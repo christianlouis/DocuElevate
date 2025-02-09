@@ -1,0 +1,8 @@
+fastapi[all]
+uvicorn
+celery
+redis
+sqlalchemy
+pydantic
+boto3
+pikepdf
