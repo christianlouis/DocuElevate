@@ -10,3 +10,4 @@ openai
 # Add this line explicitly
 #pymupdf==1.23.5
 pymupdf
+requests
