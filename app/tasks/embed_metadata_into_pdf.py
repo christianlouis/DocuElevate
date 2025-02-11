@@ -29,8 +29,8 @@ def unique_filepath(directory, base_filename, extension=".pdf"):
 def persist_metadata(metadata, final_pdf_path):
     """
     Saves the metadata dictionary to a JSON file with the same base name as the final PDF.
-    For example, if final_pdf_path is "/var/docparse/working/processed/MyFile.pdf",
-    the metadata will be saved as "/var/docparse/working/processed/MyFile.json".
+    For example, if final_pdf_path is "<workdir>/processed/MyFile.pdf",
+    the metadata will be saved as "<workdir>/processed/MyFile.json".
     """
     base, _ = os.path.splitext(final_pdf_path)
     json_path = base + ".json"
@@ -49,14 +49,14 @@ def embed_metadata_into_pdf(local_file_path: str, extracted_text: str, metadata:
       - keywords: a comma‐separated list from the "tags" field
 
     After processing, the file is moved to
-      /var/docparse/working/processed/<suggested_filename.pdf>
+      <workdir>/processed/<suggested_filename.pdf>
     where <suggested_filename.pdf> is derived from metadata["filename"].
     The output PDF is saved incrementally while preserving its original encryption.
     Additionally, the metadata is persisted to a JSON file with the same base name.
     """
-    # Check for file existence; if not found, try the known shared directory.
+    # Check for file existence; if not found, try the known shared tmp directory.
     if not os.path.exists(local_file_path):
-        alt_path = os.path.join("/var/docparse/working/tmp", os.path.basename(local_file_path))
+        alt_path = os.path.join(settings.workdir, "tmp", os.path.basename(local_file_path))
         if os.path.exists(alt_path):
             local_file_path = alt_path
         else:
@@ -93,14 +93,17 @@ def embed_metadata_into_pdf(local_file_path: str, extracted_text: str, metadata:
         suggested_filename = metadata.get("filename", os.path.splitext(os.path.basename(local_file_path))[0])
         # Remove any extension and then add .pdf
         suggested_filename = os.path.splitext(suggested_filename)[0]
-        # Define the final directory and ensure it exists.
-        final_dir = "/var/docparse/working/processed"
+        # Define the final directory based on settings.workdir and ensure it exists.
+        final_dir = os.path.join(settings.workdir, "processed")
         os.makedirs(final_dir, exist_ok=True)
         # Get a unique filepath in case of collisions.
         final_file_path = unique_filepath(final_dir, suggested_filename, extension=".pdf")
 
         # Move the processed file using shutil.move to handle cross-device moves.
         shutil.move(processed_file, final_file_path)
+        # Ensure the temporary file is deleted if it still exists.
+        if os.path.exists(processed_file):
+            os.remove(processed_file)
 
         # Persist the metadata into a JSON file with the same base name.
         json_path = persist_metadata(metadata, final_file_path)
@@ -109,9 +112,17 @@ def embed_metadata_into_pdf(local_file_path: str, extracted_text: str, metadata:
         # Trigger the next step: final storage.
         finalize_document_storage.delay(original_file, final_file_path, metadata)
 
+        # After triggering final storage, delete the original file if it is in workdir/tmp.
+        workdir_tmp = os.path.join(settings.workdir, "tmp")
+        if original_file.startswith(workdir_tmp) and os.path.exists(original_file):
+            try:
+                os.remove(original_file)
+                print(f"[INFO] Deleted original file from {original_file}")
+            except Exception as e:
+                print(f"[ERROR] Could not delete original file {original_file}: {e}")
+
         return {"file": final_file_path, "metadata_file": json_path, "status": "Metadata embedded"}
 
     except Exception as e:
         print(f"[ERROR] Failed to embed metadata into {processed_file}: {e}")
         return {"error": str(e)}
-

@@ -38,10 +38,13 @@ def upload_to_s3(original_local_file: str):
     file_ext = os.path.splitext(original_local_file)[1]  # Preserve original file extension
     file_uuid = str(uuid.uuid4())
     new_filename = f"{file_uuid}{file_ext}"
-    new_local_path = os.path.join("/var/docparse/working/tmp", new_filename)
 
-    # Ensure the target directory exists
-    os.makedirs(os.path.dirname(new_local_path), exist_ok=True)
+    # Construct the new local path using settings.workdir and a 'tmp' subdirectory
+    tmp_dir = os.path.join(settings.workdir, "tmp")
+    new_local_path = os.path.join(tmp_dir, new_filename)
+
+    # Ensure the target tmp directory exists
+    os.makedirs(tmp_dir, exist_ok=True)
 
     # Copy the file instead of moving it
     shutil.copy(original_local_file, new_local_path)
@@ -59,4 +62,3 @@ def upload_to_s3(original_local_file: str):
     except Exception as e:
         print(f"[ERROR] Failed to upload {new_local_path} to S3: {e}")
         return {"error": str(e)}
-
