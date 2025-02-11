@@ -1,0 +1,13 @@
+name: Deploy to Production
+
+on:
+  repository_dispatch:
+    types: [deploy-document-processor]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Deployment Webhook
+        run: |
+          curl -X POST https://docker2.kuechenserver.org/api/stacks/webhooks/7cd03b34-5a65-4d49-9bc5-9a1f633770c2
