@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     admin_username: str
@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     aws_textract_role_arn: str
     database_url: str
     redis_url: str
+    s3_bucket_name: str
+    openai_api_key: str
+
+
 
     class Config:
         env_file = ".env"
