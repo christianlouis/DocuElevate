@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     dropbox_app_secret: str
     dropbox_token_file_path: str
     dropbox_folder: str
+    dropbox_refresh_token: str
     nextcloud_upload_url: str
     nextcloud_username: str
     nextcloud_password: str
