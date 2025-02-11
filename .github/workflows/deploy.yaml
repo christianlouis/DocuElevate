@@ -15,4 +15,4 @@ jobs:
     steps:
       - name: Call Deployment Webhook
         run: |
-          curl -X POST https://docker2.kuechenserver.org/api/stacks/webhooks/7cd03b34-5a65-4d49-9bc5-9a1f633770c2
+          curl -X POST https://docker2.kuechenserver.org/api/stacks/webhooks/960c7d8e-97ec-4175-a8dc-73f037b02349
