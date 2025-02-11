@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     nextcloud_upload_url: str
     nextcloud_username: str
     nextcloud_password: str
+    nextcloud_folder: str
     paperless_ngx_url: str
     paperless_ngx_api_token: str
     paperless_host: str
