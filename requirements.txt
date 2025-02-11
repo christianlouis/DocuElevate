@@ -11,3 +11,4 @@ openai
 #pymupdf==1.23.5
 pymupdf
 requests
+dropbox
