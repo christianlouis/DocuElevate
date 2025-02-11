@@ -1,31 +1,58 @@
-version: "3.8"
 
 services:
   api:
     image: christianlouis/document-processor:latest
     container_name: document_api
-    ports:
-      - "8000:8000"
+
+    # We'll keep the code in /app, but set working_dir to the shared data directory
+    working_dir: /var/docparse/working
+
+    # We'll run uvicorn from the container's /app code
+    command: ["sh", "-c", "cd /app && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+
+    # Environment variables
+    environment:
+      - PYTHONPATH=/app
     env_file:
       - .env
+
+    # Expose container's 8000 -> Host's 8000
+    ports:
+      - "8000:8000"
+
     depends_on:
       - redis
       - worker
+
+    # Mount the shared working directory for data
     volumes:
-      - ./app:/app  # Optional, for local development override
+      # optional: mount your code if you want local dev changes to reflect
+      # - ./app:/app
+      - /var/docparse/working:/var/docparse/working
+
+  worker:
+    image: christianlouis/document-processor:latest
+    container_name: document_worker
+
+    # same shared working directory
+    working_dir: /var/docparse/working
+
+    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "-Q", "document_processor,default,celery"]
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+
+    depends_on:
+      - redis
+
+    # Mount the shared directory (and optionally your code if you want dev mode)
+    volumes:
+      # optional: mount your code if you want local dev changes
+      # - ./app:/app
+      - /var/docparse/working:/var/docparse/working
 
   redis:
     image: redis:alpine
     container_name: document_redis
     restart: always
-
-  worker:
-    image: christianlouis/document-processor:latest
-    container_name: document_worker
-    command: ["celery", "-A", "app.celery_worker.celery", "worker", "--loglevel=info"]
-    env_file:
-      - .env
-    depends_on:
-      - redis
-    volumes:
-      - ./app:/app  # Optional, for local development override

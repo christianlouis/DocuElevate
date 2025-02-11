@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
 
-from fastapi import FastAPI, Depends
-from .config import settings
-from .database import engine, SessionLocal
-from .models import Base
-from .tasks import process_document
+from fastapi import FastAPI, HTTPException
+from .tasks.upload_to_s3 import upload_to_s3
+import os
 
-app = FastAPI(title="Document Processor")
-
-# Initialize database
-Base.metadata.create_all(bind=engine)
+app = FastAPI(title="Document Processing API")
 
 @app.get("/")
 def root():
@@ -17,6 +12,14 @@ def root():
 
 @app.post("/process/")
 def process(file_path: str):
-    """Trigger document processing"""
-    task = process_document.delay(file_path)
+    """
+    API Endpoint to start document processing.
+    This enqueues the first task (upload_to_s3), which handles the full pipeline.
+    """
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=400, detail=f"File {file_path} not found.")
+
+    task = upload_to_s3.delay(file_path)
     return {"task_id": task.id, "status": "queued"}
+
