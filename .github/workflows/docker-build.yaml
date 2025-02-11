@@ -1,5 +1,9 @@
 name: Build and Push Docker Image
 
+permissions:
+  contents: read
+  packages: write
+
 on:
   push:
     branches:
@@ -25,12 +29,26 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and Push
         uses: docker/build-push-action@v4
         with:
+          # Specify target platforms
+          platforms: linux/amd64,linux/arm64
           context: .
           file: Dockerfile
           push: true
           tags: |
             christianlouis/document-processor:latest
             christianlouis/document-processor:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/document-processor:latest
+            ghcr.io/${{ github.repository_owner }}/document-processor:${{ github.sha }}
+          # Cache options (optional)
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
