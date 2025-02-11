@@ -1,5 +1,9 @@
 name: Build and Push Docker Image
 
+permissions:
+  contents: read
+  packages: write
+
 on:
   push:
     branches:
@@ -35,6 +39,8 @@ jobs:
       - name: Build and Push
         uses: docker/build-push-action@v4
         with:
+          # Specify target platforms
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
           context: .
           file: Dockerfile
           push: true
@@ -43,3 +49,6 @@ jobs:
             christianlouis/document-processor:${{ github.sha }}
             ghcr.io/${{ github.repository_owner }}/document-processor:latest
             ghcr.io/${{ github.repository_owner }}/document-processor:${{ github.sha }}
+          # Cache options (optional)
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
