@@ -23,7 +23,7 @@ def process(file_path: str):
 
     # If file_path is not absolute, treat it as relative to settings.workdir.
     if not os.path.isabs(file_path):
-        file_path = os.path.join(settings.workdir, 'processed', file_path)
+        file_path = os.path.join(settings.workdir, file_path)
 
     if not os.path.exists(file_path):
         raise HTTPException(status_code=400, detail=f"File {file_path} not found.")
