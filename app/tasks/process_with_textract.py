@@ -64,13 +64,13 @@ def create_searchable_pdf(tmp_file_path, extracted_pages):
 def process_with_textract(s3_filename: str):
     """
     Processes a PDF document using Textract and overlays invisible OCR text onto
-    the local temporary file (already stored under /var/docparse/working/tmp).
+    the local temporary file (already stored under <workdir>/tmp).
     
     Steps:
       1. Start a Textract text detection job.
       2. Poll until the job succeeds and organize the Textract Blocks into pages
          (each page is a list of (text, bounding-box) tuples).
-      3. Use the local tmp file at /var/docparse/working/tmp/<s3_filename> to add the OCR overlay.
+      3. Use the local tmp file at <workdir>/tmp/<s3_filename> to add the OCR overlay.
       4. Delete the S3 object.
       5. Trigger downstream metadata extraction by calling extract_metadata_with_gpt.
     """
@@ -106,8 +106,8 @@ def process_with_textract(s3_filename: str):
                 raise Exception("Textract job failed")
             time.sleep(3)
 
-        # Use the existing local tmp file (from /var/docparse/working/tmp).
-        tmp_file_path = os.path.join("/var/docparse/working/tmp", s3_filename)
+        # Use the local tmp file located under the workdir configuration.
+        tmp_file_path = os.path.join(settings.workdir, "tmp", s3_filename)
         if not os.path.exists(tmp_file_path):
             raise Exception(f"Local file not found: {tmp_file_path}")
         logger.info(f"Processing local file {tmp_file_path} with OCR overlay.")
@@ -128,4 +128,3 @@ def process_with_textract(s3_filename: str):
     except Exception as e:
         logger.error(f"Error processing {s3_filename}: {e}")
         raise
-
