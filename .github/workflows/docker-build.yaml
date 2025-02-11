@@ -40,7 +40,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           # Specify target platforms
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           context: .
           file: Dockerfile
           push: true
