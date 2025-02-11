@@ -1,8 +1,13 @@
 name: Deploy to Production
 
 on:
-  repository_dispatch:
-    types: [deploy-document-processor]
+  workflow_run:
+    workflows: ["Build and Push Docker Image"]
+    types:
+      - completed
+
+permissions:
+  contents: read
 
 jobs:
   deploy:
