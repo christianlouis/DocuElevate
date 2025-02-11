@@ -1,0 +1,18 @@
+name: Deploy to Production
+
+on:
+  workflow_run:
+    workflows: ["Build and Push Docker Image"]
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Deployment Webhook
+        run: |
+          curl -X POST https://docker2.kuechenserver.org/api/stacks/webhooks/960c7d8e-97ec-4175-a8dc-73f037b02349
