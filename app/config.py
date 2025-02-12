@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from pydantic_settings import BaseSettings
+from typing import Optional
 
 class Settings(BaseSettings):
     admin_username: str
