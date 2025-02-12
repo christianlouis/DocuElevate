@@ -5,7 +5,7 @@ services:
     container_name: document_api
 
     # We'll keep the code in /app, but set working_dir to the shared data directory
-    working_dir: /var/docparse/working
+    working_dir: /workdir
 
     # We'll run uvicorn from the container's /app code
     command: ["sh", "-c", "cd /app && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
@@ -28,16 +28,16 @@ services:
     volumes:
       # optional: mount your code if you want local dev changes to reflect
       # - ./app:/app
-      - /var/docparse/working:/var/docparse/working
+      - /var/docparse/workdir:/workdir
 
   worker:
     image: christianlouis/document-processor:latest
     container_name: document_worker
 
     # same shared working directory
-    working_dir: /var/docparse/working
+    working_dir: /workdir
 
-    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "-Q", "document_processor,default,celery"]
+    command: ["celery", "-A", "app.celery_worker", "worker", "-B", "--loglevel=info", "-Q", "document_processor,default,celery"]
     env_file:
       - .env
     environment:
@@ -50,7 +50,7 @@ services:
     volumes:
       # optional: mount your code if you want local dev changes
       # - ./app:/app
-      - /var/docparse/working:/var/docparse/working
+      - /var/docparse/workdir:/workdir
 
   redis:
     image: redis:alpine
