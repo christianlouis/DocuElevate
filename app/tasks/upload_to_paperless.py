@@ -5,11 +5,14 @@ import re
 import json
 import time
 import requests
+import logging
 from typing import Optional, Dict, Any, List
 
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.celery_app import celery
+
+logger = logging.getLogger(__name__)
 
 POLL_MAX_ATTEMPTS = 10
 POLL_INTERVAL_SEC = 3
@@ -31,97 +34,143 @@ def _paperless_api_url(path: str) -> str:
     return f"{host}{path}"
 
 def get_or_create_correspondent(name: str) -> Optional[int]:
-    """Look up or create a Paperless 'correspondent' by name. Return its ID or None if empty/unknown."""
+    """
+    Look up or create a Paperless 'correspondent' by name.
+    Return its ID or None if name is empty/unknown or if creation fails.
+    """
     if not name or name.lower() == "unknown":
         return None
 
     url = _paperless_api_url("/api/correspondents/")
-    # Attempt to find existing by name
-    resp = requests.get(url, headers=_get_headers(), params={"name": name})
-    resp.raise_for_status()
-    data = resp.json()
+    try:
+        # Attempt to find existing by name
+        resp = requests.get(url, headers=_get_headers(), params={"name": name})
+        resp.raise_for_status()
+        data = resp.json()
 
-    existing = [c for c in data["results"] if c["name"] == name]
-    if existing:
-        return existing[0]["id"]
+        existing = [c for c in data["results"] if c["name"] == name]
+        if existing:
+            return existing[0]["id"]
 
-    # If none found, create
-    create_resp = requests.post(
-        url,
-        headers={**_get_headers(), "Content-Type": "application/json"},
-        json={"name": name}
-    )
-    create_resp.raise_for_status()
-    return create_resp.json()["id"]
+        # Create new
+        create_resp = requests.post(
+            url,
+            headers={**_get_headers(), "Content-Type": "application/json"},
+            json={"name": name}
+        )
+        create_resp.raise_for_status()
+        return create_resp.json()["id"]
+
+    except requests.exceptions.RequestException as exc:
+        logger.warning(
+            "Failed to get/create correspondent '%s'. Error: %s. Response=%s",
+            name, exc, getattr(exc.response, "text", "<no response>")
+        )
+        return None
+
 
 def get_or_create_document_type(name: str) -> Optional[int]:
-    """Look up or create a Paperless 'document_type' by name. Return its ID or None if empty/unknown."""
+    """
+    Look up or create a Paperless 'document_type' by name.
+    Return its ID or None if name is empty/unknown or if creation fails.
+    """
     if not name or name.lower() == "unknown":
         return None
 
     url = _paperless_api_url("/api/document_types/")
-    resp = requests.get(url, headers=_get_headers(), params={"name": name})
-    resp.raise_for_status()
-    data = resp.json()
+    try:
+        resp = requests.get(url, headers=_get_headers(), params={"name": name})
+        resp.raise_for_status()
+        data = resp.json()
 
-    existing = [dt for dt in data["results"] if dt["name"] == name]
-    if existing:
-        return existing[0]["id"]
+        existing = [dt for dt in data["results"] if dt["name"] == name]
+        if existing:
+            return existing[0]["id"]
 
-    create_resp = requests.post(
-        url,
-        headers={**_get_headers(), "Content-Type": "application/json"},
-        json={"name": name}
-    )
-    create_resp.raise_for_status()
-    return create_resp.json()["id"]
+        create_resp = requests.post(
+            url,
+            headers={**_get_headers(), "Content-Type": "application/json"},
+            json={"name": name}
+        )
+        create_resp.raise_for_status()
+        return create_resp.json()["id"]
+
+    except requests.exceptions.RequestException as exc:
+        logger.warning(
+            "Failed to get/create document type '%s'. Error: %s. Response=%s",
+            name, exc, getattr(exc.response, "text", "<no response>")
+        )
+        return None
+
 
 def get_or_create_tag(tag_name: str) -> Optional[int]:
-    """Look up or create a Paperless 'tag' by name. Return its ID or None if empty/unknown."""
+    """
+    Look up or create a Paperless 'tag' by name.
+    Return its ID or None if tag_name is empty/unknown or if creation fails.
+    """
     if not tag_name or tag_name.lower() == "unknown":
         return None
 
     url = _paperless_api_url("/api/tags/")
-    resp = requests.get(url, headers=_get_headers(), params={"name": tag_name})
-    resp.raise_for_status()
-    data = resp.json()
+    try:
+        resp = requests.get(url, headers=_get_headers(), params={"name": tag_name})
+        resp.raise_for_status()
+        data = resp.json()
 
-    existing = [t for t in data["results"] if t["name"] == tag_name]
-    if existing:
-        return existing[0]["id"]
+        existing = [t for t in data["results"] if t["name"] == tag_name]
+        if existing:
+            return existing[0]["id"]
 
-    create_resp = requests.post(
-        url,
-        headers={**_get_headers(), "Content-Type": "application/json"},
-        json={"name": tag_name}
-    )
-    create_resp.raise_for_status()
-    return create_resp.json()["id"]
+        create_resp = requests.post(
+            url,
+            headers={**_get_headers(), "Content-Type": "application/json"},
+            json={"name": tag_name}
+        )
+        create_resp.raise_for_status()
+        return create_resp.json()["id"]
 
-def get_or_create_custom_field(field_name: str) -> int:
+    except requests.exceptions.RequestException as exc:
+        logger.warning(
+            "Failed to get/create tag '%s'. Error: %s. Response=%s",
+            tag_name, exc, getattr(exc.response, "text", "<no response>")
+        )
+        return None
+
+
+def get_or_create_custom_field(field_name: str) -> Optional[int]:
     """
     Look up or create a Paperless 'custom_field' by name.
-    Returns its ID. Raises ValueError if field_name is empty.
+    Return its ID or None if empty or if creation fails.
     """
     if not field_name:
-        raise ValueError("Field name must not be empty")
+        logger.warning("Field name must not be empty.")
+        return None
 
     url = _paperless_api_url("/api/custom_fields/")
-    resp = requests.get(url, headers=_get_headers(), params={"name": field_name})
-    resp.raise_for_status()
-    data = resp.json()
+    try:
+        resp = requests.get(url, headers=_get_headers(), params={"name": field_name})
+        resp.raise_for_status()
+        data = resp.json()
 
-    existing = [cf for cf in data["results"] if cf["name"] == field_name]
-    if existing:
-        return existing[0]["id"]
+        existing = [cf for cf in data["results"] if cf["name"] == field_name]
+        if existing:
+            return existing[0]["id"]
 
-    create_resp = requests.post(
-        url,
-        headers={**_get_headers(), "Content-Type": "application/json"},
-        json={"name": field_name, "data_type": "string"}
-    )
-    create_resp.raise_for_status()
-    return create_resp.json()["id"]
+        create_resp = requests.post(
+            url,
+            headers={**_get_headers(), "Content-Type": "application/json"},
+            json={"name": field_name, "data_type": "string"}
+        )
+        create_resp.raise_for_status()
+        return create_resp.json()["id"]
+
+    except requests.exceptions.RequestException as exc:
+        logger.warning(
+            "Failed to get/create custom field '%s'. Error: %s. Response=%s",
+            field_name, exc, getattr(exc.response, "text", "<no response>")
+        )
+        return None
+
 
 def poll_task_for_document_id(task_id: str) -> int:
     """
@@ -136,22 +185,21 @@ def poll_task_for_document_id(task_id: str) -> int:
     attempts = 0
 
     while attempts < POLL_MAX_ATTEMPTS:
-        resp = requests.get(url, headers=_get_headers(), params={"task_id": task_id})
-        resp.raise_for_status()
+        try:
+            resp = requests.get(url, headers=_get_headers(), params={"task_id": task_id})
+            resp.raise_for_status()
+            tasks_data = resp.json()
+        except requests.exceptions.RequestException as exc:
+            logger.warning(
+                "Failed to poll for task_id='%s'. Attempt=%d Error=%s",
+                task_id, attempts + 1, exc
+            )
+            time.sleep(POLL_INTERVAL_SEC)
+            attempts += 1
+            continue
 
-        # The response is typically a list of length 1, e.g.:
-        # [
-        #   {
-        #     "task_id": "uuid",
-        #     "status": "SUCCESS",
-        #     "related_document": "56712",
-        #     "result": "Success. New document id 56712 created",
-        #     ...
-        #   }
-        # ]
-        tasks_data = resp.json()
+        # The response is typically a list or a dict with "results"
         if isinstance(tasks_data, dict) and "results" in tasks_data:
-            # Some versions wrap tasks in { "results": [ ... ] }
             tasks_data = tasks_data["results"]
 
         if tasks_data:
@@ -174,7 +222,10 @@ def poll_task_for_document_id(task_id: str) -> int:
         attempts += 1
         time.sleep(POLL_INTERVAL_SEC)
 
-    raise TimeoutError(f"Task {task_id} didn't reach SUCCESS within {POLL_MAX_ATTEMPTS} attempts.")
+    raise TimeoutError(
+        f"Task {task_id} didn't reach SUCCESS within {POLL_MAX_ATTEMPTS} attempts."
+    )
+
 
 def patch_document_custom_fields(document_id: int, field_values: Dict[int, str]) -> None:
     """
@@ -193,19 +244,32 @@ def patch_document_custom_fields(document_id: int, field_values: Dict[int, str])
         ]
     }
 
-    resp = requests.patch(url, headers={**_get_headers(), "Content-Type": "application/json"}, json=payload)
-    resp.raise_for_status()
+    try:
+        resp = requests.patch(
+            url,
+            headers={**_get_headers(), "Content-Type": "application/json"},
+            json=payload
+        )
+        resp.raise_for_status()
+    except requests.exceptions.RequestException as exc:
+        logger.warning(
+            "Failed to patch custom fields for doc %d. Error: %s. Payload=%s Response=%s",
+            document_id, exc, payload, getattr(exc.response, "text", "<no response>")
+        )
+        # We skip raising here, so ingestion can continue.
+
 
 @celery.task(base=BaseTaskWithRetry)
 def upload_to_paperless(file_path: str) -> Dict[str, Any]:
     """
     1. Reads JSON metadata from a matching .json file.
-    2. Creates/fetches correspondents, doc types, tags, custom fields as needed.
+    2. Creates/fetches correspondents, doc types, tags, custom fields as needed (with graceful error handling).
     3. POSTs the PDF to Paperless => returns a quoted UUID string (task_id).
     4. Polls /api/tasks/?task_id=<uuid> until SUCCESS or FAILURE => doc_id
     5. PATCHes custom fields onto the doc if present.
-    """
 
+    Returns a dict with status, the paperless_task_id, paperless_document_id, and file_path.
+    """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
 
@@ -223,11 +287,13 @@ def upload_to_paperless(file_path: str) -> Dict[str, Any]:
     corr_name = metadata.get("correspondent", "") or metadata.get("absender", "")
     if corr_name.lower() == "unknown":
         corr_name = ""
+    # Attempt creation, if fails, returns None
     correspondent_id = get_or_create_correspondent(corr_name)
 
     doc_type_str = metadata.get("document_type", "")
     if doc_type_str.lower() == "unknown":
         doc_type_str = ""
+    # Attempt creation, if fails, returns None
     document_type_id = get_or_create_document_type(doc_type_str) if doc_type_str else None
 
     # Tags
@@ -235,57 +301,70 @@ def upload_to_paperless(file_path: str) -> Dict[str, Any]:
     tags_list = metadata.get("tags", [])
     for tag_item in tags_list:
         if tag_item and tag_item.lower() != "unknown":
+            # If creation fails, returns None and is skipped
             tid = get_or_create_tag(tag_item)
             if tid:
                 tag_ids.append(tid)
+            else:
+                logger.warning("Skipping invalid tag '%s'", tag_item)
 
     # 1) Upload PDF
     post_url = _paperless_api_url("/api/documents/post_document/")
-    files = {
-        "document": (os.path.basename(file_path), open(file_path, "rb"), "application/pdf"),
-    }
-    data = {
-        "title": title
-    }
-    if correspondent_id:
-        data["correspondent"] = correspondent_id
-    if document_type_id:
-        data["document_type"] = document_type_id
+    with open(file_path, "rb") as f:
+        files = {
+            "document": (os.path.basename(file_path), f, "application/pdf"),
+        }
+        data = {"title": title}
+        if correspondent_id:
+            data["correspondent"] = correspondent_id
+        if document_type_id:
+            data["document_type"] = document_type_id
 
-    # Usually Paperless expects repeated form fields for tags[] or a single tags array
-    # We'll do repeated form fields for each tag
-    for t_id in tag_ids:
-        data.setdefault("tags", []).append(str(t_id))
+        # Paperless can handle repeated form fields for tags[] or a single array
+        for t_id in tag_ids:
+            data.setdefault("tags", []).append(str(t_id))
 
-    # Send the POST
-    resp = requests.post(post_url, headers=_get_headers(), files=files, data=data)
-    # Close file handle
-    files["document"][1].close()
-    resp.raise_for_status()
+        try:
+            logger.debug(
+                "Posting document to Paperless: data=%s, file=%s",
+                data, os.path.basename(file_path)
+            )
+            resp = requests.post(post_url, headers=_get_headers(), files=files, data=data)
+            resp.raise_for_status()
+        except requests.exceptions.RequestException as exc:
+            # This is a hard fail: if the main doc upload fails, there's no doc in Paperless at all
+            logger.error(
+                "Failed to upload document '%s' to Paperless. Error: %s. Response=%s",
+                file_path, exc, getattr(exc.response, "text", "<no response>")
+            )
+            raise
 
-    # The response is typically just: "some-uuid"
-    raw_task_id = resp.text.strip().strip('"').strip("'")
-    print(f"[INFO] Received Paperless task ID: {raw_task_id}")
+        raw_task_id = resp.text.strip().strip('"').strip("'")
+        logger.info(f"Received Paperless task ID: {raw_task_id}")
 
     # 2) Poll tasks until success/fail => get doc_id
     doc_id = poll_task_for_document_id(raw_task_id)
-    print(f"[INFO] Document created (or found duplicate) => ID={doc_id}")
+    logger.info(f"Document {file_path} successfully ingested => ID={doc_id}")
 
     # 3) Create custom fields for leftover JSON keys
-    # Skip these built-ins to avoid storing duplicates
-    built_in_keys = {"filename", "title", "tags", "document_type", "correspondent"}
+    built_in_keys = {"filename", "title", "tags", "document_type", "correspondent", "absender"}
     field_values_map = {}
     for key, val in metadata.items():
         if key in built_in_keys:
             continue
         if not val or str(val).lower() == "unknown":
             continue
-        cf_id = get_or_create_custom_field(key)
-        field_values_map[cf_id] = str(val)
 
+        cf_id = get_or_create_custom_field(key)
+        if cf_id is not None:
+            field_values_map[cf_id] = str(val)
+        else:
+            logger.warning("Skipping custom field '%s' due to creation error.", key)
+
+    # 4) Patch custom fields onto the doc
     if field_values_map:
         patch_document_custom_fields(doc_id, field_values_map)
-        print(f"[INFO] Patched custom fields for doc {doc_id}")
+        logger.info(f"Patched custom fields for doc {doc_id}")
 
     return {
         "status": "Completed",
