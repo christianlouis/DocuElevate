@@ -20,6 +20,7 @@ from app.tasks.upload_to_dropbox import upload_to_dropbox
 from app.tasks.upload_to_paperless import upload_to_paperless
 from app.tasks.upload_to_nextcloud import upload_to_nextcloud
 from app.tasks.imap_tasks import pull_all_inboxes
+from app.tasks.send_to_all import send_to_all_destinations
 
 celery.conf.task_routes = {
     "app.tasks.*": {"queue": "default"},
