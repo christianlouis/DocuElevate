@@ -19,6 +19,7 @@ from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
 from app.tasks.upload_to_dropbox import upload_to_dropbox
 from app.tasks.upload_to_paperless import upload_to_paperless
 from app.tasks.upload_to_nextcloud import upload_to_nextcloud
+from app.tasks.imap_tasks import pull_all_inboxes
 
 celery.conf.task_routes = {
     "app.tasks.*": {"queue": "default"},
@@ -27,3 +28,13 @@ celery.conf.task_routes = {
 @celery.task
 def test_task():
     return "Celery is working!"
+
+# If you want Celery Beat to run the poll task every minute, add:
+from celery.schedules import crontab
+
+celery.conf.beat_schedule = {
+    "poll-inboxes-every-minute": {
+        "task": "app.tasks.imap_tasks.pull_all_inboxes",
+        "schedule": crontab(minute="*/1"),  # every 1 minute
+    },
+}

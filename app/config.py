@@ -26,6 +26,24 @@ class Settings(BaseSettings):
     paperless_ngx_url: str
     paperless_ngx_api_token: str
     paperless_host: str
+    
+    # IMAP 1
+    imap1_host: Optional[str] = None
+    imap1_port: Optional[int] = 993
+    imap1_username: Optional[str] = None
+    imap1_password: Optional[str] = None
+    imap1_ssl: bool = True
+    imap1_poll_interval_minutes: int = 5
+    imap1_delete_after_process: bool = False
+
+    # IMAP 2
+    imap2_host: Optional[str] = None
+    imap2_port: Optional[int] = 993
+    imap2_username: Optional[str] = None
+    imap2_password: Optional[str] = None
+    imap2_ssl: bool = True
+    imap2_poll_interval_minutes: int = 10
+    imap2_delete_after_process: bool = False
 
     class Config:
         env_file = ".env"
