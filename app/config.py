@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     nextcloud_folder: str
     paperless_ngx_api_token: str
     paperless_host: str
+    azure_ai_key: str
+    azure_region: str
+    azure_endpoint: str
     
     # IMAP 1
     imap1_host: Optional[str] = None
