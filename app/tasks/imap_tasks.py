@@ -115,7 +115,7 @@ def pull_inbox(
 ):
     """
     Connects to the IMAP inbox, fetches new emails (last 7 days),
-    and processes attachments without marking emails as read.
+    and processes attachments while preserving the original unread status.
     """
     logger.info(f"Connecting to {mailbox_key} at {host}:{port} (SSL={use_ssl})")
     processed_emails = load_processed_emails()
@@ -142,6 +142,14 @@ def pull_inbox(
         logger.info(f"Found {len(msg_numbers)} emails from the last 7 days in {mailbox_key}.")
 
         for num in msg_numbers:
+            # Check if email is unread
+            status, flag_data = mail.fetch(num, "(FLAGS)")
+            if status != "OK":
+                logger.warning(f"Failed to fetch flags for message {num} in {mailbox_key}. Status={status}")
+                continue
+
+            is_unread = b"\\Seen" not in flag_data[0]  # Email was originally unread
+
             status, msg_data = mail.fetch(num, "(RFC822)")
             if status != "OK":
                 logger.warning(f"Failed to fetch message {num} in {mailbox_key}. Status={status}")
@@ -163,15 +171,18 @@ def pull_inbox(
             # Process attachments
             has_attachment = fetch_attachments_and_enqueue(email_message)
 
-            # If an attachment was found, store in cache
-            if has_attachment:
-                processed_emails[msg_id] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
-                save_processed_emails(cleanup_old_entries(processed_emails))
+            # Store processed email in cache
+            processed_emails[msg_id] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+            save_processed_emails(cleanup_old_entries(processed_emails))
 
-                # Delete email if configured
-                if delete_after_process:
-                    logger.info(f"Deleting message {num.decode()} from {mailbox_key}")
-                    mail.store(num, "+FLAGS", "\\Deleted")
+            # Handle deletion or unread restoration
+            if delete_after_process:
+                logger.info(f"Deleting message {num.decode()} from {mailbox_key}")
+                mail.store(num, "+FLAGS", "\\Deleted")
+            else:
+                # Restore unread status if it was unread before processing
+                if is_unread:
+                    mail.store(num, "-FLAGS", "\\Seen")
 
         if delete_after_process:
             mail.expunge()
