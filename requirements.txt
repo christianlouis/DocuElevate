@@ -12,3 +12,4 @@ openai
 pymupdf
 requests
 dropbox
+azure-ai-documentintelligence
