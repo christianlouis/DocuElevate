@@ -12,5 +12,4 @@ openai
 pymupdf
 requests
 dropbox
-azure-core-credentials
 azure-ai-documentintelligence
