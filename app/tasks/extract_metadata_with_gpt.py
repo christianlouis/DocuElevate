@@ -31,21 +31,33 @@ def extract_json_from_text(text):
 
 @celery.task(base=BaseTaskWithRetry)
 def extract_metadata_with_gpt(s3_filename: str, cleaned_text: str):
-    """Uses OpenAI GPT-4o to classify document metadata."""
-    
+    """Uses OpenAI GPT-4o-mini to classify document metadata."""
+
     prompt = f"""
-You are an intelligent document classifier.
-Given the following extracted text from a document, analyze it and return a JSON object with the following fields:
-1. "filename": A machine-readable filename in the format YYYY-MM-DD_DescriptiveTitle (use only letters, numbers, periods, and underscores).
-2. "empfaenger": The recipient, or "Unknown" if not found.
-3. "absender": The sender, or "Unknown" if not found.
-4. "correspondent": A correspondent extracted from the document, or "Unknown".
-5. "kommunikationsart": One of [Behoerdlicher_Brief, Rechnung, Kontoauszug, Vertrag, Quittung, Privater_Brief, Einladung, Gewerbliche_Korrespondenz, Newsletter, Werbung, Sonstiges].
-6. "kommunikationskategorie": One of [Amtliche_Postbehoerdliche_Dokumente, Finanz_und_Vertragsdokumente, Geschaeftliche_Kommunikation, Private_Korrespondenz, Sonstige_Informationen].
-7. "document_type": The document type, or "Unknown".
-8. "tags": A list of additional keywords extracted from the document.
-9. "language": The detected language code (e.g., "DE").
-10. "title": A human-friendly title for the document.
+You are a specialized document analyzer trained to extract structured metadata from documents.
+Your task is to analyze the given text and return a well-structured JSON object.
+
+Extract and return the following fields:
+1. **filename**: Machine-readable filename (YYYY-MM-DD_DescriptiveTitle, use only letters, numbers, periods, and underscores).
+2. **empfaenger**: The recipient, or "Unknown" if not found.
+3. **absender**: The sender, or "Unknown" if not found.
+4. **correspondent**: The entity or company that issued the document (shortest possible name, e.g., "Amazon" instead of "Amazon EU SARL, German branch").
+5. **kommunikationsart**: One of [Behoerdlicher_Brief, Rechnung, Kontoauszug, Vertrag, Quittung, Privater_Brief, Einladung, Gewerbliche_Korrespondenz, Newsletter, Werbung, Sonstiges].
+6. **kommunikationskategorie**: One of [Amtliche_Postbehoerdliche_Dokumente, Finanz_und_Vertragsdokumente, Geschaeftliche_Kommunikation, Private_Korrespondenz, Sonstige_Informationen].
+7. **document_type**: Precise classification (e.g., Invoice, Contract, Information, Unknown).
+8. **tags**: A list of up to 4 relevant thematic keywords.
+9. **language**: Detected document language (ISO 639-1 code, e.g., "de" or "en").
+10. **title**: A human-readable title summarizing the document content.
+11. **confidence_score**: A numeric value (0-100) indicating the confidence level of the extracted metadata.
+12. **reference_number**: Extracted invoice/order/reference number if available.
+13. **monetary_amounts**: A list of key monetary values detected in the document.
+
+### Important Rules:
+- **OCR Correction**: Assume the text has been corrected for OCR errors.
+- **Tagging**: Max 4 tags, avoiding generic or overly specific terms.
+- **Title**: Concise, no addresses, and contains key identifying features.
+- **Date Selection**: Use the most relevant date if multiple are found.
+- **Output Language**: Maintain the document's original language.
 
 Extracted text:
 {cleaned_text}
@@ -56,7 +68,7 @@ Return only valid JSON with no additional commentary.
     try:
         print(f"[DEBUG] Sending classification request for {s3_filename}...")
         completion = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are an intelligent document classifier."},
                 {"role": "user", "content": prompt}
@@ -83,4 +95,3 @@ Return only valid JSON with no additional commentary.
     except Exception as e:
         print(f"[ERROR] OpenAI classification failed for {s3_filename}: {e}")
         return {}
-

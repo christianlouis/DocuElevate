@@ -114,7 +114,7 @@ def pull_inbox(
     delete_after_process: bool
 ):
     """
-    Connects to the IMAP inbox, fetches new emails (last 7 days),
+    Connects to the IMAP inbox, fetches new emails (last 3 days),
     and processes attachments while preserving the original unread status.
     """
     logger.info(f"Connecting to {mailbox_key} at {host}:{port} (SSL={use_ssl})")
@@ -129,8 +129,8 @@ def pull_inbox(
         mail.login(username, password)
         mail.select("INBOX")
 
-        # Fetch emails from the last 7 days
-        since_date = (datetime.utcnow() - timedelta(days=7)).strftime("%d-%b-%Y")
+        # Fetch emails from the last 3 days
+        since_date = (datetime.utcnow() - timedelta(days=3)).strftime("%d-%b-%Y")
         status, search_data = mail.search(None, f'(SINCE {since_date})')
         if status != "OK":
             logger.warning(f"Search failed on mailbox {mailbox_key}. Status={status}")
@@ -139,7 +139,7 @@ def pull_inbox(
             return
 
         msg_numbers = search_data[0].split()
-        logger.info(f"Found {len(msg_numbers)} emails from the last 7 days in {mailbox_key}.")
+        logger.info(f"Found {len(msg_numbers)} emails from the last 3 days in {mailbox_key}.")
 
         for num in msg_numbers:
             # Check if email is unread
