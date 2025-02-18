@@ -22,7 +22,10 @@ def load_processed_emails():
     if os.path.exists(CACHE_FILE):
         try:
             with open(CACHE_FILE, "r") as f:
-                return json.load(f)
+                processed_emails = json.load(f)
+                # Clean up emails older than 7 days
+                processed_emails = cleanup_old_entries(processed_emails)
+                return processed_emails
         except json.JSONDecodeError:
             logger.warning("Failed to decode JSON, resetting processed emails cache.")
             return {}
@@ -64,7 +67,7 @@ def pull_all_inboxes():
         delete_after_process=settings.imap1_delete_after_process,
     )
 
-    # Process Mailbox #2
+    # Process Mailbox #2 (Gmail)
     check_and_pull_mailbox(
         mailbox_key="imap2",
         host=settings.imap2_host,
@@ -175,6 +178,10 @@ def pull_inbox(
             processed_emails[msg_id] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
             save_processed_emails(cleanup_old_entries(processed_emails))
 
+            # Mark the email as processed (either by star or label)
+            if has_attachment:
+                mark_as_processed_with_label(mail, num, label="Ingested")  # Or use mark_as_processed_with_star()
+
             # Handle deletion or unread restoration
             if delete_after_process:
                 logger.info(f"Deleting message {num.decode()} from {mailbox_key}")
@@ -229,3 +236,21 @@ def fetch_attachments_and_enqueue(email_message):
             upload_to_s3.delay(file_path)
 
     return has_attachment
+
+
+def mark_as_processed_with_star(mail, msg_id):
+    """Mark email as processed using a star in Gmail."""
+    try:
+        mail.store(msg_id, '+FLAGS', '\\Flagged')  # This sets the "Starred" status for Gmail
+        logger.info(f"Email {msg_id} has been starred and marked as ingested.")
+    except Exception as e:
+        logger.error(f"Failed to mark email {msg_id} with star: {e}")
+
+
+def mark_as_processed_with_label(mail, msg_id, label="Ingested"):
+    """Mark email as processed by adding a custom label in Gmail."""
+    try:
+        mail.store(msg_id, '+X-GM-LABELS', label)  # Add custom label 'Ingested'
+        logger.info(f"Email {msg_id} has been labeled with '{label}' and marked as ingested.")
+    except Exception as e:
+        logger.error(f"Failed to mark email {msg_id} with label {label}: {e}")
