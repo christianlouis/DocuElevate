@@ -45,12 +45,18 @@ services:
 
     depends_on:
       - redis
+      - gotenberg
 
     # Mount the shared directory (and optionally your code if you want dev mode)
     volumes:
       # optional: mount your code if you want local dev changes
       # - ./app:/app
       - /var/docparse/workdir:/workdir
+
+  gotenberg:
+    image: gotenberg/gotenberg:latest
+    container_name: gotenberg
+
 
   redis:
     image: redis:alpine

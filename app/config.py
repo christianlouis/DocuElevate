@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     azure_ai_key: str
     azure_region: str
     azure_endpoint: str
+    gotenberg_url: str
     
     # IMAP 1
     imap1_host: Optional[str] = None

@@ -14,6 +14,7 @@ from app.tasks.process_with_textract import process_with_textract
 from app.tasks.refine_text_with_gpt import refine_text_with_gpt
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
+from app.tasks.convert_to_pdf import convert_to_pdf
 
 # Import new send tasks
 from app.tasks.upload_to_dropbox import upload_to_dropbox
