@@ -141,7 +141,8 @@ def check_and_pull_mailbox(
     )
 
 
-def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_after_process):
+def pull_inbox(mailbox_key, host, port, username, password, use_ssl,
+               delete_after_process):
     """
     Connects to the IMAP inbox, fetches new unread emails from the last 3 days,
     and processes attachments while preserving the original unread status.
@@ -152,7 +153,8 @@ def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_afte
     
     For non-Gmail mailboxes, it falls back to selecting the INBOX with a SINCE/UNSEEN filter.
     """
-    logger.info(f"Connecting to {mailbox_key} at {host}:{port} (SSL={use_ssl})")
+    logger.info("Connecting to %s at %s:%s (SSL=%s)",
+                mailbox_key, host, port, use_ssl)
     processed_emails = load_processed_emails()
 
     try:
@@ -164,7 +166,7 @@ def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_afte
             # For Gmail, try to select the localized All Mail folder.
             all_mail_folder = find_all_mail_folder(mail)
             if all_mail_folder:
-                logger.info(f"Using Gmail All Mail folder: {all_mail_folder}")
+                logger.info("Using Gmail All Mail folder: %s", all_mail_folder)
                 mail.select(f'"{all_mail_folder}"')
             else:
                 logger.warning("Gmail All Mail folder not found, falling back to INBOX.")
@@ -175,22 +177,25 @@ def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_afte
         else:
             # For non-Gmail, select INBOX and use SINCE/UNSEEN query.
             mail.select("INBOX")
-            since_date = (datetime.now(timezone.utc) - timedelta(days=3)).strftime("%d-%b-%Y")
+            since_date = (datetime.now(timezone.utc) - timedelta(days=3)
+                          ).strftime("%d-%b-%Y")
             status, search_data = mail.search(None, f'(SINCE {since_date} UNSEEN)')
 
         if status != "OK":
-            logger.warning(f"Search failed on mailbox {mailbox_key}. Status={status}")
+            logger.warning("Search failed on mailbox %s. Status=%s",
+                           mailbox_key, status)
             mail.close()
             mail.logout()
             return
 
         msg_numbers = search_data[0].split()
-        logger.info(f"Found {len(msg_numbers)} unread emails in {mailbox_key}.")
+        logger.info("Found %d unread emails in %s.", len(msg_numbers), mailbox_key)
 
         for num in msg_numbers:
             status, msg_data = mail.fetch(num, "(RFC822)")
             if status != "OK":
-                logger.warning(f"Failed to fetch message {num} in {mailbox_key}. Status={status}")
+                logger.warning("Failed to fetch message %s in %s. Status=%s",
+                               num, mailbox_key, status)
                 continue
 
             raw_email = msg_data[0][1]
@@ -198,21 +203,23 @@ def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_afte
             msg_id = email_message.get("Message-ID")
 
             if not msg_id:
-                logger.warning(f"Skipping email without Message-ID in {mailbox_key}")
+                logger.warning("Skipping email without Message-ID in %s", mailbox_key)
                 continue
 
             if msg_id in processed_emails:
-                logger.info(f"Skipping already processed email {msg_id} in {mailbox_key}")
+                logger.info("Skipping already processed email %s in %s", msg_id, mailbox_key)
                 continue
 
             # For Gmail, check if the email already has the "Ingested" label.
             if is_gmail_host:
                 if email_already_has_label(mail, num, "Ingested"):
-                    logger.info(f"Skipping email {msg_id} in {mailbox_key}, already labeled 'Ingested'.")
+                    logger.info("Skipping email %s in %s, already labeled 'Ingested'.",
+                                msg_id, mailbox_key)
                     continue
 
-            # Process attachments (and convert non-PDF files)
-            has_attachment = fetch_attachments_and_enqueue(email_message)
+            # Process attachments (and convert non-PDF files).
+            # We call the function without assigning its return value since it is not used.
+            fetch_attachments_and_enqueue(email_message)
 
             if is_gmail_host:
                 mark_as_processed_with_star(mail, num)
@@ -222,7 +229,7 @@ def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_afte
             save_processed_emails(processed_emails)
 
             if delete_after_process:
-                logger.info(f"Deleting message {num.decode()} from {mailbox_key}")
+                logger.info("Deleting message %s from %s", num.decode(), mailbox_key)
                 mail.store(num, "+FLAGS", "\\Deleted")
             else:
                 mail.store(num, "-FLAGS", "\\Seen")
@@ -232,21 +239,53 @@ def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_afte
 
         mail.close()
         mail.logout()
-        logger.info(f"Finished processing mailbox {mailbox_key}")
+        logger.info("Finished processing mailbox %s", mailbox_key)
 
     except Exception as e:
-        logger.exception(f"Error pulling mailbox {mailbox_key}: {e}")
+        logger.exception("Error pulling mailbox %s: %s", mailbox_key, e)
 
 
 def fetch_attachments_and_enqueue(email_message):
     """
-    Extracts attachments from the email.
+    Extracts attachments from the email and processes only allowed file types.
     
-    - If the attachment is a PDF (MIME type "application/pdf"), it is enqueued for upload.
-    - For any other attachment, a conversion task is enqueued that converts it to PDF.
+    Allowed file types include:
+      - PDF: application/pdf
+      - Microsoft Office files:
+          - Word: application/msword, 
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document
+          - Excel: application/vnd.ms-excel, 
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+          - PowerPoint: application/vnd.ms-powerpoint, 
+            application/vnd.openxmlformats-officedocument.presentationml.presentation
+      - Other meaningful attachments:
+          - Plain text: text/plain
+          - CSV: text/csv
+          - Rich Text Format: application/rtf, text/rtf
     
-    Returns True if at least one attachment was processed.
+    Attachments not in this list are skipped. Common image MIME types such as
+    image/jpeg, image/png, image/gif, image/bmp, image/tiff, and image/webp are
+    intentionally excluded.
+    
+    If the attachment is a PDF, it is enqueued for upload; any other allowed file
+    is enqueued for conversion to PDF.
+    
+    Returns True if at least one allowed attachment was processed.
     """
+    ALLOWED_MIME_TYPES = {
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "text/plain",
+        "text/csv",
+        "application/rtf",
+        "text/rtf",
+    }
+    
     has_attachment = False
     for part in email_message.walk():
         if part.get_content_maintype() == "multipart":
@@ -256,17 +295,23 @@ def fetch_attachments_and_enqueue(email_message):
         if not filename:
             continue
 
+        mime_type = part.get_content_type()
+        if mime_type not in ALLOWED_MIME_TYPES:
+            logger.info("Skipping attachment %s with MIME type %s",
+                        filename, mime_type)
+            continue
+
         file_path = os.path.join(settings.workdir, filename)
         with open(file_path, "wb") as f:
             f.write(part.get_payload(decode=True))
 
-        if part.get_content_type() == "application/pdf":
+        if mime_type == "application/pdf":
             upload_to_s3.delay(file_path)
-            logger.info(f"Enqueued PDF for upload: {filename}")
-        else:
+            logger.info("Enqueued PDF for upload: %s", filename)
+        elif mime_type in ALLOWED_MIME_TYPES:
             # Enqueue conversion to PDF using the Gotenberg service.
             convert_to_pdf.delay(file_path)
-            logger.info(f"Enqueued file for conversion to PDF: {filename}")
+            logger.info("Enqueued file for conversion to PDF: %s", filename)
 
         has_attachment = True
     return has_attachment
@@ -284,7 +329,7 @@ def email_already_has_label(mail, msg_id, label="Ingested"):
             if label in raw_labels:
                 return True
     except Exception as e:
-        logger.error(f"Failed to fetch labels for msg_id={msg_id}: {e}")
+        logger.error("Failed to fetch labels for msg_id=%s: %s", msg_id, e)
     return False
 
 
@@ -292,18 +337,18 @@ def mark_as_processed_with_star(mail, msg_id):
     """Stars the email in Gmail."""
     try:
         mail.store(msg_id, "+FLAGS", "\\Flagged")
-        logger.info(f"Email {msg_id} starred in Gmail.")
+        logger.info("Email %s starred in Gmail.", msg_id)
     except Exception as e:
-        logger.error(f"Failed to star email {msg_id}: {e}")
+        logger.error("Failed to star email %s: %s", msg_id, e)
 
 
 def mark_as_processed_with_label(mail, msg_id, label="Ingested"):
     """Adds a custom label to the email in Gmail."""
     try:
         mail.store(msg_id, "+X-GM-LABELS", label)
-        logger.info(f"Email {msg_id} labeled '{label}' in Gmail.")
+        logger.info("Email %s labeled '%s' in Gmail.", msg_id, label)
     except Exception as e:
-        logger.error(f"Failed to label email {msg_id} with {label}: {e}")
+        logger.error("Failed to label email %s with %s: %s", msg_id, label, e)
 
 
 def find_all_mail_folder(mail):
@@ -360,7 +405,7 @@ def find_all_mail_xlist(mail):
             match = re.search(r'"([^"]+)"$', line_str)
             if match:
                 candidate = match.group(1)
-                logger.info(f"Found All Mail folder via XLIST: {candidate}")
+                logger.info("Found All Mail folder via XLIST: %s", candidate)
                 all_mail_folder = candidate
         if line_str.startswith(tag):
             break
