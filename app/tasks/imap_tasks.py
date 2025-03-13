@@ -240,13 +240,39 @@ def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_afte
 
 def fetch_attachments_and_enqueue(email_message):
     """
-    Extracts attachments from the email.
+    Extracts attachments from the email and processes only allowed file types.
     
-    - If the attachment is a PDF (MIME type "application/pdf"), it is enqueued for upload.
-    - For any other attachment, a conversion task is enqueued that converts it to PDF.
+    Allowed file types include:
+      - PDF: application/pdf
+      - Microsoft Office files:
+          - Word: application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document
+          - Excel: application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+          - PowerPoint: application/vnd.ms-powerpoint, application/vnd.openxmlformats-officedocument.presentationml.presentation
+      - Other meaningful attachments:
+          - Plain text: text/plain
+          - CSV: text/csv
+          - Rich Text Format: application/rtf, text/rtf
     
-    Returns True if at least one attachment was processed.
+    - If the attachment is a PDF, it is enqueued for upload.
+    - For any other allowed file, a conversion task is enqueued to convert it to PDF.
+    
+    Returns True if at least one allowed attachment was processed.
     """
+    # Define allowed MIME types for office files and other meaningful attachments.
+    ALLOWED_MIME_TYPES = {
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "text/plain",
+        "text/csv",
+        "application/rtf",
+        "text/rtf",
+    }
+    
     has_attachment = False
     for part in email_message.walk():
         if part.get_content_maintype() == "multipart":
@@ -256,11 +282,17 @@ def fetch_attachments_and_enqueue(email_message):
         if not filename:
             continue
 
+        # Check the MIME type of the attachment.
+        mime_type = part.get_content_type()
+        if mime_type not in ALLOWED_MIME_TYPES:
+            logger.info(f"Skipping attachment {filename} with MIME type {mime_type}")
+            continue
+
         file_path = os.path.join(settings.workdir, filename)
         with open(file_path, "wb") as f:
             f.write(part.get_payload(decode=True))
 
-        if part.get_content_type() == "application/pdf":
+        if mime_type == "application/pdf":
             upload_to_s3.delay(file_path)
             logger.info(f"Enqueued PDF for upload: {filename}")
         else:
@@ -270,6 +302,7 @@ def fetch_attachments_and_enqueue(email_message):
 
         has_attachment = True
     return has_attachment
+
 
 
 def email_already_has_label(mail, msg_id, label="Ingested"):
