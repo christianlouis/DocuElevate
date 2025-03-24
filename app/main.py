@@ -115,7 +115,7 @@ def process_all_pdfs_in_workdir():
 
 app.include_router(frontend_router)
 
-@router.post("/ui-upload")
+@app.post("/ui-upload")
 async def ui_upload(file: UploadFile = File(...)):
     # You can store this file in your 'workdir' (like how /process does) or a tmp dir
     workdir = "/workdir"
