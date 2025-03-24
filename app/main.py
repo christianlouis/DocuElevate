@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from app.config import settings
 from app.tasks.upload_to_s3 import upload_to_s3
 from app.tasks.upload_to_dropbox import upload_to_dropbox
