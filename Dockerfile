@@ -18,6 +18,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application files correctly
 COPY ./app /app/app
+COPY ./frontend /app/frontend
 
 # Set Python path explicitly
 ENV PYTHONPATH=/app
