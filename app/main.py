@@ -114,3 +114,20 @@ def process_all_pdfs_in_workdir():
     }
 
 app.include_router(frontend_router)
+
+@router.post("/ui-upload")
+async def ui_upload(file: UploadFile = File(...)):
+    # You can store this file in your 'workdir' (like how /process does) or a tmp dir
+    workdir = "/workdir"
+    target_path = os.path.join(workdir, file.filename)
+
+    try:
+        with open(target_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+
+    # Now you can call your existing Celery flow:
+    task = upload_to_s3.delay(target_path)
+    return {"task_id": task.id, "status": "queued"}
