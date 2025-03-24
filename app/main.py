@@ -8,6 +8,7 @@ from app.tasks.upload_to_dropbox import upload_to_dropbox
 from app.tasks.upload_to_paperless import upload_to_paperless
 from app.tasks.upload_to_nextcloud import upload_to_nextcloud
 from app.tasks.send_to_all import send_to_all_destinations
+from app.frontend import router as frontend_router
 
 app = FastAPI(title="Document Processing API")
 
@@ -111,3 +112,5 @@ def process_all_pdfs_in_workdir():
         "pdf_files": pdf_files,
         "task_ids": task_ids
     }
+
+app.include_router(frontend_router)
