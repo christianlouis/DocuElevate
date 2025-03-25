@@ -31,7 +31,7 @@ async def custom_404_handler(request: Request, exc):
     return FileResponse("frontend/404.html", status_code=status.HTTP_404_NOT_FOUND) """
 
 @router.get("/", response_class=FileResponse)
-async def serve_upload(request: Request):
+async def serve_index(request: Request):
     return os.path.join(frontend_folder, "index.html")
 
 @router.get("/about", response_class=FileResponse)
