@@ -1,45 +1,78 @@
-<!-- File: frontend/index.html -->
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <title>Document Processor - Upload</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Tailwind via CDN or your own build -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <script>
-      // Optional: Additional JS for drag-and-drop, or you can keep it inline.
-    </script>
   </head>
-  <body class="bg-gray-50 h-screen flex flex-col items-center justify-center">
-    <h1 class="text-3xl font-bold mb-8">Upload a File</h1>
+  <body class="bg-gray-50 h-screen flex flex-col">
 
-    <div
-      id="dropZone"
-      class="border-4 border-dashed border-gray-300 rounded-lg p-8 bg-white text-center w-1/2"
-      ondrop="handleDrop(event)"
-      ondragover="handleDragOver(event)"
-    >
-      <p class="text-gray-500">
-        Drag & drop a file here, or click to select a file.
-      </p>
-      <input
-        id="fileInput"
-        type="file"
-        class="hidden"
-        onchange="handleFileSelect(event)"
-      />
-    </div>
+    <!-- Navigation Bar -->
+    <nav class="bg-white shadow">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between h-16 items-center">
+        <!-- Brand -->
+        <div class="flex-shrink-0">
+          <a href="/" class="text-xl font-bold text-blue-500 hover:text-blue-700">
+            Document Processor
+          </a>
+        </div>
+        <!-- Menu items on the right -->
+        <div class="flex space-x-4 items-center">
+          <!-- Example link to /upload (current page), or other pages -->
+          <a href="/upload" class="text-gray-700 hover:text-gray-900">
+            Upload
+          </a>
+          <!-- Placeholder for future pages -->
+          <a href="/some-other" class="text-gray-700 hover:text-gray-900">
+            Some Page
+          </a>
+          <!-- Dynamic login/logout section -->
+          <div id="authSection" class="text-gray-700 hover:text-gray-900"></div>
+        </div>
+      </div>
+    </nav>
 
-    <div id="statusMessage" class="mt-4 text-gray-700"></div>
+    <!-- Main content area -->
+    <main class="flex-grow flex flex-col items-center justify-center p-8">
+      <h1 class="text-3xl font-bold mb-8">Upload a File</h1>
 
+      <div
+        id="dropZone"
+        class="border-4 border-dashed border-gray-300 rounded-lg p-8 bg-white text-center w-full max-w-lg"
+        ondrop="handleDrop(event)"
+        ondragover="handleDragOver(event)"
+      >
+        <p class="text-gray-500 mb-4">
+          Drag & drop a file here, or click to select a file.
+        </p>
+        <input
+          id="fileInput"
+          type="file"
+          class="hidden"
+          onchange="handleFileSelect(event)"
+        />
+      </div>
+
+      <div id="statusMessage" class="mt-4 text-gray-700"></div>
+    </main>
+
+    <!-- Footer (optional) -->
+    <footer class="bg-white shadow mt-auto">
+      <div class="max-w-7xl mx-auto px-4 py-4 text-center text-gray-600">
+        &copy; 2025 Document Processor - All rights reserved.
+      </div>
+    </footer>
+
+    <!-- JavaScript -->
     <script>
+      // 1) Drag-and-drop / file input logic
       const dropZone = document.getElementById("dropZone");
       const fileInput = document.getElementById("fileInput");
       const statusMessage = document.getElementById("statusMessage");
 
-      dropZone.addEventListener("click", () => {
-        fileInput.click();
-      });
+      dropZone.addEventListener("click", () => fileInput.click());
 
       function handleDragOver(e) {
         e.preventDefault();
@@ -65,7 +98,6 @@
         statusMessage.textContent = `Uploading ${file.name}...`;
 
         try {
-          // We'll POST the file to /upload
           let formData = new FormData();
           formData.append("file", file);
 
@@ -84,6 +116,27 @@
           statusMessage.textContent = `Error: ${err}`;
         }
       }
+
+      // 2) Example dynamic auth check: if you have an endpoint like /api/whoami
+      //    that returns JSON with { email: "..."} if logged in, or 401 if not.
+      (async function checkAuth() {
+        try {
+          const resp = await fetch("/api/whoami");
+          if (resp.ok) {
+            const data = await resp.json();
+            document.getElementById("authSection").innerHTML = 
+              `Logged in as <strong>${data.email}</strong> <a href="/logout" class="ml-2 text-blue-600">Logout</a>`;
+          } else {
+            // If 401 or other non-OK status => show Login link
+            document.getElementById("authSection").innerHTML = 
+              `<a href="/login" class="text-blue-600">Login</a>`;
+          }
+        } catch (error) {
+          // If fetch fails, also show login
+          document.getElementById("authSection").innerHTML = 
+            `<a href="/login" class="text-blue-600">Login</a>`;
+        }
+      })();
     </script>
   </body>
 </html>
