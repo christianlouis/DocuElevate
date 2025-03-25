@@ -26,6 +26,6 @@ async def serve_upload(request: Request):
 def favicon():
     return os.path.join(frontend_folder, "favicon.ico")
 
-@app.exception_handler(404)
+@router.exception_handler(404)
 async def custom_404_handler(request: Request, exc):
     return FileResponse("frontend/404.html", status_code=status.HTTP_404_NOT_FOUND)
