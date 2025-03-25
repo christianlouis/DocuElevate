@@ -2,6 +2,7 @@
 
 import os
 from fastapi import FastAPI, HTTPException, UploadFile, File
+from app.database import init_db
 from app.config import settings
 from app.tasks.upload_to_s3 import upload_to_s3
 from app.tasks.upload_to_dropbox import upload_to_dropbox
@@ -11,6 +12,10 @@ from app.tasks.send_to_all import send_to_all_destinations
 from app.frontend import router as frontend_router
 
 app = FastAPI(title="Document Processing API")
+
+@app.on_event("startup")
+def on_startup():
+    init_db()  # Create tables if they don't exist
 
 @app.get("/")
 def root():
