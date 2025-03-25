@@ -90,6 +90,12 @@
       }
 
       async function uploadFile(file) {
+        // Check file type
+        const acceptedTypes = ['application/pdf'];
+        if (!acceptedTypes.includes(file.type)) {
+          statusMessage.textContent = `Error: Only PDF files are accepted.`;
+          return;
+        }
         statusMessage.textContent = `Uploading ${file.name}...`;
         try {
           let formData = new FormData();
