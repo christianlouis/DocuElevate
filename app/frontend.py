@@ -1,7 +1,8 @@
 # app/frontend.py (new file or inline in main.py)
-from fastapi import APIRouter
+from fastapi import APIRouter, Request, status
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from app.auth import require_login
 import os
 
 router = APIRouter()
@@ -14,11 +15,25 @@ frontend_folder = os.path.join(os.path.dirname(__file__), "..", "frontend")
 router.mount("/static", StaticFiles(directory=frontend_folder), name="static")
 
 # 2) For the root route ("/"), return the index.html
-@router.get("/ui", response_class=FileResponse)
-def serve_ui():
-    return os.path.join(frontend_folder, "index.html")
+
+@router.get("/upload", response_class=FileResponse)
+@require_login
+async def serve_upload(request: Request):
+    return os.path.join(frontend_folder, "upload.html")
 
 # 3) Serve favicon.ico from the frontend folder
 @router.get("/favicon.ico", response_class=FileResponse)
 def favicon():
     return os.path.join(frontend_folder, "favicon.ico")
+
+""" @router.exception_handler(404)
+async def custom_404_handler(request: Request, exc):
+    return FileResponse("frontend/404.html", status_code=status.HTTP_404_NOT_FOUND) """
+
+@router.get("/", response_class=FileResponse)
+async def serve_index(request: Request):
+    return os.path.join(frontend_folder, "index.html")
+
+@router.get("/about", response_class=FileResponse)
+async def serve_about(request: Request):
+    return os.path.join(frontend_folder, "about.html")

@@ -13,3 +13,6 @@ pymupdf
 requests
 dropbox
 azure-ai-documentintelligence
+authlib
+python-dotenv
+starlette

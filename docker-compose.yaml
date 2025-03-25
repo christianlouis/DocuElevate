@@ -8,7 +8,7 @@ services:
     working_dir: /workdir
 
     # We'll run uvicorn from the container's /app code
-    command: ["sh", "-c", "cd /app && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    command: ["sh", "-c", "cd /app && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"]
 
     # Environment variables
     environment:

@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
-
 import os
-from fastapi import FastAPI, HTTPException, UploadFile, File
+
+from fastapi import FastAPI, HTTPException, UploadFile, File, status, Request
+from fastapi.responses import FileResponse
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.config import Config
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from app.database import init_db
 from app.config import settings
 from app.tasks.upload_to_s3 import upload_to_s3
@@ -9,17 +14,42 @@ from app.tasks.upload_to_dropbox import upload_to_dropbox
 from app.tasks.upload_to_paperless import upload_to_paperless
 from app.tasks.upload_to_nextcloud import upload_to_nextcloud
 from app.tasks.send_to_all import send_to_all_destinations
+from pathlib import Path
+
+from app.api import router as api_router
 from app.frontend import router as frontend_router
+from app.auth import router as auth_router
+
+
+# Load configuration from .env for the session key
+config = Config(".env")
+SESSION_SECRET = config(
+    "SESSION_SECRET",
+    default="YOUR_DEFAULT_SESSION_SECRET_MUST_BE_32_CHARS_OR_MORE"
+)
 
 app = FastAPI(title="Document Processing API")
+
+
+# 1) Session Middleware (for request.session to work)
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+
+# 2) Respect the X-Forwarded-* headers from Traefik
+#    so your request.url_for(...) uses https://docparse.hosterra.net
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+
+# 3) (Optional but recommended) Restrict valid hosts:
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=[
+    "docparse.hosterra.net",
+    "localhost",
+    "127.0.0.1"
+])
 
 @app.on_event("startup")
 def on_startup():
     init_db()  # Create tables if they don't exist
 
-@app.get("/")
-def root():
-    return {"message": "Document Processing API"}
+
 
 @app.post("/process/")
 def process(file_path: str):
@@ -27,13 +57,13 @@ def process(file_path: str):
     API Endpoint to start document processing.
     This enqueues the first task (upload_to_s3), which handles the full pipeline.
     """
-
-    # If file_path is not absolute, treat it as relative to settings.workdir.
     if not os.path.isabs(file_path):
         file_path = os.path.join(settings.workdir, file_path)
 
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=400, detail=f"File {file_path} not found.")
+        raise HTTPException(
+            status_code=400, detail=f"File {file_path} not found."
+        )
 
     task = upload_to_s3.delay(file_path)
     return {"task_id": task.id, "status": "queued"}
@@ -43,7 +73,9 @@ def send_to_dropbox(file_path: str):
     if not os.path.isabs(file_path):
         file_path = os.path.join(settings.workdir, 'processed', file_path)
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=400, detail=f"File {file_path} not found.")
+        raise HTTPException(
+            status_code=400, detail=f"File {file_path} not found."
+        )
     task = upload_to_dropbox.delay(file_path)
     return {"task_id": task.id, "status": "queued"}
 
@@ -52,7 +84,9 @@ def send_to_paperless(file_path: str):
     if not os.path.isabs(file_path):
         file_path = os.path.join(settings.workdir, 'processed', file_path)
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=400, detail=f"File {file_path} not found.")
+        raise HTTPException(
+            status_code=400, detail=f"File {file_path} not found."
+        )
     task = upload_to_paperless.delay(file_path)
     return {"task_id": task.id, "status": "queued"}
 
@@ -61,10 +95,11 @@ def send_to_nextcloud(file_path: str):
     if not os.path.isabs(file_path):
         file_path = os.path.join(settings.workdir, 'processed', file_path)
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=400, detail=f"File {file_path} not found.")
+        raise HTTPException(
+            status_code=400, detail=f"File {file_path} not found."
+        )
     task = upload_to_nextcloud.delay(file_path)
     return {"task_id": task.id, "status": "queued"}
-
 
 @app.post("/send_to_all_destinations/")
 def send_to_all_destinations_endpoint(file_path: str):
@@ -72,29 +107,26 @@ def send_to_all_destinations_endpoint(file_path: str):
     Call the aggregator task that sends this file to dropbox, nextcloud, and paperless.
     """
     if not os.path.isabs(file_path):
-        # If not absolute, assume it's in processed subdir
         file_path = os.path.join(settings.workdir, 'processed', file_path)
 
     if not os.path.exists(file_path):
         raise HTTPException(
-            status_code=400,
-            detail=f"File {file_path} not found."
+            status_code=400, detail=f"File {file_path} not found."
         )
 
     task = send_to_all_destinations.delay(file_path)
     return {"task_id": task.id, "status": "queued", "file_path": file_path}
 
-
-
 @app.post("/processall")
 def process_all_pdfs_in_workdir():
     """
-    Finds all .pdf files in <workdir>/processed
-    and enqueues them for upload_to_s3.
+    Finds all .pdf files in <workdir> and enqueues them for upload_to_s3.
     """
     target_dir = settings.workdir
     if not os.path.exists(target_dir):
-        raise HTTPException(status_code=400, detail=f"Directory {target_dir} does not exist.")
+        raise HTTPException(
+            status_code=400, detail=f"Directory {target_dir} does not exist."
+        )
 
     pdf_files = []
     for filename in os.listdir(target_dir):
@@ -102,13 +134,11 @@ def process_all_pdfs_in_workdir():
             pdf_files.append(filename)
 
     if not pdf_files:
-        return {"message": "No PDF files found in processed directory."}
+        return {"message": "No PDF files found in that directory."}
 
     task_ids = []
     for pdf in pdf_files:
         file_path = os.path.join(target_dir, pdf)
-        # Enqueue upload_to_s3
-        from app.tasks.upload_to_s3 import upload_to_s3
         task = upload_to_s3.delay(file_path)
         task_ids.append(task.id)
 
@@ -118,21 +148,33 @@ def process_all_pdfs_in_workdir():
         "task_ids": task_ids
     }
 
-app.include_router(frontend_router)
-
 @app.post("/ui-upload")
 async def ui_upload(file: UploadFile = File(...)):
-    # You can store this file in your 'workdir' (like how /process does) or a tmp dir
+    """Endpoint to accept a user-uploaded file and enqueue it to S3."""
     workdir = "/workdir"
     target_path = os.path.join(workdir, file.filename)
-
     try:
         with open(target_path, "wb") as f:
             content = await file.read()
             f.write(content)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save file: {e}"
+        )
 
-    # Now you can call your existing Celery flow:
     task = upload_to_s3.delay(target_path)
     return {"task_id": task.id, "status": "queued"}
+
+@app.exception_handler(404)
+async def custom_404_handler(request: Request, exc: HTTPException):
+    return FileResponse(
+        "/app/frontend/404.html",
+        status_code=status.HTTP_404_NOT_FOUND
+    )
+
+# Include the frontend and auth routers
+app.include_router(frontend_router)
+app.include_router(auth_router)
+app.include_router(api_router, prefix="/api")
+
