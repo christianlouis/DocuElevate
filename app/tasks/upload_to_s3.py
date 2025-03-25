@@ -4,14 +4,19 @@ import os
 import uuid
 import boto3
 import shutil
+import mimetypes
 import fitz  # PyMuPDF for checking embedded text
+
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.tasks.process_with_textract import process_with_textract
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
-
-# Import the shared Celery instance
 from app.celery_app import celery
+
+# NEW imports for the DB
+from app.database import SessionLocal
+from app.models import FileRecord
+from app.utils import hash_file
 
 # Initialize S3 client
 s3_client = boto3.client(
@@ -21,13 +26,20 @@ s3_client = boto3.client(
     region_name=settings.aws_region,
 )
 
+
 @celery.task(base=BaseTaskWithRetry)
 def upload_to_s3(original_local_file: str):
     """
     Uploads a file to S3 with a UUID-based filename and triggers processing.
-    - If the PDF already contains embedded text, skip Textract and extract text locally.
-    - Otherwise, upload to S3 and process with Textract.
+
+    Steps:
+      1. Check if we have a FileRecord entry (via SHA-256 hash). If found, skip re-processing.
+      2. If not found, insert a new DB row and continue with the pipeline:
+         - Copy file to /workdir/tmp
+         - Check for embedded text. If present, skip S3 and run local GPT extraction
+         - Otherwise, upload to S3 and queue Textract-based OCR
     """
+
     bucket_name = settings.s3_bucket_name
     if not bucket_name:
         print("[ERROR] S3 bucket name not set.")
@@ -37,22 +49,54 @@ def upload_to_s3(original_local_file: str):
         print(f"[ERROR] File {original_local_file} not found.")
         return {"error": "File not found"}
 
-    # Generate UUID and create a new filename
-    file_ext = os.path.splitext(original_local_file)[1]  # Preserve original file extension
-    file_uuid = str(uuid.uuid4())
-    new_filename = f"{file_uuid}{file_ext}"
+    # 0. Compute the file hash and check for duplicates
+    filehash = hash_file(original_local_file)
+    original_filename = os.path.basename(original_local_file)
+    file_size = os.path.getsize(original_local_file)
+    mime_type, _ = mimetypes.guess_type(original_local_file)
+    if not mime_type:
+        mime_type = "application/octet-stream"
 
-    # Construct the new local path using settings.workdir and a 'tmp' subdirectory
-    tmp_dir = os.path.join(settings.workdir, "tmp")
-    new_local_path = os.path.join(tmp_dir, new_filename)
+    # Acquire DB session in the task
+    with SessionLocal() as db:
+        existing = db.query(FileRecord).filter_by(filehash=filehash).one_or_none()
+        if existing:
+            print(f"[INFO] Duplicate file detected (hash={filehash[:10]}...) Skipping processing.")
+            return {
+                "status": "duplicate_file",
+                "file_id": existing.id,
+                "detail": "File already processed."
+            }
 
-    # Ensure the target tmp directory exists
-    os.makedirs(tmp_dir, exist_ok=True)
+        # Not a duplicate -> insert a new record
+        new_record = FileRecord(
+            filehash=filehash,
+            original_filename=original_filename,
+            local_filename="",  # Will fill in after we move it
+            file_size=file_size,
+            mime_type=mime_type,
+        )
+        db.add(new_record)
+        db.commit()
+        db.refresh(new_record)
 
-    # Copy the file instead of moving it
-    shutil.copy(original_local_file, new_local_path)
+        # 1. Generate a UUID-based filename and place it in /workdir/tmp
+        file_ext = os.path.splitext(original_local_file)[1]
+        file_uuid = str(uuid.uuid4())
+        new_filename = f"{file_uuid}{file_ext}"
 
-    # Check for embedded text
+        tmp_dir = os.path.join(settings.workdir, "tmp")
+        os.makedirs(tmp_dir, exist_ok=True)
+        new_local_path = os.path.join(tmp_dir, new_filename)
+
+        # Copy the file instead of moving it
+        shutil.copy(original_local_file, new_local_path)
+
+        # Update the DB with final local filename
+        new_record.local_filename = new_local_path
+        db.commit()
+
+    # 2. Check for embedded text (outside the DB session to avoid long open transactions)
     pdf_doc = fitz.open(new_local_path)
     has_text = any(page.get_text() for page in pdf_doc)
     pdf_doc.close()
@@ -72,6 +116,7 @@ def upload_to_s3(original_local_file: str):
 
         return {"file": new_local_path, "status": "Text extracted locally"}
 
+    # 3. If no embedded text, upload to S3 and queue Textract processing
     try:
         print(f"[INFO] Uploading {new_local_path} to s3://{bucket_name}/{new_filename}...")
         s3_client.upload_file(new_local_path, bucket_name, new_filename)

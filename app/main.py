@@ -6,7 +6,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.config import Config
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
-
+from app.database import init_db
 from app.config import settings
 from app.tasks.upload_to_s3 import upload_to_s3
 from app.tasks.upload_to_dropbox import upload_to_dropbox
@@ -25,6 +25,7 @@ SESSION_SECRET = config(
 
 app = FastAPI(title="Document Processing API")
 
+
 # 1) Session Middleware (for request.session to work)
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 
@@ -38,6 +39,10 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=[
     "localhost",
     "127.0.0.1"
 ])
+
+@app.on_event("startup")
+def on_startup():
+    init_db()  # Create tables if they don't exist
 
 @app.get("/")
 def root():
