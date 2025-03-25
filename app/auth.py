@@ -26,13 +26,12 @@ def get_current_user(request: Request):
     return request.session.get("user")
 
 def require_login(func):
-    """Decorator to require login for particular endpoints."""
     @wraps(func)
     async def wrapper(request: Request, *args, **kwargs):
         if not request.session.get("user"):
-            # Not logged in => redirect to /login
+            # Save original URL in session before redirecting to login
+            request.session["redirect_after_login"] = str(request.url)
             return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
-        # User is logged in => proceed
         return await func(request, *args, **kwargs)
     return wrapper
 
@@ -55,7 +54,10 @@ async def auth(request: Request):
     token = await oauth.authentik.authorize_access_token(request)
     userinfo = token.get("userinfo")
     request.session["user"] = dict(userinfo)
-    return RedirectResponse(url="/ui")
+
+    # Get original destination or fallback
+    redirect_url = request.session.pop("redirect_after_login", "/ui")
+    return RedirectResponse(url=redirect_url)
 
 @router.get("/logout")
 async def logout(request: Request):
