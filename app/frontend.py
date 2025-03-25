@@ -35,5 +35,5 @@ async def serve_index(request: Request):
     return os.path.join(frontend_folder, "index.html")
 
 @router.get("/about", response_class=FileResponse)
-async def serve_upload(request: Request):
+async def serve_about(request: Request):
     return os.path.join(frontend_folder, "about.html")
