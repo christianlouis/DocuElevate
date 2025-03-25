@@ -1,7 +1,7 @@
 # app/models.py
 #!/usr/bin/env python3
 
-from sqlalchemy import Column, String, Integer, DateTime, func
+from sqlalchemy import Column, String, Integer, DateTime, func, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from app.database import Base
 
