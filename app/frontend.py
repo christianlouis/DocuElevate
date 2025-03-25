@@ -19,7 +19,7 @@ router.mount("/static", StaticFiles(directory=frontend_folder), name="static")
 @router.get("/upload", response_class=FileResponse)
 @require_login
 async def serve_upload(request: Request):
-    return os.path.join(frontend_folder, "index.html")
+    return os.path.join(frontend_folder, "upload.html")
 
 # 3) Serve favicon.ico from the frontend folder
 @router.get("/favicon.ico", response_class=FileResponse)
@@ -29,3 +29,11 @@ def favicon():
 """ @router.exception_handler(404)
 async def custom_404_handler(request: Request, exc):
     return FileResponse("frontend/404.html", status_code=status.HTTP_404_NOT_FOUND) """
+
+@router.get("/", response_class=FileResponse)
+async def serve_upload(request: Request):
+    return os.path.join(frontend_folder, "index.html")
+
+@router.get("/about", response_class=FileResponse)
+async def serve_upload(request: Request):
+    return os.path.join(frontend_folder, "about.html")

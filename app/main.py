@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, status, Request
+from fastapi import FastAPI, HTTPException, UploadFile, File, status, Request, FileResponse
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.config import Config
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -52,9 +52,7 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=[
 def on_startup():
     init_db()  # Create tables if they don't exist
 
-@app.get("/")
-def root():
-    return {"message": "Document Processing API"}
+
 
 @app.post("/process/")
 def process(file_path: str):

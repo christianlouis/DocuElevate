@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>About DocuNova</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  </head>
+  <body class="bg-gray-50 min-h-screen flex flex-col">
+    <!-- Navigation Bar -->
+    <nav class="bg-white shadow">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between h-16 items-center">
+        <!-- Brand -->
+        <div class="flex-shrink-0">
+          <a href="/" class="text-xl font-bold text-blue-500 hover:text-blue-700">
+            DocuNova
+          </a>
+        </div>
+        <!-- Menu items -->
+        <div class="flex space-x-4 items-center">
+          <a href="/" class="text-gray-700 hover:text-gray-900">Home</a>
+          <a href="/upload" class="text-gray-700 hover:text-gray-900">Upload</a>
+          <a href="/about" class="text-gray-700 hover:text-gray-900">About</a>
+          <a href="/files" class="text-gray-700 hover:text-gray-900">Files</a>
+          <!-- Dynamic auth section -->
+          <div id="authSection" class="text-gray-700 hover:text-gray-900"></div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow container mx-auto px-4 py-8">
+      <h1 class="text-4xl font-bold mb-4">About DocuNova</h1>
+      <p class="text-gray-700 mb-6 leading-relaxed">
+        Welcome to <strong>DocuNova</strong> – your modern, intelligent solution for document processing! We’ve built DocuNova to completely transform the way you handle your documents – from upload to extraction, from processing to storage. With cutting-edge technologies and a user-first design, DocuNova makes managing your documents as easy as a click.
+      </p>
+      
+      <!-- Our Story Section -->
+      <section class="bg-white shadow rounded p-6 mb-8">
+        <h2 class="text-2xl font-semibold mb-2">Our Story</h2>
+        <p class="text-gray-600 mb-4">
+          DocuNova was created with one goal in mind: to simplify and streamline document management for everyone, whether you’re a small startup or a large enterprise. Tired of clunky, outdated systems, we set out to design a platform that is intuitive, flexible, and packed with powerful features.
+        </p>
+        <p class="text-gray-600">
+          We harness the power of OpenAI for metadata extraction and text refinement, integrate seamlessly with Dropbox, Nextcloud, and Paperless NGX for storage and indexing, leverage Azure Document Intelligence for OCR, and even use Gotenberg for file-to-PDF conversions. And while we’ve implemented AWS S3 for now, we’re always evolving!
+        </p>
+      </section>
+
+      <!-- Key Features Section -->
+      <section class="bg-white shadow rounded p-6 mb-8">
+        <h2 class="text-2xl font-semibold mb-2">Key Features</h2>
+        <ul class="list-disc list-inside text-gray-600">
+          <li>Simple and secure file uploads with drag & drop support</li>
+          <li>Automated metadata extraction, indexing, and version control</li>
+          <li>Integration with popular cloud services and storage platforms</li>
+          <li>OCR and intelligent document processing powered by AI</li>
+          <li>IMAP integration for automated document fetching</li>
+          <li>Highly configurable via environment variables for custom workflows</li>
+          <li>Docker-ready for easy deployment and scalability</li>
+        </ul>
+      </section>
+
+      <!-- Meet the Creator Section -->
+      <section class="bg-white shadow rounded p-6 mb-8">
+        <h2 class="text-2xl font-semibold mb-2">Meet the Creator</h2>
+        <p class="text-gray-600">
+          DocuNova is passionately developed by <a href="https://christianlouis.de" target="_blank" class="text-blue-600 hover:underline">Christian Krakau-Louis</a>, a visionary committed to solving real-world challenges with innovative technology. His dedication and expertise ensure that every feature in DocuNova is crafted with you in mind.
+        </p>
+      </section>
+
+      <!-- GitHub Link Section -->
+      <section class="bg-white shadow rounded p-6">
+        <h2 class="text-2xl font-semibold mb-2">Get Involved</h2>
+        <p class="text-gray-600 mb-4">
+          Want to dive into the code, contribute ideas, or simply check out the magic behind DocuNova? Visit our GitHub repository to see the project in action!
+        </p>
+        <a href="https://github.com/christianlouis/document-processor" target="_blank" class="flex items-center space-x-2 text-blue-600 hover:text-blue-800">
+          <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub Logo" class="h-6 w-6" />
+          <span>View DocuNova on GitHub</span>
+        </a>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white shadow">
+      <div class="max-w-7xl mx-auto px-4 py-4 text-center text-gray-600">
+        &copy; 2025 DocuNova. All rights reserved.
+      </div>
+    </footer>
+
+    <!-- JavaScript for dynamic auth section -->
+    <script>
+      (async function checkAuth() {
+        try {
+          const resp = await fetch("/api/whoami");
+          if (resp.ok) {
+            const data = await resp.json();
+            document.getElementById("authSection").innerHTML = `
+              <img src="${data.picture}" alt="User Avatar" class="inline-block h-8 w-8 rounded-full mr-2">
+              Logged in as <strong>${data.email}</strong>
+              <a href="/logout" class="ml-4 text-blue-600 hover:text-blue-800">Logout</a>
+            `;
+          } else {
+            document.getElementById("authSection").innerHTML = 
+              `<a href="/login" class="text-blue-600">Login</a>`;
+          }
+        } catch (error) {
+          document.getElementById("authSection").innerHTML = 
+            `<a href="/login" class="text-blue-600">Login</a>`;
+        }
+      })();
+    </script>
+  </body>
+</html>
