@@ -2,7 +2,6 @@
 import os
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
 from starlette.config import Config
 
 from app.config import settings
@@ -20,8 +19,6 @@ SESSION_SECRET = config("SESSION_SECRET", default="YOUR_DEFAULT_SESSION_SECRET_M
 
 app = FastAPI(title="Document Processing API")
 
-# Add ProxyHeadersMiddleware so that FastAPI uses the proper forwarded headers (e.g., X-Forwarded-Proto)
-app.add_middleware(ProxyHeadersMiddleware)
 
 # Add session middleware (needed for storing user sessions)
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
