@@ -20,10 +20,6 @@ from app.api import router as api_router
 from app.frontend import router as frontend_router
 from app.auth import router as auth_router
 
-BASE_DIR = Path(__file__).resolve().parent  # this is /app in many Docker setups
-FRONTEND_DIR = BASE_DIR / "frontend"
-
-
 
 # Load configuration from .env for the session key
 config = Config(".env")
@@ -173,7 +169,7 @@ async def ui_upload(file: UploadFile = File(...)):
 @app.exception_handler(404)
 async def custom_404_handler(request: Request, exc: HTTPException):
     return FileResponse(
-        FRONTEND_DIR / "404.html",
+        "/app/frontend/404.html",
         status_code=status.HTTP_404_NOT_FOUND
     )
 

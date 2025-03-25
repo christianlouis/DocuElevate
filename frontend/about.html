@@ -65,7 +65,7 @@
       <section class="bg-white shadow rounded p-6 mb-8">
         <h2 class="text-2xl font-semibold mb-2">Meet the Creator</h2>
         <p class="text-gray-600">
-          DocuNova is passionately developed by <a href="https://christianlouis.de" target="_blank" class="text-blue-600 hover:underline">Christian Krakau-Louis</a>, a visionary committed to solving real-world challenges with innovative technology. His dedication and expertise ensure that every feature in DocuNova is crafted with you in mind.
+          DocuNova is passionately developed by <a href="https://www.christianlouis.de" target="_blank" class="text-blue-600 hover:underline">Christian Krakau-Louis</a>, a visionary committed to solving real-world challenges with innovative technology. His dedication and expertise ensure that every feature in DocuNova is crafted with you in mind.
         </p>
       </section>
 
@@ -89,27 +89,44 @@
       </div>
     </footer>
 
-    <!-- JavaScript for dynamic auth section -->
-    <script>
-      (async function checkAuth() {
-        try {
-          const resp = await fetch("/api/whoami");
-          if (resp.ok) {
-            const data = await resp.json();
-            document.getElementById("authSection").innerHTML = `
-              <img src="${data.picture}" alt="User Avatar" class="inline-block h-8 w-8 rounded-full mr-2">
-              Logged in as <strong>${data.email}</strong>
-              <a href="/logout" class="ml-4 text-blue-600 hover:text-blue-800">Logout</a>
-            `;
-          } else {
-            document.getElementById("authSection").innerHTML = 
-              `<a href="/login" class="text-blue-600">Login</a>`;
-          }
-        } catch (error) {
-          document.getElementById("authSection").innerHTML = 
-            `<a href="/login" class="text-blue-600">Login</a>`;
-        }
-      })();
-    </script>
+<!-- JavaScript for dynamic auth section -->
+<script>
+  (async function checkAuth() {
+    try {
+      const resp = await fetch("/api/whoami");
+      if (resp.ok) {
+        const data = await resp.json();
+        // data.picture is expected to be a Gravatar URL
+        const authSection = document.getElementById("authSection");
+        authSection.innerHTML = '';
+        
+        const img = document.createElement('img');
+        img.src = data.picture;
+        img.alt = 'User Avatar';
+        img.className = 'inline-block h-8 w-8 rounded-full mr-2';
+        
+        const textNode = document.createTextNode('Logged in as ');
+        const strong = document.createElement('strong');
+        strong.textContent = data.email;
+        
+        const logoutLink = document.createElement('a');
+        logoutLink.href = '/logout';
+        logoutLink.className = 'ml-4 text-blue-600 hover:text-blue-800';
+        logoutLink.textContent = 'Logout';
+        
+        authSection.appendChild(img);
+        authSection.appendChild(textNode);
+        authSection.appendChild(strong);
+        authSection.appendChild(logoutLink);
+      } else {
+        document.getElementById("authSection").innerHTML = 
+          `<a href="/login" class="text-blue-600">Login</a>`;
+      }
+    } catch (error) {
+      document.getElementById("authSection").innerHTML = 
+        `<a href="/login" class="text-blue-600">Login</a>`;
+    }
+  })();
+</script>
   </body>
 </html>
