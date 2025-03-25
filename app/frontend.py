@@ -2,6 +2,7 @@
 from fastapi import APIRouter
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from app.auth import require_login
 import os
 
 router = APIRouter()
@@ -14,7 +15,9 @@ frontend_folder = os.path.join(os.path.dirname(__file__), "..", "frontend")
 router.mount("/static", StaticFiles(directory=frontend_folder), name="static")
 
 # 2) For the root route ("/"), return the index.html
-@router.get("/ui", response_class=FileResponse)
+
+@router.get("/upload", response_class=FileResponse)
+@require_login
 def serve_ui():
     return os.path.join(frontend_folder, "index.html")
 
