@@ -18,7 +18,7 @@ router.mount("/static", StaticFiles(directory=frontend_folder), name="static")
 
 @router.get("/upload", response_class=FileResponse)
 @require_login
-def serve_ui(request: Request):
+async def serve_upload(request: Request):
     return os.path.join(frontend_folder, "index.html")
 
 # 3) Serve favicon.ico from the frontend folder
