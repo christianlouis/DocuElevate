@@ -17,3 +17,8 @@ router.mount("/static", StaticFiles(directory=frontend_folder), name="static")
 @router.get("/ui", response_class=FileResponse)
 def serve_ui():
     return os.path.join(frontend_folder, "index.html")
+
+# 3) Serve favicon.ico from the frontend folder
+@router.get("/favicon.ico", response_class=FileResponse)
+def favicon():
+    return os.path.join(frontend_folder, "favicon.ico")
