@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 import os
 from fastapi import FastAPI, HTTPException, UploadFile, File
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
+from starlette.config import Config
+
 from app.config import settings
 from app.tasks.upload_to_s3 import upload_to_s3
 from app.tasks.upload_to_dropbox import upload_to_dropbox
@@ -9,14 +13,15 @@ from app.tasks.upload_to_nextcloud import upload_to_nextcloud
 from app.tasks.send_to_all import send_to_all_destinations
 from app.frontend import router as frontend_router
 from app.auth import router as auth_router
-from starlette.middleware.sessions import SessionMiddleware
-from starlette.config import Config
 
 # Load configuration from .env for the session key
 config = Config(".env")
 SESSION_SECRET = config("SESSION_SECRET", default="YOUR_DEFAULT_SESSION_SECRET_MUST_BE_32_CHARS_OR_MORE")
 
 app = FastAPI(title="Document Processing API")
+
+# Add ProxyHeadersMiddleware so that FastAPI uses the proper forwarded headers (e.g., X-Forwarded-Proto)
+app.add_middleware(ProxyHeadersMiddleware)
 
 # Add session middleware (needed for storing user sessions)
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
