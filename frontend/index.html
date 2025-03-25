@@ -124,8 +124,12 @@
           const resp = await fetch("/api/whoami");
           if (resp.ok) {
             const data = await resp.json();
-            document.getElementById("authSection").innerHTML = 
-              `Logged in as <strong>${data.email}</strong> <a href="/logout" class="ml-2 text-blue-600">Logout</a>`;
+            // data.picture is the Gravatar URL
+            document.getElementById("authSection").innerHTML = `
+            <img src="${data.picture}" alt="User Avatar" class="inline-block h-8 w-8 rounded-full mr-2">
+            Logged in as <strong>${data.email}</strong>
+            <a href="/logout" class="ml-4 text-blue-600 hover:text-blue-800">Logout</a>
+            `;
           } else {
             // If 401 or other non-OK status => show Login link
             document.getElementById("authSection").innerHTML = 

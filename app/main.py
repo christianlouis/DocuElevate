@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, status
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.config import Config
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -13,8 +13,16 @@ from app.tasks.upload_to_dropbox import upload_to_dropbox
 from app.tasks.upload_to_paperless import upload_to_paperless
 from app.tasks.upload_to_nextcloud import upload_to_nextcloud
 from app.tasks.send_to_all import send_to_all_destinations
+from pathlib import Path
+
+from app.api import router as api_router
 from app.frontend import router as frontend_router
 from app.auth import router as auth_router
+
+BASE_DIR = Path(__file__).resolve().parent  # this is /app in many Docker setups
+FRONTEND_DIR = BASE_DIR / "frontend"
+
+
 
 # Load configuration from .env for the session key
 config = Config(".env")
@@ -163,6 +171,15 @@ async def ui_upload(file: UploadFile = File(...)):
     task = upload_to_s3.delay(target_path)
     return {"task_id": task.id, "status": "queued"}
 
+@app.exception_handler(404)
+async def custom_404_handler(request: Request, exc: HTTPException):
+    return FileResponse(
+        FRONTEND_DIR / "404.html",
+        status_code=status.HTTP_404_NOT_FOUND
+    )
+
 # Include the frontend and auth routers
 app.include_router(frontend_router)
 app.include_router(auth_router)
+app.include_router(api_router, prefix="/api")
+
