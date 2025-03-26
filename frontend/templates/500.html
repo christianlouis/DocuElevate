@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Server Error - DocuNova{% endblock %}
+
+{% block content %}
+<div class="relative isolate px-6 pt-14 lg:px-8">
+  <!-- Hero Image -->
+  <div class="mx-auto max-w-3xl py-12">
+    <img
+      src="/static/explosion.jpg"
+      alt="Server Explosion"
+      class="mx-auto rounded-xl shadow-xl h-[300px] w-full object-cover"
+    />
+  </div>
+
+  <div class="mx-auto max-w-3xl text-center">
+    <h1 class="text-7xl font-bold text-red-500">500</h1>
+    <p class="mt-4 text-4xl font-semibold tracking-tight text-gray-900">
+      Oops! Something Went Wrong.
+    </p>
+    <p class="mt-4 text-lg leading-8 text-gray-600">
+      Our servers encountered a mishap and need a moment. Maybe the hamsters spilled their coffee?
+    </p>
+    <p class="mt-2 text-lg leading-8 text-gray-600">
+      We're already on it—sorting files, rebooting servers, and recalibrating flux capacitors.
+    </p>
+
+    {% if exc %}
+    <details class="mt-8 bg-gray-100 rounded-lg p-4 text-left shadow-md">
+      <summary class="cursor-pointer font-medium text-blue-600 hover:text-blue-700">
+        Show Debug Info
+      </summary>
+      <pre class="mt-4 text-sm text-gray-700 overflow-auto">{{ exc }}</pre>
+    </details>
+    {% endif %}
+
+    <div class="mt-10">
+      <a href="/" class="inline-block bg-blue-600 px-6 py-3 rounded-md text-white font-semibold shadow-md hover:bg-blue-700 transition-colors">
+        &larr; Go Home
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

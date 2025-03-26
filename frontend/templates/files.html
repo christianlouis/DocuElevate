@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}File Records{% endblock %}
+
+{% block head_extra %}
+  <!-- Include Grid.js CSS -->
+  <link href="https://unpkg.com/gridjs/dist/theme/mermaid.min.css" rel="stylesheet" />
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-8">
+  <h2 class="text-3xl font-bold mb-6">File Records</h2>
+  <!-- Grid.js will render the table in this container -->
+  <div id="gridjs-wrapper"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <!-- Include Grid.js JS -->
+  <script src="https://unpkg.com/gridjs/dist/gridjs.umd.js"></script>
+  <script>
+    new gridjs.Grid({
+      columns: [
+        { id: 'id', name: 'ID' },
+        { id: 'original_filename', name: 'Original Filename' },
+        { id: 'file_size', name: 'File Size' },
+        { id: 'mime_type', name: 'Mime Type' },
+        { id: 'created_at', name: 'Created At' }
+      ],
+      server: {
+        url: '/api/files',
+        then: data => data.map(file => [
+          file.id,
+          file.original_filename || "",
+          file.file_size,
+          file.mime_type,
+          file.created_at || ""
+        ])
+      },
+      search: true,
+      sort: true,
+      pagination: {
+        limit: 10
+      }
+    }).render(document.getElementById("gridjs-wrapper"));
+  </script>
+{% endblock %}
