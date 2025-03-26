@@ -1,5 +1,5 @@
-# app/auth.py
 import os
+import inspect
 from functools import wraps
 
 from authlib.integrations.starlette_client import OAuth
@@ -37,7 +37,11 @@ def require_login(func):
         if not request.session.get("user"):
             request.session["redirect_after_login"] = str(request.url)
             return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
-        return await func(request, *args, **kwargs)
+        # Check if the wrapped function is a coroutine function
+        if inspect.iscoroutinefunction(func):
+            return await func(request, *args, **kwargs)
+        else:
+            return func(request, *args, **kwargs)
 
     return wrapper
 
