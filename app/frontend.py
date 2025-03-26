@@ -11,6 +11,18 @@ router = APIRouter()
 templates_dir = Path(__file__).parent.parent / "frontend" / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
 
+@router.get("/", include_in_schema=False)
+ async def serve_index(request: Request):
+     return templates.TemplateResponse("index.html", {"request": request})
+ 
+ @router.get("/about", include_in_schema=False)
+ async def serve_about(request: Request):
+     return templates.TemplateResponse("about.html", {"request": request})
+ 
+ @router.get("/upload", include_in_schema=False)
+ @require_login
+ async def serve_upload(request: Request):
+     return templates.TemplateResponse("upload.html", {"request": request})
   
 @router.get("/favicon.ico", include_in_schema=False)
 def favicon():
