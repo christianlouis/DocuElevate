@@ -1,84 +1,46 @@
 {% extends "base.html" %}
-{% block title %}Files{% endblock %}
+{% block title %}File Records{% endblock %}
+
+{% block head_extra %}
+  <!-- Include Grid.js CSS -->
+  <link href="https://unpkg.com/gridjs/dist/theme/mermaid.min.css" rel="stylesheet" />
+{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 py-8">
   <h2 class="text-3xl font-bold mb-6">File Records</h2>
-
-  <!-- Placeholder for the table -->
-  <div id="fileTableContainer" class="overflow-x-auto bg-white shadow-md rounded">
-    <!-- We’ll fill this via JS -->
-    <table id="fileTable" class="min-w-full text-left border-collapse hidden">
-      <thead>
-        <tr class="border-b bg-gray-100">
-          <th class="py-3 px-4">ID</th>
-          <th class="py-3 px-4">Original Filename</th>
-          <th class="py-3 px-4">Size</th>
-          <th class="py-3 px-4">Mime Type</th>
-          <th class="py-3 px-4">Created At</th>
-        </tr>
-      </thead>
-      <tbody id="fileTableBody">
-        <!-- Rows inserted by JS -->
-      </tbody>
-    </table>
-  </div>
-
-  <p id="noFilesMsg" class="text-gray-600 hidden">
-    No files found.
-  </p>
+  <!-- Grid.js will render the table in this container -->
+  <div id="gridjs-wrapper"></div>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script>
-  // Once the DOM is ready, fetch from /api/files
-  document.addEventListener("DOMContentLoaded", async () => {
-    const table = document.getElementById("fileTable");
-    const tableBody = document.getElementById("fileTableBody");
-    const noFilesMsg = document.getElementById("noFilesMsg");
-
-    try {
-      const resp = await fetch("/api/files");
-      if (!resp.ok) {
-        // e.g. 401 => not logged in, or 403 => forbidden
-        if (resp.status === 401) {
-          // Could redirect to /login
-          window.location.href = "/login";
-          return;
-        }
-        throw new Error(`HTTP ${resp.status} - ${resp.statusText}`);
+  <!-- Include Grid.js JS -->
+  <script src="https://unpkg.com/gridjs/dist/gridjs.umd.js"></script>
+  <script>
+    new gridjs.Grid({
+      columns: [
+        { id: 'id', name: 'ID' },
+        { id: 'original_filename', name: 'Original Filename' },
+        { id: 'file_size', name: 'File Size' },
+        { id: 'mime_type', name: 'Mime Type' },
+        { id: 'created_at', name: 'Created At' }
+      ],
+      server: {
+        url: '/api/files',
+        then: data => data.map(file => [
+          file.id,
+          file.original_filename || "",
+          file.file_size,
+          file.mime_type,
+          file.created_at || ""
+        ])
+      },
+      search: true,
+      sort: true,
+      pagination: {
+        limit: 10
       }
-      const data = await resp.json(); // array of file objects
-
-      // If empty, show "No files" message
-      if (!data || data.length === 0) {
-        noFilesMsg.classList.remove("hidden");
-        return;
-      }
-
-      // Otherwise, fill the table
-      data.forEach(file => {
-        const row = document.createElement("tr");
-        row.className = "border-b hover:bg-gray-50";
-
-        row.innerHTML = `
-          <td class="py-3 px-4">${file.id}</td>
-          <td class="py-3 px-4">${file.original_filename ?? ""}</td>
-          <td class="py-3 px-4">${file.file_size}</td>
-          <td class="py-3 px-4">${file.mime_type}</td>
-          <td class="py-3 px-4">${file.created_at ? file.created_at : ""}</td>
-        `;
-
-        tableBody.appendChild(row);
-      });
-
-      // Show the table now that we have data
-      table.classList.remove("hidden");
-    } catch (err) {
-      console.error("Failed to load file records:", err);
-      alert("Could not load files from /api/files. Check console for details.");
-    }
-  });
-</script>
+    }).render(document.getElementById("gridjs-wrapper"));
+  </script>
 {% endblock %}
