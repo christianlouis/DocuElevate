@@ -1,4 +1,3 @@
-<!-- frontend/templates/base.html -->
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -15,12 +14,22 @@
     <!-- Global Nav -->
     <nav class="bg-white shadow">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between h-16 items-center">
-        <!-- Brand -->
+        
+        <!-- Brand + Icon -->
         <div class="flex-shrink-0">
-          <a href="/" class="text-xl font-bold text-blue-500 hover:text-blue-700">
-            DocuNova
+          <a href="/" class="inline-flex items-center space-x-2">
+            <!-- Icon -->
+            <span 
+              class="material-symbols-light--folder-managed-outline text-blue-500"
+              style="width: 24px; height: 24px;"
+            ></span>
+            <!-- Text -->
+            <span class="text-xl font-bold text-blue-500 hover:text-blue-700">
+              DocuNova
+            </span>
           </a>
         </div>
+        
         <!-- Menu Items -->
         <div class="flex space-x-4 items-center">
           <a href="/" class="text-gray-700 hover:text-gray-900">Home</a>
