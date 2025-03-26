@@ -180,6 +180,20 @@ async def custom_404_handler(request: Request, exc: HTTPException):
         status_code=status.HTTP_404_NOT_FOUND
     )
 
+@app.exception_handler(500)
+async def custom_500_handler(request: Request, exc: Exception):
+    templates = Jinja2Templates(directory=str(frontend_static_dir.parent / "templates"))
+    # Option 1: Keep it simple, just show a funny 500 message:
+    return templates.TemplateResponse(
+        "500.html",
+        {"request": request, "exc": exc},
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+    )
+
+@app.get("/test-500")
+def test_500():
+    raise RuntimeError("Testing forced 500 error!")
+
 # Include the frontend and auth routers
 app.include_router(frontend_router)
 app.include_router(auth_router)

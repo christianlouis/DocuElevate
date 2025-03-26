@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Server Error - Oops{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto py-16 text-center">
+  <h1 class="text-6xl font-bold text-red-600 mb-4">500</h1>
+  <h2 class="text-3xl font-semibold text-gray-800 mb-8">Internal Server Error</h2>
+
+  <!-- The meltdown SVG (or PNG) from /static/images/ -->
+  <img 
+    src="/static/explosion.jpg"
+    alt="A meltdown illustration"
+    class="mx-auto w-48 h-48 mb-8"
+  />
+
+  <p class="text-gray-600 mb-4">
+    <strong>Uh-oh!</strong> It looks like DocuNova misfiled some paperwork. Our server hamsters
+    have taken a short coffee break – but we promise they’ll be right back!
+  </p>
+  <p class="text-gray-600 mb-8">
+    We’re on it – reordering the files, recharging the flux capacitor, or maybe just
+    turning it off and on again.
+  </p>
+
+  <!-- If you want to show *some* technical info in dev mode -->
+  {% if exc %}
+    <details class="my-4 bg-gray-100 text-left p-4 rounded overflow-auto">
+      <summary class="cursor-pointer text-blue-600 hover:text-blue-800 font-semibold mb-2">
+        Show Debug Info
+      </summary>
+      <pre class="mt-2 text-sm text-gray-700">{{ exc }}</pre>
+    </details>
+  {% endif %}
+
+  <a href="/" class="text-blue-600 hover:text-blue-800 font-semibold">&larr; Return Home</a>
+</div>
+{% endblock %}
