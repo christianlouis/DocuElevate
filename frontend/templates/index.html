@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Home - DocuNova{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+  <h1 class="text-4xl font-bold mb-4">Welcome to DocuNova</h1>
+  <p class="text-gray-700 mb-8">
+    Your intelligent solution for processing, managing, and organizing documents effortlessly.
+  </p>
+  <!-- Sample sections -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+    <div class="bg-white shadow rounded p-6">
+      <h2 class="text-2xl font-semibold mb-2">Upload Documents</h2>
+      <p class="text-gray-600">
+        Quickly upload and process your files with our user-friendly interface.
+      </p>
+      <a href="/upload" class="mt-4 inline-block text-blue-600 hover:text-blue-800">
+        Get Started &rarr;
+      </a>
+    </div>
+    <div class="bg-white shadow rounded p-6">
+      <h2 class="text-2xl font-semibold mb-2">Manage Your Files</h2>
+      <p class="text-gray-600">
+        View, organize, and collaborate on your processed files in one central hub.
+      </p>
+      <a href="/files" class="mt-4 inline-block text-blue-600 hover:text-blue-800">
+        View Files &rarr;
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

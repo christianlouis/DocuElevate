@@ -3,10 +3,14 @@ import os
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, status, Request
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.config import Config
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+from pathlib import Path
+
 from app.database import init_db
 from app.config import settings
 from app.tasks.upload_to_s3 import upload_to_s3
@@ -14,12 +18,10 @@ from app.tasks.upload_to_dropbox import upload_to_dropbox
 from app.tasks.upload_to_paperless import upload_to_paperless
 from app.tasks.upload_to_nextcloud import upload_to_nextcloud
 from app.tasks.send_to_all import send_to_all_destinations
-from pathlib import Path
 
 from app.api import router as api_router
 from app.frontend import router as frontend_router
 from app.auth import router as auth_router
-
 
 # Load configuration from .env for the session key
 config = Config(".env")
@@ -30,12 +32,10 @@ SESSION_SECRET = config(
 
 app = FastAPI(title="Document Processing API")
 
-
 # 1) Session Middleware (for request.session to work)
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 
 # 2) Respect the X-Forwarded-* headers from Traefik
-#    so your request.url_for(...) uses https://docparse.hosterra.net
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 # 3) (Optional but recommended) Restrict valid hosts:
@@ -45,11 +45,13 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=[
     "127.0.0.1"
 ])
 
+# Mount the static folder for CSS/JS:
+frontend_static_dir = Path(__file__).parent.parent / "frontend" / "static"
+app.mount("/static", StaticFiles(directory=frontend_static_dir), name="static")
+
 @app.on_event("startup")
 def on_startup():
     init_db()  # Create tables if they don't exist
-
-
 
 @app.post("/process/")
 def process(file_path: str):
@@ -166,10 +168,15 @@ async def ui_upload(file: UploadFile = File(...)):
     task = upload_to_s3.delay(target_path)
     return {"task_id": task.id, "status": "queued"}
 
+# Custom 404 - we can still return the Jinja2 template, or the old static file:
+# For a dynamic 404 using the base layout, see "frontend/404.html" usage below:
 @app.exception_handler(404)
 async def custom_404_handler(request: Request, exc: HTTPException):
-    return FileResponse(
-        "/app/frontend/404.html",
+    # Serve the 404 template directly
+    templates = Jinja2Templates(directory=str(frontend_static_dir.parent / "templates"))
+    return templates.TemplateResponse(
+        "404.html",
+        {"request": request},
         status_code=status.HTTP_404_NOT_FOUND
     )
 
@@ -177,4 +184,3 @@ async def custom_404_handler(request: Request, exc: HTTPException):
 app.include_router(frontend_router)
 app.include_router(auth_router)
 app.include_router(api_router, prefix="/api")
-
