@@ -1,5 +1,4 @@
 # app/auth.py
-# app/auth.py
 import os
 from functools import wraps
 

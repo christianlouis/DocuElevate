@@ -1,39 +1,30 @@
-# app/frontend.py (new file or inline in main.py)
-from fastapi import APIRouter, Request, status
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-from app.auth import require_login
+# app/frontend.py
 import os
+from pathlib import Path
+from fastapi import APIRouter, Request
+from fastapi.templating import Jinja2Templates
+from app.auth import require_login
 
 router = APIRouter()
 
-# 1) Serve the folder that contains index.html, etc.
-#    e.g. "frontend" is relative to your project root
-frontend_folder = os.path.join(os.path.dirname(__file__), "..", "frontend")
+# Point templates_dir to "frontend/templates"
+templates_dir = Path(__file__).parent.parent / "frontend" / "templates"
+templates = Jinja2Templates(directory=str(templates_dir))
 
-# If you just want to serve the entire folder as static:
-router.mount("/static", StaticFiles(directory=frontend_folder), name="static")
+@router.get("/", include_in_schema=False)
+async def serve_index(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
-# 2) For the root route ("/"), return the index.html
+@router.get("/about", include_in_schema=False)
+async def serve_about(request: Request):
+    return templates.TemplateResponse("about.html", {"request": request})
 
-@router.get("/upload", response_class=FileResponse)
+@router.get("/upload", include_in_schema=False)
 @require_login
 async def serve_upload(request: Request):
-    return os.path.join(frontend_folder, "upload.html")
+    return templates.TemplateResponse("upload.html", {"request": request})
 
-# 3) Serve favicon.ico from the frontend folder
-@router.get("/favicon.ico", response_class=FileResponse)
+@router.get("/favicon.ico", include_in_schema=False)
 def favicon():
-    return os.path.join(frontend_folder, "favicon.ico")
-
-""" @router.exception_handler(404)
-async def custom_404_handler(request: Request, exc):
-    return FileResponse("frontend/404.html", status_code=status.HTTP_404_NOT_FOUND) """
-
-@router.get("/", response_class=FileResponse)
-async def serve_index(request: Request):
-    return os.path.join(frontend_folder, "index.html")
-
-@router.get("/about", response_class=FileResponse)
-async def serve_about(request: Request):
-    return os.path.join(frontend_folder, "about.html")
+    # If you have a real favicon in `frontend/static/favicon.ico`, you could do:
+    return str(Path(__file__).parent.parent / "frontend" / "static" / "favicon.ico")
