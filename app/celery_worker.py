@@ -9,7 +9,7 @@ from app.celery_app import celery
 from app import tasks  # <— This imports app/tasks.py so Celery can register tasks
 
 # **Ensure all tasks are imported before Celery starts**
-from app.tasks.upload_to_s3 import upload_to_s3
+from app.tasks.process_document import process_document  # Updated import
 from app.tasks.process_with_textract import process_with_textract
 from app.tasks.refine_text_with_gpt import refine_text_with_gpt
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt

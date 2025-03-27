@@ -2,7 +2,6 @@
 
 import os
 import uuid
-import boto3
 import shutil
 import mimetypes
 import fitz  # PyMuPDF for checking embedded text
@@ -12,38 +11,23 @@ from app.tasks.retry_config import BaseTaskWithRetry
 from app.tasks.process_with_textract import process_with_textract
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.celery_app import celery
-
-# NEW imports for the DB
 from app.database import SessionLocal
 from app.models import FileRecord
 from app.utils import hash_file
 
-# Initialize S3 client
-s3_client = boto3.client(
-    "s3",
-    aws_access_key_id=settings.aws_access_key_id,
-    aws_secret_access_key=settings.aws_secret_access_key,
-    region_name=settings.aws_region,
-)
-
 
 @celery.task(base=BaseTaskWithRetry)
-def upload_to_s3(original_local_file: str):
+def process_document(original_local_file: str):
     """
-    Uploads a file to S3 with a UUID-based filename and triggers processing.
+    Process a document file and trigger appropriate text extraction.
 
     Steps:
       1. Check if we have a FileRecord entry (via SHA-256 hash). If found, skip re-processing.
       2. If not found, insert a new DB row and continue with the pipeline:
          - Copy file to /workdir/tmp
-         - Check for embedded text. If present, skip S3 and run local GPT extraction
-         - Otherwise, upload to S3 and queue Textract-based OCR
+         - Check for embedded text. If present, run local GPT extraction
+         - Otherwise, queue Textract-based OCR
     """
-
-    bucket_name = settings.s3_bucket_name
-    if not bucket_name:
-        print("[ERROR] S3 bucket name not set.")
-        return {"error": "Missing S3 bucket name"}
 
     if not os.path.exists(original_local_file):
         print(f"[ERROR] File {original_local_file} not found.")
@@ -102,7 +86,7 @@ def upload_to_s3(original_local_file: str):
     pdf_doc.close()
 
     if has_text:
-        print(f"[INFO] PDF {original_local_file} contains embedded text. Skipping Textract.")
+        print(f"[INFO] PDF {original_local_file} contains embedded text. Processing locally.")
 
         # Extract text locally
         extracted_text = ""
@@ -113,20 +97,8 @@ def upload_to_s3(original_local_file: str):
 
         # Call metadata extraction directly
         extract_metadata_with_gpt.delay(new_filename, extracted_text)
-
         return {"file": new_local_path, "status": "Text extracted locally"}
 
-    # 3. If no embedded text, upload to S3 and queue Textract processing
-    try:
-        print(f"[INFO] Uploading {new_local_path} to s3://{bucket_name}/{new_filename}...")
-        s3_client.upload_file(new_local_path, bucket_name, new_filename)
-        print(f"[INFO] File uploaded successfully: {new_filename}")
-
-        # Trigger Textract processing if no embedded text was found
-        process_with_textract.delay(new_filename)
-
-        return {"file": new_local_path, "s3_key": new_filename, "status": "Uploaded to S3 for OCR"}
-
-    except Exception as e:
-        print(f"[ERROR] Failed to upload {new_local_path} to S3: {e}")
-        return {"error": str(e)}
+    # 3. If no embedded text, queue Textract processing
+    process_with_textract.delay(new_filename)
+    return {"file": new_local_path, "status": "Queued for OCR"}

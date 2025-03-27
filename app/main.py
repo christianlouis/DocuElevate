@@ -13,7 +13,7 @@ from pathlib import Path
 
 from app.database import init_db
 from app.config import settings
-from app.tasks.upload_to_s3 import upload_to_s3
+from app.tasks.process_document import process_document  # Updated import
 from app.tasks.upload_to_dropbox import upload_to_dropbox
 from app.tasks.upload_to_paperless import upload_to_paperless
 from app.tasks.upload_to_nextcloud import upload_to_nextcloud
@@ -57,7 +57,7 @@ def on_startup():
 def process(file_path: str):
     """
     API Endpoint to start document processing.
-    This enqueues the first task (upload_to_s3), which handles the full pipeline.
+    This enqueues document processing which handles the full pipeline.
     """
     if not os.path.isabs(file_path):
         file_path = os.path.join(settings.workdir, file_path)
@@ -67,7 +67,7 @@ def process(file_path: str):
             status_code=400, detail=f"File {file_path} not found."
         )
 
-    task = upload_to_s3.delay(file_path)
+    task = process_document.delay(file_path)  # Updated function call
     return {"task_id": task.id, "status": "queued"}
 
 @app.post("/send_to_dropbox/")
@@ -122,7 +122,7 @@ def send_to_all_destinations_endpoint(file_path: str):
 @app.post("/processall")
 def process_all_pdfs_in_workdir():
     """
-    Finds all .pdf files in <workdir> and enqueues them for upload_to_s3.
+    Finds all .pdf files in <workdir> and enqueues them for processing.
     """
     target_dir = settings.workdir
     if not os.path.exists(target_dir):
@@ -141,7 +141,7 @@ def process_all_pdfs_in_workdir():
     task_ids = []
     for pdf in pdf_files:
         file_path = os.path.join(target_dir, pdf)
-        task = upload_to_s3.delay(file_path)
+        task = process_document.delay(file_path)  # Updated function call
         task_ids.append(task.id)
 
     return {
@@ -152,7 +152,7 @@ def process_all_pdfs_in_workdir():
 
 @app.post("/ui-upload")
 async def ui_upload(file: UploadFile = File(...)):
-    """Endpoint to accept a user-uploaded file and enqueue it to S3."""
+    """Endpoint to accept a user-uploaded file and enqueue it for processing."""
     workdir = "/workdir"
     target_path = os.path.join(workdir, file.filename)
     try:
@@ -165,7 +165,7 @@ async def ui_upload(file: UploadFile = File(...)):
             detail=f"Failed to save file: {e}"
         )
 
-    task = upload_to_s3.delay(target_path)
+    task = process_document.delay(target_path)  # Updated function call
     return {"task_id": task.id, "status": "queued"}
 
 # Custom 404 - we can still return the Jinja2 template, or the old static file:

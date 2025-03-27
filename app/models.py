@@ -41,8 +41,9 @@ class FileRecord(Base):
 class ProcessingLog(Base):
     __tablename__ = "processing_logs"
     id = Column(Integer, primary_key=True, index=True)
-    file_id = Column(Integer, ForeignKey("files.id"))
-    step_name = Column(String)       # e.g. "OCR", "convert_to_pdf", "upload_s3"
-    status = Column(String)          # "success" / "failure"
-    message = Column(String)         # error text or success note
+    file_id = Column(Integer, ForeignKey("files.id"), nullable=True)  # Optional file association
+    task_id = Column(String, index=True)  # Celery task ID
+    step_name = Column(String)           # e.g., "OCR", "convert_to_pdf", "upload_s3"
+    status = Column(String)              # "pending", "in_progress", "success", "failure"
+    message = Column(String, nullable=True)  # Error text or success note
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
