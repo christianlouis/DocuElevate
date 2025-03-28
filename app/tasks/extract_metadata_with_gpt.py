@@ -2,9 +2,13 @@
 
 import json
 import re
+import os
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
+from app.utils import log_task_progress, task_step_logging
+from app.database import SessionLocal
+from app.models import FileRecord
 
 # Import the shared Celery instance
 from app.celery_app import celery
@@ -34,9 +38,13 @@ def extract_json_from_text(text):
     return None
 
 @celery.task(base=BaseTaskWithRetry)
+@task_step_logging
 def extract_metadata_with_gpt(s3_filename: str, cleaned_text: str):
     """Uses OpenAI to classify document metadata."""
-    prompt = f"""
+    session = SessionLocal()
+    try:
+        log_task_progress(session, s3_filename, "Starting metadata extraction")
+        prompt = f"""
 You are a specialized document analyzer trained to extract structured metadata from documents.
 Your task is to analyze the given text and return a well-structured JSON object.
 
@@ -68,7 +76,6 @@ Extracted text:
 Return only valid JSON with no additional commentary.
 """
 
-    try:
         print(f"[DEBUG] Sending classification request for {s3_filename}...")
         completion = client.chat.completions.create(
             model=settings.openai_model,
@@ -85,6 +92,7 @@ Return only valid JSON with no additional commentary.
         json_text = extract_json_from_text(content)
         if not json_text:
             print(f"[ERROR] Could not find valid JSON in GPT response for {s3_filename}.")
+            log_task_progress(session, s3_filename, "Failed to extract valid JSON")
             return {}
 
         metadata = json.loads(json_text)
@@ -92,9 +100,19 @@ Return only valid JSON with no additional commentary.
 
         # Trigger the next step: embedding metadata into the PDF
         embed_metadata_into_pdf.delay(s3_filename, cleaned_text, metadata)
+        log_task_progress(session, s3_filename, "Metadata extraction completed")
+
+        # Update database record
+        file_record = session.query(FileRecord).filter(FileRecord.s3_filename == s3_filename).first()
+        if file_record:
+            file_record.metadata = metadata
+            session.commit()
 
         return {"s3_file": s3_filename, "metadata": metadata}
 
     except Exception as e:
         print(f"[ERROR] OpenAI classification failed for {s3_filename}: {e}")
+        log_task_progress(session, s3_filename, f"Error: {e}")
         return {}
+    finally:
+        session.close()
