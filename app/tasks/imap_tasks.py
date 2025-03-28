@@ -9,7 +9,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from celery import shared_task
 from app.config import settings
-from app.tasks.upload_to_s3 import upload_to_s3
+from app.tasks.process_document import process_document  # Updated import
 from app.tasks.convert_to_pdf import convert_to_pdf  # new conversion task
 
 logger = logging.getLogger(__name__)
@@ -306,7 +306,7 @@ def fetch_attachments_and_enqueue(email_message):
             f.write(part.get_payload(decode=True))
 
         if mime_type == "application/pdf":
-            upload_to_s3.delay(file_path)
+            process_document.delay(file_path)  # Updated function call
             logger.info("Enqueued PDF for upload: %s", filename)
         elif mime_type in ALLOWED_MIME_TYPES:
             # Enqueue conversion to PDF using the Gotenberg service.

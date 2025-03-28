@@ -5,7 +5,7 @@ import logging
 import mimetypes
 from celery import shared_task
 from app.config import settings
-from app.tasks.upload_to_s3 import upload_to_s3
+from app.tasks.process_document import process_document  # Updated import
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ def convert_to_pdf(file_path):
             with open(converted_file_path, "wb") as out_file:
                 out_file.write(response.content)
             logger.info(f"Converted file saved as PDF: {converted_file_path}")
-            upload_to_s3.delay(converted_file_path)
+            process_document.delay(converted_file_path)  # Updated function call
             return converted_file_path
         else:
             logger.error(f"Conversion failed for {file_path}. Status code: {response.status_code}")
