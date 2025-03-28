@@ -6,7 +6,7 @@ import os
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
-from app.utils import log_task_progress, task_step_logging
+from app.utils import log_task_progress, log_task
 from app.database import SessionLocal
 from app.models import FileRecord
 
@@ -38,7 +38,7 @@ def extract_json_from_text(text):
     return None
 
 @celery.task(base=BaseTaskWithRetry)
-@task_step_logging
+@log_task("extract_metadata")
 def extract_metadata_with_gpt(s3_filename: str, cleaned_text: str):
     """Uses OpenAI to classify document metadata."""
     session = SessionLocal()
