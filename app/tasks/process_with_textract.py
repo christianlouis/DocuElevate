@@ -8,7 +8,7 @@ from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.celery_app import celery
-from app.utils import log_task_progress, task_step_logging
+from app.utils import task_logger, log_task
 from app.database import SessionLocal
 from app.models import FileRecord
 
@@ -21,6 +21,7 @@ document_intelligence_client = DocumentIntelligenceClient(
 )
 
 @celery.task(base=BaseTaskWithRetry)
+@log_task("process_with_textract")
 def process_with_textract(s3_filename: str):
     """
     Processes a PDF document using Azure Document Intelligence and overlays OCR text onto
@@ -45,46 +46,56 @@ def process_with_textract(s3_filename: str):
         if file_record:
             file_id = file_record.id
     
-    log_task_progress(task_id, "process_with_textract", "pending", 
-                     f"Starting OCR for {s3_filename}", file_id, tmp_file_path)
+    task_logger(f"Starting OCR for {s3_filename}", step_name="process_with_textract", 
+               task_id=task_id, file_id=file_id, file_path=tmp_file_path)
     
     if not os.path.exists(tmp_file_path):
-        log_task_progress(task_id, "process_with_textract", "failure", 
-                         f"Local file not found: {tmp_file_path}", file_id, tmp_file_path)
+        task_logger(f"Local file not found: {tmp_file_path}", level="error", 
+                  step_name="process_with_textract", task_id=task_id, 
+                  file_id=file_id, file_path=tmp_file_path)
         raise FileNotFoundError(f"Local file not found: {tmp_file_path}")
 
     try:
-        with task_step_logging(task_id, "azure_document_intelligence", file_id, tmp_file_path):
-            # Open and send the document for processing
-            with open(tmp_file_path, "rb") as f:
-                poller = document_intelligence_client.begin_analyze_document(
-                    "prebuilt-read", body=f, output=[AnalyzeOutputOption.PDF]
-                )
-            result: AnalyzeResult = poller.result()
-            operation_id = poller.details["operation_id"]
-
-        with task_step_logging(task_id, "retrieve_and_save_searchable_pdf", file_id, tmp_file_path):
-            # Retrieve the processed searchable PDF
-            response = document_intelligence_client.get_analyze_result_pdf(
-                model_id=result.model_id, result_id=operation_id
+        task_logger(f"Sending document to Azure Document Intelligence", 
+                  step_name="azure_document_intelligence", task_id=task_id, 
+                  file_id=file_id, file_path=tmp_file_path)
+        
+        # Open and send the document for processing
+        with open(tmp_file_path, "rb") as f:
+            poller = document_intelligence_client.begin_analyze_document(
+                "prebuilt-read", body=f, output=[AnalyzeOutputOption.PDF]
             )
-            searchable_pdf_path = tmp_file_path  # Overwrite the original PDF location
-            with open(searchable_pdf_path, "wb") as writer:
-                writer.writelines(response)
-            
-            # Extract raw text content from the result
-            extracted_text = result.content if result.content else ""
-            log_task_progress(task_id, "process_with_textract", "in_progress", 
-                             f"Extracted {len(extracted_text)} characters of text", file_id, tmp_file_path)
+        result: AnalyzeResult = poller.result()
+        operation_id = poller.details["operation_id"]
+
+        task_logger(f"Azure Document Intelligence processing complete, operation ID: {operation_id}",
+                   step_name="azure_document_intelligence", task_id=task_id)
+
+        # Retrieve the processed searchable PDF
+        task_logger(f"Retrieving searchable PDF", step_name="retrieve_pdf", task_id=task_id)
+        response = document_intelligence_client.get_analyze_result_pdf(
+            model_id=result.model_id, result_id=operation_id
+        )
+        searchable_pdf_path = tmp_file_path  # Overwrite the original PDF location
+        with open(searchable_pdf_path, "wb") as writer:
+            writer.writelines(response)
+        
+        # Extract raw text content from the result
+        extracted_text = result.content if result.content else ""
+        text_length = len(extracted_text)
+        task_logger(f"Extracted {text_length} characters of text", 
+                   step_name="extract_text", task_id=task_id)
 
         # Trigger downstream metadata extraction
-        log_task_progress(task_id, "process_with_textract", "success", 
-                         "OCR completed. Queueing metadata extraction.", file_id, tmp_file_path)
-        extract_metadata_with_gpt.delay(s3_filename, extracted_text)
+        task_logger(f"OCR completed. Queueing metadata extraction for {s3_filename}", 
+                   step_name="process_with_textract", task_id=task_id, status="success")
+                   
+        metadata_task = extract_metadata_with_gpt.delay(s3_filename, extracted_text)
+        task_logger(f"Triggered metadata extraction task: {metadata_task.id}", 
+                   step_name="process_with_textract", task_id=task_id)
 
-        return {"s3_file": s3_filename, "searchable_pdf": searchable_pdf_path, "cleaned_text": extracted_text}
+        return {"file": s3_filename, "searchable_pdf": searchable_pdf_path, "text_length": text_length}
     except Exception as e:
-        log_task_progress(task_id, "process_with_textract", "failure", 
-                         f"Error processing with Azure Document Intelligence: {e}", file_id, tmp_file_path)
-        logger.error(f"Error processing {s3_filename} with Azure Document Intelligence: {e}")
+        task_logger(f"Error processing with Azure Document Intelligence: {e}", 
+                  level="error", step_name="process_with_textract", task_id=task_id)
         raise
