@@ -8,7 +8,7 @@ COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Stage 2: Final image
-FROM python:3.11-slim
+FROM python:3.13.2-slim
 
 WORKDIR /app
 
