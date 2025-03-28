@@ -3,21 +3,21 @@ import inspect
 from functools import wraps
 
 from authlib.integrations.starlette_client import OAuth
-from starlette.config import Config
 from fastapi import APIRouter, Request, status
 from starlette.responses import RedirectResponse
 
-config = Config(".env")
-oauth = OAuth(config)
+from app.config import settings
 
-AUTH_ENABLED = config("AUTH_ENABLED", cast=bool, default=True)
+oauth = OAuth()
+
+AUTH_ENABLED = settings.auth_enabled
 
 if AUTH_ENABLED:
     oauth.register(
         name="authentik",
-        client_id=config("AUTHENTIK_CLIENT_ID"),
-        client_secret=config("AUTHENTIK_CLIENT_SECRET"),
-        server_metadata_url=config("AUTHENTIK_CONFIG_URL"),
+        client_id=settings.authentik_client_id,
+        client_secret=settings.authentik_client_secret,
+        server_metadata_url=settings.authentik_config_url,
         client_kwargs={"scope": "openid profile email"},
     )
 

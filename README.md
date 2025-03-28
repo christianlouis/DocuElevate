@@ -7,16 +7,18 @@ This project automates the handling, extraction, and processing of documents usi
 - **OpenAI** for metadata extraction and text refinement.  
 - **Dropbox** and **Nextcloud** for file storage and uploads.  
 - **Paperless NGX** for document indexing and management.  
-- **Azure Document Intelligence** (optional) for OCR on PDFs (replacing Textract).  
+- **Azure Document Intelligence** for OCR on PDFs.  
 - **Gotenberg** for file-to-PDF conversions.  
-- **AWS S3** (currently implemented but may be removed in the future).  
+- **Authentik** for authentication and user management.  
 
 It is designed for flexibility and configurability through environment variables, making it easily customizable for different workflows. The system can fetch documents from multiple IMAP mailboxes, process them (OCR, metadata extraction, PDF conversion), and store them in the desired destinations.
+
+The project includes a **UI** for uploading and managing files, and an API documentation page is available at `/docs` (powered by **FastAPI**).
 
 ## Features
 
 - **Document Upload & Storage**:  
-  - Manual uploads (via API) to S3, or direct uploads to Dropbox/Nextcloud/Paperless.  
+  - Manual uploads (via API or UI) to Dropbox, Nextcloud, or Paperless.  
 - **OCR Processing (Azure)**:  
   - Extract text from scanned PDFs using Azure Document Intelligence.  
 - **Metadata Extraction (OpenAI)**:  
@@ -26,7 +28,17 @@ It is designed for flexibility and configurability through environment variables
 - **Document Management (Paperless NGX)**:  
   - Store processed documents and metadata in a Paperless NGX instance.  
 - **IMAP Integration**:  
-  - Fetch documents from multiple mailboxes (including Gmail) and automatically enqueue them for processing.
+  - Fetch documents from multiple mailboxes (including Gmail) and automatically enqueue them for processing.  
+- **Authentication**:  
+  - Secure access to the system using **Authentik** for OAuth2-based login.  
+
+## Frameworks Used
+
+- **FastAPI**: A modern, fast (high-performance) web framework for building APIs with Python.  
+- **Celery**: A distributed task queue for asynchronous processing.  
+- **SQLAlchemy**: A powerful ORM for database interactions.  
+- **Jinja2**: A templating engine for rendering HTML pages.  
+- **Tailwind CSS**: A utility-first CSS framework for styling the UI.  
 
 ## Environment Variables
 
@@ -65,9 +77,20 @@ The `.env` file drives all configuration. This table breaks down key variablesâ€
 | **Variable**          | **Description**                                                    | **How to Obtain**                                                                                              |
 |-----------------------|--------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------|
 | `OPENAI_API_KEY`      | API key for OpenAI services (used for metadata extraction/refinement). | [OpenAI platform](https://platform.openai.com/account/api-keys)                                                |
+| `OPENAI_BASE_URL`     | Base URL for OpenAI API (optional, defaults to OpenAI's endpoint). | `https://api.openai.com/v1`                                              |
+| `OPENAI_MODEL`        | OpenAI model to use for tasks (e.g., GPT-4).                       | `gpt-4`                                                                                                        |
 | `AZURE_AI_KEY`        | Azure Document Intelligence key (for OCR).                        | [Azure Portal](https://portal.azure.com/)                                                                        |
 | `AZURE_REGION`        | Azure region of your Document Intelligence instance.              | e.g. `eastus`, `westeurope`                                                                                     |
 | `AZURE_ENDPOINT`      | Endpoint URL for Document Intelligence.                           | e.g. `https://<yourendpoint>.cognitiveservices.azure.com/`                                                      |
+
+### Authentik
+
+| **Variable**            | **Description**                                               |
+|-------------------------|---------------------------------------------------------------|
+| `AUTH_ENABLED`          | Enable or disable authentication (`true`/`false`).           |
+| `AUTHENTIK_CLIENT_ID`   | Client ID for Authentik OAuth2.                              |
+| `AUTHENTIK_CLIENT_SECRET` | Client secret for Authentik OAuth2.                        |
+| `AUTHENTIK_CONFIG_URL`  | Configuration URL for Authentik OpenID Connect.             |
 
 ### Paperless NGX
 
@@ -94,22 +117,6 @@ The `.env` file drives all configuration. This table breaks down key variablesâ€
 | `NEXTCLOUD_PASSWORD`    | Nextcloud login password.                                    |
 | `NEXTCLOUD_FOLDER`      | Destination folder in Nextcloud (e.g. `"/Documents/Uploads"`). |
 
-### AWS S3
-
-| **Variable**           | **Description**                                               |
-|------------------------|---------------------------------------------------------------|
-| `AWS_ACCESS_KEY_ID`    | AWS Access Key (used for S3 upload).                          |
-| `AWS_SECRET_ACCESS_KEY`| AWS Secret Key (used for S3 upload).                          |
-| `AWS_REGION`           | AWS region for S3.                                           |
-| `S3_BUCKET_NAME`       | Default S3 bucket name if using S3 upload.                    |
-
-### General Admin Credentials
-
-| **Variable**       | **Description**                             |
-|--------------------|---------------------------------------------|
-| `ADMIN_USERNAME`   | Admin username for system access.           |
-| `ADMIN_PASSWORD`   | Admin password for system access.           |
-
 ## Running as a Docker Container
 
 This project uses Celery (with Redis) for asynchronous task management and Gotenberg for PDF conversion. The `docker-compose.yml` file defines these services:
@@ -134,7 +141,7 @@ This project uses Celery (with Redis) for asynchronous task management and Goten
    ```bash
    docker-compose up -d
    ```
-5. The API will be available at **`http://localhost:8000`**.
+5. The API will be available at **`http://localhost:8000`**, and the API documentation is available at **`http://localhost:8000/docs`**.
 
 ### Services in `docker-compose.yml`
 
@@ -186,10 +193,7 @@ services:
 
 ## To-Do List
 
-- **Refactor AWS-related code** to rely on Azure or remove if no longer needed.  
-- **Remove unnecessary environment variables** once final service usage is determined.  
 - **Make upload targets configurable** (e.g., easily choose only Dropbox, Nextcloud, or Paperless).  
-- **Potentially remove or consolidate S3 upload code** if Azure is the preferred cloud option.  
 
 ---
 
