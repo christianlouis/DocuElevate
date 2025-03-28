@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     redis_url: str
     s3_bucket_name: str
     openai_api_key: str
+    openai_base_url: str = "https://api.openai.com/v1"  # Default to OpenAI's endpoint
+    openai_model: str = "gpt-4o-mini"  # Default model
     workdir: str
     dropbox_app_key: str
     dropbox_app_secret: str
