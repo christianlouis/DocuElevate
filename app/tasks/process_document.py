@@ -46,48 +46,49 @@ def process_document(original_local_file: str):
         mime_type = "application/octet-stream"
 
     # Acquire DB session in the task
-    new_record = None
     with SessionLocal() as db:
+        # Keep all FileRecord operations within this session scope
         task_logger(f"Checking for duplicate files", step_name="check_duplicates", task_id=task_id)
-        existing = db.query(FileRecord).filter_by(filehash=filehash).one_or_none()
-        if existing:
+        existing_record = db.query(FileRecord).filter(FileRecord.filehash == filehash).one_or_none()
+        if existing_record:
             task_logger(f"Duplicate file detected (hash={filehash[:10]}...). Skipping processing.",
-                        step_name="process_document", task_id=task_id, file_id=existing.id, status="success")
+                        step_name="process_document", task_id=task_id, file_id=existing_record.id, status="success")
             return {
                 "status": "duplicate_file",
-                "file_id": existing.id,
+                "file_id": existing_record.id,
                 "detail": "File already processed."
             }
+        else:
+            task_logger(f"Creating file record for {original_local_file}", step_name="create_file_record", task_id=task_id)
+            new_record = FileRecord(
+                filehash=filehash,
+                original_filename=original_filename,
+                local_filename="",  # Will fill in after we move it
+                file_size=file_size,
+                mime_type=mime_type,
+            )
+            db.add(new_record)
+            db.commit()
+            db.refresh(new_record)
 
-        # Not a duplicate -> insert a new record
-        task_logger(f"Creating file record for {original_local_file}", step_name="create_file_record", task_id=task_id)
-        new_record = FileRecord(
-            filehash=filehash,
-            original_filename=original_filename,
-            local_filename="",  # Will fill in after we move it
-            file_size=file_size,
-            mime_type=mime_type,
-        )
-        db.add(new_record)
-        db.commit()
-        db.refresh(new_record)
+            # 1. Generate a UUID-based filename and place it in /workdir/tmp
+            task_logger(f"Copying to workdir", step_name="copy_to_workdir", task_id=task_id, file_id=new_record.id)
+            file_ext = os.path.splitext(original_local_file)[1]
+            file_uuid = str(uuid.uuid4())
+            new_filename = f"{file_uuid}{file_ext}"
 
-        # 1. Generate a UUID-based filename and place it in /workdir/tmp
-        task_logger(f"Copying to workdir", step_name="copy_to_workdir", task_id=task_id, file_id=new_record.id)
-        file_ext = os.path.splitext(original_local_file)[1]
-        file_uuid = str(uuid.uuid4())
-        new_filename = f"{file_uuid}{file_ext}"
+            tmp_dir = os.path.join(settings.workdir, "tmp")
+            os.makedirs(tmp_dir, exist_ok=True)
+            new_local_path = os.path.join(tmp_dir, new_filename)
 
-        tmp_dir = os.path.join(settings.workdir, "tmp")
-        os.makedirs(tmp_dir, exist_ok=True)
-        new_local_path = os.path.join(tmp_dir, new_filename)
+            # Copy the file instead of moving it
+            shutil.copy(original_local_file, new_local_path)
 
-        # Copy the file instead of moving it
-        shutil.copy(original_local_file, new_local_path)
+            # Update the DB with final local filename
+            new_record.local_filename = new_local_path
+            db.commit()
 
-        # Update the DB with final local filename
-        new_record.local_filename = new_local_path
-        db.commit()
+        # Perform all further interactions with existing_record/new_record here
 
     # 2. Check for embedded text (outside the DB session to avoid long open transactions)
     task_logger(f"Checking for embedded text", step_name="check_embedded_text", task_id=task_id, file_id=new_record.id)
