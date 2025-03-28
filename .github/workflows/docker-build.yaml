@@ -9,6 +9,9 @@ on:
     branches:
       - main
       - develop
+    tags:
+      - 'v*'
+      - '[0-9]+.*'
   pull_request:
     branches:
       - main
@@ -16,6 +19,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -36,19 +40,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Push
+      - name: Extract Git Tag (if applicable)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      - name: Build and Push Docker Image
         uses: docker/build-push-action@v4
         with:
-          # Specify target platforms
           platforms: linux/amd64
           context: .
           file: Dockerfile
           push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
             christianlouis/document-processor:latest
             christianlouis/document-processor:${{ github.sha }}
             ghcr.io/${{ github.repository_owner }}/document-processor:latest
             ghcr.io/${{ github.repository_owner }}/document-processor:${{ github.sha }}
-          # Cache options (optional)
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ startsWith(github.ref, 'refs/tags/') && format('christianlouis/document-processor:{0}', env.VERSION) || '' }}
+            ${{ startsWith(github.ref, 'refs/tags/') && format('ghcr.io/{0}/document-processor:{1}', github.repository_owner, env.VERSION) || '' }}
