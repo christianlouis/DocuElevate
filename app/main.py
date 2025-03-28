@@ -30,7 +30,7 @@ SESSION_SECRET = config(
     default="YOUR_DEFAULT_SESSION_SECRET_MUST_BE_32_CHARS_OR_MORE"
 )
 
-app = FastAPI(title="Document Processing API")
+app = FastAPI(title="DocuNova")
 
 # 1) Session Middleware (for request.session to work)
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
@@ -40,7 +40,7 @@ app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 # 3) (Optional but recommended) Restrict valid hosts:
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=[
-    "docparse.hosterra.net",
+    settings.external_hostname,
     "localhost",
     "127.0.0.1"
 ])

@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     azure_region: str
     azure_endpoint: str
     gotenberg_url: str
+    external_hostname: str = "localhost"  # Default to localhost
     
     # Authentik
     authentik_client_id: Optional[str] = None

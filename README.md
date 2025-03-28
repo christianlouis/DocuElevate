@@ -1,8 +1,8 @@
-# Document Processing System
+# DocuNova
 
 ## Overview
 
-This project automates the handling, extraction, and processing of documents using a variety of services, including:
+DocuNova automates the handling, extraction, and processing of documents using a variety of services, including:
 
 - **OpenAI** for metadata extraction and text refinement.  
 - **Dropbox** and **Nextcloud** for file storage and uploads.  
@@ -52,6 +52,7 @@ The `.env` file drives all configuration. This table breaks down key variablesâ€
 | `REDIS_URL`            | URL for Redis, used by Celery for broker & result store. | `redis://redis:6379/0`         |
 | `WORKDIR`              | Working directory for the application.                  | `/workdir`                     |
 | `GOTENBERG_URL`        | Gotenberg PDF processing URL.                           | `http://gotenberg:3000`        |
+| `EXTERNAL_HOSTNAME`    | The external hostname for the application.             | `docunova.example.com`         |
 
 ### IMAP Configuration (Multiple Mailboxes)
 
@@ -145,7 +146,7 @@ This project uses Celery (with Redis) for asynchronous task management and Goten
 
 ### Services in `docker-compose.yml`
 
-Below is the default structure (simplified):
+Below is the default structure:
 
 ```yaml
 services:
@@ -153,7 +154,7 @@ services:
     image: christianlouis/document-processor:latest
     container_name: document_api
     working_dir: /workdir
-    command: ["sh", "-c", "cd /app && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    command: ["sh", "-c", "cd /app && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"]
     environment:
       - PYTHONPATH=/app
     env_file:
@@ -164,7 +165,7 @@ services:
       - redis
       - worker
     volumes:
-      - /var/docparse/workdir:/workdir
+            - /var/docparse/workdir:/workdir
 
   worker:
     image: christianlouis/document-processor:latest
@@ -179,7 +180,7 @@ services:
       - redis
       - gotenberg
     volumes:
-      - /var/docparse/workdir:/workdir
+            - /var/docparse/workdir:/workdir
 
   gotenberg:
     image: gotenberg/gotenberg:latest
