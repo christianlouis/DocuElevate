@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     azure_endpoint: str
     gotenberg_url: str
     
+    # Authentik
+    authentik_client_id: Optional[str] = None
+    authentik_client_secret: Optional[str] = None
+    authentik_config_url: Optional[str] = None
+    auth_enabled: bool = True  # Default to enabled
+
     # IMAP 1
     imap1_host: Optional[str] = None
     imap1_port: Optional[int] = 993
