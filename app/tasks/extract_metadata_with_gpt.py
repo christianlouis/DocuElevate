@@ -2,15 +2,19 @@
 
 import json
 import re
-from openai import OpenAI
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
 
 # Import the shared Celery instance
 from app.celery_app import celery
+import openai
 
-client = OpenAI(api_key=settings.openai_api_key)
+# Initialize OpenAI client dynamically
+client = openai.OpenAI(
+    api_key=settings.openai_api_key,
+    base_url=settings.openai_base_url
+)
 
 def extract_json_from_text(text):
     """
@@ -31,8 +35,7 @@ def extract_json_from_text(text):
 
 @celery.task(base=BaseTaskWithRetry)
 def extract_metadata_with_gpt(s3_filename: str, cleaned_text: str):
-    """Uses OpenAI GPT-4o-mini to classify document metadata."""
-
+    """Uses OpenAI to classify document metadata."""
     prompt = f"""
 You are a specialized document analyzer trained to extract structured metadata from documents.
 Your task is to analyze the given text and return a well-structured JSON object.
@@ -68,7 +71,7 @@ Return only valid JSON with no additional commentary.
     try:
         print(f"[DEBUG] Sending classification request for {s3_filename}...")
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=settings.openai_model,
             messages=[
                 {"role": "system", "content": "You are an intelligent document classifier."},
                 {"role": "user", "content": prompt}
