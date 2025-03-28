@@ -249,8 +249,12 @@ def fetch_attachments_and_enqueue(email_message):
     """
     Extracts attachments from the email and processes only allowed file types.
     
+    Files are accepted if either:
+    1. They have a MIME type from the ALLOWED_MIME_TYPES set, OR
+    2. They have a '.pdf' file extension (regardless of MIME type)
+    
     Allowed file types include:
-      - PDF: application/pdf
+      - PDF: application/pdf or *.pdf extension
       - Microsoft Office files:
           - Word: application/msword, 
             application/vnd.openxmlformats-officedocument.wordprocessingml.document
@@ -263,12 +267,8 @@ def fetch_attachments_and_enqueue(email_message):
           - CSV: text/csv
           - Rich Text Format: application/rtf, text/rtf
     
-    Attachments not in this list are skipped. Common image MIME types such as
-    image/jpeg, image/png, image/gif, image/bmp, image/tiff, and image/webp are
-    intentionally excluded.
-    
-    If the attachment is a PDF, it is enqueued for upload; any other allowed file
-    is enqueued for conversion to PDF.
+    If the attachment is a PDF (by extension or MIME type), it is enqueued for upload;
+    any other allowed file is enqueued for conversion to PDF.
     
     Returns True if at least one allowed attachment was processed.
     """
@@ -295,8 +295,12 @@ def fetch_attachments_and_enqueue(email_message):
         if not filename:
             continue
 
+        # Check if it's a PDF file by extension, regardless of MIME type
+        is_pdf_by_extension = filename.lower().endswith('.pdf')
+        
         mime_type = part.get_content_type()
-        if mime_type not in ALLOWED_MIME_TYPES:
+        # Accept file if it has an allowed MIME type OR it's a PDF by extension
+        if mime_type not in ALLOWED_MIME_TYPES and not is_pdf_by_extension:
             logger.info("Skipping attachment %s with MIME type %s",
                         filename, mime_type)
             continue
@@ -305,11 +309,12 @@ def fetch_attachments_and_enqueue(email_message):
         with open(file_path, "wb") as f:
             f.write(part.get_payload(decode=True))
 
-        if mime_type == "application/pdf":
-            process_document.delay(file_path)  # Updated function call
-            logger.info("Enqueued PDF for upload: %s", filename)
+        # If it's a PDF by MIME type or extension, process it directly
+        if mime_type == "application/pdf" or is_pdf_by_extension:
+            process_document.delay(file_path)
+            logger.info("Enqueued PDF for upload: %s (MIME: %s)", filename, mime_type)
         elif mime_type in ALLOWED_MIME_TYPES:
-            # Enqueue conversion to PDF using the Gotenberg service.
+            # Other allowed files are sent for conversion
             convert_to_pdf.delay(file_path)
             logger.info("Enqueued file for conversion to PDF: %s", filename)
 
@@ -323,6 +328,10 @@ def email_already_has_label(mail, msg_id, label="Ingested"):
     Returns True if the label is found, False otherwise.
     """
     try:
+        # Convert msg_id to bytes if it's an integer
+        if isinstance(msg_id, int):
+            msg_id = str(msg_id).encode()
+            
         label_status, label_data = mail.fetch(msg_id, "(X-GM-LABELS)")
         if label_status == "OK" and label_data and len(label_data) > 0:
             raw_labels = label_data[0][1].decode("utf-8", errors="ignore")
