@@ -1,4 +1,8 @@
-# DocuNova
+<div align="center">
+  <img src="frontend/static/logo.svg" alt="DocuNova Logo" width="100" height="100" />
+  <h1>DocuNova</h1>
+  <p>Intelligent Document Processing & Management</p>
+</div>
 
 ## Overview
 
@@ -14,6 +18,48 @@ DocuNova automates the handling, extraction, and processing of documents using a
 It is designed for flexibility and configurability through environment variables, making it easily customizable for different workflows. The system can fetch documents from multiple IMAP mailboxes, process them (OCR, metadata extraction, PDF conversion), and store them in the desired destinations.
 
 The project includes a **UI** for uploading and managing files, and an API documentation page is available at `/docs` (powered by **FastAPI**).
+
+## Screenshots
+
+<div align="center">
+  <img src="docs/upload-view.png" alt="DocuNova Upload Interface" width="80%" />
+  <p><em>Upload interface for adding new documents</em></p>
+  
+  <img src="docs/files-view.png" alt="DocuNova Files View" width="80%" />
+  <p><em>Files view with processed documents and metadata</em></p>
+</div>
+
+## Workflow Process
+
+DocuNova follows a streamlined document processing workflow:
+
+<div align="center">
+  <img src="docs/workflow-diagram.png" alt="DocuNova Workflow" width="90%" />
+</div>
+
+### Document Ingestion
+Documents enter DocuNova through three possible channels:
+1. **Web Upload**: Users manually upload files via the web interface
+2. **Email Attachments**: Automatic polling of configured IMAP mailboxes (supports multiple accounts)
+3. **API**: Direct programmatic uploads via the REST API
+
+### Processing Pipeline
+Every document goes through the following steps:
+1. **PDF Conversion**: Non-PDF files are converted to PDF format using Gotenberg
+2. **OCR Processing**: Azure Document Intelligence extracts text from images/scans
+3. **Metadata Extraction**: OpenAI analyzes document content to identify:
+   - Document type (invoice, receipt, contract, etc.)
+   - Key entities (dates, names, amounts, account numbers)
+   - Important data points specific to the document type
+4. **Enrichment**: Metadata is attached to the document in a structured format
+
+### Distribution
+Processed documents with their metadata can be automatically sent to:
+- **Dropbox**: For cloud storage and sharing
+- **Nextcloud**: For self-hosted file storage
+- **Paperless-NGX**: For advanced document management with search capabilities
+
+Users can choose to send documents to any combination of these destinations through configuration settings or manual selection.
 
 ## Features
 
