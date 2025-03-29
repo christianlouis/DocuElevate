@@ -1,18 +1,14 @@
-fastapi[all]
-uvicorn
-celery
-redis
-sqlalchemy
-pydantic
-boto3
-pikepdf
-openai
-# Add this line explicitly
-#pymupdf==1.23.5
-pymupdf
-requests
-dropbox
-azure-ai-documentintelligence
-authlib
-python-dotenv
-starlette
+fastapi[all]  # Web framework with all extras
+uvicorn  # ASGI server
+celery  # Task queue
+redis  # Message broker for Celery
+sqlalchemy  # Database ORM
+pydantic  # Data validation
+openai  # GPT integration for metadata extraction
+pymupdf  # PDF processing, text extraction, and detection (imported as 'fitz')
+requests  # HTTP client
+dropbox  # Dropbox integration
+azure-ai-documentintelligence  # Azure OCR service
+authlib  # Authentication
+python-dotenv  # Environment variables
+starlette  # ASGI toolkit (used by FastAPI)
