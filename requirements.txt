@@ -12,3 +12,4 @@ azure-ai-documentintelligence  # Azure OCR service
 authlib  # Authentication
 python-dotenv  # Environment variables
 starlette  # ASGI toolkit (used by FastAPI)
+alembic  # Database migrations
