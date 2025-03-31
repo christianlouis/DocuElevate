@@ -28,17 +28,6 @@ DocuNova can monitor multiple IMAP mailboxes for document attachments. Each mail
 | `IMAP1_PASSWORD`              | IMAP password (first mailbox).                              | `*******`         |
 | `IMAP1_SSL`                   | Use SSL (`true`/`false`).                                   | `true`            |
 | `IMAP1_POLL_INTERVAL_MINUTES` | Frequency in minutes to poll for new mail.                  | `5`               |
-| `IMAP1_DELETE_AFTER_PROCESS`  | Delete emails after processing (`true`/`false`).            | `false`           |
-
-To configure additional mailboxes, use `IMAP2_`, `IMAP3_`, etc.
-
-### OpenAI & Azure Document Intelligence
-
-| **Variable**                     | **Description**                          | **How to Obtain**                                                        |
-|---------------------------------|------------------------------------------|--------------------------------------------------------------------------|
-| `OPENAI_API_KEY`                | OpenAI API key for GPT metadata extraction. | [OpenAI API keys](https://platform.openai.com/account/api-keys)             |
-| `AZURE_DOCUMENT_INTELLIGENCE_KEY` | Azure Document Intelligence API key for OCR. | [Azure Portal](https://portal.azure.com/) |
-| `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` | Endpoint URL for Azure Doc Intelligence API. | [Azure Portal](https://portal.azure.com/) |
 
 ### Authentication
 
@@ -48,6 +37,14 @@ To configure additional mailboxes, use `IMAP2_`, `IMAP3_`, etc.
 | `AUTHENTIK_CLIENT_ID`   | Client ID for Authentik OAuth2.                              |
 | `AUTHENTIK_CLIENT_SECRET` | Client secret for Authentik OAuth2.                        |
 | `AUTHENTIK_CONFIG_URL`  | Configuration URL for Authentik OpenID Connect.             |
+
+### OpenAI & Azure Document Intelligence
+
+| **Variable**                     | **Description**                          | **How to Obtain**                                                        |
+|---------------------------------|------------------------------------------|--------------------------------------------------------------------------|
+| `OPENAI_API_KEY`                | OpenAI API key for GPT metadata extraction. | [OpenAI API keys](https://platform.openai.com/account/api-keys)             |
+| `AZURE_DOCUMENT_INTELLIGENCE_KEY` | Azure Document Intelligence API key for OCR. | [Azure Portal](https://portal.azure.com/) |
+| `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` | Endpoint URL for Azure Doc Intelligence API. | [Azure Portal](https://portal.azure.com/) |
 
 ### Paperless NGX
 
