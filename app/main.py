@@ -16,13 +16,9 @@ from app.config import settings
 from app.utils.config_validator import check_all_configs
 
 # Import both the traditional and new routers - we'll keep both available for compatibility
-from app.frontend.router import router as frontend_router_original
-from app.api.router import router as api_router_original
+from app.frontend import router as frontend_router_original
+from app.api import router as api_router_original
 from app.auth import router as auth_router
-
-# Import also the organized router modules
-from app.frontend.router import router as frontend_router_organized
-from app.api.router import router as api_router_organized
 
 # Load configuration from .env for the session key
 config = Config(".env")
@@ -105,7 +101,4 @@ app.include_router(frontend_router_original)
 app.include_router(auth_router)
 app.include_router(api_router_original, prefix="/api")
 
-# Note: These are the future, organized router modules that we'll eventually switch to
-# For now they are disabled to avoid duplicate route conflicts
-# app.include_router(frontend_router_organized) 
-# app.include_router(api_router_organized, prefix="/api")
+

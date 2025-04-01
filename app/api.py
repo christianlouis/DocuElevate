@@ -233,8 +233,26 @@ def process_all_pdfs_in_workdir():
 @require_login
 async def ui_upload(file: UploadFile = File(...)):
     """Endpoint to accept a user-uploaded file and enqueue it for processing."""
-    workdir = "/workdir"
-    target_path = os.path.join(workdir, file.filename)
+    import uuid
+    import os.path
+    
+    workdir = settings.workdir
+    
+    # Extract just the filename without any path components to prevent path traversal
+    safe_filename = os.path.basename(file.filename)
+    
+    # Generate a unique filename with UUID to prevent overwriting and filename conflicts
+    unique_id = str(uuid.uuid4())
+    # Keep the original extension if present
+    if "." in safe_filename:
+        file_extension = safe_filename.rsplit(".", 1)[1]
+        target_filename = f"{unique_id}.{file_extension}"
+    else:
+        target_filename = unique_id
+    
+    # Store both the safe original name and the unique name
+    target_path = os.path.join(workdir, target_filename)
+    
     try:
         with open(target_path, "wb") as f:
             content = await file.read()
@@ -245,8 +263,16 @@ async def ui_upload(file: UploadFile = File(...)):
             detail=f"Failed to save file: {e}"
         )
 
+    # Log the mapping between original and safe filename
+    print(f"Saved uploaded file '{safe_filename}' as '{target_filename}'")
+    
     task = process_document.delay(target_path)
-    return {"task_id": task.id, "status": "queued"}
+    return {
+        "task_id": task.id, 
+        "status": "queued", 
+        "original_filename": safe_filename,
+        "stored_filename": target_filename
+    }
 
 # Note: The api/router.py is now a submodule organization, 
 # but we're keeping this file for compatibility until we've fully migrated
