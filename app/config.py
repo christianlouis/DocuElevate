@@ -60,9 +60,9 @@ class Settings(BaseSettings):
     imap2_delete_after_process: bool = False
 
     # Google Drive settings
-    google_drive_credentials_json: str = ""
-    google_drive_folder_id: str = ""
-    google_drive_delegate_to: str = ""  # Optional delegated user email
+    google_drive_credentials_json: Optional[str] = ""
+    google_drive_folder_id: Optional[str] = ""
+    google_drive_delegate_to: Optional[str] = ""  # Optional delegated user email
 
     # WebDAV settings
     webdav_url: Optional[str] = None

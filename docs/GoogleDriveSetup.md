@@ -28,6 +28,7 @@ For a complete list of configuration options, see the [Configuration Guide](Conf
 3. Fill in the service account details and click "Create"
 4. Add appropriate roles (e.g., "Editor" for full access)
 5. Click "Continue" and then "Done"
+6. Note down the service account's email address (it will look like: `service-name@project-id.iam.gserviceaccount.com`)
 
 ### 3. Generate Service Account Key
 
@@ -37,13 +38,15 @@ For a complete list of configuration options, see the [Configuration Guide](Conf
 4. Choose JSON format and click "Create"
 5. The key file will be downloaded automatically
 
-### 4. Configure DocuNova
+### 4. Share Your Google Drive Folder with the Service Account
 
-1. Open the downloaded JSON key file
-2. Set the entire JSON content as the `GOOGLE_DRIVE_CREDENTIALS_JSON` environment variable
-3. For security, ensure the JSON is properly escaped if your deployment method requires it
+1. Navigate to the desired folder in Google Drive
+2. Right-click on the folder and select "Share"
+3. Enter the service account's email address that you noted down in step 2
+4. Set the permission to "Editor" (to allow the service account to create/upload files)
+5. Click "Send" to share the folder (you can uncheck "Notify people" as the service account won't receive emails)
 
-### Get Google Drive Folder ID
+### 5. Get Google Drive Folder ID
 
 To find your Google Drive folder ID:
 
@@ -51,6 +54,12 @@ To find your Google Drive folder ID:
 2. The URL will look like: `https://drive.google.com/drive/folders/1a2b3c4d5e6f7g8h9i0j`
 3. The string after "folders/" is your folder ID (in this example: `1a2b3c4d5e6f7g8h9i0j`)
 4. Set this value as `GOOGLE_DRIVE_FOLDER_ID` in your configuration
+
+### 6. Configure DocuNova
+
+1. Open the downloaded JSON key file
+2. Set the entire JSON content as the `GOOGLE_DRIVE_CREDENTIALS_JSON` environment variable
+3. For security, ensure the JSON is properly escaped if your deployment method requires it
 
 ### Domain-Wide Delegation (Optional)
 
