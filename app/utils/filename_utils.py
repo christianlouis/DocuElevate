@@ -94,38 +94,42 @@ def sanitize_filename(filename):
     
     return sanitized
 
-def extract_remote_path(local_path, base_dir, remote_base=None):
+def extract_remote_path(file_path, base_dir, remote_base=""):
     """
-    Extracts the appropriate remote path based on a local path structure.
+    Extract a remote path for a file by preserving its directory structure
+    relative to the base directory, but with a new remote base path.
     
-    Args:
-        local_path (str): The local file path
-        base_dir (str): The local base directory to remove from path
-        remote_base (str, optional): Remote base directory to prepend
-        
-    Returns:
-        str: The calculated remote path
+    Modified to skip 'processed' directory in the remote path.
     """
-    # Convert both paths to use forward slashes for consistency
-    local_path = local_path.replace('\\', '/')
-    base_dir = base_dir.replace('\\', '/')
+    # Normalize paths for consistent handling across platforms
+    file_path = os.path.normpath(file_path)
+    base_dir = os.path.normpath(base_dir)
     
-    # Make sure base_dir ends with a slash
-    if not base_dir.endswith('/'):
-        base_dir += '/'
-    
-    # Remove the base directory from the local path
-    if local_path.startswith(base_dir):
-        relative_path = local_path[len(base_dir):]
+    # Get relative path from base directory
+    if file_path.startswith(base_dir):
+        rel_path = os.path.relpath(file_path, base_dir)
     else:
-        # If local_path is not within base_dir, just use the filename
-        relative_path = os.path.basename(local_path)
+        # If not a subdirectory of base_dir, just use the filename
+        rel_path = os.path.basename(file_path)
     
-    # Prepend the remote base if provided
+    # Skip 'processed' directory if it's in the path
+    path_parts = rel_path.split(os.sep)
+    if 'processed' in path_parts:
+        # Remove 'processed' from the path
+        path_parts.remove('processed')
+        rel_path = os.path.join(*path_parts)
+    
+    # Combine with remote base path
     if remote_base:
-        # Ensure remote_base ends with slash
-        if not remote_base.endswith('/'):
-            remote_base += '/'
-        return remote_base + relative_path
+        if remote_base.startswith('/'):
+            # Handle absolute path for services like Dropbox
+            remote_path = os.path.join(remote_base[1:], rel_path)
+        else:
+            remote_path = os.path.join(remote_base, rel_path)
+    else:
+        remote_path = rel_path
     
-    return relative_path
+    # Convert to forward slashes for compatibility with most cloud services
+    remote_path = remote_path.replace(os.sep, '/')
+    
+    return remote_path

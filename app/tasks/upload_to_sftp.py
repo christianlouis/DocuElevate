@@ -68,6 +68,10 @@ def upload_to_sftp(file_path: str):
         remote_base = settings.sftp_folder or ""
         remote_path = extract_remote_path(file_path, settings.workdir, remote_base)
         
+        # Ensure the remote path starts with a slash if the base folder does
+        if remote_base.startswith('/') and not remote_path.startswith('/'):
+            remote_path = '/' + remote_path
+        
         # Function to check if file exists in SFTP server
         def check_exists_in_sftp(path):
             try:

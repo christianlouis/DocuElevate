@@ -34,16 +34,14 @@
                   {{ item.name }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {% if debug_enabled %}
-                    {% if item.value is none %}
-                      <span class="text-gray-400">NULL</span>
-                    {% elif item.value == "" %}
-                      <span class="text-gray-400">(empty string)</span>
-                    {% else %}
-                      {{ item.value }}
-                    {% endif %}
+                  {% if item.value is none %}
+                    <span class="text-gray-400">NULL</span>
+                  {% elif item.value == "" %}
+                    <span class="text-gray-400">(empty string)</span>
+                  {% elif item.value == "********" %}
+                    <span class="text-gray-400">********</span>
                   {% else %}
-                    <span class="text-gray-400">*** hidden in non-debug mode ***</span>
+                    {{ item.value }}
                   {% endif %}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">

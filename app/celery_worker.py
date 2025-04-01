@@ -30,6 +30,7 @@ from app.tasks.upload_to_email import upload_to_email
 
 from app.tasks.imap_tasks import pull_all_inboxes
 from app.tasks.send_to_all import send_to_all_destinations
+from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
 
 celery.conf.task_routes = {
     "app.tasks.*": {"queue": "default"},
@@ -47,4 +48,13 @@ celery.conf.beat_schedule = {
         "task": "app.tasks.imap_tasks.pull_all_inboxes",
         "schedule": crontab(minute="*/1"),  # every 1 minute
     },
+    # Add Uptime Kuma ping task if configured
+    "ping-uptime-kuma": {
+        "task": "app.tasks.uptime_kuma_tasks.ping_uptime_kuma",
+        "schedule": crontab(minute=f"*/{settings.uptime_kuma_ping_interval}"),
+        "options": {"expires": 55},  # Ensure tasks don't pile up
+    } if settings.uptime_kuma_url else None,
 }
+
+# Remove None entries from beat_schedule
+celery.conf.beat_schedule = {k: v for k, v in celery.conf.beat_schedule.items() if v is not None}

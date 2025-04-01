@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import Optional, List, Dict, Any
+import os
 
 class Settings(BaseSettings):
     database_url: str
@@ -10,6 +11,7 @@ class Settings(BaseSettings):
     openai_base_url: str = "https://api.openai.com/v1"  # Default to OpenAI's endpoint
     openai_model: str = "gpt-4o-mini"  # Default model
     workdir: str
+    debug: bool = False  # Default to False
     
     # Making Dropbox optional
     dropbox_app_key: Optional[str] = None
@@ -110,7 +112,37 @@ class Settings(BaseSettings):
     s3_storage_class: Optional[str] = "STANDARD"  # Default storage class
     s3_acl: Optional[str] = "private"  # Default ACL
 
+    # Uptime Kuma settings
+    uptime_kuma_url: Optional[str] = None
+    uptime_kuma_ping_interval: int = 5  # Default ping interval in minutes
+
+    # Get version from file or environment
+    @property
+    def version(self) -> str:
+        # First try to get version from environment
+        env_version = os.environ.get("APP_VERSION")
+        if env_version:
+            return env_version
+        
+        # Then try to get version from VERSION file
+        version_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "VERSION")
+        if os.path.exists(version_file):
+            with open(version_file, "r") as f:
+                return f.read().strip()
+                
+        # Default version if not found
+        return "0.1.0-dev"
+
     class Config:
         env_file = ".env"
+        # Convert string representations of booleans to actual booleans
+        @classmethod
+        def parse_env_var(cls, field_name: str, raw_val: str) -> Any:
+            if field_name.endswith('_enabled') or field_name == 'debug':
+                if raw_val.lower() in ('false', '0', 'no', 'n', 'f'):
+                    return False
+                if raw_val.lower() in ('true', '1', 'yes', 'y', 't'):
+                    return True
+            return raw_val
 
 settings = Settings()
