@@ -7,7 +7,13 @@ Welcome to the DocuNova documentation. This directory contains comprehensive gui
 - [User Guide](UserGuide.md) - How to use DocuNova's features and interface
 - [API Documentation](API.md) - Complete API reference for developers
 - [Deployment Guide](DeploymentGuide.md) - How to deploy DocuNova in various environments
-- [Configuration Guide](ConfigurationGuide.md) - All available configuration options
+- [Configuration Guide](ConfigurationGuide.md) - All available configuration options, including:
+  - Dropbox integration
+  - Nextcloud integration 
+  - Paperless NGX integration
+  - Google Drive integration
+  - Authentication setup
+  - Email processing configuration
 - [Troubleshooting](Troubleshooting.md) - Solutions to common issues
 
 ## Additional Resources

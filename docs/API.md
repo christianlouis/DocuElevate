@@ -101,6 +101,21 @@ Reprocess a specific file.
 }
 ```
 
+**POST** `/send_to_google_drive/`
+
+Send a processed file to Google Drive.
+
+**Parameters**:
+- `file_path`: Path to the file to upload
+
+**Response**:
+```json
+{
+  "task_id": "a1b2c3d4-e5f6-7g8h-9i0j-k1l2m3n4o5p6",
+  "status": "queued"
+}
+```
+
 ## Error Handling
 
 Errors follow standard HTTP status codes with descriptive messages:

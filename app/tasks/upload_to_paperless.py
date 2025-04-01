@@ -82,31 +82,31 @@ def poll_task_for_document_id(task_id: str) -> int:
     )
 
 @celery.task(base=BaseTaskWithRetry)
-def upload_to_paperless(file_path: str) -> Dict[str, Any]:
-    """
-    Uploads a PDF to Paperless with minimal metadata (filename and date only).
-    
-    1. Extracts the filename and date from the file.
-    2. POSTs the PDF to Paperless => returns a quoted UUID string (task_id).
-    3. Polls /api/tasks/?task_id=<uuid> until SUCCESS or FAILURE => doc_id.
+def upload_to_paperless(file_path: str):
+    """Uploads a file to Paperless-ngx."""
 
-    Returns a dict with status, the paperless_task_id, paperless_document_id, and file_path.
-    """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
 
-    base_name = os.path.basename(file_path)
+    # Extract filename
+    filename = os.path.basename(file_path)
+
+    # Check if Paperless settings are configured
+    if not settings.paperless_host or not settings.paperless_ngx_api_token:
+        error_msg = "Paperless-ngx credentials are not fully configured"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
 
     # Upload the PDF
     post_url = _paperless_api_url("/api/documents/post_document/")
     with open(file_path, "rb") as f:
         files = {
-            "document": (base_name, f, "application/pdf"),
+            "document": (filename, f, "application/pdf"),
         }
-        data = {"title": base_name}  # Title = Filename (no additional metadata)
+        data = {"title": filename}  # Title = Filename (no additional metadata)
 
         try:
-            logger.debug("Posting document to Paperless: file=%s", base_name)
+            logger.debug("Posting document to Paperless: file=%s", filename)
             resp = requests.post(post_url, headers=_get_headers(), files=files, data=data)
             resp.raise_for_status()
         except requests.exceptions.RequestException as exc:

@@ -13,3 +13,18 @@ authlib  # Authentication
 python-dotenv  # Environment variables
 starlette  # ASGI toolkit (used by FastAPI)
 alembic  # Database migrations
+
+# Google Drive API
+google-api-python-client>=2.79.0
+google-auth>=2.22.0
+google-auth-oauthlib>=1.0.0
+
+# OneDrive/Microsoft Graph API
+msgraph-core>=1.0.0
+msal>=1.20.0
+
+# AWS S3
+boto3>=1.28.0
+
+# SFTP
+paramiko>=3.4.0  # SSH/SFTP implementation for Python
