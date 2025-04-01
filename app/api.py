@@ -231,7 +231,7 @@ def process_all_pdfs_in_workdir():
 
 @router.post("/ui-upload")
 @require_login
-async def ui_upload(file: UploadFile = File(...)):
+async def ui_upload(request: Request, file: UploadFile = File(...)):
     """Endpoint to accept a user-uploaded file and enqueue it for processing."""
     import uuid
     import os.path

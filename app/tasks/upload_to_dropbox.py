@@ -12,20 +12,30 @@ from app.utils.filename_utils import get_unique_filename, sanitize_filename, ext
 
 logger = logging.getLogger(__name__)
 
+def _validate_dropbox_settings():
+    """Validate that all required Dropbox settings are available."""
+    missing = []
+    
+    if not hasattr(settings, 'dropbox_refresh_token') or not settings.dropbox_refresh_token:
+        missing.append("refresh token")
+    
+    if not hasattr(settings, 'dropbox_app_key') or not settings.dropbox_app_key:
+        missing.append("app key")
+    
+    if not hasattr(settings, 'dropbox_app_secret') or not settings.dropbox_app_secret:
+        missing.append("app secret")
+    
+    if missing:
+        logger.error(f"Cannot refresh Dropbox token: Missing {', '.join(missing)}")
+        return False
+    
+    return True
+
 def get_dropbox_access_token():
     """Refresh the Dropbox access token using the stored refresh token from ENV."""
     
     # Check if needed settings are available
-    if not hasattr(settings, 'dropbox_refresh_token') or not settings.dropbox_refresh_token:
-        logger.error("Cannot refresh Dropbox token: Missing refresh token")
-        return None
-        
-    if not hasattr(settings, 'dropbox_app_key') or not settings.dropbox_app_key:
-        logger.error("Cannot refresh Dropbox token: Missing app key")
-        return None
-        
-    if not hasattr(settings, 'dropbox_app_secret') or not settings.dropbox_app_secret:
-        logger.error("Cannot refresh Dropbox token: Missing app secret")
+    if not _validate_dropbox_settings():
         return None
 
     token_url = "https://api.dropbox.com/oauth2/token"
@@ -64,7 +74,6 @@ def upload_to_dropbox(file_path: str):
         return {"status": "Skipped", "reason": "Dropbox settings not configured"}
     
     filename = os.path.basename(file_path)
-    sanitized_filename = sanitize_filename(filename)
     
     try:
         # Get access token from refresh token

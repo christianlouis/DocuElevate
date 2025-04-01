@@ -117,6 +117,48 @@ def attach_logo(msg):
         logger.warning(f"Error attaching logo: {str(e)}")
         return False
 
+def _prepare_recipients(recipients):
+    """Helper function to prepare email recipients list."""
+    if not recipients:
+        if not settings.email_default_recipient:
+            error_msg = "No recipients specified and no default recipient configured"
+            logger.error(error_msg)
+            return None, error_msg
+        return [settings.email_default_recipient], None
+    elif isinstance(recipients, str):
+        return [recipients], None  # Convert single email to list
+    return recipients, None
+
+def _send_email_with_smtp(msg, filename, recipients):
+    """Helper function to handle SMTP connection and sending."""
+    try:
+        # First try to resolve the hostname
+        socket.gethostbyname(settings.email_host)
+        
+        # Connect to the SMTP server
+        with smtplib.SMTP(settings.email_host, settings.email_port, timeout=30) as server:
+            # Use TLS if specified
+            if settings.email_use_tls:
+                server.starttls()
+            
+            # Login if credentials are provided
+            if settings.email_username and settings.email_password:
+                server.login(settings.email_username, settings.email_password)
+            
+            # Send the email
+            server.send_message(msg)
+
+        logger.info(f"Successfully sent {filename} via email to {', '.join(recipients)}")
+        return None
+    except socket.gaierror as e:
+        error_msg = f"Failed to resolve email host: {settings.email_host} - {str(e)}"
+        logger.error(error_msg)
+        return {"status": "Failed", "reason": error_msg, "error": str(e)}
+    except (ConnectionRefusedError, TimeoutError) as e:
+        error_msg = f"Connection error to SMTP server {settings.email_host}:{settings.email_port} - {str(e)}"
+        logger.error(error_msg)
+        return {"status": "Failed", "reason": error_msg, "error": str(e)}
+
 @celery.task(base=BaseTaskWithRetry)
 def upload_to_email(file_path: str, recipients=None, subject=None, message=None, template_name="default.html", include_metadata=True):
     """
@@ -139,19 +181,13 @@ def upload_to_email(file_path: str, recipients=None, subject=None, message=None,
     logger.debug(f"Email config - Host: {settings.email_host}, Port: {settings.email_port}, " 
                 f"Username: {settings.email_username}, TLS: {settings.email_use_tls}")
 
-    # Use provided recipients or fall back to default
-    if not recipients:
-        if not settings.email_default_recipient:
-            error_msg = "No recipients specified and no default recipient configured"
-            logger.error(error_msg)
-            return {"status": "Skipped", "reason": error_msg}
-        recipients = [settings.email_default_recipient]
-    elif isinstance(recipients, str):
-        recipients = [recipients]  # Convert single email to list
+    # Process recipients
+    recipients, error = _prepare_recipients(recipients)
+    if error:
+        return {"status": "Skipped", "reason": error}
 
     # Use provided subject or create default
-    if not subject:
-        subject = f"DocuNova Document: {filename}"
+    subject = subject or f"DocuNova Document: {filename}"
 
     # Extract document metadata if available
     metadata = {}
@@ -160,7 +196,7 @@ def upload_to_email(file_path: str, recipients=None, subject=None, message=None,
 
     try:
         # Create the email
-        msg = MIMEMultipart('related')  # Changed to 'related' to properly handle inline images
+        msg = MIMEMultipart('related')
         msg['From'] = settings.email_sender or settings.email_username
         msg['To'] = ", ".join(recipients)
         msg['Subject'] = subject
@@ -198,45 +234,20 @@ def upload_to_email(file_path: str, recipients=None, subject=None, message=None,
             attachment.add_header('Content-Disposition', f'attachment; filename="{filename}"')
             msg.attach(attachment)
 
-        try:
-            # First try to resolve the hostname
-            socket.gethostbyname(settings.email_host)
-            
-            # Connect to the SMTP server
-            with smtplib.SMTP(settings.email_host, settings.email_port, timeout=30) as server:
-                # Use TLS if specified
-                if settings.email_use_tls:
-                    server.starttls()
-                
-                # Login if credentials are provided
-                if settings.email_username and settings.email_password:
-                    server.login(settings.email_username, settings.email_password)
-                
-                # Send the email
-                server.send_message(msg)
+        # Send the email through SMTP
+        error_result = _send_email_with_smtp(msg, filename, recipients)
+        if error_result:
+            return error_result
 
-            logger.info(f"Successfully sent {filename} via email to {', '.join(recipients)}")
-            return {
-                "status": "Completed",
-                "file": file_path,
-                "recipients": recipients,
-                "subject": subject,
-                "metadata_included": bool(metadata),
-                "logo_included": has_logo
-            }
-        except socket.gaierror as e:
-            error_msg = f"Failed to resolve email host: {settings.email_host} - {str(e)}"
-            logger.error(error_msg)
-            return {"status": "Failed", "reason": error_msg, "error": str(e)}
-        except ConnectionRefusedError as e:
-            error_msg = f"Connection refused to SMTP server {settings.email_host}:{settings.email_port} - {str(e)}"
-            logger.error(error_msg)
-            return {"status": "Failed", "reason": error_msg, "error": str(e)}
-        except TimeoutError as e:
-            error_msg = f"Connection timeout to SMTP server {settings.email_host}:{settings.email_port} - {str(e)}"
-            logger.error(error_msg)
-            return {"status": "Failed", "reason": error_msg, "error": str(e)}
-
+        return {
+            "status": "Completed",
+            "file": file_path,
+            "recipients": recipients,
+            "subject": subject,
+            "metadata_included": bool(metadata),
+            "logo_included": has_logo
+        }
+        
     except Exception as e:
         error_msg = f"Failed to send {filename} via email: {str(e)}"
         logger.error(error_msg)

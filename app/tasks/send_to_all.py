@@ -18,6 +18,55 @@ from app.celery_app import celery
 
 logger = logging.getLogger(__name__)
 
+def _should_upload_to_dropbox():
+    return (settings.dropbox_app_key and 
+            settings.dropbox_app_secret and 
+            settings.dropbox_refresh_token)
+
+def _should_upload_to_nextcloud():
+    return (settings.nextcloud_upload_url and 
+            settings.nextcloud_username and 
+            settings.nextcloud_password)
+
+def _should_upload_to_paperless():
+    return (settings.paperless_ngx_api_token and 
+            settings.paperless_host)
+
+def _should_upload_to_google_drive():
+    return settings.google_drive_credentials_json
+
+def _should_upload_to_webdav():
+    return (settings.webdav_url and 
+            settings.webdav_username and 
+            settings.webdav_password)
+
+def _should_upload_to_ftp():
+    return (settings.ftp_host and 
+            settings.ftp_username and 
+            settings.ftp_password)
+
+def _should_upload_to_sftp():
+    return (settings.sftp_host and 
+            settings.sftp_username and 
+            (settings.sftp_password or settings.sftp_private_key))
+
+def _should_upload_to_email():
+    return (settings.email_host and 
+            settings.email_username and 
+            settings.email_password and 
+            settings.email_default_recipient)
+
+def _should_upload_to_onedrive():
+    return (settings.onedrive_client_id and 
+            settings.onedrive_client_secret and 
+            (settings.onedrive_refresh_token or 
+             (settings.onedrive_tenant_id and settings.onedrive_tenant_id != "common")))
+
+def _should_upload_to_s3():
+    return (settings.s3_bucket_name and 
+            settings.aws_access_key_id and 
+            settings.aws_secret_access_key)
+
 @celery.task(base=BaseTaskWithRetry)
 def send_to_all_destinations(file_path: str):
     """Distribute a file to all configured storage destinations."""
@@ -28,68 +77,66 @@ def send_to_all_destinations(file_path: str):
     logger.info(f"Sending {file_path} to all configured destinations")
     results = {}
     
-    # Send to Dropbox if configured
-    if settings.dropbox_app_key and settings.dropbox_app_secret and settings.dropbox_refresh_token:
-        logger.info(f"Queueing {file_path} for Dropbox upload")
-        task = upload_to_dropbox.delay(file_path)
-        results["dropbox_task_id"] = task.id
+    # Define service configurations
+    services = [
+        {
+            "name": "dropbox",
+            "should_upload": _should_upload_to_dropbox,
+            "upload_func": upload_to_dropbox,
+        },
+        {
+            "name": "nextcloud",
+            "should_upload": _should_upload_to_nextcloud,
+            "upload_func": upload_to_nextcloud,
+        },
+        {
+            "name": "paperless",
+            "should_upload": _should_upload_to_paperless,
+            "upload_func": upload_to_paperless,
+        },
+        {
+            "name": "google_drive",
+            "should_upload": _should_upload_to_google_drive,
+            "upload_func": upload_to_google_drive,
+        },
+        {
+            "name": "webdav",
+            "should_upload": _should_upload_to_webdav,
+            "upload_func": upload_to_webdav,
+        },
+        {
+            "name": "ftp",
+            "should_upload": _should_upload_to_ftp,
+            "upload_func": upload_to_ftp,
+        },
+        {
+            "name": "sftp",
+            "should_upload": _should_upload_to_sftp,
+            "upload_func": upload_to_sftp,
+        },
+        {
+            "name": "email",
+            "should_upload": _should_upload_to_email,
+            "upload_func": upload_to_email,
+        },
+        {
+            "name": "onedrive",
+            "should_upload": _should_upload_to_onedrive,
+            "upload_func": upload_to_onedrive,
+        },
+        {
+            "name": "s3",
+            "should_upload": _should_upload_to_s3,
+            "upload_func": upload_to_s3,
+        },
+    ]
     
-    # Send to Nextcloud if configured
-    if settings.nextcloud_upload_url and settings.nextcloud_username and settings.nextcloud_password:
-        logger.info(f"Queueing {file_path} for Nextcloud upload")
-        task = upload_to_nextcloud.delay(file_path)
-        results["nextcloud_task_id"] = task.id
-    
-    # Send to Paperless if configured
-    if settings.paperless_ngx_api_token and settings.paperless_host:
-        logger.info(f"Queueing {file_path} for Paperless upload")
-        task = upload_to_paperless.delay(file_path)
-        results["paperless_task_id"] = task.id
-    
-    # Send to Google Drive if configured
-    if settings.google_drive_credentials_json:
-        logger.info(f"Queueing {file_path} for Google Drive upload")
-        task = upload_to_google_drive.delay(file_path)
-        results["google_drive_task_id"] = task.id
-
-    # Send to WebDAV if configured
-    if settings.webdav_url and settings.webdav_username and settings.webdav_password:
-        logger.info(f"Queueing {file_path} for WebDAV upload")
-        task = upload_to_webdav.delay(file_path)
-        results["webdav_task_id"] = task.id
-        
-    # Send to FTP if configured
-    if settings.ftp_host and settings.ftp_username and settings.ftp_password:
-        logger.info(f"Queueing {file_path} for FTP upload")
-        task = upload_to_ftp.delay(file_path)
-        results["ftp_task_id"] = task.id
-        
-    # Send to SFTP if configured
-    if settings.sftp_host and settings.sftp_username and (settings.sftp_password or settings.sftp_private_key):
-        logger.info(f"Queueing {file_path} for SFTP upload")
-        task = upload_to_sftp.delay(file_path)
-        results["sftp_task_id"] = task.id
-
-    # Send via email if configured
-    if settings.email_host and settings.email_username and settings.email_password and settings.email_default_recipient:
-        logger.info(f"Queueing {file_path} for email delivery")
-        task = upload_to_email.delay(file_path)
-        results["email_task_id"] = task.id
-        
-    # Send to OneDrive if configured
-    if settings.onedrive_client_id and settings.onedrive_client_secret and (
-        settings.onedrive_refresh_token or 
-        (settings.onedrive_tenant_id and settings.onedrive_tenant_id != "common")
-    ):
-        logger.info(f"Queueing {file_path} for OneDrive upload")
-        task = upload_to_onedrive.delay(file_path)
-        results["onedrive_task_id"] = task.id
-        
-    # Send to Amazon S3 if configured
-    if settings.s3_bucket_name and settings.aws_access_key_id and settings.aws_secret_access_key:
-        logger.info(f"Queueing {file_path} for S3 upload")
-        task = upload_to_s3.delay(file_path)
-        results["s3_task_id"] = task.id
+    # Process each service
+    for service in services:
+        if service["should_upload"]():
+            logger.info(f"Queueing {file_path} for {service['name']} upload")
+            task = service["upload_func"].delay(file_path)
+            results[f"{service['name']}_task_id"] = task.id
     
     return {
         "status": "Queued",
