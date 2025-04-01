@@ -131,7 +131,7 @@ class Settings(BaseSettings):
                 return f.read().strip()
                 
         # Default version if not found
-        return "0.1.0-dev"
+        return "0.3.2-dev"
 
     class Config:
         env_file = ".env"
