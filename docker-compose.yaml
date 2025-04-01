@@ -1,7 +1,8 @@
-
 services:
   api:
-    image: christianlouis/document-processor:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: document_api
 
     # We'll keep the code in /app, but set working_dir to the shared data directory
@@ -26,12 +27,12 @@ services:
 
     # Mount the shared working directory for data
     volumes:
-      # optional: mount your code if you want local dev changes to reflect
-      # - ./app:/app
       - /var/docparse/workdir:/workdir
 
   worker:
-    image: christianlouis/document-processor:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: document_worker
 
     # same shared working directory
@@ -49,8 +50,6 @@ services:
 
     # Mount the shared directory (and optionally your code if you want dev mode)
     volumes:
-      # optional: mount your code if you want local dev changes
-      # - ./app:/app
       - /var/docparse/workdir:/workdir
 
   gotenberg:

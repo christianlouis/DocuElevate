@@ -5,22 +5,25 @@
 <div class="flex flex-col items-center justify-center p-8">
   <h1 class="text-3xl font-bold mb-8">Upload a File</h1>
 
-  <div
-    id="dropZone"
-    class="border-4 border-dashed border-gray-300 rounded-lg p-8 bg-white text-center w-full max-w-lg"
-    ondrop="handleDrop(event)"
-    ondragover="handleDragOver(event)"
-  >
-    <p class="text-gray-500 mb-4">
-      Drag & drop a file here, or click to select a file.
-    </p>
-    <input
-      id="fileInput"
-      type="file"
-      class="hidden"
-      onchange="handleFileSelect(event)"
-    />
-  </div>
+  <form action="/api/ui-upload" method="POST" enctype="multipart/form-data">
+    <div
+      id="dropZone"
+      class="border-4 border-dashed border-gray-300 rounded-lg p-8 bg-white text-center w-full max-w-lg"
+      ondrop="handleDrop(event)"
+      ondragover="handleDragOver(event)"
+    >
+      <p class="text-gray-500 mb-4">
+        Drag & drop a file here, or click to select a file.
+      </p>
+      <input
+        id="fileInput"
+        type="file"
+        class="hidden"
+        onchange="handleFileSelect(event)"
+        name="file"
+      />
+    </div>
+  </form>
 
   <div id="statusMessage" class="mt-4 text-gray-700"></div>
 </div>
@@ -66,7 +69,7 @@
     try {
       let formData = new FormData();
       formData.append("file", file);
-      const response = await fetch("/ui-upload", {
+      const response = await fetch("/api/ui-upload", {
         method: "POST",
         body: formData,
       });

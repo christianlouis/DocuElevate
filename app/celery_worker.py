@@ -20,6 +20,14 @@ from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.upload_to_dropbox import upload_to_dropbox
 from app.tasks.upload_to_paperless import upload_to_paperless
 from app.tasks.upload_to_nextcloud import upload_to_nextcloud
+from app.tasks.upload_to_google_drive import upload_to_google_drive
+from app.tasks.upload_to_webdav import upload_to_webdav
+from app.tasks.upload_to_s3 import upload_to_s3
+from app.tasks.upload_to_onedrive import upload_to_onedrive
+from app.tasks.upload_to_ftp import upload_to_ftp
+from app.tasks.upload_to_sftp import upload_to_sftp 
+from app.tasks.upload_to_email import upload_to_email
+
 from app.tasks.imap_tasks import pull_all_inboxes
 from app.tasks.send_to_all import send_to_all_destinations
 

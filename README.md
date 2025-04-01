@@ -10,7 +10,7 @@
 DocuNova automates the handling, extraction, and processing of documents using a variety of services, including:
 
 - **OpenAI** for metadata extraction and text refinement.  
-- **Dropbox** and **Nextcloud** for file storage and uploads.  
+- **Dropbox**, **Nextcloud**, and **Google Drive** for file storage and uploads.  
 - **Paperless NGX** for document indexing and management.  
 - **Azure Document Intelligence** for OCR on PDFs.  
 - **Gotenberg** for file-to-PDF conversions.  
@@ -67,6 +67,7 @@ Every document goes through the following steps:
 Processed documents with their metadata can be automatically sent to:
 - **Dropbox**: For cloud storage and sharing
 - **Nextcloud**: For self-hosted file storage
+- **Google Drive**: For Google Workspace integration
 - **Paperless-NGX**: For advanced document management with search capabilities
 
 Users can choose to send documents to any combination of these destinations through configuration settings or manual selection.
@@ -74,7 +75,7 @@ Users can choose to send documents to any combination of these destinations thro
 ## Features
 
 - **Document Upload & Storage**:  
-  - Manual uploads (via API or UI) to Dropbox, Nextcloud, or Paperless.  
+  - Manual uploads (via API or UI) to Dropbox, Nextcloud, Google Drive, or Paperless.  
 - **OCR Processing (Azure)**:  
   - Extract text from scanned PDFs using Azure Document Intelligence.  
 - **Metadata Extraction (OpenAI)**:  

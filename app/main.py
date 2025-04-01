@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import os
+import logging
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, status, Request
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -13,14 +13,11 @@ from pathlib import Path
 
 from app.database import init_db
 from app.config import settings
-from app.tasks.process_document import process_document  # Updated import
-from app.tasks.upload_to_dropbox import upload_to_dropbox
-from app.tasks.upload_to_paperless import upload_to_paperless
-from app.tasks.upload_to_nextcloud import upload_to_nextcloud
-from app.tasks.send_to_all import send_to_all_destinations
+from app.utils.config_validator import check_all_configs
 
-from app.api import router as api_router
-from app.frontend import router as frontend_router
+# Import both the traditional and new routers - we'll keep both available for compatibility
+from app.frontend import router as frontend_router_original
+from app.api import router as api_router_original
 from app.auth import router as auth_router
 
 # Load configuration from .env for the session key
@@ -53,123 +50,27 @@ app.mount("/static", StaticFiles(directory=frontend_static_dir), name="static")
 def on_startup():
     init_db()  # Create tables if they don't exist
 
-@app.post("/process/")
-def process(file_path: str):
-    """
-    API Endpoint to start document processing.
-    This enqueues document processing which handles the full pipeline.
-    """
-    if not os.path.isabs(file_path):
-        file_path = os.path.join(settings.workdir, file_path)
-
-    if not os.path.exists(file_path):
-        raise HTTPException(
-            status_code=400, detail=f"File {file_path} not found."
-        )
-
-    task = process_document.delay(file_path)  # Updated function call
-    return {"task_id": task.id, "status": "queued"}
-
-@app.post("/send_to_dropbox/")
-def send_to_dropbox(file_path: str):
-    if not os.path.isabs(file_path):
-        file_path = os.path.join(settings.workdir, 'processed', file_path)
-    if not os.path.exists(file_path):
-        raise HTTPException(
-            status_code=400, detail=f"File {file_path} not found."
-        )
-    task = upload_to_dropbox.delay(file_path)
-    return {"task_id": task.id, "status": "queued"}
-
-@app.post("/send_to_paperless/")
-def send_to_paperless(file_path: str):
-    if not os.path.isabs(file_path):
-        file_path = os.path.join(settings.workdir, 'processed', file_path)
-    if not os.path.exists(file_path):
-        raise HTTPException(
-            status_code=400, detail=f"File {file_path} not found."
-        )
-    task = upload_to_paperless.delay(file_path)
-    return {"task_id": task.id, "status": "queued"}
-
-@app.post("/send_to_nextcloud/")
-def send_to_nextcloud(file_path: str):
-    if not os.path.isabs(file_path):
-        file_path = os.path.join(settings.workdir, 'processed', file_path)
-    if not os.path.exists(file_path):
-        raise HTTPException(
-            status_code=400, detail=f"File {file_path} not found."
-        )
-    task = upload_to_nextcloud.delay(file_path)
-    return {"task_id": task.id, "status": "queued"}
-
-@app.post("/send_to_all_destinations/")
-def send_to_all_destinations_endpoint(file_path: str):
-    """
-    Call the aggregator task that sends this file to dropbox, nextcloud, and paperless.
-    """
-    if not os.path.isabs(file_path):
-        file_path = os.path.join(settings.workdir, 'processed', file_path)
-
-    if not os.path.exists(file_path):
-        raise HTTPException(
-            status_code=400, detail=f"File {file_path} not found."
-        )
-
-    task = send_to_all_destinations.delay(file_path)
-    return {"task_id": task.id, "status": "queued", "file_path": file_path}
-
-@app.post("/processall")
-def process_all_pdfs_in_workdir():
-    """
-    Finds all .pdf files in <workdir> and enqueues them for processing.
-    """
-    target_dir = settings.workdir
-    if not os.path.exists(target_dir):
-        raise HTTPException(
-            status_code=400, detail=f"Directory {target_dir} does not exist."
-        )
-
-    pdf_files = []
-    for filename in os.listdir(target_dir):
-        if filename.lower().endswith(".pdf"):
-            pdf_files.append(filename)
-
-    if not pdf_files:
-        return {"message": "No PDF files found in that directory."}
-
-    task_ids = []
-    for pdf in pdf_files:
-        file_path = os.path.join(target_dir, pdf)
-        task = process_document.delay(file_path)  # Updated function call
-        task_ids.append(task.id)
-
-    return {
-        "message": f"Enqueued {len(pdf_files)} PDFs to upload_to_s3",
-        "pdf_files": pdf_files,
-        "task_ids": task_ids
-    }
-
-@app.post("/ui-upload")
-async def ui_upload(file: UploadFile = File(...)):
-    """Endpoint to accept a user-uploaded file and enqueue it for processing."""
-    workdir = "/workdir"
-    target_path = os.path.join(workdir, file.filename)
-    try:
-        with open(target_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to save file: {e}"
-        )
-
-    task = process_document.delay(target_path)  # Updated function call
-    return {"task_id": task.id, "status": "queued"}
+@app.on_event("startup")
+async def startup_event():
+    """Run startup tasks for the application"""
+    # Force settings dump to log for troubleshooting
+    from app.utils.config_validator import dump_all_settings
+    dump_all_settings()
+    
+    # Validate configuration
+    config_issues = check_all_configs()
+    
+    # Log overall status
+    has_issues = any(config_issues['email']) or any(len(issues) > 0 for provider, issues in config_issues['storage'].items())
+    if has_issues:
+        logging.warning("Application started with configuration issues - some features may be unavailable")
+    else:
+        logging.info("Application started with valid configuration")
+    
+    logging.info("Router organization note: Using route handlers from main app directory for now")
+    logging.info("In the future, we'll transition fully to the frontend/ and api/ submodules")
 
 # Custom 404 - we can still return the Jinja2 template, or the old static file:
-# For a dynamic 404 using the base layout, see "frontend/404.html" usage below:
 @app.exception_handler(404)
 async def custom_404_handler(request: Request, exc: HTTPException):
     # Serve the 404 template directly
@@ -194,7 +95,10 @@ async def custom_500_handler(request: Request, exc: Exception):
 def test_500():
     raise RuntimeError("Testing forced 500 error!")
 
-# Include the frontend and auth routers
-app.include_router(frontend_router)
+# Include the routers - for now we're using the original routers
+# Later we can switch to the organized router structure
+app.include_router(frontend_router_original)
 app.include_router(auth_router)
-app.include_router(api_router, prefix="/api")
+app.include_router(api_router_original, prefix="/api")
+
+
