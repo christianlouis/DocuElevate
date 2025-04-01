@@ -76,10 +76,10 @@ async def status_dashboard(request: Request):
 async def env_debug(request: Request):
     """
     Debug endpoint to view environment variables and settings
-    Only shows values when DEBUG is True
+    Uses actual debug setting from config
     """
-    # Default DEBUG to True for this route
-    debug_enabled = True
+    # Use the actual debug setting from configuration
+    debug_enabled = settings.debug
     
     # Get settings data
     from app.utils.config_validator import get_settings_for_display
@@ -91,7 +91,7 @@ async def env_debug(request: Request):
             "request": request, 
             "settings": settings_data,
             "debug_enabled": debug_enabled,
-            "app_version": getattr(settings, 'version', 'Unknown')
+            "app_version": settings.version
         }
     )
 

@@ -86,12 +86,12 @@ def list_files_api(request: Request, db: Session = Depends(get_db)):
 # API endpoints
 @router.get("/diagnostic/settings")
 @require_login
-async def diagnostic_settings(current_user: dict = Depends(get_current_user)):
+async def diagnostic_settings(request: Request, current_user: dict = Depends(get_current_user)):
     """
     API endpoint to dump settings to the log and view basic config information
     This endpoint doesn't expose sensitive information like passwords or tokens
     """
-    from app.utils.config_validator import dump_all_settings
+    from app.utils.config_validator import dump_all_settings, get_settings_for_display
     # Dump full settings to log for admin to see
     dump_all_settings()
     
@@ -107,6 +107,8 @@ async def diagnostic_settings(current_user: dict = Depends(get_current_user)):
             "sftp": bool(getattr(settings, 'sftp_host', None)),
             "paperless": bool(getattr(settings, 'paperless_host', None)),
             "google_drive": bool(getattr(settings, 'google_drive_credentials_json', None)),
+            "uptime_kuma": bool(getattr(settings, 'uptime_kuma_url', None)),
+            "auth": bool(getattr(settings, 'authentik_config_url', None)),
         },
         "imap_enabled": bool(getattr(settings, 'imap1_host', None) or getattr(settings, 'imap2_host', None)),
     }

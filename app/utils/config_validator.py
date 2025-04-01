@@ -129,170 +129,322 @@ def validate_storage_configs():
         onedrive_issues.append("OneDrive credentials are not fully configured")
     issues['onedrive'] = onedrive_issues
     
+    # Validate Uptime Kuma
+    uptime_kuma_issues = []
+    if not getattr(settings, 'uptime_kuma_url', None):
+        uptime_kuma_issues.append("UPTIME_KUMA_URL is not configured")
+    issues['uptime_kuma'] = uptime_kuma_issues
+    
     return issues
 
 def get_provider_status():
-    """Get the status of each provider for the dashboard"""
-    providers = {
-        "Email": {
-            "configured": bool(getattr(settings, 'email_host', None) and 
-                               getattr(settings, 'email_username', None) and
-                               getattr(settings, 'email_password', None)),
-            "icon": "mail",
-            "url": getattr(settings, 'email_host', None) or "",
-            "description": f"Send to {getattr(settings, 'email_default_recipient', 'Not configured')}"
-        },
-        "Dropbox": {
-            "configured": bool(getattr(settings, 'dropbox_app_key', None) and 
-                               getattr(settings, 'dropbox_app_secret', None) and
-                               getattr(settings, 'dropbox_refresh_token', None)),
-            "icon": "dropbox",
-            "url": "https://dropbox.com",
-            "description": f"Upload to folder: {getattr(settings, 'dropbox_folder', 'Root')}"
-        },
-        "Nextcloud": {
-            "configured": bool(getattr(settings, 'nextcloud_upload_url', None) and
-                               getattr(settings, 'nextcloud_username', None)),
-            "icon": "cloud",
-            "url": getattr(settings, 'nextcloud_upload_url', "").split('/remote.php')[0] if getattr(settings, 'nextcloud_upload_url', None) else "",
-            "description": f"Upload to folder: {getattr(settings, 'nextcloud_folder', 'Root')}"
-        },
-        "SFTP": {
-            "configured": bool(getattr(settings, 'sftp_host', None) and
-                               getattr(settings, 'sftp_username', None) and
-                               (getattr(settings, 'sftp_password', None) or getattr(settings, 'sftp_private_key', None))),
-            "icon": "server",
-            "url": f"sftp://{getattr(settings, 'sftp_host', '')}:{getattr(settings, 'sftp_port', 22)}",
-            "description": f"Upload to {getattr(settings, 'sftp_host', 'Not configured')}:{getattr(settings, 'sftp_folder', '/')}"
-        },
-        "Paperless": {
-            "configured": bool(getattr(settings, 'paperless_host', None) and
-                               getattr(settings, 'paperless_ngx_api_token', None)),
-            "icon": "file-text",
-            "url": getattr(settings, 'paperless_host', ""),
-            "description": "Document management system"
-        },
-        "S3": {
-            "configured": bool(getattr(settings, 's3_bucket_name', None) and
-                              getattr(settings, 'aws_access_key_id', None)),
-            "icon": "database",
-            "url": f"https://s3.console.aws.amazon.com/s3/buckets/{getattr(settings, 's3_bucket_name', '')}",
-            "description": f"Bucket: {getattr(settings, 's3_bucket_name', 'Not configured')}"
-        },
-        "FTP": {
-            "configured": bool(getattr(settings, 'ftp_host', None) and
-                              getattr(settings, 'ftp_username', None)),
-            "icon": "hard-drive",
-            "url": f"ftp://{getattr(settings, 'ftp_host', '')}:{getattr(settings, 'ftp_port', 21)}",
-            "description": f"Upload to {getattr(settings, 'ftp_host', 'Not configured')}:{getattr(settings, 'ftp_folder', '/')}"
-        },
-        "WebDAV": {
-            "configured": bool(getattr(settings, 'webdav_url', None) and
-                              getattr(settings, 'webdav_username', None)),
-            "icon": "globe",
-            "url": getattr(settings, 'webdav_url', ""),
-            "description": f"Upload to {getattr(settings, 'webdav_folder', '/')}"
-        },
-        "Google Drive": {
-            "configured": bool(getattr(settings, 'google_drive_credentials_json', None)),
-            "icon": "google",
-            "url": "https://drive.google.com",
-            "description": f"Folder ID: {getattr(settings, 'google_drive_folder_id', 'Not configured')}"
-        },
-        "OneDrive": {
-            "configured": bool(getattr(settings, 'onedrive_client_id', None) and
-                               getattr(settings, 'onedrive_refresh_token', None)),
-            "icon": "microsoft",
-            "url": "https://onedrive.live.com",
-            "description": f"Upload to folder: {getattr(settings, 'onedrive_folder_path', 'Not configured')}"
+    """Returns status information for all configured providers"""
+    providers = {}
+    
+    # Check Dropbox configuration
+    providers["Dropbox"] = {
+        "name": "Dropbox", 
+        "configured": bool(getattr(settings, 'dropbox_refresh_token', None)),
+        "enabled": True,
+        "details": {
+            "folder": getattr(settings, 'dropbox_folder', 'Not set')
+        }
+    }
+    
+    # Check Paperless configuration
+    providers["Paperless-ngx"] = {
+        "name": "Paperless-ngx", 
+        "configured": bool(getattr(settings, 'paperless_host', None) and 
+                         getattr(settings, 'paperless_ngx_api_token', None)),
+        "enabled": True,
+        "details": {
+            "host": getattr(settings, 'paperless_host', 'Not set')
+        }
+    }
+    
+    # Check NextCloud configuration
+    providers["NextCloud"] = {
+        "name": "NextCloud", 
+        "configured": bool(getattr(settings, 'nextcloud_upload_url', None) and 
+                          getattr(settings, 'nextcloud_username', None) and 
+                          getattr(settings, 'nextcloud_password', None)),
+        "enabled": True,
+        "details": {
+            "url": getattr(settings, 'nextcloud_upload_url', 'Not set'),
+            "folder": getattr(settings, 'nextcloud_folder', 'Not set')
+        }
+    }
+    
+    # Check SFTP configuration
+    providers["SFTP Storage"] = {
+        "name": "SFTP Storage", 
+        "configured": bool(getattr(settings, 'sftp_host', None) and 
+                          getattr(settings, 'sftp_username', None) and 
+                          (getattr(settings, 'sftp_password', None) or 
+                           getattr(settings, 'sftp_private_key', None))),
+        "enabled": True,
+        "details": {
+            "host": getattr(settings, 'sftp_host', 'Not set'),
+            "folder": getattr(settings, 'sftp_folder', 'Not set')
+        }
+    }
+    
+    # Check S3 configuration
+    providers["S3 Storage"] = {
+        "name": "S3 Storage", 
+        "configured": bool(getattr(settings, 's3_bucket_name', None) and 
+                          getattr(settings, 'aws_access_key_id', None) and 
+                          getattr(settings, 'aws_secret_access_key', None)),
+        "enabled": True,
+        "details": {
+            "bucket": getattr(settings, 's3_bucket_name', 'Not set'),
+            "region": getattr(settings, 'aws_region', 'Not set')
+        }
+    }
+    
+    # Check Google Drive configuration
+    providers["Google Drive"] = {
+        "name": "Google Drive", 
+        "configured": bool(getattr(settings, 'google_drive_credentials_json', None) and 
+                          getattr(settings, 'google_drive_folder_id', None)),
+        "enabled": True,
+        "details": {
+            "folder_id": getattr(settings, 'google_drive_folder_id', 'Not set'),
+            "delegate": getattr(settings, 'google_drive_delegate_to', 'Not set')
+        }
+    }
+    
+    # Check OneDrive configuration
+    providers["OneDrive"] = {
+        "name": "OneDrive", 
+        "configured": bool(getattr(settings, 'onedrive_client_id', None) and 
+                          getattr(settings, 'onedrive_client_secret', None) and 
+                          getattr(settings, 'onedrive_refresh_token', None)),
+        "enabled": True,
+        "details": {
+            "folder": getattr(settings, 'onedrive_folder_path', 'Not set')
+        }
+    }
+
+    # Check WebDAV configuration
+    providers["WebDAV"] = {
+        "name": "WebDAV", 
+        "configured": bool(getattr(settings, 'webdav_url', None) and 
+                          getattr(settings, 'webdav_username', None) and 
+                          getattr(settings, 'webdav_password', None)),
+        "enabled": True,
+        "details": {
+            "url": getattr(settings, 'webdav_url', 'Not set'),
+            "folder": getattr(settings, 'webdav_folder', 'Not set')
         }
     }
     
     return providers
 
 def dump_all_settings():
-    """Dump all settings to the log for debugging"""
-    logger.info("================ SETTINGS DUMP ================")
-    
-    # Get all attributes from settings object
-    attributes = inspect.getmembers(settings, lambda a: not inspect.isroutine(a))
-    settings_dict = {a[0]: a[1] for a in attributes 
-                    if not a[0].startswith('_') and not callable(a[1])}
-    
-    # Sort keys for better readability
-    for key in sorted(settings_dict.keys()):
-        value = settings_dict[key]
-        # Hide sensitive values
-        if any(sensitive in key.lower() for sensitive in ['password', 'secret', 'token', 'key']):
-            if value:
-                value = "******** [HIDDEN FOR SECURITY]"
-        logger.info(f"  {key} = {value}")
-    
-    # Also log all environment variables
-    logger.info("----------- ENVIRONMENT VARIABLES -----------")
-    env_vars_to_log = {}
-    for key in sorted(os.environ.keys()):
-        value = os.environ[key]
-        # Hide sensitive values
-        if any(sensitive in key.lower() for sensitive in ['password', 'secret', 'token', 'key']):
-            if value:
-                value = "******** [HIDDEN FOR SECURITY]"
-        env_vars_to_log[key] = value
-    
-    for key in sorted(env_vars_to_log.keys()):
-        logger.info(f"  {key} = {env_vars_to_log[key]}")
-    
-    logger.info("=============================================")
+    """Log all settings values for diagnostic purposes"""
+    logger.info("--- DUMPING ALL SETTINGS FOR DIAGNOSTIC PURPOSES ---")
+    for key in dir(settings):
+        if not key.startswith('_') and not callable(getattr(settings, key)):
+            value = getattr(settings, key)
+            # Mask sensitive values in logs
+            if key.lower().find('password') >= 0 or key.lower().find('secret') >= 0 or key.lower().find('token') >= 0 or key.lower().find('key') >= 0:
+                if value:
+                    value = "********" 
+            logger.info(f"{key}: {value}")
+    logger.info("--- END OF SETTINGS DUMP ---")
 
 def get_settings_for_display(show_values=False):
-    """Get all settings organized by category for display in UI"""
-    # Get all attributes from settings object
-    attributes = inspect.getmembers(settings, lambda a: not inspect.isroutine(a))
-    settings_dict = {a[0]: a[1] for a in attributes 
-                    if not a[0].startswith('_') and not callable(a[1])}
+    """
+    Group settings into logical categories and check if they are configured.
+    Returns a dictionary with categories as keys and lists of setting items as values.
+    Each setting item is a dict with name, value, and is_configured.
     
-    # Categorize settings
-    categories = {
-        "Core": [],
-        "Email": [],
-        "IMAP": [],
-        "Storage": [],
-        "Authentication": [],
-        "Integration": [],
-        "Other": []
+    If show_values is False, sensitive values are masked.
+    """
+    # First include system info with version in result
+    result = {
+        "System Info": [
+            {
+                "name": "App Version",
+                "value": settings.version,
+                "is_configured": True
+            }
+        ]
     }
     
-    # Sort keys for better readability
-    for key in sorted(settings_dict.keys()):
-        value = settings_dict[key]
-        # Mask sensitive values if show_values is False
-        display_value = value
-        if not show_values or any(sensitive in key.lower() for sensitive in ['password', 'secret', 'token', 'key']):
-            if value:
-                display_value = "******** [HIDDEN]"
-            else:
-                display_value = None
-        
-        # Categorize by key prefix
-        setting_item = {"name": key, "value": display_value, "is_configured": value is not None and value != ""}
-        
-        if key.startswith(('email_', 'smtp_')):
-            categories["Email"].append(setting_item)
-        elif key.startswith('imap'):
-            categories["IMAP"].append(setting_item)
-        elif key.startswith(('s3_', 'aws_', 'dropbox_', 'nextcloud_', 'sftp_', 'ftp_', 'google_drive_')):
-            categories["Storage"].append(setting_item)
-        elif key.startswith(('auth_', 'jwt_', 'oauth_')):
-            categories["Authentication"].append(setting_item)
-        elif key.startswith(('paperless_', 'tesseract_', 'azure_')):
-            categories["Integration"].append(setting_item)
-        elif key in ('workdir', 'external_hostname', 'debug', 'version', 'env', 'log_level'):
-            categories["Core"].append(setting_item)
-        else:
-            categories["Other"].append(setting_item)
+    # Define categories and their settings
+    categories = {
+        "Core": [
+            "debug", # Explicitly include debug setting
+            "external_hostname",
+            "workdir",
+            "database_url",
+            "redis_url",
+            "gotenberg_url"
+        ],
+        "Authentication": [
+            "auth_enabled",
+            "authentik_client_id",
+            "authentik_client_secret",
+            "authentik_config_url"
+        ],
+        "Email": [
+            "email_host",
+            "email_port",
+            "email_username",
+            "email_password",
+            "email_use_tls",
+            "email_sender",
+            "email_default_recipient"
+        ],
+        "IMAP": [
+            "imap1_host",
+            "imap1_port",
+            "imap1_username",
+            "imap1_password",
+            "imap1_ssl",
+            "imap1_poll_interval_minutes",
+            "imap1_delete_after_process",
+            "imap2_host",
+            "imap2_port",
+            "imap2_username",
+            "imap2_password",
+            "imap2_ssl",
+            "imap2_poll_interval_minutes",
+            "imap2_delete_after_process"
+        ],
+        "Dropbox": [
+            "dropbox_app_key",
+            "dropbox_app_secret",
+            "dropbox_folder",
+            "dropbox_refresh_token"
+        ],
+        "NextCloud": [
+            "nextcloud_upload_url",
+            "nextcloud_username",
+            "nextcloud_password",
+            "nextcloud_folder"
+        ],
+        "Paperless": [
+            "paperless_host",
+            "paperless_ngx_api_token"
+        ],
+        "Google Drive": [
+            "google_drive_credentials_json",
+            "google_drive_folder_id",
+            "google_drive_delegate_to"
+        ],
+        "OneDrive": [
+            "onedrive_client_id",
+            "onedrive_client_secret",
+            "onedrive_tenant_id",
+            "onedrive_refresh_token",
+            "onedrive_folder_path"
+        ],
+        "WebDAV": [
+            "webdav_url",
+            "webdav_username",
+            "webdav_password",
+            "webdav_folder",
+            "webdav_verify_ssl"
+        ],
+        "SFTP": [
+            "sftp_host",
+            "sftp_port",
+            "sftp_username",
+            "sftp_password",
+            "sftp_folder",
+            "sftp_private_key",
+            "sftp_private_key_passphrase"
+        ],
+        "FTP": [
+            "ftp_host",
+            "ftp_port",
+            "ftp_username",
+            "ftp_password",
+            "ftp_folder"
+        ],
+        "S3/AWS": [
+            "aws_access_key_id",
+            "aws_secret_access_key",
+            "aws_region",
+            "s3_bucket_name",
+            "s3_folder_prefix",
+            "s3_storage_class",
+            "s3_acl"
+        ],
+        "AI Services": [
+            "openai_api_key",
+            "openai_base_url",
+            "openai_model",
+            "azure_ai_key",
+            "azure_endpoint",
+            "azure_region"
+        ],
+        "Monitoring": [
+            "uptime_kuma_url",
+            "uptime_kuma_ping_interval"
+        ]
+    }
     
-    # Remove empty categories
-    return {k: v for k, v in categories.items() if v}
+    # Handle any settings that don't fit into the predefined categories
+    all_settings = set([key for key in dir(settings) 
+                        if not key.startswith('_') and 
+                        not callable(getattr(settings, key)) and
+                        key not in ["model_computed_fields", "model_config", 
+                                    "model_extra", "model_fields",
+                                    "model_fields_set"]])
+    
+    # Ensure 'version' is excluded since we display it separately
+    all_settings.discard("version")
+    
+    categorized_settings = set()
+    for cat_settings in categories.values():
+        categorized_settings.update(cat_settings)
+    
+    uncategorized = all_settings - categorized_settings
+    if uncategorized:
+        categories["Other"] = list(uncategorized)
+    
+    # Build the result
+    for category, setting_keys in categories.items():
+        items = []
+        for key in setting_keys:
+            if hasattr(settings, key):
+                value = getattr(settings, key)
+                
+                # List of patterns that indicate sensitive values
+                sensitive_patterns = [
+                    'password', 'secret', 'token', 'api_key', 'private_key',
+                    'credentials', 'access_key', 'auth'
+                ]
+                
+                # Check if this is a sensitive value that should be masked
+                is_sensitive = any(pattern in key.lower() for pattern in sensitive_patterns)
+                
+                # Mask sensitive values regardless of debug mode
+                # Other values are only hidden if debug mode is off AND show_values is False
+                if (is_sensitive or not show_values) and value:
+                    if is_sensitive:
+                        value = "********" 
+                
+                # Check if the setting is configured (has a non-None value)
+                # For boolean settings, consider them configured even if False
+                is_configured = value is not None
+                if is_configured and isinstance(value, str):
+                    is_configured = len(value) > 0
+                
+                items.append({
+                    "name": key,
+                    "value": value,
+                    "is_configured": is_configured
+                })
+        
+        if items:  # Only add categories that have items
+            result[category] = items
+    
+    return result
 
 def check_all_configs():
     """Run all configuration validations and log results"""
