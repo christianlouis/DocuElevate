@@ -21,21 +21,52 @@ def get_onedrive_token():
     if not settings.onedrive_client_id or not settings.onedrive_client_secret:
         raise ValueError("OneDrive client ID and client secret must be configured")
     
+    # Log more details about the configuration
+    tenant = settings.onedrive_tenant_id or "common"
+    logger.info(f"Using OneDrive tenant: {tenant}")
+    
+    # Define scopes consistently
+    scopes = ["https://graph.microsoft.com/.default"]
+    
     # Use refresh token flow (works for both personal and org accounts)
     if settings.onedrive_refresh_token:
-        # Use MSAL to get token from refresh token
-        app = msal.PublicClientApplication(settings.onedrive_client_id)
+        # Use MSAL's ConfidentialClientApplication instead of PublicClientApplication
+        app = msal.ConfidentialClientApplication(
+            client_id=settings.onedrive_client_id,
+            client_credential=settings.onedrive_client_secret,
+            authority=f"https://login.microsoftonline.com/{tenant}"
+        )
         
         # Request new token using refresh token
+        logger.info("Attempting to acquire token using refresh token")
         token_response = app.acquire_token_by_refresh_token(
             refresh_token=settings.onedrive_refresh_token,
-            scopes=["https://graph.microsoft.com/Files.ReadWrite"]
+            scopes=scopes
         )
         
         if "access_token" not in token_response:
             error = token_response.get("error", "")
             error_desc = token_response.get("error_description", "Unknown error")
+            
+            # Log more details about the error
+            logger.error(f"Failed to get access token using refresh token")
+            logger.error(f"Error code: {error}")
+            logger.error(f"Error description: {error_desc}")
+            
+            if error == "invalid_grant":
+                logger.error("The refresh token appears to be expired or revoked")
+                logger.error("A new authorization flow is required to obtain a fresh token")
+                
             raise ValueError(f"Failed to get access token: {error} - {error_desc}")
+        
+        # Check if we received a new refresh token and update it
+        if "refresh_token" in token_response:
+            new_refresh_token = token_response["refresh_token"]
+            logger.info("Received new refresh token from Microsoft")
+            
+            # Update the refresh token in memory
+            settings.onedrive_refresh_token = new_refresh_token
+            logger.info("Updated refresh token in memory")
             
         return token_response["access_token"]
     
@@ -50,7 +81,7 @@ def get_onedrive_token():
         
         # Acquire token for application
         token_response = app.acquire_token_for_client(
-            scopes=["https://graph.microsoft.com/.default"]
+            scopes=scopes
         )
         
         if "access_token" not in token_response:

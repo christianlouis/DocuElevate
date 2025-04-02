@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: document_api
+    restart: always
 
     # We'll keep the code in /app, but set working_dir to the shared data directory
     working_dir: /workdir
@@ -34,6 +35,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: document_worker
+    restart: always
 
     # same shared working directory
     working_dir: /workdir
@@ -55,6 +57,7 @@ services:
   gotenberg:
     image: gotenberg/gotenberg:latest
     container_name: gotenberg
+    restart: always
 
 
   redis:
