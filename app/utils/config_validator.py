@@ -238,6 +238,21 @@ def get_provider_status():
             "folder": getattr(settings, 'webdav_folder', 'Not set')
         }
     }
+
+    # Add FTP configuration to providers
+    providers["FTP Storage"] = {
+        "name": "FTP Storage",
+        "configured": bool(getattr(settings, 'ftp_host', None) and
+                          getattr(settings, 'ftp_username', None) and
+                          getattr(settings, 'ftp_password', None)),
+        "enabled": True,
+        "details": {
+            "host": getattr(settings, 'ftp_host', 'Not set'),
+            "folder": getattr(settings, 'ftp_folder', 'Not set'),
+            "tls": getattr(settings, 'ftp_use_tls', True),
+            "allow_plaintext": getattr(settings, 'ftp_allow_plaintext', True)
+        }
+    }
     
     return providers
 
@@ -363,7 +378,9 @@ def get_settings_for_display(show_values=False):
             "ftp_port",
             "ftp_username",
             "ftp_password",
-            "ftp_folder"
+            "ftp_folder",
+            "ftp_use_tls",
+            "ftp_allow_plaintext"
         ],
         "S3/AWS": [
             "aws_access_key_id",

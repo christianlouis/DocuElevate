@@ -102,6 +102,8 @@ For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveS
 | `FTP_USERNAME`          | FTP authentication username.                                  |
 | `FTP_PASSWORD`          | FTP authentication password.                                  |
 | `FTP_FOLDER`            | Destination folder on FTP server (e.g. `"/Documents/Uploads"`). |
+| `FTP_USE_TLS`           | Try to use FTPS with TLS encryption first (default: `True`).  |
+| `FTP_ALLOW_PLAINTEXT`   | Allow fallback to plaintext FTP if TLS fails (default: `True`). |
 
 ### SFTP
 
@@ -235,6 +237,8 @@ FTP_PORT=21
 FTP_USERNAME=username
 FTP_PASSWORD=password
 FTP_FOLDER=/Documents/Uploads
+FTP_USE_TLS=True
+FTP_ALLOW_PLAINTEXT=True
 
 # SFTP
 SFTP_HOST=sftp.example.com

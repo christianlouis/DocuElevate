@@ -26,18 +26,66 @@ def upload_to_ftp(file_path: str):
         raise ValueError(error_msg)
 
     try:
-        # Connect to FTP server
-        ftp = ftplib.FTP()
-        ftp.connect(
-            host=settings.ftp_host,
-            port=settings.ftp_port or 21
-        )
+        # First attempt FTPS (FTP with TLS)
+        use_tls = getattr(settings, 'ftp_use_tls', True)  # Default to try TLS
+        allow_plaintext = getattr(settings, 'ftp_allow_plaintext', True)  # Default to allow plaintext fallback
         
-        # Login with credentials
-        ftp.login(
-            user=settings.ftp_username, 
-            passwd=settings.ftp_password
-        )
+        if use_tls:
+            try:
+                logger.info(f"Attempting FTPS connection to {settings.ftp_host}")
+                ftp = ftplib.FTP_TLS()
+                ftp.connect(
+                    host=settings.ftp_host,
+                    port=settings.ftp_port or 21
+                )
+                
+                # Login with credentials
+                ftp.login(
+                    user=settings.ftp_username, 
+                    passwd=settings.ftp_password
+                )
+                
+                # Enable data protection - encrypt the data channel
+                ftp.prot_p()
+                logger.info("Successfully established FTPS connection with TLS")
+            except Exception as e:
+                if not allow_plaintext:
+                    error_msg = f"FTPS connection failed and plaintext FTP is forbidden: {str(e)}"
+                    logger.error(error_msg)
+                    raise Exception(error_msg)
+                else:
+                    logger.warning(f"FTPS connection failed, falling back to regular FTP: {str(e)}")
+                    # Fall back to regular FTP
+                    ftp = ftplib.FTP()
+                    ftp.connect(
+                        host=settings.ftp_host,
+                        port=settings.ftp_port or 21
+                    )
+                    
+                    # Login with credentials
+                    ftp.login(
+                        user=settings.ftp_username, 
+                        passwd=settings.ftp_password
+                    )
+        else:
+            # Check if plaintext is allowed when TLS is explicitly disabled
+            if not allow_plaintext:
+                error_msg = "Plaintext FTP is forbidden by configuration"
+                logger.error(error_msg)
+                raise Exception(error_msg)
+            
+            # Directly use regular FTP if TLS is explicitly disabled
+            ftp = ftplib.FTP()
+            ftp.connect(
+                host=settings.ftp_host,
+                port=settings.ftp_port or 21
+            )
+            
+            # Login with credentials
+            ftp.login(
+                user=settings.ftp_username, 
+                passwd=settings.ftp_password
+            )
         
         # Change to target directory if specified
         if settings.ftp_folder:
@@ -80,7 +128,8 @@ def upload_to_ftp(file_path: str):
             "status": "Completed", 
             "file": file_path, 
             "ftp_host": settings.ftp_host,
-            "ftp_path": f"{settings.ftp_folder}/{filename}" if settings.ftp_folder else filename
+            "ftp_path": f"{settings.ftp_folder}/{filename}" if settings.ftp_folder else filename,
+            "used_tls": isinstance(ftp, ftplib.FTP_TLS)
         }
     
     except Exception as e:

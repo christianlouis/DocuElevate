@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+{% block title %}OneDrive Setup{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold mb-2">OneDrive Integration Setup</h1>
+    <p class="text-gray-600 mb-4">
+      Configure the Microsoft OneDrive integration for DocuNova using our setup wizard.
+    </p>
+    
+    <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 my-4" role="alert">
+      <p class="font-bold">Current Status:</p>
+      <p>OneDrive integration is 
+        {% if is_configured %}
+          <span class="text-green-700 font-semibold">configured</span>.
+        {% else %}
+          <span class="text-red-700 font-semibold">not configured</span>.
+        {% endif %}
+      </p>
+      {% if folder_path %}
+      <p class="mt-2"><strong>Target folder:</strong> {{ folder_path }}</p>
+      {% endif %}
+    </div>
+    
+    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 my-4">
+      <div class="flex">
+        <div class="flex-shrink-0">
+          <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+          </svg>
+        </div>
+        <div class="ml-3">
+          <p class="text-sm text-yellow-700">
+            <strong>Note:</strong> You only need to create an Azure application and get credentials. The setup wizard will handle the rest automatically.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+    <h2 class="text-2xl font-semibold mb-4">Quick Setup Guide</h2>
+    
+    <div class="mb-6">
+      <h3 class="text-xl font-medium mb-4">Step 1: Register an Azure Application</h3>
+      <ol class="list-decimal ml-6 space-y-3">
+        <li>Go to the <a href="https://portal.azure.com/" target="_blank" class="text-blue-600 hover:underline">Azure Portal</a></li>
+        <li>Navigate to "Azure Active Directory" > "App registrations"</li>
+        <li>Click "New registration"</li>
+        <li>Enter a name for your application (e.g., "DocuNova")</li>
+        <li>For "Supported account types", select:
+          <div class="bg-gray-50 p-2 my-2 rounded text-sm">
+            "Accounts in any organizational directory and personal Microsoft accounts"
+          </div>
+        </li>
+        <li>For Redirect URI:
+          <ul class="list-disc ml-6 mt-1">
+            <li>Select "Web"</li>
+            <li>Enter: <code class="bg-gray-100 p-1">{{ request.url.scheme }}://{{ request.url.netloc }}/onedrive-callback</code></li>
+          </ul>
+        </li>
+        <li>Click "Register"</li>
+      </ol>
+    </div>
+
+    <div class="mb-6">
+      <h3 class="text-xl font-medium mb-4">Step 2: Configure API Permissions</h3>
+      <ol class="list-decimal ml-6 space-y-3">
+        <li>In your application page, go to "API permissions"</li>
+        <li>Click "Add a permission"</li>
+        <li>Select "Microsoft Graph" > "Delegated permissions"</li>
+        <li>Search for and add these permissions:
+          <ul class="list-disc ml-6 mt-1">
+            <li><code class="bg-gray-100 p-1">Files.ReadWrite</code></li>
+            <li><code class="bg-gray-100 p-1">offline_access</code></li>
+          </ul>
+        </li>
+        <li>Click "Add permissions"</li>
+      </ol>
+    </div>
+
+    <div class="mb-6">
+      <h3 class="text-xl font-medium mb-4">Step 3: Get Client ID and Create Secret</h3>
+      <ol class="list-decimal ml-6 space-y-3">
+        <li>Copy the "Application (client) ID" from the overview page</li>
+        <li>Go to "Certificates & secrets"</li>
+        <li>Under "Client secrets", click "New client secret"</li>
+        <li>Add a description and select an expiration period</li>
+        <li>Click "Add" and <strong>immediately copy the secret value</strong> (it will only be shown once)</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+    <h2 class="text-2xl font-semibold mb-4">Complete Setup with Wizard</h2>
+    
+    <div class="space-y-4">
+      <div>
+        <label for="client-id" class="block text-sm font-medium text-gray-700">Client ID</label>
+        <input type="text" id="client-id" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Azure AD application client ID" value="{{ client_id_value }}">
+      </div>
+      
+      <div>
+        <label for="client-secret" class="block text-sm font-medium text-gray-700">Client Secret</label>
+        <input type="password" id="client-secret" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Azure AD application client secret" value="{{ client_secret_value }}">
+      </div>
+      
+      <div>
+        <label for="tenant-id" class="block text-sm font-medium text-gray-700">Tenant ID (Optional)</label>
+        <input type="text" id="tenant-id" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="common" value="{{ tenant_id }}">
+        <p class="text-xs text-gray-500 mt-1">Use "common" for personal accounts or your organization's Tenant ID for corporate accounts</p>
+      </div>
+      
+      <div>
+        <button id="start-auth-flow" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+          Start Authentication Flow
+        </button>
+      </div>
+      
+      <!-- Token validation and status -->
+      <div id="token-status" class="mt-6 {{ 'hidden' if not is_configured else '' }}">
+        <div class="rounded-md {{ 'bg-green-50' if is_configured else 'bg-yellow-50' }} p-4">
+          <div class="flex">
+            <div class="flex-shrink-0">
+              {% if is_configured %}
+              <svg class="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+              </svg>
+              {% else %}
+              <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+              </svg>
+              {% endif %}
+            </div>
+            <div class="ml-3">
+              <p class="text-sm font-medium {{ 'text-green-800' if is_configured else 'text-yellow-800' }}">
+                {% if is_configured %}
+                  OneDrive integration is properly configured! Your refresh token is valid.
+                {% else %}
+                  OneDrive integration is not completely configured or token may be invalid.
+                {% endif %}
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="mt-4 flex space-x-3">
+          <button id="test-token" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+            Test Token
+          </button>
+          <button id="refresh-token-btn" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+            Refresh Token
+          </button>
+        </div>
+        
+        <!-- Configuration for Worker Nodes section -->
+        <div class="mt-6 p-4 bg-gray-100 rounded-md">
+          <h3 class="font-medium text-lg mb-2">Configuration for Worker Nodes</h3>
+          <p class="text-sm text-gray-600 mb-3">
+            Copy these environment variables to configure all worker nodes:
+          </p>
+          
+          <div class="relative">
+            <pre id="env-vars" class="bg-gray-800 text-green-400 text-sm p-3 rounded overflow-x-auto"><code>ONEDRIVE_CLIENT_ID={{ client_id_value }}
+ONEDRIVE_CLIENT_SECRET={{ client_secret_value|default('YOUR_CLIENT_SECRET', true) }}
+ONEDRIVE_TENANT_ID={{ tenant_id }}
+ONEDRIVE_REFRESH_TOKEN={{ refresh_token_value|default('YOUR_REFRESH_TOKEN', true) }}
+ONEDRIVE_FOLDER_PATH={{ folder_path|default('Documents/Uploads', true) }}</code></pre>
+            
+            <button id="copy-env-vars" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs py-1 px-2 rounded">
+              Copy
+            </button>
+          </div>
+          
+          <p class="text-xs text-gray-500 mt-2">
+            Add these variables to your .env file or environment configuration.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+    <div class="flex items-start">
+      <div class="flex-shrink-0">
+        <svg class="h-6 w-6 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <div class="ml-3">
+        <h3 class="text-lg font-medium">Need More Information?</h3>
+        <p class="mt-1 text-sm text-gray-600">
+          For detailed instructions and troubleshooting, refer to the
+          <a href="/docs/OneDriveSetup.md" target="_blank" class="text-blue-600 hover:underline">OneDrive Setup Documentation</a>.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-8">
+    <a href="/status" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+      Back to Status
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Elements
+  const startAuthFlowBtn = document.getElementById('start-auth-flow');
+  const testTokenBtn = document.getElementById('test-token');
+  const refreshTokenBtn = document.getElementById('refresh-token-btn');
+  const tokenStatus = document.getElementById('token-status');
+  const clientSecretInput = document.getElementById('client-secret');
+  
+  // Start Authentication Flow button click
+  startAuthFlowBtn.addEventListener('click', function() {
+    const clientId = document.getElementById('client-id').value.trim();
+    const clientSecret = clientSecretInput.value.trim();
+    const redirectUri = window.location.origin + "/onedrive-callback";
+    const tenantId = document.getElementById('tenant-id').value.trim() || 'common';
+
+    if (!clientId) {
+      alert('Please enter your Client ID');
+      return;
+    }
+    
+    if (!clientSecret) {
+      alert('Please enter your Client Secret');
+      return;
+    }
+
+    // Save client secret to session storage temporarily
+    sessionStorage.setItem('onedrive_client_secret', clientSecret);
+
+    // Generate the authorization URL with .default scope
+    const authUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?client_id=${encodeURIComponent(clientId)}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&response_mode=query&scope=${encodeURIComponent('https://graph.microsoft.com/.default offline_access')}&prompt=consent`;
+    
+    // Redirect the user to the Microsoft login page
+    window.location.href = authUrl;
+  });
+
+  // Test Token button click
+  if (testTokenBtn) {
+    testTokenBtn.addEventListener('click', function() {
+      testTokenBtn.innerHTML = '<span class="animate-spin inline-block mr-2">⟳</span> Testing...';
+      testTokenBtn.disabled = true;
+      
+      fetch('/api/onedrive/test-token')
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === 'success') {
+            alert('Token is valid! Successfully connected to OneDrive.');
+          } else {
+            if (data.message && data.message.includes('invalid_grant')) {
+              if (confirm('Your OneDrive token has expired or is invalid. Would you like to obtain a new token now?')) {
+                startAuthFlowBtn.click();
+              }
+            } else {
+              alert('Token validation failed: ' + data.message);
+            }
+          }
+        })
+        .catch(error => {
+          alert('Error testing token: ' + error.message);
+        })
+        .finally(() => {
+          testTokenBtn.innerHTML = 'Test Token';
+          testTokenBtn.disabled = false;
+        });
+    });
+  }
+  
+  // Refresh Token button click
+  if (refreshTokenBtn) {
+    refreshTokenBtn.addEventListener('click', function() {
+      if (confirm('This will start a new authentication flow to obtain a fresh token from Microsoft. Continue?')) {
+        startAuthFlowBtn.click();
+      }
+    });
+  }
+  
+  // Copy Environment Variables Button
+  const copyEnvVarsBtn = document.getElementById('copy-env-vars');
+  if (copyEnvVarsBtn) {
+    copyEnvVarsBtn.addEventListener('click', function() {
+      const envVarsText = document.getElementById('env-vars').textContent;
+      navigator.clipboard.writeText(envVarsText)
+        .then(() => {
+          const originalText = copyEnvVarsBtn.textContent;
+          copyEnvVarsBtn.textContent = 'Copied!';
+          copyEnvVarsBtn.classList.add('bg-green-700');
+          setTimeout(() => {
+            copyEnvVarsBtn.textContent = originalText;
+            copyEnvVarsBtn.classList.remove('bg-green-700');
+          }, 2000);
+        })
+        .catch(err => {
+          console.error('Failed to copy: ', err);
+          alert('Failed to copy text to clipboard');
+        });
+    });
+  }
+  
+  // Try to retrieve client secret from session storage (if coming back from auth)
+  if (clientSecretInput && !clientSecretInput.value && sessionStorage.getItem('onedrive_client_secret')) {
+    clientSecretInput.value = sessionStorage.getItem('onedrive_client_secret');
+    // Clear it after use
+    sessionStorage.removeItem('onedrive_client_secret');
+  }
+  
+  // If token is not configured but we have a client ID, show the token status section
+  if (document.getElementById('client-id').value && !tokenStatus.classList.contains('hidden')) {
+    tokenStatus.classList.remove('hidden');
+  }
+});
+</script>
+{% endblock %}

@@ -77,6 +77,8 @@ class Settings(BaseSettings):
     ftp_username: Optional[str] = None
     ftp_password: Optional[str] = None
     ftp_folder: Optional[str] = None
+    ftp_use_tls: bool = True  # Default to attempting TLS connection first
+    ftp_allow_plaintext: bool = True  # Default to allowing plaintext fallback
 
     # SFTP settings
     sftp_host: Optional[str] = None
