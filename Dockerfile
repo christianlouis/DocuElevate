@@ -1,4 +1,3 @@
-
 # Stage 1: Build dependencies
 FROM python:3.13 AS builder
 
@@ -19,6 +18,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application files correctly
 COPY ./app /app/app
 COPY ./frontend /app/frontend
+COPY ./VERSION /app/VERSION
 
 # Set Python path explicitly
 ENV PYTHONPATH=/app
