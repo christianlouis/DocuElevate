@@ -14,7 +14,7 @@ client = openai.OpenAI(
 )
 
 @celery.task(base=BaseTaskWithRetry)
-def refine_text_with_gpt(s3_filename: str, raw_text: str):
+def refine_text_with_gpt(filename: str, raw_text: str):
     """Uses OpenAI to clean and refine OCR text."""
     response = client.chat.completions.create(
         model=settings.openai_model,
@@ -28,7 +28,7 @@ def refine_text_with_gpt(s3_filename: str, raw_text: str):
 
     # Trigger next task (import locally if needed to avoid circular imports)
     from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
-    extract_metadata_with_gpt.delay(s3_filename, cleaned_text)
+    extract_metadata_with_gpt.delay(filename, cleaned_text)
 
-    return {"s3_file": s3_filename, "cleaned_text": cleaned_text}
+    return {"s3_file": filename, "cleaned_text": cleaned_text}
 
