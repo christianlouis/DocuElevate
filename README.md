@@ -5,6 +5,10 @@
 
 # DocuElevate
 
+<div align="center">
+  <a href="https://www.docuelevate.org"><img src="frontend/static/hero.png" alt="DocuElevate Logo" width="80%" /></a>
+</div>
+
 ## Overview
 
 DocuElevate automates the handling, extraction, and processing of documents using a variety of services, including:

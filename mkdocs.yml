@@ -1,0 +1,26 @@
+site_name: DocuElevate
+site_description: Intelligent Document Processing & Management
+site_url: https://docuelevate.readthedocs.io/
+repo_url: https://github.com/christianlouis/DocuElevate
+repo_name: DocuElevate
+repo_type: github
+theme:
+  name: material
+  logo: frontend/static/logo_writing.svg
+  favicon: frontend/static/logo_writing.svg
+  features:
+    - navigation.tabs
+    - navigation.instant
+    - search.suggest
+    - content.code.copy
+nav:
+  - Home: index.md
+  - User Guide: user-guide.md
+  - API: api.md
+  - Deployment: deployment.md
+  - Configuration:
+      - Overview: configuration.md
+      - Dropbox: integrations/dropbox.md
+      - Google Drive: integrations/google-drive.md
+      - OneDrive: integrations/onedrive.md
+  - Troubleshooting: troubleshooting.md
