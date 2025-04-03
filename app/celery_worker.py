@@ -11,6 +11,7 @@ from app import tasks  # <— This imports app/tasks.py so Celery can register t
 # **Ensure all tasks are imported before Celery starts**
 from app.tasks.process_document import process_document
 from app.tasks.process_with_azure_document_intelligence import process_with_azure_document_intelligence
+from app.tasks.rotate_pdf_pages import rotate_pdf_pages
 from app.tasks.refine_text_with_gpt import refine_text_with_gpt
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf

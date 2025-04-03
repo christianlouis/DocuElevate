@@ -7,7 +7,7 @@ from azure.ai.documentintelligence.models import AnalyzeOutputOption, AnalyzeRes
 
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
-from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
+from app.tasks.rotate_pdf_pages import rotate_pdf_pages
 from app.celery_app import celery
 
 logger = logging.getLogger(__name__)
@@ -41,22 +41,30 @@ def check_page_rotation(result, filename):
     Args:
         result: The AnalyzeResult from Azure Document Intelligence API
         filename: The name of the file being processed
+        
+    Returns:
+        dict: Dictionary mapping page indices (integers) to rotation angles
     """
     logger.error(f"Checking rotation for document: {filename}")
+    rotation_data = {}
     
     if not hasattr(result, 'pages') or not result.pages:
         logger.error(f"No page information available for rotation check: {filename}")
-        return
+        return rotation_data
         
     for i, page in enumerate(result.pages):
         if hasattr(page, 'angle'):
             rotation_angle = page.angle
             if rotation_angle != 0:
                 logger.error(f"Page {i+1} is rotated by {rotation_angle} degrees")
+                # Store page index as integer, not string
+                rotation_data[i] = rotation_angle
             else:
                 logger.error(f"Page {i+1} has no rotation (0 degrees)")
         else:
             logger.error(f"Page {i+1} rotation information not available")
+            
+    return rotation_data
 
 @celery.task(base=BaseTaskWithRetry)
 def process_with_azure_document_intelligence(filename: str):
@@ -69,8 +77,8 @@ def process_with_azure_document_intelligence(filename: str):
       1. Uploads the document for OCR using Azure Document Intelligence.
       2. Retrieves the processed PDF with embedded text.
       3. Saves the OCR-processed PDF locally in the same location as before.
-      4. Extracts the text content for metadata processing.
-      5. Triggers downstream metadata extraction by calling extract_metadata_with_gpt.
+      4. Checks for page rotation and triggers page rotation if needed.
+      5. Triggers downstream metadata extraction.
     """
     try:
         tmp_file_path = os.path.join(settings.workdir, "tmp", filename)
@@ -106,7 +114,7 @@ def process_with_azure_document_intelligence(filename: str):
         operation_id = poller.details["operation_id"]
 
         # Check and log page rotation information
-        check_page_rotation(result, filename)
+        rotation_data = check_page_rotation(result, filename)
 
         # Retrieve the processed searchable PDF
         response = document_intelligence_client.get_analyze_result_pdf(
@@ -121,8 +129,8 @@ def process_with_azure_document_intelligence(filename: str):
         extracted_text = result.content if result.content else ""
         logger.info(f"Extracted text for {filename}: {len(extracted_text)} characters")
 
-        # Trigger downstream metadata extraction
-        extract_metadata_with_gpt.delay(filename, extracted_text)
+        # Trigger page rotation task if rotation is detected, otherwise proceed to metadata extraction
+        rotate_pdf_pages.delay(filename, extracted_text, rotation_data)
 
         return {"file": filename, "searchable_pdf": searchable_pdf_path, "cleaned_text": extracted_text}
     except Exception as e:
