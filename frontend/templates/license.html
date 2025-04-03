@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}DocuNova - License{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-2xl font-bold mb-4">License Information</h1>
+    
+    <div class="bg-white shadow-md rounded-lg p-6">
+        <h2 class="text-xl font-semibold mb-4">Apache License 2.0</h2>
+        
+        <div class="prose">
+            <pre class="whitespace-pre-wrap text-sm font-mono bg-gray-50 p-4 rounded border overflow-auto max-h-96 mb-4">{{ license_text }}</pre>
+        </div>
+        
+        <p class="mt-4 text-gray-600">
+            DocuNova is distributed under the Apache License 2.0, which is a permissive
+            open-source software license that allows you to use, modify, distribute, and
+            contribute to the project.
+        </p>
+    </div>
+</div>
+{% endblock %}
