@@ -1,17 +1,17 @@
 {% extends "base.html" %}
-{% block title %}OneDrive Setup{% endblock %}
+{% block title %}Dropbox Setup{% endblock %}
 
 {% block content %}
 <div class="container mx-auto px-4 py-8">
   <div class="mb-8">
-    <h1 class="text-3xl font-bold mb-2">OneDrive Integration Setup</h1>
+    <h1 class="text-3xl font-bold mb-2">Dropbox Integration Setup</h1>
     <p class="text-gray-600 mb-4">
-      Configure the Microsoft OneDrive integration for DocuNova using our setup wizard.
+      Configure the Dropbox integration for DocuNova using our setup wizard.
     </p>
     
     <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 my-4" role="alert">
       <p class="font-bold">Current Status:</p>
-      <p>OneDrive integration is 
+      <p>Dropbox integration is 
         {% if is_configured %}
           <span class="text-green-700 font-semibold">configured</span>.
         {% else %}
@@ -32,7 +32,7 @@
         </div>
         <div class="ml-3">
           <p class="text-sm text-yellow-700">
-            <strong>Note:</strong> You only need to create an Azure application and get credentials. The setup wizard will handle the rest automatically.
+            <strong>Note:</strong> You need to create a Dropbox app and obtain API credentials. The setup wizard will guide you through this process.
           </p>
         </div>
       </div>
@@ -43,51 +43,37 @@
     <h2 class="text-2xl font-semibold mb-4">Quick Setup Guide</h2>
     
     <div class="mb-6">
-      <h3 class="text-xl font-medium mb-4">Step 1: Register an Azure Application</h3>
+      <h3 class="text-xl font-medium mb-4">Step 1: Create a Dropbox App</h3>
       <ol class="list-decimal ml-6 space-y-3">
-        <li>Go to the <a href="https://portal.azure.com/" target="_blank" class="text-blue-600 hover:underline">Azure Portal</a></li>
-        <li>Navigate to "Azure Active Directory" > "App registrations"</li>
-        <li>Click "New registration"</li>
-        <li>Enter a name for your application (e.g., "DocuNova")</li>
-        <li>For "Supported account types", select:
-          <div class="bg-gray-50 p-2 my-2 rounded text-sm">
-            "Accounts in any organizational directory and personal Microsoft accounts"
-          </div>
-        </li>
-        <li>For Redirect URI:
-          <ul class="list-disc ml-6 mt-1">
-            <li>Select "Web"</li>
-            <li>Enter: <code class="bg-gray-100 p-1">{{ request.url.scheme }}://{{ request.url.netloc }}/onedrive-callback</code></li>
-          </ul>
-        </li>
-        <li>Click "Register"</li>
+        <li>Go to the <a href="https://www.dropbox.com/developers/apps" target="_blank" class="text-blue-600 hover:underline">Dropbox Developer Apps Console</a></li>
+        <li>Click "Create app"</li>
+        <li>Select "Scoped access" for API</li>
+        <li>Choose "Full Dropbox" access (or "App folder" for more restricted access)</li>
+        <li>Give your app a name (e.g., "DocuNova")</li>
+        <li>Click "Create app"</li>
       </ol>
     </div>
 
     <div class="mb-6">
-      <h3 class="text-xl font-medium mb-4">Step 2: Configure API Permissions</h3>
+      <h3 class="text-xl font-medium mb-4">Step 2: Configure App Permissions</h3>
       <ol class="list-decimal ml-6 space-y-3">
-        <li>In your application page, go to "API permissions"</li>
-        <li>Click "Add a permission"</li>
-        <li>Select "Microsoft Graph" > "Delegated permissions"</li>
-        <li>Search for and add these permissions:
+        <li>In your app's settings page, go to the "Permissions" tab</li>
+        <li>Enable the following permissions:
           <ul class="list-disc ml-6 mt-1">
-            <li><code class="bg-gray-100 p-1">Files.ReadWrite</code></li>
-            <li><code class="bg-gray-100 p-1">offline_access</code></li>
+            <li><code class="bg-gray-100 p-1">files.content.write</code> (to upload files)</li>
+            <li><code class="bg-gray-100 p-1">files.content.read</code> (if you need to read file content)</li>
           </ul>
         </li>
-        <li>Click "Add permissions"</li>
+        <li>Click "Submit" to save changes</li>
       </ol>
     </div>
 
     <div class="mb-6">
-      <h3 class="text-xl font-medium mb-4">Step 3: Get Client ID and Create Secret</h3>
+      <h3 class="text-xl font-medium mb-4">Step 3: Set OAuth 2 Redirect URI</h3>
       <ol class="list-decimal ml-6 space-y-3">
-        <li>Copy the "Application (client) ID" from the overview page</li>
-        <li>Go to "Certificates & secrets"</li>
-        <li>Under "Client secrets", click "New client secret"</li>
-        <li>Add a description and select an expiration period</li>
-        <li>Click "Add" and <strong>immediately copy the secret value</strong> (it will only be shown once)</li>
+        <li>In your app's settings page, go to the "OAuth 2" section</li>
+        <li>Add a redirect URI: <code class="bg-gray-100 p-1">{{ request.url.scheme }}://{{ request.url.netloc }}/dropbox-callback</code></li>
+        <li>Click "Add" to save the redirect URI</li>
       </ol>
     </div>
   </div>
@@ -97,25 +83,19 @@
     
     <div class="space-y-4">
       <div>
-        <label for="client-id" class="block text-sm font-medium text-gray-700">Client ID</label>
-        <input type="text" id="client-id" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Azure AD application client ID" value="{{ client_id_value }}">
+        <label for="app-key" class="block text-sm font-medium text-gray-700">App Key</label>
+        <input type="text" id="app-key" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Dropbox app key" value="{{ app_key_value }}">
       </div>
       
       <div>
-        <label for="client-secret" class="block text-sm font-medium text-gray-700">Client Secret</label>
-        <input type="password" id="client-secret" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Azure AD application client secret" value="{{ client_secret_value }}">
-      </div>
-      
-      <div>
-        <label for="tenant-id" class="block text-sm font-medium text-gray-700">Tenant ID (Optional)</label>
-        <input type="text" id="tenant-id" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="common" value="{{ tenant_id }}">
-        <p class="text-xs text-gray-500 mt-1">Use "common" for personal accounts or your organization's Tenant ID for corporate accounts</p>
+        <label for="app-secret" class="block text-sm font-medium text-gray-700">App Secret</label>
+        <input type="password" id="app-secret" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Dropbox app secret" value="{{ app_secret_value }}">
       </div>
       
       <div>
         <label for="folder-path" class="block text-sm font-medium text-gray-700">Folder Path (Optional)</label>
-        <input type="text" id="folder-path" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Documents/Uploads" value="{{ folder_path }}">
-        <p class="text-xs text-gray-500 mt-1">Enter the folder path where files should be uploaded (e.g., Documents/Uploads)</p>
+        <input type="text" id="folder-path" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="/Documents/Uploads" value="{{ folder_path }}">
+        <p class="text-xs text-gray-500 mt-1">Enter the folder path where files should be uploaded (e.g., /Documents/Uploads)</p>
       </div>
       
       <div>
@@ -142,9 +122,9 @@
             <div class="ml-3">
               <p class="text-sm font-medium {{ 'text-green-800' if is_configured else 'text-yellow-800' }}">
                 {% if is_configured %}
-                  OneDrive integration is properly configured! Your refresh token is valid.
+                  Dropbox integration is properly configured! Your refresh token is valid.
                 {% else %}
-                  OneDrive integration is not completely configured or token may be invalid.
+                  Dropbox integration is not completely configured or token may be invalid.
                 {% endif %}
               </p>
             </div>
@@ -168,11 +148,10 @@
           </p>
           
           <div class="relative">
-            <pre id="env-vars" class="bg-gray-800 text-green-400 text-sm p-3 rounded overflow-x-auto"><code>ONEDRIVE_CLIENT_ID={{ client_id_value }}
-ONEDRIVE_CLIENT_SECRET={{ client_secret_value|default('YOUR_CLIENT_SECRET', true) }}
-ONEDRIVE_TENANT_ID={{ tenant_id }}
-ONEDRIVE_REFRESH_TOKEN={{ refresh_token_value|default('YOUR_REFRESH_TOKEN', true) }}
-ONEDRIVE_FOLDER_PATH={{ folder_path|default('Documents/Uploads', true) }}</code></pre>
+            <pre id="env-vars" class="bg-gray-800 text-green-400 text-sm p-3 rounded overflow-x-auto"><code>DROPBOX_APP_KEY={{ app_key_value }}
+DROPBOX_APP_SECRET={{ app_secret_value|default('YOUR_APP_SECRET', true) }}
+DROPBOX_REFRESH_TOKEN={{ refresh_token_value|default('YOUR_REFRESH_TOKEN', true) }}
+DROPBOX_FOLDER={{ folder_path|default('/Documents/Uploads', true) }}</code></pre>
             
             <button id="copy-env-vars" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs py-1 px-2 rounded">
               Copy
@@ -198,7 +177,7 @@ ONEDRIVE_FOLDER_PATH={{ folder_path|default('Documents/Uploads', true) }}</code>
         <h3 class="text-lg font-medium">Need More Information?</h3>
         <p class="mt-1 text-sm text-gray-600">
           For detailed instructions and troubleshooting, refer to the
-          <a href="/docs/OneDriveSetup.md" target="_blank" class="text-blue-600 hover:underline">OneDrive Setup Documentation</a>.
+          <a href="/docs/DropboxSetup.md" target="_blank" class="text-blue-600 hover:underline">Dropbox Setup Documentation</a>.
         </p>
       </div>
     </div>
@@ -242,7 +221,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const testTokenBtn = document.getElementById('test-token');
   const refreshTokenBtn = document.getElementById('refresh-token-btn');
   const tokenStatus = document.getElementById('token-status');
-  const clientSecretInput = document.getElementById('client-secret');
+  const appSecretInput = document.getElementById('app-secret');
   
   // Modal elements
   const resultModal = document.getElementById('resultModal');
@@ -292,35 +271,32 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Start Authentication Flow button click
   startAuthFlowBtn.addEventListener('click', function() {
-    const clientId = document.getElementById('client-id').value.trim();
-    const clientSecret = clientSecretInput.value.trim();
-    const redirectUri = window.location.origin + "/onedrive-callback";
-    const tenantId = document.getElementById('tenant-id').value.trim() || 'common';
-    const folderPath = document.getElementById('folder-path') ? document.getElementById('folder-path').value.trim() : '';
+    const appKey = document.getElementById('app-key').value.trim();
+    const appSecret = appSecretInput.value.trim();
+    const folderPath = document.getElementById('folder-path').value.trim();
+    const redirectUri = window.location.origin + "/dropbox-callback";
 
-    if (!clientId) {
-      showModal('error', 'Validation Error', 'Please enter your Client ID');
+    if (!appKey) {
+      showModal('error', 'Validation Error', 'Please enter your App Key');
       return;
     }
     
-    if (!clientSecret) {
-      showModal('error', 'Validation Error', 'Please enter your Client Secret');
+    if (!appSecret) {
+      showModal('error', 'Validation Error', 'Please enter your App Secret');
       return;
     }
 
-    // Save all entered values to session storage temporarily
-    sessionStorage.setItem('onedrive_client_id', clientId);
-    sessionStorage.setItem('onedrive_client_secret', clientSecret);
-    sessionStorage.setItem('onedrive_tenant_id', tenantId);
-    
+    // Save app key, app secret and folder path to session storage temporarily
+    sessionStorage.setItem('dropbox_app_key', appKey);
+    sessionStorage.setItem('dropbox_app_secret', appSecret);
     if (folderPath) {
-      sessionStorage.setItem('onedrive_folder_path', folderPath);
+      sessionStorage.setItem('dropbox_folder_path', folderPath);
     }
 
-    // Generate the authorization URL with .default scope
-    const authUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?client_id=${encodeURIComponent(clientId)}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&response_mode=query&scope=${encodeURIComponent('https://graph.microsoft.com/.default offline_access')}&prompt=consent`;
+    // Generate the authorization URL
+    const authUrl = `https://www.dropbox.com/oauth2/authorize?client_id=${encodeURIComponent(appKey)}&response_type=code&token_access_type=offline&redirect_uri=${encodeURIComponent(redirectUri)}`;
     
-    // Redirect the user to the Microsoft login page
+    // Redirect the user to the Dropbox login page
     window.location.href = authUrl;
   });
 
@@ -330,14 +306,14 @@ document.addEventListener('DOMContentLoaded', function() {
       testTokenBtn.innerHTML = '<span class="animate-spin inline-block mr-2">⟳</span> Testing...';
       testTokenBtn.disabled = true;
       
-      fetch('/api/onedrive/test-token')
+      fetch('/api/dropbox/test-token')
         .then(response => response.json())
         .then(data => {
           if (data.status === 'success') {
-            showModal('success', 'Token Valid', 'Successfully connected to OneDrive!');
+            showModal('success', 'Token Valid', `${data.message} ${data.account ? 'as ' + data.account : ''}`);
           } else {
-            if (data.message && data.message.includes('invalid_grant')) {
-              showModal('error', 'Token Invalid', 'Your OneDrive token has expired or is invalid. Please obtain a new token.');
+            if (data.message && data.message.includes('invalid_grant') || data.needs_reauth) {
+              showModal('error', 'Token Invalid', 'Your Dropbox token has expired or is invalid. Please obtain a new token.');
               // Give option to start new auth flow
               modalClose.textContent = "Get New Token";
               modalClose.addEventListener('click', function onGetNewToken() {
@@ -364,7 +340,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Refresh Token button click
   if (refreshTokenBtn) {
     refreshTokenBtn.addEventListener('click', function() {
-      showModal('info', 'Confirm', 'This will start a new authentication flow to obtain a fresh token from Microsoft. Continue?');
+      showModal('info', 'Confirm', 'This will start a new authentication flow to obtain a fresh token from Dropbox. Continue?');
       modalClose.textContent = "Cancel";
       
       // Add a confirm button
@@ -414,31 +390,15 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
-  // Try to retrieve values from session storage (if coming back from auth or browser refresh)
-  if (clientSecretInput && !clientSecretInput.value && sessionStorage.getItem('onedrive_client_secret')) {
-    clientSecretInput.value = sessionStorage.getItem('onedrive_client_secret');
+  // Try to retrieve app secret from session storage (if coming back from auth)
+  if (appSecretInput && !appSecretInput.value && sessionStorage.getItem('dropbox_app_secret')) {
+    appSecretInput.value = sessionStorage.getItem('dropbox_app_secret');
+    // Clear it after use
+    sessionStorage.removeItem('dropbox_app_secret');
   }
   
-  // Also check for client ID in session storage
-  const clientIdInput = document.getElementById('client-id');
-  if (clientIdInput && !clientIdInput.value && sessionStorage.getItem('onedrive_client_id')) {
-    clientIdInput.value = sessionStorage.getItem('onedrive_client_id');
-  }
-  
-  // Check for tenant ID in session storage
-  const tenantIdInput = document.getElementById('tenant-id');
-  if (tenantIdInput && !tenantIdInput.value && sessionStorage.getItem('onedrive_tenant_id')) {
-    tenantIdInput.value = sessionStorage.getItem('onedrive_tenant_id');
-  }
-  
-  // Check for folder path in session storage
-  const folderPathInput = document.getElementById('folder-path');
-  if (folderPathInput && !folderPathInput.value && sessionStorage.getItem('onedrive_folder_path')) {
-    folderPathInput.value = sessionStorage.getItem('onedrive_folder_path');
-  }
-  
-  // If token is not configured but we have a client ID, show the token status section
-  if (document.getElementById('client-id').value && !tokenStatus.classList.contains('hidden')) {
+  // If token is not configured but we have an app key, show the token status section
+  if (document.getElementById('app-key').value && !tokenStatus.classList.contains('hidden')) {
     tokenStatus.classList.remove('hidden');
   }
 });

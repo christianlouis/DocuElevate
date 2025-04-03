@@ -56,6 +56,49 @@ def get_dropbox_access_token():
         logger.error(error_msg)
         raise Exception(error_msg)
 
+def get_dropbox_client():
+    """
+    Create and return an authenticated Dropbox client using the configured refresh token.
+    
+    Returns:
+        dropbox.Dropbox: Authenticated Dropbox client instance
+    
+    Raises:
+        ValueError: If required Dropbox configuration is missing
+        AuthError: If authentication with Dropbox fails
+    """
+    app_key = settings.dropbox_app_key
+    app_secret = settings.dropbox_app_secret
+    refresh_token = settings.dropbox_refresh_token
+    
+    # Validate configuration
+    if not app_key or not app_secret:
+        raise ValueError("Dropbox app key or app secret is not configured")
+    
+    if not refresh_token:
+        raise ValueError("Dropbox refresh token is not configured")
+    
+    # Create a Dropbox client with refresh token
+    try:
+        dbx = dropbox.Dropbox(
+            app_key=app_key,
+            app_secret=app_secret,
+            oauth2_refresh_token=refresh_token
+        )
+        
+        # Test the connection
+        dbx.users_get_current_account()
+        logger.info("Successfully authenticated with Dropbox")
+        return dbx
+    
+    except AuthError as auth_error:
+        logger.error(f"Dropbox authentication failed: {str(auth_error)}")
+        raise
+    
+    except Exception as e:
+        logger.error(f"Error creating Dropbox client: {str(e)}")
+        raise
+
 @celery.task(base=BaseTaskWithRetry)
 def upload_to_dropbox(file_path: str):
     """
@@ -76,12 +119,8 @@ def upload_to_dropbox(file_path: str):
     filename = os.path.basename(file_path)
     
     try:
-        # Get access token from refresh token
-        access_token = get_dropbox_access_token()
-        if not access_token:
-            return {"status": "Failed", "reason": "Could not obtain access token"}
-            
-        dbx = dropbox.Dropbox(access_token)
+        # Get the Dropbox client
+        dbx = get_dropbox_client()
         
         # Calculate remote path based on local file structure
         remote_base = settings.dropbox_folder or ""

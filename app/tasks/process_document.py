@@ -26,7 +26,7 @@ def process_document(original_local_file: str):
       2. If not found, insert a new DB row and continue with the pipeline:
          - Copy file to /workdir/tmp
          - Check for embedded text. If present, run local GPT extraction
-         - Otherwise, queue Textract-based OCR
+         - Otherwise, queue Azure Document Intelligence processing
     """
 
     if not os.path.exists(original_local_file):

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}OneDrive Authorization Processing{% endblock %}
+{% block title %}Dropbox Authorization Processing{% endblock %}
 
 {% block content %}
 <div class="container mx-auto px-4 py-8">
@@ -9,7 +9,7 @@
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
       </svg>
       <h2 class="text-2xl font-bold mt-4">Processing Authorization</h2>
-      <p class="text-gray-600 mt-2">Please wait while we complete the OneDrive authorization process...</p>
+      <p class="text-gray-600 mt-2">Please wait while we complete the Dropbox authorization process...</p>
     </div>
     
     <div class="flex justify-center my-6">
@@ -37,7 +37,7 @@
         </div>
       </div>
       <div class="mt-4">
-        <a href="/onedrive-setup" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+        <a href="/dropbox-setup" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
           Return to Setup
         </a>
       </div>
@@ -53,7 +53,7 @@
           </div>
           <div class="ml-3">
             <p class="text-sm font-medium text-green-800">
-              OneDrive authorization successful! Your refresh token has been saved.
+              Dropbox authorization successful! Your refresh token has been saved.
             </p>
           </div>
         </div>
@@ -94,39 +94,36 @@ document.addEventListener('DOMContentLoaded', function() {
   const code = "{{ code }}";
   
   // Get credentials from session storage (these take precedence over server-provided values)
-  const clientId = sessionStorage.getItem('onedrive_client_id') || "{{ client_id_value }}";
-  const clientSecret = sessionStorage.getItem('onedrive_client_secret') || "{{ client_secret_value }}";
-  const tenantId = sessionStorage.getItem('onedrive_tenant_id') || "{{ tenant_id }}" || "common";
-  const folderPath = sessionStorage.getItem('onedrive_folder_path') || "";
+  const appKey = sessionStorage.getItem('dropbox_app_key') || "{{ app_key_value }}";
+  const appSecret = sessionStorage.getItem('dropbox_app_secret') || "{{ app_secret_value }}";
+  const folderPath = sessionStorage.getItem('dropbox_folder_path') || "{{ folder_path }}" || '/Documents/Uploads';
   
-  const redirectUri = window.location.origin + "/onedrive-callback";
+  const redirectUri = window.location.origin + "/dropbox-callback";
   
   // Automatically exchange the code for a refresh token
   if (code) {
-    if (!clientId || !clientSecret) {
-      showError("Missing Client ID or Client Secret. Please go back to the setup page and try again.");
+    if (!appKey || !appSecret) {
+      showError("Missing App Key or App Secret. Please go back to the setup page and try again.");
       return;
     }
     
-    exchangeCode(code, clientId, clientSecret, redirectUri, tenantId, folderPath);
+    exchangeCode(code, appKey, appSecret, redirectUri);
   } else {
     showError("No authorization code was found in the URL");
   }
   
-  function exchangeCode(code, clientId, clientSecret, redirectUri, tenantId, folderPath) {
+  function exchangeCode(code, appKey, appSecret, redirectUri) {
     const formData = new FormData();
-    formData.append('client_id', clientId);
-    formData.append('client_secret', clientSecret);
+    formData.append('client_id', appKey);
+    formData.append('client_secret', appSecret);
     formData.append('redirect_uri', redirectUri);
     formData.append('code', code);
-    formData.append('tenant_id', tenantId);
+    formData.append('folder_path', folderPath);
     
-    // Show more details in processing message
     document.getElementById('processing-message').innerHTML = 
-      '<p>Exchanging authorization code for refresh token...</p>' +
-      '<p class="text-xs text-gray-500 mt-2">Using tenant: ' + (tenantId || 'common') + '</p>';
+      '<p>Exchanging authorization code for refresh token...</p>';
     
-    fetch('/api/onedrive/exchange-token', {
+    fetch('/api/dropbox/exchange-token', {
       method: 'POST',
       body: formData
     })
@@ -140,23 +137,19 @@ document.addEventListener('DOMContentLoaded', function() {
     })
     .then(data => {
       if (data.refresh_token) {
-        // Instead of saving to .env file, update settings in memory
+        // Update settings in memory
         const updateFormData = new FormData();
         updateFormData.append('refresh_token', data.refresh_token);
         
-        // Use the values from session storage
-        updateFormData.append('client_id', clientId);
-        updateFormData.append('client_secret', clientSecret);
-        updateFormData.append('tenant_id', tenantId);
-        
-        if (folderPath) {
-          updateFormData.append('folder_path', folderPath);
-        }
+        // Use the app key and app secret from session storage
+        if (appKey) updateFormData.append('app_key', appKey);
+        if (appSecret) updateFormData.append('app_secret', appSecret);
+        if (folderPath) updateFormData.append('folder_path', folderPath);
         
         document.getElementById('processing-message').innerHTML = 
           '<p>Updating system settings with new token...</p>';
         
-        return fetch('/api/onedrive/update-settings', {
+        return fetch('/api/dropbox/update-settings', {
           method: 'POST',
           body: updateFormData
         }).then(response => {
@@ -168,18 +161,16 @@ document.addEventListener('DOMContentLoaded', function() {
           return response.json();
         }).then(() => {
           // Show the success message and environment variables
-          showSuccess(data.refresh_token, clientId, clientSecret, tenantId, folderPath);
-          
-          // In 10 seconds, redirect to status page (giving more time to copy)
+          showSuccess(data.refresh_token, appKey, appSecret, folderPath);
+          // In 10 seconds, redirect to status page (giving time to copy)
           setTimeout(() => {
             window.location.href = '/status';
           }, 10000);
           
           // Clean up session storage
-          sessionStorage.removeItem('onedrive_client_id');
-          sessionStorage.removeItem('onedrive_client_secret');
-          sessionStorage.removeItem('onedrive_tenant_id');
-          sessionStorage.removeItem('onedrive_folder_path');
+          sessionStorage.removeItem('dropbox_app_key');
+          sessionStorage.removeItem('dropbox_app_secret');
+          sessionStorage.removeItem('dropbox_folder_path');
         });
       } else {
         throw new Error('No refresh token was received from the server');
@@ -196,18 +187,17 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('error-message').innerText = message;
   }
   
-  function showSuccess(refreshToken, clientId, clientSecret, tenantId, folderPath) {
+  function showSuccess(refreshToken, appKey, appSecret, folderPath) {
     document.getElementById('processing-message').classList.add('hidden');
     document.getElementById('success-container').classList.remove('hidden');
     
     // Update the environment variables pre block with the new token
     const envVarsCode = document.querySelector('#env-vars code');
     if (envVarsCode) {
-      envVarsCode.textContent = `ONEDRIVE_CLIENT_ID=${clientId}
-ONEDRIVE_CLIENT_SECRET=${clientSecret}
-ONEDRIVE_TENANT_ID=${tenantId || 'common'}
-ONEDRIVE_REFRESH_TOKEN=${refreshToken}
-ONEDRIVE_FOLDER_PATH=${folderPath || 'Documents/Uploads'}`;
+      envVarsCode.textContent = `DROPBOX_APP_KEY=${appKey}
+DROPBOX_APP_SECRET=${appSecret}
+DROPBOX_REFRESH_TOKEN=${refreshToken}
+DROPBOX_FOLDER=${folderPath || '/Documents/Uploads'}`;
     }
     
     // Add copy functionality

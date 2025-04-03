@@ -30,5 +30,5 @@ def refine_text_with_gpt(filename: str, raw_text: str):
     from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
     extract_metadata_with_gpt.delay(filename, cleaned_text)
 
-    return {"s3_file": filename, "cleaned_text": cleaned_text}
+    return {"filename": filename, "cleaned_text": cleaned_text}
 
