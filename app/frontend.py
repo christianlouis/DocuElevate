@@ -70,6 +70,7 @@ async def status_dashboard(request: Request):
         {
             "request": request, 
             "providers": providers,
+            "app_version": settings.version,  # Add app version to the context
             "debug_enabled": getattr(settings, 'debug', False),
             "last_check": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
