@@ -71,4 +71,4 @@ if AUTH_ENABLED:
 async def private_page(request: Request):
     """A protected endpoint that requires login."""
     user = request.session.get("user")  # e.g. {"email": "...", ...}
-    return {"message": f"This is a protected page. Hello {user['email']}!"}
+    return {"message": "This is a protected page.", "user": user}

@@ -7,6 +7,8 @@
     <!-- Tailwind CSS or other global CSS references -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="stylesheet" href="/static/styles.css" />
+    <!-- Alpine.js moved to head for earlier loading -->
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     {% block head_css %}
     <!-- Tailwind CSS and other CSS -->
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
@@ -38,26 +40,58 @@
           </a>
         </div>
         
-        <!-- Menu Items -->
-        <div class="hidden md:flex space-x-4 items-center">
-          <a href="/" class="text-gray-700 hover:text-gray-900">Home</a>
-          <a href="/upload" class="text-gray-700 hover:text-gray-900">Upload</a>
-          <a href="/files" class="text-gray-700 hover:text-gray-900">Files</a>
-          <a href="/status" class="text-gray-700 hover:text-gray-900">Status</a>
-          <a href="/about" class="text-gray-700 hover:text-gray-900">About</a>
+        <!-- Menu Items - using x-data for mobile menu toggle -->
+        <div x-data="{ mobileMenuOpen: false }">
+          <div class="hidden md:flex space-x-4 items-center">
+            <a href="/" class="text-gray-700 hover:text-gray-900">Home</a>
+            <a href="/upload" class="text-gray-700 hover:text-gray-900">Upload</a>
+            <a href="/files" class="text-gray-700 hover:text-gray-900">Files</a>
+            <a href="/status" class="text-gray-700 hover:text-gray-900">Status</a>
+            <a href="/about" class="text-gray-700 hover:text-gray-900">About</a>
+            
+            <!-- Dynamic Auth Section -->
+            <div id="authSection" class="text-gray-700 hover:text-gray-900"></div>
+          </div>
           
-          <!-- Dynamic Auth Section -->
-          <div id="authSection" class="text-gray-700 hover:text-gray-900"></div>
-        </div>
-        
-        <!-- Mobile menu button -->
-        <div class="md:hidden">
-          <button type="button" class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500" aria-expanded="false">
-            <span class="sr-only">Open main menu</span>
-            <svg class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
+          <!-- Mobile menu button -->
+          <div class="md:hidden">
+            <button 
+              @click="mobileMenuOpen = !mobileMenuOpen" 
+              type="button" 
+              class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
+              :aria-expanded="mobileMenuOpen"
+            >
+              <span class="sr-only">Open main menu</span>
+              <svg class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          </div>
+          
+          <!-- Mobile menu, show/hide based on menu state -->
+          <div 
+            x-show="mobileMenuOpen" 
+            x-transition:enter="transition ease-out duration-100 transform"
+            x-transition:enter-start="opacity-0 scale-95"
+            x-transition:enter-end="opacity-100 scale-100"
+            x-transition:leave="transition ease-in duration-75 transform"
+            x-transition:leave-start="opacity-100 scale-100"
+            x-transition:leave-end="opacity-0 scale-95"
+            class="md:hidden absolute top-16 inset-x-0 bg-white shadow-md z-50"
+          >
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+              <a href="/" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Home</a>
+              <a href="/upload" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Upload</a>
+              <a href="/files" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Files</a>
+              <a href="/status" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Status</a>
+              <a href="/about" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">About</a>
+              
+              <!-- Mobile Auth Section -->
+              <div id="mobileAuthSection" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+                <!-- Will be populated by JS -->
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </nav>
@@ -74,8 +108,6 @@
       </div>
     </footer>
 
-    <!-- Alpine.js for dropdown functionality -->
-    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <!-- Common JS (shared) -->
     <script src="/static/js/common.js"></script>
 

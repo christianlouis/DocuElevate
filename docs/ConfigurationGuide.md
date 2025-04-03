@@ -15,6 +15,7 @@ Configuration is primarily done through environment variables specified in a `.e
 | `WORKDIR`              | Working directory for the application.                  | `/workdir`                     |
 | `GOTENBERG_URL`        | Gotenberg PDF processing URL.                           | `http://gotenberg:3000`        |
 | `EXTERNAL_HOSTNAME`    | The external hostname for the application.             | `docunova.example.com`         |
+| `ALLOW_FILE_DELETE`    | Enable file deletion in the web interface (`true`/`false`). | `true`                      |
 
 ### IMAP Configuration
 
@@ -184,6 +185,7 @@ REDIS_URL=redis://redis:6379/0
 WORKDIR=/workdir
 GOTENBERG_URL=http://gotenberg:3000
 EXTERNAL_HOSTNAME=docunova.example.com
+ALLOW_FILE_DELETE=true
 
 # IMAP settings
 IMAP1_HOST=mail.example.com

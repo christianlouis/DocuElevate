@@ -1,46 +1,73 @@
 // frontend/static/js/common.js
 
-(async function checkAuth() {
-    try {
-      const resp = await fetch("/api/whoami");
-      if (resp.ok) {
-        const data = await resp.json();
-        const authSection = document.getElementById("authSection");
-        if (!authSection) return;
-        authSection.innerHTML = '';
-  
-        const img = document.createElement('img');
-        img.src = data.picture;
-        img.alt = 'User Avatar';
-        img.className = 'inline-block h-8 w-8 rounded-full mr-2';
-  
-        const textNode = document.createTextNode('Logged in as ');
-        const strong = document.createElement('strong');
-        strong.textContent = data.email;
-  
-        const logoutLink = document.createElement('a');
-        logoutLink.href = '/logout';
-        logoutLink.className = 'ml-4 text-blue-600 hover:text-blue-800';
-        logoutLink.textContent = 'Logout';
-  
-        authSection.appendChild(img);
-        authSection.appendChild(textNode);
-        authSection.appendChild(strong);
-        authSection.appendChild(logoutLink);
-      } else {
-        const authSection = document.getElementById("authSection");
-        if (authSection) {
-          authSection.innerHTML =
-            `<a href="/login" class="text-blue-600">Login</a>`;
-        }
-      }
-    } catch (error) {
-      // Fallback if whoami endpoint fails
-      const authSection = document.getElementById("authSection");
+// Check authentication status and update the auth section
+(async function() {
+  console.log('Checking authentication status...');
+  try {
+    const response = await fetch('/api/auth/whoami');
+    const data = await response.json();
+
+    
+    const authSection = document.getElementById("authSection");
+    const mobileAuthSection = document.getElementById("mobileAuthSection");
+    
+    // If we have an email, user is authenticated (the whoami endpoint would have thrown 401 otherwise)
+    if (data.email) {
+      // Get the display name (prefer name, fall back to preferred_username, then email)
+      const displayName = data.name || data.preferred_username || data.email;
+      
+      // User is logged in
+      let authHTML = `
+        <div class="flex items-center">
+          <img src="${data.picture}" alt="Avatar" class="w-8 h-8 rounded-full mr-2" />
+          <span>${displayName}</span>
+          <a href="/logout" class="ml-3 text-red-600 hover:text-red-800">
+            <i class="fas fa-sign-out-alt"></i>
+          </a>
+        </div>
+      `;
+      
       if (authSection) {
-        authSection.innerHTML =
-          `<a href="/login" class="text-blue-600">Login</a>`;
+        authSection.innerHTML = authHTML;
+      }
+      
+      if (mobileAuthSection) {
+        mobileAuthSection.innerHTML = `
+          <div class="flex items-center justify-between">
+            <div class="flex items-center">
+              <img src="${data.picture}" alt="Avatar" class="w-6 h-6 rounded-full mr-2" />
+              <span>${displayName}</span>
+            </div>
+            <a href="/logout" class="text-red-600 hover:text-red-800">
+              <i class="fas fa-sign-out-alt"></i> Logout
+            </a>
+          </div>
+        `;
+      }
+    } else {
+      // User is not logged in (this shouldn't happen with current setup, but keeping as fallback)
+      if (authSection) {
+        authSection.innerHTML = `<a href="/login" class="text-blue-600">Login</a>`;
+      }
+      
+      if (mobileAuthSection) {
+        mobileAuthSection.innerHTML = `<a href="/login" class="text-blue-600">Login</a>`;
       }
     }
-  })();
-  
+  } catch (error) {
+    console.error('Authentication check failed:', error);
+    // Fallback if whoami endpoint fails
+    const authSection = document.getElementById("authSection");
+    const mobileAuthSection = document.getElementById("mobileAuthSection");
+    
+    if (authSection) {
+      authSection.innerHTML = `<a href="/login" class="text-blue-600">Login</a>`;
+    }
+    
+    if (mobileAuthSection) {
+      mobileAuthSection.innerHTML = `<a href="/login" class="text-blue-600">Login</a>`;
+    }
+  }
+})();
+
+// Other common functionality can be added here
