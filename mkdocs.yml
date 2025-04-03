@@ -13,13 +13,17 @@ theme:
     - search.suggest
     - content.code.copy
 nav:
-  - Home: index.md
-  - User Guide: user-guide.md
-  - API: api.md
-  - Deployment: deployment.md
+  - Home: README.md
+  - User Guide: UserGuide.md
+  - API: API.md
+  - Deployment: DeploymentGuide.md
   - Configuration:
-      - Overview: configuration.md
-      - Dropbox: integrations/dropbox.md
-      - Google Drive: integrations/google-drive.md
-      - OneDrive: integrations/onedrive.md
-  - Troubleshooting: troubleshooting.md
+      - Overview: ConfigurationMaster.md
+      - Configuration Guide: ConfigurationGuide.md
+      - Dropbox: DropboxSetup.md
+      - Google Drive: GoogleDriveSetup.md
+      - OneDrive: OneDriveSetup.md
+      - Amazon S3: AmazonS3Setup.md
+  - Troubleshooting:
+      - General: Troubleshooting.md
+      - Configuration: ConfigurationTroubleshooting.md
