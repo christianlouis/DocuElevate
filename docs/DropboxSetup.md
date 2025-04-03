@@ -4,7 +4,7 @@ This guide explains how to set up the Dropbox integration for DocuNova.
 
 ## Required Configuration Parameters
 
-| **Variable**            | **Description**                                  |
+| **Variable**            | **Description**                                  | 
 |-------------------------|--------------------------------------------------|
 | `DROPBOX_APP_KEY`       | Dropbox API app key                              |
 | `DROPBOX_APP_SECRET`    | Dropbox API app secret                           |
@@ -13,7 +13,29 @@ This guide explains how to set up the Dropbox integration for DocuNova.
 
 For a complete list of configuration options, see the [Configuration Guide](ConfigurationGuide.md).
 
-## Step-by-Step Setup Instructions
+## Setup Methods
+
+You can set up Dropbox integration in two ways:
+
+1. **Using the Built-in Setup Wizard (Recommended)**: An interactive setup experience available at `/dropbox-setup` in the web interface
+2. **Manual Setup**: Following the step-by-step instructions in this document
+
+## Using the Setup Wizard
+
+The easiest way to set up Dropbox integration is to use the built-in setup wizard:
+
+1. Navigate to the `/dropbox-setup` page in your DocuNova instance
+2. Follow the on-screen instructions to create a Dropbox app
+3. Enter your App Key and App Secret in the wizard
+4. Optionally specify a custom folder path for uploads
+5. Click "Start Authentication Flow" to begin the authorization process
+6. Complete the Dropbox authentication process
+7. The system will automatically exchange the authorization code for a refresh token
+8. Copy the generated environment variables for your worker nodes
+
+The wizard handles all the token exchange steps and provides you with the exact configuration needed for your environment.
+
+## Step-by-Step Manual Setup Instructions
 
 ### 1. Create a Dropbox App
 
@@ -73,4 +95,26 @@ For a complete list of configuration options, see the [Configuration Guide](Conf
 1. Set `DROPBOX_APP_KEY`, `DROPBOX_APP_SECRET`, and `DROPBOX_REFRESH_TOKEN` with your values
 2. Set `DROPBOX_FOLDER` to the path where files should be uploaded (e.g., `/Documents/Uploads`)
 
-The system will use the refresh token to automatically generate short-lived access tokens when needed, so you shouldn't need to worry about token expiration.
+## Token Management
+
+The system will use the refresh token to automatically generate short-lived access tokens when needed. Refresh tokens typically don't expire unless revoked.
+
+### Testing Your Token
+
+You can test if your token is working correctly:
+
+1. Navigate to the `/dropbox-setup` page in your DocuNova instance
+2. Click the "Test Token" button to verify your credentials
+3. If the test fails, click "Refresh Token" to obtain a new refresh token
+
+## Troubleshooting
+
+If you encounter issues with Dropbox integration:
+
+1. **Authentication Errors**: Make sure your App Key and App Secret are correct
+2. **Token Expired**: Click "Refresh Token" button on the setup page to obtain a new token
+3. **Folder Permissions**: Ensure your app has the correct permissions enabled for file operations
+4. **Invalid Redirect URI**: Verify that the redirect URI in your app settings matches the one used in the authentication flow
+5. **Rate Limiting**: Dropbox API has rate limits; if exceeded, wait and try again
+
+For more general configuration issues, see the [Configuration Troubleshooting Guide](ConfigurationTroubleshooting.md).

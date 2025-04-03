@@ -15,9 +15,9 @@ from app.database import init_db
 from app.config import settings
 from app.utils.config_validator import check_all_configs
 
-# Import both the traditional and new routers - we'll keep both available for compatibility
-from app.frontend import router as frontend_router_original
-from app.api import router as api_router_original
+# Import the routers - now using views directly instead of frontend
+from app.views import router as frontend_router
+from app.api import router as api_router
 from app.auth import router as auth_router
 
 # Load configuration from .env for the session key
@@ -67,8 +67,7 @@ async def startup_event():
     else:
         logging.info("Application started with valid configuration")
     
-    logging.info("Router organization note: Using route handlers from main app directory for now")
-    logging.info("In the future, we'll transition fully to the frontend/ and api/ submodules")
+    logging.info("Router organization: Using refactored API routers from app/api/ directory")
 
 # Custom 404 - we can still return the Jinja2 template, or the old static file:
 @app.exception_handler(404)
@@ -95,10 +94,9 @@ async def custom_500_handler(request: Request, exc: Exception):
 def test_500():
     raise RuntimeError("Testing forced 500 error!")
 
-# Include the routers - for now we're using the original routers
-# Later we can switch to the organized router structure
-app.include_router(frontend_router_original)
+# Include the routers
+app.include_router(frontend_router)
 app.include_router(auth_router)
-app.include_router(api_router_original, prefix="/api")
+app.include_router(api_router, prefix="/api")
 
 

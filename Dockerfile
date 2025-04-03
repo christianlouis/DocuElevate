@@ -19,6 +19,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY ./app /app/app
 COPY ./frontend /app/frontend
 COPY ./VERSION /app/VERSION
+COPY ./LICENSE /app/LICENSE
 
 # Set Python path explicitly
 ENV PYTHONPATH=/app

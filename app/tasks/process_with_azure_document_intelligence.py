@@ -34,6 +34,30 @@ def get_pdf_page_count(file_path):
         logger.error(f"Error getting PDF page count: {e}")
         return None
 
+def check_page_rotation(result, filename):
+    """
+    Checks if pages in the document are rotated and logs the rotation information.
+    
+    Args:
+        result: The AnalyzeResult from Azure Document Intelligence API
+        filename: The name of the file being processed
+    """
+    logger.error(f"Checking rotation for document: {filename}")
+    
+    if not hasattr(result, 'pages') or not result.pages:
+        logger.error(f"No page information available for rotation check: {filename}")
+        return
+        
+    for i, page in enumerate(result.pages):
+        if hasattr(page, 'angle'):
+            rotation_angle = page.angle
+            if rotation_angle != 0:
+                logger.error(f"Page {i+1} is rotated by {rotation_angle} degrees")
+            else:
+                logger.error(f"Page {i+1} has no rotation (0 degrees)")
+        else:
+            logger.error(f"Page {i+1} rotation information not available")
+
 @celery.task(base=BaseTaskWithRetry)
 def process_with_azure_document_intelligence(filename: str):
     """
@@ -80,6 +104,9 @@ def process_with_azure_document_intelligence(filename: str):
             )
         result: AnalyzeResult = poller.result()
         operation_id = poller.details["operation_id"]
+
+        # Check and log page rotation information
+        check_page_rotation(result, filename)
 
         # Retrieve the processed searchable PDF
         response = document_intelligence_client.get_analyze_result_pdf(
