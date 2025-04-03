@@ -5,6 +5,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 from datetime import datetime
 import logging
+from fastapi.responses import FileResponse  # Add this import
 
 from app.auth import require_login
 from app.database import SessionLocal
@@ -50,9 +51,12 @@ async def serve_upload(request: Request):
 
 @router.get("/favicon.ico", include_in_schema=False)
 def favicon():
-    # If you have a real favicon in `frontend/static/favicon.ico`:
+    # Return the favicon file as a FileResponse instead of the path string
     favicon_path = Path(__file__).parent.parent / "frontend" / "static" / "favicon.ico"
-    return str(favicon_path)
+    if not favicon_path.exists():
+        # If favicon doesn't exist, return a 404
+        raise HTTPException(status_code=404, detail="Favicon not found")
+    return FileResponse(favicon_path)
 
 @router.get("/status")
 @require_login

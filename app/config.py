@@ -118,6 +118,9 @@ class Settings(BaseSettings):
     uptime_kuma_url: Optional[str] = None
     uptime_kuma_ping_interval: int = 5  # Default ping interval in minutes
 
+    # Feature flags
+    allow_file_delete: bool = True  # Default to allowing file deletion from database
+
     # Get version from file or environment
     @property
     def version(self) -> str:

@@ -89,6 +89,52 @@ def list_files_api(request: Request, db: Session = Depends(get_db)):
         })
     return result
 
+@router.delete("/files/{file_id}")
+@require_login
+def delete_file_record(request: Request, file_id: int, db: Session = Depends(get_db)):
+    """
+    Delete a file record from the database.
+    This only removes the database entry, not the actual file.
+    """
+    # Check if file deletion is allowed
+    if not settings.allow_file_delete:
+        raise HTTPException(
+            status_code=403,
+            detail="File deletion is disabled in the configuration"
+        )
+
+    try:
+        # Find the file record
+        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        
+        if not file_record:
+            raise HTTPException(
+                status_code=404,
+                detail=f"File record with ID {file_id} not found"
+            )
+        
+        # Log the deletion
+        logger.info(f"Deleting file record: ID={file_id}, Filename={file_record.original_filename}")
+        
+        # Delete the record
+        db.delete(file_record)
+        db.commit()
+        
+        return {
+            "status": "success",
+            "message": f"File record {file_id} deleted successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Error deleting file record {file_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error deleting file record: {str(e)}"
+        )
+
 # API endpoints
 @router.get("/diagnostic/settings")
 @require_login

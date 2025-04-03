@@ -246,10 +246,9 @@ def get_provider_status():
     # Check NextCloud configuration
     nextcloud_url = getattr(settings, 'nextcloud_upload_url', 'Not set')
     # Extract base URL from WebDAV URL (remove the /remote.php part and everything after it)
-    if nextcloud_url != 'Not set' and '/remote.php' in nextcloud_url:
+    nextcloud_base_url = nextcloud_url
+    if nextcloud_url != 'Not set' and nextcloud_url is not None and '/remote.php' in nextcloud_url:
         nextcloud_base_url = nextcloud_url.split('/remote.php')[0]
-    else:
-        nextcloud_base_url = nextcloud_url
         
     providers["NextCloud"] = {
         "name": "NextCloud", 
