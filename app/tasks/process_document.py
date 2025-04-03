@@ -8,7 +8,7 @@ import fitz  # PyMuPDF for checking embedded text
 
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
-from app.tasks.process_with_textract import process_with_textract
+from app.tasks.process_with_azure_document_intelligence import process_with_azure_document_intelligence
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.celery_app import celery
 from app.database import SessionLocal
@@ -99,6 +99,6 @@ def process_document(original_local_file: str):
         extract_metadata_with_gpt.delay(new_filename, extracted_text)
         return {"file": new_local_path, "status": "Text extracted locally"}
 
-    # 3. If no embedded text, queue Textract processing
-    process_with_textract.delay(new_filename)
+    # 3. If no embedded text, queue Azure Document Intelligence processing
+    process_with_azure_document_intelligence.delay(new_filename)
     return {"file": new_local_path, "status": "Queued for OCR"}

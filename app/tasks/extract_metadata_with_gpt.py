@@ -34,7 +34,7 @@ def extract_json_from_text(text):
     return None
 
 @celery.task(base=BaseTaskWithRetry)
-def extract_metadata_with_gpt(s3_filename: str, cleaned_text: str):
+def extract_metadata_with_gpt(filename: str, cleaned_text: str):
     """Uses OpenAI to classify document metadata."""
     prompt = f"""
 You are a specialized document analyzer trained to extract structured metadata from documents.
@@ -69,7 +69,7 @@ Return only valid JSON with no additional commentary.
 """
 
     try:
-        print(f"[DEBUG] Sending classification request for {s3_filename}...")
+        print(f"[DEBUG] Sending classification request for {filename}...")
         completion = client.chat.completions.create(
             model=settings.openai_model,
             messages=[
@@ -80,21 +80,21 @@ Return only valid JSON with no additional commentary.
         )
 
         content = completion.choices[0].message.content
-        print(f"[DEBUG] Raw classification response for {s3_filename}: {content}")
+        print(f"[DEBUG] Raw classification response for {filename}: {content}")
 
         json_text = extract_json_from_text(content)
         if not json_text:
-            print(f"[ERROR] Could not find valid JSON in GPT response for {s3_filename}.")
+            print(f"[ERROR] Could not find valid JSON in GPT response for {filename}.")
             return {}
 
         metadata = json.loads(json_text)
         print(f"[DEBUG] Extracted metadata: {metadata}")
 
         # Trigger the next step: embedding metadata into the PDF
-        embed_metadata_into_pdf.delay(s3_filename, cleaned_text, metadata)
+        embed_metadata_into_pdf.delay(filename, cleaned_text, metadata)
 
-        return {"s3_file": s3_filename, "metadata": metadata}
+        return {"s3_file": filename, "metadata": metadata}
 
     except Exception as e:
-        print(f"[ERROR] OpenAI classification failed for {s3_filename}: {e}")
+        print(f"[ERROR] OpenAI classification failed for {filename}: {e}")
         return {}

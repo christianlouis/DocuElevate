@@ -9,8 +9,8 @@ from app.celery_app import celery
 from app import tasks  # <— This imports app/tasks.py so Celery can register tasks
 
 # **Ensure all tasks are imported before Celery starts**
-from app.tasks.process_document import process_document  # Updated import
-from app.tasks.process_with_textract import process_with_textract
+from app.tasks.process_document import process_document
+from app.tasks.process_with_azure_document_intelligence import process_with_azure_document_intelligence
 from app.tasks.refine_text_with_gpt import refine_text_with_gpt
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
@@ -47,7 +47,8 @@ celery.conf.beat_schedule = {
     "poll-inboxes-every-minute": {
         "task": "app.tasks.imap_tasks.pull_all_inboxes",
         "schedule": crontab(minute="*/1"),  # every 1 minute
-    },
+        "options": {"expires": 55},  # Ensure tasks don't pile up
+    } if (settings.imap1_host or settings.imap2_host) else None,
     # Add Uptime Kuma ping task if configured
     "ping-uptime-kuma": {
         "task": "app.tasks.uptime_kuma_tasks.ping_uptime_kuma",
