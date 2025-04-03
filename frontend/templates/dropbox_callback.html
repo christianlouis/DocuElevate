@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}Dropbox Authorization Processing{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+  <div class="bg-white shadow-md rounded-lg p-6">
+    <div class="text-center mb-6">
+      <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+      <h2 class="text-2xl font-bold mt-4">Processing Authorization</h2>
+      <p class="text-gray-600 mt-2">Please wait while we complete the Dropbox authorization process...</p>
+    </div>
+    
+    <div class="flex justify-center my-6">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+    </div>
+    
+    <div id="processing-message" class="text-center text-gray-700">
+      <p>Exchanging authorization code for refresh token...</p>
+    </div>
+    
+    <div id="error-container" class="hidden mt-6">
+      <div class="bg-red-50 border-l-4 border-red-400 p-4">
+        <div class="flex">
+          <div class="flex-shrink-0">
+            <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+            </svg>
+          </div>
+          <div class="ml-3">
+            <h3 class="text-sm font-medium text-red-800">Error details:</h3>
+            <div class="mt-2 text-sm text-red-700" id="error-message">
+              <!-- Error message will be inserted here -->
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mt-4">
+        <a href="/dropbox-setup" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+          Return to Setup
+        </a>
+      </div>
+    </div>
+    
+    <div id="success-container" class="hidden mt-6">
+      <div class="rounded-md bg-green-50 p-4">
+        <div class="flex">
+          <div class="flex-shrink-0">
+            <svg class="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+            </svg>
+          </div>
+          <div class="ml-3">
+            <p class="text-sm font-medium text-green-800">
+              Dropbox authorization successful! Your refresh token has been saved.
+            </p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="mt-6 p-4 bg-gray-100 rounded-md">
+        <h3 class="font-medium text-lg mb-2">Configuration for Worker Nodes</h3>
+        <p class="text-sm text-gray-600 mb-3">
+          Copy these environment variables to configure all worker nodes:
+        </p>
+        
+        <div class="relative">
+          <pre id="env-vars" class="bg-gray-800 text-green-400 text-sm p-3 rounded overflow-x-auto"><code></code></pre>
+          
+          <button id="copy-env-vars" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs py-1 px-2 rounded">
+            Copy
+          </button>
+        </div>
+        
+        <p class="text-xs text-gray-500 mt-2">
+          Add these variables to your .env file or environment configuration.
+        </p>
+      </div>
+      
+      <div class="mt-4 text-center">
+        <a href="/status" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+          Go to Status Page
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const code = "{{ code }}";
+  
+  // Get credentials from session storage (these take precedence over server-provided values)
+  const appKey = sessionStorage.getItem('dropbox_app_key') || "{{ app_key_value }}";
+  const appSecret = sessionStorage.getItem('dropbox_app_secret') || "{{ app_secret_value }}";
+  const folderPath = sessionStorage.getItem('dropbox_folder_path') || "{{ folder_path }}" || '/Documents/Uploads';
+  
+  const redirectUri = window.location.origin + "/dropbox-callback";
+  
+  // Automatically exchange the code for a refresh token
+  if (code) {
+    if (!appKey || !appSecret) {
+      showError("Missing App Key or App Secret. Please go back to the setup page and try again.");
+      return;
+    }
+    
+    exchangeCode(code, appKey, appSecret, redirectUri);
+  } else {
+    showError("No authorization code was found in the URL");
+  }
+  
+  function exchangeCode(code, appKey, appSecret, redirectUri) {
+    const formData = new FormData();
+    formData.append('client_id', appKey);
+    formData.append('client_secret', appSecret);
+    formData.append('redirect_uri', redirectUri);
+    formData.append('code', code);
+    formData.append('folder_path', folderPath);
+    
+    document.getElementById('processing-message').innerHTML = 
+      '<p>Exchanging authorization code for refresh token...</p>';
+    
+    fetch('/api/dropbox/exchange-token', {
+      method: 'POST',
+      body: formData
+    })
+    .then(response => {
+      if (!response.ok) {
+        return response.json().then(err => {
+          throw new Error(err.detail || 'Failed to exchange token');
+        });
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.refresh_token) {
+        // Update settings in memory
+        const updateFormData = new FormData();
+        updateFormData.append('refresh_token', data.refresh_token);
+        
+        // Use the app key and app secret from session storage
+        if (appKey) updateFormData.append('app_key', appKey);
+        if (appSecret) updateFormData.append('app_secret', appSecret);
+        if (folderPath) updateFormData.append('folder_path', folderPath);
+        
+        document.getElementById('processing-message').innerHTML = 
+          '<p>Updating system settings with new token...</p>';
+        
+        return fetch('/api/dropbox/update-settings', {
+          method: 'POST',
+          body: updateFormData
+        }).then(response => {
+          if (!response.ok) {
+            return response.json().then(err => {
+              throw new Error('Token received but failed to update settings: ' + (err.detail || 'Unknown error'));
+            });
+          }
+          return response.json();
+        }).then(() => {
+          // Show the success message and environment variables
+          showSuccess(data.refresh_token, appKey, appSecret, folderPath);
+          // In 10 seconds, redirect to status page (giving time to copy)
+          setTimeout(() => {
+            window.location.href = '/status';
+          }, 10000);
+          
+          // Clean up session storage
+          sessionStorage.removeItem('dropbox_app_key');
+          sessionStorage.removeItem('dropbox_app_secret');
+          sessionStorage.removeItem('dropbox_folder_path');
+        });
+      } else {
+        throw new Error('No refresh token was received from the server');
+      }
+    })
+    .catch(error => {
+      showError(error.message);
+    });
+  }
+  
+  function showError(message) {
+    document.getElementById('processing-message').classList.add('hidden');
+    document.getElementById('error-container').classList.remove('hidden');
+    document.getElementById('error-message').innerText = message;
+  }
+  
+  function showSuccess(refreshToken, appKey, appSecret, folderPath) {
+    document.getElementById('processing-message').classList.add('hidden');
+    document.getElementById('success-container').classList.remove('hidden');
+    
+    // Update the environment variables pre block with the new token
+    const envVarsCode = document.querySelector('#env-vars code');
+    if (envVarsCode) {
+      envVarsCode.textContent = `DROPBOX_APP_KEY=${appKey}
+DROPBOX_APP_SECRET=${appSecret}
+DROPBOX_REFRESH_TOKEN=${refreshToken}
+DROPBOX_FOLDER=${folderPath || '/Documents/Uploads'}`;
+    }
+    
+    // Add copy functionality
+    const copyEnvVarsBtn = document.getElementById('copy-env-vars');
+    if (copyEnvVarsBtn) {
+      copyEnvVarsBtn.addEventListener('click', function() {
+        const envVarsText = document.getElementById('env-vars').textContent;
+        navigator.clipboard.writeText(envVarsText)
+          .then(() => {
+            const originalText = copyEnvVarsBtn.textContent;
+            copyEnvVarsBtn.textContent = 'Copied!';
+            copyEnvVarsBtn.classList.add('bg-green-700');
+            setTimeout(() => {
+              copyEnvVarsBtn.textContent = originalText;
+              copyEnvVarsBtn.classList.remove('bg-green-700');
+            }, 2000);
+          })
+          .catch(err => {
+            console.error('Failed to copy: ', err);
+            alert('Failed to copy text to clipboard');
+          });
+      });
+    }
+  }
+});
+</script>
+{% endblock %}

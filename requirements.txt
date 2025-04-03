@@ -8,7 +8,7 @@ openai  # GPT integration for metadata extraction
 pymupdf  # PDF processing, text extraction, and detection (imported as 'fitz')
 PyPDF2  # PDF processing for page counting
 requests  # HTTP client
-dropbox  # Dropbox integration
+dropbox>=11.36.0  # Dropbox integration
 azure-ai-documentintelligence  # Azure OCR service
 authlib  # Authentication
 python-dotenv  # Environment variables

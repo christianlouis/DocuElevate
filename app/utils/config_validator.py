@@ -144,10 +144,15 @@ def get_provider_status():
     # Check Dropbox configuration
     providers["Dropbox"] = {
         "name": "Dropbox", 
-        "configured": bool(getattr(settings, 'dropbox_refresh_token', None)),
+        "configured": bool(getattr(settings, 'dropbox_app_key', None) and
+                          getattr(settings, 'dropbox_app_secret', None) and
+                          getattr(settings, 'dropbox_refresh_token', None)),
         "enabled": True,
         "details": {
-            "folder": getattr(settings, 'dropbox_folder', 'Not set')
+            "folder": getattr(settings, 'dropbox_folder', 'Not set'),
+            "app_key": getattr(settings, 'dropbox_app_key', 'Not set'),
+            "app_secret": getattr(settings, 'dropbox_app_secret', None) and "Configured" or "Not set",
+            "refresh_token": getattr(settings, 'dropbox_refresh_token', None) and "Configured" or "Not set"
         }
     }
     
