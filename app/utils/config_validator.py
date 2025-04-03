@@ -154,13 +154,28 @@ def mask_sensitive_value(value):
     return str(value)
 
 def get_provider_status():
-    """Returns status information for all configured providers"""
+    """
+    Returns status information for all configured providers
+    
+    Font Awesome icons used:
+    - fa-brands fa-dropbox: Dropbox icon
+    - fa-solid fa-envelope: Email icon
+    - fa-solid fa-server: FTP Server icon
+    - fa-brands fa-google-drive: Google Drive icon
+    - fa-solid fa-cloud: NextCloud icon
+    - fa-brands fa-microsoft: Microsoft/OneDrive icon
+    - fa-solid fa-file-lines: Document/Paperless icon
+    - fa-brands fa-aws: AWS/S3 icon
+    - fa-solid fa-lock: SFTP icon (secure)
+    - fa-solid fa-heart-pulse: Uptime/health monitoring
+    - fa-solid fa-globe: WebDAV/web icon
+    """
     providers = {}
     
     # Add Dropbox configuration - alphabetically ordered providers
     providers["Dropbox"] = {
         "name": "Dropbox", 
-        "icon": "dropbox",
+        "icon": "fa-brands fa-dropbox",
         "configured": bool(getattr(settings, 'dropbox_app_key', None) and
                           getattr(settings, 'dropbox_app_secret', None) and
                           getattr(settings, 'dropbox_refresh_token', None)),
@@ -177,7 +192,7 @@ def get_provider_status():
     # Add Email configuration
     providers["Email"] = {
         "name": "Email", 
-        "icon": "mail",
+        "icon": "fa-solid fa-envelope",
         "configured": bool(getattr(settings, 'email_host', None) and 
                          getattr(settings, 'email_default_recipient', None)),
         "enabled": True,
@@ -196,7 +211,7 @@ def get_provider_status():
     # Add FTP configuration to providers
     providers["FTP Storage"] = {
         "name": "FTP Storage",
-        "icon": "ftp",
+        "icon": "fa-solid fa-server",
         "configured": bool(getattr(settings, 'ftp_host', None) and
                           getattr(settings, 'ftp_username', None) and
                           getattr(settings, 'ftp_password', None)),
@@ -216,7 +231,7 @@ def get_provider_status():
     # Check Google Drive configuration
     providers["Google Drive"] = {
         "name": "Google Drive", 
-        "icon": "google",
+        "icon": "fa-brands fa-google-drive",
         "configured": bool(getattr(settings, 'google_drive_credentials_json', None) and 
                           getattr(settings, 'google_drive_folder_id', None)),
         "enabled": True,
@@ -238,7 +253,7 @@ def get_provider_status():
         
     providers["NextCloud"] = {
         "name": "NextCloud", 
-        "icon": "cloud",
+        "icon": "fa-solid fa-cloud",
         "configured": bool(getattr(settings, 'nextcloud_upload_url', None) and 
                           getattr(settings, 'nextcloud_username', None) and 
                           getattr(settings, 'nextcloud_password', None)),
@@ -256,7 +271,7 @@ def get_provider_status():
     # Check OneDrive configuration
     providers["OneDrive"] = {
         "name": "OneDrive", 
-        "icon": "microsoft",
+        "icon": "fa-brands fa-microsoft",
         "configured": bool(getattr(settings, 'onedrive_client_id', None) and 
                           getattr(settings, 'onedrive_client_secret', None) and 
                           getattr(settings, 'onedrive_refresh_token', None)),
@@ -274,7 +289,7 @@ def get_provider_status():
     # Check Paperless configuration
     providers["Paperless-ngx"] = {
         "name": "Paperless-ngx", 
-        "icon": "file-text",
+        "icon": "fa-solid fa-file-lines",
         "configured": bool(getattr(settings, 'paperless_host', None) and 
                          getattr(settings, 'paperless_ngx_api_token', None)),
         "enabled": True,
@@ -288,7 +303,7 @@ def get_provider_status():
     # Check S3 configuration
     providers["S3 Storage"] = {
         "name": "S3 Storage",
-        "icon": "database",
+        "icon": "fa-brands fa-aws",
         "configured": bool(getattr(settings, 's3_bucket_name', None) and 
                           getattr(settings, 'aws_access_key_id', None) and 
                           getattr(settings, 'aws_secret_access_key', None)),
@@ -308,7 +323,7 @@ def get_provider_status():
     # Check SFTP configuration
     providers["SFTP Storage"] = {
         "name": "SFTP Storage", 
-        "icon": "server",
+        "icon": "fa-solid fa-lock",
         "configured": bool(getattr(settings, 'sftp_host', None) and 
                           getattr(settings, 'sftp_username', None) and 
                           (getattr(settings, 'sftp_password', None) or 
@@ -329,7 +344,7 @@ def get_provider_status():
     # Add Uptime Kuma configuration
     providers["Uptime Kuma"] = {
         "name": "Uptime Kuma",
-        "icon": "activity",
+        "icon": "fa-solid fa-heart-pulse",
         "configured": bool(getattr(settings, 'uptime_kuma_url', None)),
         "enabled": True,
         "description": "Server monitoring and status page",
@@ -342,7 +357,7 @@ def get_provider_status():
     # Check WebDAV configuration
     providers["WebDAV"] = {
         "name": "WebDAV", 
-        "icon": "globe",
+        "icon": "fa-solid fa-globe",
         "configured": bool(getattr(settings, 'webdav_url', None) and 
                           getattr(settings, 'webdav_username', None) and 
                           getattr(settings, 'webdav_password', None)),
