@@ -27,7 +27,7 @@ SESSION_SECRET = config(
     default="YOUR_DEFAULT_SESSION_SECRET_MUST_BE_32_CHARS_OR_MORE"
 )
 
-app = FastAPI(title="DocuNova")
+app = FastAPI(title="DocuElevate")
 
 # 1) Session Middleware (for request.session to work)
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)

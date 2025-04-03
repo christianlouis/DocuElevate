@@ -1,6 +1,6 @@
 # Setting up Dropbox Integration
 
-This guide explains how to set up the Dropbox integration for DocuNova.
+This guide explains how to set up the Dropbox integration for DocuElevate.
 
 ## Required Configuration Parameters
 
@@ -24,7 +24,7 @@ You can set up Dropbox integration in two ways:
 
 The easiest way to set up Dropbox integration is to use the built-in setup wizard:
 
-1. Navigate to the `/dropbox-setup` page in your DocuNova instance
+1. Navigate to the `/dropbox-setup` page in your DocuElevate instance
 2. Follow the on-screen instructions to create a Dropbox app
 3. Enter your App Key and App Secret in the wizard
 4. Optionally specify a custom folder path for uploads
@@ -43,7 +43,7 @@ The wizard handles all the token exchange steps and provides you with the exact 
 2. Click "Create app"
 3. Select "Scoped access" for API
 4. Choose "Full Dropbox" access (or "App folder" for more restricted access)
-5. Give your app a name (e.g., "DocuNova")
+5. Give your app a name (e.g., "DocuElevate")
 6. Click "Create app"
 
 ### 2. Configure App Permissions
@@ -90,7 +90,7 @@ The wizard handles all the token exchange steps and provides you with the exact 
    
 2. From the response, copy the `refresh_token` value
 
-### 6. Configure DocuNova
+### 6. Configure DocuElevate
 
 1. Set `DROPBOX_APP_KEY`, `DROPBOX_APP_SECRET`, and `DROPBOX_REFRESH_TOKEN` with your values
 2. Set `DROPBOX_FOLDER` to the path where files should be uploaded (e.g., `/Documents/Uploads`)
@@ -103,7 +103,7 @@ The system will use the refresh token to automatically generate short-lived acce
 
 You can test if your token is working correctly:
 
-1. Navigate to the `/dropbox-setup` page in your DocuNova instance
+1. Navigate to the `/dropbox-setup` page in your DocuElevate instance
 2. Click the "Test Token" button to verify your credentials
 3. If the test fails, click "Refresh Token" to obtain a new refresh token
 

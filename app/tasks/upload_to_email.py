@@ -83,7 +83,7 @@ def extract_metadata_from_file(file_path):
     return metadata
 
 def attach_logo(msg):
-    """Attach the DocuNova logo to the email with proper Content-ID."""
+    """Attach the DocuElevate logo to the email with proper Content-ID."""
     try:
         # Try to find logo in workdir first (for customization)
         custom_logo_path = os.path.join(settings.workdir, "templates", "email", "logo.png")
@@ -187,7 +187,7 @@ def upload_to_email(file_path: str, recipients=None, subject=None, message=None,
         return {"status": "Skipped", "reason": error}
 
     # Use provided subject or create default
-    subject = subject or f"DocuNova Document: {filename}"
+    subject = subject or f"DocuElevate Document: {filename}"
 
     # Extract document metadata if available
     metadata = {}
@@ -215,7 +215,7 @@ def upload_to_email(file_path: str, recipients=None, subject=None, message=None,
         context = {
             "filename": filename,
             "message": message or f"Attached is the document: {filename}",
-            "app_name": "DocuNova",
+            "app_name": "DocuElevate",
             "app_url": f"https://{settings.external_hostname}" if settings.external_hostname else None,
             "custom_message": message,
             "metadata": metadata,

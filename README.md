@@ -1,13 +1,13 @@
 <div align="center">
-  <img src="frontend/static/logo_writing.svg" alt="DocuNova Logo" width="280" />
+  <img src="frontend/static/logo_writing.svg" alt="DocuElevate Logo" width="280" />
   <p>Intelligent Document Processing & Management</p>
 </div>
 
-# DocuNova
+# DocuElevate
 
 ## Overview
 
-DocuNova automates the handling, extraction, and processing of documents using a variety of services, including:
+DocuElevate automates the handling, extraction, and processing of documents using a variety of services, including:
 
 - **OpenAI** for metadata extraction and text refinement.  
 - **Dropbox**, **Nextcloud**, and **Google Drive** for file storage and uploads.  
@@ -22,33 +22,33 @@ The project includes a **UI** for uploading and managing files, and an API docum
 
 ## Documentation Index
 
-- [User Guide](docs/UserGuide.md) - How to use DocuNova
+- [User Guide](docs/UserGuide.md) - How to use DocuElevate
 - [API Documentation](docs/API.md) - API reference
-- [Deployment Guide](docs/DeploymentGuide.md) - How to deploy DocuNova
+- [Deployment Guide](docs/DeploymentGuide.md) - How to deploy DocuElevate
 - [Configuration Guide](docs/ConfigurationGuide.md) - Available configuration options
-- [Development Guide](CONTRIBUTING.md) - How to contribute to DocuNova
+- [Development Guide](CONTRIBUTING.md) - How to contribute to DocuElevate
 - [Troubleshooting](docs/Troubleshooting.md) - Common issues and solutions
 
 ## Screenshots
 
 <div align="center">
-  <img src="docs/upload-view.png" alt="DocuNova Upload Interface" width="80%" />
+  <img src="docs/upload-view.png" alt="DocuElevate Upload Interface" width="80%" />
   <p><em>Upload interface for adding new documents</em></p>
   
-  <img src="docs/files-view.png" alt="DocuNova Files View" width="80%" />
+  <img src="docs/files-view.png" alt="DocuElevate Files View" width="80%" />
   <p><em>Files view with processed documents and metadata</em></p>
 </div>
 
 ## Workflow Process
 
-DocuNova follows a streamlined document processing workflow:
+DocuElevate follows a streamlined document processing workflow:
 
 <div align="center">
-  <img src="docs/workflow-diagram.png" alt="DocuNova Workflow" width="90%" />
+  <img src="docs/workflow-diagram.png" alt="DocuElevate Workflow" width="90%" />
 </div>
 
 ### Document Ingestion
-Documents enter DocuNova through three possible channels:
+Documents enter DocuElevate through three possible channels:
 1. **Web Upload**: Users manually upload files via the web interface
 2. **Email Attachments**: Automatic polling of configured IMAP mailboxes (supports multiple accounts)
 3. **API**: Direct programmatic uploads via the REST API

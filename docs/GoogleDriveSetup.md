@@ -1,6 +1,6 @@
 # Setting up Google Drive Integration
 
-This guide explains how to set up the Google Drive integration for DocuNova.
+This guide explains how to set up the Google Drive integration for DocuElevate.
 
 ## Required Configuration Parameters
 
@@ -55,7 +55,7 @@ To find your Google Drive folder ID:
 3. The string after "folders/" is your folder ID (in this example: `1a2b3c4d5e6f7g8h9i0j`)
 4. Set this value as `GOOGLE_DRIVE_FOLDER_ID` in your configuration
 
-### 6. Configure DocuNova
+### 6. Configure DocuElevate
 
 1. Open the downloaded JSON key file
 2. Set the entire JSON content as the `GOOGLE_DRIVE_CREDENTIALS_JSON` environment variable

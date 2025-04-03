@@ -1,10 +1,10 @@
 # API Documentation
 
-DocuNova provides a powerful REST API for programmatic access to all its features. This document serves as a reference for the available endpoints and their usage.
+DocuElevate provides a powerful REST API for programmatic access to all its features. This document serves as a reference for the available endpoints and their usage.
 
 ## API Overview
 
-- Base URL: `http://<your-docunova-instance>/api`
+- Base URL: `http://<your-docuelevate-instance>/api`
 - Authentication: OAuth2 (when enabled)
 - Response Format: JSON
 
@@ -12,7 +12,7 @@ DocuNova provides a powerful REST API for programmatic access to all its feature
 
 The most up-to-date and interactive API documentation is available at:
 
-`http://<your-docunova-instance>/docs`
+`http://<your-docuelevate-instance>/docs`
 
 This Swagger UI provides a complete reference with the ability to try out API calls directly from your browser.
 
@@ -21,7 +21,7 @@ This Swagger UI provides a complete reference with the ability to try out API ca
 When authentication is enabled, you must include an authentication token in your requests:
 
 ```bash
-curl -X GET "http://<your-docunova-instance>/api/files" \
+curl -X GET "http://<your-docuelevate-instance>/api/files" \
   -H "Authorization: Bearer <your-token>"
 ```
 
@@ -131,11 +131,6 @@ Errors follow standard HTTP status codes with descriptive messages:
 
 The API implements rate limiting to ensure system stability. If you exceed the limits, you'll receive a `429 Too Many Requests` response.
 
-## Client Libraries
-
-For easy integration with your applications, consider using one of our client libraries:
-
-- Python: [github.com/christianlouis/docunova-python-client](https://github.com/christianlouis/docunova-python-client)
 
 ## Further Assistance
 

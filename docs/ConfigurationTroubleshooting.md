@@ -1,6 +1,6 @@
 # Configuration Troubleshooting Guide
 
-This guide helps you resolve common configuration issues with DocuNova's various integrations.
+This guide helps you resolve common configuration issues with DocuElevate's various integrations.
 
 ## SMTP Email Configuration
 
@@ -47,7 +47,7 @@ When you see errors like "Settings object has no attribute 'nextcloud_url'" or s
 #### Dropbox
 ```
 DROPBOX_TOKEN=your_oauth2_token
-DROPBOX_FOLDER=/DocuNova
+DROPBOX_FOLDER=/DocuElevate
 ```
 
 #### Nextcloud
