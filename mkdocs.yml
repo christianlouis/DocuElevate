@@ -3,7 +3,6 @@ site_description: Intelligent Document Processing & Management
 site_url: https://docuelevate.readthedocs.io/
 repo_url: https://github.com/christianlouis/DocuElevate
 repo_name: DocuElevate
-repo_type: github
 theme:
   name: material
   logo: frontend/static/logo_writing.svg
