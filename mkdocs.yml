@@ -5,15 +5,15 @@ repo_url: https://github.com/christianlouis/DocuElevate
 repo_name: DocuElevate
 theme:
   name: material
-  logo: frontend/static/logo_writing.svg
-  favicon: frontend/static/logo_writing.svg
+  logo: logo.png
+  favicon: favicon.ico
   features:
     - navigation.tabs
     - navigation.instant
     - search.suggest
     - content.code.copy
 nav:
-  - Home: README
+  - Home: /
   - User Guide: UserGuide
   - API: API
   - Deployment: DeploymentGuide
