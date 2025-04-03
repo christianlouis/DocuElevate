@@ -1,6 +1,6 @@
 # Configuration Guide
 
-DocuNova is designed to be highly configurable through environment variables. This guide explains all available configuration options and how to use them effectively.
+DocuElevate is designed to be highly configurable through environment variables. This guide explains all available configuration options and how to use them effectively.
 
 ## Environment Variables
 
@@ -14,12 +14,12 @@ Configuration is primarily done through environment variables specified in a `.e
 | `REDIS_URL`            | URL for Redis, used by Celery for broker & result store. | `redis://redis:6379/0`         |
 | `WORKDIR`              | Working directory for the application.                  | `/workdir`                     |
 | `GOTENBERG_URL`        | Gotenberg PDF processing URL.                           | `http://gotenberg:3000`        |
-| `EXTERNAL_HOSTNAME`    | The external hostname for the application.             | `docunova.example.com`         |
+| `EXTERNAL_HOSTNAME`    | The external hostname for the application.             | `docuelevate.example.com`      |
 | `ALLOW_FILE_DELETE`    | Enable file deletion in the web interface (`true`/`false`). | `true`                      |
 
 ### IMAP Configuration
 
-DocuNova can monitor multiple IMAP mailboxes for document attachments. Each mailbox uses a numbered prefix (e.g., `IMAP1_`, `IMAP2_`).
+DocuElevate can monitor multiple IMAP mailboxes for document attachments. Each mailbox uses a numbered prefix (e.g., `IMAP1_`, `IMAP2_`).
 
 | **Variable**                  | **Description**                                              | **Example**       |
 |-------------------------------|--------------------------------------------------------------|-------------------|
@@ -127,7 +127,7 @@ For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveS
 | `EMAIL_USERNAME`           | SMTP authentication username.                             |
 | `EMAIL_PASSWORD`           | SMTP authentication password.                             |
 | `EMAIL_USE_TLS`            | Whether to use TLS (default: `True`).                     |
-| `EMAIL_SENDER`             | From address (e.g., `"DocuNova <docunova@example.com>"`). |
+| `EMAIL_SENDER`             | From address (e.g., `"DocuElevate <docuelevate@example.com>"`). |
 | `EMAIL_DEFAULT_RECIPIENT`  | Default recipient email if none specified in the task.    |
 
 ### OneDrive / Microsoft Graph
@@ -167,7 +167,7 @@ For detailed setup instructions, see the [Amazon S3 Setup Guide](AmazonS3Setup.m
 
 ### Minimal Configuration
 
-This is the minimal configuration needed to run DocuNova with local storage only:
+This is the minimal configuration needed to run DocuElevate with local storage only:
 
 ```dotenv
 DATABASE_URL=sqlite:///./app/database.db
@@ -184,7 +184,7 @@ DATABASE_URL=sqlite:///./app/database.db
 REDIS_URL=redis://redis:6379/0
 WORKDIR=/workdir
 GOTENBERG_URL=http://gotenberg:3000
-EXTERNAL_HOSTNAME=docunova.example.com
+EXTERNAL_HOSTNAME=docuelevate.example.com
 ALLOW_FILE_DELETE=true
 
 # IMAP settings
@@ -254,10 +254,10 @@ SFTP_FOLDER=/Documents/Uploads
 # Email
 EMAIL_HOST=smtp.example.com
 EMAIL_PORT=587
-EMAIL_USERNAME=docunova@example.com
+EMAIL_USERNAME=docuelevate@example.com
 EMAIL_PASSWORD=password
 EMAIL_USE_TLS=True
-EMAIL_SENDER=DocuNova System <docunova@example.com>
+EMAIL_SENDER=DocuElevate System <docuelevate@example.com>
 EMAIL_DEFAULT_RECIPIENT=recipient@example.com
 
 # OneDrive (Personal Account)

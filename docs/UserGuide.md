@@ -1,23 +1,23 @@
 # User Guide
 
-This guide helps you get started with using DocuNova for document management and processing.
+This guide helps you get started with using DocuElevate for document management and processing.
 
 ## Getting Started
 
-DocuNova offers an intuitive web interface for uploading, managing, and processing your documents.
+DocuElevate offers an intuitive web interface for uploading, managing, and processing your documents.
 
 ### Accessing the System
 
-1. Navigate to your DocuNova instance (typically at `http://your-server-address:8000`)
+1. Navigate to your DocuElevate instance (typically at `http://your-server-address:8000`)
 2. If authentication is enabled, you'll be prompted to log in using your credentials
 
 ### Main Interface
 
-DocuNova features a simple navigation system with the following main sections:
+DocuElevate features a simple navigation system with the following main sections:
 - **Home**: Dashboard and overview
 - **Upload**: For adding new documents to the system
 - **Files**: For viewing and managing processed documents
-- **About**: Information about DocuNova
+- **About**: Information about DocuElevate
 
 ## Uploading Documents
 
@@ -31,10 +31,10 @@ DocuNova features a simple navigation system with the following main sections:
 
 ### Email Attachments
 
-If configured, DocuNova can automatically fetch documents from email attachments:
+If configured, DocuElevate can automatically fetch documents from email attachments:
 
 1. Send an email with attachments to the configured email account
-2. DocuNova will poll the mailbox at the configured interval
+2. DocuElevate will poll the mailbox at the configured interval
 3. Attachments will be automatically downloaded and processed
 4. No further action is required
 
@@ -49,7 +49,7 @@ The **Files** page provides access to all processed documents:
 
 ## Document Processing Features
 
-Depending on the system configuration, DocuNova can perform:
+Depending on the system configuration, DocuElevate can perform:
 
 - **OCR** - Extract text from images and scanned PDFs
 - **Metadata Extraction** - Automatically identify document types, dates, and other key information
@@ -58,12 +58,12 @@ Depending on the system configuration, DocuNova can perform:
 
 ## API Access
 
-For programmatic access, DocuNova provides a comprehensive REST API:
+For programmatic access, DocuElevate provides a comprehensive REST API:
 
-1. Navigate to `/docs` on your DocuNova instance
+1. Navigate to `/docs` on your DocuElevate instance
 2. The interactive Swagger documentation allows you to test API endpoints directly
 3. Obtain an API token if authentication is enabled
 
 ## Troubleshooting
 
-If you encounter issues while using DocuNova, please refer to the [Troubleshooting Guide](Troubleshooting.md).
+If you encounter issues while using DocuElevate, please refer to the [Troubleshooting Guide](Troubleshooting.md).

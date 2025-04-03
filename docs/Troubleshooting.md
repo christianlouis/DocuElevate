@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-This document provides solutions to common problems encountered when using DocuNova.
+This document provides solutions to common problems encountered when using DocuElevate.
 
 ## Common Issues
 

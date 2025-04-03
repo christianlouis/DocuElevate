@@ -1,6 +1,6 @@
 # Deployment Guide
 
-This guide provides instructions for deploying DocuNova in various environments.
+This guide provides instructions for deploying DocuElevate in various environments.
 
 ## Prerequisites
 
@@ -16,7 +16,7 @@ This guide provides instructions for deploying DocuNova in various environments.
 
 ## Docker Deployment
 
-Docker is the recommended deployment method for DocuNova.
+Docker is the recommended deployment method for DocuElevate.
 
 ### Step 1: Clone the Repository
 
@@ -42,7 +42,7 @@ docker-compose up -d
 ```
 
 This will start:
-- The DocuNova API server
+- The DocuElevate API server
 - A worker for background tasks
 - Redis for message broker and result storage
 - Gotenberg for PDF processing
@@ -60,7 +60,7 @@ For production use, we recommend setting up a reverse proxy (like Nginx or Traef
 ```nginx
 server {
     listen 80;
-    server_name docunova.example.com;
+    server_name docuelevate.example.com;
     
     location / {
         proxy_pass http://localhost:8000;
@@ -107,7 +107,7 @@ worker:
 
 ## Monitoring
 
-Monitor your DocuNova deployment using:
+Monitor your DocuElevate deployment using:
 
 - Docker's built-in logging: `docker-compose logs -f`
 - Container metrics: `docker stats`
@@ -123,7 +123,7 @@ Regularly back up the following:
 
 ## Updates
 
-To update DocuNova to a newer version:
+To update DocuElevate to a newer version:
 
 ```bash
 # Pull the latest changes

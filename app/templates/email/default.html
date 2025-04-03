@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document from DocuNova</title>
+    <title>Document from DocuElevate</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -95,7 +95,7 @@
 <body>
     <div class="header">
         {% if has_logo %}
-        <img src="cid:logo" alt="DocuNova Logo" class="logo">
+        <img src="cid:logo" alt="DocuElevate Logo" class="logo">
         {% endif %}
         <h1>Document Delivery</h1>
     </div>
@@ -105,7 +105,7 @@
             {% if custom_message %}
                 {{ custom_message }}
             {% else %}
-                A document has been shared with you from DocuNova.
+                A document has been shared with you from DocuElevate.
             {% endif %}
         </p>
         
@@ -148,14 +148,14 @@
         
         {% if app_url %}
         <p>
-            <a href="{{ app_url }}" class="button">Visit DocuNova</a>
+            <a href="{{ app_url }}" class="button">Visit DocuElevate</a>
         </p>
         {% endif %}
     </div>
     
     <div class="footer">
-        <p>This is an automated message from DocuNova Document Processing System.</p>
-        <p>© {{ now().year }} DocuNova</p>
+        <p>This is an automated message from DocuElevate Document Processing System.</p>
+        <p>© {{ now().year }} DocuElevate</p>
     </div>
 </body>
 </html>

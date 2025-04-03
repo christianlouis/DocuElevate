@@ -151,7 +151,7 @@ def upload_to_google_drive(file_path: str, include_metadata=True):
             
             # Add minimal appProperties
             file_metadata['appProperties'] = {
-                'docunova': 'true'
+                'docuelevate': 'true'
             }
             
             # Add metadata to file description for better visibility in Google Drive UI

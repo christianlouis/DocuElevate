@@ -1,12 +1,12 @@
-# DocuNova Documentation
+# DocuElevate Documentation
 
-Welcome to the DocuNova documentation. This directory contains comprehensive guides to help you install, configure, and use DocuNova effectively.
+Welcome to the DocuElevate documentation. This directory contains comprehensive guides to help you install, configure, and use DocuElevate effectively.
 
 ## Available Documentation
 
-- [User Guide](UserGuide.md) - How to use DocuNova's features and interface
+- [User Guide](UserGuide.md) - How to use DocuElevate's features and interface
 - [API Documentation](API.md) - Complete API reference for developers
-- [Deployment Guide](DeploymentGuide.md) - How to deploy DocuNova in various environments
+- [Deployment Guide](DeploymentGuide.md) - How to deploy DocuElevate in various environments
 - [Configuration](ConfigurationMaster.md) - Overview of configuration options, including:
   - [Configuration Guide](ConfigurationGuide.md) - Complete list of all available configuration parameters
   - [Google Drive Setup](GoogleDriveSetup.md) - How to set up Google Drive integration
@@ -18,7 +18,7 @@ Welcome to the DocuNova documentation. This directory contains comprehensive gui
 
 ## Additional Resources
 
-- [Contributing Guide](../CONTRIBUTING.md) - How to contribute to DocuNova development
+- [Contributing Guide](../CONTRIBUTING.md) - How to contribute to DocuElevate development
 - [License Information](../LICENSE) - Apache License 2.0 details
 
 ## Support
@@ -31,10 +31,13 @@ If you need additional assistance beyond what's covered in these guides:
 ## Screenshots
 
 ![Upload Interface](upload-view.png)
-*DocuNova's upload interface*
+*DocuElevate's upload interface*
 
 ![Files View](files-view.png)
 *Document management interface*
 
+![Status View](status-view.png)
+*System management interface*
+
 ![Workflow Diagram](workflow-diagram.png)
-*DocuNova processing workflow*
+*DocuElevate processing workflow*

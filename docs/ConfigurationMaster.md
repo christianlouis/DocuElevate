@@ -1,10 +1,10 @@
-# DocuNova Configuration 
+# DocuElevate Configuration 
 
-This section contains detailed documentation about configuring DocuNova for your environment.
+This section contains detailed documentation about configuring DocuElevate for your environment.
 
 ## Configuration Overview
 
-DocuNova is designed to be highly configurable through environment variables, typically set in a `.env` file. This allows you to enable only the services and integrations you need for your specific use case.
+DocuElevate is designed to be highly configurable through environment variables, typically set in a `.env` file. This allows you to enable only the services and integrations you need for your specific use case.
 
 ## Documentation Sections
 
@@ -28,7 +28,7 @@ DATABASE_URL=sqlite:///./app/database.db
 REDIS_URL=redis://redis:6379/0
 WORKDIR=/workdir
 GOTENBERG_URL=http://gotenberg:3000
-EXTERNAL_HOSTNAME=docunova.example.com
+EXTERNAL_HOSTNAME=docuelevate.example.com
 
 # Enable only the services you need
 # For detailed parameters, see the Configuration Guide

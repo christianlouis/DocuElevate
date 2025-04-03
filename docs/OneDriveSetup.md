@@ -1,6 +1,6 @@
 # Setting up OneDrive Integration
 
-This guide explains how to set up the Microsoft OneDrive integration for DocuNova.
+This guide explains how to set up the Microsoft OneDrive integration for DocuElevate.
 
 ## Required Configuration Parameters
 
@@ -51,7 +51,7 @@ The setup process differs slightly based on which account type you're using.
 1. Go to the [Azure Portal](https://portal.azure.com/)
 2. Navigate to "Azure Active Directory" > "App registrations"
 3. Click "New registration"
-4. Enter a name for your application (e.g., "DocuNova")
+4. Enter a name for your application (e.g., "DocuElevate")
 5. For "Supported account types", select the appropriate option:
    - For personal accounts: "Accounts in any organizational directory and personal Microsoft accounts"
    - For corporate accounts only: "Accounts in this organizational directory only"

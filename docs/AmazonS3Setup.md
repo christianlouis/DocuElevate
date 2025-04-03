@@ -1,6 +1,6 @@
 # Setting up Amazon S3 Integration
 
-This guide explains how to set up the Amazon S3 integration for DocuNova.
+This guide explains how to set up the Amazon S3 integration for DocuElevate.
 
 ## Required Configuration Parameters
 
@@ -31,7 +31,7 @@ For a complete list of configuration options, see the [Configuration Guide](Conf
 
 1. Go to the [AWS IAM Console](https://console.aws.amazon.com/iam/)
 2. Navigate to "Users" and click "Add users"
-3. Enter a name (e.g., "docunova-s3-access")
+3. Enter a name (e.g., "docuelevate-s3-access")
 4. For access type, select "Programmatic access"
 5. Click "Next: Permissions"
 6. Choose "Attach existing policies directly" and search for "AmazonS3FullAccess"
@@ -40,7 +40,7 @@ For a complete list of configuration options, see the [Configuration Guide](Conf
 9. On the final page, you'll see the Access Key ID and Secret Access Key
 10. Save these credentials securely as they won't be shown again
 
-### 3. Configure DocuNova
+### 3. Configure DocuElevate
 
 1. Set `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` to the credentials from step 2
 2. Set `AWS_REGION` to the region where your bucket was created (e.g., "us-east-1")

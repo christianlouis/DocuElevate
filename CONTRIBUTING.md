@@ -1,6 +1,6 @@
-# Contributing to DocuNova
+# Contributing to DocuElevate
 
-Thank you for your interest in contributing to DocuNova! This document provides guidelines and instructions for contributing to the project.
+Thank you for your interest in contributing to DocuElevate! This document provides guidelines and instructions for contributing to the project.
 
 ## Code of Conduct
 
