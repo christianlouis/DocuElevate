@@ -6,12 +6,14 @@ from sqlalchemy.orm import Session
 import logging
 import os
 import uuid
+import mimetypes
 
 from app.auth import require_login
 from app.models import FileRecord
 from app.config import settings
 from app.api.common import get_db
 from app.tasks.process_document import process_document
+from app.tasks.convert_to_pdf import convert_to_pdf
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -134,7 +136,63 @@ async def ui_upload(request: Request, file: UploadFile = File(...)):
     # Log the mapping between original and safe filename
     logger.info(f"Saved uploaded file '{safe_filename}' as '{target_filename}'")
     
-    task = process_document.delay(target_path)
+    # Check file size
+    file_size = os.path.getsize(target_path)
+    max_size = 500 * 1024 * 1024  # 500MB
+    if file_size > max_size:
+        # Remove the file if it's too large
+        os.remove(target_path)
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large: {file_size} bytes (max {max_size} bytes)"
+        )
+    
+    # Same set of allowed file types as in the IMAP task
+    ALLOWED_MIME_TYPES = {
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "text/plain",
+        "text/csv",
+        "application/rtf",
+        "text/rtf",
+    }
+    
+    # Image MIME types that need conversion
+    IMAGE_MIME_TYPES = {
+        'image/jpeg', 'image/jpg', 'image/png', 
+        'image/gif', 'image/bmp', 'image/tiff',
+        'image/webp', 'image/svg+xml'
+    }
+    
+    # Determine if the file is a PDF or needs conversion
+    mime_type, _ = mimetypes.guess_type(target_path)
+    file_ext = os.path.splitext(target_path)[1].lower()
+    
+    # Check if it's a PDF by extension or MIME type
+    is_pdf = file_ext == ".pdf" or mime_type == "application/pdf"
+    
+    if is_pdf:
+        # If it's a PDF, process directly
+        task = process_document.delay(target_path)
+        logger.info(f"Enqueued PDF for processing: {target_path}")
+    elif mime_type in IMAGE_MIME_TYPES or any(file_ext.endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.svg']):
+        # If it's an image, convert to PDF first
+        task = convert_to_pdf.delay(target_path)
+        logger.info(f"Enqueued image for PDF conversion: {target_path}")
+    elif mime_type in ALLOWED_MIME_TYPES or any(file_ext.endswith(ext) for ext in ['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.odp', '.rtf', '.txt', '.csv']):
+        # If it's an office document, convert to PDF first
+        task = convert_to_pdf.delay(target_path)
+        logger.info(f"Enqueued office document for PDF conversion: {target_path}")
+    else:
+        # For any other file type, attempt conversion but log a warning
+        logger.warning(f"Unsupported MIME type {mime_type} for {target_path}, attempting conversion")
+        task = convert_to_pdf.delay(target_path)
+    
     return {
         "task_id": task.id, 
         "status": "queued", 
