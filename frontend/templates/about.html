@@ -15,7 +15,7 @@
     <h2 class="text-2xl font-semibold mb-2">Our Story</h2>
     <p class="text-gray-600 mb-4">
       DocuElevate was created with one goal in mind: to simplify and streamline document management 
-      for everyone, whether you’re a small startup or a large enterprise.
+      for everyone, whether you're a small startup or a large enterprise.
     </p>
     <p class="text-gray-600">
       We harness the power of OpenAI for metadata extraction and text refinement, integrate seamlessly 
@@ -24,18 +24,48 @@
     </p>
   </section>
 
-  <!-- Key Features Section -->
+  <!-- Key Features Section - Updated with more comprehensive features -->
   <section class="bg-white shadow rounded p-6 mb-8">
     <h2 class="text-2xl font-semibold mb-2">Key Features</h2>
-    <ul class="list-disc list-inside text-gray-600">
-      <li>Simple and secure file uploads with drag & drop support</li>
-      <li>Automated metadata extraction, indexing, and version control</li>
-      <li>Integration with popular cloud services and storage platforms</li>
-      <li>OCR and intelligent document processing powered by AI</li>
-      <li>IMAP integration for automated document fetching</li>
-      <li>Highly configurable via environment variables</li>
-      <li>Docker-ready for easy deployment</li>
-    </ul>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <h3 class="font-medium text-lg text-gray-800">Document Processing</h3>
+        <ul class="list-disc list-inside text-gray-600 ml-2">
+          <li>Simple and secure file uploads with drag & drop support</li>
+          <li>OCR powered by Azure Document Intelligence</li>
+          <li>Automated metadata extraction using OpenAI</li>
+          <li>PDF conversion for various file formats via Gotenberg</li>
+          <li>Intelligent document classification and date extraction</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="font-medium text-lg text-gray-800">Integration & Storage</h3>
+        <ul class="list-disc list-inside text-gray-600 ml-2">
+          <li>Multi-destination support (store documents in multiple locations)</li>
+          <li>Cloud storage: Dropbox, Google Drive, OneDrive, Amazon S3</li>
+          <li>Self-hosted options: Nextcloud, Paperless NGX, WebDAV</li>
+          <li>Transfer protocols: FTP, SFTP, Email forwarding</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="font-medium text-lg text-gray-800">Automation</h3>
+        <ul class="list-disc list-inside text-gray-600 ml-2">
+          <li>IMAP inbox polling from multiple sources</li>
+          <li>Gmail and generic email account integration</li>
+          <li>Automated document ingestion from various inputs</li>
+          <li>Background processing with Redis and Celery</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="font-medium text-lg text-gray-800">Administration</h3>
+        <ul class="list-disc list-inside text-gray-600 ml-2">
+          <li>Powerful REST API for programmatic access</li>
+          <li>OAuth2 authentication support with Authentik</li>
+          <li>Highly configurable via environment variables</li>
+          <li>Docker-ready for easy deployment and scaling</li>
+        </ul>
+      </div>
+    </div>
   </section>
 
   <!-- Meet the Creator Section -->
@@ -47,17 +77,38 @@
     </p>
   </section>
 
-  <!-- GitHub Link Section -->
+  <!-- Privacy & Legal Section -->
+  <section class="bg-white shadow rounded p-6 mb-8">
+    <h2 class="text-2xl font-semibold mb-2">Privacy & Legal</h2>
+    <p class="text-gray-600 mb-4">
+      We care about your privacy and data security. Please review our:
+    </p>
+    <div class="flex space-x-4">
+      <a href="/privacy" class="text-blue-600 hover:underline">Privacy Notice</a>
+      <a href="/license" class="text-blue-600 hover:underline">License Information</a>
+    </div>
+  </section>
+
+  <!-- Links Section -->
   <section class="bg-white shadow rounded p-6">
     <h2 class="text-2xl font-semibold mb-2">Get Involved</h2>
     <p class="text-gray-600 mb-4">
-      Want to dive into the code, contribute ideas, or simply check out the magic behind DocuElevate?
-      Visit our GitHub repository!
+      Want to dive into the code, contribute ideas, or learn more about DocuElevate?
     </p>
-    <a href="https://github.com/christianlouis/document-processor" target="_blank" class="flex items-center space-x-2 text-blue-600 hover:text-blue-800">
-      <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub Logo" class="h-6 w-6" />
-      <span>View DocuElevate on GitHub</span>
-    </a>
+    <div class="flex flex-col space-y-3">
+      <a href="https://github.com/christianlouis/DocuElevate" target="_blank" class="flex items-center space-x-2 text-blue-600 hover:text-blue-800">
+        <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub Logo" class="h-6 w-6" />
+        <span>View DocuElevate on GitHub</span>
+      </a>
+      <a href="https://www.docuelevate.org" target="_blank" class="flex items-center space-x-2 text-blue-600 hover:text-blue-800">
+        <i class="fas fa-globe h-6 w-6"></i>
+        <span>Visit DocuElevate Website</span>
+      </a>
+      <a href="https://docuelevate.readthedocs.io" target="_blank" class="flex items-center space-x-2 text-blue-600 hover:text-blue-800">
+        <i class="fas fa-book h-6 w-6"></i>
+        <span>Read the Documentation</span>
+      </a>
+    </div>
   </section>
 </div>
 {% endblock %}

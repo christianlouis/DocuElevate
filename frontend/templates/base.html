@@ -54,19 +54,17 @@
           </div>
           
           <!-- Mobile menu button -->
-          <div class="md:hidden">
-            <button 
-              @click="mobileMenuOpen = !mobileMenuOpen" 
-              type="button" 
-              class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
-              :aria-expanded="mobileMenuOpen"
-            >
-              <span class="sr-only">Open main menu</span>
-              <svg class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-          </div>
+          <button 
+            @click="mobileMenuOpen = !mobileMenuOpen" 
+            type="button" 
+            class="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
+            :aria-expanded="mobileMenuOpen"
+          >
+            <span class="sr-only">Open main menu</span>
+            <svg class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
           
           <!-- Mobile menu, show/hide based on menu state -->
           <div 
@@ -104,7 +102,12 @@
     <!-- Footer -->
     <footer class="bg-white shadow">
       <div class="max-w-7xl mx-auto px-4 py-4 text-center text-gray-600">
-        DocuElevate 2025 - Licensed under <a href="/license" class="text-blue-500 hover:underline">Apache License 2.0</a> - 
+        DocuElevate 2025 - 
+        <a href="/privacy" class="text-blue-500 hover:underline">Privacy</a> - 
+        <a href="/imprint" class="text-blue-500 hover:underline">Imprint</a> - 
+        <a href="/terms" class="text-blue-500 hover:underline">Terms</a> - 
+        <a href="/cookies" class="text-blue-500 hover:underline">Cookies</a> - 
+        <a href="/license" class="text-blue-500 hover:underline">License</a> - 
         <span class="text-xs">Version {{ app_version|default(version, true) }}</span>
       </div>
     </footer>
