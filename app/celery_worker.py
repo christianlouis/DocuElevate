@@ -16,6 +16,7 @@ from app.tasks.refine_text_with_gpt import refine_text_with_gpt
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
 from app.tasks.convert_to_pdf import convert_to_pdf
+from app.tasks.finalize_document_storage import finalize_document_storage, convert_to_pdfa
 
 # Import new send tasks
 from app.tasks.upload_to_dropbox import upload_to_dropbox

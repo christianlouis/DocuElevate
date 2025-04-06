@@ -1,12 +1,14 @@
 """
 File-related API endpoints
 """
-from fastapi import APIRouter, Request, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, Request, HTTPException, Depends, UploadFile, File, Form, BackgroundTasks
 from sqlalchemy.orm import Session
 import logging
 import os
 import uuid
 import mimetypes
+from typing import Optional, List
+import subprocess
 
 from app.auth import require_login
 from app.models import FileRecord
@@ -14,6 +16,7 @@ from app.config import settings
 from app.api.common import get_db
 from app.tasks.process_document import process_document
 from app.tasks.convert_to_pdf import convert_to_pdf
+from app.tasks.finalize_document_storage import convert_to_pdfa
 
 # Set up logging
 logger = logging.getLogger(__name__)

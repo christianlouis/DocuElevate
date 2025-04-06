@@ -14,6 +14,7 @@ authlib  # Authentication
 python-dotenv  # Environment variables
 starlette  # ASGI toolkit (used by FastAPI)
 alembic  # Database migrations
+ocrmypdf>=15.0.0  # PDF/A conversion and OCR processing
 
 # Google Drive API
 google-api-python-client>=2.79.0
