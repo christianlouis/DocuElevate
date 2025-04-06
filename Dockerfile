@@ -1,41 +1,38 @@
-# Stage 1: Build dependencies
+# Use multi-stage build for a smaller final image
 FROM python:3.13 AS builder
 
 WORKDIR /app
 
+# Copy requirements first for better layer caching
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Stage 2: Final image
+# Second stage for the actual runtime
 FROM python:3.13.2-slim
 
 WORKDIR /app
 
-# Copy installed dependencies
+# Copy installed packages from builder stage
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy application files correctly
+# Copy application code
 COPY ./app /app/app
-COPY ./frontend /app/frontend
 COPY ./VERSION /app/VERSION
-COPY ./LICENSE /app/LICENSE
+COPY ./frontend /app/frontend
 
-# Copy build script and generate build date
-COPY ./docker/build-scripts/save-build-date.sh /tmp/
-RUN mkdir -p /app/docker/build-scripts/ && \
-    cp /tmp/save-build-date.sh /app/docker/build-scripts/ && \
-    chmod +x /tmp/save-build-date.sh && \
-    /tmp/save-build-date.sh
+# Create runtime_info directory
+RUN mkdir -p /app/runtime_info
 
-# Set build date as environment variable
-#ENV BUILD_DATE=$(cat /app/BUILD_DATE)
+# Create necessary directories
+RUN mkdir -p /workdir
 
-# Set Python path explicitly
+# Set environment variables
 ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 
-# Expose API port
+# Expose the port the app runs on
 EXPOSE 8000
-WORKDIR /app
 
+# Default command
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -10,7 +10,7 @@ services:
     working_dir: /workdir
 
     # We'll run uvicorn from the container's /app code
-    command: ["sh", "-c", "cd /app && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
 
     # Environment variables
     environment:
@@ -50,7 +50,7 @@ services:
       - redis
       - gotenberg
 
-    # Mount the shared directory (and optionally your code if you want dev mode)
+    # Mount the shared directory
     volumes:
       - /var/docparse/workdir:/workdir
 
@@ -58,7 +58,6 @@ services:
     image: gotenberg/gotenberg:latest
     container_name: gotenberg
     restart: always
-
 
   redis:
     image: redis:alpine

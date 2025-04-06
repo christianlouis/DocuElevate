@@ -1,18 +1,19 @@
 """
 General routes for the application homepage and basic pages.
 """
-from fastapi import Request, HTTPException
+from fastapi import Request, HTTPException, Depends
 from fastapi.responses import FileResponse
 from pathlib import Path
 from datetime import date
+from sqlalchemy.orm import Session
 
-from app.views.base import APIRouter, templates, require_login
+from app.views.base import APIRouter, templates, require_login, get_db
 from app.utils.config_validator import get_provider_status, validate_storage_configs
 
 router = APIRouter()
 
 @router.get("/", include_in_schema=False)
-async def serve_index(request: Request):
+async def serve_index(request: Request, db: Session = Depends(get_db)):
     """Serve the index/home page."""
     # Get provider information from config validator
     providers = get_provider_status()
@@ -27,9 +28,20 @@ async def serve_index(request: Request):
                                                                     's3', 'ftp', 'webdav', 
                                                                     'google_drive', 'onedrive'])
     
+    # Query the actual file count from the database
+    processed_files = 0
+    try:
+        # Import the model here to avoid circular imports
+        from app.models import FileRecord
+        processed_files = db.query(FileRecord).count()
+    except Exception as e:
+        # Log error but continue (don't break the page if DB query fails)
+        from app.views.base import logger
+        logger.error(f"Error counting files: {str(e)}")
+    
     # Create stats object to pass to the template
     stats = {
-        "processed_files": 0,  # Placeholder - would need actual DB query
+        "processed_files": processed_files,
         "active_integrations": configured_providers,
         "storage_targets": configured_storage_targets
     }
