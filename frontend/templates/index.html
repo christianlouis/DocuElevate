@@ -3,28 +3,132 @@
 
 {% block content %}
 <div class="container mx-auto px-4 py-8">
-  <h1 class="text-4xl font-bold mb-4">Welcome to DocuElevate</h1>
-  <p class="text-gray-700 mb-8">
-    Your intelligent solution for processing, managing, and organizing documents effortlessly.
-  </p>
-  <!-- Sample sections -->
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-    <div class="bg-white shadow rounded p-6">
-      <h2 class="text-2xl font-semibold mb-2">Upload Documents</h2>
-      <p class="text-gray-600">
-        Quickly upload and process your files with our user-friendly interface.
-      </p>
-      <a href="/upload" class="mt-4 inline-block text-blue-600 hover:text-blue-800">
-        Get Started &rarr;
+  <!-- Hero Section -->
+  <div class="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg shadow-lg text-white p-8 mb-8">
+    <h1 class="text-4xl font-bold mb-4">Welcome to DocuElevate</h1>
+    <p class="text-xl mb-6">
+      Your intelligent solution for processing, managing, and organizing documents effortlessly.
+    </p>
+    <div class="flex flex-wrap gap-4">
+      <a href="/upload" class="bg-white text-blue-600 hover:bg-gray-100 font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center">
+        <i class="fas fa-upload mr-2"></i> Upload Document
+      </a>
+      <a href="/status" class="bg-transparent border border-white text-white hover:bg-white hover:text-blue-600 font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center">
+        <i class="fas fa-cog mr-2"></i> System Status
       </a>
     </div>
-    <div class="bg-white shadow rounded p-6">
-      <h2 class="text-2xl font-semibold mb-2">Manage Your Files</h2>
-      <p class="text-gray-600">
-        View, organize, and collaborate on your processed files in one central hub.
+  </div>
+
+  <!-- Stats Section -->
+  <div class="bg-white rounded-lg shadow p-6 mb-8">
+    <h2 class="text-2xl font-semibold mb-4">System Overview</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="border-r border-gray-200 px-4">
+        <p class="text-4xl font-bold text-blue-600">{{ stats.processed_files|default('0') }}</p>
+        <p class="text-gray-600">Documents Processed</p>
+      </div>
+      <div class="border-r border-gray-200 px-4">
+        <p class="text-4xl font-bold text-green-600">{{ stats.active_integrations|default('0') }}</p>
+        <p class="text-gray-600">Active Integrations</p>
+      </div>
+      <div class="px-4">
+        <p class="text-4xl font-bold text-indigo-600">{{ stats.storage_targets|default('0') }}</p>
+        <p class="text-gray-600">Storage Targets</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Features Section -->
+  <h2 class="text-3xl font-semibold mb-6">Core Features</h2>
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+    <div class="bg-white shadow rounded-lg p-6 hover:shadow-lg transition duration-300">
+      <div class="text-blue-600 mb-4">
+        <i class="fas fa-file-alt fa-2x"></i>
+      </div>
+      <h3 class="text-xl font-semibold mb-2">Document Processing</h3>
+      <p class="text-gray-600 mb-4">
+        Upload and process documents with OCR, metadata extraction, and intelligent classification.
       </p>
-      <a href="/files" class="mt-4 inline-block text-blue-600 hover:text-blue-800">
-        View Files &rarr;
+      <a href="/upload" class="text-blue-600 hover:text-blue-800 font-medium">
+        Start processing &rarr;
+      </a>
+    </div>
+
+    <div class="bg-white shadow rounded-lg p-6 hover:shadow-lg transition duration-300">
+      <div class="text-blue-600 mb-4">
+        <i class="fas fa-cloud fa-2x"></i>
+      </div>
+      <h3 class="text-xl font-semibold mb-2">Multiple Storage Options</h3>
+      <p class="text-gray-600 mb-4">
+        Connect to Dropbox, NextCloud, OneDrive and other storage solutions seamlessly.
+      </p>
+      <a href="/status" class="text-blue-600 hover:text-blue-800 font-medium">
+        Configure storage &rarr;
+      </a>
+    </div>
+
+    <div class="bg-white shadow rounded-lg p-6 hover:shadow-lg transition duration-300">
+      <div class="text-blue-600 mb-4">
+        <i class="fas fa-robot fa-2x"></i>
+      </div>
+      <h3 class="text-xl font-semibold mb-2">AI-Powered Analysis</h3>
+      <p class="text-gray-600 mb-4">
+        Leverage AI to extract metadata, classify documents, and organize your information.
+      </p>
+      <a href="/files" class="text-blue-600 hover:text-blue-800 font-medium">
+        View processed files &rarr;
+      </a>
+    </div>
+
+    <div class="bg-white shadow rounded-lg p-6 hover:shadow-lg transition duration-300">
+      <div class="text-blue-600 mb-4">
+        <i class="fas fa-envelope fa-2x"></i>
+      </div>
+      <h3 class="text-xl font-semibold mb-2">Email Integration</h3>
+      <p class="text-gray-600 mb-4">
+        Auto-process documents received via email with our IMAP polling capabilities.
+      </p>
+      <a href="/status" class="text-blue-600 hover:text-blue-800 font-medium">
+        Set up email &rarr;
+      </a>
+    </div>
+
+    <div class="bg-white shadow rounded-lg p-6 hover:shadow-lg transition duration-300">
+      <div class="text-blue-600 mb-4">
+        <i class="fas fa-cogs fa-2x"></i>
+      </div>
+      <h3 class="text-xl font-semibold mb-2">Workflow Automation</h3>
+      <p class="text-gray-600 mb-4">
+        Create workflows to automatically process and route documents based on content.
+      </p>
+      <a href="/about" class="text-blue-600 hover:text-blue-800 font-medium">
+        Learn more &rarr;
+      </a>
+    </div>
+
+    <div class="bg-white shadow rounded-lg p-6 hover:shadow-lg transition duration-300">
+      <div class="text-blue-600 mb-4">
+        <i class="fas fa-shield-alt fa-2x"></i>
+      </div>
+      <h3 class="text-xl font-semibold mb-2">Secure & Private</h3>
+      <p class="text-gray-600 mb-4">
+        Your documents are processed securely with privacy-focused design principles.
+      </p>
+      <a href="/privacy" class="text-blue-600 hover:text-blue-800 font-medium">
+        Privacy policy &rarr;
+      </a>
+    </div>
+  </div>
+
+  <!-- Getting Started Section -->
+  <div class="bg-gray-50 rounded-lg border border-gray-200 p-8">
+    <div class="flex flex-col md:flex-row md:items-center justify-between">
+      <div class="mb-6 md:mb-0">
+        <h2 class="text-2xl font-bold mb-2">Ready to get started?</h2>
+        <p class="text-gray-600">Upload your first document and see DocuElevate in action.</p>
+      </div>
+      <a href="/upload" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300">
+        Try it now
       </a>
     </div>
   </div>

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Cookie Policy - DocuElevate{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8 max-w-4xl">
+  <h1 class="text-4xl font-bold mb-6">Cookie Policy</h1>
+  <p class="text-sm text-gray-500 mb-8">Last Updated: {{ build_date|default(current_date|default('May 14, 2024')) }}</p>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">What Are Cookies</h2>
+    <p class="text-gray-700 mb-3">
+      Cookies are small text files that are stored on your computer or mobile device when you visit a website. They are widely used to make websites work more efficiently and provide information to the website owners.
+    </p>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">How We Use Cookies</h2>
+    <p class="text-gray-700 mb-3">
+      DocuElevate only uses essential session cookies for the following purpose:
+    </p>
+    <ul class="list-disc list-inside text-gray-700 ml-4 mb-3">
+      <li>Authentication & Session Management: To identify you when you sign in and maintain your session while you use the application</li>
+    </ul>
+    <p class="text-gray-700 mb-3">
+      These cookies are mandatory for the proper functioning of our service. Without these cookies, you would be required to log in repeatedly during your browsing session.
+    </p>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">Duration of Cookies</h2>
+    <p class="text-gray-700 mb-3">
+      The session cookies we use are temporary and are deleted when you close your browser.
+    </p>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">No Third-Party Cookies</h2>
+    <p class="text-gray-700 mb-3">
+      DocuElevate does not use any third-party cookies, tracking cookies, advertising cookies, or analytics cookies. We respect your privacy and only implement the minimum cookies required for our service to function.
+    </p>
+    <p class="text-gray-700">
+      For more information about how we handle your data, please see our <a href="/privacy" class="text-blue-600 hover:underline">Privacy Policy</a>.
+    </p>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">Managing Cookies</h2>
+    <p class="text-gray-700 mb-3">
+      While most web browsers allow you to control cookies through their settings, please note that blocking or deleting our session cookies will prevent DocuElevate from functioning properly, as user authentication relies on these cookies.
+    </p>
+    <p class="text-gray-700">
+      By using DocuElevate, you consent to our use of cookies as described in this policy. This Cookie Policy is part of and incorporated into our <a href="/terms" class="text-blue-600 hover:underline">Terms of Service</a>.
+    </p>
+  </div>
+</div>
+{% endblock %}

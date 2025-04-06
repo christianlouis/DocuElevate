@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Privacy Notice - DocuElevate{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8 max-w-4xl">
+  <h1 class="text-4xl font-bold mb-6">DocuElevate – Privacy Notice</h1>
+  <p class="text-sm text-gray-500 mb-8">Last Updated: {{ build_date|default(current_date|default('April 7, 2024')) }}</p>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">Data Controller</h2>
+    <p class="text-gray-700 mb-3">
+      The controller responsible for processing your personal data under the EU General Data Protection Regulation (GDPR) is DocuElevate.
+    </p>
+    <p class="text-gray-700 mb-3">
+      Contact Email: <a href="mailto:docuelevate@christian-louis.de" class="text-blue-600 hover:underline">docuelevate@christian-louis.de</a>
+    </p>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">Scope of this Privacy Notice</h2>
+    <p class="text-gray-700">
+      This notice applies to the DocuElevate web application, hosted at <a href="{{ request.url.scheme }}://{{ request.url.netloc }}/" class="text-blue-600 hover:underline" target="_blank">{{ request.url.scheme }}://{{ request.url.netloc }}/</a>.
+    </p>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">Data Collection & Purposes</h2>
+    <p class="text-gray-700 mb-3">
+      <strong>User Authentication:</strong> We use Google, Dropbox, and Microsoft OAuth for sign-in. Through these services, we may receive information such as your name, email address, and profile picture.
+    </p>
+    <p class="text-gray-700 mb-3">
+      <strong>Purpose:</strong> We use this information to authenticate you, personalize your experience, and provide the core functionality of DocuElevate.
+    </p>
+    <p class="text-gray-700 mb-3">
+      <strong>Legal Basis (GDPR Art. 6):</strong> Our primary legal bases for processing are:
+    </p>
+    <ul class="list-disc list-inside text-gray-700 ml-4 mb-3">
+      <li>(1)(b) Performance of a contract: to provide the DocuElevate service.</li>
+      <li>(1)(f) Legitimate interests: ensuring the security of the service and preventing fraud.</li>
+    </ul>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">Use of Cookies & Similar Technologies</h2>
+    <p class="text-gray-700 mb-3">
+      We may use cookies or similar technologies to maintain your session, remember your preferences, and enhance your user experience.
+    </p>
+    <p class="text-gray-700">
+      For more information about our use of cookies, please visit our <a href="/cookies" class="text-blue-600 hover:underline">Cookie Policy</a>.
+    </p>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">Third-Party Services</h2>
+    <p class="text-gray-700 mb-3">
+      <strong>OAuth Providers:</strong> Google, Dropbox, and Microsoft. These providers may process your personal data according to their own privacy policies.
+    </p>
+    <p class="text-gray-700">
+      <strong>No Additional Sharing:</strong> We do not share, sell, or otherwise disclose your personal data to third parties for advertising or marketing purposes.
+    </p>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">Data Retention</h2>
+    <p class="text-gray-700 mb-3">
+      We retain your personal data only as long as necessary to provide the DocuElevate service or to comply with legal obligations.
+    </p>
+    <p class="text-gray-700">
+      If you wish to have your data deleted or your account removed, please contact us at <a href="mailto:docuelevate@christian-louis.de" class="text-blue-600 hover:underline">docuelevate@christian-louis.de</a>.
+    </p>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">Data Security</h2>
+    <p class="text-gray-700">
+      We implement appropriate technical and organizational measures to protect your personal data against unauthorized access, alteration, disclosure, or destruction.
+    </p>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">Your Rights under GDPR</h2>
+    <ul class="list-disc list-inside text-gray-700 ml-4">
+      <li class="mb-2"><strong>Access & Rectification:</strong> You can request to see the data we hold about you and ask for corrections if necessary.</li>
+      <li class="mb-2"><strong>Erasure (Right to be Forgotten):</strong> You can request deletion of your data where there is no legitimate reason for us to continue processing it.</li>
+      <li class="mb-2"><strong>Restriction of Processing:</strong> In certain circumstances, you can request a temporary block on processing your personal data.</li>
+      <li class="mb-2"><strong>Data Portability:</strong> You can request a copy of your data in a commonly used, machine-readable format.</li>
+      <li class="mb-2"><strong>Objection:</strong> You have the right to object to data processing, especially where processing is based on legitimate interests.</li>
+      <li class="mb-2"><strong>Withdrawal of Consent:</strong> If processing is based on your consent, you have the right to withdraw that consent at any time.</li>
+      <li><strong>Complaint:</strong> If you believe your rights have been violated, you have the right to lodge a complaint with a supervisory authority in the EU Member State of your residence or workplace.</li>
+    </ul>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">Updates to this Privacy Notice</h2>
+    <p class="text-gray-700 mb-3">
+      We may update this notice from time to time to reflect changes in our practices or applicable laws. Any changes will be posted at <a href="{{ request.url.scheme }}://{{ request.url.netloc }}/" class="text-blue-600 hover:underline" target="_blank">{{ request.url.scheme }}://{{ request.url.netloc }}/</a>, and where appropriate, we will notify you via email or other channels.
+    </p>
+    <p class="text-gray-700 mb-3">
+      If you have any questions or concerns about this Privacy Notice or your personal data, please contact us at <a href="mailto:docuelevate@christian-louis.de" class="text-blue-600 hover:underline">docuelevate@christian-louis.de</a>.
+    </p>
+    <p class="text-gray-700">
+      Please also review our <a href="/terms" class="text-blue-600 hover:underline">Terms of Service</a> and <a href="/license" class="text-blue-600 hover:underline">License Information</a>.
+    </p>
+  </div>
+</div>
+{% endblock %}

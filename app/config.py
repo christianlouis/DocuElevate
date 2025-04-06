@@ -3,6 +3,7 @@
 from pydantic_settings import BaseSettings
 from typing import Optional, List, Dict, Any
 import os
+from datetime import datetime
 
 class Settings(BaseSettings):
     database_url: str
@@ -120,6 +121,29 @@ class Settings(BaseSettings):
 
     # Feature flags
     allow_file_delete: bool = True  # Default to allowing file deletion from database
+
+    # Get build date from environment or file
+    @property
+    def build_date(self) -> str:
+        # First try to get build date from environment
+        env_build_date = os.environ.get("BUILD_DATE")
+        if env_build_date:
+            return env_build_date
+        
+        # Then try to get build date from BUILD_DATE file
+        build_date_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "BUILD_DATE")
+        if os.path.exists(build_date_file):
+            with open(build_date_file, "r") as f:
+                return f.read().strip()
+        
+        # If a timestamp file doesn't exist, try to get the app.py creation/modification time
+        app_file = os.path.join(os.path.dirname(__file__), "app.py")
+        if os.path.exists(app_file):
+            timestamp = os.path.getmtime(app_file)
+            return datetime.fromtimestamp(timestamp).strftime("%B %d, %Y")
+                
+        # Default to current date if not found elsewhere
+        return datetime.now().strftime("%B %d, %Y")
 
     # Get version from file or environment
     @property

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Terms of Service - DocuElevate{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8 max-w-4xl">
+  <h1 class="text-4xl font-bold mb-6">Terms of Service</h1>
+  <p class="text-sm text-gray-500 mb-8">Last Updated: {{ current_date|default('May 14, 2024') }}</p>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">1. Acceptance of Terms</h2>
+    <p class="text-gray-700 mb-3">
+      By accessing or using DocuElevate, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use this service.
+    </p>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">2. Description of Service</h2>
+    <p class="text-gray-700 mb-3">
+      DocuElevate provides document processing, OCR, metadata extraction, and storage services. We reserve the right to modify or discontinue any aspect of the service at any time.
+    </p>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">3. User Responsibilities</h2>
+    <p class="text-gray-700 mb-3">
+      You are responsible for:
+    </p>
+    <ul class="list-disc list-inside text-gray-700 ml-4 mb-3">
+      <li>All content you upload to DocuElevate</li>
+      <li>Ensuring you have proper rights to upload and process documents</li>
+      <li>Maintaining the confidentiality of your account credentials</li>
+      <li>Any activity that occurs under your account</li>
+    </ul>
+    <p class="text-gray-700 mb-3">
+      By using our service, you also agree to our <a href="/privacy" class="text-blue-600 hover:underline">Privacy Policy</a> and <a href="/cookies" class="text-blue-600 hover:underline">Cookie Policy</a>.
+    </p>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">4. Intellectual Property Rights</h2>
+    <p class="text-gray-700 mb-3">
+      DocuElevate respects intellectual property rights. Users may not upload content that infringes on the intellectual property rights of others.
+    </p>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">5. Limitation of Liability</h2>
+    <p class="text-gray-700 mb-3">
+      DocuElevate provides the service "as is" without warranties of any kind. We shall not be liable for any direct, indirect, incidental, special, consequential, or punitive damages resulting from your use of or inability to use the service.
+    </p>
+  </div>
+
+  <div class="bg-white shadow rounded-lg p-6">
+    <h2 class="text-2xl font-semibold mb-4">6. Governing Law</h2>
+    <p class="text-gray-700 mb-3">
+      These Terms shall be governed by the laws of Germany, without regard to its conflict of law provisions.
+    </p>
+    <p class="text-gray-700 mb-3">
+      If you have any questions about these Terms, please contact us at <a href="mailto:docuelevate@christian-louis.de" class="text-blue-600 hover:underline">docuelevate@christian-louis.de</a>.
+    </p>
+    <p class="text-gray-700">
+      For information about how we use cookies, please see our <a href="/cookies" class="text-blue-600 hover:underline">Cookie Policy</a>. For licensing information, please refer to our <a href="/license" class="text-blue-600 hover:underline">License Information</a>.
+    </p>
+  </div>
+</div>
+{% endblock %}

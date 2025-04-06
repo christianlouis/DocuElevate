@@ -21,6 +21,16 @@ COPY ./frontend /app/frontend
 COPY ./VERSION /app/VERSION
 COPY ./LICENSE /app/LICENSE
 
+# Copy build script and generate build date
+COPY ./docker/build-scripts/save-build-date.sh /tmp/
+RUN mkdir -p /app/docker/build-scripts/ && \
+    cp /tmp/save-build-date.sh /app/docker/build-scripts/ && \
+    chmod +x /tmp/save-build-date.sh && \
+    /tmp/save-build-date.sh
+
+# Set build date as environment variable
+#ENV BUILD_DATE=$(cat /app/BUILD_DATE)
+
 # Set Python path explicitly
 ENV PYTHONPATH=/app
 
