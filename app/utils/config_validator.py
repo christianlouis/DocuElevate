@@ -138,39 +138,48 @@ def validate_storage_configs():
     return issues
 
 def mask_sensitive_value(value):
-    """Helper function to mask sensitive values consistently"""
-    if not value:
-        return "Not set"
-    
-    if isinstance(value, str):
-        if len(value) > 10:
-            visible_start = max(1, len(value) // 3)
-            visible_end = max(1, len(value) // 4)
-            return f"{value[:visible_start]}{'*' * (len(value) - visible_start - visible_end)}{value[-visible_end:]}"
-        else:
-            return f"{value[:2]}{'*' * (len(value) - 4)}{value[-2:]}" if len(value) > 4 else "****"
-    elif not isinstance(value, (bool, int, float)):
-        return "**Configured Value**"
-    return str(value)
+    """
+    Masks sensitive values like API keys in logs and output
+    """
+    # Return masked value for sensitive data
+    if value and isinstance(value, str) and len(value) > 8:
+        return value[:4] + "*" * (len(value) - 4)
+    return value
 
 def get_provider_status():
     """
     Returns status information for all configured providers
-    
-    Font Awesome icons used:
-    - fa-brands fa-dropbox: Dropbox icon
-    - fa-solid fa-envelope: Email icon
-    - fa-solid fa-server: FTP Server icon
-    - fa-brands fa-google-drive: Google Drive icon
-    - fa-solid fa-cloud: NextCloud icon
-    - fa-brands fa-microsoft: Microsoft/OneDrive icon
-    - fa-solid fa-file-lines: Document/Paperless icon
-    - fa-brands fa-aws: AWS/S3 icon
-    - fa-solid fa-lock: SFTP icon (secure)
-    - fa-solid fa-heart-pulse: Uptime/health monitoring
-    - fa-solid fa-globe: WebDAV/web icon
     """
     providers = {}
+    
+    # Add AI services first
+    providers["OpenAI"] = {
+        "name": "OpenAI", 
+        "icon": "fa-brands fa-openai",
+        "configured": bool(getattr(settings, 'openai_api_key', None) and 
+                           str(getattr(settings, 'openai_api_key', '')).startswith('sk-')),
+        "enabled": True,
+        "description": "AI-powered document analysis and metadata extraction",
+        "details": {
+            "api_key": mask_sensitive_value(getattr(settings, 'openai_api_key', None)),
+            "base_url": getattr(settings, 'openai_base_url', 'https://api.openai.com/v1'),
+            "model": getattr(settings, 'openai_model', 'gpt-4')
+        }
+    }
+    
+    providers["Azure AI"] = {
+        "name": "Azure AI", 
+        "icon": "fa-solid fa-robot",
+        "configured": bool(getattr(settings, 'azure_ai_key', None) and 
+                          getattr(settings, 'azure_endpoint', None)),
+        "enabled": True,
+        "description": "Microsoft Azure Document Intelligence",
+        "details": {
+            "api_key": mask_sensitive_value(getattr(settings, 'azure_ai_key', None)),
+            "endpoint": getattr(settings, 'azure_endpoint', 'Not set'),
+            "region": getattr(settings, 'azure_region', 'Not set')
+        }
+    }
     
     # Add Dropbox configuration - alphabetically ordered providers
     providers["Dropbox"] = {
@@ -210,7 +219,7 @@ def get_provider_status():
     
     # Add FTP configuration to providers
     providers["FTP Storage"] = {
-        "name": "FTP Storage",
+        "name": "FTP Storage", 
         "icon": "fa-solid fa-server",
         "configured": bool(getattr(settings, 'ftp_host', None) and
                           getattr(settings, 'ftp_username', None) and
@@ -301,7 +310,7 @@ def get_provider_status():
     
     # Check S3 configuration
     providers["S3 Storage"] = {
-        "name": "S3 Storage",
+        "name": "S3 Storage", 
         "icon": "fa-brands fa-aws",
         "configured": bool(getattr(settings, 's3_bucket_name', None) and 
                           getattr(settings, 'aws_access_key_id', None) and 
@@ -339,10 +348,10 @@ def get_provider_status():
             "folder": getattr(settings, 'sftp_folder', 'Not set')
         }
     }
-
+    
     # Add Uptime Kuma configuration
     providers["Uptime Kuma"] = {
-        "name": "Uptime Kuma",
+        "name": "Uptime Kuma", 
         "icon": "fa-solid fa-heart-pulse",
         "configured": bool(getattr(settings, 'uptime_kuma_url', None)),
         "enabled": True,
@@ -352,7 +361,7 @@ def get_provider_status():
             "ping_interval": getattr(settings, 'uptime_kuma_ping_interval', 'Not set')
         }
     }
-
+    
     # Check WebDAV configuration
     providers["WebDAV"] = {
         "name": "WebDAV", 
@@ -394,7 +403,7 @@ def dump_all_settings():
 def get_settings_for_display(show_values=False):
     """
     Group settings into logical categories and check if they are configured.
-    Returns a dictionary with categories as keys and lists of setting items as values.
+    Returns a dictionary with categories as keys and lists of setting items as values. 
     Each setting item is a dict with name, value, and is_configured.
     
     If show_values is False, sensitive values are masked.
@@ -403,7 +412,7 @@ def get_settings_for_display(show_values=False):
     result = {
         "System Info": [
             {
-                "name": "App Version",
+                "name": "App Version", 
                 "value": settings.version,
                 "is_configured": True
             }

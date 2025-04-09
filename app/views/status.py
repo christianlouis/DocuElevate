@@ -2,12 +2,15 @@
 Status and configuration views for the application.
 """
 from fastapi import Request
+from fastapi.responses import JSONResponse
 from datetime import datetime
 import os
 import subprocess
+import logging
 
 from app.views.base import APIRouter, templates, require_login, settings
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/status")

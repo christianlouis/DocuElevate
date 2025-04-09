@@ -165,8 +165,17 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         # Convert string representations of booleans to actual booleans
+        # and strip quotes from string values
         @classmethod
         def parse_env_var(cls, field_name: str, raw_val: str) -> Any:
+            # First, strip quotes from the value if it's a string
+            if isinstance(raw_val, str):
+                if (raw_val.startswith('"') and raw_val.endswith('"')) or \
+                   (raw_val.startswith("'") and raw_val.endswith("'")):
+                    raw_val = raw_val[1:-1]
+                raw_val = raw_val.strip()
+                
+            # Convert string representations of booleans to actual booleans
             if field_name.endswith('_enabled') or field_name == 'debug':
                 if raw_val.lower() in ('false', '0', 'no', 'n', 'f'):
                     return False

@@ -11,6 +11,8 @@ from app.api.process import router as process_router
 from app.api.diagnostic import router as diagnostic_router
 from app.api.onedrive import router as onedrive_router
 from app.api.dropbox import router as dropbox_router
+from app.api.openai import router as openai_router
+from app.api.azure import router as azure_router
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -25,3 +27,5 @@ router.include_router(process_router)
 router.include_router(diagnostic_router)
 router.include_router(onedrive_router)
 router.include_router(dropbox_router)
+router.include_router(openai_router)
+router.include_router(azure_router)

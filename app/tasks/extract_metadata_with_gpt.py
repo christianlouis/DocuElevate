@@ -9,12 +9,20 @@ from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
 # Import the shared Celery instance
 from app.celery_app import celery
 import openai
+import logging
 
-# Initialize OpenAI client dynamically
-client = openai.OpenAI(
-    api_key=settings.openai_api_key,
-    base_url=settings.openai_base_url
-)
+logger = logging.getLogger(__name__)
+
+# Initialize OpenAI client dynamically with better error handling
+try:
+    client = openai.OpenAI(
+        api_key=settings.openai_api_key,
+        base_url=settings.openai_base_url
+    )
+    logger.info("OpenAI client initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize OpenAI client: {e}")
+    client = None
 
 def extract_json_from_text(text):
     """
