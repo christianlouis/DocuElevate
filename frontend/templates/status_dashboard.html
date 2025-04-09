@@ -136,6 +136,22 @@
                       Configure Now
                     </a>
                   {% endif %}
+                {% elif name == "OpenAI" %}
+                  {% if provider.configured %}
+                    <button 
+                      class="test-provider-btn inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      data-provider="openai">
+                      Test Connection
+                    </button>
+                  {% endif %}
+                {% elif name == "Azure AI" %}
+                  {% if provider.configured %}
+                    <button 
+                      class="test-provider-btn inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      data-provider="azure">
+                      Test Connection
+                    </button>
+                  {% endif %}
                 {% elif provider.configured and name == "Paperless-ngx" %}
                   <a href="{{ provider.details.host }}" target="_blank" class="inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                     <i class="fa-solid fa-external-link h-3 w-3 mr-1"></i>
@@ -380,6 +396,10 @@ document.addEventListener('DOMContentLoaded', function() {
         endpoint = '/api/dropbox/test-token';
       } else if (provider === 'onedrive') {
         endpoint = '/api/onedrive/test-token';
+      } else if (provider === 'openai') {
+        endpoint = '/api/openai/test';
+      } else if (provider === 'azure') {
+        endpoint = '/api/azure/test';
       }
       
       fetch(endpoint)
