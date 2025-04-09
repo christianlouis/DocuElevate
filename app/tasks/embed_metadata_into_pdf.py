@@ -2,7 +2,7 @@
 
 import os
 import shutil
-import fitz  # PyMuPDF for PDF metadata editing
+import PyPDF2  # Replace fitz with PyPDF2
 import json
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
@@ -51,7 +51,6 @@ def embed_metadata_into_pdf(local_file_path: str, extracted_text: str, metadata:
     After processing, the file is moved to
       <workdir>/processed/<suggested_filename.pdf>
     where <suggested_filename.pdf> is derived from metadata["filename"].
-    The output PDF is saved incrementally while preserving its original encryption.
     Additionally, the metadata is persisted to a JSON file with the same base name.
     """
     # Check for file existence; if not found, try the known shared tmp directory.
@@ -74,18 +73,26 @@ def embed_metadata_into_pdf(local_file_path: str, extracted_text: str, metadata:
     try:
         print(f"[DEBUG] Embedding metadata into {processed_file}...")
 
-        # Open the PDF
-        doc = fitz.open(processed_file)
-        # Set PDF metadata using only the standard keys.
-        doc.set_metadata({
-            "title": metadata.get("filename", "Unknown Document"),
-            "author": metadata.get("absender", "Unknown"),
-            "subject": metadata.get("document_type", "Unknown"),
-            "keywords": ", ".join(metadata.get("tags", []))
-        })
-        # Save incrementally and preserve encryption
-        doc.save(processed_file, incremental=True, encryption=fitz.PDF_ENCRYPT_KEEP)
-        doc.close()
+        # Open the PDF and modify metadata
+        with open(processed_file, 'rb') as file:
+            pdf_reader = PyPDF2.PdfReader(file)
+            pdf_writer = PyPDF2.PdfWriter()
+            
+            # Copy all pages from the reader to the writer
+            for page in pdf_reader.pages:
+                pdf_writer.add_page(page)
+            
+            # Set PDF metadata
+            pdf_writer.add_metadata({
+                "/Title": metadata.get("filename", "Unknown Document"),
+                "/Author": metadata.get("absender", "Unknown"),
+                "/Subject": metadata.get("document_type", "Unknown"),
+                "/Keywords": ", ".join(metadata.get("tags", []))
+            })
+            
+            # Write the modified PDF
+            with open(processed_file, 'wb') as output_file:
+                pdf_writer.write(output_file)
 
         print(f"[INFO] Metadata embedded successfully in {processed_file}")
 

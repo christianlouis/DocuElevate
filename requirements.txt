@@ -5,8 +5,7 @@ redis  # Message broker for Celery
 sqlalchemy  # Database ORM
 pydantic  # Data validation
 openai  # GPT integration for metadata extraction
-pymupdf  # PDF processing, text extraction, and detection (imported as 'fitz')
-PyPDF2  # PDF processing for page counting and now also for rotation
+PyPDF2>=3.0.0  # PDF processing for text extraction, metadata editing and rotation (replaces PyMuPDF)
 requests  # HTTP client
 dropbox>=11.36.0  # Dropbox integration
 azure-ai-documentintelligence  # Azure OCR service
