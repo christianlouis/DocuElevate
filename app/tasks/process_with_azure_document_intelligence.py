@@ -4,6 +4,7 @@ import PyPDF2
 from azure.core.credentials import AzureKeyCredential
 from azure.ai.documentintelligence import DocumentIntelligenceClient
 from azure.ai.documentintelligence.models import AnalyzeOutputOption, AnalyzeResult
+import azure.core.exceptions
 
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
@@ -12,11 +13,19 @@ from app.celery_app import celery
 
 logger = logging.getLogger(__name__)
 
-# Initialize Azure Document Intelligence client
-document_intelligence_client = DocumentIntelligenceClient(
-    endpoint=settings.azure_endpoint,
-    credential=AzureKeyCredential(settings.azure_ai_key)
-)
+# Initialize Azure Document Intelligence client with error handling
+try:
+    document_intelligence_client = DocumentIntelligenceClient(
+        endpoint=settings.azure_endpoint,
+        credential=AzureKeyCredential(settings.azure_ai_key)
+    )
+    logger.info("Azure Document Intelligence client initialized successfully")
+except (ValueError, azure.core.exceptions.ClientAuthenticationError) as e:
+    logger.error(f"Failed to initialize Azure Document Intelligence client: {e}")
+    document_intelligence_client = None
+except Exception as e:
+    logger.error(f"Unexpected error initializing Azure Document Intelligence client: {e}")
+    document_intelligence_client = None
 
 # Azure Document Intelligence service limits for Standard S0 tier
 AZURE_DOC_INTELLIGENCE_LIMITS = {
