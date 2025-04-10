@@ -14,6 +14,7 @@ from pathlib import Path
 from app.database import init_db
 from app.config import settings
 from app.utils.config_validator import check_all_configs
+from app.utils.notification import init_apprise, send_notification, notify_startup, notify_shutdown
 
 # Import the routers - now using views directly instead of frontend
 from app.views import router as frontend_router
@@ -68,6 +69,20 @@ async def startup_event():
         logging.info("Application started with valid configuration")
     
     logging.info("Router organization: Using refactored API routers from app/api/ directory")
+    
+    # Initialize notification system
+    init_apprise()
+    
+    # Send startup notification
+    notify_startup()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Run shutdown tasks for the application"""
+    logging.info("Application shutting down")
+    
+    # Send shutdown notification
+    notify_shutdown()
 
 # Custom 404 - we can still return the Jinja2 template, or the old static file:
 @app.exception_handler(404)

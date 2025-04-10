@@ -23,6 +23,20 @@ def dump_all_settings():
                         value = f"{value[:visible_start]}{'*' * (len(value) - visible_start - visible_end)}{value[-visible_end:]}"
                     else:
                         value = f"{value[:2]}{'*' * (len(value) - 4)}{value[-2:]}" if isinstance(value, str) and len(value) > 4 else "****"
+            
+            # Special handling for notification URLs
+            if key == 'notification_urls' and value:
+                try:
+                    from app.utils.notification import _mask_sensitive_url
+                    if isinstance(value, list):
+                        masked_urls = [_mask_sensitive_url(url) for url in value]
+                        logger.info(f"{key}: {masked_urls}")
+                    else:
+                        logger.info(f"{key}: {_mask_sensitive_url(value)}")
+                    continue  # Skip the default logging
+                except (ImportError, AttributeError):
+                    pass  # Fall back to default logging if _mask_sensitive_url is not available
+                    
             logger.info(f"{key}: {value}")
     logger.info("--- END OF SETTINGS DUMP ---")
 
@@ -169,6 +183,13 @@ def get_settings_for_display(show_values=False):
         "Monitoring": [
             "uptime_kuma_url",
             "uptime_kuma_ping_interval"
+        ],
+        "Notifications": [
+            "notification_urls",
+            "notify_on_task_failure",
+            "notify_on_credential_failure", 
+            "notify_on_startup",
+            "notify_on_shutdown"
         ]
     }
     
