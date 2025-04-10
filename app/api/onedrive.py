@@ -5,6 +5,9 @@ from fastapi import APIRouter, Request, HTTPException, status, Form
 import logging
 import os
 import requests
+import json
+from datetime import datetime, timedelta
+from typing import Optional
 
 from app.auth import require_login
 from app.config import settings
@@ -112,59 +115,146 @@ async def exchange_onedrive_token(
 @require_login
 async def test_onedrive_token(request: Request):
     """
-    Test if the configured OneDrive refresh token is valid.
-    Provides detailed error information if token is invalid.
+    Test if the configured OneDrive token is valid and return expiration information.
     """
     try:
-        from app.tasks.upload_to_onedrive import get_onedrive_token
-        
         logger.info("Testing OneDrive token validity")
-        if not settings.onedrive_refresh_token:
-            logger.warning("No OneDrive refresh token configured")
+        
+        if not settings.onedrive_refresh_token or not settings.onedrive_client_id or not settings.onedrive_client_secret:
+            logger.warning("OneDrive credentials not fully configured")
             return {
                 "status": "error", 
-                "message": "No OneDrive refresh token is configured"
+                "message": "OneDrive credentials are not fully configured"
             }
         
-        # Check if client ID and client secret are configured
-        if not settings.onedrive_client_id or not settings.onedrive_client_secret:
-            logger.warning("OneDrive client ID or client secret is missing")
-            return {
-                "status": "error",
-                "message": "OneDrive client ID or client secret is missing",
-                "missing_config": True
-            }
+        # Refresh token to get a new access token and expiration info
+        tenant_id = settings.onedrive_tenant_id or "common"
+        token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
         
-        # Try to get an access token using the configured refresh token
-        try:
-            access_token = get_onedrive_token()
-            
-            # If we got here, token is valid
-            logger.info("OneDrive token is valid")
-            return {
-                "status": "success",
-                "message": "OneDrive token is valid",
-            }
-        except Exception as e:
-            error_msg = str(e)
-            logger.error(f"OneDrive token test failed: {error_msg}")
-            
-            # Determine if this is an invalid_grant error (expired token)
-            is_expired = "invalid_grant" in error_msg.lower()
-            
+        refresh_data = {
+            "client_id": settings.onedrive_client_id,
+            "client_secret": settings.onedrive_client_secret,
+            "refresh_token": settings.onedrive_refresh_token,
+            "grant_type": "refresh_token",
+            "scope": "offline_access Files.ReadWrite"
+        }
+        
+        response = requests.post(token_url, data=refresh_data)
+        
+        if response.status_code != 200:
+            logger.error(f"Failed to refresh OneDrive token: {response.text}")
             return {
                 "status": "error",
-                "message": f"Token validation failed: {error_msg}",
-                "is_expired": is_expired,
+                "message": "Refresh token has expired or is invalid",
                 "needs_reauth": True
             }
-    
+        
+        token_data = response.json()
+        access_token = token_data.get("access_token")
+        expires_in = token_data.get("expires_in", 3600)  # Default to 1 hour if not specified
+        
+        # Check if we got a new refresh token (Microsoft sometimes issues a new one)
+        new_refresh_token = token_data.get("refresh_token")
+        if new_refresh_token and new_refresh_token != settings.onedrive_refresh_token:
+            logger.info("Received new refresh token from Microsoft - will update configuration")
+            
+            # Update refresh token in memory
+            settings.onedrive_refresh_token = new_refresh_token
+            
+            # Also try to update .env file if it exists
+            try:
+                env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
+                if os.path.exists(env_path):
+                    with open(env_path, "r") as f:
+                        env_lines = f.readlines()
+                    
+                    updated_lines = []
+                    updated = False
+                    
+                    for line in env_lines:
+                        if line.startswith("ONEDRIVE_REFRESH_TOKEN="):
+                            updated_lines.append(f"ONEDRIVE_REFRESH_TOKEN={new_refresh_token}\n")
+                            updated = True
+                        else:
+                            updated_lines.append(line)
+                    
+                    if not updated:
+                        updated_lines.append(f"ONEDRIVE_REFRESH_TOKEN={new_refresh_token}\n")
+                    
+                    with open(env_path, "w") as f:
+                        f.writelines(updated_lines)
+                    
+                    logger.info("Updated refresh token in .env file")
+                
+            except Exception as e:
+                logger.warning(f"Failed to update refresh token in .env file: {e}")
+        
+        # Test the access token by getting user information
+        user_info_url = "https://graph.microsoft.com/v1.0/me"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        
+        user_response = requests.get(user_info_url, headers=headers)
+        
+        if user_response.status_code != 200:
+            logger.error(f"OneDrive token test failed: {user_response.status_code} {user_response.text}")
+            return {
+                "status": "error",
+                "message": f"Token validation failed with status {user_response.status_code}: {user_response.text}"
+            }
+        
+        # Get user info
+        user_info = user_response.json()
+        display_name = user_info.get("displayName", "Unknown user")
+        email = user_info.get("userPrincipalName", "Unknown email")
+        
+        # Calculate expiration time
+        now = datetime.now()
+        expiry_time = now + timedelta(seconds=expires_in)
+        
+        # Format expiration info
+        time_left = expiry_time - now
+        token_info = {
+            "expires_at": expiry_time.isoformat(),
+            "expires_in_seconds": expires_in,
+            "expires_in_human": format_time_remaining(time_left),
+            "refresh_token_validity": "Refresh token is valid for 90 days of inactivity"
+        }
+        
+        logger.info(f"Successfully connected to OneDrive as {email}")
+        
+        return {
+            "status": "success",
+            "message": f"OneDrive connection successful",
+            "account": email,
+            "account_name": display_name,
+            "token_info": token_info
+        }
+        
     except Exception as e:
-        logger.exception("Unexpected error testing OneDrive token")
+        logger.exception(f"Unexpected error testing OneDrive token: {str(e)}")
         return {
             "status": "error",
-            "message": f"Unexpected error: {str(e)}"
+            "message": f"Connection error: {str(e)}"
         }
+
+def format_time_remaining(time_delta):
+    """Format a timedelta into a human-readable string."""
+    if time_delta.total_seconds() <= 0:
+        return "Expired"
+        
+    days = time_delta.days
+    hours, remainder = divmod(time_delta.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    
+    parts = []
+    if days > 0:
+        parts.append(f"{days} day{'s' if days != 1 else ''}")
+    if hours > 0:
+        parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+    if minutes > 0 and days == 0:  # Only show minutes if less than a day
+        parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+    
+    return ", ".join(parts)
 
 @router.post("/onedrive/save-settings")
 @require_login

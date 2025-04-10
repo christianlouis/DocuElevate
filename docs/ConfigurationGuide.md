@@ -78,9 +78,15 @@ For detailed setup instructions, see the [Dropbox Setup Guide](DropboxSetup.md).
 
 | **Variable**                    | **Description**                                       |
 |---------------------------------|-------------------------------------------------------|
-| `GOOGLE_DRIVE_CREDENTIALS_JSON` | JSON string containing service account credentials    |
+| `GOOGLE_DRIVE_USE_OAUTH`        | Set to `true` to use OAuth flow (recommended)         |
+| `GOOGLE_DRIVE_CLIENT_ID`        | OAuth Client ID (required if using OAuth flow)        |
+| `GOOGLE_DRIVE_CLIENT_SECRET`    | OAuth Client Secret (required if using OAuth flow)    |
+| `GOOGLE_DRIVE_REFRESH_TOKEN`    | OAuth Refresh Token (required if using OAuth flow)    |
 | `GOOGLE_DRIVE_FOLDER_ID`        | Google Drive folder ID for file uploads               |
-| `GOOGLE_DRIVE_DELEGATE_TO`      | Email address to delegate permissions (optional)      |
+| `GOOGLE_DRIVE_CREDENTIALS_JSON` | JSON string containing service account credentials (alternative method) |
+| `GOOGLE_DRIVE_DELEGATE_TO`      | Email address to delegate permissions (optional for service accounts) |
+
+**Note:** For OAuth method with non-verified apps, refresh tokens expire after 7 days. For production use, either complete the Google verification process or use the Service Account method.
 
 For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveSetup.md).
 
@@ -225,6 +231,10 @@ NEXTCLOUD_FOLDER=/Documents/Uploads
 GOOGLE_DRIVE_CREDENTIALS_JSON={"type":"service_account","project_id":"..."}
 GOOGLE_DRIVE_FOLDER_ID=1a2b3c4d5e6f7g8h9i0j
 GOOGLE_DRIVE_DELEGATE_TO=optional-user@example.com
+GOOGLE_DRIVE_USE_OAUTH=true
+GOOGLE_DRIVE_CLIENT_ID=your_client_id
+GOOGLE_DRIVE_CLIENT_SECRET=your_client_secret
+GOOGLE_DRIVE_REFRESH_TOKEN=your_refresh_token
 
 # WebDAV
 WEBDAV_URL=https://webdav.example.com/path

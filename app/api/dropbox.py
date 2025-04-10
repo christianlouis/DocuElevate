@@ -5,6 +5,9 @@ from fastapi import APIRouter, Request, HTTPException, status, Form
 import logging
 import os
 import requests
+import json
+from datetime import datetime, timedelta
+from typing import Optional
 
 from app.auth import require_login
 from app.config import settings
@@ -157,60 +160,91 @@ async def update_dropbox_settings(
 @require_login
 async def test_dropbox_token(request: Request):
     """
-    Test if the configured Dropbox refresh token is valid.
+    Test if the configured Dropbox token is valid and return expiration information.
     """
     try:
-        from app.tasks.upload_to_dropbox import get_dropbox_client
-        
         logger.info("Testing Dropbox token validity")
-        if not settings.dropbox_refresh_token:
-            logger.warning("No Dropbox refresh token configured")
+        
+        if not settings.dropbox_refresh_token or not settings.dropbox_app_key or not settings.dropbox_app_secret:
+            logger.warning("Dropbox credentials not fully configured")
             return {
                 "status": "error", 
-                "message": "No Dropbox refresh token is configured"
+                "message": "Dropbox credentials are not fully configured"
             }
         
-        # Check if app key and app secret are configured
-        if not settings.dropbox_app_key or not settings.dropbox_app_secret:
-            logger.warning("Dropbox app key or app secret is missing")
+        # Check token validity by getting current account info
+        headers = {"Authorization": f"Bearer {settings.dropbox_refresh_token}"}
+        response = requests.post(
+            "https://api.dropboxapi.com/2/users/get_current_account",
+            headers=headers
+        )
+        
+        # If token is invalid, try refreshing it
+        if response.status_code == 401:
+            logger.info("Dropbox access token invalid or expired, trying to refresh")
+            
+            # Get a new access token using the refresh token
+            refresh_url = "https://api.dropbox.com/oauth2/token"
+            refresh_data = {
+                "grant_type": "refresh_token",
+                "refresh_token": settings.dropbox_refresh_token,
+                "client_id": settings.dropbox_app_key,
+                "client_secret": settings.dropbox_app_secret
+            }
+            
+            refresh_response = requests.post(refresh_url, data=refresh_data)
+            
+            if refresh_response.status_code != 200:
+                logger.error(f"Failed to refresh Dropbox token: {refresh_response.text}")
+                return {
+                    "status": "error",
+                    "message": "Refresh token has expired or is invalid",
+                    "needs_reauth": True
+                }
+            
+            token_info = refresh_response.json()
+            access_token = token_info.get("access_token")
+            
+            # Try again with the new access token
+            headers = {"Authorization": f"Bearer {access_token}"}
+            response = requests.post(
+                "https://api.dropboxapi.com/2/users/get_current_account",
+                headers=headers
+            )
+        
+        if response.status_code != 200:
+            logger.error(f"Dropbox token test failed: {response.status_code} {response.text}")
             return {
                 "status": "error",
-                "message": "Dropbox app key or app secret is missing",
-                "missing_config": True
+                "message": f"Token validation failed with status {response.status_code}: {response.text}"
             }
         
-        # Try to get a client using the configured refresh token
-        try:
-            dbx = get_dropbox_client()
-            # Test connection by getting account info
-            account = dbx.users_get_current_account()
-            logger.info(f"Successfully connected to Dropbox as {account.name.display_name}")
-            
-            return {
-                "status": "success",
-                "message": f"Token is valid! Connected as {account.name.display_name}",
-                "account": account.name.display_name,
-                "email": account.email
-            }
-        except Exception as e:
-            error_msg = str(e)
-            logger.error(f"Dropbox token test failed: {error_msg}")
-            
-            # Determine if this is an authentication error
-            is_auth_error = "auth" in error_msg.lower() or "invalid" in error_msg.lower()
-            
-            return {
-                "status": "error",
-                "message": f"Token validation failed: {error_msg}",
-                "is_auth_error": is_auth_error,
-                "needs_reauth": is_auth_error
-            }
-    
+        # Get account info
+        account_info = response.json()
+        account_email = account_info.get("email", "Unknown account")
+        account_name = account_info.get("name", {}).get("display_name", "Unknown user")
+        
+        # Dropbox refresh tokens don't expire, but we should note that in our response
+        token_info = {
+            "expires_in_human": "Never expires (perpetual token)",
+            "is_perpetual": True
+        }
+        
+        logger.info(f"Successfully connected to Dropbox as {account_email}")
+        
+        return {
+            "status": "success",
+            "message": f"Dropbox connection successful",
+            "account": account_email,
+            "account_name": account_name,
+            "token_info": token_info
+        }
+        
     except Exception as e:
-        logger.exception("Unexpected error testing Dropbox token")
+        logger.exception(f"Unexpected error testing Dropbox token: {str(e)}")
         return {
             "status": "error",
-            "message": f"Unexpected error: {str(e)}"
+            "message": f"Connection error: {str(e)}"
         }
 
 @router.post("/dropbox/save-settings")
