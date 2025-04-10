@@ -136,6 +136,36 @@ def validate_storage_configs():
     
     return issues
 
+def validate_notification_config():
+    """Check notification configuration"""
+    issues = []
+    
+    # Check if any notification URLs are configured
+    if not getattr(settings, 'notification_urls', None):
+        issues.append("No notification URLs configured")
+    else:
+        try:
+            # Try initializing Apprise to validate URLs
+            import apprise
+            a = apprise.Apprise()
+            
+            for url in settings.notification_urls:
+                try:
+                    if not a.add(url):
+                        issues.append(f"Invalid notification URL format: {url}")
+                except Exception as e:
+                    issues.append(f"Error with notification URL: {str(e)}")
+                    
+        except ImportError:
+            issues.append("Apprise module not installed")
+    
+    if not issues:
+        logger.info("Notification configuration valid")
+    else:
+        logger.warning(f"Notification configuration issues: {', '.join(issues)}")
+        
+    return issues
+
 def check_all_configs():
     """Run all configuration validations and log results"""
     from app.utils.config_validator.settings_display import dump_all_settings
@@ -161,8 +191,16 @@ def check_all_configs():
         else:
             logger.info(f"{provider.capitalize()} configuration OK")
     
+    # Check notification configuration
+    notification_issues = validate_notification_config()
+    if notification_issues:
+        logger.warning(f"Notification configuration issues: {', '.join(notification_issues)}")
+    else:
+        logger.info("Notification configuration OK")
+    
     # Return all identified issues
     return {
         'email': email_issues,
-        'storage': storage_issues
+        'storage': storage_issues,
+        'notification': notification_issues
     }

@@ -104,6 +104,28 @@
                   </button>
                 {% endif %}
                 
+                <!-- Notification Test Button -->
+                {% if name == "Notifications" and provider.configured %}
+                  <button 
+                    id="testNotificationBtn"
+                    class="test-generic-btn inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    data-endpoint="{{ provider.test_endpoint }}"
+                    data-method="POST">
+                    Test Notifications
+                  </button>
+                {% endif %}
+                
+                <!-- Generic Test Button for any provider with test_endpoint -->
+                {% if provider.testable and provider.configured and provider.test_endpoint and name != "Notifications" %}
+                  <button 
+                    class="test-generic-btn inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    data-endpoint="{{ provider.test_endpoint }}"
+                    data-method="{{ provider.test_method|default('GET') }}">
+                    Test {{ name }}
+                  </button>
+                {% endif %}
+                
+                <!-- Provider-specific buttons -->
                 {% if name == "Dropbox" %}
                   {% if provider.configured %}
                     <button 
@@ -394,6 +416,91 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       
       showDetailsModal(providerName, detailsData);
+    });
+  });
+  
+  // Test notifications
+  const testNotificationBtn = document.getElementById('testNotificationBtn');
+  if (testNotificationBtn) {
+    testNotificationBtn.addEventListener('click', function() {
+      const originalText = this.innerHTML;
+      
+      this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Sending...';
+      this.disabled = true;
+      
+      fetch('/api/diagnostic/test-notification', {
+        method: 'POST',
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === 'success') {
+            showModal('success', 'Test Notification Sent', data.message);
+          } else if (data.status === 'warning') {
+            showModal('error', 'Notification Configuration Missing', data.message);
+          } else {
+            showModal('error', 'Test Notification Failed', data.message);
+          }
+        })
+        .catch(error => {
+          showModal('error', 'Connection Error', 'Error testing notifications: ' + error.message);
+        })
+        .finally(() => {
+          // Always restore the button text and enable the button, regardless of success or failure
+          this.innerHTML = originalText;
+          this.disabled = false;
+        });
+    });
+  }
+  
+  // Generic test button functionality
+  const testGenericBtns = document.querySelectorAll('.test-generic-btn:not(#testNotificationBtn)');
+  testGenericBtns.forEach(button => {
+    button.addEventListener('click', function() {
+      const originalText = this.innerHTML;
+      const endpoint = this.getAttribute('data-endpoint');
+      const method = this.getAttribute('data-method') || 'GET';
+      
+      this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Testing...';
+      this.disabled = true;
+      
+      fetch(endpoint, {
+        method: method,
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === 'success') {
+            // If there's token info, we need to handle it specially
+            if (data.token_info && data.token_info.expires_in_human) {
+              let message = data.message || 'Connection successful';
+              message += `<br><br><div class="bg-blue-50 p-3 rounded mt-2">
+                <span class="font-medium">Token valid for:</span> ${data.token_info.expires_in_human}
+                </div>`;
+              
+              modalTitle.textContent = 'Test Successful';
+              modalMessage.innerHTML = message;
+              modalIcon.innerHTML = '<i class="fa-solid fa-check text-green-600 fa-2x"></i>';
+              modalIcon.className = 'mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4';
+              resultModal.classList.remove('hidden');
+            } else {
+              // Regular success
+              showModal('success', 'Test Successful', data.message + (data.account ? ' as ' + data.account : ''));
+            }
+          } else if (data.status === 'warning') {
+            showModal('error', 'Warning', data.message);
+          } else if (data.needs_reauth) {
+            showModal('error', 'Authentication Required', 'Your token has expired or is invalid. Please reconfigure this connection.');
+          } else {
+            showModal('error', 'Test Failed', data.message);
+          }
+        })
+        .catch(error => {
+          showModal('error', 'Connection Error', `Error: ${error.message}`);
+        })
+        .finally(() => {
+          // Always restore the button state
+          this.innerHTML = originalText;
+          this.disabled = false;
+        });
     });
   });
   

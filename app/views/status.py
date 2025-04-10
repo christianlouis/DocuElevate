@@ -86,6 +86,9 @@ async def status_dashboard(request: Request):
     except Exception:
         container_info = {'is_docker': False, 'id': 'Unknown', 'git_sha': 'Unknown'}
     
+    # Get notification URLs for the notification box
+    notification_urls = getattr(settings, 'notification_urls', [])
+    
     return templates.TemplateResponse(
         "status_dashboard.html",
         {
@@ -95,7 +98,10 @@ async def status_dashboard(request: Request):
             "build_date": build_date,
             "debug_enabled": getattr(settings, 'debug', False),
             "last_check": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "container_info": container_info
+            "container_info": container_info,
+            "settings": {
+                "notification_urls": notification_urls
+            }
         }
     )
 

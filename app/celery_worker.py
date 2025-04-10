@@ -32,6 +32,7 @@ from app.tasks.upload_to_email import upload_to_email
 from app.tasks.imap_tasks import pull_all_inboxes
 from app.tasks.send_to_all import send_to_all_destinations
 from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
+from app.tasks.check_credentials import check_credentials
 
 celery.conf.task_routes = {
     "app.tasks.*": {"queue": "default"},
@@ -43,6 +44,9 @@ def test_task():
 
 # If you want Celery Beat to run the poll task every minute, add:
 from celery.schedules import crontab
+
+# Run the check_credentials task at startup
+check_credentials.apply_async(countdown=10)  # Run 10 seconds after worker starts
 
 celery.conf.beat_schedule = {
     "poll-inboxes-every-minute": {
@@ -56,6 +60,18 @@ celery.conf.beat_schedule = {
         "schedule": crontab(minute=f"*/{settings.uptime_kuma_ping_interval}"),
         "options": {"expires": 55},  # Ensure tasks don't pile up
     } if settings.uptime_kuma_url else None,
+    # Check credentials every 5 minutes
+    "check-credentials-regularly": {
+        "task": "app.tasks.check_credentials.check_credentials",
+        "schedule": crontab(minute="*/5"),  # Every 5 minutes
+        "options": {"expires": 240},  # 4 minutes expiry
+    },
+    # Also keep daily check for logs and statistics purposes
+    "check-credentials-daily": {
+        "task": "app.tasks.check_credentials.check_credentials",
+        "schedule": crontab(hour="0", minute="0"),  # Midnight
+        "options": {"expires": 3600},  # 1 hour expiry
+    }
 }
 
 # Remove None entries from beat_schedule

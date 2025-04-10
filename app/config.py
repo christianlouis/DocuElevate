@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 from pydantic_settings import BaseSettings
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
+from pydantic import Field, validator
 import os
 from datetime import datetime
 
@@ -127,6 +128,39 @@ class Settings(BaseSettings):
 
     # Feature flags
     allow_file_delete: bool = True  # Default to allowing file deletion from database
+
+    # Notification settings
+    notification_urls: Union[List[str], str] = Field(
+        default_factory=list,
+        description="List of Apprise notification URLs (e.g., discord://, telegram://, etc.)"
+    )
+    notify_on_task_failure: bool = Field(
+        default=True, 
+        description="Send notifications when Celery tasks fail"
+    )
+    notify_on_credential_failure: bool = Field(
+        default=True,
+        description="Send notifications when credential checks fail"
+    )
+    notify_on_startup: bool = Field(
+        default=True,
+        description="Send notifications when application starts"
+    )
+    notify_on_shutdown: bool = Field(
+        default=False,
+        description="Send notifications when application shuts down"
+    )
+    
+    @validator('notification_urls', pre=True)
+    def parse_notification_urls(cls, v):
+        """Parse notification URLs from string or list"""
+        if isinstance(v, str):
+            if ',' in v:
+                return [url.strip() for url in v.split(',') if url.strip()]
+            elif v.strip():
+                return [v.strip()]
+            return []
+        return v
 
     # Get build date from environment or file
     @property

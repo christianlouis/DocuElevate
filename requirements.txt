@@ -28,3 +28,6 @@ boto3>=1.28.0
 
 # SFTP
 paramiko>=3.4.0  # SSH/SFTP implementation for Python
+
+# Notification service
+apprise>=1.4.0
