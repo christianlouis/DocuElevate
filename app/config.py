@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     google_drive_credentials_json: Optional[str] = ""
     google_drive_folder_id: Optional[str] = ""
     google_drive_delegate_to: Optional[str] = ""  # Optional delegated user email
+    
+    # Google Drive OAuth settings
+    google_drive_use_oauth: bool = False  # Default to service account method
+    google_drive_client_id: Optional[str] = ""
+    google_drive_client_secret: Optional[str] = ""
+    google_drive_refresh_token: Optional[str] = ""
 
     # WebDAV settings
     webdav_url: Optional[str] = None

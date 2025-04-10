@@ -185,11 +185,17 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('processing-message').classList.add('hidden');
     document.getElementById('error-container').classList.remove('hidden');
     document.getElementById('error-message').innerText = message;
+    
+    // Hide the spinner when showing error
+    document.querySelector('.animate-spin').parentNode.classList.add('hidden');
   }
   
   function showSuccess(refreshToken, appKey, appSecret, folderPath) {
     document.getElementById('processing-message').classList.add('hidden');
     document.getElementById('success-container').classList.remove('hidden');
+    
+    // Hide the spinner when showing success
+    document.querySelector('.animate-spin').parentNode.classList.add('hidden');
     
     // Update the environment variables pre block with the new token
     const envVarsCode = document.querySelector('#env-vars code');

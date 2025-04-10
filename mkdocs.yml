@@ -13,7 +13,6 @@ theme:
     - search.suggest
     - content.code.copy
 nav:
-  - Home: /
   - User Guide: UserGuide
   - API: API
   - Deployment: DeploymentGuide

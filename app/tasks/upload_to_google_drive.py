@@ -8,6 +8,10 @@ import logging
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.service_account import Credentials
+from google.oauth2.credentials import Credentials as OAuthCredentials
+from google_auth_oauthlib.flow import Flow
+from google.auth.transport.requests import Request
+from google.auth.exceptions import RefreshError
 
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
@@ -15,12 +19,54 @@ from app.celery_app import celery
 
 logger = logging.getLogger(__name__)
 
+def get_drive_service_oauth():
+    """
+    Get Google Drive service using OAuth credentials.
+    Uses saved refresh token to get a new access token.
+    """
+    try:
+        # Check for required OAuth settings
+        if not (settings.google_drive_client_id and 
+                settings.google_drive_client_secret and 
+                settings.google_drive_refresh_token):
+            logger.error("Google Drive OAuth credentials not fully configured")
+            return None
+        
+        # Create credentials object from refresh token
+        credentials = OAuthCredentials(
+            None,  # No access token initially, will be refreshed
+            refresh_token=settings.google_drive_refresh_token,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=settings.google_drive_client_id,
+            client_secret=settings.google_drive_client_secret,
+            # Use only drive.file scope
+            scopes=['https://www.googleapis.com/auth/drive.file']
+        )
+        
+        # Refresh the access token
+        credentials.refresh(Request())
+        
+        # Build and return the service
+        service = build('drive', 'v3', credentials=credentials)
+        return service
+        
+    except RefreshError as e:
+        logger.error(f"Failed to refresh Google Drive token: {str(e)}")
+        raise
+    except Exception as e:
+        logger.error(f"Failed to authenticate with Google Drive OAuth: {str(e)}")
+        return None
+
 def get_google_drive_service():
     """
     Authenticate with Google Drive API using service account credentials
     and return an authorized service object.
     """
     try:
+        # Check if we should use OAuth instead of service account
+        if getattr(settings, 'google_drive_use_oauth', False):
+            return get_drive_service_oauth()
+            
         # Load service account credentials from settings
         if not settings.google_drive_credentials_json:
             logger.error("Google Drive credentials not configured")

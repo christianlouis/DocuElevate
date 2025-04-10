@@ -10,6 +10,7 @@ from app.views.files import router as files_router
 from app.views.status import router as status_router
 from app.views.dropbox import router as dropbox_router
 from app.views.onedrive import router as onedrive_router
+from app.views.google_drive import router as google_drive_router
 
 # Create a combined router
 router = APIRouter()
@@ -20,3 +21,4 @@ router.include_router(files_router)
 router.include_router(status_router)
 router.include_router(dropbox_router)
 router.include_router(onedrive_router)
+router.include_router(google_drive_router)

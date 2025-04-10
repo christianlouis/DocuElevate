@@ -14,6 +14,7 @@ from app.tasks.upload_to_sftp import upload_to_sftp
 from app.tasks.upload_to_email import upload_to_email
 from app.tasks.upload_to_onedrive import upload_to_onedrive
 from app.tasks.upload_to_s3 import upload_to_s3
+from app.utils.config_validator import get_provider_status
 from app.celery_app import celery
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,16 @@ def _should_upload_to_paperless():
             settings.paperless_host)
 
 def _should_upload_to_google_drive():
-    return settings.google_drive_credentials_json
+    # Check for OAuth configuration
+    if getattr(settings, 'google_drive_use_oauth', False):
+        return (settings.google_drive_client_id and 
+                settings.google_drive_client_secret and 
+                settings.google_drive_refresh_token and
+                settings.google_drive_folder_id)
+    # Or check for service account configuration
+    else:
+        return (settings.google_drive_credentials_json and
+                settings.google_drive_folder_id)
 
 def _should_upload_to_webdav():
     return (settings.webdav_url and 
@@ -59,18 +69,51 @@ def _should_upload_to_email():
 def _should_upload_to_onedrive():
     return (settings.onedrive_client_id and 
             settings.onedrive_client_secret and 
-            (settings.onedrive_refresh_token or 
-             (settings.onedrive_tenant_id and settings.onedrive_tenant_id != "common")))
+            settings.onedrive_refresh_token)
 
 def _should_upload_to_s3():
     return (settings.s3_bucket_name and 
             settings.aws_access_key_id and 
             settings.aws_secret_access_key)
 
-@celery.task(base=BaseTaskWithRetry)
-def send_to_all_destinations(file_path: str):
-    """Distribute a file to all configured storage destinations."""
+def get_configured_services_from_validator():
+    """
+    Use the config validator to determine which services are configured properly.
+    Returns a dictionary with service names as keys and boolean values indicating
+    whether they're properly configured.
+    """
+    providers = get_provider_status()
     
+    service_map = {
+        "Dropbox": "dropbox",
+        "NextCloud": "nextcloud",
+        "Paperless-ngx": "paperless",
+        "Google Drive": "google_drive",
+        "WebDAV": "webdav",
+        "FTP Storage": "ftp",
+        "SFTP Storage": "sftp",
+        "Email": "email",
+        "OneDrive": "onedrive",
+        "S3 Storage": "s3"
+    }
+    
+    result = {}
+    for provider_name, internal_name in service_map.items():
+        if provider_name in providers:
+            result[internal_name] = providers[provider_name].get('configured', False)
+    
+    return result
+
+@celery.task(base=BaseTaskWithRetry)
+def send_to_all_destinations(file_path: str, use_validator=True):
+    """
+    Distribute a file to all configured storage destinations.
+    
+    Args:
+        file_path: Path to the file to distribute
+        use_validator: Whether to use the config validator to determine enabled services
+                       (if False, falls back to individual checks)
+    """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
     
@@ -131,12 +174,42 @@ def send_to_all_destinations(file_path: str):
         },
     ]
     
+    # Optionally get configuration status from validator
+    configured_services = {}
+    if use_validator:
+        try:
+            configured_services = get_configured_services_from_validator()
+            logger.info(f"Configured services according to validator: {configured_services}")
+        except Exception as e:
+            logger.warning(f"Failed to get configuration from validator: {str(e)}")
+            use_validator = False
+    
     # Process each service
     for service in services:
-        if service["should_upload"]():
-            logger.info(f"Queueing {file_path} for {service['name']} upload")
-            task = service["upload_func"].delay(file_path)
-            results[f"{service['name']}_task_id"] = task.id
+        service_name = service["name"]
+        
+        # Determine if service is configured
+        is_configured = False
+        if use_validator and service_name in configured_services:
+            is_configured = configured_services[service_name]
+            logger.debug(f"{service_name} configuration from validator: {is_configured}")
+        else:
+            try:
+                is_configured = service["should_upload"]()
+                logger.debug(f"{service_name} configuration from function: {is_configured}")
+            except Exception as e:
+                logger.error(f"Error checking configuration for {service_name}: {str(e)}")
+                is_configured = False
+        
+        # Queue the upload task if service is configured
+        if is_configured:
+            logger.info(f"Queueing {file_path} for {service_name} upload")
+            try:
+                task = service["upload_func"].delay(file_path)
+                results[f"{service_name}_task_id"] = task.id
+            except Exception as e:
+                logger.error(f"Failed to queue {service_name} task: {str(e)}")
+                results[f"{service_name}_error"] = str(e)
     
     return {
         "status": "Queued",
