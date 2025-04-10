@@ -4,7 +4,7 @@ import os
 import uuid
 import shutil
 import mimetypes
-import fitz  # PyMuPDF for checking embedded text
+import PyPDF2  # Replace fitz with PyPDF2
 
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
@@ -81,19 +81,23 @@ def process_document(original_local_file: str):
         db.commit()
 
     # 2. Check for embedded text (outside the DB session to avoid long open transactions)
-    pdf_doc = fitz.open(new_local_path)
-    has_text = any(page.get_text() for page in pdf_doc)
-    pdf_doc.close()
+    with open(new_local_path, 'rb') as file:
+        pdf_reader = PyPDF2.PdfReader(file)
+        has_text = False
+        for page in pdf_reader.pages:
+            if page.extract_text().strip():
+                has_text = True
+                break
 
     if has_text:
         print(f"[INFO] PDF {original_local_file} contains embedded text. Processing locally.")
 
         # Extract text locally
         extracted_text = ""
-        pdf_doc = fitz.open(new_local_path)
-        for page in pdf_doc:
-            extracted_text += page.get_text("text") + "\n"
-        pdf_doc.close()
+        with open(new_local_path, 'rb') as file:
+            pdf_reader = PyPDF2.PdfReader(file)
+            for page in pdf_reader.pages:
+                extracted_text += page.extract_text() + "\n"
 
         # Call metadata extraction directly
         extract_metadata_with_gpt.delay(new_filename, extracted_text)
