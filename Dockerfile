@@ -20,6 +20,8 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY ./app /app/app
 COPY ./VERSION /app/VERSION
 COPY ./frontend /app/frontend
+COPY ./BUILD_DATE /app/BUILD_DATE
+COPY ./LICENSE /app/LICENSE
 
 # Create runtime_info directory
 RUN mkdir -p /app/runtime_info

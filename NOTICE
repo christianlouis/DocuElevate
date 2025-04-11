@@ -1,0 +1,138 @@
+DocuElevate
+Copyright 2025 Christian Krakau-Louis
+
+This product includes software developed for the DocuElevate project.
+
+================================================================================
+
+This software includes third-party components with their own licenses:
+
+SPECIAL NOTICE REGARDING LGPL SOFTWARE:
+--------------------------------------------------------------------------------
+DocuElevate incorporates Paramiko, which is licensed under the GNU Lesser General 
+Public License (LGPL) version 2.1. In accordance with the LGPL:
+
+1. The complete source code for Paramiko can be obtained from:
+   https://github.com/paramiko/paramiko
+
+2. This software is distributed in the hope that it will be useful, but WITHOUT 
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
+   FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License 
+   for more details.
+
+3. A copy of the GNU Lesser General Public License version 2.1 can be found at:
+   frontend/static/licenses/lgpl.txt and at https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
+
+4. Users have the right to obtain the source code of Paramiko and to modify and
+   redistribute it under the terms of the LGPL.
+
+# Python Dependencies
+--------------------------------------------------------------------------------
+FastAPI (MIT License)
+Copyright (c) 2018 Sebastián Ramírez
+https://github.com/tiangolo/fastapi
+
+Celery (BSD License)
+Copyright (c) 2015-2016 Ask Solem & contributors
+https://github.com/celery/celery
+
+Uvicorn (BSD License)
+Copyright (c) 2017-present, Encode OSS Ltd.
+https://github.com/encode/uvicorn
+
+SQLAlchemy (MIT License)
+Copyright (c) 2005-2023 SQLAlchemy authors and contributors
+https://github.com/sqlalchemy/sqlalchemy
+
+Pydantic (MIT License)
+Copyright (c) 2017-present Pydantic Services Inc.
+https://github.com/pydantic/pydantic
+
+OpenAI (MIT License)
+Copyright (c) 2023 OpenAI
+https://github.com/openai/openai-python
+
+PyPDF2 (BSD License)
+Copyright (c) 2006-2008, Mathieu Fenniak
+https://github.com/py-pdf/PyPDF2
+
+Requests (Apache 2.0 License)
+Copyright 2019 Kenneth Reitz
+https://github.com/psf/requests
+
+Dropbox (MIT License)
+Copyright (c) 2015-2021 Dropbox, Inc.
+https://github.com/dropbox/dropbox-sdk-python
+
+Azure AI Document Intelligence (MIT License)
+Copyright (c) Microsoft Corporation
+https://github.com/Azure/azure-sdk-for-python
+
+Authlib (BSD License)
+Copyright (c) 2017-present, Hsiaoming Yang
+https://github.com/lepture/authlib
+
+python-dotenv (BSD License)
+Copyright (c) 2014, Saurabh Kumar
+https://github.com/theskumar/python-dotenv
+
+Starlette (BSD License)
+Copyright (c) 2018-present, Encode OSS Ltd.
+https://github.com/encode/starlette
+
+Alembic (MIT License)
+Copyright (c) 2009-2023 Michael Bayer
+https://github.com/sqlalchemy/alembic
+
+Google API Client (Apache 2.0 License)
+Copyright 2014 Google LLC
+https://github.com/googleapis/google-api-python-client
+
+Microsoft Graph Core (MIT License)
+Copyright (c) Microsoft Corporation
+https://github.com/microsoftgraph/msgraph-sdk-python-core
+
+MSAL (MIT License)
+Copyright (c) Microsoft Corporation
+https://github.com/AzureAD/microsoft-authentication-library-for-python
+
+Boto3 (Apache 2.0 License)
+Copyright Amazon.com, Inc. or its affiliates
+https://github.com/boto/boto3
+
+Paramiko (LGPL-2.1 License)
+Copyright (c) 2003-2009 Robey Pointer
+https://github.com/paramiko/paramiko
+
+Apprise (MIT License)
+Copyright (C) 2019-2024 Chris Caron
+https://github.com/caronc/apprise
+
+# Docker Images
+--------------------------------------------------------------------------------
+Redis (BSD License)
+Copyright (c) 2006-2020, Salvatore Sanfilippo
+https://redis.io/
+
+Gotenberg (MIT License)
+Copyright (c) 2019 Julien Neuhart
+https://github.com/gotenberg/gotenberg
+
+# Frontend Libraries
+--------------------------------------------------------------------------------
+Tailwind CSS (MIT License)
+Copyright (c) Tailwind Labs, Inc.
+https://github.com/tailwindlabs/tailwindcss
+
+Alpine.js (MIT License)
+Copyright (c) 2019-2021 Caleb Porzio and contributors
+https://github.com/alpinejs/alpine
+
+Font Awesome (Font Awesome Free License)
+https://github.com/FortAwesome/Font-Awesome
+
+# For a complete list of all dependencies and their licenses
+--------------------------------------------------------------------------------
+See the attribution page in the application or run:
+pip install pip-licenses
+pip-licenses

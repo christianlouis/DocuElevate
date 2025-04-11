@@ -124,3 +124,50 @@ The API will be available at **`http://localhost:8000`**, and the API documentat
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+## Third-Party Software
+
+This project uses various third-party libraries and components. See [NOTICE](NOTICE) for attributions and the [attribution page](frontend/templates/attribution.html) in the application for more details.
+
+### LGPL Compliance
+
+This project uses Paramiko which is licensed under LGPL-2.1. In accordance with the LGPL license:
+
+- The source code for Paramiko can be obtained from https://github.com/paramiko/paramiko
+- A copy of the LGPL license is available in the application at `/licenses/lgpl.txt`
+- Users have the right to modify and redistribute Paramiko under the terms of the LGPL
+
+## Dependency Licenses
+
+The following is a summary of the licenses used by our direct dependencies:
+
+| Dependency | License |
+|------------|---------|
+| FastAPI    | MIT     |
+| Celery     | BSD     |
+| Uvicorn    | BSD     |
+| SQLAlchemy | MIT     |
+| Pydantic   | MIT     |
+| OpenAI     | MIT     |
+| PyPDF2     | BSD     |
+| Requests   | Apache 2.0 |
+| Dropbox    | MIT     |
+| Azure AI Document Intelligence | MIT |
+| Authlib    | BSD     |
+| Starlette  | BSD     |
+| Alembic    | MIT     |
+| Google API Client | Apache 2.0 |
+| Microsoft Graph Core | MIT |
+| MSAL       | MIT     |
+| Boto3      | Apache 2.0 |
+| Paramiko   | LGPL-2.1|
+| Apprise    | MIT     |
+| Redis      | BSD     |
+| Gotenberg  | MIT     |
+
+For a comprehensive list of all dependencies and their licenses, run:
+
+```
+pip install pip-licenses
+pip-licenses
+```

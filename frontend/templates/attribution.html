@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}DocuElevate - Third-Party Attributions{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-2xl font-bold mb-4">Third-Party Software Attributions</h1>
+    
+    <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+        <p class="mb-4">
+            DocuElevate uses several open source libraries and tools. We are grateful to the
+            developers of these projects for their contributions to open source software.
+        </p>
+
+        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm text-yellow-700">
+                        <strong>Special Attribution:</strong> This software includes Paramiko, which is licensed under LGPL. The source code for Paramiko is available at 
+                        <a href="https://github.com/paramiko/paramiko" class="font-medium underline text-yellow-700 hover:text-yellow-600">
+                            https://github.com/paramiko/paramiko
+                        </a>.
+                        A copy of the LGPL license can be found 
+                        <a href="/static/licenses/lgpl.txt" class="font-medium underline text-yellow-700 hover:text-yellow-600">
+                            here
+                        </a>.
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <h2 class="text-xl font-semibold mb-2">Python Dependencies</h2>
+        <ul class="list-disc pl-5 mb-4">
+            <li class="mb-2">
+                <span class="font-semibold">FastAPI</span> (MIT License)<br>
+                Copyright (c) 2018 Sebastián Ramírez<br>
+                <a href="https://github.com/tiangolo/fastapi" class="text-blue-600 hover:underline">https://github.com/tiangolo/fastapi</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">Celery</span> (BSD License)<br>
+                Copyright (c) 2015-2016 Ask Solem & contributors<br>
+                <a href="https://github.com/celery/celery" class="text-blue-600 hover:underline">https://github.com/celery/celery</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">Uvicorn</span> (BSD License)<br>
+                Copyright (c) 2017-present, Encode OSS Ltd.<br>
+                <a href="https://github.com/encode/uvicorn" class="text-blue-600 hover:underline">https://github.com/encode/uvicorn</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">SQLAlchemy</span> (MIT License)<br>
+                Copyright (c) 2005-2023 SQLAlchemy authors and contributors<br>
+                <a href="https://github.com/sqlalchemy/sqlalchemy" class="text-blue-600 hover:underline">https://github.com/sqlalchemy/sqlalchemy</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">Pydantic</span> (MIT License)<br>
+                Copyright (c) 2017-present Pydantic Services Inc.<br>
+                <a href="https://github.com/pydantic/pydantic" class="text-blue-600 hover:underline">https://github.com/pydantic/pydantic</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">OpenAI</span> (MIT License)<br>
+                Copyright (c) 2023 OpenAI<br>
+                <a href="https://github.com/openai/openai-python" class="text-blue-600 hover:underline">https://github.com/openai/openai-python</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">PyPDF2</span> (BSD License)<br>
+                Copyright (c) 2006-2008, Mathieu Fenniak<br>
+                <a href="https://github.com/py-pdf/PyPDF2" class="text-blue-600 hover:underline">https://github.com/py-pdf/PyPDF2</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">Requests</span> (Apache 2.0 License)<br>
+                Copyright 2019 Kenneth Reitz<br>
+                <a href="https://github.com/psf/requests" class="text-blue-600 hover:underline">https://github.com/psf/requests</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">Dropbox</span> (MIT License)<br>
+                Copyright (c) 2015-2021 Dropbox, Inc.<br>
+                <a href="https://github.com/dropbox/dropbox-sdk-python" class="text-blue-600 hover:underline">https://github.com/dropbox/dropbox-sdk-python</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">Azure AI Document Intelligence</span> (MIT License)<br>
+                Copyright (c) Microsoft Corporation<br>
+                <a href="https://github.com/Azure/azure-sdk-for-python" class="text-blue-600 hover:underline">https://github.com/Azure/azure-sdk-for-python</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">Authlib</span> (BSD License)<br>
+                Copyright (c) 2017-present, Hsiaoming Yang<br>
+                <a href="https://github.com/lepture/authlib" class="text-blue-600 hover:underline">https://github.com/lepture/authlib</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">python-dotenv</span> (BSD License)<br>
+                Copyright (c) 2014, Saurabh Kumar<br>
+                <a href="https://github.com/theskumar/python-dotenv" class="text-blue-600 hover:underline">https://github.com/theskumar/python-dotenv</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">Starlette</span> (BSD License)<br>
+                Copyright (c) 2018-present, Encode OSS Ltd.<br>
+                <a href="https://github.com/encode/starlette" class="text-blue-600 hover:underline">https://github.com/encode/starlette</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">Alembic</span> (MIT License)<br>
+                Copyright (c) 2009-2023 Michael Bayer<br>
+                <a href="https://github.com/sqlalchemy/alembic" class="text-blue-600 hover:underline">https://github.com/sqlalchemy/alembic</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">Google API Client</span> (Apache 2.0 License)<br>
+                Copyright 2014 Google LLC<br>
+                <a href="https://github.com/googleapis/google-api-python-client" class="text-blue-600 hover:underline">https://github.com/googleapis/google-api-python-client</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">Microsoft Graph Core</span> (MIT License)<br>
+                Copyright (c) Microsoft Corporation<br>
+                <a href="https://github.com/microsoftgraph/msgraph-sdk-python-core" class="text-blue-600 hover:underline">https://github.com/microsoftgraph/msgraph-sdk-python-core</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">MSAL</span> (MIT License)<br>
+                Copyright (c) Microsoft Corporation<br>
+                <a href="https://github.com/AzureAD/microsoft-authentication-library-for-python" class="text-blue-600 hover:underline">https://github.com/AzureAD/microsoft-authentication-library-for-python</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">Boto3</span> (Apache 2.0 License)<br>
+                Copyright Amazon.com, Inc. or its affiliates<br>
+                <a href="https://github.com/boto/boto3" class="text-blue-600 hover:underline">https://github.com/boto/boto3</a>
+            </li>
+            <li class="mb-2 bg-gray-50 p-3 border-l-4 border-yellow-500">
+                <span class="font-semibold">Paramiko</span> (LGPL-2.1 License)<br>
+                Copyright (c) 2003-2009 Robey Pointer<br>
+                <a href="https://github.com/paramiko/paramiko" class="text-blue-600 hover:underline">https://github.com/paramiko/paramiko</a><br>
+                <span class="text-sm text-gray-600">Note: This library is licensed under the GNU Lesser General Public License v2.1 (LGPL-2.1)</span>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">Apprise</span> (MIT License)<br>
+                Copyright (C) 2019-2024 Chris Caron<br>
+                <a href="https://github.com/caronc/apprise" class="text-blue-600 hover:underline">https://github.com/caronc/apprise</a>
+            </li>
+        </ul>
+        
+        <h2 class="text-xl font-semibold mb-2">Docker Images</h2>
+        <ul class="list-disc pl-5 mb-4">
+            <li class="mb-2">
+                <span class="font-semibold">Redis</span> (BSD License)<br>
+                Copyright (c) 2006-2020, Salvatore Sanfilippo<br>
+                <a href="https://redis.io/" class="text-blue-600 hover:underline">https://redis.io/</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">Gotenberg</span> (MIT License)<br>
+                Copyright (c) 2019 Julien Neuhart<br>
+                <a href="https://github.com/gotenberg/gotenberg" class="text-blue-600 hover:underline">https://github.com/gotenberg/gotenberg</a>
+            </li>
+        </ul>
+        
+        <h2 class="text-xl font-semibold mb-2">Frontend Dependencies</h2>
+        <ul class="list-disc pl-5 mb-4">
+            <li class="mb-2">
+                <span class="font-semibold">Tailwind CSS</span> (MIT License)<br>
+                Copyright (c) Tailwind Labs, Inc.<br>
+                <a href="https://github.com/tailwindlabs/tailwindcss" class="text-blue-600 hover:underline">https://github.com/tailwindlabs/tailwindcss</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">Alpine.js</span> (MIT License)<br>
+                Copyright (c) 2019-2021 Caleb Porzio and contributors<br>
+                <a href="https://github.com/alpinejs/alpine" class="text-blue-600 hover:underline">https://github.com/alpinejs/alpine</a>
+            </li>
+            <li class="mb-2">
+                <span class="font-semibold">Font Awesome</span> (Font Awesome Free License)<br>
+                Font Awesome Free License<br>
+                <a href="https://github.com/FortAwesome/Font-Awesome" class="text-blue-600 hover:underline">https://github.com/FortAwesome/Font-Awesome</a>
+            </li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

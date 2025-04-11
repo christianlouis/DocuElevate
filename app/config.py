@@ -176,14 +176,8 @@ class Settings(BaseSettings):
             with open(build_date_file, "r") as f:
                 return f.read().strip()
         
-        # If a timestamp file doesn't exist, try to get the app.py creation/modification time
-        app_file = os.path.join(os.path.dirname(__file__), "app.py")
-        if os.path.exists(app_file):
-            timestamp = os.path.getmtime(app_file)
-            return datetime.fromtimestamp(timestamp).strftime("%B %d, %Y")
-                
-        # Default to current date if not found elsewhere
-        return datetime.now().strftime("%B %d, %Y")
+        # Default to unknown if not found
+        return "Unknown build date"
 
     # Get version from file or environment
     @property
