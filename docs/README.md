@@ -13,6 +13,8 @@ Welcome to the DocuElevate documentation. This directory contains comprehensive 
   - [Dropbox Setup](DropboxSetup.md) - How to set up Dropbox integration
   - [OneDrive Setup](OneDriveSetup.md) - How to set up Microsoft OneDrive/Graph integration
   - [Amazon S3 Setup](AmazonS3Setup.md) - How to set up Amazon S3 integration
+  - [Authentication Setup](AuthenticationSetup.md) - How to set up user authentication
+  - [Notifications Setup](NotificationsSetup.md) - How to set up system notifications
 - [Configuration Troubleshooting](ConfigurationTroubleshooting.md) - Solutions to common configuration issues
 - [Troubleshooting](Troubleshooting.md) - General troubleshooting and solutions to common issues
 

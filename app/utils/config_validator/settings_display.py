@@ -77,9 +77,13 @@ def get_settings_for_display(show_values=False):
         ],
         "Authentication": [
             "auth_enabled",
+            "session_secret",
+            "admin_username",
+            "admin_password",
             "authentik_client_id",
             "authentik_client_secret",
-            "authentik_config_url"
+            "authentik_config_url",
+            "oauth_provider_name"
         ],
         "Email": [
             "email_host",

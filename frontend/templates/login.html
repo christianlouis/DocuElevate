@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocuElevate - Login</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" 
+          integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" 
+          crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body class="bg-gray-100 h-screen flex items-center justify-center">
+    <div class="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
+        <div class="flex justify-center mb-6">
+            <img src="/static/images/logo_writing.svg" alt="DocuElevate Logo" class="h-16">
+        </div>
+
+        <h1 class="text-2xl font-bold text-center text-gray-800 mb-6">Welcome to DocuElevate</h1>
+        
+        {% if error %}
+        <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
+            <p>{{ error }}</p>
+        </div>
+        {% endif %}
+
+        {% if message %}
+        <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-6" role="alert">
+            <p>{{ message }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Local authentication form -->
+        <div class="mb-8" id="local-auth">
+            <h2 class="text-lg font-semibold mb-4 text-gray-700">Sign in with username</h2>
+            <form method="POST" action="/auth" class="space-y-4">
+                <div>
+                    <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
+                    <input type="text" id="username" name="username" required 
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50">
+                </div>
+                
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
+                    <input type="password" id="password" name="password" required 
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50">
+                </div>
+                
+                <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    Sign in
+                </button>
+            </form>
+        </div>
+
+        {% if show_oauth %}
+        <!-- OAuth option -->
+        <div class="relative">
+            <div class="absolute inset-0 flex items-center">
+                <div class="w-full border-t border-gray-300"></div>
+            </div>
+            <div class="relative flex justify-center text-sm">
+                <span class="px-2 bg-white text-gray-500">Or continue with</span>
+            </div>
+        </div>
+
+        <div class="mt-6 grid grid-cols-1 gap-3">
+            <a href="/oauth-login" 
+               class="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                <span class="sr-only">Sign in with SSO</span>
+                <i class="fas fa-lock mr-2"></i>
+                {{ oauth_provider_name }}
+            </a>
+        </div>
+        {% endif %}
+        
+        <div class="mt-8 text-center">
+            <a href="/" class="text-sm font-medium text-blue-600 hover:text-blue-500">
+                Return to Home
+            </a>
+        </div>
+    </div>
+
+    <!-- Optional footer with version info -->
+    <div class="fixed bottom-4 text-center w-full text-xs text-gray-500">
+        DocuElevate {{ app_version|default('', true) }}
+    </div>
+</body>
+</html>

@@ -13,6 +13,8 @@ DocuElevate is designed to be highly configurable through environment variables,
 - [Dropbox Setup](DropboxSetup.md) - How to set up Dropbox integration
 - [OneDrive Setup](OneDriveSetup.md) - How to set up Microsoft OneDrive/Graph integration
 - [Amazon S3 Setup](AmazonS3Setup.md) - How to set up Amazon S3 integration
+- [Authentication Setup](AuthenticationSetup.md) - How to set up user authentication
+- [Notifications Setup](NotificationsSetup.md) - How to set up system notifications
 
 ## Configuration File Location
 

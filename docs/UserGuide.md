@@ -11,6 +11,28 @@ DocuElevate offers an intuitive web interface for uploading, managing, and proce
 1. Navigate to your DocuElevate instance (typically at `http://your-server-address:8000`)
 2. If authentication is enabled, you'll be prompted to log in using your credentials
 
+### Authentication
+
+DocuElevate supports two main authentication methods:
+
+#### Basic Authentication
+If basic authentication is configured:
+1. You'll see a simple login form
+2. Enter your username and password as configured in the system
+3. Click "Log In" to access DocuElevate
+
+#### OpenID Connect (OIDC)
+If OpenID Connect authentication is configured:
+1. You'll see a login button
+2. Clicking this will redirect you to your identity provider (e.g., Authentik, Keycloak, Auth0)
+3. Log in with your existing credentials on that platform
+4. You'll be redirected back to DocuElevate after successful authentication
+
+#### User Sessions
+- Once authenticated, your session will remain active until you log out or it expires
+- Click the "Logout" button in the top navigation bar to end your session
+- For security, sessions automatically expire after a period of inactivity
+
 ### Main Interface
 
 DocuElevate features a simple navigation system with the following main sections:

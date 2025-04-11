@@ -37,11 +37,17 @@ class Settings(BaseSettings):
     gotenberg_url: str
     external_hostname: str = "localhost"  # Default to localhost
 
+    # Authentication settings
+    auth_enabled: bool = True  # Default to enabled
+    admin_username: Optional[str] = None
+    admin_password: Optional[str] = None
+    session_secret: Optional[str] = None
+
     # Authentik
     authentik_client_id: Optional[str] = None
     authentik_client_secret: Optional[str] = None
     authentik_config_url: Optional[str] = None
-    auth_enabled: bool = True  # Default to enabled
+    oauth_provider_name: Optional[str] = None  # Name to display for the OAuth provider
 
     # IMAP 1
     imap1_host: Optional[str] = None
@@ -160,6 +166,15 @@ class Settings(BaseSettings):
             elif v.strip():
                 return [v.strip()]
             return []
+        return v
+
+    @validator('session_secret')
+    def validate_session_secret(cls, v, values):
+        """Validate that session_secret is set and has sufficient length when auth is enabled"""
+        if values.get('auth_enabled') and not v:
+            raise ValueError("SESSION_SECRET must be set when AUTH_ENABLED=True")
+        if values.get('auth_enabled') and v and len(v) < 32:
+            raise ValueError("SESSION_SECRET must be at least 32 characters long")
         return v
 
     # Get build date from environment or file

@@ -33,6 +33,35 @@ def validate_email_config():
     
     return issues
 
+def validate_auth_config():
+    """Validates authentication configuration settings"""
+    issues = []
+    
+    # If auth is enabled, check for required settings
+    if getattr(settings, 'auth_enabled', False):
+        # Check for session secret
+        if not getattr(settings, 'session_secret', None):
+            issues.append("SESSION_SECRET is not configured but AUTH_ENABLED is True")
+        elif len(getattr(settings, 'session_secret', '')) < 32:
+            issues.append("SESSION_SECRET must be at least 32 characters long")
+        
+        # Check if using simple authentication or OIDC
+        using_simple_auth = bool(getattr(settings, 'admin_username', None) and 
+                                getattr(settings, 'admin_password', None))
+        
+        using_oidc = bool(getattr(settings, 'authentik_client_id', None) and 
+                         getattr(settings, 'authentik_client_secret', None) and
+                         getattr(settings, 'authentik_config_url', None))
+        
+        if not using_simple_auth and not using_oidc:
+            issues.append("Neither simple authentication nor OIDC are properly configured")
+        
+        # If using OIDC, check for provider name
+        if using_oidc and not getattr(settings, 'oauth_provider_name', None):
+            issues.append("OAUTH_PROVIDER_NAME is not configured but OIDC is enabled")
+    
+    return issues
+
 def validate_storage_configs():
     """Validates configuration for all storage providers"""
     issues = {}
@@ -176,6 +205,13 @@ def check_all_configs():
     if hasattr(settings, 'debug') and settings.debug:
         dump_all_settings()
     
+    # Check auth config
+    auth_issues = validate_auth_config()
+    if auth_issues:
+        logger.warning(f"Authentication configuration issues: {', '.join(auth_issues)}")
+    else:
+        logger.info("Authentication configuration OK")
+    
     # Check email config
     email_issues = validate_email_config()
     if email_issues:
@@ -200,6 +236,7 @@ def check_all_configs():
     
     # Return all identified issues
     return {
+        'auth': auth_issues,
         'email': email_issues,
         'storage': storage_issues,
         'notification': notification_issues

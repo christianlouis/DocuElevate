@@ -13,6 +13,7 @@ This guide provides instructions for deploying DocuElevate in various environmen
   - Paperless NGX instance
   - SMTP server (for email notifications)
   - IMAP server(s) (for email attachment processing)
+  - Notification services (Discord, Telegram, etc. for system alerts)
 
 ## Docker Deployment
 

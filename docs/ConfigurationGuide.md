@@ -35,9 +35,13 @@ DocuElevate can monitor multiple IMAP mailboxes for document attachments. Each m
 | **Variable**            | **Description**                                               |
 |-------------------------|---------------------------------------------------------------|
 | `AUTH_ENABLED`          | Enable or disable authentication (`true`/`false`).           |
-| `AUTHENTIK_CLIENT_ID`   | Client ID for Authentik OAuth2.                              |
-| `AUTHENTIK_CLIENT_SECRET` | Client secret for Authentik OAuth2.                        |
+| `SESSION_SECRET`        | Secret key used to encrypt sessions and cookies (at least 32 chars). |
+| `ADMIN_USERNAME`        | Username for basic authentication (when not using OIDC).     |
+| `ADMIN_PASSWORD`        | Password for basic authentication (when not using OIDC).     |
+| `AUTHENTIK_CLIENT_ID`   | Client ID for Authentik OAuth2/OIDC authentication.          |
+| `AUTHENTIK_CLIENT_SECRET` | Client secret for Authentik OAuth2/OIDC authentication.    |
 | `AUTHENTIK_CONFIG_URL`  | Configuration URL for Authentik OpenID Connect.             |
+| `OAUTH_PROVIDER_NAME`   | Display name for the OAuth provider button.                  |
 
 ### OpenAI & Azure Document Intelligence
 
@@ -162,6 +166,18 @@ For detailed setup instructions, see the [OneDrive Setup Guide](OneDriveSetup.md
 
 For detailed setup instructions, see the [Amazon S3 Setup Guide](AmazonS3Setup.md).
 
+### Notification System
+
+| **Variable**                | **Description**                                           |
+|----------------------------|----------------------------------------------------------|
+| `NOTIFICATION_URLS`        | Comma-separated list of Apprise notification URLs         |
+| `NOTIFY_ON_TASK_FAILURE`   | Send notifications on task failures (`True`/`False`)     |
+| `NOTIFY_ON_CREDENTIAL_FAILURE` | Send notifications on credential failures (`True`/`False`) |
+| `NOTIFY_ON_STARTUP`        | Send notification when system starts (`True`/`False`)    |
+| `NOTIFY_ON_SHUTDOWN`       | Send notification when system shuts down (`True`/`False`)|
+
+For detailed setup instructions, see the [Notifications Setup Guide](NotificationsSetup.md).
+
 ### Uptime Kuma
 
 | **Variable**                | **Description**                                                |
@@ -209,9 +225,13 @@ AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=https://...
 
 # Authentication
 AUTH_ENABLED=true
+SESSION_SECRET=a-very-long-and-secure-random-secret-key-string-for-session-encryption
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=your_secure_password
 AUTHENTIK_CLIENT_ID=...
 AUTHENTIK_CLIENT_SECRET=...
 AUTHENTIK_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
+OAUTH_PROVIDER_NAME=Authentik SSO
 
 # Storage services
 PAPERLESS_NGX_API_TOKEN=...
@@ -269,6 +289,14 @@ EMAIL_PASSWORD=password
 EMAIL_USE_TLS=True
 EMAIL_SENDER=DocuElevate System <docuelevate@example.com>
 EMAIL_DEFAULT_RECIPIENT=recipient@example.com
+
+# Notification Settings
+# Configure notification services using Apprise URL format
+NOTIFICATION_URLS=discord://webhook_id/webhook_token,mailto://user:pass@gmail.com,tgram://bot_token/chat_id
+NOTIFY_ON_TASK_FAILURE=True
+NOTIFY_ON_CREDENTIAL_FAILURE=True
+NOTIFY_ON_STARTUP=True
+NOTIFY_ON_SHUTDOWN=False
 
 # OneDrive (Personal Account)
 ONEDRIVE_CLIENT_ID=12345678-1234-1234-1234-123456789012

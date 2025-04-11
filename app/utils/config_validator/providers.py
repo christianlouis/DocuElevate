@@ -11,6 +11,29 @@ def get_provider_status():
     """
     providers = {}
     
+    # Add Authentication configuration
+    auth_enabled = getattr(settings, 'auth_enabled', False)
+    using_oidc = bool(getattr(settings, 'authentik_client_id', None) and 
+                     getattr(settings, 'authentik_client_secret', None) and
+                     getattr(settings, 'authentik_config_url', None))
+    
+    auth_method = "OIDC" if using_oidc else "Basic Auth" if auth_enabled else "None"
+    
+    providers["Authentication"] = {
+        "name": "Authentication", 
+        "icon": "fa-solid fa-lock",
+        "configured": bool(auth_enabled and 
+                         (getattr(settings, 'admin_username', None) or 
+                          using_oidc)),
+        "enabled": auth_enabled,
+        "description": "Access control and user authentication",
+        "details": {
+            "method": auth_method,
+            "provider_name": getattr(settings, 'oauth_provider_name', 'Not set') if using_oidc else "N/A",
+            "session_security": "Configured" if getattr(settings, 'session_secret', None) else "Not configured"
+        }
+    }
+    
     # Add Notification configuration - Make sure this provider is near the top of the list
     providers["Notifications"] = {
         "name": "Notifications", 

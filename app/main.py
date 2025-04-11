@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import logging
+import pathlib
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.staticfiles import StaticFiles
@@ -43,9 +44,12 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=[
     "127.0.0.1"
 ])
 
-# Mount the static folder for CSS/JS:
-frontend_static_dir = Path(__file__).parent.parent / "frontend" / "static"
-app.mount("/static", StaticFiles(directory=frontend_static_dir), name="static")
+# Mount the static files directory
+static_dir = pathlib.Path(__file__).parents[1] / "frontend" / "static"
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+else:
+    print(f"WARNING: Static directory not found at {static_dir}. Static files will not be served.")
 
 @app.on_event("startup")
 def on_startup():
