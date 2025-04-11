@@ -92,7 +92,7 @@ async def shutdown_event():
 @app.exception_handler(404)
 async def custom_404_handler(request: Request, exc: HTTPException):
     # Serve the 404 template directly
-    templates = Jinja2Templates(directory=str(frontend_static_dir.parent / "templates"))
+    templates = Jinja2Templates(directory=str(static_dir.parent / "templates"))
     return templates.TemplateResponse(
         "404.html",
         {"request": request},
@@ -101,7 +101,7 @@ async def custom_404_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(500)
 async def custom_500_handler(request: Request, exc: Exception):
-    templates = Jinja2Templates(directory=str(frontend_static_dir.parent / "templates"))
+    templates = Jinja2Templates(directory=str(static_dir.parent / "templates"))
     # Option 1: Keep it simple, just show a funny 500 message:
     return templates.TemplateResponse(
         "500.html",
