@@ -22,6 +22,9 @@ from app.views import router as frontend_router
 from app.api import router as api_router
 from app.auth import router as auth_router
 
+# Explicitly include the files router
+from app.views.files import router as files_router
+
 # Load configuration from .env for the session key
 config = Config(".env")
 SESSION_SECRET = config(
@@ -115,6 +118,7 @@ def test_500():
 
 # Include the routers
 app.include_router(frontend_router)
+app.include_router(files_router)  # Explicitly include the files router
 app.include_router(auth_router)
 app.include_router(api_router, prefix="/api")
 
