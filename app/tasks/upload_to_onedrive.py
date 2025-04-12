@@ -5,6 +5,7 @@ import time
 import logging
 import requests
 import msal
+import urllib.parse
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.celery_app import celery
@@ -99,30 +100,51 @@ def create_upload_session(filename, folder_path, access_token):
     # Construct the API endpoint
     base_url = "https://graph.microsoft.com/v1.0/me/drive"
     
-    # Format the folder path correctly
+    # Format the folder path correctly and properly encode for URL
     if folder_path:
         # Remove leading/trailing slashes
         folder_path = folder_path.strip('/')
-        # Replace spaces with %20
-        folder_path = folder_path.replace(' ', '%20')
-        item_path = f"/root:/{folder_path}/{filename}:/createUploadSession"
+        
+        # URL encode the path components separately
+        path_components = folder_path.split('/')
+        encoded_path = '/'.join(urllib.parse.quote(component) for component in path_components)
+        
+        # Also encode the filename
+        encoded_filename = urllib.parse.quote(filename)
+        item_path = f"/root:/{encoded_path}/{encoded_filename}:/createUploadSession"
     else:
-        item_path = f"/root:/{filename}:/createUploadSession"
+        # Just encode the filename
+        encoded_filename = urllib.parse.quote(filename)
+        item_path = f"/root:/{encoded_filename}:/createUploadSession"
     
     url = f"{base_url}{item_path}"
+    
+    # Add required request body (can be empty JSON object)
+    request_body = {
+        "item": {
+            "@microsoft.graph.conflictBehavior": "replace"
+        }
+    }
     
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json"
     }
     
-    response = requests.post(url, headers=headers)
+    logger.info(f"Creating upload session for {filename} at path {folder_path}")
+    
+    response = requests.post(url, headers=headers, json=request_body)
     
     if response.status_code == 200:
-        return response.json().get("uploadUrl")
+        upload_url = response.json().get("uploadUrl")
+        logger.info(f"Upload session created successfully for {filename}")
+        return upload_url
     else:
         error_msg = f"Failed to create upload session: {response.status_code} - {response.text}"
         logger.error(error_msg)
+        logger.error(f"Request URL was: {url}")
+        logger.error(f"Request headers: {headers}")
+        logger.error(f"Request body: {request_body}")
         raise Exception(error_msg)
 
 def upload_large_file(file_path, upload_url):
