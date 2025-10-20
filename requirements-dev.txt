@@ -1,1 +1,1 @@
-pip-licenses==5.0.0  # For license compliance checking
+pip-licenses==5.5.0  # For license compliance checking
