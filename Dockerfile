@@ -1,5 +1,5 @@
 # Use multi-stage build for a smaller final image
-FROM python:3.13 AS builder
+FROM python:3.14.1 AS builder
 
 WORKDIR /app
 
@@ -38,3 +38,4 @@ EXPOSE 8000
 
 # Default command
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
