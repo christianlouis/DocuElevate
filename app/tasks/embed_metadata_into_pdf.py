@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import tempfile
 import PyPDF2  # Replace fitz with PyPDF2
 import json
 from app.config import settings
@@ -62,10 +63,12 @@ def embed_metadata_into_pdf(local_file_path: str, extracted_text: str, metadata:
             print(f"[ERROR] Local file {local_file_path} not found, cannot embed metadata.")
             return {"error": "File not found"}
 
-    # Work on a safe copy in /tmp
-    tmp_dir = "/tmp"
+    # Work on a safe copy in a secure temporary directory
     original_file = local_file_path
-    processed_file = os.path.join(tmp_dir, f"processed_{os.path.basename(local_file_path)}")
+    # Create a temporary file with the same extension as the original
+    _, ext = os.path.splitext(local_file_path)
+    with tempfile.NamedTemporaryFile(mode='wb', suffix=ext, prefix='processed_', delete=False) as tmp_file:
+        processed_file = tmp_file.name
 
     # Create a safe copy to work on
     shutil.copy(original_file, processed_file)
@@ -132,4 +135,11 @@ def embed_metadata_into_pdf(local_file_path: str, extracted_text: str, metadata:
 
     except Exception as e:
         print(f"[ERROR] Failed to embed metadata into {processed_file}: {e}")
+        # Clean up temporary file in case of error
+        if os.path.exists(processed_file):
+            try:
+                os.remove(processed_file)
+                print(f"[INFO] Cleaned up temporary file {processed_file}")
+            except Exception as cleanup_error:
+                print(f"[ERROR] Could not clean up temporary file {processed_file}: {cleanup_error}")
         return {"error": str(e)}
