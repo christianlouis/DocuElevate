@@ -67,8 +67,9 @@ def embed_metadata_into_pdf(local_file_path: str, extracted_text: str, metadata:
     original_file = local_file_path
     # Create a temporary file with the same extension as the original
     _, ext = os.path.splitext(local_file_path)
-    with tempfile.NamedTemporaryFile(mode='wb', suffix=ext, prefix='processed_', delete=False) as tmp_file:
-        processed_file = tmp_file.name
+    tmp_file = tempfile.NamedTemporaryFile(mode='wb', suffix=ext, prefix='processed_', delete=False)
+    processed_file = tmp_file.name
+    tmp_file.close()
 
     # Create a safe copy to work on
     shutil.copy(original_file, processed_file)
