@@ -183,3 +183,38 @@ def notify_shutdown() -> bool:
         notification_type="info",
         tags=["system", "shutdown"]
     )
+
+def notify_file_processed(filename: str, file_size: int, metadata: dict, destinations: list) -> bool:
+    """Send a notification that a file has been successfully processed"""
+    if not settings.notify_on_file_processed:
+        return False
+    
+    # Format file size for display
+    size_mb = file_size / (1024 * 1024)
+    size_str = f"{size_mb:.2f} MB" if size_mb >= 1 else f"{file_size / 1024:.2f} KB"
+    
+    # Extract key metadata fields
+    doc_type = metadata.get('document_type', 'Unknown')
+    tags = metadata.get('tags', [])
+    tags_str = ', '.join(tags) if tags else 'None'
+    
+    # Format destinations
+    destinations_str = ', '.join(destinations) if destinations else 'None configured'
+    
+    title = f"File Processed: {filename}"
+    message = f"""
+File: {filename}
+Size: {size_str}
+Document Type: {doc_type}
+Tags: {tags_str}
+Destinations: {destinations_str}
+
+The file has been successfully processed and uploaded to all configured destinations.
+"""
+    
+    return send_notification(
+        title=title,
+        message=message.strip(),
+        notification_type="success",
+        tags=["document", "processed", "success"]
+    )
