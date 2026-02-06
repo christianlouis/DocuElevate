@@ -27,10 +27,11 @@ from app.views.files import router as files_router
 
 # Load configuration from .env for the session key
 config = Config(".env")
-SESSION_SECRET = config(
-    "SESSION_SECRET",
-    default="YOUR_DEFAULT_SESSION_SECRET_MUST_BE_32_CHARS_OR_MORE"
-)
+# Use settings.session_secret which has proper validation
+# Fallback to raising an error if not set when auth is enabled
+if settings.auth_enabled and not settings.session_secret:
+    raise ValueError("SESSION_SECRET must be set when AUTH_ENABLED=True. Generate one with: python -c 'import secrets; print(secrets.token_hex(32))'")
+SESSION_SECRET = settings.session_secret or "INSECURE_DEFAULT_FOR_DEVELOPMENT_ONLY_DO_NOT_USE_IN_PRODUCTION_MINIMUM_32_CHARS"
 
 app = FastAPI(title="DocuElevate")
 
