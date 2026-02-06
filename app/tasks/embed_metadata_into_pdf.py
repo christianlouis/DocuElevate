@@ -13,6 +13,10 @@ from app.tasks.finalize_document_storage import finalize_document_storage
 from app.celery_app import celery
 
 # Directory constants - defined here to avoid hardcoded strings (BAN-B108)
+# Note: These are application-specific subdirectories within settings.workdir,
+# not system temporary directories. The workdir is a configurable path specific
+# to this application. For actual temporary file creation, tempfile module is
+# used (see line 70: tempfile.NamedTemporaryFile)
 TMP_SUBDIR = "tmp"
 PROCESSED_SUBDIR = "processed"
 
