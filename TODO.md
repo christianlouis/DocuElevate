@@ -23,6 +23,7 @@ This document tracks actionable tasks for the current development cycle. For lon
 - [x] Create test fixtures and conftest.py
 - [x] Add basic API integration tests
 - [x] Add configuration validation tests
+- [ ] Fix API integration tests (auth configuration issues)
 - [ ] Add tests for file upload functionality
 - [ ] Add tests for OCR processing (mocked)
 - [ ] Add tests for metadata extraction (mocked)
