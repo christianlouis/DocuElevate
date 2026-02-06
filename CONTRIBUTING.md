@@ -78,3 +78,52 @@ isort .
 
 ## Project Structure
 
+```
+DocuElevate/
+├── app/               # Main application code
+│   ├── api/          # REST API endpoints (organized by feature)
+│   ├── tasks/        # Celery background tasks
+│   ├── views/        # UI routes and template rendering
+│   ├── utils/        # Utility functions and helpers
+│   ├── config.py     # Configuration management (Pydantic)
+│   ├── database.py   # Database setup and session management
+│   ├── models.py     # SQLAlchemy models
+│   ├── main.py       # FastAPI app initialization
+│   └── auth.py       # Authentication logic
+├── frontend/         # Frontend assets
+│   ├── static/       # CSS, JavaScript, images
+│   └── templates/    # Jinja2 HTML templates
+├── tests/            # Test suite
+├── docs/             # User and developer documentation
+├── migrations/       # Alembic database migrations
+└── docker/           # Docker configuration files
+```
+
+## 📚 Additional Resources
+
+### Documentation
+- **[AGENTIC_CODING.md](AGENTIC_CODING.md)** - Comprehensive guide for AI agents and developers
+- **[README.md](README.md)** - Project overview and quickstart
+- **[ROADMAP.md](ROADMAP.md)** - Future features and long-term vision
+- **[MILESTONES.md](MILESTONES.md)** - Release planning and versioning
+- **[TODO.md](TODO.md)** - Current tasks and priorities
+- **[SECURITY.md](SECURITY.md)** - Security policy
+- **[SECURITY_AUDIT.md](SECURITY_AUDIT.md)** - Security findings and improvements
+
+### Testing
+- All new features must include tests
+- Aim for 80% code coverage
+- See [AGENTIC_CODING.md#testing-strategy](AGENTIC_CODING.md#testing-strategy) for detailed testing guidelines
+
+### Security
+- Never commit secrets or credentials
+- Follow guidelines in [SECURITY_AUDIT.md](SECURITY_AUDIT.md)
+- Report security issues per [SECURITY.md](SECURITY.md)
+
+## 🤝 Getting Help
+
+- **GitHub Issues:** Bug reports and feature requests
+- **GitHub Discussions:** Questions and community support
+- **Documentation:** Check `docs/` directory for guides
+
+Thank you for contributing to DocuElevate!

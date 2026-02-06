@@ -25,7 +25,34 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+
+# Environment files - NEVER commit these!
 .env
+.env.local
+.env.*.local
+*.env
+
+# Secrets and credentials
+*secret*
+*credentials*.json
+!frontend/static/*  # Allow static files even if they match patterns
+!docs/*  # Allow documentation files
+
+# Private keys
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+ssh_host_*
+
+# Database files - may contain sensitive data
+*.db
+*.sqlite
+*.sqlite3
+database.db
+db.sqlite3
+db.sqlite3-journal
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -59,8 +86,6 @@ cover/
 # Django stuff:
 *.log
 local_settings.py
-db.sqlite3
-db.sqlite3-journal
 
 # Flask stuff:
 instance/
