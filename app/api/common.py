@@ -22,15 +22,39 @@ def get_db():
 
 def resolve_file_path(file_path: str, subfolder: str = None) -> str:
     """
-    Resolves a file path to an absolute path.
+    Resolves a file path to an absolute path with path traversal protection.
     If the path is not absolute, it will be joined with the workdir path.
     Optionally, can include a subfolder like 'processed'.
     
     Returns the absolute file path.
+    
+    Raises:
+        ValueError: If the resolved path is outside the allowed base directory.
     """
-    if not os.path.isabs(file_path):
-        if subfolder:
-            file_path = os.path.join(settings.workdir, subfolder, file_path)
-        else:
-            file_path = os.path.join(settings.workdir, file_path)
-    return file_path
+    # Determine the base directory
+    if subfolder:
+        base_dir = os.path.join(settings.workdir, subfolder)
+    else:
+        base_dir = settings.workdir
+    
+    # Normalize the base directory to absolute path
+    base_dir = os.path.realpath(base_dir)
+    
+    # If the file_path is absolute, use it directly; otherwise join with base_dir
+    if os.path.isabs(file_path):
+        resolved_path = os.path.realpath(file_path)
+    else:
+        resolved_path = os.path.realpath(os.path.join(base_dir, file_path))
+    
+    # Verify the resolved path is within the base directory
+    try:
+        common_path = os.path.commonpath([base_dir, resolved_path])
+    except ValueError:
+        # os.path.commonpath raises ValueError if paths are on different drives (Windows)
+        # This indicates path traversal attempt
+        raise ValueError(f"Path traversal detected: {file_path} resolves outside base directory")
+    
+    if common_path != base_dir:
+        raise ValueError(f"Path traversal detected: {file_path} resolves outside base directory")
+    
+    return resolved_path
