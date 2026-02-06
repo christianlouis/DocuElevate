@@ -25,7 +25,12 @@ router = APIRouter()
 @require_login
 def process(file_path: str):
     """API Endpoint to start document processing."""
-    file_path = resolve_file_path(file_path)
+    try:
+        file_path = resolve_file_path(file_path)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid file path: {str(e)}"
+        )
 
     if not os.path.exists(file_path):
         raise HTTPException(
@@ -39,7 +44,12 @@ def process(file_path: str):
 @require_login
 def send_to_dropbox_endpoint(file_path: str):
     """Send a document to Dropbox."""
-    file_path = resolve_file_path(file_path, 'processed')
+    try:
+        file_path = resolve_file_path(file_path, 'processed')
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid file path: {str(e)}"
+        )
     if not os.path.exists(file_path):
         raise HTTPException(
             status_code=400, detail=f"File {file_path} not found."
@@ -51,7 +61,12 @@ def send_to_dropbox_endpoint(file_path: str):
 @require_login
 def send_to_paperless_endpoint(file_path: str):
     """Send a document to Paperless-ngx."""
-    file_path = resolve_file_path(file_path, 'processed')
+    try:
+        file_path = resolve_file_path(file_path, 'processed')
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid file path: {str(e)}"
+        )
     if not os.path.exists(file_path):
         raise HTTPException(
             status_code=400, detail=f"File {file_path} not found."
@@ -63,7 +78,12 @@ def send_to_paperless_endpoint(file_path: str):
 @require_login
 def send_to_nextcloud_endpoint(file_path: str):
     """Send a document to NextCloud."""
-    file_path = resolve_file_path(file_path, 'processed')
+    try:
+        file_path = resolve_file_path(file_path, 'processed')
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid file path: {str(e)}"
+        )
     if not os.path.exists(file_path):
         raise HTTPException(
             status_code=400, detail=f"File {file_path} not found."
@@ -75,7 +95,12 @@ def send_to_nextcloud_endpoint(file_path: str):
 @require_login
 def send_to_google_drive_endpoint(file_path: str):
     """Send a document to Google Drive."""
-    file_path = resolve_file_path(file_path, 'processed')
+    try:
+        file_path = resolve_file_path(file_path, 'processed')
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid file path: {str(e)}"
+        )
     if not os.path.exists(file_path):
         raise HTTPException(
             status_code=400, detail=f"File {file_path} not found."
@@ -87,7 +112,12 @@ def send_to_google_drive_endpoint(file_path: str):
 @require_login
 def send_to_onedrive_endpoint(file_path: str):
     """Send a document to OneDrive."""
-    file_path = resolve_file_path(file_path, 'processed')
+    try:
+        file_path = resolve_file_path(file_path, 'processed')
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid file path: {str(e)}"
+        )
     if not os.path.exists(file_path):
         raise HTTPException(
             status_code=400, detail=f"File {file_path} not found."
@@ -99,7 +129,12 @@ def send_to_onedrive_endpoint(file_path: str):
 @require_login
 def send_to_all_destinations_endpoint(file_path: str):
     """Call the aggregator task that sends this file to all configured destinations."""
-    file_path = resolve_file_path(file_path, 'processed')
+    try:
+        file_path = resolve_file_path(file_path, 'processed')
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid file path: {str(e)}"
+        )
 
     if not os.path.exists(file_path):
         raise HTTPException(
