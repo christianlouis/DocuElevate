@@ -130,12 +130,12 @@ def process_document(self, original_local_file: str):
         # Call metadata extraction directly
         logger.info(f"[{task_id}] Queueing metadata extraction")
         log_task_progress(task_id, "process_document", "success", "Queued for metadata extraction", file_id=new_record.id)
-        extract_metadata_with_gpt.delay(new_filename, extracted_text)
+        extract_metadata_with_gpt.delay(new_filename, extracted_text, new_record.id)
         return {"file": new_local_path, "status": "Text extracted locally", "file_id": new_record.id}
 
     # 3. If no embedded text, queue Azure Document Intelligence processing
     logger.info(f"[{task_id}] No embedded text found. Queueing Azure Document Intelligence processing")
     log_task_progress(task_id, "check_text", "success", "No embedded text, queuing OCR", file_id=new_record.id)
     log_task_progress(task_id, "process_document", "success", "Queued for OCR processing", file_id=new_record.id)
-    process_with_azure_document_intelligence.delay(new_filename)
+    process_with_azure_document_intelligence.delay(new_filename, new_record.id)
     return {"file": new_local_path, "status": "Queued for OCR", "file_id": new_record.id}

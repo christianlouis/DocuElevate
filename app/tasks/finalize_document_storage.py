@@ -17,29 +17,29 @@ logger = logging.getLogger(__name__)
 
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
-def finalize_document_storage(self, original_file: str, processed_file: str, metadata: dict):
+def finalize_document_storage(self, original_file: str, processed_file: str, metadata: dict, file_id: int = None):
     """
     Final storage step after embedding metadata.
     We will now call 'send_to_all_destinations' to push the final PDF to Dropbox/Nextcloud/Paperless.
     """
     task_id = self.request.id
     logger.info(f"[{task_id}] Finalizing document storage for {processed_file}")
-    log_task_progress(task_id, "finalize_document_storage", "in_progress", f"Finalizing: {os.path.basename(processed_file)}")
+    log_task_progress(task_id, "finalize_document_storage", "in_progress", f"Finalizing: {os.path.basename(processed_file)}", file_id=file_id)
     
-    # Get file_id from database
-    file_id = None
-    with SessionLocal() as db:
-        # Try to find by the processed file path first
-        file_record = db.query(FileRecord).filter(
-            FileRecord.local_filename.like(f"%{os.path.basename(original_file)}%")
-        ).first()
-        if file_record:
-            file_id = file_record.id
+    # Get file_id from database if not provided
+    if file_id is None:
+        with SessionLocal() as db:
+            # Try to find by the original file path
+            file_record = db.query(FileRecord).filter(
+                FileRecord.local_filename.like(f"%{os.path.basename(original_file)}%")
+            ).first()
+            if file_record:
+                file_id = file_record.id
 
     # 2) Enqueue uploads to all destinations (Dropbox, Nextcloud, Paperless)
     logger.info(f"[{task_id}] Queueing uploads to all destinations")
     log_task_progress(task_id, "finalize_document_storage", "success", "Queuing uploads to destinations", file_id=file_id)
-    send_to_all_destinations.delay(processed_file)
+    send_to_all_destinations.delay(processed_file, True, file_id)
 
     return {
         "status": "Completed",

@@ -46,21 +46,21 @@ def extract_json_from_text(text):
     return None
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
-def extract_metadata_with_gpt(self, filename: str, cleaned_text: str):
+def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: int = None):
     """Uses OpenAI to classify document metadata."""
     task_id = self.request.id
     logger.info(f"[{task_id}] Starting metadata extraction for: {filename}")
-    log_task_progress(task_id, "extract_metadata_with_gpt", "in_progress", f"Extracting metadata for {filename}")
+    log_task_progress(task_id, "extract_metadata_with_gpt", "in_progress", f"Extracting metadata for {filename}", file_id=file_id)
     
-    # Get file_id from database
-    file_id = None
-    tmp_dir = os.path.join(settings.workdir, "tmp")
-    file_path = os.path.join(tmp_dir, filename)
-    if os.path.exists(file_path):
-        with SessionLocal() as db:
-            file_record = db.query(FileRecord).filter_by(local_filename=file_path).first()
-            if file_record:
-                file_id = file_record.id
+    # Get file_id from database if not provided
+    if file_id is None:
+        tmp_dir = os.path.join(settings.workdir, "tmp")
+        file_path = os.path.join(tmp_dir, filename)
+        if os.path.exists(file_path):
+            with SessionLocal() as db:
+                file_record = db.query(FileRecord).filter_by(local_filename=file_path).first()
+                if file_record:
+                    file_id = file_record.id
     
     prompt = f"""
 You are a specialized document analyzer trained to extract structured metadata from documents.
@@ -123,7 +123,7 @@ Return only valid JSON with no additional commentary.
         # Trigger the next step: embedding metadata into the PDF
         logger.info(f"[{task_id}] Queueing metadata embedding task")
         log_task_progress(task_id, "extract_metadata_with_gpt", "success", "Metadata extracted, queuing embed task", file_id=file_id)
-        embed_metadata_into_pdf.delay(filename, cleaned_text, metadata)
+        embed_metadata_into_pdf.delay(filename, cleaned_text, metadata, file_id)
 
         return {"s3_file": filename, "metadata": metadata}
 

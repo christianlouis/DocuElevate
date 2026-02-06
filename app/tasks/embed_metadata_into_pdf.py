@@ -46,7 +46,7 @@ def persist_metadata(metadata, final_pdf_path):
     return json_path
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
-def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, metadata: dict):
+def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, metadata: dict, file_id: int = None):
     """
     Embeds extracted metadata into the PDF's standard metadata fields.
     The mapping is as follows:
@@ -62,11 +62,14 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
     """
     task_id = self.request.id
     logger.info(f"[{task_id}] Starting metadata embedding for: {local_file_path}")
-    log_task_progress(task_id, "embed_metadata_into_pdf", "in_progress", f"Embedding metadata into {os.path.basename(local_file_path)}")
+    log_task_progress(task_id, "embed_metadata_into_pdf", "in_progress", f"Embedding metadata into {os.path.basename(local_file_path)}", file_id=file_id)
     
-    # Get file_id from database
-    file_id = None
-    # Check for file existence; if not found, try the known shared tmp directory.
+    # Get file_id from database if not provided
+    if file_id is None:
+        with SessionLocal() as db:
+            file_record = db.query(FileRecord).filter_by(local_filename=local_file_path).first()
+            if file_record:
+                file_id = file_record.id
     if not os.path.exists(local_file_path):
         alt_path = os.path.join(settings.workdir, "tmp", os.path.basename(local_file_path))
         if os.path.exists(alt_path):
@@ -76,10 +79,8 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
             log_task_progress(task_id, "embed_metadata_into_pdf", "failure", "File not found")
             return {"error": "File not found"}
     
-    with SessionLocal() as db:
-        file_record = db.query(FileRecord).filter_by(local_filename=local_file_path).first()
-        if file_record:
-            file_id = file_record.id
+    
+    # Check for file existence; if not found, try the known shared tmp directory.
 
     # Work on a safe copy in a secure temporary directory
     original_file = local_file_path
@@ -149,7 +150,7 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
         # Trigger the next step: final storage.
         logger.info(f"[{task_id}] Queueing final storage task")
         log_task_progress(task_id, "embed_metadata_into_pdf", "success", "Metadata embedded, queuing finalization", file_id=file_id)
-        finalize_document_storage.delay(original_file, final_file_path, metadata)
+        finalize_document_storage.delay(original_file, final_file_path, metadata, file_id)
 
         # After triggering final storage, delete the original file if it is in workdir/tmp.
         workdir_tmp = os.path.join(settings.workdir, "tmp")

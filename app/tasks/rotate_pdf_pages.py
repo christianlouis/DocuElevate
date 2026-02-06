@@ -47,7 +47,7 @@ def determine_rotation_angle(detected_angle):
     return rotation_value
 
 @celery.task(base=BaseTaskWithRetry)
-def rotate_pdf_pages(filename: str, extracted_text: str, rotation_data=None):
+def rotate_pdf_pages(filename: str, extracted_text: str, rotation_data=None, file_id: int = None):
     """
     Rotates pages in a PDF document based on detected rotation angles.
     
@@ -55,6 +55,7 @@ def rotate_pdf_pages(filename: str, extracted_text: str, rotation_data=None):
         filename: The name of the file to rotate
         extracted_text: The extracted text from the document
         rotation_data: Optional rotation data dictionary {page_index: angle}
+        file_id: Optional file ID to pass through to subsequent tasks
     """
     try:
         pdf_path = os.path.join(settings.workdir, "tmp", filename)
@@ -64,7 +65,7 @@ def rotate_pdf_pages(filename: str, extracted_text: str, rotation_data=None):
         # Skip rotation if no rotation data provided
         if not rotation_data:
             logger.info(f"No rotation data provided for {filename}, proceeding with metadata extraction")
-            extract_metadata_with_gpt.delay(filename, extracted_text)
+            extract_metadata_with_gpt.delay(filename, extracted_text, file_id)
             return {"file": filename, "status": "no_rotation_needed"}
 
         # Standardize rotation_data keys to integers
@@ -77,7 +78,7 @@ def rotate_pdf_pages(filename: str, extracted_text: str, rotation_data=None):
 
         if not any(abs(angle) > 0 for angle in normalized_rotation_data.values()):
             logger.info(f"No significant rotations detected in {filename}, proceeding with metadata extraction")
-            extract_metadata_with_gpt.delay(filename, extracted_text)
+            extract_metadata_with_gpt.delay(filename, extracted_text, file_id)
             return {"file": filename, "status": "no_rotation_needed"}
         
         logger.info(f"Rotating {len(normalized_rotation_data)} pages in {filename}")
@@ -117,7 +118,7 @@ def rotate_pdf_pages(filename: str, extracted_text: str, rotation_data=None):
             logger.info(f"Detected rotations in {filename} but no rotations were actually applied (angles too small or not multiples of 90°)")
         
         # Continue with metadata extraction
-        extract_metadata_with_gpt.delay(filename, extracted_text)
+        extract_metadata_with_gpt.delay(filename, extracted_text, file_id)
         
         return {
             "file": filename, 
@@ -129,5 +130,5 @@ def rotate_pdf_pages(filename: str, extracted_text: str, rotation_data=None):
     except Exception as e:
         logger.error(f"Error rotating PDF {filename}: {e}")
         # Continue with metadata extraction despite rotation failure
-        extract_metadata_with_gpt.delay(filename, extracted_text)
+        extract_metadata_with_gpt.delay(filename, extracted_text, file_id)
         return {"file": filename, "status": "rotation_failed", "error": str(e)}

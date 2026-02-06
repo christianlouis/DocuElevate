@@ -108,7 +108,7 @@ def get_configured_services_from_validator():
     return result
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
-def send_to_all_destinations(self, file_path: str, use_validator=True):
+def send_to_all_destinations(self, file_path: str, use_validator=True, file_id: int = None):
     """
     Distribute a file to all configured storage destinations.
     
@@ -116,25 +116,26 @@ def send_to_all_destinations(self, file_path: str, use_validator=True):
         file_path: Path to the file to distribute
         use_validator: Whether to use the config validator to determine enabled services
                        (if False, falls back to individual checks)
+        file_id: Optional file ID to associate with logs
     """
     task_id = self.request.id
     
     if not os.path.exists(file_path):
         logger.error(f"[{task_id}] File not found: {file_path}")
-        log_task_progress(task_id, "send_to_all_destinations", "failure", "File not found")
+        log_task_progress(task_id, "send_to_all_destinations", "failure", "File not found", file_id=file_id)
         raise FileNotFoundError(f"File not found: {file_path}")
     
     logger.info(f"[{task_id}] Sending {file_path} to all configured destinations")
-    log_task_progress(task_id, "send_to_all_destinations", "in_progress", f"Distributing: {os.path.basename(file_path)}")
+    log_task_progress(task_id, "send_to_all_destinations", "in_progress", f"Distributing: {os.path.basename(file_path)}", file_id=file_id)
     
-    # Get file_id from database
-    file_id = None
-    with SessionLocal() as db:
-        file_record = db.query(FileRecord).filter(
-            FileRecord.local_filename.like(f"%{os.path.basename(file_path)}%")
-        ).first()
-        if file_record:
-            file_id = file_record.id
+    # Get file_id from database if not provided
+    if file_id is None:
+        with SessionLocal() as db:
+            file_record = db.query(FileRecord).filter(
+                FileRecord.local_filename.like(f"%{os.path.basename(file_path)}%")
+            ).first()
+            if file_record:
+                file_id = file_record.id
     
     results = {}
     
