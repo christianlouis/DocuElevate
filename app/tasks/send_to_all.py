@@ -16,6 +16,9 @@ from app.tasks.upload_to_onedrive import upload_to_onedrive
 from app.tasks.upload_to_s3 import upload_to_s3
 from app.utils.config_validator import get_provider_status
 from app.celery_app import celery
+from app.utils import log_task_progress
+from app.database import SessionLocal
+from app.models import FileRecord
 
 logger = logging.getLogger(__name__)
 
@@ -104,8 +107,8 @@ def get_configured_services_from_validator():
     
     return result
 
-@celery.task(base=BaseTaskWithRetry)
-def send_to_all_destinations(file_path: str, use_validator=True):
+@celery.task(base=BaseTaskWithRetry, bind=True)
+def send_to_all_destinations(self, file_path: str, use_validator=True):
     """
     Distribute a file to all configured storage destinations.
     
@@ -114,10 +117,25 @@ def send_to_all_destinations(file_path: str, use_validator=True):
         use_validator: Whether to use the config validator to determine enabled services
                        (if False, falls back to individual checks)
     """
+    task_id = self.request.id
+    
     if not os.path.exists(file_path):
+        logger.error(f"[{task_id}] File not found: {file_path}")
+        log_task_progress(task_id, "send_to_all_destinations", "failure", "File not found")
         raise FileNotFoundError(f"File not found: {file_path}")
     
-    logger.info(f"Sending {file_path} to all configured destinations")
+    logger.info(f"[{task_id}] Sending {file_path} to all configured destinations")
+    log_task_progress(task_id, "send_to_all_destinations", "in_progress", f"Distributing: {os.path.basename(file_path)}")
+    
+    # Get file_id from database
+    file_id = None
+    with SessionLocal() as db:
+        file_record = db.query(FileRecord).filter(
+            FileRecord.local_filename.like(f"%{os.path.basename(file_path)}%")
+        ).first()
+        if file_record:
+            file_id = file_record.id
+    
     results = {}
     
     # Define service configurations
@@ -179,12 +197,13 @@ def send_to_all_destinations(file_path: str, use_validator=True):
     if use_validator:
         try:
             configured_services = get_configured_services_from_validator()
-            logger.info(f"Configured services according to validator: {configured_services}")
+            logger.info(f"[{task_id}] Configured services according to validator: {configured_services}")
         except Exception as e:
-            logger.warning(f"Failed to get configuration from validator: {str(e)}")
+            logger.warning(f"[{task_id}] Failed to get configuration from validator: {str(e)}")
             use_validator = False
     
     # Process each service
+    queued_count = 0
     for service in services:
         service_name = service["name"]
         
@@ -192,24 +211,31 @@ def send_to_all_destinations(file_path: str, use_validator=True):
         is_configured = False
         if use_validator and service_name in configured_services:
             is_configured = configured_services[service_name]
-            logger.debug(f"{service_name} configuration from validator: {is_configured}")
+            logger.debug(f"[{task_id}] {service_name} configuration from validator: {is_configured}")
         else:
             try:
                 is_configured = service["should_upload"]()
-                logger.debug(f"{service_name} configuration from function: {is_configured}")
+                logger.debug(f"[{task_id}] {service_name} configuration from function: {is_configured}")
             except Exception as e:
-                logger.error(f"Error checking configuration for {service_name}: {str(e)}")
+                logger.error(f"[{task_id}] Error checking configuration for {service_name}: {str(e)}")
                 is_configured = False
         
         # Queue the upload task if service is configured
         if is_configured:
-            logger.info(f"Queueing {file_path} for {service_name} upload")
+            logger.info(f"[{task_id}] Queueing {file_path} for {service_name} upload")
+            log_task_progress(task_id, f"queue_{service_name}", "in_progress", f"Queueing upload to {service_name}", file_id=file_id)
             try:
                 task = service["upload_func"].delay(file_path)
                 results[f"{service_name}_task_id"] = task.id
+                queued_count += 1
+                log_task_progress(task_id, f"queue_{service_name}", "success", f"Queued for {service_name}", file_id=file_id)
             except Exception as e:
-                logger.error(f"Failed to queue {service_name} task: {str(e)}")
+                logger.error(f"[{task_id}] Failed to queue {service_name} task: {str(e)}")
                 results[f"{service_name}_error"] = str(e)
+                log_task_progress(task_id, f"queue_{service_name}", "failure", f"Failed: {str(e)}", file_id=file_id)
+    
+    logger.info(f"[{task_id}] Queued {queued_count} upload tasks")
+    log_task_progress(task_id, "send_to_all_destinations", "success", f"Queued {queued_count} uploads", file_id=file_id)
     
     return {
         "status": "Queued",
