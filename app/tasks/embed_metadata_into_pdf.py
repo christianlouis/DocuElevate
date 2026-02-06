@@ -64,23 +64,22 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
     logger.info(f"[{task_id}] Starting metadata embedding for: {local_file_path}")
     log_task_progress(task_id, "embed_metadata_into_pdf", "in_progress", f"Embedding metadata into {os.path.basename(local_file_path)}", file_id=file_id)
     
-    # Get file_id from database if not provided
+    # Get file_id from database if not provided (fallback only, prefer passing file_id explicitly)
     if file_id is None:
         with SessionLocal() as db:
             file_record = db.query(FileRecord).filter_by(local_filename=local_file_path).first()
             if file_record:
                 file_id = file_record.id
+    
+    # Check for file existence; if not found, try the known shared tmp directory.
     if not os.path.exists(local_file_path):
         alt_path = os.path.join(settings.workdir, "tmp", os.path.basename(local_file_path))
         if os.path.exists(alt_path):
             local_file_path = alt_path
         else:
             logger.error(f"[{task_id}] Local file {local_file_path} not found, cannot embed metadata.")
-            log_task_progress(task_id, "embed_metadata_into_pdf", "failure", "File not found")
+            log_task_progress(task_id, "embed_metadata_into_pdf", "failure", "File not found", file_id=file_id)
             return {"error": "File not found"}
-    
-    
-    # Check for file existence; if not found, try the known shared tmp directory.
 
     # Work on a safe copy in a secure temporary directory
     original_file = local_file_path

@@ -26,12 +26,14 @@ def finalize_document_storage(self, original_file: str, processed_file: str, met
     logger.info(f"[{task_id}] Finalizing document storage for {processed_file}")
     log_task_progress(task_id, "finalize_document_storage", "in_progress", f"Finalizing: {os.path.basename(processed_file)}", file_id=file_id)
     
-    # Get file_id from database if not provided
+    # Get file_id from database if not provided (fallback only, prefer passing file_id explicitly)
     if file_id is None:
         with SessionLocal() as db:
-            # Try to find by the original file path
+            # Only as a last resort, try to find by exact match on local_filename
+            # This should not be needed if file_id is passed correctly through the chain
+            tmp_path = os.path.join(settings.workdir, "tmp", os.path.basename(original_file))
             file_record = db.query(FileRecord).filter(
-                FileRecord.local_filename.like(f"%{os.path.basename(original_file)}%")
+                FileRecord.local_filename == tmp_path
             ).first()
             if file_record:
                 file_id = file_record.id

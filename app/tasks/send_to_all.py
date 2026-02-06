@@ -128,11 +128,13 @@ def send_to_all_destinations(self, file_path: str, use_validator=True, file_id: 
     logger.info(f"[{task_id}] Sending {file_path} to all configured destinations")
     log_task_progress(task_id, "send_to_all_destinations", "in_progress", f"Distributing: {os.path.basename(file_path)}", file_id=file_id)
     
-    # Get file_id from database if not provided
+    # Get file_id from database if not provided (fallback only, prefer passing file_id explicitly)
     if file_id is None:
         with SessionLocal() as db:
+            # Only as a last resort, try to find by basename match
+            # This should not be needed if file_id is passed correctly through the chain
             file_record = db.query(FileRecord).filter(
-                FileRecord.local_filename.like(f"%{os.path.basename(file_path)}%")
+                FileRecord.local_filename == os.path.join(settings.workdir, "tmp", os.path.basename(file_path))
             ).first()
             if file_record:
                 file_id = file_record.id
