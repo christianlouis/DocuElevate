@@ -97,7 +97,7 @@ Document Type: Invoice
 Tags: financial, vendor-acme, urgent
 Destinations: Dropbox, Google Drive, Paperless-ngx
 
-The file has been successfully processed and uploaded to all configured destinations.
+The file has been successfully processed and is being uploaded to all configured destinations.
 ```
 
 ## Automated Credential Checking

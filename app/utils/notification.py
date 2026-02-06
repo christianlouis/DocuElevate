@@ -209,7 +209,7 @@ Document Type: {doc_type}
 Tags: {tags_str}
 Destinations: {destinations_str}
 
-The file has been successfully processed and uploaded to all configured destinations.
+The file has been successfully processed and is being uploaded to all configured destinations.
 """
     
     return send_notification(

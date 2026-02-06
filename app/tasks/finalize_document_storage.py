@@ -37,9 +37,12 @@ def finalize_document_storage(original_file: str, processed_file: str, metadata:
         configured_destinations = ["configured destinations"]
 
     # 2) Enqueue uploads to all destinations (Dropbox, Nextcloud, Paperless)
+    # Note: send_to_all_destinations is asynchronous and queues upload tasks
     send_to_all_destinations.delay(processed_file)
 
     # 3) Send notification about successful file processing
+    # Note: This notification is sent after processing is complete but while uploads
+    # are being queued. The message reflects that uploads are being initiated.
     try:
         # Get file information
         file_size = os.path.getsize(processed_file) if os.path.exists(processed_file) else 0
