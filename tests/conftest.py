@@ -24,6 +24,8 @@ os.environ["SESSION_SECRET"] = "test_secret_key_for_testing_must_be_at_least_32_
 
 from app.database import Base, get_db
 from app.main import app as fastapi_app
+# Import models to register them with SQLAlchemy Base
+from app.models import DocumentMetadata, FileRecord, ProcessingLog
 
 
 @pytest.fixture(scope="session")
@@ -61,6 +63,10 @@ def db_session():
 def client(db_session) -> TestClient:
     """Create a test client with a fresh database."""
     
+    # Import all the different get_db functions used across the app
+    from app.api.common import get_db as api_get_db
+    from app.views.base import get_db as views_get_db
+    
     # Override the get_db dependency to use our test database
     def override_get_db():
         try:
@@ -68,7 +74,10 @@ def client(db_session) -> TestClient:
         finally:
             pass
     
+    # Override all variants of get_db
     fastapi_app.dependency_overrides[get_db] = override_get_db
+    fastapi_app.dependency_overrides[api_get_db] = override_get_db
+    fastapi_app.dependency_overrides[views_get_db] = override_get_db
     
     # Use base_url to satisfy TrustedHostMiddleware
     with TestClient(fastapi_app, base_url="http://localhost") as test_client:
