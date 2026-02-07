@@ -418,9 +418,15 @@ def test_upload_to_webdav_file_not_found():
 
 @pytest.mark.unit
 def test_all_upload_tasks_have_consistent_signature(sample_text_file):
-    """Test that all upload tasks accept file_id as a keyword parameter."""
-    # This test verifies that all upload tasks can be called with the same signature
-    # as used in send_to_all.py: task.delay(file_path, file_id)
+    """Test that all upload tasks accept file_id as a keyword parameter.
+    
+    This test verifies that all upload tasks can be called with the same signature
+    as used in send_to_all.py: task.delay(file_path, file_id)
+    
+    Note: We use task.run to inspect the actual function signature because
+    Celery tasks wrap the original function, and .run provides access to
+    the unwrapped callable's signature.
+    """
     
     upload_tasks = [
         (upload_to_s3, "app.tasks.upload_to_s3"),
@@ -431,9 +437,11 @@ def test_all_upload_tasks_have_consistent_signature(sample_text_file):
         (upload_to_email, "app.tasks.upload_to_email"),
     ]
     
+    import inspect
+    
     for task, module_path in upload_tasks:
-        # Verify that the task has the expected signature by inspecting its function
-        import inspect
+        # Use task.run to inspect the actual wrapped function's signature
+        # This is necessary because Celery's task decorator wraps the original function
         sig = inspect.signature(task.run)
         params = list(sig.parameters.keys())
         

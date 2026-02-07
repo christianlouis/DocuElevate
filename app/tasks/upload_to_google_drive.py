@@ -144,14 +144,14 @@ def truncate_property_value(key, value, max_bytes=100):
     return str_value
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
-def upload_to_google_drive(self, file_path: str, file_id: int = None, include_metadata=True):
+def upload_to_google_drive(self, file_path: str, include_metadata=True, file_id: int = None):
     """
     Uploads a file to Google Drive in the configured folder with optional metadata.
     
     Args:
         file_path: Path to the file to upload
-        file_id: Optional file ID to associate with logs
         include_metadata: Whether to include metadata in the upload
+        file_id: Optional file ID to associate with logs
     """
     task_id = self.request.id
     logger.info(f"[{task_id}] Starting Google Drive upload: {file_path}")
