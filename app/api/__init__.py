@@ -15,6 +15,7 @@ from app.api.openai import router as openai_router
 from app.api.azure import router as azure_router
 from app.api.google_drive import router as google_drive_router
 from app.api.logs import router as logs_router
+from app.api.settings import router as settings_router
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -33,3 +34,4 @@ router.include_router(openai_router)
 router.include_router(azure_router)
 router.include_router(google_drive_router)
 router.include_router(logs_router)
+router.include_router(settings_router)

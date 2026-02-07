@@ -59,6 +59,19 @@ else:
 @app.on_event("startup")
 def on_startup():
     init_db()  # Create tables if they don't exist
+    
+    # Load settings from database after DB initialization
+    from app.database import SessionLocal
+    from app.utils.config_loader import load_settings_from_db
+    
+    db = SessionLocal()
+    try:
+        load_settings_from_db(settings, db)
+        logging.info("Database settings loaded successfully")
+    except Exception as e:
+        logging.error(f"Failed to load database settings: {e}")
+    finally:
+        db.close()
 
 @app.on_event("startup")
 async def startup_event():

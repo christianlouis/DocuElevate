@@ -47,3 +47,13 @@ class ProcessingLog(Base):
     status = Column(String)              # "pending", "in_progress", "success", "failure"
     message = Column(String, nullable=True)  # Error text or success note
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+class ApplicationSettings(Base):
+    """Store application settings in database with precedence over environment variables"""
+    __tablename__ = "application_settings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, index=True, nullable=False)  # Setting key (e.g., 'database_url')
+    value = Column(String, nullable=True)  # Setting value (stored as string, converted as needed)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
