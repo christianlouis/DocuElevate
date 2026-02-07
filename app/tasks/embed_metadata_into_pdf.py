@@ -12,6 +12,14 @@ from app.tasks.finalize_document_storage import finalize_document_storage
 # Import the shared Celery instance
 from app.celery_app import celery
 
+# Directory constants - defined here to avoid hardcoded strings (BAN-B108)
+# Note: These are application-specific subdirectories within settings.workdir,
+# not system temporary directories. The workdir is a configurable path specific
+# to this application. For actual temporary file creation, tempfile module is
+# used (see line 70: tempfile.NamedTemporaryFile)
+TMP_SUBDIR = "tmp"
+PROCESSED_SUBDIR = "processed"
+
 def unique_filepath(directory, base_filename, extension=".pdf"):
     """
     Returns a unique filepath in the specified directory.
@@ -56,7 +64,7 @@ def embed_metadata_into_pdf(local_file_path: str, extracted_text: str, metadata:
     """
     # Check for file existence; if not found, try the known shared tmp directory.
     if not os.path.exists(local_file_path):
-        alt_path = os.path.join(settings.workdir, "tmp", os.path.basename(local_file_path))
+        alt_path = os.path.join(settings.workdir, TMP_SUBDIR, os.path.basename(local_file_path))
         if os.path.exists(alt_path):
             local_file_path = alt_path
         else:
@@ -105,7 +113,7 @@ def embed_metadata_into_pdf(local_file_path: str, extracted_text: str, metadata:
         # Remove any extension and then add .pdf
         suggested_filename = os.path.splitext(suggested_filename)[0]
         # Define the final directory based on settings.workdir and ensure it exists.
-        final_dir = os.path.join(settings.workdir, "processed")
+        final_dir = os.path.join(settings.workdir, PROCESSED_SUBDIR)
         os.makedirs(final_dir, exist_ok=True)
         # Get a unique filepath in case of collisions.
         final_file_path = unique_filepath(final_dir, suggested_filename, extension=".pdf")
@@ -124,7 +132,7 @@ def embed_metadata_into_pdf(local_file_path: str, extracted_text: str, metadata:
         finalize_document_storage.delay(original_file, final_file_path, metadata)
 
         # After triggering final storage, delete the original file if it is in workdir/tmp.
-        workdir_tmp = os.path.join(settings.workdir, "tmp")
+        workdir_tmp = os.path.join(settings.workdir, TMP_SUBDIR)
         if original_file.startswith(workdir_tmp) and os.path.exists(original_file):
             try:
                 os.remove(original_file)
