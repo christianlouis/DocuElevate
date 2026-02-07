@@ -5,13 +5,12 @@ These tests verify the fix for the issue where uploaded files do not maintain
 their original file names.
 """
 
-import os
-import pytest
-from unittest.mock import patch, MagicMock
-from sqlalchemy.orm import Session
+from unittest.mock import MagicMock, patch
 
-from app.tasks.process_document import process_document
+import pytest
+
 from app.models import FileRecord
+from app.tasks.process_document import process_document
 
 
 @pytest.mark.unit
@@ -83,15 +82,16 @@ startxref
 %%EOF
 """
     test_pdf.write_bytes(pdf_content)
-    
+
     # The original filename that the user uploaded
     original_filename = "Apostille Sverige.pdf"
 
     # Mock environment and dependencies
-    with patch("app.tasks.process_document.SessionLocal") as mock_session_local, \
-         patch("app.tasks.process_document.settings") as mock_settings, \
-         patch("app.tasks.process_document.log_task_progress"), \
-         patch("app.tasks.process_document.extract_metadata_with_gpt") as mock_extract:
+    with patch("app.tasks.process_document.SessionLocal") as mock_session_local, patch(
+        "app.tasks.process_document.settings"
+    ) as mock_settings, patch("app.tasks.process_document.log_task_progress"), patch(
+        "app.tasks.process_document.extract_metadata_with_gpt"
+    ) as mock_extract:
 
         # Setup mocks
         mock_settings.workdir = str(tmp_path)
@@ -109,7 +109,7 @@ startxref
         # Verify that a FileRecord was created with the correct original filename
         file_record = db_session.query(FileRecord).first()
         assert file_record is not None
-        
+
         # This is the key assertion - the original filename should be preserved
         assert file_record.original_filename == original_filename
         # The filename should NOT be the UUID-based filename
@@ -187,10 +187,11 @@ startxref
     test_pdf.write_bytes(pdf_content)
 
     # Mock environment and dependencies
-    with patch("app.tasks.process_document.SessionLocal") as mock_session_local, \
-         patch("app.tasks.process_document.settings") as mock_settings, \
-         patch("app.tasks.process_document.log_task_progress"), \
-         patch("app.tasks.process_document.extract_metadata_with_gpt") as mock_extract:
+    with patch("app.tasks.process_document.SessionLocal") as mock_session_local, patch(
+        "app.tasks.process_document.settings"
+    ) as mock_settings, patch("app.tasks.process_document.log_task_progress"), patch(
+        "app.tasks.process_document.extract_metadata_with_gpt"
+    ) as mock_extract:
 
         # Setup mocks
         mock_settings.workdir = str(tmp_path)
