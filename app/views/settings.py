@@ -57,7 +57,6 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
                 
                 settings_data[category].append({
                     "key": key,
-                    "value": value if value is not None else "",
                     "display_value": display_value if display_value is not None else "",
                     "metadata": metadata
                 })

@@ -160,8 +160,8 @@ function settingsApp() {
       // Initialize form data from current settings
       {% for category, settings_list in settings_data.items() %}
         {% for setting in settings_list %}
-          this.formData['{{ setting.key }}'] = '{{ setting.value }}';
-          this.originalData['{{ setting.key }}'] = '{{ setting.value }}';
+          this.formData['{{ setting.key }}'] = {{ setting.display_value|tojson }};
+          this.originalData['{{ setting.key }}'] = {{ setting.display_value|tojson }};
           this.showPassword['{{ setting.key }}'] = false;
         {% endfor %}
       {% endfor %}

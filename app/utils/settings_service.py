@@ -8,7 +8,7 @@ This module provides functionality to:
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -290,7 +290,7 @@ def get_settings_by_category() -> Dict[str, List[str]]:
     return categories
 
 
-def validate_setting_value(key: str, value: str) -> tuple[bool, Optional[str]]:
+def validate_setting_value(key: str, value: str) -> Tuple[bool, Optional[str]]:
     """
     Validate a setting value based on its metadata.
     
