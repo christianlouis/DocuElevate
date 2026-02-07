@@ -62,7 +62,8 @@ def require_login(func):
 def get_gravatar_url(email):
     """Generate a Gravatar URL for the given email"""
     email = email.lower().strip()
-    email_hash = hashlib.md5(email.encode('utf-8')).hexdigest()
+    # MD5 is used here for Gravatar's URL generation (not for security), so usedforsecurity=False
+    email_hash = hashlib.md5(email.encode('utf-8'), usedforsecurity=False).hexdigest()
     return f"https://www.gravatar.com/avatar/{email_hash}?d=identicon"
 
 

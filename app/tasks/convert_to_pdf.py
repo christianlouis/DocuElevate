@@ -189,7 +189,7 @@ def convert_to_pdf(self, file_path, original_filename=None):
         log_task_progress(task_id, "call_gotenberg", "in_progress", "Calling Gotenberg API")
 
         # Send the conversion request to Gotenberg
-        response = requests.post(endpoint, files=files, data=form_data)
+        response = requests.post(endpoint, files=files, data=form_data, timeout=settings.http_request_timeout)
 
         if response.status_code == 200:
             # Save the converted PDF

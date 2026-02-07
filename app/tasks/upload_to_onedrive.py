@@ -134,7 +134,7 @@ def create_upload_session(filename, folder_path, access_token):
     
     logger.info(f"Creating upload session for {filename} at path {folder_path}")
     
-    response = requests.post(url, headers=headers, json=request_body)
+    response = requests.post(url, headers=headers, json=request_body, timeout=settings.http_request_timeout)
     
     if response.status_code == 200:
         upload_url = response.json().get("uploadUrl")
@@ -190,7 +190,8 @@ def upload_large_file(file_path, upload_url):
                     response = requests.put(
                         upload_url,
                         headers=headers,
-                        data=chunk
+                        data=chunk,
+                        timeout=settings.http_request_timeout
                     )
                     
                     # Check if successful

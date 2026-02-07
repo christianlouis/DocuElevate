@@ -44,9 +44,17 @@ jobs:
         run: pylint app/ --max-line-length=120 --disable=C0111,C0103,R0903
         continue-on-error: true
       
-      - name: Run Security Linter (Bandit)
-        run: bandit -r app/ -ll -f json -o bandit-report.json
+      - name: Run Security Linter (Bandit) - Full Report
+        run: |
+          echo "Running Bandit security scan..."
+          bandit -r app/ -f json -o bandit-report.json || true
         continue-on-error: true
+      
+      - name: Run Security Linter (Bandit) - Fail on High/Medium
+        run: |
+          echo "Running Bandit security scan (fail on high/medium severity)..."
+          bandit -r app/ -ll
+        continue-on-error: false
       
       - name: Upload Bandit Report
         uses: actions/upload-artifact@v4

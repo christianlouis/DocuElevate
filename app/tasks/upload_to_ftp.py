@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
 import os
-import ftplib
+# Security Warning: FTP is an insecure protocol. FTPS (FTP_TLS) is strongly recommended.
+# This module attempts to use FTPS by default and falls back to plaintext FTP only if configured.
+import ftplib  # nosec B402 - FTP usage is intentional for legacy server support
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.celery_app import celery
@@ -14,6 +16,10 @@ logger = logging.getLogger(__name__)
 def upload_to_ftp(self, file_path: str, file_id: int = None):
     """
     Uploads a file to an FTP server in the configured folder.
+    
+    Security Note: This function prefers FTPS (FTP with TLS) for secure connections.
+    Plaintext FTP is only used if FTPS fails and ftp_allow_plaintext=True (default).
+    For security-critical environments, set ftp_allow_plaintext=False and ftp_use_tls=True.
     
     Args:
         file_path: Path to the file to upload
@@ -71,8 +77,8 @@ def upload_to_ftp(self, file_path: str, file_id: int = None):
                     raise Exception(error_msg)
                 else:
                     logger.warning(f"FTPS connection failed, falling back to regular FTP: {str(e)}")
-                    # Fall back to regular FTP
-                    ftp = ftplib.FTP()
+                    # Fall back to regular FTP - only if explicitly allowed by configuration
+                    ftp = ftplib.FTP()  # nosec B321 - Fallback to FTP intentional when configured
                     ftp.connect(
                         host=settings.ftp_host,
                         port=settings.ftp_port or 21
@@ -91,7 +97,8 @@ def upload_to_ftp(self, file_path: str, file_id: int = None):
                 raise Exception(error_msg)
             
             # Directly use regular FTP if TLS is explicitly disabled
-            ftp = ftplib.FTP()
+            logger.warning("Using plaintext FTP - connection is NOT encrypted!")
+            ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when explicitly configured
             ftp.connect(
                 host=settings.ftp_host,
                 port=settings.ftp_port or 21

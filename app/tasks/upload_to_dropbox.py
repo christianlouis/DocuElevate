@@ -49,8 +49,8 @@ def get_dropbox_access_token():
         "client_id": settings.dropbox_app_key,
         "client_secret": settings.dropbox_app_secret,
     }
-
-    response = requests.post(token_url, headers=headers, data=data)
+
+    response = requests.post(token_url, headers=headers, data=data, timeout=settings.http_request_timeout)
 
     if response.status_code == 200:
         return response.json()["access_token"]
