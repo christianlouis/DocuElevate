@@ -10,8 +10,6 @@ from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.celery_app import celery
 from app.utils import log_task_progress
-from app.database import SessionLocal
-from app.models import FileRecord
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +227,13 @@ def upload_to_onedrive(self, file_path: str, file_id: int = None):
     """
     task_id = self.request.id
     logger.info(f"[{task_id}] Starting OneDrive upload: {file_path}")
-    log_task_progress(task_id, "upload_to_onedrive", "in_progress", f"Uploading to OneDrive: {os.path.basename(file_path)}", file_id=file_id)
+    log_task_progress(
+        task_id,
+        "upload_to_onedrive",
+        "in_progress",
+        f"Uploading to OneDrive: {os.path.basename(file_path)}",
+        file_id=file_id,
+    )
     
     if not os.path.exists(file_path):
         error_msg = f"File not found: {file_path}"
@@ -261,7 +265,9 @@ def upload_to_onedrive(self, file_path: str, file_id: int = None):
         web_url = result.get("webUrl", "Not available")
         logger.info(f"[{task_id}] Successfully uploaded {filename} to OneDrive at path {settings.onedrive_folder_path}")
         logger.info(f"[{task_id}] File accessible at: {web_url}")
-        log_task_progress(task_id, "upload_to_onedrive", "success", f"Uploaded to OneDrive: {filename}", file_id=file_id)
+        log_task_progress(
+            task_id, "upload_to_onedrive", "success", f"Uploaded to OneDrive: {filename}", file_id=file_id
+        )
         
         return {
             "status": "Completed",
