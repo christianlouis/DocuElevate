@@ -304,13 +304,13 @@
         <strong id="selectedCount">0</strong> files selected
       </div>
       <div style="display: flex; gap: 1rem;">
-        <button type="button" onclick="bulkReprocess()" class="filter-item" style="padding: 0.5rem 1rem; background-color: #3182ce; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;">
+        <button type="button" onclick="bulkReprocess()" style="padding: 0.5rem 1rem; background-color: #3182ce; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;">
           <i class="fas fa-sync"></i> Reprocess Selected
         </button>
-        <button type="button" onclick="bulkDelete()" class="filter-item" style="padding: 0.5rem 1rem; background-color: #e53e3e; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;">
+        <button type="button" onclick="bulkDelete()" style="padding: 0.5rem 1rem; background-color: #e53e3e; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;">
           <i class="fas fa-trash"></i> Delete Selected
         </button>
-        <button type="button" onclick="clearSelection()" class="filter-item" style="padding: 0.5rem 1rem; background-color: #718096; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;">
+        <button type="button" onclick="clearSelection()" style="padding: 0.5rem 1rem; background-color: #718096; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;">
           Clear Selection
         </button>
       </div>
@@ -583,7 +583,7 @@
     function bulkDelete() {
       const fileIds = getSelectedFileIds();
       if (fileIds.length === 0) {
-        alert('No files selected');
+        alert('Please select files to delete');
         return;
       }
       
@@ -619,7 +619,7 @@
     function bulkReprocess() {
       const fileIds = getSelectedFileIds();
       if (fileIds.length === 0) {
-        alert('No files selected');
+        alert('Please select files to reprocess');
         return;
       }
       
