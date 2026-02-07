@@ -44,7 +44,20 @@ def upload_to_sftp(self, file_path: str, file_id: int = None):
     
     # SSH client for SFTP connection
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    
+    # Security: Host key verification
+    # WARNING: AutoAddPolicy automatically trusts unknown host keys (vulnerable to MITM attacks)
+    # For production, use RejectPolicy and configure known_hosts, or WarningPolicy at minimum
+    if getattr(settings, 'sftp_disable_host_key_verification', True):
+        logger.warning(
+            "SFTP host key verification is DISABLED - connections are vulnerable to MITM attacks. "
+            "For production, set SFTP_DISABLE_HOST_KEY_VERIFICATION=false and configure known_hosts."
+        )
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # nosec B507 - Configurable, warns user
+    else:
+        # Use system known_hosts for host key verification (more secure)
+        ssh.load_system_host_keys()
+        ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
     
     try:
         # Setup connection parameters

@@ -55,7 +55,7 @@ async def exchange_onedrive_token(
         
         # Make the token request
         logger.info("Sending POST request to Microsoft for token exchange")
-        response = requests.post(token_url, data=payload)
+        response = requests.post(token_url, data=payload, timeout=settings.http_request_timeout)
         
         # Check if the request was successful
         logger.info(f"Token exchange response status: {response.status_code}")
@@ -139,7 +139,7 @@ async def test_onedrive_token(request: Request):
             "scope": "offline_access Files.ReadWrite"
         }
         
-        response = requests.post(token_url, data=refresh_data)
+        response = requests.post(token_url, data=refresh_data, timeout=settings.http_request_timeout)
         
         if response.status_code != 200:
             logger.error(f"Failed to refresh OneDrive token: {response.text}")
@@ -193,7 +193,7 @@ async def test_onedrive_token(request: Request):
         user_info_url = "https://graph.microsoft.com/v1.0/me"
         headers = {"Authorization": f"Bearer {access_token}"}
         
-        user_response = requests.get(user_info_url, headers=headers)
+        user_response = requests.get(user_info_url, headers=headers, timeout=settings.http_request_timeout)
         
         if user_response.status_code != 200:
             logger.error(f"OneDrive token test failed: {user_response.status_code} {user_response.text}")

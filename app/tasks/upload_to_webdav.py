@@ -64,7 +64,8 @@ def upload_to_webdav(self, file_path: str, file_id: int = None):
                 webdav_url,
                 auth=(settings.webdav_username, settings.webdav_password),
                 data=file_data,
-                verify=settings.webdav_verify_ssl if hasattr(settings, "webdav_verify_ssl") else True
+                verify=settings.webdav_verify_ssl if hasattr(settings, "webdav_verify_ssl") else True,
+                timeout=settings.http_request_timeout
             )
 
         # Check if upload was successful

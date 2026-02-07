@@ -49,7 +49,7 @@ def poll_task_for_document_id(task_id: str) -> int:
 
     while attempts < POLL_MAX_ATTEMPTS:
         try:
-            resp = requests.get(url, headers=_get_headers(), params={"task_id": task_id})
+            resp = requests.get(url, headers=_get_headers(), params={"task_id": task_id}, timeout=settings.http_request_timeout)
             resp.raise_for_status()
             tasks_data = resp.json()
         except requests.exceptions.RequestException as exc:
@@ -125,7 +125,7 @@ def upload_to_paperless(self, file_path: str, file_id: int = None):
 
         try:
             logger.debug("Posting document to Paperless: file=%s", filename)
-            resp = requests.post(post_url, headers=_get_headers(), files=files, data=data)
+            resp = requests.post(post_url, headers=_get_headers(), files=files, data=data, timeout=settings.http_request_timeout)
             resp.raise_for_status()
         except requests.exceptions.RequestException as exc:
             error_msg = f"Failed to upload to Paperless: {exc}"

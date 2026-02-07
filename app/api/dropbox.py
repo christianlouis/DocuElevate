@@ -53,7 +53,7 @@ async def exchange_dropbox_token(
         
         # Make the token request
         logger.info("Sending POST request to Dropbox for token exchange")
-        response = requests.post(token_url, data=payload)
+        response = requests.post(token_url, data=payload, timeout=settings.http_request_timeout)
         
         # Check if the request was successful
         logger.info(f"Token exchange response status: {response.status_code}")
@@ -176,7 +176,8 @@ async def test_dropbox_token(request: Request):
         headers = {"Authorization": f"Bearer {settings.dropbox_refresh_token}"}
         response = requests.post(
             "https://api.dropboxapi.com/2/users/get_current_account",
-            headers=headers
+            headers=headers,
+            timeout=settings.http_request_timeout
         )
         
         # If token is invalid, try refreshing it
@@ -192,7 +193,7 @@ async def test_dropbox_token(request: Request):
                 "client_secret": settings.dropbox_app_secret
             }
             
-            refresh_response = requests.post(refresh_url, data=refresh_data)
+            refresh_response = requests.post(refresh_url, data=refresh_data, timeout=settings.http_request_timeout)
             
             if refresh_response.status_code != 200:
                 logger.error(f"Failed to refresh Dropbox token: {refresh_response.text}")
@@ -209,7 +210,8 @@ async def test_dropbox_token(request: Request):
             headers = {"Authorization": f"Bearer {access_token}"}
             response = requests.post(
                 "https://api.dropboxapi.com/2/users/get_current_account",
-                headers=headers
+                headers=headers,
+                timeout=settings.http_request_timeout
             )
         
         if response.status_code != 200:

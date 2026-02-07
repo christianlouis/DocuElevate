@@ -53,7 +53,7 @@ async def exchange_google_drive_token(
         
         # Make the token request
         logger.info("Sending POST request to Google for token exchange")
-        response = requests.post(token_url, data=payload)
+        response = requests.post(token_url, data=payload, timeout=settings.http_request_timeout)
         
         # Check if the request was successful
         logger.info(f"Token exchange response status: {response.status_code}")

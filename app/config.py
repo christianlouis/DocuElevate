@@ -104,6 +104,9 @@ class Settings(BaseSettings):
     sftp_folder: Optional[str] = None
     sftp_private_key: Optional[str] = None
     sftp_private_key_passphrase: Optional[str] = None
+    # Security: Disable host key verification only in development/testing environments
+    # In production, set to True and configure known_hosts file
+    sftp_disable_host_key_verification: bool = True  # Default allows connection without known_hosts
 
     # Email settings
     email_host: Optional[str] = None
@@ -133,6 +136,9 @@ class Settings(BaseSettings):
     # Uptime Kuma settings
     uptime_kuma_url: Optional[str] = None
     uptime_kuma_ping_interval: int = 5  # Default ping interval in minutes
+
+    # HTTP request settings
+    http_request_timeout: int = 30  # Default timeout for HTTP requests in seconds
 
     # Feature flags
     allow_file_delete: bool = True  # Default to allowing file deletion from database
