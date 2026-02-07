@@ -8,7 +8,7 @@ This module provides functionality to:
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Union
 from sqlalchemy.orm import Session
 
 from app.models import ApplicationSettings
