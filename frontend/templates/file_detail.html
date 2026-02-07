@@ -207,6 +207,57 @@
       color: #991B1B;
     }
   </style>
+  <script>
+    // JavaScript for handling retry functionality
+    async function reprocessFile() {
+      const fileId = {{ file.id | tojson }};
+      const button = document.getElementById('reprocess-btn');
+      const statusDiv = document.getElementById('reprocess-status');
+      
+      // Disable button and show loading
+      button.disabled = true;
+      button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+      statusDiv.innerHTML = '';
+      
+      try {
+        const response = await fetch(`/api/files/${fileId}/reprocess`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          statusDiv.innerHTML = `
+            <div style="background-color: #D1FAE5; color: #065F46; padding: 1rem; border-radius: 0.25rem; margin-top: 1rem;">
+              <i class="fas fa-check-circle"></i> File queued for reprocessing. Task ID: ${data.task_id}
+              <br><small>Refresh the page in a few moments to see updated status.</small>
+            </div>
+          `;
+          // Reload page after 3 seconds
+          setTimeout(() => window.location.reload(), 3000);
+        } else {
+          statusDiv.innerHTML = `
+            <div class="error-message" style="margin-top: 1rem;">
+              <i class="fas fa-exclamation-triangle"></i> Error: ${data.detail || 'Failed to reprocess file'}
+            </div>
+          `;
+          button.disabled = false;
+          button.innerHTML = '<i class="fas fa-redo"></i> Retry Processing';
+        }
+      } catch (error) {
+        statusDiv.innerHTML = `
+          <div class="error-message" style="margin-top: 1rem;">
+            <i class="fas fa-exclamation-triangle"></i> Network error: ${error.message}
+          </div>
+        `;
+        button.disabled = false;
+        button.innerHTML = '<i class="fas fa-redo"></i> Retry Processing';
+      }
+    }
+  </script>
 {% endblock %}
 
 {% block content %}
@@ -273,7 +324,15 @@
   
   <!-- Processing History Card -->
   <div class="detail-card">
-    <h3>Processing History</h3>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <h3 style="margin: 0;">Processing History</h3>
+      {% if file_exists %}
+      <button id="reprocess-btn" onclick="reprocessFile()" style="background-color: #3182ce; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;">
+        <i class="fas fa-redo"></i> Retry Processing
+      </button>
+      {% endif %}
+    </div>
+    <div id="reprocess-status"></div>
     {% if logs %}
     <div class="timeline">
       {% for log in logs %}
@@ -304,6 +363,97 @@
     </div>
     {% endif %}
   </div>
+  
+  <!-- Process Flow Visualization Card -->
+  {% if flow_data %}
+  <div class="detail-card">
+    <h3>Process Flow Visualization</h3>
+    <div style="padding: 1rem 0;">
+      <div style="position: relative;">
+        {% for stage in flow_data %}
+        <div style="display: flex; align-items: center; margin-bottom: 1.5rem;">
+          <!-- Status indicator -->
+          <div style="width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 1rem;
+            {% if stage.status == 'success' %}background-color: #48bb78; color: white;
+            {% elif stage.status == 'failure' %}background-color: #f56565; color: white;
+            {% elif stage.status == 'in_progress' %}background-color: #4299e1; color: white;
+            {% elif stage.status == 'pending' %}background-color: #ecc94b; color: white;
+            {% else %}background-color: #e2e8f0; color: #718096;{% endif %}
+          ">
+            {% if stage.status == 'success' %}<i class="fas fa-check"></i>
+            {% elif stage.status == 'failure' %}<i class="fas fa-times"></i>
+            {% elif stage.status == 'in_progress' %}<i class="fas fa-spinner fa-spin"></i>
+            {% elif stage.status == 'pending' %}<i class="fas fa-clock"></i>
+            {% else %}<i class="fas fa-circle"></i>{% endif %}
+          </div>
+          
+          <!-- Stage info -->
+          <div style="flex: 1; background-color: #f7fafc; padding: 1rem; border-radius: 0.5rem; border-left: 3px solid 
+            {% if stage.status == 'success' %}#48bb78
+            {% elif stage.status == 'failure' %}#f56565
+            {% elif stage.status == 'in_progress' %}#4299e1
+            {% elif stage.status == 'pending' %}#ecc94b
+            {% else %}#e2e8f0{% endif %};">
+            <div style="font-weight: 600; color: #2d3748; margin-bottom: 0.25rem;">{{ stage.label }}</div>
+            {% if stage.message %}
+            <div style="color: #4a5568; font-size: 0.875rem;">{{ stage.message }}</div>
+            {% endif %}
+            {% if stage.status == 'not_run' %}
+            <div style="color: #718096; font-size: 0.875rem; font-style: italic;">Not executed</div>
+            {% endif %}
+            {% if stage.timestamp %}
+            <div style="color: #718096; font-size: 0.75rem; margin-top: 0.25rem;">
+              {{ stage.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        
+        <!-- Connector line (except for last item) -->
+        {% if not loop.last %}
+        <div style="width: 2px; height: 20px; background-color: #e2e8f0; margin-left: 19px; margin-bottom: 0.5rem;"></div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  
+  <!-- File Preview Card -->
+  {% if file_exists or processed_exists %}
+  <div class="detail-card">
+    <h3>File Previews</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 2rem;">
+      {% if file_exists %}
+      <div>
+        <h4 style="font-weight: 600; color: #2d3748; margin-bottom: 1rem;">Original File</h4>
+        <div style="border: 2px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; background-color: #f7fafc;">
+          <embed src="/api/files/{{ file.id }}/preview?version=original" type="application/pdf" width="100%" height="600px" style="border: none;">
+        </div>
+        <div style="margin-top: 0.5rem; text-align: center;">
+          <a href="/api/files/{{ file.id }}/preview?version=original" target="_blank" style="color: #3182ce; text-decoration: none; font-size: 0.875rem;">
+            <i class="fas fa-external-link-alt"></i> Open in new tab
+          </a>
+        </div>
+      </div>
+      {% endif %}
+      
+      {% if processed_exists %}
+      <div>
+        <h4 style="font-weight: 600; color: #2d3748; margin-bottom: 1rem;">Processed File</h4>
+        <div style="border: 2px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; background-color: #f7fafc;">
+          <embed src="/api/files/{{ file.id }}/preview?version=processed" type="application/pdf" width="100%" height="600px" style="border: none;">
+        </div>
+        <div style="margin-top: 0.5rem; text-align: center;">
+          <a href="/api/files/{{ file.id }}/preview?version=processed" target="_blank" style="color: #3182ce; text-decoration: none; font-size: 0.875rem;">
+            <i class="fas fa-external-link-alt"></i> Open in new tab
+          </a>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
   
   {% endif %}
 </div>
