@@ -69,6 +69,51 @@ The **Files** page provides access to all processed documents:
 3. Click on any file to view its details
 4. Sort the list by any column by clicking on the column header
 
+### File Detail View
+
+When you click on a file, you'll see a comprehensive detail view with the following sections:
+
+#### File Information
+This section displays metadata about the file:
+- File ID and original filename
+- File hash (SHA-256)
+- File size and MIME type
+- Creation timestamp
+- Local path and disk status
+
+#### Processing History
+View the complete processing history with a timeline showing:
+- Each processing step that was executed
+- Status of each step (success, failure, in progress, pending)
+- Error messages for failed steps
+- Timestamps for each operation
+
+**Retry Processing**: If a file's processing has failed, you can use the "Retry Processing" button to reprocess the entire file. This is useful when:
+- External API services (like OpenAI) had temporary issues
+- Network connectivity was lost during processing
+- Configuration has been updated and you want to reprocess with new settings
+
+#### Process Flow Visualization
+The process flow visualization shows a visual representation of the document processing pipeline:
+- **Green indicators**: Successful stages
+- **Red indicators**: Failed stages with error messages
+- **Gray indicators**: Stages that were not executed (e.g., because a previous stage failed)
+
+This helps you understand:
+- Which processing path your document took (local text extraction vs. OCR)
+- Where exactly the processing failed
+- Which stages were skipped and why
+
+#### File Previews
+If your file is still available on disk, you can preview it directly in the browser:
+- **Original File**: The file as it was uploaded
+- **Processed File**: The file after metadata has been embedded (if processing completed)
+
+Both previews support:
+- In-browser PDF viewing
+- Opening in a new tab for full-screen viewing
+- Side-by-side comparison of original and processed versions
+
 ## Document Processing Features
 
 Depending on the system configuration, DocuElevate can perform:

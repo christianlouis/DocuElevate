@@ -91,15 +91,48 @@ Retrieve metadata for a specific file.
 
 **POST** `/api/files/{file_id}/reprocess`
 
-Reprocess a specific file.
+Reprocess a specific file. This queues the file for complete reprocessing through the entire pipeline.
 
 **Response**:
 ```json
 {
-  "success": true,
-  "message": "File queued for reprocessing"
+  "status": "success",
+  "message": "File queued for reprocessing",
+  "file_id": 123,
+  "filename": "invoice.pdf",
+  "task_id": "a1b2c3d4-e5f6-7g8h-9i0j-k1l2m3n4o5p6"
 }
 ```
+
+**Error Responses**:
+- `404`: File not found
+- `400`: Local file not found on disk (cannot reprocess)
+
+### File Preview
+
+**GET** `/api/files/{file_id}/preview`
+
+Retrieve the file content for preview purposes.
+
+**Parameters**:
+- `version` (required): Either `original` or `processed`
+  - `original`: Returns the file as it was uploaded (from tmp directory)
+  - `processed`: Returns the file after metadata embedding (from processed directory)
+
+**Response**: Returns the file content with appropriate MIME type for browser display.
+
+**Example**:
+```bash
+# Preview original file
+curl "http://<your-instance>/api/files/123/preview?version=original"
+
+# Preview processed file
+curl "http://<your-instance>/api/files/123/preview?version=processed"
+```
+
+**Error Responses**:
+- `404`: File not found in database or on disk
+- `400`: Invalid version parameter
 
 ### Batch Processing
 
