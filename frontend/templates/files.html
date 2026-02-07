@@ -43,6 +43,20 @@
     .delete-btn:hover {
       background-color: #fed7d7;
     }
+    .view-logs-btn {
+      color: #3182ce;
+      cursor: pointer;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      background: none;
+      border: none;
+      display: flex;
+      align-items: center;
+      margin-right: 0.5rem;
+    }
+    .view-logs-btn:hover {
+      background-color: #bee3f8;
+    }
     .error-message {
       background-color: #FEE2E2;
       border: 1px solid #F87171;
@@ -76,8 +90,10 @@
       background-color: white;
       border-radius: 0.5rem;
       padding: 2rem;
-      max-width: 500px;
+      max-width: 800px;
       width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
     .modal-title {
@@ -109,6 +125,48 @@
     }
     .modal-btn-delete:hover {
       background-color: #c53030;
+    }
+    
+    /* Logs styles */
+    .logs-container {
+      margin-top: 1rem;
+    }
+    .log-entry {
+      padding: 0.75rem;
+      border-left: 3px solid #e2e8f0;
+      margin-bottom: 0.5rem;
+      background-color: #f7fafc;
+      border-radius: 0.25rem;
+    }
+    .log-entry.success {
+      border-left-color: #48bb78;
+      background-color: #f0fff4;
+    }
+    .log-entry.failure {
+      border-left-color: #f56565;
+      background-color: #fff5f5;
+    }
+    .log-entry.in_progress {
+      border-left-color: #4299e1;
+      background-color: #ebf8ff;
+    }
+    .log-step {
+      font-weight: 600;
+      color: #2d3748;
+    }
+    .log-message {
+      color: #4a5568;
+      margin-top: 0.25rem;
+    }
+    .log-timestamp {
+      font-size: 0.875rem;
+      color: #718096;
+      margin-top: 0.25rem;
+    }
+    .no-logs {
+      text-align: center;
+      padding: 2rem;
+      color: #718096;
     }
   </style>
 {% endblock %}
@@ -147,9 +205,14 @@
           <td>{{ file.mime_type }}</td>
           <td>{{ file.created_at }}</td>
           <td>
-            <button onclick="showDeleteModal('{{ file.id }}')" class="delete-btn">
-              <i class="fas fa-trash"></i>
-            </button>
+            <div style="display: flex; align-items: center;">
+              <button onclick="showLogs('{{ file.id }}')" class="view-logs-btn" title="View processing logs">
+                <i class="fas fa-list"></i>
+              </button>
+              <button onclick="showDeleteModal('{{ file.id }}')" class="delete-btn" title="Delete file">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
           </td>
         </tr>
         {% else %}
@@ -173,32 +236,104 @@
     </div>
   </div>
   
+  <!-- Processing logs modal -->
+  <div id="logsModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-title">Processing Logs</div>
+      <div id="logsContent">
+        <p>Loading logs...</p>
+      </div>
+      <div class="modal-buttons">
+        <button id="closeLogsModal" class="modal-btn modal-btn-cancel">Close</button>
+      </div>
+    </div>
+  </div>
+  
   <!-- Add JavaScript for handling DELETE requests -->
   <script>
     // Modal functionality
-    const modal = document.getElementById('deleteModal');
+    const deleteModal = document.getElementById('deleteModal');
+    const logsModal = document.getElementById('logsModal');
     const cancelDelete = document.getElementById('cancelDelete');
     const confirmDelete = document.getElementById('confirmDelete');
+    const closeLogsModal = document.getElementById('closeLogsModal');
     let currentFileId = null;
     
     function showDeleteModal(fileId) {
       currentFileId = fileId;
-      modal.style.display = 'flex';
+      deleteModal.style.display = 'flex';
+    }
+    
+    function showLogs(fileId) {
+      logsModal.style.display = 'flex';
+      document.getElementById('logsContent').innerHTML = '<p>Loading logs...</p>';
+      
+      // Fetch logs from API
+      fetch(`/api/logs/file/${fileId}`)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Failed to fetch logs');
+          }
+          return response.json();
+        })
+        .then(data => {
+          displayLogs(data);
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          document.getElementById('logsContent').innerHTML = 
+            `<div class="error-message">Error loading logs: ${error.message}</div>`;
+        });
+    }
+    
+    function displayLogs(data) {
+      const logsContent = document.getElementById('logsContent');
+      
+      if (!data.logs || data.logs.length === 0) {
+        logsContent.innerHTML = '<div class="no-logs">No processing logs found for this file.</div>';
+        return;
+      }
+      
+      let html = '<div class="logs-container">';
+      html += `<h3 style="margin-bottom: 1rem;">File: ${data.file.original_filename}</h3>`;
+      
+      data.logs.forEach(log => {
+        const statusClass = log.status.toLowerCase().replace(' ', '_');
+        const timestamp = new Date(log.timestamp).toLocaleString();
+        
+        html += `
+          <div class="log-entry ${statusClass}">
+            <div class="log-step">${log.step_name} - ${log.status}</div>
+            ${log.message ? `<div class="log-message">${log.message}</div>` : ''}
+            <div class="log-timestamp">${timestamp}</div>
+          </div>
+        `;
+      });
+      
+      html += '</div>';
+      logsContent.innerHTML = html;
     }
     
     cancelDelete.addEventListener('click', () => {
-      modal.style.display = 'none';
+      deleteModal.style.display = 'none';
     });
     
     confirmDelete.addEventListener('click', () => {
       deleteFile(currentFileId);
-      modal.style.display = 'none';
+      deleteModal.style.display = 'none';
+    });
+    
+    closeLogsModal.addEventListener('click', () => {
+      logsModal.style.display = 'none';
     });
     
     // Close modal if clicking outside of it
     window.addEventListener('click', (event) => {
-      if (event.target === modal) {
-        modal.style.display = 'none';
+      if (event.target === deleteModal) {
+        deleteModal.style.display = 'none';
+      }
+      if (event.target === logsModal) {
+        logsModal.style.display = 'none';
       }
     });
     

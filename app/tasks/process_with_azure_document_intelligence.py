@@ -76,7 +76,7 @@ def check_page_rotation(result, filename):
     return rotation_data
 
 @celery.task(base=BaseTaskWithRetry)
-def process_with_azure_document_intelligence(filename: str):
+def process_with_azure_document_intelligence(filename: str, file_id: int = None):
     """
     Processes a PDF document using Azure Document Intelligence and overlays OCR text onto
     the local temporary file (stored under <workdir>/tmp).
@@ -88,6 +88,10 @@ def process_with_azure_document_intelligence(filename: str):
       3. Saves the OCR-processed PDF locally in the same location as before.
       4. Checks for page rotation and triggers page rotation if needed.
       5. Triggers downstream metadata extraction.
+      
+    Args:
+        filename: Name of the file to process
+        file_id: Optional file ID to pass through to subsequent tasks
     """
     try:
         tmp_file_path = os.path.join(settings.workdir, "tmp", filename)
@@ -139,7 +143,7 @@ def process_with_azure_document_intelligence(filename: str):
         logger.info(f"Extracted text for {filename}: {len(extracted_text)} characters")
 
         # Trigger page rotation task if rotation is detected, otherwise proceed to metadata extraction
-        rotate_pdf_pages.delay(filename, extracted_text, rotation_data)
+        rotate_pdf_pages.delay(filename, extracted_text, rotation_data, file_id)
 
         return {"file": filename, "searchable_pdf": searchable_pdf_path, "cleaned_text": extracted_text}
     except Exception as e:

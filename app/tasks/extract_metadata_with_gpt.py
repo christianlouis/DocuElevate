@@ -2,6 +2,7 @@
 
 import json
 import re
+import os
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
@@ -10,6 +11,9 @@ from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
 from app.celery_app import celery
 import openai
 import logging
+from app.utils import log_task_progress
+from app.database import SessionLocal
+from app.models import FileRecord
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +45,23 @@ def extract_json_from_text(text):
             return text[start:end+1]
     return None
 
-@celery.task(base=BaseTaskWithRetry)
-def extract_metadata_with_gpt(filename: str, cleaned_text: str):
+@celery.task(base=BaseTaskWithRetry, bind=True)
+def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: int = None):
     """Uses OpenAI to classify document metadata."""
+    task_id = self.request.id
+    logger.info(f"[{task_id}] Starting metadata extraction for: {filename}")
+    log_task_progress(task_id, "extract_metadata_with_gpt", "in_progress", f"Extracting metadata for {filename}", file_id=file_id)
+    
+    # Get file_id from database if not provided
+    if file_id is None:
+        tmp_dir = os.path.join(settings.workdir, "tmp")
+        file_path = os.path.join(tmp_dir, filename)
+        if os.path.exists(file_path):
+            with SessionLocal() as db:
+                file_record = db.query(FileRecord).filter_by(local_filename=file_path).first()
+                if file_record:
+                    file_id = file_record.id
+    
     prompt = f"""
 You are a specialized document analyzer trained to extract structured metadata from documents.
 Your task is to analyze the given text and return a well-structured JSON object.
@@ -77,7 +95,8 @@ Return only valid JSON with no additional commentary.
 """
 
     try:
-        print(f"[DEBUG] Sending classification request for {filename}...")
+        logger.info(f"[{task_id}] Sending classification request for {filename}...")
+        log_task_progress(task_id, "call_openai", "in_progress", "Calling OpenAI API", file_id=file_id)
         completion = client.chat.completions.create(
             model=settings.openai_model,
             messages=[
@@ -88,21 +107,27 @@ Return only valid JSON with no additional commentary.
         )
 
         content = completion.choices[0].message.content
-        print(f"[DEBUG] Raw classification response for {filename}: {content}")
+        logger.info(f"[{task_id}] Raw classification response for {filename}: {content[:200]}...")
+        log_task_progress(task_id, "call_openai", "success", "Received OpenAI response", file_id=file_id)
 
         json_text = extract_json_from_text(content)
         if not json_text:
-            print(f"[ERROR] Could not find valid JSON in GPT response for {filename}.")
+            logger.error(f"[{task_id}] Could not find valid JSON in GPT response for {filename}.")
+            log_task_progress(task_id, "extract_metadata_with_gpt", "failure", "Invalid JSON in response", file_id=file_id)
             return {}
 
         metadata = json.loads(json_text)
-        print(f"[DEBUG] Extracted metadata: {metadata}")
+        logger.info(f"[{task_id}] Extracted metadata: {metadata}")
+        log_task_progress(task_id, "parse_metadata", "success", f"Parsed metadata: {list(metadata.keys())}", file_id=file_id)
 
         # Trigger the next step: embedding metadata into the PDF
-        embed_metadata_into_pdf.delay(filename, cleaned_text, metadata)
+        logger.info(f"[{task_id}] Queueing metadata embedding task")
+        log_task_progress(task_id, "extract_metadata_with_gpt", "success", "Metadata extracted, queuing embed task", file_id=file_id)
+        embed_metadata_into_pdf.delay(filename, cleaned_text, metadata, file_id)
 
         return {"s3_file": filename, "metadata": metadata}
 
     except Exception as e:
-        print(f"[ERROR] OpenAI classification failed for {filename}: {e}")
+        logger.exception(f"[{task_id}] OpenAI classification failed for {filename}: {e}")
+        log_task_progress(task_id, "extract_metadata_with_gpt", "failure", f"Exception: {str(e)}", file_id=file_id)
         return {}

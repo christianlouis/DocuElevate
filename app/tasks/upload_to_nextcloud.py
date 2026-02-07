@@ -8,17 +8,29 @@ from app.config import settings
 from app.celery_app import celery
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils.filename_utils import get_unique_filename, sanitize_filename, extract_remote_path
+from app.utils import log_task_progress
+from app.database import SessionLocal
+from app.models import FileRecord
 
 logger = logging.getLogger(__name__)
 
-@celery.task(base=BaseTaskWithRetry)
-def upload_to_nextcloud(file_path: str):
+@celery.task(base=BaseTaskWithRetry, bind=True)
+def upload_to_nextcloud(self, file_path: str, file_id: int = None):
     """
     Upload a file to Nextcloud WebDAV.
+    
+    Args:
+        file_path: Path to the file to upload
+        file_id: Optional file ID to associate with logs
     """
+    task_id = self.request.id
+    logger.info(f"[{task_id}] Starting Nextcloud upload: {file_path}")
+    log_task_progress(task_id, "upload_to_nextcloud", "in_progress", f"Uploading to Nextcloud: {os.path.basename(file_path)}", file_id=file_id)
+    
     if not os.path.exists(file_path):
         error_msg = f"File not found: {file_path}"
-        logger.error(error_msg)
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_nextcloud", "failure", error_msg, file_id=file_id)
         raise FileNotFoundError(error_msg)
     
     # For Nextcloud, we need to check for 'nextcloud_upload_url' instead of 'nextcloud_url'
@@ -26,7 +38,8 @@ def upload_to_nextcloud(file_path: str):
     if not (getattr(settings, 'nextcloud_upload_url', None) and 
             getattr(settings, 'nextcloud_username', None) and 
             getattr(settings, 'nextcloud_password', None)):
-        logger.info("Nextcloud upload skipped: Missing configuration")
+        logger.info(f"[{task_id}] Nextcloud upload skipped: Missing configuration")
+        log_task_progress(task_id, "upload_to_nextcloud", "success", "Skipped: Not configured", file_id=file_id)
         return {"status": "Skipped", "reason": "Nextcloud settings not configured"}
     
     filename = os.path.basename(file_path)
@@ -99,7 +112,8 @@ def upload_to_nextcloud(file_path: str):
                 )
         
         # Upload the file
-        logger.info(f"Uploading {filename} to Nextcloud at {full_url}")
+        logger.info(f"[{task_id}] Uploading {filename} to Nextcloud at {full_url}")
+        log_task_progress(task_id, "upload_file", "in_progress", f"Uploading to {remote_path}", file_id=file_id)
         with open(file_path, 'rb') as file_data:
             response = requests.put(
                 full_url,
@@ -110,7 +124,8 @@ def upload_to_nextcloud(file_path: str):
             )
         
         if response.status_code in (201, 204):  # Created or No Content
-            logger.info(f"Successfully uploaded {filename} to Nextcloud at {remote_path}")
+            logger.info(f"[{task_id}] Successfully uploaded {filename} to Nextcloud at {remote_path}")
+            log_task_progress(task_id, "upload_to_nextcloud", "success", f"Uploaded to Nextcloud: {remote_path}", file_id=file_id)
             return {
                 "status": "Completed",
                 "file_path": file_path,
@@ -118,11 +133,13 @@ def upload_to_nextcloud(file_path: str):
                 "response_code": response.status_code
             }
         else:
-            error_msg = f"[ERROR] Failed to upload {filename} to Nextcloud: {response.status_code} - {response.text}"
-            logger.error(error_msg)
+            error_msg = f"Failed to upload {filename} to Nextcloud: {response.status_code} - {response.text}"
+            logger.error(f"[{task_id}] {error_msg}")
+            log_task_progress(task_id, "upload_to_nextcloud", "failure", error_msg, file_id=file_id)
             raise Exception(error_msg)
     
     except Exception as e:
-        error_msg = f"[ERROR] Failed to upload {filename} to Nextcloud: {str(e)}"
-        logger.error(error_msg)
+        error_msg = f"Failed to upload {filename} to Nextcloud: {str(e)}"
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_nextcloud", "failure", error_msg, file_id=file_id)
         raise Exception(error_msg)
