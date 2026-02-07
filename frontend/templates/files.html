@@ -297,11 +297,34 @@
     </form>
   </div>
   
+  <!-- Bulk Actions Section -->
+  <div id="bulkActionsBar" class="filters-section" style="display: none; background-color: #e6f3ff;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <strong id="selectedCount">0</strong> files selected
+      </div>
+      <div style="display: flex; gap: 1rem;">
+        <button type="button" onclick="bulkReprocess()" style="padding: 0.5rem 1rem; background-color: #3182ce; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;">
+          <i class="fas fa-sync"></i> Reprocess Selected
+        </button>
+        <button type="button" onclick="bulkDelete()" style="padding: 0.5rem 1rem; background-color: #e53e3e; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;">
+          <i class="fas fa-trash"></i> Delete Selected
+        </button>
+        <button type="button" onclick="clearSelection()" style="padding: 0.5rem 1rem; background-color: #718096; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;">
+          Clear Selection
+        </button>
+      </div>
+    </div>
+  </div>
+  
   <!-- File table -->
   <div class="overflow-x-auto">
     <table class="file-table" id="fileTable">
       <thead>
         <tr>
+          <th style="width: 40px;">
+            <input type="checkbox" id="selectAll" onclick="toggleSelectAll()" title="Select all files on this page">
+          </th>
           <th class="sortable" onclick="sortTable('id')">
             ID
             <span class="sort-indicator {% if sort_by == 'id' %}active{% endif %}">
@@ -359,6 +382,9 @@
       <tbody>
         {% for file in files %}
         <tr onclick="viewFileDetail({{ file.id }}, event)">
+          <td onclick="event.stopPropagation();">
+            <input type="checkbox" class="file-checkbox" value="{{ file.id }}" onchange="updateBulkActionsBar()">
+          </td>
           <td>{{ file.id }}</td>
           <td>{{ file.original_filename }}</td>
           <td>{{ (file.file_size / 1024) | round(2) }} KB</td>
@@ -382,7 +408,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="7" class="text-center py-4">No files found</td>
+          <td colspan="8" class="text-center py-4">No files found</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -512,6 +538,124 @@
     
     function clearFilters() {
       window.location.href = '/files';
+    }
+    
+    // Bulk selection functionality
+    function toggleSelectAll() {
+      const selectAll = document.getElementById('selectAll');
+      const checkboxes = document.querySelectorAll('.file-checkbox');
+      checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+      });
+      updateBulkActionsBar();
+    }
+    
+    function updateBulkActionsBar() {
+      const checkboxes = document.querySelectorAll('.file-checkbox:checked');
+      const selectedCount = checkboxes.length;
+      const bulkActionsBar = document.getElementById('bulkActionsBar');
+      const selectedCountEl = document.getElementById('selectedCount');
+      
+      if (selectedCount > 0) {
+        bulkActionsBar.style.display = 'block';
+        selectedCountEl.textContent = selectedCount;
+      } else {
+        bulkActionsBar.style.display = 'none';
+      }
+      
+      // Update "select all" checkbox state
+      const allCheckboxes = document.querySelectorAll('.file-checkbox');
+      const selectAll = document.getElementById('selectAll');
+      selectAll.checked = allCheckboxes.length > 0 && selectedCount === allCheckboxes.length;
+    }
+    
+    function clearSelection() {
+      document.querySelectorAll('.file-checkbox').forEach(cb => cb.checked = false);
+      document.getElementById('selectAll').checked = false;
+      updateBulkActionsBar();
+    }
+    
+    function getSelectedFileIds() {
+      const checkboxes = document.querySelectorAll('.file-checkbox:checked');
+      return Array.from(checkboxes).map(cb => parseInt(cb.value));
+    }
+    
+    function bulkDelete() {
+      const fileIds = getSelectedFileIds();
+      if (fileIds.length === 0) {
+        alert('Please select files to delete');
+        return;
+      }
+      
+      if (!confirm(`Are you sure you want to delete ${fileIds.length} file(s)?`)) {
+        return;
+      }
+      
+      fetch('/api/files/bulk-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(fileIds)
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.json().then(err => {
+            throw new Error(err.detail || 'Failed to delete files');
+          });
+        }
+        return response.json();
+      })
+      .then(data => {
+        alert(data.message);
+        window.location.reload();
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert(`Error deleting files: ${error.message}`);
+      });
+    }
+    
+    function bulkReprocess() {
+      const fileIds = getSelectedFileIds();
+      if (fileIds.length === 0) {
+        alert('Please select files to reprocess');
+        return;
+      }
+      
+      if (!confirm(`Are you sure you want to reprocess ${fileIds.length} file(s)?`)) {
+        return;
+      }
+      
+      fetch('/api/files/bulk-reprocess', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(fileIds)
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.json().then(err => {
+            throw new Error(err.detail || 'Failed to reprocess files');
+          });
+        }
+        return response.json();
+      })
+      .then(data => {
+        if (data.errors && data.errors.length > 0) {
+          const errorMsg = data.errors.map(e => `${e.filename}: ${e.error}`).join('\n');
+          alert(`${data.message}\n\nErrors:\n${errorMsg}`);
+        } else {
+          alert(data.message);
+        }
+        clearSelection();
+        window.location.reload();
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert(`Error reprocessing files: ${error.message}`);
+      });
     }
   </script>
 </div>

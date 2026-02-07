@@ -275,6 +275,127 @@ def delete_file_record(request: Request, file_id: int, db: Session = Depends(get
             detail=f"Error deleting file record: {str(e)}"
         )
 
+@router.post("/files/bulk-delete")
+@require_login
+def bulk_delete_files(request: Request, file_ids: List[int], db: Session = Depends(get_db)):
+    """
+    Delete multiple file records from the database.
+    This only removes the database entries, not the actual files.
+    """
+    # Check if file deletion is allowed
+    if not settings.allow_file_delete:
+        raise HTTPException(
+            status_code=403,
+            detail="File deletion is disabled in the configuration"
+        )
+
+    try:
+        # Find all file records
+        file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+        
+        if not file_records:
+            raise HTTPException(
+                status_code=404,
+                detail="No files found with the provided IDs"
+            )
+        
+        deleted_count = len(file_records)
+        deleted_ids = [f.id for f in file_records]
+        
+        # Log the deletion
+        logger.info(f"Bulk deleting {deleted_count} file records: IDs={deleted_ids}")
+        
+        # Delete all records
+        for file_record in file_records:
+            db.delete(file_record)
+        
+        db.commit()
+        
+        return {
+            "status": "success",
+            "message": f"Successfully deleted {deleted_count} file records",
+            "deleted_ids": deleted_ids
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Error bulk deleting file records: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error bulk deleting file records: {str(e)}"
+        )
+
+
+@router.post("/files/bulk-reprocess")
+@require_login
+def bulk_reprocess_files(request: Request, file_ids: List[int], db: Session = Depends(get_db)):
+    """
+    Reprocess multiple files by queuing them for processing.
+    """
+    try:
+        # Find all file records
+        file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+        
+        if not file_records:
+            raise HTTPException(
+                status_code=404,
+                detail="No files found with the provided IDs"
+            )
+        
+        task_ids = []
+        processed_files = []
+        errors = []
+        
+        for file_record in file_records:
+            try:
+                # Check if local file exists
+                if not file_record.local_filename or not os.path.exists(file_record.local_filename):
+                    errors.append({
+                        "file_id": file_record.id,
+                        "filename": file_record.original_filename,
+                        "error": "Local file not found"
+                    })
+                    continue
+                
+                # Queue the file for processing
+                task = process_document.delay(file_record.local_filename)
+                task_ids.append(task.id)
+                processed_files.append({
+                    "file_id": file_record.id,
+                    "filename": file_record.original_filename,
+                    "task_id": task.id
+                })
+                
+                logger.info(f"Reprocessing file: ID={file_record.id}, Filename={file_record.original_filename}, TaskID={task.id}")
+                
+            except Exception as e:
+                logger.exception(f"Error reprocessing file {file_record.id}: {str(e)}")
+                errors.append({
+                    "file_id": file_record.id,
+                    "filename": file_record.original_filename,
+                    "error": str(e)
+                })
+        
+        return {
+            "status": "success" if processed_files else "error",
+            "message": f"Successfully queued {len(processed_files)} files for reprocessing",
+            "processed_files": processed_files,
+            "errors": errors if errors else None,
+            "task_ids": task_ids
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error bulk reprocessing files: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error bulk reprocessing files: {str(e)}"
+        )
+
+
 @router.post("/ui-upload")
 @require_login
 async def ui_upload(request: Request, file: UploadFile = File(...)):
