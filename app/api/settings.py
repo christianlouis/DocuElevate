@@ -21,7 +21,7 @@ from app.utils.settings_service import (
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/settings", tags=["settings"])
+router = APIRouter(prefix="/settings", tags=["settings"])
 
 
 def require_admin(request: Request):
