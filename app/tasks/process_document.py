@@ -1,30 +1,35 @@
 #!/usr/bin/env python3
 
-import os
-import uuid
-import shutil
-import mimetypes
 import logging
+import mimetypes
+import os
+import shutil
+import uuid
+
 import PyPDF2  # Replace fitz with PyPDF2
 
+from app.celery_app import celery
 from app.config import settings
-from app.tasks.retry_config import BaseTaskWithRetry
+from app.database import SessionLocal
+from app.models import FileRecord
+from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.tasks.process_with_azure_document_intelligence import (
     process_with_azure_document_intelligence,
 )
-from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
-from app.celery_app import celery
-from app.database import SessionLocal
-from app.models import FileRecord
+from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils import hash_file, log_task_progress
 
 logger = logging.getLogger(__name__)
 
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
-def process_document(self, original_local_file: str):
+def process_document(self, original_local_file: str, original_filename: str = None):
     """
     Process a document file and trigger appropriate text extraction.
+
+    Args:
+        original_local_file: Path to the file on disk
+        original_filename: Optional original filename (if different from path basename)
 
     Steps:
       1. Check if we have a FileRecord entry (via SHA-256 hash). If found, skip re-processing.
@@ -51,15 +56,15 @@ def process_document(self, original_local_file: str):
     logger.info(f"[{task_id}] Computing file hash...")
     log_task_progress(task_id, "hash_file", "in_progress", "Computing file hash")
     filehash = hash_file(original_local_file)
-    original_filename = os.path.basename(original_local_file)
+    # Use provided original_filename or fall back to basename of path
+    if original_filename is None:
+        original_filename = os.path.basename(original_local_file)
     file_size = os.path.getsize(original_local_file)
     mime_type, _ = mimetypes.guess_type(original_local_file)
     if not mime_type:
         mime_type = "application/octet-stream"
 
-    logger.info(
-        f"[{task_id}] File hash: {filehash[:10]}..., Size: {file_size} bytes, MIME: {mime_type}"
-    )
+    logger.info(f"[{task_id}] File hash: {filehash[:10]}..., Size: {file_size} bytes, MIME: {mime_type}")
     log_task_progress(
         task_id,
         "hash_file",
@@ -71,9 +76,7 @@ def process_document(self, original_local_file: str):
     with SessionLocal() as db:
         existing = db.query(FileRecord).filter_by(filehash=filehash).one_or_none()
         if existing:
-            logger.info(
-                f"[{task_id}] Duplicate file detected (hash={filehash[:10]}...) Skipping processing."
-            )
+            logger.info(f"[{task_id}] Duplicate file detected (hash={filehash[:10]}...) Skipping processing.")
             log_task_progress(
                 task_id,
                 "process_document",
@@ -89,9 +92,7 @@ def process_document(self, original_local_file: str):
 
         # Not a duplicate -> insert a new record
         logger.info(f"[{task_id}] Creating new file record in database")
-        log_task_progress(
-            task_id, "create_file_record", "in_progress", "Creating file record"
-        )
+        log_task_progress(task_id, "create_file_record", "in_progress", "Creating file record")
         new_record = FileRecord(
             filehash=filehash,
             original_filename=original_filename,
@@ -163,9 +164,7 @@ def process_document(self, original_local_file: str):
                 break
 
     if has_text:
-        logger.info(
-            f"[{task_id}] PDF {original_local_file} contains embedded text. Processing locally."
-        )
+        logger.info(f"[{task_id}] PDF {original_local_file} contains embedded text. Processing locally.")
         log_task_progress(
             task_id,
             "check_text",
@@ -215,9 +214,7 @@ def process_document(self, original_local_file: str):
         }
 
     # 3. If no embedded text, queue Azure Document Intelligence processing
-    logger.info(
-        f"[{task_id}] No embedded text found. Queueing Azure Document Intelligence processing"
-    )
+    logger.info(f"[{task_id}] No embedded text found. Queueing Azure Document Intelligence processing")
     log_task_progress(
         task_id,
         "check_text",
