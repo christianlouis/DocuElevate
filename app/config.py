@@ -138,7 +138,7 @@ class Settings(BaseSettings):
     uptime_kuma_ping_interval: int = 5  # Default ping interval in minutes
 
     # HTTP request settings
-    http_request_timeout: int = 30  # Default timeout for HTTP requests in seconds
+    http_request_timeout: int = 120  # Default timeout for HTTP requests in seconds (handles large file operations)
 
     # Feature flags
     allow_file_delete: bool = True  # Default to allowing file deletion from database

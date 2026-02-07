@@ -120,7 +120,7 @@ def upload_to_nextcloud(self, file_path: str, file_id: int = None):
                 data=file_data,
                 auth=HTTPBasicAuth(settings.nextcloud_username, settings.nextcloud_password),
                 headers={'Content-Type': 'application/octet-stream'},
-                timeout=60  # Longer timeout for larger files
+                timeout=settings.http_request_timeout  # Use configured timeout for large files
             )
         
         if response.status_code in (201, 204):  # Created or No Content

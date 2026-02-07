@@ -78,9 +78,16 @@ This document tracks security vulnerabilities found in DocuElevate and their rem
 **Issue:** HTTP requests without timeout can hang indefinitely, leading to resource exhaustion and potential DoS.
 
 **Remediation:**
-- Added `http_request_timeout` configuration setting (default: 30 seconds)
+- Added `http_request_timeout` configuration setting (default: 120 seconds)
+- Timeout configured to handle large file operations (PDFs up to 1GB+)
 - Applied `timeout=settings.http_request_timeout` to all `requests.get()`, `requests.post()`, and `requests.put()` calls
-- Configurable via environment variable: `HTTP_REQUEST_TIMEOUT=30`
+- Configurable via environment variable: `HTTP_REQUEST_TIMEOUT=120`
+
+**Note:** The 120-second default timeout is appropriate for:
+- Large PDF file uploads and downloads (up to 1GB)
+- PDF conversion operations via Gotenberg
+- Cloud storage uploads (Dropbox, OneDrive, Google Drive, Nextcloud, WebDAV)
+- Document processing and OCR operations
 
 ### Low Severity Issues (Informational)
 
