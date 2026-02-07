@@ -501,8 +501,13 @@
       })
       .then(response => {
         if (!response.ok) {
-          throw new Error('Failed to delete file');
+          return response.json().then(err => {
+            throw new Error(err.detail || 'Failed to delete file');
+          });
         }
+        return response.json();
+      })
+      .then(data => {
         // Reload the page to show updated file list
         window.location.reload();
       })

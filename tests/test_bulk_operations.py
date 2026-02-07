@@ -9,6 +9,44 @@ from unittest.mock import patch, MagicMock
 
 @pytest.mark.integration
 @pytest.mark.requires_db
+class TestSingleFileOperations:
+    """Tests for single file operations."""
+    
+    def test_single_file_delete_success(self, client: TestClient, db_session):
+        """Test deletion of a single file."""
+        # Create a sample file
+        file_record = FileRecord(
+            filehash="hash1",
+            original_filename="test.pdf",
+            local_filename="/tmp/test.pdf",
+            file_size=1024,
+            mime_type="application/pdf"
+        )
+        db_session.add(file_record)
+        db_session.commit()
+        file_id = file_record.id
+        
+        # Delete the file
+        response = client.delete(f"/api/files/{file_id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert f"File record {file_id} deleted successfully" in data["message"]
+        
+        # Verify file is deleted
+        file_record = db_session.query(FileRecord).filter(FileRecord.id == file_id).first()
+        assert file_record is None
+    
+    def test_single_file_delete_nonexistent(self, client: TestClient, db_session):
+        """Test deletion of a non-existent file."""
+        response = client.delete("/api/files/9999")
+        assert response.status_code == 404
+        data = response.json()
+        assert "not found" in data["detail"].lower()
+
+
+@pytest.mark.integration
+@pytest.mark.requires_db
 class TestBulkOperations:
     """Tests for bulk file operations."""
     
