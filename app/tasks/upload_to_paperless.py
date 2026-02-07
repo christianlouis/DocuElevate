@@ -10,6 +10,9 @@ from typing import Dict, Any
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.celery_app import celery
+from app.utils import log_task_progress
+from app.database import SessionLocal
+from app.models import FileRecord
 
 logger = logging.getLogger(__name__)
 
@@ -81,12 +84,24 @@ def poll_task_for_document_id(task_id: str) -> int:
         f"Task {task_id} didn't reach SUCCESS within {POLL_MAX_ATTEMPTS} attempts."
     )
 
-@celery.task(base=BaseTaskWithRetry)
-def upload_to_paperless(file_path: str):
-    """Uploads a file to Paperless-ngx."""
+@celery.task(base=BaseTaskWithRetry, bind=True)
+def upload_to_paperless(self, file_path: str, file_id: int = None):
+    """
+    Uploads a file to Paperless-ngx.
+    
+    Args:
+        file_path: Path to the file to upload
+        file_id: Optional file ID to associate with logs
+    """
+    task_id = self.request.id
+    logger.info(f"[{task_id}] Starting Paperless upload: {file_path}")
+    log_task_progress(task_id, "upload_to_paperless", "in_progress", f"Uploading to Paperless: {os.path.basename(file_path)}", file_id=file_id)
 
     if not os.path.exists(file_path):
-        raise FileNotFoundError(f"File not found: {file_path}")
+        error_msg = f"File not found: {file_path}"
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_paperless", "failure", error_msg, file_id=file_id)
+        raise FileNotFoundError(error_msg)
 
     # Extract filename
     filename = os.path.basename(file_path)
@@ -94,10 +109,13 @@ def upload_to_paperless(file_path: str):
     # Check if Paperless settings are configured
     if not settings.paperless_host or not settings.paperless_ngx_api_token:
         error_msg = "Paperless-ngx credentials are not fully configured"
-        logger.error(error_msg)
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_paperless", "failure", error_msg, file_id=file_id)
         raise ValueError(error_msg)
 
     # Upload the PDF
+    logger.info(f"[{task_id}] Posting document to Paperless")
+    log_task_progress(task_id, "post_document", "in_progress", "Posting to Paperless API", file_id=file_id)
     post_url = _paperless_api_url("/api/documents/post_document/")
     with open(file_path, "rb") as f:
         files = {
@@ -110,18 +128,24 @@ def upload_to_paperless(file_path: str):
             resp = requests.post(post_url, headers=_get_headers(), files=files, data=data)
             resp.raise_for_status()
         except requests.exceptions.RequestException as exc:
+            error_msg = f"Failed to upload to Paperless: {exc}"
             logger.error(
-                "Failed to upload document '%s' to Paperless. Error: %s. Response=%s",
+                f"[{task_id}] Failed to upload document '%s' to Paperless. Error: %s. Response=%s",
                 file_path, exc, getattr(exc.response, "text", "<no response>")
             )
+            log_task_progress(task_id, "upload_to_paperless", "failure", error_msg, file_id=file_id)
             raise
 
         raw_task_id = resp.text.strip().strip('"').strip("'")
-        logger.info(f"Received Paperless task ID: {raw_task_id}")
+        logger.info(f"[{task_id}] Received Paperless task ID: {raw_task_id}")
+        log_task_progress(task_id, "post_document", "success", f"Task ID: {raw_task_id}", file_id=file_id)
 
     # Poll tasks until success/fail => get doc_id
+    logger.info(f"[{task_id}] Polling for document ID")
+    log_task_progress(task_id, "poll_task", "in_progress", "Waiting for Paperless processing", file_id=file_id)
     doc_id = poll_task_for_document_id(raw_task_id)
-    logger.info(f"Document {file_path} successfully ingested => ID={doc_id}")
+    logger.info(f"[{task_id}] Document {file_path} successfully ingested => ID={doc_id}")
+    log_task_progress(task_id, "upload_to_paperless", "success", f"Uploaded to Paperless: Doc ID {doc_id}", file_id=file_id)
 
     return {
         "status": "Completed",

@@ -9,6 +9,9 @@ from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.celery_app import celery
 from app.utils.filename_utils import get_unique_filename, sanitize_filename, extract_remote_path
+from app.utils import log_task_progress
+from app.database import SessionLocal
+from app.models import FileRecord
 
 logger = logging.getLogger(__name__)
 
@@ -99,21 +102,31 @@ def get_dropbox_client():
         logger.error(f"Error creating Dropbox client: {str(e)}")
         raise
 
-@celery.task(base=BaseTaskWithRetry)
-def upload_to_dropbox(file_path: str):
+@celery.task(base=BaseTaskWithRetry, bind=True)
+def upload_to_dropbox(self, file_path: str, file_id: int = None):
     """
     Upload a file to Dropbox.
+    
+    Args:
+        file_path: Path to the file to upload
+        file_id: Optional file ID to associate with logs
     """
+    task_id = self.request.id
+    logger.info(f"[{task_id}] Starting Dropbox upload: {file_path}")
+    log_task_progress(task_id, "upload_to_dropbox", "in_progress", f"Uploading to Dropbox: {os.path.basename(file_path)}", file_id=file_id)
+    
     if not os.path.exists(file_path):
         error_msg = f"File not found: {file_path}"
-        logger.error(error_msg)
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_dropbox", "failure", error_msg, file_id=file_id)
         raise FileNotFoundError(error_msg)
     
     # Check if Dropbox is properly configured
     if not (hasattr(settings, 'dropbox_app_key') and settings.dropbox_app_key and
             hasattr(settings, 'dropbox_app_secret') and settings.dropbox_app_secret and
             hasattr(settings, 'dropbox_refresh_token') and settings.dropbox_refresh_token):
-        logger.info("Dropbox upload skipped: Missing configuration")
+        logger.info(f"[{task_id}] Dropbox upload skipped: Missing configuration")
+        log_task_progress(task_id, "upload_to_dropbox", "success", "Skipped: Not configured", file_id=file_id)
         return {"status": "Skipped", "reason": "Dropbox settings not configured"}
     
     filename = os.path.basename(file_path)
@@ -144,7 +157,8 @@ def upload_to_dropbox(file_path: str):
         dropbox_path = get_unique_filename(remote_full_path, check_exists_in_dropbox)
         
         # Upload the file
-        logger.info(f"Uploading {filename} to Dropbox at {dropbox_path}")
+        logger.info(f"[{task_id}] Uploading {filename} to Dropbox at {dropbox_path}")
+        log_task_progress(task_id, "upload_file", "in_progress", f"Uploading to {dropbox_path}", file_id=file_id)
         with open(file_path, 'rb') as file_data:
             # Use files_upload_session for large files to avoid timeouts
             file_size = os.path.getsize(file_path)
@@ -179,7 +193,8 @@ def upload_to_dropbox(file_path: str):
                     mode=dropbox.files.WriteMode.overwrite
                 )
         
-        logger.info(f"Successfully uploaded {filename} to Dropbox at {dropbox_path}")
+        logger.info(f"[{task_id}] Successfully uploaded {filename} to Dropbox at {dropbox_path}")
+        log_task_progress(task_id, "upload_to_dropbox", "success", f"Uploaded to Dropbox: {dropbox_path}", file_id=file_id)
         return {
             "status": "Completed",
             "file_path": file_path,
@@ -187,14 +202,17 @@ def upload_to_dropbox(file_path: str):
         }
     
     except AuthError:
-        error_msg = f"[ERROR] Authentication failed while uploading {filename} to Dropbox. Check token."
-        logger.error(error_msg)
+        error_msg = f"Authentication failed while uploading {filename} to Dropbox. Check token."
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_dropbox", "failure", error_msg, file_id=file_id)
         raise Exception(error_msg)
     except ApiError as e:
-        error_msg = f"[ERROR] Failed to upload {filename} to Dropbox: {e}"
-        logger.error(error_msg)
+        error_msg = f"Failed to upload {filename} to Dropbox: {e}"
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_dropbox", "failure", error_msg, file_id=file_id)
         raise Exception(error_msg)
     except Exception as e:
-        error_msg = f"[ERROR] Unexpected error uploading {filename} to Dropbox: {e}"
-        logger.error(error_msg)
+        error_msg = f"Unexpected error uploading {filename} to Dropbox: {e}"
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_dropbox", "failure", error_msg, file_id=file_id)
         raise Exception(error_msg)
