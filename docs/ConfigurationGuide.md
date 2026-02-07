@@ -17,6 +17,20 @@ Configuration is primarily done through environment variables specified in a `.e
 | `EXTERNAL_HOSTNAME`    | The external hostname for the application.             | `docuelevate.example.com`      |
 | `ALLOW_FILE_DELETE`    | Enable file deletion in the web interface (`true`/`false`). | `true`                      |
 
+### Batch Processing Settings
+
+Control how the `/processall` endpoint handles large batches of files to prevent overwhelming downstream APIs.
+
+| **Variable**                      | **Description**                                                                                    | **Default** |
+|-----------------------------------|----------------------------------------------------------------------------------------------------|-------------|
+| `PROCESSALL_THROTTLE_THRESHOLD`   | Number of files above which throttling is applied. Files <= threshold are processed immediately.  | `20`        |
+| `PROCESSALL_THROTTLE_DELAY`       | Delay in seconds between each task submission when throttling is active.                          | `3`         |
+
+**Example Usage**: When processing 25 files with default settings:
+- Files are staggered: file 0 at 0s, file 1 at 3s, file 2 at 6s, etc.
+- Total queue time: (25-1) × 3 = 72 seconds
+- Prevents API rate limit issues and ensures smooth processing
+
 ### IMAP Configuration
 
 DocuElevate can monitor multiple IMAP mailboxes for document attachments. Each mailbox uses a numbered prefix (e.g., `IMAP1_`, `IMAP2_`).
