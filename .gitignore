@@ -194,3 +194,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Build metadata files - generated at build time
+GIT_SHA
+RUNTIME_INFO

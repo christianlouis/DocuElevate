@@ -80,6 +80,98 @@ class TestConfigurationValidation:
         assert config.session_secret is None
 
 
+
+
+@pytest.mark.unit
+class TestBuildMetadataConfiguration:
+    """Tests for build metadata configuration."""
+    
+    def test_version_from_environment(self, monkeypatch):
+        """Test that version is read from APP_VERSION environment variable."""
+        monkeypatch.setenv("APP_VERSION", "1.2.3-test")
+        config = Settings(
+            database_url="sqlite:///test.db",
+            redis_url="redis://localhost:6379",
+            openai_api_key="test",
+            azure_ai_key="test",
+            azure_region="test",
+            azure_endpoint="https://test.example.com",
+            gotenberg_url="http://localhost:3000",
+            workdir="/tmp",
+            auth_enabled=False
+        )
+        assert config.version == "1.2.3-test"
+    
+    def test_build_date_from_environment(self, monkeypatch):
+        """Test that build_date is read from BUILD_DATE environment variable."""
+        monkeypatch.setenv("BUILD_DATE", "2026-01-15")
+        config = Settings(
+            database_url="sqlite:///test.db",
+            redis_url="redis://localhost:6379",
+            openai_api_key="test",
+            azure_ai_key="test",
+            azure_region="test",
+            azure_endpoint="https://test.example.com",
+            gotenberg_url="http://localhost:3000",
+            workdir="/tmp",
+            auth_enabled=False
+        )
+        assert config.build_date == "2026-01-15"
+    
+    def test_git_sha_from_environment(self, monkeypatch):
+        """Test that git_sha is read from GIT_COMMIT_SHA environment variable."""
+        monkeypatch.setenv("GIT_COMMIT_SHA", "abc1234")
+        config = Settings(
+            database_url="sqlite:///test.db",
+            redis_url="redis://localhost:6379",
+            openai_api_key="test",
+            azure_ai_key="test",
+            azure_region="test",
+            azure_endpoint="https://test.example.com",
+            gotenberg_url="http://localhost:3000",
+            workdir="/tmp",
+            auth_enabled=False
+        )
+        assert config.git_sha == "abc1234"
+    
+    def test_git_sha_default(self, monkeypatch, tmp_path):
+        """Test that git_sha defaults to 'unknown' when not set."""
+        # Mock the file system to ensure no GIT_SHA file exists
+        import app.config
+        monkeypatch.setattr(app.config.os.path, 'dirname', lambda x: str(tmp_path))
+        
+        config = Settings(
+            database_url="sqlite:///test.db",
+            redis_url="redis://localhost:6379",
+            openai_api_key="test",
+            azure_ai_key="test",
+            azure_region="test",
+            azure_endpoint="https://test.example.com",
+            gotenberg_url="http://localhost:3000",
+            workdir="/tmp",
+            auth_enabled=False
+        )
+        # When no file or env var exists, should return "unknown"
+        assert config.git_sha == "unknown"
+    
+    def test_runtime_info_property(self):
+        """Test that runtime_info returns build information."""
+        config = Settings(
+            database_url="sqlite:///test.db",
+            redis_url="redis://localhost:6379",
+            openai_api_key="test",
+            azure_ai_key="test",
+            azure_region="test",
+            azure_endpoint="https://test.example.com",
+            gotenberg_url="http://localhost:3000",
+            workdir="/tmp",
+            auth_enabled=False
+        )
+        runtime_info = config.runtime_info
+        # Should contain version, build_date, and git_sha in some form
+        assert "Version:" in runtime_info or config.version in runtime_info
+
+
 @pytest.mark.unit
 class TestNotificationConfiguration:
     """Tests for notification configuration parsing."""

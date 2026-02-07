@@ -5,7 +5,6 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from datetime import datetime
 import os
-import subprocess
 import logging
 
 from app.views.base import APIRouter, templates, require_login, settings
@@ -46,42 +45,26 @@ async def status_dashboard(request: Request):
             except Exception:
                 container_info['id'] = 'Unknown'
             
-            # Try to get Git commit SHA from runtime info
+            # Get Git commit SHA from settings
             try:
-                # First check runtime info directory
-                if os.path.exists('/app/runtime_info/GIT_SHA'):
-                    with open('/app/runtime_info/GIT_SHA', 'r') as f:
-                        git_sha = f.read().strip()
-                # Then try environment variable
-                else:
-                    git_sha = os.environ.get('GIT_COMMIT_SHA', '')
-                
-                # If still not found, try the original file location
-                if not git_sha and os.path.exists('/.git-commit-sha'):
-                    with open('/.git-commit-sha', 'r') as f:
-                        git_sha = f.read().strip()
-                
+                git_sha = settings.git_sha
                 container_info['git_sha'] = git_sha[:7] if git_sha and git_sha != 'unknown' else 'Unknown'
             except Exception:
                 container_info['git_sha'] = 'Unknown'
             
             # Try to get runtime information
             try:
-                if os.path.exists('/app/runtime_info/RUNTIME_INFO'):
-                    with open('/app/runtime_info/RUNTIME_INFO', 'r') as f:
-                        container_info['runtime_info'] = f.read().strip()
+                container_info['runtime_info'] = settings.runtime_info
             except Exception:
                 pass
         else:
             container_info['is_docker'] = False
             
-            # If not in Docker, try to get Git info directly
+            # If not in Docker, get Git info from settings
             try:
-                git_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], 
-                                                stderr=subprocess.DEVNULL, 
-                                                text=True).strip()[:7]
-                container_info['git_sha'] = git_sha
-            except (subprocess.SubprocessError, FileNotFoundError):
+                git_sha = settings.git_sha
+                container_info['git_sha'] = git_sha[:7] if git_sha and git_sha != 'unknown' else 'Unknown'
+            except Exception:
                 container_info['git_sha'] = 'Unknown'
     except Exception:
         container_info = {'is_docker': False, 'id': 'Unknown', 'git_sha': 'Unknown'}

@@ -30,6 +30,7 @@ The project includes a **UI** for uploading and managing files, and an API docum
 - [API Documentation](docs/API.md) - API reference
 - [Deployment Guide](docs/DeploymentGuide.md) - How to deploy DocuElevate
 - [Configuration Guide](docs/ConfigurationGuide.md) - Available configuration options
+- [Build Metadata](docs/BuildMetadata.md) - Automated version and build information
 - [Development Guide](CONTRIBUTING.md) - How to contribute to DocuElevate
 - [Troubleshooting](docs/Troubleshooting.md) - Common issues and solutions
 

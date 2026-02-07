@@ -213,6 +213,34 @@ class Settings(BaseSettings):
         # Default version if not found
         return "0.3.2-dev"
 
+    @property
+    def git_sha(self) -> str:
+        """Get Git commit SHA from environment or file."""
+        # First try to get from environment
+        env_sha = os.environ.get("GIT_COMMIT_SHA")
+        if env_sha:
+            return env_sha
+
+        # Then try to get from GIT_SHA file
+        git_sha_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "GIT_SHA")
+        if os.path.exists(git_sha_file):
+            with open(git_sha_file, "r") as f:
+                return f.read().strip()
+
+        # Default if not found
+        return "unknown"
+
+    @property
+    def runtime_info(self) -> str:
+        """Get runtime information from file."""
+        runtime_info_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "RUNTIME_INFO")
+        if os.path.exists(runtime_info_file):
+            with open(runtime_info_file, "r") as f:
+                return f.read().strip()
+
+        # Return basic info if file not found
+        return f"Version: {self.version}\nBuild Date: {self.build_date}\nGit SHA: {self.git_sha}"
+
     class Config:
         env_file = ".env"
 
