@@ -210,7 +210,7 @@
   <script>
     // JavaScript for handling retry functionality
     async function reprocessFile() {
-      const fileId = {{ file.id }};
+      const fileId = {{ file.id | tojson }};
       const button = document.getElementById('reprocess-btn');
       const statusDiv = document.getElementById('reprocess-status');
       
