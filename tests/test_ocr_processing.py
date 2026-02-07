@@ -539,14 +539,14 @@ class TestRotatePdfPages:
 
     def test_determine_rotation_angle_arbitrary(self):
         """Test rotation angle determination for arbitrary angles."""
-        # 45 degrees should round to nearest 90-degree increment (0 or 90)
+        # 45 degrees should round to nearest 90-degree increment
         angle = determine_rotation_angle(45)
-        # Round(45/90) * 90 = 0, so should return 0
+        # Round(45/90) = Round(0.5) = 0, so 0 * 90 = 0
         assert angle == 0
 
         # 135 degrees should round to 180
         angle = determine_rotation_angle(135)
-        # Round(135/90) * 90 = 90, but it's closer to 180, so should return 180
+        # Round(135/90) = Round(1.5) = 2, so 2 * 90 = 180
         assert angle == 180
 
     def test_rotate_pdf_pages_with_rotation(self, tmp_path):
