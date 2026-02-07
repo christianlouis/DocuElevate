@@ -421,7 +421,7 @@ def test_all_upload_tasks_have_consistent_signature(sample_text_file):
     """Test that all upload tasks accept file_id as a keyword parameter.
     
     This test verifies that all upload tasks can be called with the same signature
-    as used in send_to_all.py: task.delay(file_path, file_id)
+    as used in send_to_all.py: task.delay(file_path, file_id=file_id)
     
     Note: We use task.run to inspect the actual function signature because
     Celery tasks wrap the original function, and .run provides access to
@@ -451,3 +451,69 @@ def test_all_upload_tasks_have_consistent_signature(sample_text_file):
         
         # file_id should have a default value (None)
         assert sig.parameters["file_id"].default is None, f"{task.name} file_id should default to None"
+
+
+@pytest.mark.unit
+def test_send_to_all_calls_upload_tasks_with_keyword_argument():
+    """Test that send_to_all_destinations calls upload tasks with file_id as keyword argument.
+    
+    Regression test for issue: upload_to_s3() takes 1 positional argument but 2 were given.
+    This ensures that file_id is always passed as a keyword argument, not positional.
+    """
+    from app.tasks.send_to_all import send_to_all_destinations
+    
+    test_file = "/tmp/test_file.pdf"
+    
+    # Create the test file
+    with open(test_file, "w") as f:
+        f.write("test content")
+    
+    try:
+        # Mock all the upload functions and settings
+        with patch("app.tasks.send_to_all.upload_to_s3") as mock_s3, \
+             patch("app.tasks.send_to_all.settings") as mock_settings, \
+             patch("app.tasks.send_to_all.log_task_progress"), \
+             patch("app.tasks.send_to_all.SessionLocal"), \
+             patch("app.tasks.send_to_all.get_configured_services_from_validator") as mock_validator:
+            
+            # Configure validator to return S3 as configured
+            mock_validator.return_value = {"s3": True}
+            
+            # Configure settings to enable only S3
+            mock_settings.s3_bucket_name = "test-bucket"
+            mock_settings.aws_access_key_id = "test-key"
+            mock_settings.aws_secret_access_key = "test-secret"
+            mock_settings.dropbox_app_key = None
+            mock_settings.nextcloud_upload_url = None
+            mock_settings.paperless_ngx_api_token = None
+            mock_settings.google_drive_credentials_json = None
+            mock_settings.webdav_url = None
+            mock_settings.ftp_host = None
+            mock_settings.sftp_host = None
+            mock_settings.email_host = None
+            mock_settings.onedrive_client_id = None
+            mock_settings.workdir = "/tmp"
+            
+            # Mock the delay method to track how it's called
+            mock_s3_task = Mock()
+            mock_s3_task.id = "test-task-id"
+            mock_s3.delay.return_value = mock_s3_task
+            
+            # Call send_to_all_destinations with file_id
+            result = send_to_all_destinations.apply(args=[test_file], kwargs={"file_id": 123}).get()
+            
+            # Verify that upload_to_s3.delay was called with file_id as keyword argument
+            mock_s3.delay.assert_called_once()
+            call_args, call_kwargs = mock_s3.delay.call_args
+            
+            # The call should be: delay(file_path, file_id=file_id)
+            # So we expect 1 positional arg (file_path) and file_id in kwargs
+            assert len(call_args) == 1, "Should have exactly 1 positional argument (file_path)"
+            assert call_args[0] == test_file, "First positional arg should be file_path"
+            assert "file_id" in call_kwargs, "file_id should be passed as keyword argument"
+            assert call_kwargs["file_id"] == 123, "file_id value should be correct"
+    
+    finally:
+        # Clean up test file
+        if os.path.exists(test_file):
+            os.remove(test_file)

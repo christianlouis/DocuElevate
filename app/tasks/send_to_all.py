@@ -228,7 +228,7 @@ def send_to_all_destinations(self, file_path: str, use_validator=True, file_id: 
             logger.info(f"[{task_id}] Queueing {file_path} for {service_name} upload")
             log_task_progress(task_id, f"queue_{service_name}", "in_progress", f"Queueing upload to {service_name}", file_id=file_id)
             try:
-                task = service["upload_func"].delay(file_path, file_id)
+                task = service["upload_func"].delay(file_path, file_id=file_id)
                 results[f"{service_name}_task_id"] = task.id
                 queued_count += 1
                 log_task_progress(task_id, f"queue_{service_name}", "success", f"Queued for {service_name}", file_id=file_id)
