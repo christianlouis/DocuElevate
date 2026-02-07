@@ -134,8 +134,12 @@ class TestBuildMetadataConfiguration:
         )
         assert config.git_sha == "abc1234"
     
-    def test_git_sha_default(self):
+    def test_git_sha_default(self, monkeypatch, tmp_path):
         """Test that git_sha defaults to 'unknown' when not set."""
+        # Mock the file system to ensure no GIT_SHA file exists
+        import app.config
+        monkeypatch.setattr(app.config.os.path, 'dirname', lambda x: str(tmp_path))
+        
         config = Settings(
             database_url="sqlite:///test.db",
             redis_url="redis://localhost:6379",
@@ -148,8 +152,7 @@ class TestBuildMetadataConfiguration:
             auth_enabled=False
         )
         # When no file or env var exists, should return "unknown"
-        # (Note: In actual tests, VERSION file exists, so version won't be default)
-        assert config.git_sha in ["unknown", "6812d0d"]  # May have been generated
+        assert config.git_sha == "unknown"
     
     def test_runtime_info_property(self):
         """Test that runtime_info returns build information."""
