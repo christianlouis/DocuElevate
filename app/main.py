@@ -4,6 +4,7 @@ import logging
 import pathlib
 
 from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -92,21 +93,54 @@ async def shutdown_event():
     # Send shutdown notification
     notify_shutdown()
 
-# Custom 404 - we can still return the Jinja2 template, or the old static file:
-@app.exception_handler(404)
-async def custom_404_handler(request: Request, exc: HTTPException):
-    # Serve the 404 template directly
+# Custom exception handlers that return JSON for API routes and HTML for frontend routes
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """
+    Handle all HTTPException instances.
+    Returns JSON for API routes, HTML templates for frontend routes.
+    """
+    # For API routes, always return JSON
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail}
+        )
+    
+    # For frontend routes, return appropriate HTML templates
     templates = Jinja2Templates(directory=str(static_dir.parent / "templates"))
+    
+    # Handle 404 errors with a custom template
+    if exc.status_code == 404:
+        return templates.TemplateResponse(
+            "404.html",
+            {"request": request},
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    # For other HTTP errors, we could create specific templates or use a generic one
+    # For now, return a simple error page
     return templates.TemplateResponse(
-        "404.html",
+        "404.html",  # Reuse 404 template for other errors, or create a generic error template
         {"request": request},
-        status_code=status.HTTP_404_NOT_FOUND
+        status_code=exc.status_code
     )
 
 @app.exception_handler(500)
 async def custom_500_handler(request: Request, exc: Exception):
+    """
+    Handle internal server errors (500).
+    Returns JSON for API routes, HTML templates for frontend routes.
+    """
+    # For API routes, return JSON instead of HTML
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": "Internal server error"}
+        )
+    
+    # Serve the 500 template for non-API routes
     templates = Jinja2Templates(directory=str(static_dir.parent / "templates"))
-    # Option 1: Keep it simple, just show a funny 500 message:
     return templates.TemplateResponse(
         "500.html",
         {"request": request, "exc": exc},
