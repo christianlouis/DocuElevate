@@ -4,7 +4,9 @@ Pytest configuration and shared fixtures for DocuElevate tests.
 import os
 import tempfile
 import pytest
+import sys
 from typing import Generator
+from unittest.mock import Mock, MagicMock
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -21,6 +23,11 @@ os.environ["GOTENBERG_URL"] = "http://localhost:3000"
 os.environ["WORKDIR"] = "/tmp"
 os.environ["AUTH_ENABLED"] = "False"
 os.environ["SESSION_SECRET"] = "test_secret_key_for_testing_must_be_at_least_32_characters_long"
+
+# Mock Celery before any app imports to prevent Redis connection attempts
+mock_celery = MagicMock()
+sys.modules['celery'] = mock_celery
+sys.modules['celery.signals'] = MagicMock()
 
 from app.database import Base, get_db
 from app.main import app as fastapi_app
