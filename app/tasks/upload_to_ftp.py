@@ -5,16 +5,31 @@ import ftplib
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.celery_app import celery
+from app.utils import log_task_progress
 import logging
 
 logger = logging.getLogger(__name__)
 
-@celery.task(base=BaseTaskWithRetry)
-def upload_to_ftp(file_path: str):
-    """Uploads a file to an FTP server in the configured folder."""
+@celery.task(base=BaseTaskWithRetry, bind=True)
+def upload_to_ftp(self, file_path: str, file_id: int = None):
+    """
+    Uploads a file to an FTP server in the configured folder.
+    
+    Args:
+        file_path: Path to the file to upload
+        file_id: Optional file ID to associate with logs
+    """
+    task_id = self.request.id
+    logger.info(f"[{task_id}] Starting FTP upload: {file_path}")
+    log_task_progress(
+        task_id, "upload_to_ftp", "in_progress", f"Uploading to FTP: {os.path.basename(file_path)}", file_id=file_id
+    )
 
     if not os.path.exists(file_path):
-        raise FileNotFoundError(f"File not found: {file_path}")
+        error_msg = f"File not found: {file_path}"
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_ftp", "failure", error_msg, file_id=file_id)
+        raise FileNotFoundError(error_msg)
 
     # Extract filename
     filename = os.path.basename(file_path)
@@ -22,7 +37,8 @@ def upload_to_ftp(file_path: str):
     # Check if FTP settings are configured
     if not settings.ftp_host:
         error_msg = "FTP host is not configured"
-        logger.error(error_msg)
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_ftp", "failure", error_msg, file_id=file_id)
         raise ValueError(error_msg)
 
     try:
@@ -123,7 +139,8 @@ def upload_to_ftp(file_path: str):
         # Close FTP connection
         ftp.quit()
         
-        logger.info(f"Successfully uploaded {filename} to FTP server at {settings.ftp_host}")
+        logger.info(f"[{task_id}] Successfully uploaded {filename} to FTP server at {settings.ftp_host}")
+        log_task_progress(task_id, "upload_to_ftp", "success", f"Uploaded to FTP: {filename}", file_id=file_id)
         return {
             "status": "Completed", 
             "file": file_path, 
@@ -134,5 +151,6 @@ def upload_to_ftp(file_path: str):
     
     except Exception as e:
         error_msg = f"Failed to upload {filename} to FTP server: {str(e)}"
-        logger.error(error_msg)
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_ftp", "failure", error_msg, file_id=file_id)
         raise Exception(error_msg)

@@ -16,6 +16,7 @@ from google.auth.exceptions import RefreshError
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.celery_app import celery
+from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
 
@@ -142,12 +143,27 @@ def truncate_property_value(key, value, max_bytes=100):
         
     return str_value
 
-@celery.task(base=BaseTaskWithRetry)
-def upload_to_google_drive(file_path: str, include_metadata=True):
-    """Uploads a file to Google Drive in the configured folder with optional metadata."""
+@celery.task(base=BaseTaskWithRetry, bind=True)
+def upload_to_google_drive(self, file_path: str, include_metadata=True, file_id: int = None):
+    """
+    Uploads a file to Google Drive in the configured folder with optional metadata.
+    
+    Args:
+        file_path: Path to the file to upload
+        include_metadata: Whether to include metadata in the upload
+        file_id: Optional file ID to associate with logs
+    """
+    task_id = self.request.id
+    logger.info(f"[{task_id}] Starting Google Drive upload: {file_path}")
+    log_task_progress(
+        task_id, "upload_to_google_drive", "in_progress", f"Uploading to Google Drive: {os.path.basename(file_path)}", file_id=file_id
+    )
 
     if not os.path.exists(file_path):
-        raise FileNotFoundError(f"File not found: {file_path}")
+        error_msg = f"File not found: {file_path}"
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_google_drive", "failure", error_msg, file_id=file_id)
+        raise FileNotFoundError(error_msg)
 
     # Extract filename from path
     filename = os.path.basename(file_path)
@@ -161,7 +177,10 @@ def upload_to_google_drive(file_path: str, include_metadata=True):
         # Get Google Drive service
         service = get_google_drive_service()
         if not service:
-            raise Exception("Failed to initialize Google Drive service")
+            error_msg = "Failed to initialize Google Drive service"
+            logger.error(f"[{task_id}] {error_msg}")
+            log_task_progress(task_id, "upload_to_google_drive", "failure", error_msg, file_id=file_id)
+            raise Exception(error_msg)
 
         # Prepare the file metadata
         file_metadata = {
@@ -221,16 +240,17 @@ def upload_to_google_drive(file_path: str, include_metadata=True):
         ).execute()
         
         # Log success details
-        file_id = file.get('id')
+        google_drive_file_id = file.get('id')
         web_view_link = file.get('webViewLink')
         
-        logger.info(f"Successfully uploaded {filename} to Google Drive with ID: {file_id}")
-        logger.info(f"File accessible at: {web_view_link}")
+        logger.info(f"[{task_id}] Successfully uploaded {filename} to Google Drive with ID: {google_drive_file_id}")
+        logger.info(f"[{task_id}] File accessible at: {web_view_link}")
+        log_task_progress(task_id, "upload_to_google_drive", "success", f"Uploaded to Google Drive: {filename}", file_id=file_id)
         
         result = {
             "status": "Completed", 
             "file_path": file_path,
-            "google_drive_file_id": file_id,
+            "google_drive_file_id": google_drive_file_id,
             "google_drive_web_link": web_view_link
         }
         
@@ -242,5 +262,6 @@ def upload_to_google_drive(file_path: str, include_metadata=True):
 
     except Exception as e:
         error_msg = f"Failed to upload {filename} to Google Drive: {str(e)}"
-        logger.error(error_msg)
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_google_drive", "failure", error_msg, file_id=file_id)
         raise Exception(error_msg)

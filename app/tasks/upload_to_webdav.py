@@ -6,16 +6,31 @@ from urllib.parse import urljoin
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.celery_app import celery
+from app.utils import log_task_progress
 import logging
 
 logger = logging.getLogger(__name__)
 
-@celery.task(base=BaseTaskWithRetry)
-def upload_to_webdav(file_path: str):
-    """Uploads a file to a WebDAV server in the configured folder."""
+@celery.task(base=BaseTaskWithRetry, bind=True)
+def upload_to_webdav(self, file_path: str, file_id: int = None):
+    """
+    Uploads a file to a WebDAV server in the configured folder.
+    
+    Args:
+        file_path: Path to the file to upload
+        file_id: Optional file ID to associate with logs
+    """
+    task_id = self.request.id
+    logger.info(f"[{task_id}] Starting WebDAV upload: {file_path}")
+    log_task_progress(
+        task_id, "upload_to_webdav", "in_progress", f"Uploading to WebDAV: {os.path.basename(file_path)}", file_id=file_id
+    )
 
     if not os.path.exists(file_path):
-        raise FileNotFoundError(f"File not found: {file_path}")
+        error_msg = f"File not found: {file_path}"
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_webdav", "failure", error_msg, file_id=file_id)
+        raise FileNotFoundError(error_msg)
 
     # Extract filename
     filename = os.path.basename(file_path)
@@ -23,7 +38,8 @@ def upload_to_webdav(file_path: str):
     # Check if WebDAV settings are configured
     if not settings.webdav_url:
         error_msg = "WebDAV URL is not configured"
-        logger.error(error_msg)
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_webdav", "failure", error_msg, file_id=file_id)
         raise ValueError(error_msg)
 
     # Construct the full upload URL
@@ -53,14 +69,17 @@ def upload_to_webdav(file_path: str):
 
         # Check if upload was successful
         if response.status_code in (200, 201, 204):
-            logger.info(f"Successfully uploaded {filename} to WebDAV at {webdav_url}.")
+            logger.info(f"[{task_id}] Successfully uploaded {filename} to WebDAV at {webdav_url}.")
+            log_task_progress(task_id, "upload_to_webdav", "success", f"Uploaded to WebDAV: {filename}", file_id=file_id)
             return {"status": "Completed", "file": file_path, "url": webdav_url}
         else:
             error_msg = f"Failed to upload {filename} to WebDAV: {response.status_code} - {response.text}"
-            logger.error(error_msg)
+            logger.error(f"[{task_id}] {error_msg}")
+            log_task_progress(task_id, "upload_to_webdav", "failure", error_msg, file_id=file_id)
             raise Exception(error_msg)
     
     except Exception as e:
         error_msg = f"Error uploading {filename} to WebDAV: {str(e)}"
-        logger.error(error_msg)
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_webdav", "failure", error_msg, file_id=file_id)
         raise Exception(error_msg)
