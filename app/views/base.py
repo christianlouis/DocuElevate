@@ -15,6 +15,10 @@ from app.config import settings
 templates_dir = Path(__file__).parent.parent.parent / "frontend" / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
 
+# Add Python built-in functions to Jinja2 template globals
+templates.env.globals["min"] = min
+templates.env.globals["max"] = max
+
 # Customize Jinja2Templates to include app_version in all templates
 original_template_response = templates.TemplateResponse
 
