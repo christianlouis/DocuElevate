@@ -85,7 +85,71 @@
       color: #991B1B;
     }
     
-    /* Processing logs */
+    /* Step summary section */
+    .step-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .summary-card {
+      background-color: #f7fafc;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      border-left: 4px solid #e2e8f0;
+    }
+    .summary-card.main-steps {
+      border-left-color: #4299e1;
+    }
+    .summary-card.upload-steps {
+      border-left-color: #48bb78;
+    }
+    .summary-title {
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 0.5rem;
+      font-size: 0.875rem;
+      text-transform: uppercase;
+    }
+    .summary-counts {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .summary-count {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.875rem;
+    }
+    .count-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.5rem;
+      height: 1.5rem;
+      border-radius: 50%;
+      font-weight: 600;
+      font-size: 0.75rem;
+    }
+    .count-badge.success {
+      background-color: #48bb78;
+      color: white;
+    }
+    .count-badge.failure {
+      background-color: #f56565;
+      color: white;
+    }
+    .count-badge.in-progress {
+      background-color: #4299e1;
+      color: white;
+    }
+    .count-badge.queued {
+      background-color: #ecc94b;
+      color: white;
+    }
+    
+    /* Processing logs - collapsible */
     .timeline {
       position: relative;
       padding-left: 2rem;
@@ -170,6 +234,29 @@
       color: #a0aec0;
     }
     
+    .logs-toggle {
+      cursor: pointer;
+      user-select: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: #3182ce;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+    .logs-toggle:hover {
+      color: #2c5aa0;
+    }
+    .logs-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+    }
+    .logs-content.expanded {
+      max-height: 5000px;
+      transition: max-height 0.5s ease-in;
+    }
+    
     .no-logs {
       text-align: center;
       padding: 3rem;
@@ -205,6 +292,178 @@
     .file-status-indicator.missing {
       background-color: #FEE2E2;
       color: #991B1B;
+    }
+    
+    /* Flow visualization with branches */
+    .flow-stage {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 1.5rem;
+    }
+    .flow-indicator {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 1rem;
+      flex-shrink: 0;
+    }
+    .flow-indicator.success {
+      background-color: #48bb78;
+      color: white;
+    }
+    .flow-indicator.failure {
+      background-color: #f56565;
+      color: white;
+    }
+    .flow-indicator.in_progress {
+      background-color: #4299e1;
+      color: white;
+    }
+    .flow-indicator.pending, .flow-indicator.queued {
+      background-color: #ecc94b;
+      color: white;
+    }
+    .flow-indicator.not_run {
+      background-color: #e2e8f0;
+      color: #718096;
+    }
+    .flow-content {
+      flex: 1;
+      background-color: #f7fafc;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      border-left: 3px solid #e2e8f0;
+    }
+    .flow-content.success {
+      border-left-color: #48bb78;
+      background-color: #f0fff4;
+    }
+    .flow-content.failure {
+      border-left-color: #f56565;
+      background-color: #fff5f5;
+    }
+    .flow-content.in_progress {
+      border-left-color: #4299e1;
+      background-color: #ebf8ff;
+    }
+    .flow-content.pending, .flow-content.queued {
+      border-left-color: #ecc94b;
+      background-color: #fffff0;
+    }
+    .flow-title {
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 0.25rem;
+    }
+    .flow-message {
+      color: #4a5568;
+      font-size: 0.875rem;
+    }
+    .flow-timestamp {
+      color: #718096;
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+    }
+    .flow-connector {
+      width: 2px;
+      height: 20px;
+      background-color: #e2e8f0;
+      margin-left: 19px;
+      margin-bottom: 0.5rem;
+    }
+    
+    /* Branch visualization */
+    .flow-branches {
+      margin-left: 56px;
+      margin-top: 1rem;
+      padding-left: 1rem;
+      border-left: 2px dashed #cbd5e0;
+    }
+    .branch-item {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+      position: relative;
+    }
+    .branch-item::before {
+      content: '';
+      position: absolute;
+      left: -1rem;
+      top: 20px;
+      width: 1rem;
+      height: 2px;
+      background-color: #cbd5e0;
+    }
+    .branch-indicator {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 0.75rem;
+      flex-shrink: 0;
+      font-size: 0.875rem;
+    }
+    .branch-indicator.success {
+      background-color: #48bb78;
+      color: white;
+    }
+    .branch-indicator.failure {
+      background-color: #f56565;
+      color: white;
+    }
+    .branch-indicator.in_progress {
+      background-color: #4299e1;
+      color: white;
+    }
+    .branch-indicator.pending, .branch-indicator.queued {
+      background-color: #ecc94b;
+      color: white;
+    }
+    .branch-content {
+      flex: 1;
+      background-color: white;
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      border: 1px solid #e2e8f0;
+    }
+    .branch-content.failure {
+      border-color: #f56565;
+      background-color: #fffafa;
+    }
+    .branch-title {
+      font-weight: 600;
+      color: #2d3748;
+      font-size: 0.875rem;
+      margin-bottom: 0.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .branch-message {
+      color: #4a5568;
+      font-size: 0.75rem;
+    }
+    .retry-btn {
+      background-color: #f56565;
+      color: white;
+      border: none;
+      padding: 0.25rem 0.75rem;
+      border-radius: 0.25rem;
+      font-size: 0.75rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .retry-btn:hover {
+      background-color: #e53e3e;
+    }
+    .retry-btn:disabled {
+      background-color: #cbd5e0;
+      cursor: not-allowed;
     }
   </style>
   <script>
@@ -255,6 +514,79 @@
         `;
         button.disabled = false;
         button.innerHTML = '<i class="fas fa-redo"></i> Retry Processing';
+      }
+    }
+    
+    // JavaScript for handling per-subtask retry
+    async function retrySubtask(subtaskName, buttonId) {
+      const fileId = {{ file.id | tojson }};
+      const button = document.getElementById(buttonId);
+      const statusDiv = document.getElementById('subtask-status-' + subtaskName);
+      
+      // Disable button and show loading
+      button.disabled = true;
+      button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Retrying...';
+      if (statusDiv) {
+        statusDiv.innerHTML = '';
+      }
+      
+      try {
+        const response = await fetch(`/api/files/${fileId}/retry-subtask?subtask_name=${subtaskName}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          if (statusDiv) {
+            statusDiv.innerHTML = `
+              <div style="background-color: #D1FAE5; color: #065F46; padding: 0.5rem; border-radius: 0.25rem; margin-top: 0.5rem; font-size: 0.75rem;">
+                <i class="fas fa-check-circle"></i> Queued for retry. Task ID: ${data.task_id}
+              </div>
+            `;
+          }
+          // Reload page after 2 seconds
+          setTimeout(() => window.location.reload(), 2000);
+        } else {
+          if (statusDiv) {
+            statusDiv.innerHTML = `
+              <div style="background-color: #FEE2E2; color: #991B1B; padding: 0.5rem; border-radius: 0.25rem; margin-top: 0.5rem; font-size: 0.75rem;">
+                <i class="fas fa-exclamation-triangle"></i> Error: ${data.detail || 'Failed to retry'}
+              </div>
+            `;
+          }
+          button.disabled = false;
+          button.innerHTML = '<i class="fas fa-redo"></i> Retry';
+        }
+      } catch (error) {
+        if (statusDiv) {
+          statusDiv.innerHTML = `
+            <div style="background-color: #FEE2E2; color: #991B1B; padding: 0.5rem; border-radius: 0.25rem; margin-top: 0.5rem; font-size: 0.75rem;">
+              <i class="fas fa-exclamation-triangle"></i> Network error: ${error.message}
+            </div>
+          `;
+        }
+        button.disabled = false;
+        button.innerHTML = '<i class="fas fa-redo"></i> Retry';
+      }
+    }
+    
+    // Toggle logs visibility
+    function toggleLogs() {
+      const logsContent = document.getElementById('logs-content');
+      const toggleIcon = document.getElementById('logs-toggle-icon');
+      
+      if (logsContent.classList.contains('expanded')) {
+        logsContent.classList.remove('expanded');
+        toggleIcon.classList.remove('fa-chevron-up');
+        toggleIcon.classList.add('fa-chevron-down');
+      } else {
+        logsContent.classList.add('expanded');
+        toggleIcon.classList.remove('fa-chevron-down');
+        toggleIcon.classList.add('fa-chevron-up');
       }
     }
   </script>
@@ -322,7 +654,77 @@
     </div>
   </div>
   
-  <!-- Processing History Card -->
+  <!-- Step Summary Card -->
+  {% if step_summary %}
+  <div class="detail-card">
+    <h3>Processing Status Summary</h3>
+    <div class="step-summary">
+      <div class="summary-card main-steps">
+        <div class="summary-title">Main Processing Steps</div>
+        <div class="summary-counts">
+          {% if step_summary.main.success > 0 %}
+          <div class="summary-count">
+            <span class="count-badge success">{{ step_summary.main.success }}</span>
+            <span>Success</span>
+          </div>
+          {% endif %}
+          {% if step_summary.main.failure > 0 %}
+          <div class="summary-count">
+            <span class="count-badge failure">{{ step_summary.main.failure }}</span>
+            <span>Failed</span>
+          </div>
+          {% endif %}
+          {% if step_summary.main.in_progress > 0 %}
+          <div class="summary-count">
+            <span class="count-badge in-progress">{{ step_summary.main.in_progress }}</span>
+            <span>In Progress</span>
+          </div>
+          {% endif %}
+          {% if step_summary.main.queued > 0 %}
+          <div class="summary-count">
+            <span class="count-badge queued">{{ step_summary.main.queued }}</span>
+            <span>Queued</span>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      
+      {% if step_summary.total_upload_tasks > 0 %}
+      <div class="summary-card upload-steps">
+        <div class="summary-title">Upload Destinations</div>
+        <div class="summary-counts">
+          {% if step_summary.uploads.success > 0 %}
+          <div class="summary-count">
+            <span class="count-badge success">{{ step_summary.uploads.success }}</span>
+            <span>Success</span>
+          </div>
+          {% endif %}
+          {% if step_summary.uploads.failure > 0 %}
+          <div class="summary-count">
+            <span class="count-badge failure">{{ step_summary.uploads.failure }}</span>
+            <span>Failed</span>
+          </div>
+          {% endif %}
+          {% if step_summary.uploads.in_progress > 0 %}
+          <div class="summary-count">
+            <span class="count-badge in-progress">{{ step_summary.uploads.in_progress }}</span>
+            <span>In Progress</span>
+          </div>
+          {% endif %}
+          {% if step_summary.uploads.queued > 0 %}
+          <div class="summary-count">
+            <span class="count-badge queued">{{ step_summary.uploads.queued }}</span>
+            <span>Queued</span>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+  
+  <!-- Processing History Card (Collapsible) -->
   <div class="detail-card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
       <h3 style="margin: 0;">Processing History</h3>
@@ -334,26 +736,32 @@
     </div>
     <div id="reprocess-status"></div>
     {% if logs %}
-    <div class="timeline">
-      {% for log in logs %}
-      <div class="timeline-item">
-        <div class="timeline-marker {{ log.status.lower().replace(' ', '_') }}"></div>
-        <div class="timeline-content {{ log.status.lower().replace(' ', '_') }}">
-          <div class="timeline-title">
-            {{ log.step_name }} - <span style="text-transform: capitalize;">{{ log.status }}</span>
-          </div>
-          {% if log.message %}
-          <div class="timeline-message">{{ log.message }}</div>
-          {% endif %}
-          <div class="timeline-meta">
-            <span>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else 'N/A' }}</span>
-            {% if log.task_id %}
-            <span class="timeline-task-id">Task: {{ log.task_id[:16] }}...</span>
+    <div class="logs-toggle" onclick="toggleLogs()">
+      <i id="logs-toggle-icon" class="fas fa-chevron-down"></i>
+      <span>View Full Processing Logs ({{ logs|length }} entries)</span>
+    </div>
+    <div id="logs-content" class="logs-content">
+      <div class="timeline">
+        {% for log in logs %}
+        <div class="timeline-item">
+          <div class="timeline-marker {{ log.status.lower().replace(' ', '_') }}"></div>
+          <div class="timeline-content {{ log.status.lower().replace(' ', '_') }}">
+            <div class="timeline-title">
+              {{ log.step_name }} - <span style="text-transform: capitalize;">{{ log.status }}</span>
+            </div>
+            {% if log.message %}
+            <div class="timeline-message">{{ log.message }}</div>
             {% endif %}
+            <div class="timeline-meta">
+              <span>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else 'N/A' }}</span>
+              {% if log.task_id %}
+              <span class="timeline-task-id">Task: {{ log.task_id[:16] }}...</span>
+              {% endif %}
+            </div>
           </div>
         </div>
+        {% endfor %}
       </div>
-      {% endfor %}
     </div>
     {% else %}
     <div class="no-logs">
@@ -369,52 +777,77 @@
   <div class="detail-card">
     <h3>Process Flow Visualization</h3>
     <div style="padding: 1rem 0;">
-      <div style="position: relative;">
-        {% for stage in flow_data %}
-        <div style="display: flex; align-items: center; margin-bottom: 1.5rem;">
-          <!-- Status indicator -->
-          <div style="width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 1rem;
-            {% if stage.status == 'success' %}background-color: #48bb78; color: white;
-            {% elif stage.status == 'failure' %}background-color: #f56565; color: white;
-            {% elif stage.status == 'in_progress' %}background-color: #4299e1; color: white;
-            {% elif stage.status == 'pending' %}background-color: #ecc94b; color: white;
-            {% else %}background-color: #e2e8f0; color: #718096;{% endif %}
-          ">
-            {% if stage.status == 'success' %}<i class="fas fa-check"></i>
-            {% elif stage.status == 'failure' %}<i class="fas fa-times"></i>
-            {% elif stage.status == 'in_progress' %}<i class="fas fa-spinner fa-spin"></i>
-            {% elif stage.status == 'pending' %}<i class="fas fa-clock"></i>
-            {% else %}<i class="fas fa-circle"></i>{% endif %}
-          </div>
-          
-          <!-- Stage info -->
-          <div style="flex: 1; background-color: #f7fafc; padding: 1rem; border-radius: 0.5rem; border-left: 3px solid 
-            {% if stage.status == 'success' %}#48bb78
-            {% elif stage.status == 'failure' %}#f56565
-            {% elif stage.status == 'in_progress' %}#4299e1
-            {% elif stage.status == 'pending' %}#ecc94b
-            {% else %}#e2e8f0{% endif %};">
-            <div style="font-weight: 600; color: #2d3748; margin-bottom: 0.25rem;">{{ stage.label }}</div>
-            {% if stage.message %}
-            <div style="color: #4a5568; font-size: 0.875rem;">{{ stage.message }}</div>
-            {% endif %}
-            {% if stage.status == 'not_run' %}
-            <div style="color: #718096; font-size: 0.875rem; font-style: italic;">Not executed</div>
-            {% endif %}
-            {% if stage.timestamp %}
-            <div style="color: #718096; font-size: 0.75rem; margin-top: 0.25rem;">
-              {{ stage.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
-            </div>
-            {% endif %}
-          </div>
+      {% for stage in flow_data %}
+      <div class="flow-stage">
+        <!-- Status indicator -->
+        <div class="flow-indicator {{ stage.status.lower().replace(' ', '_') }}">
+          {% if stage.status == 'success' %}<i class="fas fa-check"></i>
+          {% elif stage.status == 'failure' %}<i class="fas fa-times"></i>
+          {% elif stage.status == 'in_progress' %}<i class="fas fa-spinner fa-spin"></i>
+          {% elif stage.status in ['pending', 'queued'] %}<i class="fas fa-clock"></i>
+          {% else %}<i class="fas fa-circle"></i>{% endif %}
         </div>
         
-        <!-- Connector line (except for last item) -->
-        {% if not loop.last %}
-        <div style="width: 2px; height: 20px; background-color: #e2e8f0; margin-left: 19px; margin-bottom: 0.5rem;"></div>
-        {% endif %}
+        <!-- Stage content -->
+        <div class="flow-content {{ stage.status.lower().replace(' ', '_') }}">
+          <div class="flow-title">{{ stage.label }}</div>
+          {% if stage.message %}
+          <div class="flow-message">{{ stage.message }}</div>
+          {% endif %}
+          {% if stage.status == 'not_run' %}
+          <div style="color: #718096; font-size: 0.875rem; font-style: italic;">Not executed</div>
+          {% endif %}
+          {% if stage.timestamp %}
+          <div class="flow-timestamp">
+            {{ stage.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      
+      <!-- Upload branches (if this stage has them) -->
+      {% if stage.is_branch_parent and stage.branches %}
+      <div class="flow-branches">
+        {% for branch in stage.branches %}
+        <div class="branch-item">
+          <div class="branch-indicator {{ branch.status.lower().replace(' ', '_') }}">
+            {% if branch.status == 'success' %}<i class="fas fa-check"></i>
+            {% elif branch.status == 'failure' %}<i class="fas fa-times"></i>
+            {% elif branch.status == 'in_progress' %}<i class="fas fa-spinner fa-spin"></i>
+            {% else %}<i class="fas fa-clock"></i>{% endif %}
+          </div>
+          <div class="branch-content {% if branch.status == 'failure' %}failure{% endif %}">
+            <div class="branch-title">
+              <span>{{ branch.label }}</span>
+              {% if branch.can_retry and branch.status == 'failure' %}
+              <button 
+                id="retry-btn-{{ branch.key }}" 
+                class="retry-btn" 
+                onclick="retrySubtask('{{ branch.key }}', 'retry-btn-{{ branch.key }}')">
+                <i class="fas fa-redo"></i> Retry
+              </button>
+              {% endif %}
+            </div>
+            {% if branch.message %}
+            <div class="branch-message">{{ branch.message }}</div>
+            {% endif %}
+            {% if branch.timestamp %}
+            <div style="color: #718096; font-size: 0.65rem; margin-top: 0.25rem;">
+              {{ branch.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
+            </div>
+            {% endif %}
+            <div id="subtask-status-{{ branch.key }}"></div>
+          </div>
+        </div>
         {% endfor %}
       </div>
+      {% endif %}
+      
+      <!-- Connector line (except for last item) -->
+      {% if not loop.last %}
+      <div class="flow-connector"></div>
+      {% endif %}
+      {% endfor %}
     </div>
   </div>
   {% endif %}

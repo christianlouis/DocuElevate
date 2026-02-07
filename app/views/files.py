@@ -200,13 +200,17 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
         # Compute processing flow for visualization
         flow_data = _compute_processing_flow(logs)
         
+        # Compute step-aligned summary
+        step_summary = _compute_step_summary(logs)
+        
         return templates.TemplateResponse("file_detail.html", {
             "request": request,
             "file": file_record,
             "logs": logs,
             "file_exists": file_exists,
             "processed_exists": processed_exists,
-            "flow_data": flow_data
+            "flow_data": flow_data,
+            "step_summary": step_summary
         })
     except Exception as e:
         logger.error(f"Error retrieving file details: {str(e)}")
@@ -221,8 +225,9 @@ def _compute_processing_flow(logs):
     Compute the processing flow structure from logs for visualization.
     
     Returns a structured representation of the processing pipeline with branches.
+    Detects upload sub-tasks and organizes them as branches under the parent upload stage.
     """
-    # Define the processing stages and their relationships
+    # Define the main processing stages
     stages = {
         "hash_file": {"label": "File Upload & Hash", "next": ["create_file_record"]},
         "create_file_record": {"label": "Create File Record", "next": ["check_text"]},
@@ -231,22 +236,63 @@ def _compute_processing_flow(logs):
         "process_with_azure_document_intelligence": {"label": "OCR Processing (Azure)", "next": ["extract_metadata_with_gpt"]},
         "extract_metadata_with_gpt": {"label": "Extract Metadata (GPT)", "next": ["embed_metadata_into_pdf"]},
         "embed_metadata_into_pdf": {"label": "Embed Metadata into PDF", "next": ["finalize_document_storage"]},
-        "finalize_document_storage": {"label": "Finalize & Queue Distribution", "next": ["upload_destinations"]},
-        "upload_destinations": {"label": "Upload to Destinations", "next": []}
+        "finalize_document_storage": {"label": "Finalize & Queue Distribution", "next": ["send_to_all_destinations"]},
+        "send_to_all_destinations": {"label": "Upload to Destinations", "next": [], "has_branches": True}
+    }
+    
+    # Define upload sub-tasks (branches)
+    upload_tasks = {
+        "upload_to_dropbox": "Dropbox",
+        "upload_to_nextcloud": "Nextcloud", 
+        "upload_to_paperless": "Paperless-ngx",
+        "upload_to_google_drive": "Google Drive",
+        "upload_to_onedrive": "OneDrive",
+        "upload_to_s3": "S3 Storage",
+        "upload_to_webdav": "WebDAV",
+        "upload_to_ftp": "FTP Storage",
+        "upload_to_sftp": "SFTP Storage",
+        "upload_to_email": "Email",
+        "queue_dropbox": "Dropbox",
+        "queue_nextcloud": "Nextcloud",
+        "queue_paperless": "Paperless-ngx",
+        "queue_google_drive": "Google Drive",
+        "queue_onedrive": "OneDrive",
+        "queue_s3": "S3 Storage",
+        "queue_webdav": "WebDAV",
+        "queue_ftp": "FTP Storage",
+        "queue_sftp": "SFTP Storage",
+        "queue_email": "Email"
     }
     
     # Create a map of step names to their log entries
     step_map = {}
+    upload_branches = {}
+    
     for log in logs:
         step_name = log.step_name
-        if step_name not in step_map:
-            step_map[step_name] = []
-        step_map[step_name].append({
-            "status": log.status,
-            "message": log.message,
-            "timestamp": log.timestamp,
-            "task_id": log.task_id
-        })
+        
+        # Check if this is an upload sub-task
+        if step_name in upload_tasks:
+            # Extract the actual upload task name (remove queue_ prefix if present)
+            upload_key = step_name.replace("queue_", "upload_to_")
+            if upload_key not in upload_branches:
+                upload_branches[upload_key] = []
+            upload_branches[upload_key].append({
+                "status": log.status,
+                "message": log.message,
+                "timestamp": log.timestamp,
+                "task_id": log.task_id
+            })
+        else:
+            # Regular processing step
+            if step_name not in step_map:
+                step_map[step_name] = []
+            step_map[step_name].append({
+                "status": log.status,
+                "message": log.message,
+                "timestamp": log.timestamp,
+                "task_id": log.task_id
+            })
     
     # Build the flow structure
     flow = []
@@ -266,14 +312,90 @@ def _compute_processing_flow(logs):
             timestamp = None
             task_id = None
         
-        flow.append({
+        stage_data = {
             "key": stage_key,
             "label": stage_info["label"],
             "status": status,
             "message": message,
             "timestamp": timestamp,
             "task_id": task_id,
-            "can_retry": status == "failure"
-        })
+            "can_retry": status == "failure",
+            "is_branch_parent": stage_info.get("has_branches", False)
+        }
+        
+        # If this is the upload stage, add branches
+        if stage_info.get("has_branches") and upload_branches:
+            branches = []
+            for upload_key, upload_logs in upload_branches.items():
+                latest_upload = upload_logs[-1]
+                upload_name = upload_tasks.get(upload_key, upload_key.replace("upload_to_", "").title())
+                
+                branches.append({
+                    "key": upload_key,
+                    "label": upload_name,
+                    "status": latest_upload["status"],
+                    "message": latest_upload["message"],
+                    "timestamp": latest_upload["timestamp"],
+                    "task_id": latest_upload["task_id"],
+                    "can_retry": latest_upload["status"] == "failure"
+                })
+            stage_data["branches"] = branches
+        
+        flow.append(stage_data)
     
     return flow
+
+
+def _compute_step_summary(logs):
+    """
+    Compute a step-aligned summary from logs showing queued, success, and failure counts.
+    
+    Returns a dictionary with main step counts and upload branch counts.
+    """
+    # Count statuses for main processing steps (not uploads)
+    main_steps = [
+        "hash_file", "create_file_record", "check_text", "extract_text",
+        "process_with_azure_document_intelligence", "extract_metadata_with_gpt",
+        "embed_metadata_into_pdf", "finalize_document_storage", "send_to_all_destinations"
+    ]
+    
+    upload_prefixes = ["upload_to_", "queue_"]
+    
+    main_counts = {"queued": 0, "in_progress": 0, "success": 0, "failure": 0}
+    upload_counts = {"queued": 0, "in_progress": 0, "success": 0, "failure": 0}
+    
+    # Track which steps we've seen
+    main_steps_seen = set()
+    upload_tasks_seen = {}
+    
+    for log in logs:
+        step_name = log.step_name
+        status = log.status.lower()
+        
+        # Normalize status
+        if status == "pending":
+            status = "queued"
+        
+        # Check if it's an upload task
+        is_upload = any(step_name.startswith(prefix) for prefix in upload_prefixes)
+        
+        if is_upload:
+            # Track latest status for each unique upload task
+            upload_tasks_seen[step_name] = status
+        elif step_name in main_steps:
+            # Track latest status for main steps
+            main_steps_seen.add(step_name)
+            if status in main_counts:
+                main_counts[status] += 1
+    
+    # Count upload task statuses
+    for task_status in upload_tasks_seen.values():
+        if task_status in upload_counts:
+            upload_counts[task_status] += 1
+    
+    return {
+        "main": main_counts,
+        "uploads": upload_counts,
+        "total_main_steps": len(main_steps_seen),
+        "total_upload_tasks": len(upload_tasks_seen)
+    }
