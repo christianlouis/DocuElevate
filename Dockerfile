@@ -18,10 +18,14 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
 COPY ./app /app/app
-COPY ./VERSION /app/VERSION
 COPY ./frontend /app/frontend
-COPY ./BUILD_DATE /app/BUILD_DATE
 COPY ./LICENSE /app/LICENSE
+
+# Copy build metadata files (generated at build time)
+COPY ./VERSION /app/VERSION
+COPY ./BUILD_DATE /app/BUILD_DATE
+COPY ./GIT_SHA /app/GIT_SHA
+COPY ./RUNTIME_INFO /app/RUNTIME_INFO
 
 # Create runtime_info directory
 RUN mkdir -p /app/runtime_info
