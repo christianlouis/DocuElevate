@@ -157,7 +157,7 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
         # Trigger the next step: final storage.
         logger.info(f"[{task_id}] Queueing final storage task")
         log_task_progress(task_id, "embed_metadata_into_pdf", "success", "Metadata embedded, queuing finalization", file_id=file_id)
-        finalize_document_storage.delay(original_file, final_file_path, metadata, file_id)
+        finalize_document_storage.delay(original_file, final_file_path, metadata, file_id=file_id)
 
         # After triggering final storage, delete the original file if it is in workdir/tmp.
         workdir_tmp = os.path.join(settings.workdir, TMP_SUBDIR)
