@@ -501,9 +501,20 @@
       })
       .then(response => {
         if (!response.ok) {
-          return response.json().then(err => {
-            throw new Error(err.detail || 'Failed to delete file');
-          });
+          // Try to parse JSON error response, but handle non-JSON gracefully
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            return response.json().then(err => {
+              throw new Error(err.detail || 'Failed to delete file');
+            });
+          } else {
+            // Non-JSON response (likely HTML error page)
+            return response.text().then(text => {
+              // Extract a readable error message
+              const statusText = response.statusText || 'Error';
+              throw new Error(`${statusText} (${response.status}): Server returned non-JSON response`);
+            });
+          }
         }
         return response.json();
       })
