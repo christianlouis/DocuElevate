@@ -16,6 +16,7 @@ from app.config import settings
 from app.api.common import get_db
 from app.tasks.process_document import process_document
 from app.tasks.convert_to_pdf import convert_to_pdf
+from app.utils.file_status import get_file_processing_status, get_files_processing_status
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -70,7 +71,42 @@ def list_files_api(
     if mime_type:
         query = query.filter(FileRecord.mime_type == mime_type)
     
-    # Get total count before pagination
+    # Apply status filter (before pagination for correct counts)
+    if status:
+        # Subquery to get file IDs matching the status
+        if status == "pending":
+            # Files with no logs
+            subq = db.query(ProcessingLog.file_id).distinct()
+            query = query.filter(~FileRecord.id.in_(subq))
+        elif status == "processing":
+            # Files with in_progress logs
+            subq = db.query(ProcessingLog.file_id).filter(
+                ProcessingLog.status == "in_progress"
+            ).distinct()
+            query = query.filter(FileRecord.id.in_(subq))
+        elif status == "failed":
+            # Files with failure logs
+            subq = db.query(ProcessingLog.file_id).filter(
+                ProcessingLog.status == "failure"
+            ).distinct()
+            query = query.filter(FileRecord.id.in_(subq))
+        elif status == "completed":
+            # Files with success logs but no failures or in_progress
+            success_files = db.query(ProcessingLog.file_id).filter(
+                ProcessingLog.status == "success"
+            ).distinct().subquery()
+            
+            failed_files = db.query(ProcessingLog.file_id).filter(
+                or_(ProcessingLog.status == "failure", ProcessingLog.status == "in_progress")
+            ).distinct().subquery()
+            
+            query = query.filter(
+                FileRecord.id.in_(db.query(success_files.c.file_id))
+            ).filter(
+                ~FileRecord.id.in_(db.query(failed_files.c.file_id))
+            )
+    
+    # Get total count before pagination (after all filters)
     total_items = query.count()
     
     # Apply sorting
@@ -91,12 +127,13 @@ def list_files_api(
     offset = (page - 1) * per_page
     files = query.offset(offset).limit(per_page).all()
     
+    # Get processing status for all files efficiently
+    file_ids = [f.id for f in files]
+    statuses = get_files_processing_status(db, file_ids)
+    
     # Build result with processing status
     result = []
     for f in files:
-        # Get processing status for this file
-        processing_status = _get_file_processing_status(db, f.id)
-        
         result.append({
             "id": f.id,
             "filehash": f.filehash,
@@ -105,13 +142,13 @@ def list_files_api(
             "file_size": f.file_size,
             "mime_type": f.mime_type,
             "created_at": f.created_at.isoformat() if f.created_at else None,
-            "processing_status": processing_status
+            "processing_status": statuses.get(f.id, {
+                "status": "pending",
+                "last_step": None,
+                "has_errors": False,
+                "total_steps": 0
+            })
         })
-    
-    # Filter by status if requested (after computing statuses)
-    if status:
-        result = [f for f in result if f["processing_status"]["status"] == status]
-        total_items = len(result)  # Update total for filtered results
     
     # Calculate pagination info
     total_pages = (total_items + per_page - 1) // per_page
@@ -129,49 +166,11 @@ def list_files_api(
 
 def _get_file_processing_status(db: Session, file_id: int) -> dict:
     """
-    Get the processing status for a file by checking its processing logs.
-    
-    Returns:
-        dict with status, last_step, and has_errors
+    Deprecated: Use app.utils.file_status.get_file_processing_status instead.
+    Kept for backward compatibility with file detail endpoint.
     """
-    # Get all logs for this file
-    logs = db.query(ProcessingLog).filter(
-        ProcessingLog.file_id == file_id
-    ).order_by(ProcessingLog.timestamp.desc()).all()
-    
-    if not logs:
-        return {
-            "status": "pending",
-            "last_step": None,
-            "has_errors": False,
-            "total_steps": 0
-        }
-    
-    # Check for failures
-    has_errors = any(log.status == "failure" for log in logs)
-    
-    # Check if any in progress
-    in_progress = any(log.status == "in_progress" for log in logs)
-    
-    # Get the latest log
-    latest_log = logs[0]
-    
-    # Determine overall status
-    if has_errors:
-        status = "failed"
-    elif in_progress:
-        status = "processing"
-    elif latest_log.status == "success":
-        status = "completed"
-    else:
-        status = "pending"
-    
-    return {
-        "status": status,
-        "last_step": latest_log.step_name,
-        "has_errors": has_errors,
-        "total_steps": len(logs)
-    }
+    from app.utils.file_status import get_file_processing_status
+    return get_file_processing_status(db, file_id)
 
 
 

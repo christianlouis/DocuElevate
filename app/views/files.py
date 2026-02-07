@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.views.base import APIRouter, templates, require_login, get_db, logger
+from app.utils.file_status import get_files_processing_status
 
 router = APIRouter()
 
@@ -62,33 +63,14 @@ def files_page(
         offset = (page - 1) * per_page
         files = query.offset(offset).limit(per_page).all()
         
-        # Add processing status to each file
+        # Get processing status for all files efficiently (avoids N+1)
+        file_ids = [f.id for f in files]
+        statuses = get_files_processing_status(db, file_ids)
+        
+        # Add status to each file
         files_with_status = []
         for file in files:
-            # Get processing logs for this file
-            logs = db.query(ProcessingLog).filter(
-                ProcessingLog.file_id == file.id
-            ).order_by(ProcessingLog.timestamp.desc()).all()
-            
-            # Determine status
-            if not logs:
-                processing_status = "pending"
-            else:
-                has_errors = any(log.status == "failure" for log in logs)
-                in_progress = any(log.status == "in_progress" for log in logs)
-                latest_log = logs[0]
-                
-                if has_errors:
-                    processing_status = "failed"
-                elif in_progress:
-                    processing_status = "processing"
-                elif latest_log.status == "success":
-                    processing_status = "completed"
-                else:
-                    processing_status = "pending"
-            
-            # Add status to file object as an attribute
-            file.processing_status = processing_status
+            file.processing_status = statuses.get(file.id, {}).get("status", "pending")
             files_with_status.append(file)
         
         # Calculate pagination info
