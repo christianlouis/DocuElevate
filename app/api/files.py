@@ -363,6 +363,122 @@ def bulk_reprocess_files(request: Request, file_ids: List[int], db: Session = De
         raise HTTPException(status_code=500, detail=f"Error bulk reprocessing files: {str(e)}")
 
 
+@router.post("/files/{file_id}/reprocess")
+@require_login
+def reprocess_single_file(request: Request, file_id: int, db: Session = Depends(get_db)):
+    """
+    Reprocess a single file by queuing it for processing again.
+    
+    Args:
+        file_id: ID of the file to reprocess
+        
+    Returns:
+        Task ID and status information
+    """
+    try:
+        # Find the file record
+        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        
+        if not file_record:
+            raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
+        
+        # Check if local file exists
+        if not file_record.local_filename or not os.path.exists(file_record.local_filename):
+            raise HTTPException(
+                status_code=400, 
+                detail="Local file not found on disk. Cannot reprocess."
+            )
+        
+        # Queue the file for processing
+        task = process_document.delay(file_record.local_filename, original_filename=file_record.original_filename)
+        
+        logger.info(
+            f"Reprocessing file: ID={file_record.id}, "
+            f"Filename={file_record.original_filename}, TaskID={task.id}"
+        )
+        
+        return {
+            "status": "success",
+            "message": "File queued for reprocessing",
+            "file_id": file_record.id,
+            "filename": file_record.original_filename,
+            "task_id": task.id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error reprocessing file {file_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error reprocessing file: {str(e)}")
+
+
+@router.get("/files/{file_id}/preview")
+@require_login
+def get_file_preview(request: Request, file_id: int, version: str = Query("original", description="original or processed"), db: Session = Depends(get_db)):
+    """
+    Get file content for preview (original or processed version).
+    
+    Args:
+        file_id: ID of the file
+        version: "original" for tmp file, "processed" for processed file
+        
+    Returns:
+        File content for preview
+    """
+    from fastapi.responses import FileResponse
+    
+    try:
+        # Find the file record
+        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        
+        if not file_record:
+            raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
+        
+        if version == "original":
+            # Return the original file from tmp
+            if not file_record.local_filename or not os.path.exists(file_record.local_filename):
+                raise HTTPException(status_code=404, detail="Original file not found on disk")
+            
+            file_path = file_record.local_filename
+            
+        elif version == "processed":
+            # Look for processed file in /workdir/processed/
+            workdir = settings.workdir
+            processed_dir = os.path.join(workdir, "processed")
+            
+            # Try to find the processed file (same hash or UUID-based naming)
+            base_filename = os.path.splitext(file_record.original_filename)[0]
+            potential_paths = [
+                os.path.join(processed_dir, f"{file_record.filehash}.pdf"),
+                os.path.join(processed_dir, f"{base_filename}_processed.pdf"),
+                os.path.join(processed_dir, file_record.original_filename),
+            ]
+            
+            file_path = None
+            for path in potential_paths:
+                if os.path.exists(path):
+                    file_path = path
+                    break
+            
+            if not file_path:
+                raise HTTPException(status_code=404, detail="Processed file not found")
+        else:
+            raise HTTPException(status_code=400, detail="Invalid version parameter. Use 'original' or 'processed'")
+        
+        # Return the file
+        return FileResponse(
+            path=file_path,
+            media_type=file_record.mime_type or "application/pdf",
+            filename=file_record.original_filename
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error retrieving file preview: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving file preview: {str(e)}")
+
+
 @router.post("/ui-upload")
 @require_login
 async def ui_upload(request: Request, file: UploadFile = File(...)):

@@ -7,6 +7,7 @@ from typing import Optional
 
 from app.views.base import APIRouter, templates, require_login, get_db, logger
 from app.utils.file_status import get_files_processing_status
+from app.config import settings
 
 router = APIRouter()
 
@@ -180,11 +181,32 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
         # Check if file exists on disk
         file_exists = os.path.exists(file_record.local_filename) if file_record.local_filename else False
         
+        # Check if processed file exists
+        processed_exists = False
+        workdir = settings.workdir
+        processed_dir = os.path.join(workdir, "processed")
+        if os.path.exists(processed_dir):
+            base_filename = os.path.splitext(file_record.original_filename)[0]
+            potential_paths = [
+                os.path.join(processed_dir, f"{file_record.filehash}.pdf"),
+                os.path.join(processed_dir, f"{base_filename}_processed.pdf"),
+                os.path.join(processed_dir, file_record.original_filename),
+            ]
+            for path in potential_paths:
+                if os.path.exists(path):
+                    processed_exists = True
+                    break
+        
+        # Compute processing flow for visualization
+        flow_data = _compute_processing_flow(logs)
+        
         return templates.TemplateResponse("file_detail.html", {
             "request": request,
             "file": file_record,
             "logs": logs,
-            "file_exists": file_exists
+            "file_exists": file_exists,
+            "processed_exists": processed_exists,
+            "flow_data": flow_data
         })
     except Exception as e:
         logger.error(f"Error retrieving file details: {str(e)}")
@@ -192,3 +214,66 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
             "request": request,
             "error": str(e)
         })
+
+
+def _compute_processing_flow(logs):
+    """
+    Compute the processing flow structure from logs for visualization.
+    
+    Returns a structured representation of the processing pipeline with branches.
+    """
+    # Define the processing stages and their relationships
+    stages = {
+        "hash_file": {"label": "File Upload & Hash", "next": ["create_file_record"]},
+        "create_file_record": {"label": "Create File Record", "next": ["check_text"]},
+        "check_text": {"label": "Check Embedded Text", "next": ["extract_text", "process_with_azure_document_intelligence"]},
+        "extract_text": {"label": "Extract Text (Local)", "next": ["extract_metadata_with_gpt"]},
+        "process_with_azure_document_intelligence": {"label": "OCR Processing (Azure)", "next": ["extract_metadata_with_gpt"]},
+        "extract_metadata_with_gpt": {"label": "Extract Metadata (GPT)", "next": ["embed_metadata_into_pdf"]},
+        "embed_metadata_into_pdf": {"label": "Embed Metadata into PDF", "next": ["finalize_document_storage"]},
+        "finalize_document_storage": {"label": "Finalize & Queue Distribution", "next": ["upload_destinations"]},
+        "upload_destinations": {"label": "Upload to Destinations", "next": []}
+    }
+    
+    # Create a map of step names to their log entries
+    step_map = {}
+    for log in logs:
+        step_name = log.step_name
+        if step_name not in step_map:
+            step_map[step_name] = []
+        step_map[step_name].append({
+            "status": log.status,
+            "message": log.message,
+            "timestamp": log.timestamp,
+            "task_id": log.task_id
+        })
+    
+    # Build the flow structure
+    flow = []
+    for stage_key, stage_info in stages.items():
+        stage_logs = step_map.get(stage_key, [])
+        
+        # Determine overall status for this stage
+        if stage_logs:
+            latest_log = stage_logs[-1]
+            status = latest_log["status"]
+            message = latest_log["message"]
+            timestamp = latest_log["timestamp"]
+            task_id = latest_log["task_id"]
+        else:
+            status = "not_run"
+            message = None
+            timestamp = None
+            task_id = None
+        
+        flow.append({
+            "key": stage_key,
+            "label": stage_info["label"],
+            "status": status,
+            "message": message,
+            "timestamp": timestamp,
+            "task_id": task_id,
+            "can_retry": status == "failure"
+        })
+    
+    return flow
