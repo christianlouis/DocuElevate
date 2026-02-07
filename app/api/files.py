@@ -1,19 +1,22 @@
 """
 File-related API endpoints
 """
-from fastapi import APIRouter, Request, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, Request, HTTPException, Depends, UploadFile, File, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import desc, asc, or_, func
+from typing import Optional, List
 import logging
 import os
 import uuid
 import mimetypes
 
 from app.auth import require_login
-from app.models import FileRecord
+from app.models import FileRecord, ProcessingLog
 from app.config import settings
 from app.api.common import get_db
 from app.tasks.process_document import process_document
 from app.tasks.convert_to_pdf import convert_to_pdf
+from app.utils.file_status import get_file_processing_status, get_files_processing_status
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -22,27 +25,113 @@ router = APIRouter()
 
 @router.get("/files")
 @require_login
-def list_files_api(request: Request, db: Session = Depends(get_db)):
+def list_files_api(
+    request: Request,
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(50, ge=1, le=200, description="Items per page"),
+    sort_by: str = Query("created_at", description="Sort field: id, original_filename, file_size, mime_type, created_at, status"),
+    sort_order: str = Query("desc", description="Sort order: asc or desc"),
+    search: Optional[str] = Query(None, description="Search in filename"),
+    mime_type: Optional[str] = Query(None, description="Filter by MIME type"),
+    status: Optional[str] = Query(None, description="Filter by processing status")
+):
     """
-    Returns a JSON list of all FileRecord entries.
-    Protected by `@require_login`, so only logged-in sessions can access.
+    Returns a paginated JSON list of FileRecord entries with processing status.
+    Supports server-side sorting, filtering, and searching.
+    
+    Query Parameters:
+    - page: Page number (default: 1)
+    - per_page: Items per page (default: 50, max: 200)
+    - sort_by: Field to sort by (default: created_at)
+    - sort_order: asc or desc (default: desc)
+    - search: Search in filename
+    - mime_type: Filter by MIME type
+    - status: Filter by processing status (pending, processing, completed, failed)
     
     Example response:
-    [
-      {
-        "id": 123,
-        "filehash": "abc123...",
-        "original_filename": "example.pdf",
-        "local_filename": "/workdir/tmp/<uuid>.pdf",
-        "file_size": 1048576,
-        "mime_type": "application/pdf",
-        "created_at": "2025-05-01T12:34:56.789000"
-      },
-      ...
-    ]
+    {
+      "files": [...],
+      "pagination": {
+        "page": 1,
+        "per_page": 50,
+        "total_items": 150,
+        "total_pages": 3
+      }
+    }
     """
-    files = db.query(FileRecord).order_by(FileRecord.created_at.desc()).all()
-    # Return a simple list of dicts
+    # Start with base query
+    query = db.query(FileRecord)
+    
+    # Apply search filter
+    if search:
+        query = query.filter(FileRecord.original_filename.ilike(f"%{search}%"))
+    
+    # Apply MIME type filter
+    if mime_type:
+        query = query.filter(FileRecord.mime_type == mime_type)
+    
+    # Apply status filter (before pagination for correct counts)
+    if status:
+        # Subquery to get file IDs matching the status
+        if status == "pending":
+            # Files with no logs
+            subq = db.query(ProcessingLog.file_id).distinct()
+            query = query.filter(~FileRecord.id.in_(subq))
+        elif status == "processing":
+            # Files with in_progress logs
+            subq = db.query(ProcessingLog.file_id).filter(
+                ProcessingLog.status == "in_progress"
+            ).distinct()
+            query = query.filter(FileRecord.id.in_(subq))
+        elif status == "failed":
+            # Files with failure logs
+            subq = db.query(ProcessingLog.file_id).filter(
+                ProcessingLog.status == "failure"
+            ).distinct()
+            query = query.filter(FileRecord.id.in_(subq))
+        elif status == "completed":
+            # Files with success logs but no failures or in_progress
+            success_files = db.query(ProcessingLog.file_id).filter(
+                ProcessingLog.status == "success"
+            ).distinct().subquery()
+            
+            failed_files = db.query(ProcessingLog.file_id).filter(
+                or_(ProcessingLog.status == "failure", ProcessingLog.status == "in_progress")
+            ).distinct().subquery()
+            
+            query = query.filter(
+                FileRecord.id.in_(db.query(success_files.c.file_id))
+            ).filter(
+                ~FileRecord.id.in_(db.query(failed_files.c.file_id))
+            )
+    
+    # Get total count before pagination (after all filters)
+    total_items = query.count()
+    
+    # Apply sorting
+    sort_column = {
+        "id": FileRecord.id,
+        "original_filename": FileRecord.original_filename,
+        "file_size": FileRecord.file_size,
+        "mime_type": FileRecord.mime_type,
+        "created_at": FileRecord.created_at
+    }.get(sort_by, FileRecord.created_at)
+    
+    if sort_order == "asc":
+        query = query.order_by(asc(sort_column))
+    else:
+        query = query.order_by(desc(sort_column))
+    
+    # Apply pagination
+    offset = (page - 1) * per_page
+    files = query.offset(offset).limit(per_page).all()
+    
+    # Get processing status for all files efficiently
+    file_ids = [f.id for f in files]
+    statuses = get_files_processing_status(db, file_ids)
+    
+    # Build result with processing status
     result = []
     for f in files:
         result.append({
@@ -52,9 +141,93 @@ def list_files_api(request: Request, db: Session = Depends(get_db)):
             "local_filename": f.local_filename,
             "file_size": f.file_size,
             "mime_type": f.mime_type,
-            "created_at": f.created_at.isoformat() if f.created_at else None
+            "created_at": f.created_at.isoformat() if f.created_at else None,
+            "processing_status": statuses.get(f.id, {
+                "status": "pending",
+                "last_step": None,
+                "has_errors": False,
+                "total_steps": 0
+            })
         })
-    return result
+    
+    # Calculate pagination info
+    total_pages = (total_items + per_page - 1) // per_page
+    
+    return {
+        "files": result,
+        "pagination": {
+            "page": page,
+            "per_page": per_page,
+            "total_items": total_items,
+            "total_pages": total_pages
+        }
+    }
+
+
+def _get_file_processing_status(db: Session, file_id: int) -> dict:
+    """
+    Deprecated: Use app.utils.file_status.get_file_processing_status instead.
+    Kept for backward compatibility with file detail endpoint.
+    """
+    from app.utils.file_status import get_file_processing_status
+    return get_file_processing_status(db, file_id)
+
+
+
+@router.get("/files/{file_id}")
+@require_login
+def get_file_details(request: Request, file_id: int, db: Session = Depends(get_db)):
+    """
+    Get detailed information about a specific file including processing history.
+    """
+    # Find the file record
+    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    
+    if not file_record:
+        raise HTTPException(
+            status_code=404,
+            detail=f"File record with ID {file_id} not found"
+        )
+    
+    # Get processing logs
+    logs = db.query(ProcessingLog).filter(
+        ProcessingLog.file_id == file_id
+    ).order_by(ProcessingLog.timestamp.desc()).all()
+    
+    # Build log list
+    log_list = []
+    for log in logs:
+        log_list.append({
+            "id": log.id,
+            "task_id": log.task_id,
+            "step_name": log.step_name,
+            "status": log.status,
+            "message": log.message,
+            "timestamp": log.timestamp.isoformat() if log.timestamp else None
+        })
+    
+    # Get processing status
+    processing_status = _get_file_processing_status(db, file_id)
+    
+    # Check if files exist on disk
+    files_on_disk = {
+        "original": os.path.exists(file_record.local_filename) if file_record.local_filename else False
+    }
+    
+    return {
+        "file": {
+            "id": file_record.id,
+            "filehash": file_record.filehash,
+            "original_filename": file_record.original_filename,
+            "local_filename": file_record.local_filename,
+            "file_size": file_record.file_size,
+            "mime_type": file_record.mime_type,
+            "created_at": file_record.created_at.isoformat() if file_record.created_at else None
+        },
+        "processing_status": processing_status,
+        "logs": log_list,
+        "files_on_disk": files_on_disk
+    }
 
 @router.delete("/files/{file_id}")
 @require_login

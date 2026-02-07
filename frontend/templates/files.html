@@ -3,10 +3,6 @@
 
 {% block head_extra %}
   <script src="/static/js/common.js"></script>
-  <!-- Add TableSorter library -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.31.3/js/jquery.tablesorter.min.js"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.31.3/css/theme.bootstrap_4.min.css">
   <style>
     .file-table {
       width: 100%;
@@ -22,55 +18,161 @@
     .file-table th {
       background-color: #f7fafc;
       font-weight: 600;
-      cursor: pointer;
+      position: relative;
     }
-    .file-table th:hover {
+    .file-table th.sortable {
+      cursor: pointer;
+      user-select: none;
+    }
+    .file-table th.sortable:hover {
       background-color: #edf2f7;
     }
     .file-table tbody tr:hover {
       background-color: #f7fafc;
-    }
-    .delete-btn {
-      color: #e53e3e;
       cursor: pointer;
-      padding: 0.25rem 0.5rem;
-      border-radius: 0.25rem;
-      background: none;
-      border: none;
-      display: flex;
-      align-items: center;
     }
-    .delete-btn:hover {
-      background-color: #fed7d7;
+    .sort-indicator {
+      display: inline-block;
+      margin-left: 0.5rem;
+      opacity: 0.5;
     }
-    .view-logs-btn {
+    .sort-indicator.active {
+      opacity: 1;
+      font-weight: bold;
+    }
+    
+    /* Status badges */
+    .status-badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-align: center;
+    }
+    .status-pending {
+      background-color: #FEF3C7;
+      color: #92400E;
+    }
+    .status-processing {
+      background-color: #DBEAFE;
+      color: #1E3A8A;
+    }
+    .status-completed {
+      background-color: #D1FAE5;
+      color: #065F46;
+    }
+    .status-failed {
+      background-color: #FEE2E2;
+      color: #991B1B;
+    }
+    
+    /* Action buttons */
+    .action-btn {
       color: #3182ce;
       cursor: pointer;
       padding: 0.25rem 0.5rem;
       border-radius: 0.25rem;
       background: none;
       border: none;
-      display: flex;
+      display: inline-flex;
       align-items: center;
       margin-right: 0.5rem;
     }
-    .view-logs-btn:hover {
+    .action-btn:hover {
       background-color: #bee3f8;
     }
-    .error-message {
-      background-color: #FEE2E2;
-      border: 1px solid #F87171;
-      color: #B91C1C;
-      padding: 1rem;
-      border-radius: 0.25rem;
-      margin-bottom: 1rem;
+    .action-btn.delete {
+      color: #e53e3e;
+    }
+    .action-btn.delete:hover {
+      background-color: #fed7d7;
     }
     
-    /* TableSorter specific styles */
-    .tablesorter-header-inner {
+    /* Filters section */
+    .filters-section {
+      background-color: #f7fafc;
+      padding: 1.5rem;
+      border-radius: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .filter-group {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+    .filter-item {
+      flex: 1;
+      min-width: 200px;
+    }
+    .filter-item label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #2d3748;
+    }
+    .filter-item input,
+    .filter-item select {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid #cbd5e0;
+      border-radius: 0.25rem;
+    }
+    .filter-item button {
+      padding: 0.5rem 1rem;
+      background-color: #3182ce;
+      color: white;
+      border: none;
+      border-radius: 0.25rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .filter-item button:hover {
+      background-color: #2c5aa0;
+    }
+    .filter-item button.clear {
+      background-color: #718096;
+    }
+    .filter-item button.clear:hover {
+      background-color: #4a5568;
+    }
+    
+    /* Pagination */
+    .pagination {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid #e2e8f0;
+    }
+    .pagination-info {
+      color: #4a5568;
+    }
+    .pagination-buttons {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .pagination-button {
+      padding: 0.5rem 1rem;
+      border: 1px solid #cbd5e0;
+      background-color: white;
+      border-radius: 0.25rem;
+      cursor: pointer;
+      color: #2d3748;
+    }
+    .pagination-button:hover:not(:disabled) {
+      background-color: #edf2f7;
+    }
+    .pagination-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .pagination-button.active {
+      background-color: #3182ce;
+      color: white;
+      border-color: #3182ce;
     }
     
     /* Modal styles */
@@ -127,46 +229,13 @@
       background-color: #c53030;
     }
     
-    /* Logs styles */
-    .logs-container {
-      margin-top: 1rem;
-    }
-    .log-entry {
-      padding: 0.75rem;
-      border-left: 3px solid #e2e8f0;
-      margin-bottom: 0.5rem;
-      background-color: #f7fafc;
+    .error-message {
+      background-color: #FEE2E2;
+      border: 1px solid #F87171;
+      color: #B91C1C;
+      padding: 1rem;
       border-radius: 0.25rem;
-    }
-    .log-entry.success {
-      border-left-color: #48bb78;
-      background-color: #f0fff4;
-    }
-    .log-entry.failure {
-      border-left-color: #f56565;
-      background-color: #fff5f5;
-    }
-    .log-entry.in_progress {
-      border-left-color: #4299e1;
-      background-color: #ebf8ff;
-    }
-    .log-step {
-      font-weight: 600;
-      color: #2d3748;
-    }
-    .log-message {
-      color: #4a5568;
-      margin-top: 0.25rem;
-    }
-    .log-timestamp {
-      font-size: 0.875rem;
-      color: #718096;
-      margin-top: 0.25rem;
-    }
-    .no-logs {
-      text-align: center;
-      padding: 2rem;
-      color: #718096;
+      margin-bottom: 1rem;
     }
   </style>
 {% endblock %}
@@ -182,34 +251,130 @@
   </div>
   {% endif %}
 
+  <!-- Filters Section -->
+  <div class="filters-section">
+    <form method="get" action="/files" class="filter-group">
+      <div class="filter-item">
+        <label for="search">Search Filename</label>
+        <input type="text" id="search" name="search" value="{{ search }}" placeholder="Enter filename...">
+      </div>
+      
+      <div class="filter-item">
+        <label for="mime_type">MIME Type</label>
+        <select id="mime_type" name="mime_type">
+          <option value="">All Types</option>
+          {% for mt in mime_types %}
+          <option value="{{ mt }}" {% if mt == mime_type %}selected{% endif %}>{{ mt }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      
+      <div class="filter-item">
+        <label for="status">Status</label>
+        <select id="status" name="status">
+          <option value="">All Statuses</option>
+          <option value="pending" {% if status == "pending" %}selected{% endif %}>Pending</option>
+          <option value="processing" {% if status == "processing" %}selected{% endif %}>Processing</option>
+          <option value="completed" {% if status == "completed" %}selected{% endif %}>Completed</option>
+          <option value="failed" {% if status == "failed" %}selected{% endif %}>Failed</option>
+        </select>
+      </div>
+      
+      <div class="filter-item">
+        <label>&nbsp;</label>
+        <button type="submit">Apply Filters</button>
+      </div>
+      
+      <div class="filter-item">
+        <label>&nbsp;</label>
+        <button type="button" class="clear" onclick="clearFilters()">Clear</button>
+      </div>
+      
+      <!-- Hidden fields to preserve sort order -->
+      <input type="hidden" name="sort_by" value="{{ sort_by }}">
+      <input type="hidden" name="sort_order" value="{{ sort_order }}">
+      <input type="hidden" name="per_page" value="{{ pagination.per_page }}">
+    </form>
+  </div>
   
   <!-- File table -->
   <div class="overflow-x-auto">
     <table class="file-table" id="fileTable">
       <thead>
         <tr>
-          <th>ID</th>
-          <th>Original Filename</th>
-          <th>File Size</th>
-          <th>Mime Type</th>
-          <th>Created At</th>
-          <th class="sorter-false">Actions</th>
+          <th class="sortable" onclick="sortTable('id')">
+            ID
+            <span class="sort-indicator {% if sort_by == 'id' %}active{% endif %}">
+              {% if sort_by == 'id' %}
+                {% if sort_order == 'asc' %}▲{% else %}▼{% endif %}
+              {% else %}
+                ↕
+              {% endif %}
+            </span>
+          </th>
+          <th class="sortable" onclick="sortTable('original_filename')">
+            Original Filename
+            <span class="sort-indicator {% if sort_by == 'original_filename' %}active{% endif %}">
+              {% if sort_by == 'original_filename' %}
+                {% if sort_order == 'asc' %}▲{% else %}▼{% endif %}
+              {% else %}
+                ↕
+              {% endif %}
+            </span>
+          </th>
+          <th class="sortable" onclick="sortTable('file_size')">
+            File Size
+            <span class="sort-indicator {% if sort_by == 'file_size' %}active{% endif %}">
+              {% if sort_by == 'file_size' %}
+                {% if sort_order == 'asc' %}▲{% else %}▼{% endif %}
+              {% else %}
+                ↕
+              {% endif %}
+            </span>
+          </th>
+          <th class="sortable" onclick="sortTable('mime_type')">
+            MIME Type
+            <span class="sort-indicator {% if sort_by == 'mime_type' %}active{% endif %}">
+              {% if sort_by == 'mime_type' %}
+                {% if sort_order == 'asc' %}▲{% else %}▼{% endif %}
+              {% else %}
+                ↕
+              {% endif %}
+            </span>
+          </th>
+          <th>Status</th>
+          <th class="sortable" onclick="sortTable('created_at')">
+            Created At
+            <span class="sort-indicator {% if sort_by == 'created_at' %}active{% endif %}">
+              {% if sort_by == 'created_at' %}
+                {% if sort_order == 'asc' %}▲{% else %}▼{% endif %}
+              {% else %}
+                ↕
+              {% endif %}
+            </span>
+          </th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
         {% for file in files %}
-        <tr>
+        <tr onclick="viewFileDetail({{ file.id }}, event)">
           <td>{{ file.id }}</td>
           <td>{{ file.original_filename }}</td>
-          <td data-sort-value="{{ file.file_size }}">{{ (file.file_size / 1024) | round(2) }} KB</td>
+          <td>{{ (file.file_size / 1024) | round(2) }} KB</td>
           <td>{{ file.mime_type }}</td>
-          <td>{{ file.created_at }}</td>
+          <td>
+            <span class="status-badge status-{{ file.processing_status }}">
+              {{ file.processing_status | title }}
+            </span>
+          </td>
+          <td>{{ file.created_at.strftime('%Y-%m-%d %H:%M:%S') if file.created_at else 'N/A' }}</td>
           <td>
             <div style="display: flex; align-items: center;">
-              <button onclick="showLogs('{{ file.id }}')" class="view-logs-btn" title="View processing logs">
-                <i class="fas fa-list"></i>
+              <button onclick="viewFileDetail({{ file.id }}, event)" class="action-btn" title="View details">
+                <i class="fas fa-info-circle"></i>
               </button>
-              <button onclick="showDeleteModal('{{ file.id }}')" class="delete-btn" title="Delete file">
+              <button onclick="showDeleteModal({{ file.id }}, event)" class="action-btn delete" title="Delete file">
                 <i class="fas fa-trash"></i>
               </button>
             </div>
@@ -217,12 +382,40 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="6" class="text-center py-4">No files found</td>
+          <td colspan="7" class="text-center py-4">No files found</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+  
+  <!-- Pagination -->
+  {% if pagination.total_pages > 1 %}
+  <div class="pagination">
+    <div class="pagination-info">
+      Showing {{ ((pagination.page - 1) * pagination.per_page + 1) }} - 
+      {{ min(pagination.page * pagination.per_page, pagination.total_items) }} 
+      of {{ pagination.total_items }} files
+    </div>
+    <div class="pagination-buttons">
+      {% if pagination.page > 1 %}
+      <button class="pagination-button" onclick="goToPage(1)">First</button>
+      <button class="pagination-button" onclick="goToPage({{ pagination.page - 1 }})">Previous</button>
+      {% endif %}
+      
+      {% for p in range(max(1, pagination.page - 2), min(pagination.total_pages + 1, pagination.page + 3)) %}
+      <button class="pagination-button {% if p == pagination.page %}active{% endif %}" onclick="goToPage({{ p }})">
+        {{ p }}
+      </button>
+      {% endfor %}
+      
+      {% if pagination.page < pagination.total_pages %}
+      <button class="pagination-button" onclick="goToPage({{ pagination.page + 1 }})">Next</button>
+      <button class="pagination-button" onclick="goToPage({{ pagination.total_pages }})">Last</button>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
   
   <!-- Delete confirmation modal -->
   <div id="deleteModal" class="modal">
@@ -236,82 +429,25 @@
     </div>
   </div>
   
-  <!-- Processing logs modal -->
-  <div id="logsModal" class="modal">
-    <div class="modal-content">
-      <div class="modal-title">Processing Logs</div>
-      <div id="logsContent">
-        <p>Loading logs...</p>
-      </div>
-      <div class="modal-buttons">
-        <button id="closeLogsModal" class="modal-btn modal-btn-cancel">Close</button>
-      </div>
-    </div>
-  </div>
-  
-  <!-- Add JavaScript for handling DELETE requests -->
   <script>
     // Modal functionality
     const deleteModal = document.getElementById('deleteModal');
-    const logsModal = document.getElementById('logsModal');
     const cancelDelete = document.getElementById('cancelDelete');
     const confirmDelete = document.getElementById('confirmDelete');
-    const closeLogsModal = document.getElementById('closeLogsModal');
     let currentFileId = null;
     
-    function showDeleteModal(fileId) {
+    function showDeleteModal(fileId, event) {
+      if (event) event.stopPropagation();
       currentFileId = fileId;
       deleteModal.style.display = 'flex';
     }
     
-    function showLogs(fileId) {
-      logsModal.style.display = 'flex';
-      document.getElementById('logsContent').innerHTML = '<p>Loading logs...</p>';
-      
-      // Fetch logs from API
-      fetch(`/api/logs/file/${fileId}`)
-        .then(response => {
-          if (!response.ok) {
-            throw new Error('Failed to fetch logs');
-          }
-          return response.json();
-        })
-        .then(data => {
-          displayLogs(data);
-        })
-        .catch(error => {
-          console.error('Error:', error);
-          document.getElementById('logsContent').innerHTML = 
-            `<div class="error-message">Error loading logs: ${error.message}</div>`;
-        });
-    }
-    
-    function displayLogs(data) {
-      const logsContent = document.getElementById('logsContent');
-      
-      if (!data.logs || data.logs.length === 0) {
-        logsContent.innerHTML = '<div class="no-logs">No processing logs found for this file.</div>';
-        return;
+    function viewFileDetail(fileId, event) {
+      if (event && event.target.closest('.action-btn')) {
+        return; // Don't navigate if clicking action button
       }
-      
-      let html = '<div class="logs-container">';
-      html += `<h3 style="margin-bottom: 1rem;">File: ${data.file.original_filename}</h3>`;
-      
-      data.logs.forEach(log => {
-        const statusClass = log.status.toLowerCase().replace(' ', '_');
-        const timestamp = new Date(log.timestamp).toLocaleString();
-        
-        html += `
-          <div class="log-entry ${statusClass}">
-            <div class="log-step">${log.step_name} - ${log.status}</div>
-            ${log.message ? `<div class="log-message">${log.message}</div>` : ''}
-            <div class="log-timestamp">${timestamp}</div>
-          </div>
-        `;
-      });
-      
-      html += '</div>';
-      logsContent.innerHTML = html;
+      if (event) event.stopPropagation();
+      window.location.href = `/files/${fileId}/detail`;
     }
     
     cancelDelete.addEventListener('click', () => {
@@ -323,17 +459,10 @@
       deleteModal.style.display = 'none';
     });
     
-    closeLogsModal.addEventListener('click', () => {
-      logsModal.style.display = 'none';
-    });
-    
     // Close modal if clicking outside of it
     window.addEventListener('click', (event) => {
       if (event.target === deleteModal) {
         deleteModal.style.display = 'none';
-      }
-      if (event.target === logsModal) {
-        logsModal.style.display = 'none';
       }
     });
     
@@ -357,19 +486,33 @@
       });
     }
     
-    // Initialize TableSorter
-    $(document).ready(function() {
-      $("#fileTable").tablesorter({
-        theme: 'bootstrap',
-        widthFixed: true,
-        headerTemplate: '{content} {icon}',
-        widgets: ['zebra', 'stickyHeaders'],
-        sortList: [[0, 0]], // Default sort on the first column ascending
-        headers: {
-          5: { sorter: false } // Disable sorting on the Actions column
-        }
-      });
-    });
+    function sortTable(column) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const currentSortBy = urlParams.get('sort_by') || 'created_at';
+      const currentSortOrder = urlParams.get('sort_order') || 'desc';
+      
+      // Toggle sort order if clicking the same column
+      let newSortOrder = 'asc';
+      if (column === currentSortBy) {
+        newSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+      }
+      
+      urlParams.set('sort_by', column);
+      urlParams.set('sort_order', newSortOrder);
+      urlParams.set('page', '1'); // Reset to first page on sort
+      
+      window.location.search = urlParams.toString();
+    }
+    
+    function goToPage(page) {
+      const urlParams = new URLSearchParams(window.location.search);
+      urlParams.set('page', page);
+      window.location.search = urlParams.toString();
+    }
+    
+    function clearFilters() {
+      window.location.href = '/files';
+    }
   </script>
 </div>
 {% endblock %}

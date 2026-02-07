@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+{% block title %}File Details{% endblock %}
+
+{% block head_extra %}
+  <style>
+    .detail-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .back-button {
+      display: inline-flex;
+      align-items: center;
+      color: #3182ce;
+      text-decoration: none;
+      margin-bottom: 1.5rem;
+      font-weight: 600;
+    }
+    .back-button:hover {
+      color: #2c5aa0;
+    }
+    .back-button i {
+      margin-right: 0.5rem;
+    }
+    
+    .detail-card {
+      background-color: white;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      padding: 2rem;
+      margin-bottom: 1.5rem;
+    }
+    .detail-card h3 {
+      font-size: 1.5rem;
+      font-weight: bold;
+      margin-bottom: 1rem;
+      color: #2d3748;
+    }
+    
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+    }
+    .detail-item {
+      display: flex;
+      flex-direction: column;
+    }
+    .detail-label {
+      font-weight: 600;
+      color: #4a5568;
+      margin-bottom: 0.25rem;
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .detail-value {
+      color: #2d3748;
+      font-size: 1rem;
+      word-break: break-word;
+    }
+    
+    /* Status badges */
+    .status-badge {
+      display: inline-block;
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      font-size: 1rem;
+      font-weight: 600;
+      text-align: center;
+    }
+    .status-pending {
+      background-color: #FEF3C7;
+      color: #92400E;
+    }
+    .status-processing {
+      background-color: #DBEAFE;
+      color: #1E3A8A;
+    }
+    .status-completed {
+      background-color: #D1FAE5;
+      color: #065F46;
+    }
+    .status-failed {
+      background-color: #FEE2E2;
+      color: #991B1B;
+    }
+    
+    /* Processing logs */
+    .timeline {
+      position: relative;
+      padding-left: 2rem;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 0.5rem;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background-color: #e2e8f0;
+    }
+    .timeline-item {
+      position: relative;
+      padding-bottom: 2rem;
+    }
+    .timeline-item:last-child {
+      padding-bottom: 0;
+    }
+    .timeline-marker {
+      position: absolute;
+      left: -1.5rem;
+      width: 1rem;
+      height: 1rem;
+      border-radius: 50%;
+      background-color: #e2e8f0;
+      border: 2px solid white;
+    }
+    .timeline-marker.success {
+      background-color: #48bb78;
+    }
+    .timeline-marker.failure {
+      background-color: #f56565;
+    }
+    .timeline-marker.in_progress {
+      background-color: #4299e1;
+    }
+    .timeline-marker.pending {
+      background-color: #ecc94b;
+    }
+    .timeline-content {
+      background-color: #f7fafc;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      border-left: 3px solid #e2e8f0;
+    }
+    .timeline-content.success {
+      border-left-color: #48bb78;
+      background-color: #f0fff4;
+    }
+    .timeline-content.failure {
+      border-left-color: #f56565;
+      background-color: #fff5f5;
+    }
+    .timeline-content.in_progress {
+      border-left-color: #4299e1;
+      background-color: #ebf8ff;
+    }
+    .timeline-content.pending {
+      border-left-color: #ecc94b;
+      background-color: #fffff0;
+    }
+    .timeline-title {
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 0.5rem;
+    }
+    .timeline-message {
+      color: #4a5568;
+      margin-bottom: 0.5rem;
+    }
+    .timeline-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.875rem;
+      color: #718096;
+    }
+    .timeline-task-id {
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #a0aec0;
+    }
+    
+    .no-logs {
+      text-align: center;
+      padding: 3rem;
+      color: #718096;
+    }
+    .no-logs i {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+    
+    .error-message {
+      background-color: #FEE2E2;
+      border: 1px solid #F87171;
+      color: #B91C1C;
+      padding: 1rem;
+      border-radius: 0.25rem;
+      margin-bottom: 1rem;
+    }
+    
+    .file-status-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: 0.25rem;
+      font-size: 0.875rem;
+    }
+    .file-status-indicator.exists {
+      background-color: #D1FAE5;
+      color: #065F46;
+    }
+    .file-status-indicator.missing {
+      background-color: #FEE2E2;
+      color: #991B1B;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="detail-container">
+  <a href="/files" class="back-button">
+    <i class="fas fa-arrow-left"></i>
+    Back to File List
+  </a>
+  
+  {% if error %}
+  <div class="error-message">
+    <p><strong>Error:</strong> {{ error }}</p>
+  </div>
+  {% else %}
+  
+  <!-- File Information Card -->
+  <div class="detail-card">
+    <h3>File Information</h3>
+    <div class="detail-grid">
+      <div class="detail-item">
+        <span class="detail-label">File ID</span>
+        <span class="detail-value">{{ file.id }}</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">Original Filename</span>
+        <span class="detail-value">{{ file.original_filename }}</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">File Hash</span>
+        <span class="detail-value" style="font-family: monospace; font-size: 0.875rem;">{{ file.filehash }}</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">File Size</span>
+        <span class="detail-value">{{ (file.file_size / 1024) | round(2) }} KB ({{ file.file_size }} bytes)</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">MIME Type</span>
+        <span class="detail-value">{{ file.mime_type or 'N/A' }}</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">Created At</span>
+        <span class="detail-value">{{ file.created_at.strftime('%Y-%m-%d %H:%M:%S') if file.created_at else 'N/A' }}</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">Local Path</span>
+        <span class="detail-value" style="font-family: monospace; font-size: 0.875rem;">{{ file.local_filename }}</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">File on Disk</span>
+        <span class="detail-value">
+          {% if file_exists %}
+          <span class="file-status-indicator exists">
+            <i class="fas fa-check-circle"></i> File exists
+          </span>
+          {% else %}
+          <span class="file-status-indicator missing">
+            <i class="fas fa-times-circle"></i> File not found
+          </span>
+          {% endif %}
+        </span>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Processing History Card -->
+  <div class="detail-card">
+    <h3>Processing History</h3>
+    {% if logs %}
+    <div class="timeline">
+      {% for log in logs %}
+      <div class="timeline-item">
+        <div class="timeline-marker {{ log.status.lower().replace(' ', '_') }}"></div>
+        <div class="timeline-content {{ log.status.lower().replace(' ', '_') }}">
+          <div class="timeline-title">
+            {{ log.step_name }} - <span style="text-transform: capitalize;">{{ log.status }}</span>
+          </div>
+          {% if log.message %}
+          <div class="timeline-message">{{ log.message }}</div>
+          {% endif %}
+          <div class="timeline-meta">
+            <span>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else 'N/A' }}</span>
+            {% if log.task_id %}
+            <span class="timeline-task-id">Task: {{ log.task_id[:16] }}...</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="no-logs">
+      <i class="fas fa-clipboard-list"></i>
+      <p>No processing logs found for this file.</p>
+      <p style="margin-top: 0.5rem; font-size: 0.875rem;">The file may not have been processed yet.</p>
+    </div>
+    {% endif %}
+  </div>
+  
+  {% endif %}
+</div>
+{% endblock %}
