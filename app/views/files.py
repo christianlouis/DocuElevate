@@ -29,7 +29,7 @@ def files_page(
     try:
         # Import the model here to avoid circular imports
         from app.models import FileRecord, ProcessingLog
-        from sqlalchemy import desc, asc
+        from sqlalchemy import desc, asc, or_
         
         # Start with base query
         query = db.query(FileRecord)
@@ -41,6 +41,41 @@ def files_page(
         # Apply MIME type filter
         if mime_type:
             query = query.filter(FileRecord.mime_type == mime_type)
+        
+        # Apply status filter (before pagination for correct counts)
+        if status:
+            # Subquery to get file IDs matching the status
+            if status == "pending":
+                # Files with no logs
+                subq = db.query(ProcessingLog.file_id).distinct()
+                query = query.filter(~FileRecord.id.in_(subq))
+            elif status == "processing":
+                # Files with in_progress logs
+                subq = db.query(ProcessingLog.file_id).filter(
+                    ProcessingLog.status == "in_progress"
+                ).distinct()
+                query = query.filter(FileRecord.id.in_(subq))
+            elif status == "failed":
+                # Files with failure logs
+                subq = db.query(ProcessingLog.file_id).filter(
+                    ProcessingLog.status == "failure"
+                ).distinct()
+                query = query.filter(FileRecord.id.in_(subq))
+            elif status == "completed":
+                # Files with success logs but no failures or in_progress
+                success_files = db.query(ProcessingLog.file_id).filter(
+                    ProcessingLog.status == "success"
+                ).distinct().subquery()
+                
+                failed_files = db.query(ProcessingLog.file_id).filter(
+                    or_(ProcessingLog.status == "failure", ProcessingLog.status == "in_progress")
+                ).distinct().subquery()
+                
+                query = query.filter(
+                    FileRecord.id.in_(db.query(success_files.c.file_id))
+                ).filter(
+                    ~FileRecord.id.in_(db.query(failed_files.c.file_id))
+                )
         
         # Get total count before pagination
         total_items = query.count()
