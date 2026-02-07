@@ -9,6 +9,9 @@ import urllib.parse
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.celery_app import celery
+from app.utils import log_task_progress
+from app.database import SessionLocal
+from app.models import FileRecord
 
 logger = logging.getLogger(__name__)
 
@@ -215,12 +218,24 @@ def upload_large_file(file_path, upload_url):
     # The last response should contain the file metadata
     return response.json()
 
-@celery.task(base=BaseTaskWithRetry)
-def upload_to_onedrive(file_path: str):
-    """Uploads a file to OneDrive in the configured folder."""
+@celery.task(base=BaseTaskWithRetry, bind=True)
+def upload_to_onedrive(self, file_path: str, file_id: int = None):
+    """
+    Uploads a file to OneDrive in the configured folder.
+    
+    Args:
+        file_path: Path to the file to upload
+        file_id: Optional file ID to associate with logs
+    """
+    task_id = self.request.id
+    logger.info(f"[{task_id}] Starting OneDrive upload: {file_path}")
+    log_task_progress(task_id, "upload_to_onedrive", "in_progress", f"Uploading to OneDrive: {os.path.basename(file_path)}", file_id=file_id)
     
     if not os.path.exists(file_path):
-        raise FileNotFoundError(f"File not found: {file_path}")
+        error_msg = f"File not found: {file_path}"
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_onedrive", "failure", error_msg, file_id=file_id)
+        raise FileNotFoundError(error_msg)
 
     # Extract filename
     filename = os.path.basename(file_path)
@@ -228,7 +243,8 @@ def upload_to_onedrive(file_path: str):
     # Check if OneDrive settings are configured
     if not settings.onedrive_client_id:
         error_msg = "OneDrive client ID is not configured"
-        logger.error(error_msg)
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_onedrive", "failure", error_msg, file_id=file_id)
         raise ValueError(error_msg)
 
     try:
@@ -243,8 +259,9 @@ def upload_to_onedrive(file_path: str):
         
         # Log success
         web_url = result.get("webUrl", "Not available")
-        logger.info(f"Successfully uploaded {filename} to OneDrive at path {settings.onedrive_folder_path}")
-        logger.info(f"File accessible at: {web_url}")
+        logger.info(f"[{task_id}] Successfully uploaded {filename} to OneDrive at path {settings.onedrive_folder_path}")
+        logger.info(f"[{task_id}] File accessible at: {web_url}")
+        log_task_progress(task_id, "upload_to_onedrive", "success", f"Uploaded to OneDrive: {filename}", file_id=file_id)
         
         return {
             "status": "Completed",
@@ -255,5 +272,6 @@ def upload_to_onedrive(file_path: str):
         
     except Exception as e:
         error_msg = f"Failed to upload {filename} to OneDrive: {str(e)}"
-        logger.error(error_msg)
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_onedrive", "failure", error_msg, file_id=file_id)
         raise Exception(error_msg)
