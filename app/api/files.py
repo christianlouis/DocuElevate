@@ -472,20 +472,20 @@ async def ui_upload(request: Request, file: UploadFile = File(...)):
     
     if is_pdf:
         # If it's a PDF, process directly
-        task = process_document.delay(target_path)
+        task = process_document.delay(target_path, original_filename=safe_filename)
         logger.info(f"Enqueued PDF for processing: {target_path}")
     elif mime_type in IMAGE_MIME_TYPES or any(file_ext.endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.svg']):
         # If it's an image, convert to PDF first
-        task = convert_to_pdf.delay(target_path)
+        task = convert_to_pdf.delay(target_path, original_filename=safe_filename)
         logger.info(f"Enqueued image for PDF conversion: {target_path}")
     elif mime_type in ALLOWED_MIME_TYPES or any(file_ext.endswith(ext) for ext in ['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.odp', '.rtf', '.txt', '.csv']):
         # If it's an office document, convert to PDF first
-        task = convert_to_pdf.delay(target_path)
+        task = convert_to_pdf.delay(target_path, original_filename=safe_filename)
         logger.info(f"Enqueued office document for PDF conversion: {target_path}")
     else:
         # For any other file type, attempt conversion but log a warning
         logger.warning(f"Unsupported MIME type {mime_type} for {target_path}, attempting conversion")
-        task = convert_to_pdf.delay(target_path)
+        task = convert_to_pdf.delay(target_path, original_filename=safe_filename)
     
     return {
         "task_id": task.id, 

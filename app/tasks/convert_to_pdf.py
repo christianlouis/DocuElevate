@@ -12,11 +12,15 @@ from app.utils import log_task_progress
 logger = logging.getLogger(__name__)
 
 @shared_task(bind=True)
-def convert_to_pdf(self, file_path):
+def convert_to_pdf(self, file_path, original_filename=None):
     """
     Converts a file to PDF using Gotenberg's API.
     Determines the appropriate Gotenberg endpoint based on the file's MIME type.
     On success, saves the PDF locally and enqueues it for processing.
+    
+    Args:
+        file_path: Path to the file to convert
+        original_filename: Optional original filename (if different from path basename)
     """
     task_id = self.request.id
     logger.info(f"[{task_id}] Starting PDF conversion: {file_path}")
@@ -174,8 +178,14 @@ def convert_to_pdf(self, file_path):
             log_task_progress(task_id, "call_gotenberg", "success", "PDF conversion successful")
             log_task_progress(task_id, "convert_to_pdf", "success", f"Converted to PDF: {os.path.basename(converted_file_path)}")
             
-            # Enqueue the PDF for further processing
-            process_document.delay(converted_file_path)
+            # Enqueue the PDF for further processing, preserving original filename if provided
+            if original_filename:
+                # Change extension to .pdf for the original filename
+                original_base = os.path.splitext(original_filename)[0]
+                pdf_original_filename = f"{original_base}.pdf"
+                process_document.delay(converted_file_path, original_filename=pdf_original_filename)
+            else:
+                process_document.delay(converted_file_path)
             
             return converted_file_path
         else:

@@ -22,9 +22,13 @@ logger = logging.getLogger(__name__)
 
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
-def process_document(self, original_local_file: str):
+def process_document(self, original_local_file: str, original_filename: str = None):
     """
     Process a document file and trigger appropriate text extraction.
+
+    Args:
+        original_local_file: Path to the file on disk
+        original_filename: Optional original filename (if different from path basename)
 
     Steps:
       1. Check if we have a FileRecord entry (via SHA-256 hash). If found, skip re-processing.
@@ -51,7 +55,9 @@ def process_document(self, original_local_file: str):
     logger.info(f"[{task_id}] Computing file hash...")
     log_task_progress(task_id, "hash_file", "in_progress", "Computing file hash")
     filehash = hash_file(original_local_file)
-    original_filename = os.path.basename(original_local_file)
+    # Use provided original_filename or fall back to basename of path
+    if original_filename is None:
+        original_filename = os.path.basename(original_local_file)
     file_size = os.path.getsize(original_local_file)
     mime_type, _ = mimetypes.guess_type(original_local_file)
     if not mime_type:
