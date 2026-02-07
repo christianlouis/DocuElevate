@@ -11,6 +11,7 @@ This guide explains how to set up the notification system for DocuElevate, which
 | `NOTIFY_ON_CREDENTIAL_FAILURE` | Send notifications on credential failures (`True`/`False`) |
 | `NOTIFY_ON_STARTUP`        | Send notification when system starts (`True`/`False`)    |
 | `NOTIFY_ON_SHUTDOWN`       | Send notification when system shuts down (`True`/`False`)|
+| `NOTIFY_ON_FILE_PROCESSED` | Send notifications when files are processed (`True`/`False`)|
 
 For a complete list of configuration options, see the [Configuration Guide](ConfigurationGuide.md).
 
@@ -61,6 +62,42 @@ NOTIFY_ON_TASK_FAILURE=True        # Notify when background tasks fail
 NOTIFY_ON_CREDENTIAL_FAILURE=True  # Notify when service credentials fail (e.g. API token expired)
 NOTIFY_ON_STARTUP=True             # Notify when the system starts
 NOTIFY_ON_SHUTDOWN=False           # Notify when the system shuts down
+NOTIFY_ON_FILE_PROCESSED=True      # Notify when files are successfully processed
+```
+
+## File Processing Notifications
+
+DocuElevate can notify you whenever a document is successfully processed and uploaded to your configured destinations. When enabled, you'll receive a notification containing:
+
+- **File name**: The name of the processed document
+- **File size**: Size of the processed file
+- **Document type**: The type of document detected by AI (invoice, receipt, contract, etc.)
+- **Tags**: Any tags extracted from the document
+- **Destinations**: List of destinations where the file was uploaded
+
+This feature is particularly useful for:
+- Tracking document processing in real-time
+- Confirming important documents have been processed
+- Monitoring the document processing workflow
+- Receiving immediate feedback when uploading documents via email or API
+
+To enable file processing notifications:
+
+```dotenv
+NOTIFY_ON_FILE_PROCESSED=True
+```
+
+Example notification:
+```
+Subject: File Processed: Invoice_2024-01-15.pdf
+
+File: Invoice_2024-01-15.pdf
+Size: 1.23 MB
+Document Type: Invoice
+Tags: financial, vendor-acme, urgent
+Destinations: Dropbox, Google Drive, Paperless-ngx
+
+The file has been successfully processed and is being uploaded to all configured destinations.
 ```
 
 ## Automated Credential Checking

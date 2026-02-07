@@ -156,6 +156,10 @@ class Settings(BaseSettings):
         default=False,
         description="Send notifications when application shuts down"
     )
+    notify_on_file_processed: bool = Field(
+        default=True,
+        description="Send notifications when files are successfully processed"
+    )
     
     @validator('notification_urls', pre=True)
     def parse_notification_urls(cls, v):
