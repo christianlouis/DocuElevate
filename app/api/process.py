@@ -112,7 +112,12 @@ def send_to_all_destinations_endpoint(file_path: str):
 @router.post("/processall")
 @require_login
 def process_all_pdfs_in_workdir():
-    """Finds all .pdf files in <workdir> and enqueues them for processing."""
+    """
+    Finds all .pdf files in <workdir> and enqueues them for processing.
+    
+    For large batches (>processall_throttle_threshold files), tasks are staggered
+    to avoid overwhelming downstream APIs.
+    """
     target_dir = settings.workdir
     if not os.path.exists(target_dir):
         raise HTTPException(
@@ -128,13 +133,42 @@ def process_all_pdfs_in_workdir():
         return {"message": "No PDF files found in that directory."}
 
     task_ids = []
-    for pdf in pdf_files:
+    num_files = len(pdf_files)
+    
+    # Apply throttling if we have more files than the threshold
+    apply_throttle = num_files > settings.processall_throttle_threshold
+    
+    if apply_throttle:
+        logger.info(
+            f"Processing {num_files} files with throttling "
+            f"(threshold: {settings.processall_throttle_threshold}, "
+            f"delay: {settings.processall_throttle_delay}s per file)"
+        )
+    
+    for index, pdf in enumerate(pdf_files):
         file_path = os.path.join(target_dir, pdf)
-        task = process_document.delay(file_path)
+        
+        if apply_throttle:
+            # Stagger task submission with countdown
+            # First file starts immediately (countdown=0)
+            # Each subsequent file has an increasing delay
+            countdown = index * settings.processall_throttle_delay
+            task = process_document.apply_async(args=[file_path], countdown=countdown)
+            logger.debug(f"Scheduled {pdf} with {countdown}s delay")
+        else:
+            # No throttling - enqueue immediately
+            task = process_document.delay(file_path)
+        
         task_ids.append(task.id)
 
+    message = f"Enqueued {num_files} PDFs for processing"
+    if apply_throttle:
+        total_time = (num_files - 1) * settings.processall_throttle_delay
+        message += f" (throttled over {total_time} seconds)"
+    
     return {
-        "message": f"Enqueued {len(pdf_files)} PDFs to upload_to_s3",
+        "message": message,
         "pdf_files": pdf_files,
-        "task_ids": task_ids
+        "task_ids": task_ids,
+        "throttled": apply_throttle
     }

@@ -135,6 +135,16 @@ class Settings(BaseSettings):
     # Feature flags
     allow_file_delete: bool = True  # Default to allowing file deletion from database
 
+    # Batch processing settings
+    processall_throttle_threshold: int = Field(
+        default=20,
+        description="Number of files above which throttling is applied in /processall endpoint"
+    )
+    processall_throttle_delay: int = Field(
+        default=3,
+        description="Delay in seconds between each task submission when throttling in /processall"
+    )
+
     # Notification settings
     notification_urls: Union[List[str], str] = Field(
         default_factory=list,
