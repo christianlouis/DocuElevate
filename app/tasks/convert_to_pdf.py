@@ -7,25 +7,32 @@ import json
 from celery import shared_task
 from app.config import settings
 from app.tasks.process_document import process_document
+from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
 
-@shared_task
-def convert_to_pdf(file_path):
+@shared_task(bind=True)
+def convert_to_pdf(self, file_path):
     """
     Converts a file to PDF using Gotenberg's API.
     Determines the appropriate Gotenberg endpoint based on the file's MIME type.
     On success, saves the PDF locally and enqueues it for processing.
     """
+    task_id = self.request.id
+    logger.info(f"[{task_id}] Starting PDF conversion: {file_path}")
+    log_task_progress(task_id, "convert_to_pdf", "in_progress", f"Converting file: {os.path.basename(file_path)}")
+    
     gotenberg_url = getattr(settings, "gotenberg_url", None)
     if not gotenberg_url:
-        logger.error("Gotenberg URL is not configured in settings.")
+        logger.error(f"[{task_id}] Gotenberg URL is not configured in settings.")
+        log_task_progress(task_id, "convert_to_pdf", "failure", "Gotenberg URL not configured")
         return
 
     # Try to guess the MIME type based on file content and extension
     mime_type, encoding = mimetypes.guess_type(file_path)
     file_ext = os.path.splitext(file_path)[1].lower()
-    logger.info(f"Guessed MIME type for '{file_path}' is: {mime_type}, extension: {file_ext}")
+    logger.info(f"[{task_id}] Guessed MIME type for '{file_path}' is: {mime_type}, extension: {file_ext}")
+    log_task_progress(task_id, "detect_file_type", "success", f"File type: {mime_type or file_ext}")
 
     # Determine which Gotenberg endpoint to use
     endpoint = None
@@ -146,11 +153,13 @@ def convert_to_pdf(file_path):
         logger.warning(f"Using fallback conversion for unknown type: {mime_type} / {file_ext}")
 
     if not endpoint:
-        logger.error(f"Could not determine Gotenberg endpoint for file type: {mime_type}")
+        logger.error(f"[{task_id}] Could not determine Gotenberg endpoint for file type: {mime_type}")
+        log_task_progress(task_id, "convert_to_pdf", "failure", f"Unknown file type: {mime_type}")
         return None
 
     try:
-        logger.info(f"Converting {file_path} using endpoint: {endpoint}")
+        logger.info(f"[{task_id}] Converting {file_path} using endpoint: {endpoint}")
+        log_task_progress(task_id, "call_gotenberg", "in_progress", "Calling Gotenberg API")
         
         # Send the conversion request to Gotenberg
         response = requests.post(endpoint, files=files, data=form_data)
@@ -161,19 +170,25 @@ def convert_to_pdf(file_path):
             with open(converted_file_path, "wb") as out_file:
                 out_file.write(response.content)
             
-            logger.info(f"Converted file saved as PDF: {converted_file_path}")
+            logger.info(f"[{task_id}] Converted file saved as PDF: {converted_file_path}")
+            log_task_progress(task_id, "call_gotenberg", "success", "PDF conversion successful")
+            log_task_progress(task_id, "convert_to_pdf", "success", f"Converted to PDF: {os.path.basename(converted_file_path)}")
             
             # Enqueue the PDF for further processing
             process_document.delay(converted_file_path)
             
             return converted_file_path
         else:
+            error_msg = f"Status code: {response.status_code}"
             logger.error(
-                f"Conversion failed for {file_path}. "
-                f"Status code: {response.status_code}, "
+                f"[{task_id}] Conversion failed for {file_path}. "
+                f"{error_msg}, "
                 f"Response: {response.text[:500]}..."
             )
+            log_task_progress(task_id, "call_gotenberg", "failure", error_msg)
+            log_task_progress(task_id, "convert_to_pdf", "failure", f"Conversion failed: {error_msg}")
             return None
     except Exception as e:
-        logger.exception(f"Error converting {file_path} to PDF: {e}")
+        logger.exception(f"[{task_id}] Error converting {file_path} to PDF: {e}")
+        log_task_progress(task_id, "convert_to_pdf", "failure", f"Exception: {str(e)}")
         return None
