@@ -8,21 +8,35 @@ from app.config import settings
 from app.celery_app import celery
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils.filename_utils import get_unique_filename, sanitize_filename, extract_remote_path
+from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
 
-@celery.task(base=BaseTaskWithRetry)
-def upload_to_sftp(file_path: str):
+@celery.task(base=BaseTaskWithRetry, bind=True)
+def upload_to_sftp(self, file_path: str, file_id: int = None):
     """
     Upload a file to an SFTP server.
+    
+    Args:
+        file_path: Path to the file to upload
+        file_id: Optional file ID to associate with logs
     """
+    task_id = self.request.id
+    logger.info(f"[{task_id}] Starting SFTP upload: {file_path}")
+    log_task_progress(
+        task_id, "upload_to_sftp", "in_progress", f"Uploading to SFTP: {os.path.basename(file_path)}", file_id=file_id
+    )
+    
     if not os.path.exists(file_path):
         error_msg = f"File not found: {file_path}"
-        logger.error(error_msg)
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_sftp", "failure", error_msg, file_id=file_id)
         raise FileNotFoundError(error_msg)
     
     if not (settings.sftp_host and settings.sftp_port and settings.sftp_username):
-        logger.info("SFTP upload skipped: Missing configuration")
+        error_msg = "SFTP upload skipped: Missing configuration"
+        logger.info(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_sftp", "skipped", error_msg, file_id=file_id)
         return {"status": "Skipped", "reason": "SFTP settings not configured"}
     
     filename = os.path.basename(file_path)
@@ -102,9 +116,10 @@ def upload_to_sftp(file_path: str):
                 logger.warning(f"Failed to create directory structure {remote_dir}: {str(e)}")
         
         # Upload the file
-        logger.info(f"Uploading {filename} to SFTP at {remote_path}")
+        logger.info(f"[{task_id}] Uploading {filename} to SFTP at {remote_path}")
         sftp.put(file_path, remote_path)
-        logger.info(f"Successfully uploaded {filename} to SFTP at {remote_path}")
+        logger.info(f"[{task_id}] Successfully uploaded {filename} to SFTP at {remote_path}")
+        log_task_progress(task_id, "upload_to_sftp", "success", f"Uploaded to SFTP: {filename}", file_id=file_id)
         
         # Close connections
         sftp.close()
@@ -126,5 +141,6 @@ def upload_to_sftp(file_path: str):
             pass
             
         error_msg = f"Failed to upload {filename} to SFTP server: {str(e)}"
-        logger.error(error_msg)
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_sftp", "failure", error_msg, file_id=file_id)
         raise Exception(error_msg)

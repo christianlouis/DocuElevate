@@ -15,6 +15,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.celery_app import celery
+from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
 
@@ -159,14 +160,32 @@ def _send_email_with_smtp(msg, filename, recipients):
         logger.error(error_msg)
         return {"status": "Failed", "reason": error_msg, "error": str(e)}
 
-@celery.task(base=BaseTaskWithRetry)
-def upload_to_email(file_path: str, recipients=None, subject=None, message=None, template_name="default.html", include_metadata=True):
+@celery.task(base=BaseTaskWithRetry, bind=True)
+def upload_to_email(self, file_path: str, file_id: int = None, recipients=None, subject=None, message=None, template_name="default.html", include_metadata=True):
     """
     Sends a file via email to the specified recipients.
     If recipients is None, uses the configured default email recipient.
+    
+    Args:
+        file_path: Path to the file to send
+        file_id: Optional file ID to associate with logs
+        recipients: Optional list of recipient email addresses
+        subject: Optional email subject
+        message: Optional custom message
+        template_name: Email template to use
+        include_metadata: Whether to include metadata in the email
     """
+    task_id = self.request.id
+    logger.info(f"[{task_id}] Starting email send: {file_path}")
+    log_task_progress(
+        task_id, "upload_to_email", "in_progress", f"Sending via email: {os.path.basename(file_path)}", file_id=file_id
+    )
+    
     if not os.path.exists(file_path):
-        raise FileNotFoundError(f"File not found: {file_path}")
+        error_msg = f"File not found: {file_path}"
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_email", "failure", error_msg, file_id=file_id)
+        raise FileNotFoundError(error_msg)
 
     # Extract filename
     filename = os.path.basename(file_path)
@@ -174,16 +193,19 @@ def upload_to_email(file_path: str, recipients=None, subject=None, message=None,
     # Check if email settings are configured
     if not settings.email_host:
         error_msg = "Email host is not configured"
-        logger.error(error_msg)
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_email", "skipped", error_msg, file_id=file_id)
         return {"status": "Skipped", "reason": error_msg}
         
     # Log email configuration for debugging
-    logger.debug(f"Email config - Host: {settings.email_host}, Port: {settings.email_port}, " 
+    logger.debug(f"[{task_id}] Email config - Host: {settings.email_host}, Port: {settings.email_port}, " 
                 f"Username: {settings.email_username}, TLS: {settings.email_use_tls}")
 
     # Process recipients
     recipients, error = _prepare_recipients(recipients)
     if error:
+        logger.error(f"[{task_id}] {error}")
+        log_task_progress(task_id, "upload_to_email", "skipped", error, file_id=file_id)
         return {"status": "Skipped", "reason": error}
 
     # Use provided subject or create default
@@ -237,8 +259,13 @@ def upload_to_email(file_path: str, recipients=None, subject=None, message=None,
         # Send the email through SMTP
         error_result = _send_email_with_smtp(msg, filename, recipients)
         if error_result:
+            logger.error(f"[{task_id}] Failed to send email: {error_result.get('reason')}")
+            log_task_progress(task_id, "upload_to_email", "failure", error_result.get('reason'), file_id=file_id)
             return error_result
 
+        logger.info(f"[{task_id}] Successfully sent {filename} via email to {len(recipients)} recipients")
+        log_task_progress(task_id, "upload_to_email", "success", f"Sent via email: {filename}", file_id=file_id)
+        
         return {
             "status": "Completed",
             "file": file_path,
@@ -250,5 +277,6 @@ def upload_to_email(file_path: str, recipients=None, subject=None, message=None,
         
     except Exception as e:
         error_msg = f"Failed to send {filename} via email: {str(e)}"
-        logger.error(error_msg)
+        logger.error(f"[{task_id}] {error_msg}")
+        log_task_progress(task_id, "upload_to_email", "failure", error_msg, file_id=file_id)
         raise Exception(error_msg)
