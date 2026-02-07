@@ -161,19 +161,19 @@ def _send_email_with_smtp(msg, filename, recipients):
         return {"status": "Failed", "reason": error_msg, "error": str(e)}
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
-def upload_to_email(self, file_path: str, file_id: int = None, recipients=None, subject=None, message=None, template_name="default.html", include_metadata=True):
+def upload_to_email(self, file_path: str, recipients=None, subject=None, message=None, template_name="default.html", include_metadata=True, file_id: int = None):
     """
     Sends a file via email to the specified recipients.
     If recipients is None, uses the configured default email recipient.
     
     Args:
         file_path: Path to the file to send
-        file_id: Optional file ID to associate with logs
         recipients: Optional list of recipient email addresses
         subject: Optional email subject
         message: Optional custom message
         template_name: Email template to use
         include_metadata: Whether to include metadata in the email
+        file_id: Optional file ID to associate with logs
     """
     task_id = self.request.id
     logger.info(f"[{task_id}] Starting email send: {file_path}")

@@ -240,17 +240,17 @@ def upload_to_google_drive(self, file_path: str, file_id: int = None, include_me
         ).execute()
         
         # Log success details
-        file_id_gd = file.get('id')
+        google_drive_file_id = file.get('id')
         web_view_link = file.get('webViewLink')
         
-        logger.info(f"[{task_id}] Successfully uploaded {filename} to Google Drive with ID: {file_id_gd}")
+        logger.info(f"[{task_id}] Successfully uploaded {filename} to Google Drive with ID: {google_drive_file_id}")
         logger.info(f"[{task_id}] File accessible at: {web_view_link}")
         log_task_progress(task_id, "upload_to_google_drive", "success", f"Uploaded to Google Drive: {filename}", file_id=file_id)
         
         result = {
             "status": "Completed", 
             "file_path": file_path,
-            "google_drive_file_id": file_id_gd,
+            "google_drive_file_id": google_drive_file_id,
             "google_drive_web_link": web_view_link
         }
         
