@@ -101,6 +101,29 @@ Reprocess a specific file.
 }
 ```
 
+### Batch Processing
+
+**POST** `/api/processall`
+
+Process all PDF files in the configured workdir directory.
+
+**Throttling**: For large batches (>20 files by default), tasks are automatically staggered to prevent overwhelming downstream APIs. The throttling behavior can be configured via environment variables:
+
+- `PROCESSALL_THROTTLE_THRESHOLD`: Number of files above which throttling is applied (default: 20)
+- `PROCESSALL_THROTTLE_DELAY`: Delay in seconds between each task submission when throttling (default: 3)
+
+**Example**: When processing 25 files with default settings, the first file is queued immediately, the second after 3 seconds, the third after 6 seconds, etc., spreading the load over 72 seconds total.
+
+**Response**:
+```json
+{
+  "message": "Enqueued 25 PDFs for processing (throttled over 72 seconds)",
+  "pdf_files": ["file1.pdf", "file2.pdf", ...],
+  "task_ids": ["a1b2c3...", "d4e5f6...", ...],
+  "throttled": true
+}
+```
+
 **POST** `/send_to_google_drive/`
 
 Send a processed file to Google Drive.

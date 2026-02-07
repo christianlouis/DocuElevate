@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
-from pydantic_settings import BaseSettings
-from typing import Optional, List, Dict, Any, Union
-from pydantic import Field, validator
 import os
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
+
+from pydantic import Field, validator
+from pydantic_settings import BaseSettings
+
 
 class Settings(BaseSettings):
     database_url: str
@@ -14,23 +16,23 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"  # Default model
     workdir: str
     debug: bool = False  # Default to False
-    
+
     # Making Dropbox optional
     dropbox_app_key: Optional[str] = None
     dropbox_app_secret: Optional[str] = None
     dropbox_folder: Optional[str] = None
     dropbox_refresh_token: Optional[str] = None
-    
+
     # Making Nextcloud optional
     nextcloud_upload_url: Optional[str] = None
     nextcloud_username: Optional[str] = None
     nextcloud_password: Optional[str] = None
     nextcloud_folder: Optional[str] = None
-    
+
     # Making Paperless optional
     paperless_ngx_api_token: Optional[str] = None
     paperless_host: Optional[str] = None
-    
+
     azure_ai_key: str
     azure_region: str
     azure_endpoint: str
@@ -71,7 +73,7 @@ class Settings(BaseSettings):
     google_drive_credentials_json: Optional[str] = ""
     google_drive_folder_id: Optional[str] = ""
     google_drive_delegate_to: Optional[str] = ""  # Optional delegated user email
-    
+
     # Google Drive OAuth settings
     google_drive_use_oauth: bool = False  # Default to service account method
     google_drive_client_id: Optional[str] = ""
@@ -135,49 +137,45 @@ class Settings(BaseSettings):
     # Feature flags
     allow_file_delete: bool = True  # Default to allowing file deletion from database
 
+    # Batch processing settings
+    processall_throttle_threshold: int = Field(
+        default=20, description="Number of files above which throttling is applied in /processall endpoint"
+    )
+    processall_throttle_delay: int = Field(
+        default=3, description="Delay in seconds between each task submission when throttling in /processall"
+    )
+
     # Notification settings
     notification_urls: Union[List[str], str] = Field(
-        default_factory=list,
-        description="List of Apprise notification URLs (e.g., discord://, telegram://, etc.)"
+        default_factory=list, description="List of Apprise notification URLs (e.g., discord://, telegram://, etc.)"
     )
-    notify_on_task_failure: bool = Field(
-        default=True, 
-        description="Send notifications when Celery tasks fail"
-    )
+    notify_on_task_failure: bool = Field(default=True, description="Send notifications when Celery tasks fail")
     notify_on_credential_failure: bool = Field(
-        default=True,
-        description="Send notifications when credential checks fail"
+        default=True, description="Send notifications when credential checks fail"
     )
-    notify_on_startup: bool = Field(
-        default=True,
-        description="Send notifications when application starts"
-    )
-    notify_on_shutdown: bool = Field(
-        default=False,
-        description="Send notifications when application shuts down"
-    )
+    notify_on_startup: bool = Field(default=True, description="Send notifications when application starts")
+    notify_on_shutdown: bool = Field(default=False, description="Send notifications when application shuts down")
     notify_on_file_processed: bool = Field(
-        default=True,
-        description="Send notifications when files are successfully processed"
+        default=True, description="Send notifications when files are successfully processed"
     )
-    
-    @validator('notification_urls', pre=True)
+
+    @validator("notification_urls", pre=True)
     def parse_notification_urls(cls, v):
         """Parse notification URLs from string or list"""
         if isinstance(v, str):
-            if ',' in v:
-                return [url.strip() for url in v.split(',') if url.strip()]
+            if "," in v:
+                return [url.strip() for url in v.split(",") if url.strip()]
             elif v.strip():
                 return [v.strip()]
             return []
         return v
 
-    @validator('session_secret')
+    @validator("session_secret")
     def validate_session_secret(cls, v, values):
         """Validate that session_secret is set and has sufficient length when auth is enabled"""
-        if values.get('auth_enabled') and not v:
+        if values.get("auth_enabled") and not v:
             raise ValueError("SESSION_SECRET must be set when AUTH_ENABLED=True")
-        if values.get('auth_enabled') and v and len(v) < 32:
+        if values.get("auth_enabled") and v and len(v) < 32:
             raise ValueError("SESSION_SECRET must be at least 32 characters long")
         return v
 
@@ -188,13 +186,13 @@ class Settings(BaseSettings):
         env_build_date = os.environ.get("BUILD_DATE")
         if env_build_date:
             return env_build_date
-        
+
         # Then try to get build date from BUILD_DATE file
         build_date_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "BUILD_DATE")
         if os.path.exists(build_date_file):
             with open(build_date_file, "r") as f:
                 return f.read().strip()
-        
+
         # Default to unknown if not found
         return "Unknown build date"
 
@@ -205,35 +203,38 @@ class Settings(BaseSettings):
         env_version = os.environ.get("APP_VERSION")
         if env_version:
             return env_version
-        
+
         # Then try to get version from VERSION file
         version_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "VERSION")
         if os.path.exists(version_file):
             with open(version_file, "r") as f:
                 return f.read().strip()
-                
+
         # Default version if not found
         return "0.3.2-dev"
 
     class Config:
         env_file = ".env"
+
         # Convert string representations of booleans to actual booleans
         # and strip quotes from string values
         @classmethod
         def parse_env_var(cls, field_name: str, raw_val: str) -> Any:
             # First, strip quotes from the value if it's a string
             if isinstance(raw_val, str):
-                if (raw_val.startswith('"') and raw_val.endswith('"')) or \
-                   (raw_val.startswith("'") and raw_val.endswith("'")):
+                if (raw_val.startswith('"') and raw_val.endswith('"')) or (
+                    raw_val.startswith("'") and raw_val.endswith("'")
+                ):
                     raw_val = raw_val[1:-1]
                 raw_val = raw_val.strip()
-                
+
             # Convert string representations of booleans to actual booleans
-            if field_name.endswith('_enabled') or field_name == 'debug':
-                if raw_val.lower() in ('false', '0', 'no', 'n', 'f'):
+            if field_name.endswith("_enabled") or field_name == "debug":
+                if raw_val.lower() in ("false", "0", "no", "n", "f"):
                     return False
-                if raw_val.lower() in ('true', '1', 'yes', 'y', 't'):
+                if raw_val.lower() in ("true", "1", "yes", "y", "t"):
                     return True
             return raw_val
+
 
 settings = Settings()

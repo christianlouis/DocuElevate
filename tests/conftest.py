@@ -70,7 +70,8 @@ def client(db_session) -> TestClient:
     
     fastapi_app.dependency_overrides[get_db] = override_get_db
     
-    with TestClient(fastapi_app) as test_client:
+    # Use base_url to satisfy TrustedHostMiddleware
+    with TestClient(fastapi_app, base_url="http://localhost") as test_client:
         yield test_client
     
     # Clean up
