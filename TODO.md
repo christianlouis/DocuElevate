@@ -7,6 +7,15 @@ This document tracks actionable tasks for the current development cycle. For lon
 
 ---
 
+## ⚠️ Important Note on Versioning
+
+As of this update, DocuElevate uses **automated semantic versioning** via `python-semantic-release`:
+- **DO NOT** manually edit `VERSION` or `CHANGELOG.md` 
+- Version bumps are automated based on conventional commit messages
+- See [CONTRIBUTING.md](CONTRIBUTING.md) for commit message format
+
+---
+
 ## 🔴 Critical Priority (This Week)
 
 ### Security
@@ -46,6 +55,8 @@ This document tracks actionable tasks for the current development cycle. For lon
 - [x] Enable tests in GitHub Actions
 - [x] Add coverage reporting
 - [x] Add CodeQL scanning
+- [x] Implement semantic-release for automated versioning
+- [x] Add conventional commit validation (commitlint)
 - [ ] Add dependency scanning (Dependabot or similar)
 - [ ] Make linting checks blocking (once critical issues fixed)
 - [ ] Add build status badges to README.md
@@ -55,8 +66,9 @@ This document tracks actionable tasks for the current development cycle. For lon
 - [x] Create MILESTONES.md
 - [x] Create TODO.md
 - [x] Create SECURITY_AUDIT.md
-- [ ] Create AGENTIC_CODING.md
-- [ ] Update CONTRIBUTING.md with testing guidelines
+- [x] Create AGENTIC_CODING.md
+- [x] Update CONTRIBUTING.md with testing guidelines and conventional commits
+- [x] Archive one-off documentation files to docs/archive/
 - [ ] Add architecture diagram to docs/
 - [ ] Document all environment variables in docs/ConfigurationGuide.md
 - [ ] Add troubleshooting section for common test failures
@@ -214,7 +226,18 @@ This document tracks actionable tasks for the current development cycle. For lon
 
 ## ✅ Completed (Recent)
 
-### 2026-02-08
+### 2026-02-08 (Semantic Release & Documentation Overhaul)
+- [x] Implemented semantic-release with python-semantic-release
+- [x] Created pyproject.toml with semantic-release configuration
+- [x] Added .github/workflows/release.yml for automated releases
+- [x] Added conventional commit validation (commitlint) to pre-commit hooks
+- [x] Updated Docker workflow to use docuelevate image name
+- [x] Archived one-off documentation to docs/archive/
+- [x] Updated CONTRIBUTING.md with conventional commits guide
+- [x] Updated AGENTIC_CODING.md with versioning/release process
+- [x] Updated .github/copilot-instructions.md with commit format rules
+
+### 2026-02-08 (Settings Management)
 - [x] Implemented database-backed settings management system
 - [x] Added Fernet encryption for sensitive settings in database
 - [x] Created 3-step setup wizard for fresh installations

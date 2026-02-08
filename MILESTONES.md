@@ -27,8 +27,17 @@ DocuElevate follows [Semantic Versioning 2.0.0](https://semver.org/):
 - **Database-backed settings management with encryption**
 - **Setup wizard for first-time configuration**
 - **Admin UI for runtime configuration**
+- **Automated semantic versioning and releases**
 - OAuth2 authentication with admin group support
 - Basic web UI and REST API
+
+### Important Note on Versioning
+As of February 2026, DocuElevate uses **automated semantic versioning**:
+- Version management handled by `python-semantic-release`
+- Releases automated via GitHub Actions on merge to main
+- Version bumps determined by conventional commit messages
+- `VERSION` and `CHANGELOG.md` automatically updated
+- GitHub Releases created automatically with release notes
 
 ---
 
@@ -237,7 +246,27 @@ This is our first major release, marking production-ready enterprise capabilitie
 
 ## Release Process
 
-### Pre-release Checklist
+### Automated Semantic Versioning (v0.6.0+)
+Starting with v0.6.0, releases are fully automated using `python-semantic-release`:
+
+1. **Commit with Conventional Format**: Use conventional commit messages (feat, fix, etc.)
+2. **Merge to Main**: PR merges trigger semantic-release workflow
+3. **Automated Analysis**: semantic-release determines version from commits
+4. **Automatic Updates**:
+   - Updates `VERSION` file
+   - Generates/updates `CHANGELOG.md`
+   - Creates Git tag (e.g., `v0.6.0`)
+   - Creates GitHub Release with notes
+   - Triggers Docker image builds
+5. **No Manual Steps**: VERSION and CHANGELOG are never edited manually
+
+### Version Bump Rules
+- `feat:` commits → Minor version (0.5.0 → 0.6.0)
+- `fix:`, `perf:` → Patch version (0.5.0 → 0.5.1)
+- `feat!:`, `BREAKING CHANGE:` → Major version (0.5.0 → 1.0.0)
+- Other types (docs, chore, etc.) → No version bump
+
+### Pre-release Checklist (Automated)
 - [ ] All tests passing
 - [ ] Security scan passed
 - [ ] Code review completed
