@@ -2,6 +2,7 @@
 Settings management views for the application.
 """
 
+import os
 import logging
 import inspect
 from functools import wraps
@@ -46,9 +47,16 @@ def require_admin_access(func):
 async def settings_page(request: Request, db: Session = Depends(get_db)):
     """
     Settings management page - admin only.
+    
+    This page is a convenience feature to view and edit settings.
+    Values are displayed in precedence order: Database > Environment > Defaults
     """
     
     try:
+        # Get settings from database
+        from app.utils.settings_service import get_all_settings_from_db
+        db_settings = get_all_settings_from_db(db)
+        
         # Get settings organized by category
         categories = get_settings_by_category()
         
@@ -57,8 +65,25 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
         for category, keys in categories.items():
             settings_data[category] = []
             for key in keys:
-                # Get current value from settings
+                # Get current value from settings (already has precedence applied)
                 value = getattr(settings, key, None)
+                
+                # Determine the source of this setting
+                # Check if it's in the database
+                if key in db_settings:
+                    source = "database"
+                    source_label = "DB"
+                    source_color = "green"
+                # Check if it's from environment variable
+                elif key.upper() in os.environ or key in os.environ:
+                    source = "environment"
+                    source_label = "ENV"
+                    source_color = "blue"
+                else:
+                    # It's using the default value
+                    source = "default"
+                    source_label = "DEFAULT"
+                    source_color = "gray"
                 
                 # Get metadata
                 metadata = get_setting_metadata(key)
@@ -71,11 +96,20 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
                 settings_data[category].append({
                     "key": key,
                     "display_value": display_value if display_value is not None else "",
-                    "metadata": metadata
+                    "metadata": metadata,
+                    "source": source,
+                    "source_label": source_label,
+                    "source_color": source_color
                 })
         
         return templates.TemplateResponse(
             "settings.html",
+            {
+                "request": request,
+                "settings_data": settings_data,
+                "app_version": settings.version
+            }
+        )
             {
                 "request": request,
                 "settings_data": settings_data,

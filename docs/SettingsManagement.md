@@ -2,9 +2,14 @@
 
 ## Overview
 
-DocuElevate now supports managing application settings through a web-based GUI. Settings can be configured, saved to the database, and will persist across application restarts with the following precedence:
+DocuElevate supports managing application settings through a web-based GUI. This is a **convenience feature** that allows administrators to view and edit configuration settings. Settings are displayed and saved with the following precedence:
 
 **Database > Environment Variables > Defaults**
+
+Each setting in the UI shows a badge indicating its current source:
+- 🟢 **DB** - Explicitly saved in database (highest priority)
+- 🔵 **ENV** - From environment variable (.env file or system)
+- ⚪ **DEFAULT** - Built-in application default
 
 ## Accessing the Settings Page
 
@@ -63,19 +68,36 @@ Most runtime settings (API keys, storage credentials) can be changed without res
 2. Browse categories using the expandable sections
 3. Each setting shows:
    - **Name**: The setting key
+   - **Source Badge**: Where the current value comes from (DB/ENV/DEFAULT)
    - **Description**: What the setting does
    - **Current Value**: The active value (masked if sensitive)
    - **Type**: String, boolean, integer, or list
-   - **Required**: Whether the setting must be configured
+   - **Required**: Whether the setting must be configured (informational only)
    - **Restart Required**: Whether changing this setting requires a restart
+
+### Understanding Source Badges
+
+- **🟢 DB (Green)**: This setting has been explicitly saved via the settings page. It's stored in the database and overrides environment variables.
+- **🔵 ENV (Blue)**: This setting comes from an environment variable (`.env` file or system environment). It can be overridden by saving it in the database.
+- **⚪ DEFAULT (Gray)**: This setting is using the built-in application default. No environment variable or database value is set.
+
+The current value displayed is **always** the effective value after applying precedence (DB > ENV > DEFAULT).
 
 ### Updating Settings
 
 1. Modify the desired settings in the form
-2. Click "Save Settings" at the bottom of the page
-3. Settings are validated before saving
-4. Success/error messages are displayed
-5. If any changed setting requires a restart, you'll be notified
+2. **All fields are optional** - you only need to change the settings you want to override
+3. Click "Save Settings" at the bottom of the page
+4. Settings are validated before saving
+5. Success/error messages are displayed
+6. Successfully saved settings will show a 🟢 DB badge
+7. If any changed setting requires a restart, you'll be notified
+
+**Important**: 
+- You don't need to fill all fields - only change what you want to override
+- Saving a setting to the database makes it override environment variables
+- Empty fields are ignored (won't clear existing values)
+- To revert a setting to ENV or DEFAULT, delete it from the database (see API endpoints)
 
 ### Bulk Updates
 
