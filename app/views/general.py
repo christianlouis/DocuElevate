@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import date
 from sqlalchemy.orm import Session
 
-from app.views.base import APIRouter, templates, require_login, get_db
+from app.views.base import APIRouter, templates, require_login, get_db, logger
 from app.utils.config_validator import get_provider_status, validate_storage_configs
 
 router = APIRouter()
@@ -54,7 +54,6 @@ async def serve_index(request: Request, db: Session = Depends(get_db)):
         processed_files = db.query(FileRecord).count()
     except Exception as e:
         # Log error but continue (don't break the page if DB query fails)
-        from app.views.base import logger
         logger.error(f"Error counting files: {str(e)}")
     
     # Create stats object to pass to the template
