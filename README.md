@@ -6,6 +6,25 @@
 # DocuElevate
 
 <div align="center">
+
+[![codecov](https://codecov.io/github/christianlouis/DocuElevate/graph/badge.svg?token=1699E7OHZG)](https://codecov.io/github/christianlouis/DocuElevate)
+[![Tests](https://github.com/christianlouis/DocuElevate/actions/workflows/tests.yaml/badge.svg)](https://github.com/christianlouis/DocuElevate/actions/workflows/tests.yaml)
+[![Docker CI](https://github.com/christianlouis/DocuElevate/actions/workflows/docker-ci.yml/badge.svg)](https://github.com/christianlouis/DocuElevate/actions/workflows/docker-ci.yml)
+[![CodeQL](https://github.com/christianlouis/DocuElevate/actions/workflows/codeql.yml/badge.svg)](https://github.com/christianlouis/DocuElevate/actions/workflows/codeql.yml)
+
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/christianlouis/DocuElevate)](https://github.com/christianlouis/DocuElevate/releases)
+[![GitHub](https://img.shields.io/github/license/christianlouis/DocuElevate)](LICENSE)
+[![Python Version](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
+[![Docker](https://img.shields.io/badge/docker-ready-blue)](https://hub.docker.com/)
+
+[![GitHub stars](https://img.shields.io/github/stars/christianlouis/DocuElevate?style=social)](https://github.com/christianlouis/DocuElevate/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/christianlouis/DocuElevate?style=social)](https://github.com/christianlouis/DocuElevate/network/members)
+[![GitHub issues](https://img.shields.io/github/issues/christianlouis/DocuElevate)](https://github.com/christianlouis/DocuElevate/issues)
+[![GitHub pull requests](https://img.shields.io/github/issues-pr/christianlouis/DocuElevate)](https://github.com/christianlouis/DocuElevate/pulls)
+
+</div>
+
+<div align="center">
   <a href="https://www.docuelevate.org"><img src="frontend/static/hero.png" alt="DocuElevate Logo" width="80%" /></a>
 </div>
 
