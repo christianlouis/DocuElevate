@@ -5,7 +5,38 @@ All notable changes to DocuElevate will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Important Note
+
+**As of v0.6.0**: This CHANGELOG is automatically generated and maintained by [python-semantic-release](https://github.com/python-semantic-release/python-semantic-release). Do not edit manually.
+
+**Prior to v0.6.0**: This CHANGELOG was manually maintained. The transition to automated releases includes:
+- Standardized tag format with `v` prefix (e.g., `v0.6.0`)
+- Automated version bumping based on conventional commits
+- Auto-generated release notes from commit messages
+
+---
+
 ## [Unreleased]
+
+### Added
+- Automated semantic versioning with python-semantic-release
+- Conventional commit validation via commitlint
+- Automated CHANGELOG generation
+- Automated GitHub Release creation with notes
+- Documentation archive for one-off documents
+
+### Changed
+- Docker image name from `christianlouis/document-processor` to `christianlouis/docuelevate`
+- GHCR image references updated to `docuelevate`
+- Comprehensive documentation updates for versioning and release process
+
+### Documentation
+- Added conventional commits guide to CONTRIBUTING.md
+- Updated AGENTIC_CODING.md with versioning/release process
+- Updated .github/copilot-instructions.md with commit format rules
+- Archived historical one-off documentation to docs/archive/
+
+---
 
 ## [0.5.0] - 2026-02-08
 
@@ -167,11 +198,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/christianlouis/DocuElevate/compare/v0.5.0...HEAD
-[0.5.0]: https://github.com/christianlouis/DocuElevate/compare/v0.3.3...v0.5.0
-[0.3.3]: https://github.com/christianlouis/DocuElevate/compare/v0.3.2...v0.3.3
-[0.3.2]: https://github.com/christianlouis/DocuElevate/compare/v0.3.1...v0.3.2
-[0.3.1]: https://github.com/christianlouis/DocuElevate/compare/v0.3.0...v0.3.1
-[0.3.0]: https://github.com/christianlouis/DocuElevate/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/christianlouis/DocuElevate/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/christianlouis/DocuElevate/releases/tag/v0.1.0
+## Historical Release Links
+
+**Note**: Tags v0.3.1, v0.3.2, v0.3.3, and v0.5.0 do not exist as GitHub Releases. The features described in those versions were included in the codebase but not formally released until later versions. Going forward (v0.6.0+), all releases will have corresponding GitHub Releases and tags.
+
+[Unreleased]: https://github.com/christianlouis/DocuElevate/compare/0.4.3...HEAD
+[0.5.0]: https://github.com/christianlouis/DocuElevate/compare/0.4.3...HEAD
+[0.3.3]: https://github.com/christianlouis/DocuElevate/compare/0.4.3...HEAD
+[0.3.2]: https://github.com/christianlouis/DocuElevate/compare/0.4...0.4.3
+[0.3.1]: https://github.com/christianlouis/DocuElevate/compare/0.3...0.4
+[0.3.0]: https://github.com/christianlouis/DocuElevate/compare/0.2...0.3
+[0.2.0]: https://github.com/christianlouis/DocuElevate/compare/0.1...0.2
+[0.1.0]: https://github.com/christianlouis/DocuElevate/releases/tag/0.1
