@@ -3,7 +3,86 @@
 
 {% block head_extra %}
   <script src="/static/js/common.js"></script>
+  <script src="/static/js/upload.js"></script>
   <style>
+    /* Drop overlay styles */
+    .drop-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(59, 130, 246, 0.1);
+      border: 4px dashed #3b82f6;
+      z-index: 999;
+      pointer-events: none;
+      justify-content: center;
+      align-items: center;
+    }
+    .drop-overlay.active {
+      display: flex;
+    }
+    .drop-message {
+      background-color: white;
+      padding: 2rem 3rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      text-align: center;
+    }
+    .drop-message i {
+      font-size: 3rem;
+      color: #3b82f6;
+      margin-bottom: 1rem;
+    }
+    .drop-message p {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #1f2937;
+    }
+    
+    /* Upload progress modal */
+    .upload-modal {
+      display: none;
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      width: 400px;
+      max-width: 90vw;
+      background-color: white;
+      border-radius: 0.5rem;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      z-index: 1000;
+      overflow: hidden;
+    }
+    .upload-modal.active {
+      display: block;
+    }
+    .upload-modal-header {
+      background-color: #3b82f6;
+      color: white;
+      padding: 0.75rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .upload-modal-body {
+      padding: 1rem;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .close-modal-btn {
+      background: none;
+      border: none;
+      color: white;
+      cursor: pointer;
+      font-size: 1.25rem;
+    }
+    .close-modal-btn:hover {
+      opacity: 0.8;
+    }
+    
+    <style>
     .file-table {
       width: 100%;
       border-collapse: collapse;
@@ -241,6 +320,28 @@
 {% endblock %}
 
 {% block content %}
+<!-- Drop overlay -->
+<div id="dropOverlay" class="drop-overlay">
+  <div class="drop-message">
+    <i class="fas fa-cloud-upload-alt"></i>
+    <p>Drop files here to upload</p>
+  </div>
+</div>
+
+<!-- Upload progress modal -->
+<div id="uploadModal" class="upload-modal">
+  <div class="upload-modal-header">
+    <span><i class="fas fa-upload"></i> Uploading Files</span>
+    <button class="close-modal-btn" onclick="closeUploadModal()">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+  <div class="upload-modal-body">
+    <div id="uploadStatusMessage" class="text-sm text-gray-700 mb-2"></div>
+    <div id="uploadProgressContainer" class="space-y-2"></div>
+  </div>
+</div>
+
 <div class="container mx-auto px-4 py-8">
   <h2 class="text-3xl font-bold mb-6">File Records</h2>
   
@@ -672,6 +773,76 @@
         console.error('Error:', error);
         alert(`Error reprocessing files: ${error.message}`);
       });
+    }
+    
+    // ===== Drag-and-Drop Upload Functionality =====
+    const dropOverlay = document.getElementById('dropOverlay');
+    const uploadModal = document.getElementById('uploadModal');
+    const uploadStatusMessage = document.getElementById('uploadStatusMessage');
+    const uploadProgressContainer = document.getElementById('uploadProgressContainer');
+    
+    let dragCounter = 0; // Track nested drag events
+    
+    // Show overlay when dragging files over the window
+    window.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dragCounter++;
+      
+      // Only show overlay if dragging files
+      if (e.dataTransfer.types.includes('Files')) {
+        dropOverlay.classList.add('active');
+      }
+    });
+    
+    window.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dragCounter--;
+      
+      if (dragCounter === 0) {
+        dropOverlay.classList.remove('active');
+      }
+    });
+    
+    window.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    });
+    
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      dropOverlay.classList.remove('active');
+      
+      if (e.dataTransfer.files.length > 0) {
+        // Show upload modal
+        uploadModal.classList.add('active');
+        uploadProgressContainer.innerHTML = '';
+        
+        // Process the dropped files
+        processFiles(e.dataTransfer.files, uploadProgressContainer, uploadStatusMessage);
+        
+        // Optionally reload page after uploads complete (with a delay)
+        setTimeout(() => {
+          const fileStatuses = document.querySelectorAll('.file-status');
+          let allCompleted = true;
+          fileStatuses.forEach(status => {
+            if (!status.textContent.includes('Success') && !status.textContent.includes('Error')) {
+              allCompleted = false;
+            }
+          });
+          
+          if (allCompleted && fileStatuses.length > 0) {
+            // Refresh the page after a short delay to show the new files
+            setTimeout(() => {
+              window.location.reload();
+            }, 2000);
+          }
+        }, 1000);
+      }
+    });
+    
+    function closeUploadModal() {
+      uploadModal.classList.remove('active');
     }
   </script>
 </div>
