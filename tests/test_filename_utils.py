@@ -1,0 +1,259 @@
+"""
+Tests for app/utils/filename_utils.py
+
+Tests filename sanitization and manipulation functions.
+"""
+
+import pytest
+import os
+from pathlib import Path
+from unittest.mock import Mock, patch
+from datetime import datetime
+
+
+@pytest.mark.unit
+class TestFilenameSanitization:
+    """Test filename sanitization functions"""
+
+    def test_sanitize_filename_basic(self):
+        """Test basic filename sanitization"""
+        from app.utils.filename_utils import sanitize_filename
+
+        # Basic valid filename
+        result = sanitize_filename("document.pdf")
+        assert result == "document.pdf"
+
+    def test_sanitize_filename_with_spaces(self):
+        """Test sanitization of filenames with spaces"""
+        from app.utils.filename_utils import sanitize_filename
+
+        result = sanitize_filename("my document file.pdf")
+        # Spaces should be preserved
+        assert "my" in result
+        assert "document" in result
+        assert "file.pdf" in result
+
+    def test_sanitize_filename_with_special_characters(self):
+        """Test sanitization removes or replaces special characters"""
+        from app.utils.filename_utils import sanitize_filename
+
+        result = sanitize_filename("file:with*special?chars.pdf")
+        # Special characters should be replaced with underscores
+        assert ":" not in result
+        assert "*" not in result
+        assert "?" not in result
+        assert "_" in result
+
+    def test_sanitize_filename_with_path_separators(self):
+        """Test that path separators are handled"""
+        from app.utils.filename_utils import sanitize_filename
+
+        result = sanitize_filename("../../../etc/passwd")
+        # Path traversal characters should be replaced
+        assert ".." not in result or result.count("..") < 3
+
+    def test_sanitize_filename_empty_string(self):
+        """Test sanitization of empty string"""
+        from app.utils.filename_utils import sanitize_filename
+
+        result = sanitize_filename("")
+        # Should return a valid string (default name with timestamp)
+        assert isinstance(result, str)
+        assert len(result) > 0
+        assert "document" in result
+
+    def test_sanitize_filename_only_periods(self):
+        """Test sanitization of only periods"""
+        from app.utils.filename_utils import sanitize_filename
+
+        result = sanitize_filename("...")
+        # Should return a default name
+        assert isinstance(result, str)
+        assert len(result) > 0
+        assert "document" in result
+
+    def test_sanitize_filename_leading_trailing_spaces(self):
+        """Test sanitization trims leading/trailing spaces"""
+        from app.utils.filename_utils import sanitize_filename
+
+        result = sanitize_filename("  filename.pdf  ")
+        assert result == "filename.pdf"
+
+    def test_sanitize_filename_multiple_underscores(self):
+        """Test sanitization collapses multiple underscores"""
+        from app.utils.filename_utils import sanitize_filename
+
+        result = sanitize_filename("file____name.pdf")
+        assert "____" not in result
+        assert result == "file_name.pdf"
+
+
+@pytest.mark.unit
+class TestUniqueFilenameGeneration:
+    """Test unique filename generation"""
+
+    def test_get_unique_filename_no_collision(self):
+        """Test that original filename is returned when no collision"""
+        from app.utils.filename_utils import get_unique_filename
+
+        # Mock check_exists_func to return False (file doesn't exist)
+        check_func = Mock(return_value=False)
+
+        result = get_unique_filename("/tmp/document.pdf", check_exists_func=check_func)
+        assert result == "/tmp/document.pdf"
+        check_func.assert_called_once_with("/tmp/document.pdf")
+
+    def test_get_unique_filename_with_collision(self):
+        """Test that unique filename is generated on collision"""
+        from app.utils.filename_utils import get_unique_filename
+
+        # Mock check_exists_func to return True for original, False for timestamped
+        def check_func(path):
+            return path == "/tmp/document.pdf"
+
+        result = get_unique_filename("/tmp/document.pdf", check_exists_func=check_func)
+        assert result != "/tmp/document.pdf"
+        assert "document" in result
+        assert ".pdf" in result
+
+    def test_get_unique_filename_uses_timestamp(self):
+        """Test that timestamp is added on collision"""
+        from app.utils.filename_utils import get_unique_filename
+
+        # First file exists
+        check_func = Mock(side_effect=[True, False])
+
+        result = get_unique_filename("/tmp/test.pdf", check_exists_func=check_func)
+        assert result != "/tmp/test.pdf"
+        assert "test_" in result
+        assert ".pdf" in result
+
+    def test_get_unique_filename_falls_back_to_uuid(self):
+        """Test UUID fallback when timestamp collision occurs"""
+        from app.utils.filename_utils import get_unique_filename
+
+        # Original and timestamp both exist
+        check_func = Mock(side_effect=[True, True, False])
+
+        result = get_unique_filename("/tmp/test.pdf", check_exists_func=check_func)
+        assert result != "/tmp/test.pdf"
+        assert "test_" in result
+        assert ".pdf" in result
+
+    def test_get_unique_filename_default_check_function(self):
+        """Test that os.path.exists is used by default"""
+        from app.utils.filename_utils import get_unique_filename
+
+        # Use actual filesystem check
+        result = get_unique_filename("/tmp/nonexistent_file_12345.pdf")
+        # Should return original since file doesn't exist
+        assert result == "/tmp/nonexistent_file_12345.pdf"
+
+
+@pytest.mark.unit
+class TestExtractRemotePath:
+    """Test remote path extraction"""
+
+    def test_extract_remote_path_basic(self):
+        """Test basic remote path extraction"""
+        from app.utils.filename_utils import extract_remote_path
+
+        file_path = "/home/user/docs/file.pdf"
+        base_dir = "/home/user"
+        remote_base = "Documents"
+
+        result = extract_remote_path(file_path, base_dir, remote_base)
+        assert result == "Documents/docs/file.pdf"
+
+    def test_extract_remote_path_without_remote_base(self):
+        """Test remote path extraction without remote base"""
+        from app.utils.filename_utils import extract_remote_path
+
+        file_path = "/home/user/docs/file.pdf"
+        base_dir = "/home/user"
+
+        result = extract_remote_path(file_path, base_dir, "")
+        assert result == "docs/file.pdf"
+
+    def test_extract_remote_path_skips_processed_dir(self):
+        """Test that 'processed' directory is skipped"""
+        from app.utils.filename_utils import extract_remote_path
+
+        file_path = "/home/user/processed/docs/file.pdf"
+        base_dir = "/home/user"
+
+        result = extract_remote_path(file_path, base_dir, "")
+        assert "processed" not in result
+        assert result == "docs/file.pdf"
+
+    def test_extract_remote_path_with_absolute_remote_base(self):
+        """Test remote path extraction with absolute remote base"""
+        from app.utils.filename_utils import extract_remote_path
+
+        file_path = "/home/user/docs/file.pdf"
+        base_dir = "/home/user"
+        remote_base = "/Documents"
+
+        result = extract_remote_path(file_path, base_dir, remote_base)
+        # Leading slash should be stripped
+        assert result == "Documents/docs/file.pdf"
+
+    def test_extract_remote_path_file_outside_base(self):
+        """Test handling of file outside base directory"""
+        from app.utils.filename_utils import extract_remote_path
+
+        file_path = "/other/path/file.pdf"
+        base_dir = "/home/user"
+
+        result = extract_remote_path(file_path, base_dir, "")
+        # Should just use filename
+        assert result == "file.pdf"
+
+    def test_extract_remote_path_uses_forward_slashes(self):
+        """Test that result uses forward slashes"""
+        from app.utils.filename_utils import extract_remote_path
+
+        file_path = "/home/user/docs/subfolder/file.pdf"
+        base_dir = "/home/user"
+
+        result = extract_remote_path(file_path, base_dir, "")
+        # Should use forward slashes for cloud service compatibility
+        assert "/" in result
+        assert "\\" not in result
+
+
+@pytest.mark.unit
+class TestFilenameUtilsEdgeCases:
+    """Test edge cases in filename utilities"""
+
+    def test_very_long_filename(self):
+        """Test handling of very long filenames"""
+        from app.utils.filename_utils import sanitize_filename
+
+        long_name = "a" * 300 + ".pdf"
+        result = sanitize_filename(long_name)
+        # Should handle long filenames
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_filename_with_multiple_dots(self):
+        """Test filename with multiple dots"""
+        from app.utils.filename_utils import sanitize_filename
+
+        result = sanitize_filename("my.document.file.name.pdf")
+        assert isinstance(result, str)
+        assert ".pdf" in result
+        assert result == "my.document.file.name.pdf"
+
+    def test_sanitize_filename_windows_reserved_chars(self):
+        """Test sanitization of Windows reserved characters"""
+        from app.utils.filename_utils import sanitize_filename
+
+        result = sanitize_filename('file<>:"|?*.pdf')
+        # All reserved chars should be replaced
+        assert "<" not in result
+        assert ">" not in result
+        assert ":" not in result
+        assert '"' not in result
+        assert "|" not in result
+        assert "?" not in result

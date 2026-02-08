@@ -1,0 +1,231 @@
+"""
+Tests for app/utils/encryption.py
+
+Tests encryption/decryption functionality for sensitive settings.
+"""
+
+import pytest
+from unittest.mock import Mock, patch, MagicMock
+
+
+@pytest.mark.unit
+class TestEncryption:
+    """Test encryption utility functions"""
+
+    def test_encrypt_value_with_none(self):
+        """Test that None values are returned as-is"""
+        from app.utils.encryption import encrypt_value
+
+        result = encrypt_value(None)
+        assert result is None
+
+    def test_encrypt_value_with_empty_string(self):
+        """Test that empty strings are returned as-is"""
+        from app.utils.encryption import encrypt_value
+
+        result = encrypt_value("")
+        assert result == ""
+
+    @patch("app.utils.encryption._get_cipher_suite")
+    def test_encrypt_value_when_encryption_unavailable(self, mock_cipher):
+        """Test that plaintext is returned when encryption is unavailable"""
+        from app.utils.encryption import encrypt_value
+
+        mock_cipher.return_value = None
+        result = encrypt_value("secret_value")
+
+        # Should return plaintext with warning logged
+        assert result == "secret_value"
+
+    @patch("app.utils.encryption._get_cipher_suite")
+    def test_encrypt_value_success(self, mock_cipher):
+        """Test successful encryption"""
+        from app.utils.encryption import encrypt_value
+
+        # Mock cipher that returns encrypted bytes
+        mock_fernet = Mock()
+        mock_fernet.encrypt.return_value = b"encrypted_data"
+        mock_cipher.return_value = mock_fernet
+
+        result = encrypt_value("secret_value")
+
+        # Should have "enc:" prefix
+        assert result.startswith("enc:")
+        assert "encrypted_data" in result
+        mock_fernet.encrypt.assert_called_once()
+
+    @patch("app.utils.encryption._get_cipher_suite")
+    def test_encrypt_value_encryption_failure(self, mock_cipher):
+        """Test that encryption failures fall back to plaintext"""
+        from app.utils.encryption import encrypt_value
+
+        # Mock cipher that raises exception
+        mock_fernet = Mock()
+        mock_fernet.encrypt.side_effect = Exception("Encryption error")
+        mock_cipher.return_value = mock_fernet
+
+        result = encrypt_value("secret_value")
+
+        # Should fall back to plaintext
+        assert result == "secret_value"
+
+    def test_decrypt_value_with_none(self):
+        """Test that None values are returned as-is"""
+        from app.utils.encryption import decrypt_value
+
+        result = decrypt_value(None)
+        assert result is None
+
+    def test_decrypt_value_with_empty_string(self):
+        """Test that empty strings are returned as-is"""
+        from app.utils.encryption import decrypt_value
+
+        result = decrypt_value("")
+        assert result == ""
+
+    def test_decrypt_value_plaintext(self):
+        """Test that plaintext values without enc: prefix are returned as-is"""
+        from app.utils.encryption import decrypt_value
+
+        result = decrypt_value("plain_value")
+        assert result == "plain_value"
+
+    @patch("app.utils.encryption._get_cipher_suite")
+    def test_decrypt_value_when_encryption_unavailable(self, mock_cipher):
+        """Test decryption when cipher is unavailable"""
+        from app.utils.encryption import decrypt_value
+
+        mock_cipher.return_value = None
+        result = decrypt_value("enc:encrypted_data")
+
+        # Should return error message
+        assert result == "[ENCRYPTED - Cannot decrypt]"
+
+    @patch("app.utils.encryption._get_cipher_suite")
+    def test_decrypt_value_success(self, mock_cipher):
+        """Test successful decryption"""
+        from app.utils.encryption import decrypt_value
+
+        # Mock cipher that returns decrypted bytes
+        mock_fernet = Mock()
+        mock_fernet.decrypt.return_value = b"decrypted_value"
+        mock_cipher.return_value = mock_fernet
+
+        result = decrypt_value("enc:encrypted_data")
+
+        assert result == "decrypted_value"
+        mock_fernet.decrypt.assert_called_once()
+
+    @patch("app.utils.encryption._get_cipher_suite")
+    def test_decrypt_value_decryption_failure(self, mock_cipher):
+        """Test that decryption failures return error message"""
+        from app.utils.encryption import decrypt_value
+
+        # Mock cipher that raises exception
+        mock_fernet = Mock()
+        mock_fernet.decrypt.side_effect = Exception("Decryption error")
+        mock_cipher.return_value = mock_fernet
+
+        result = decrypt_value("enc:bad_data")
+
+        # Should return error message
+        assert result == "[DECRYPTION FAILED]"
+
+    def test_is_encrypted_with_encrypted_value(self):
+        """Test is_encrypted returns True for encrypted values"""
+        from app.utils.encryption import is_encrypted
+
+        assert is_encrypted("enc:some_encrypted_data") is True
+
+    def test_is_encrypted_with_plaintext(self):
+        """Test is_encrypted returns False for plaintext"""
+        from app.utils.encryption import is_encrypted
+
+        assert is_encrypted("plain_value") is False
+
+    def test_is_encrypted_with_none(self):
+        """Test is_encrypted returns False for None"""
+        from app.utils.encryption import is_encrypted
+
+        assert is_encrypted(None) is False
+
+    def test_is_encrypted_with_empty_string(self):
+        """Test is_encrypted returns False for empty string"""
+        from app.utils.encryption import is_encrypted
+
+        assert is_encrypted("") is False
+
+    def test_is_encrypted_with_non_string(self):
+        """Test is_encrypted returns False for non-string types"""
+        from app.utils.encryption import is_encrypted
+
+        assert is_encrypted(123) is False
+        assert is_encrypted([]) is False
+        assert is_encrypted({}) is False
+
+    @patch("app.utils.encryption._get_cipher_suite")
+    def test_is_encryption_available_true(self, mock_cipher):
+        """Test is_encryption_available when cryptography is available"""
+        from app.utils.encryption import is_encryption_available
+
+        mock_cipher.return_value = Mock()  # Non-None cipher
+        assert is_encryption_available() is True
+
+    @patch("app.utils.encryption._get_cipher_suite")
+    def test_is_encryption_available_false(self, mock_cipher):
+        """Test is_encryption_available when cryptography is not available"""
+        from app.utils.encryption import is_encryption_available
+
+        mock_cipher.return_value = None
+        assert is_encryption_available() is False
+
+
+@pytest.mark.unit
+class TestGetCipherSuite:
+    """Test the _get_cipher_suite internal function"""
+
+    def test_cipher_suite_caching(self):
+        """Test that cipher suite is cached after first call"""
+        import app.utils.encryption
+
+        # First call
+        result1 = app.utils.encryption._get_cipher_suite()
+
+        # Second call should return same instance (cached)
+        result2 = app.utils.encryption._get_cipher_suite()
+
+        # Both calls should return the same object (cached)
+        assert result1 is result2
+
+
+@pytest.mark.unit
+class TestEncryptionIntegration:
+    """Integration tests for encrypt/decrypt cycle"""
+
+    @patch("app.utils.encryption._get_cipher_suite")
+    def test_encrypt_decrypt_cycle(self, mock_cipher):
+        """Test that encrypting and then decrypting returns original value"""
+        from app.utils.encryption import encrypt_value, decrypt_value
+
+        # Mock a simple reversible encryption
+        mock_fernet = Mock()
+
+        # Simulate encryption: just add a prefix
+        def mock_encrypt(data):
+            return b"ENCRYPTED_" + data
+
+        # Simulate decryption: remove the prefix
+        def mock_decrypt(data):
+            return data.replace(b"ENCRYPTED_", b"")
+
+        mock_fernet.encrypt = mock_encrypt
+        mock_fernet.decrypt = mock_decrypt
+        mock_cipher.return_value = mock_fernet
+
+        original = "my_secret_password"
+        encrypted = encrypt_value(original)
+        decrypted = decrypt_value(encrypted)
+
+        assert encrypted != original
+        assert encrypted.startswith("enc:")
+        assert decrypted == original
