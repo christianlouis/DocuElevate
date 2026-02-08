@@ -466,6 +466,7 @@
       cursor: not-allowed;
     }
   </style>
+  {% if file %}
   <script>
     // JavaScript for handling retry functionality
     async function reprocessFile() {
@@ -590,6 +591,7 @@
       }
     }
   </script>
+  {% endif %}
 {% endblock %}
 
 {% block content %}

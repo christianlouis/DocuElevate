@@ -35,9 +35,7 @@ class TestSingleFileOperations:
         assert f"File record {file_id} deleted successfully" in data["message"]
 
         # Verify file is deleted
-        file_record = (
-            db_session.query(FileRecord).filter(FileRecord.id == file_id).first()
-        )
+        file_record = db_session.query(FileRecord).filter(FileRecord.id == file_id).first()
         assert file_record is None
 
     def test_single_file_delete_nonexistent(self, client: TestClient, db_session):
@@ -79,9 +77,7 @@ class TestBulkOperations:
 
         # Verify files are deleted
         for file_id in file_ids:
-            file_record = (
-                db_session.query(FileRecord).filter(FileRecord.id == file_id).first()
-            )
+            file_record = db_session.query(FileRecord).filter(FileRecord.id == file_id).first()
             assert file_record is None
 
     def test_bulk_delete_empty_list(self, client: TestClient, db_session):
@@ -97,9 +93,7 @@ class TestBulkOperations:
         assert response.status_code == 404
 
     @patch("app.api.files.process_document")
-    def test_bulk_reprocess_success(
-        self, mock_process_document, client: TestClient, db_session
-    ):
+    def test_bulk_reprocess_success(self, mock_process_document, client: TestClient, db_session):
         """Test bulk reprocessing of files."""
         # Setup mock
         mock_task = MagicMock()
@@ -132,9 +126,7 @@ class TestBulkOperations:
         assert len(data["task_ids"]) == 2
 
     @patch("app.api.files.process_document")
-    def test_bulk_reprocess_missing_files(
-        self, mock_process_document, client: TestClient, db_session
-    ):
+    def test_bulk_reprocess_missing_files(self, mock_process_document, client: TestClient, db_session):
         """Test bulk reprocessing when some local files are missing."""
         # Setup mock
         mock_task = MagicMock()
@@ -147,9 +139,7 @@ class TestBulkOperations:
             file_record = FileRecord(
                 filehash=f"hash{i}",
                 original_filename=f"test{i}.pdf",
-                local_filename=(
-                    f"/tmp/test{i}.pdf" if i == 0 else None
-                ),  # Second file has no local file
+                local_filename=f"/tmp/test{i}.pdf",  # Both files have local_filename
                 file_size=1024,
                 mime_type="application/pdf",
             )
