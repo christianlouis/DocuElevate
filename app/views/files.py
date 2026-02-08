@@ -170,6 +170,7 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
         if not file_record:
             return templates.TemplateResponse("file_detail.html", {
                 "request": request,
+                "file": None,
                 "error": f"File with ID {file_id} not found"
             })
         
@@ -216,6 +217,7 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
         logger.error(f"Error retrieving file details: {str(e)}")
         return templates.TemplateResponse("file_detail.html", {
             "request": request,
+            "file": None,
             "error": str(e)
         })
 

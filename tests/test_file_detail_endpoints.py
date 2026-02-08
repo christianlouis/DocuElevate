@@ -3,6 +3,7 @@ Tests for file detail view improvements including reprocessing and preview endpo
 """
 import os
 import pytest
+from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from app.models import FileRecord, ProcessingLog
 
@@ -11,8 +12,14 @@ from app.models import FileRecord, ProcessingLog
 class TestFileReprocessing:
     """Tests for single file reprocessing endpoint."""
     
-    def test_reprocess_existing_file(self, client: TestClient, db_session, sample_pdf_path):
+    @patch("app.api.files.process_document")
+    def test_reprocess_existing_file(self, mock_process_document, client: TestClient, db_session, sample_pdf_path):
         """Test reprocessing an existing file."""
+        # Setup mock
+        mock_task = MagicMock()
+        mock_task.id = "test-task-123"
+        mock_process_document.delay.return_value = mock_task
+        
         # Create a file record
         file_record = FileRecord(
             filehash="abc123",

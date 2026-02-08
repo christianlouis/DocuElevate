@@ -147,9 +147,7 @@ class TestBulkOperations:
             file_record = FileRecord(
                 filehash=f"hash{i}",
                 original_filename=f"test{i}.pdf",
-                local_filename=(
-                    f"/tmp/test{i}.pdf" if i == 0 else None
-                ),  # Second file has no local file
+                local_filename=f"/tmp/test{i}.pdf",  # Both files have local_filename
                 file_size=1024,
                 mime_type="application/pdf",
             )

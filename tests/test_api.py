@@ -68,8 +68,11 @@ class TestFileEndpoints:
         response = client.get("/api/files")
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
-        assert len(data) == 0
+        assert isinstance(data, dict)
+        assert "files" in data
+        assert "pagination" in data
+        assert isinstance(data["files"], list)
+        assert len(data["files"]) == 0
     
     def test_get_nonexistent_file(self, client: TestClient):
         """Test getting a file that doesn't exist."""

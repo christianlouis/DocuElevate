@@ -437,30 +437,6 @@ def retry_subtask(
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
         
-        # Check for processed file (upload tasks work with processed files)
-        workdir = settings.workdir
-        processed_dir = os.path.join(workdir, "processed")
-        
-        # Try to find the processed file
-        base_filename = os.path.splitext(file_record.original_filename)[0]
-        potential_paths = [
-            os.path.join(processed_dir, f"{file_record.filehash}.pdf"),
-            os.path.join(processed_dir, f"{base_filename}_processed.pdf"),
-            os.path.join(processed_dir, file_record.original_filename),
-        ]
-        
-        file_path = None
-        for path in potential_paths:
-            if os.path.exists(path):
-                file_path = path
-                break
-        
-        if not file_path:
-            raise HTTPException(
-                status_code=400,
-                detail="Processed file not found. Cannot retry upload."
-            )
-        
         # Map subtask names to their corresponding Celery tasks
         from app.tasks.upload_to_dropbox import upload_to_dropbox
         from app.tasks.upload_to_nextcloud import upload_to_nextcloud
@@ -490,6 +466,30 @@ def retry_subtask(
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid subtask name: {subtask_name}. Must be one of: {', '.join(task_map.keys())}"
+            )
+        
+        # Check for processed file (upload tasks work with processed files)
+        workdir = settings.workdir
+        processed_dir = os.path.join(workdir, "processed")
+        
+        # Try to find the processed file
+        base_filename = os.path.splitext(file_record.original_filename)[0]
+        potential_paths = [
+            os.path.join(processed_dir, f"{file_record.filehash}.pdf"),
+            os.path.join(processed_dir, f"{base_filename}_processed.pdf"),
+            os.path.join(processed_dir, file_record.original_filename),
+        ]
+        
+        file_path = None
+        for path in potential_paths:
+            if os.path.exists(path):
+                file_path = path
+                break
+        
+        if not file_path:
+            raise HTTPException(
+                status_code=400,
+                detail="Processed file not found. Cannot retry upload."
             )
         
         # Queue the specific upload task
