@@ -2,6 +2,7 @@
 import os
 import logging
 import pathlib
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -34,7 +35,64 @@ if settings.auth_enabled and not settings.session_secret:
     raise ValueError("SESSION_SECRET must be set when AUTH_ENABLED=True. Generate one with: python -c 'import secrets; print(secrets.token_hex(32))'")
 SESSION_SECRET = settings.session_secret or "INSECURE_DEFAULT_FOR_DEVELOPMENT_ONLY_DO_NOT_USE_IN_PRODUCTION_MINIMUM_32_CHARS"
 
-app = FastAPI(title="DocuElevate")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Manage application lifespan events (startup and shutdown).
+    This replaces the deprecated @app.on_event decorators.
+    """
+    # Startup: Initialize database
+    init_db()  # Create tables if they don't exist
+    
+    # Load settings from database after DB initialization
+    from app.database import SessionLocal
+    from app.utils.config_loader import load_settings_from_db
+    
+    db = SessionLocal()
+    try:
+        load_settings_from_db(settings, db)
+        logging.info("Database settings loaded successfully")
+    except Exception as e:
+        logging.error(f"Failed to load database settings: {e}")
+    finally:
+        db.close()
+    
+    # Force settings dump to log for troubleshooting
+    from app.utils.config_validator import dump_all_settings
+    dump_all_settings()
+    
+    # Validate configuration
+    config_issues = check_all_configs()
+    
+    # Log overall status
+    has_issues = any(config_issues['email']) or any(
+        len(issues) > 0 for provider, issues in config_issues['storage'].items()
+    )
+    if has_issues:
+        logging.warning("Application started with configuration issues - some features may be unavailable")
+    else:
+        logging.info("Application started with valid configuration")
+    
+    logging.info("Router organization: Using refactored API routers from app/api/ directory")
+    
+    # Initialize notification system
+    init_apprise()
+    
+    # Send startup notification
+    notify_startup()
+    
+    # Application is now running
+    yield
+    
+    # Shutdown: Cleanup tasks
+    logging.info("Application shutting down")
+    
+    # Send shutdown notification
+    notify_shutdown()
+
+
+app = FastAPI(title="DocuElevate", lifespan=lifespan)
 
 # 1) Session Middleware (for request.session to work)
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
@@ -55,56 +113,6 @@ if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 else:
     print(f"WARNING: Static directory not found at {static_dir}. Static files will not be served.")
-
-@app.on_event("startup")
-def on_startup():
-    init_db()  # Create tables if they don't exist
-    
-    # Load settings from database after DB initialization
-    from app.database import SessionLocal
-    from app.utils.config_loader import load_settings_from_db
-    
-    db = SessionLocal()
-    try:
-        load_settings_from_db(settings, db)
-        logging.info("Database settings loaded successfully")
-    except Exception as e:
-        logging.error(f"Failed to load database settings: {e}")
-    finally:
-        db.close()
-
-@app.on_event("startup")
-async def startup_event():
-    """Run startup tasks for the application"""
-    # Force settings dump to log for troubleshooting
-    from app.utils.config_validator import dump_all_settings
-    dump_all_settings()
-    
-    # Validate configuration
-    config_issues = check_all_configs()
-    
-    # Log overall status
-    has_issues = any(config_issues['email']) or any(len(issues) > 0 for provider, issues in config_issues['storage'].items())
-    if has_issues:
-        logging.warning("Application started with configuration issues - some features may be unavailable")
-    else:
-        logging.info("Application started with valid configuration")
-    
-    logging.info("Router organization: Using refactored API routers from app/api/ directory")
-    
-    # Initialize notification system
-    init_apprise()
-    
-    # Send startup notification
-    notify_startup()
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Run shutdown tasks for the application"""
-    logging.info("Application shutting down")
-    
-    # Send shutdown notification
-    notify_shutdown()
 
 # Custom exception handlers that return JSON for API routes and HTML for frontend routes
 @app.exception_handler(HTTPException)
