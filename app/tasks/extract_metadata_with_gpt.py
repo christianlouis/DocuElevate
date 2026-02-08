@@ -70,10 +70,10 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
         "Extract and return the following fields:\n"
         "1. **filename**: Machine-readable filename "
         "(YYYY-MM-DD_DescriptiveTitle, use only letters, numbers, periods, and underscores).\n"
-        "2. **empfaenger**: The recipient, or \"Unknown\" if not found.\n"
-        "3. **absender**: The sender, or \"Unknown\" if not found.\n"
+        '2. **empfaenger**: The recipient, or "Unknown" if not found.\n'
+        '3. **absender**: The sender, or "Unknown" if not found.\n'
         "4. **correspondent**: The entity or company that issued the document "
-        "(shortest possible name, e.g., \"Amazon\" instead of \"Amazon EU SARL, German branch\").\n"
+        '(shortest possible name, e.g., "Amazon" instead of "Amazon EU SARL, German branch").\n'
         "5. **kommunikationsart**: One of [Behoerdlicher_Brief, Rechnung, Kontoauszug, Vertrag, "
         "Quittung, Privater_Brief, Einladung, Gewerbliche_Korrespondenz, Newsletter, Werbung, Sonstiges].\n"
         "6. **kommunikationskategorie**: One of [Amtliche_Postbehoerdliche_Dokumente, "
@@ -81,7 +81,7 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
         "Private_Korrespondenz, Sonstige_Informationen].\n"
         "7. **document_type**: Precise classification (e.g., Invoice, Contract, Information, Unknown).\n"
         "8. **tags**: A list of up to 4 relevant thematic keywords.\n"
-        "9. **language**: Detected document language (ISO 639-1 code, e.g., \"de\" or \"en\").\n"
+        '9. **language**: Detected document language (ISO 639-1 code, e.g., "de" or "en").\n'
         "10. **title**: A human-readable title summarizing the document content.\n"
         "11. **confidence_score**: A numeric value (0-100) indicating the confidence level "
         "of the extracted metadata.\n"

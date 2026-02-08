@@ -104,8 +104,7 @@ def rotate_pdf_pages(filename: str, extracted_text: str, rotation_data=None, fil
                         # PyPDF2 uses clockwise rotation in 90-degree increments
                         page.rotate(rotation_angle)
                         logger.info(
-                            f"Page {page_idx+1} rotated by {rotation_angle}° "
-                            f"(from detected {detected_angle}°)"
+                            f"Page {page_idx+1} rotated by {rotation_angle}° " f"(from detected {detected_angle}°)"
                         )
                         applied_rotations[str(page_idx)] = rotation_angle
                     else:
