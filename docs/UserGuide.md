@@ -43,13 +43,35 @@ DocuElevate features a simple navigation system with the following main sections
 
 ## Uploading Documents
 
-### Web Upload
+DocuElevate provides multiple convenient ways to upload documents to the system.
+
+### Web Upload (Upload Page)
 
 1. Navigate to the **Upload** page
-2. Drag and drop files onto the upload area, or click to browse your files
-3. Select files to upload (supported formats include PDF, Word documents, images, etc.)
-4. Click "Upload" to begin the process
-5. Your documents will be processed automatically according to the system configuration
+2. **Drag and drop** files onto the upload area, or **click** the upload area to browse your files
+3. Select files to upload (supported formats include PDF, Word documents, Excel spreadsheets, PowerPoint presentations, images, and more)
+4. The system will automatically validate and upload your files
+5. You'll see real-time progress for each file being uploaded
+6. Your documents will be processed automatically according to the system configuration
+
+#### Supported File Types
+- **Documents**: PDF, Word (.doc, .docx), Excel (.xls, .xlsx), PowerPoint (.ppt, .pptx)
+- **Images**: JPEG, PNG, GIF, BMP, TIFF, WebP, SVG
+- **Text**: Plain text (.txt), CSV, RTF, HTML, XML, Markdown
+- **Maximum file size**: 500MB per file
+
+### Drag-and-Drop on Files Page
+
+For even more convenience, you can upload files directly from the **Files** page:
+
+1. Navigate to the **Files** page where you view your processed documents
+2. **Drag files from your computer** and drop them **anywhere** on the page
+3. A visual overlay will appear to confirm you're in drag mode
+4. Release the files to begin uploading
+5. An upload progress modal will appear in the bottom-right corner
+6. The page will automatically refresh to show your newly uploaded files once complete
+
+This feature allows you to quickly add new files without navigating away from your document management view.
 
 ### Email Attachments
 

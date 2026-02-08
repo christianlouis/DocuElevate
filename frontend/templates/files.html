@@ -5,16 +5,16 @@
   <script src="/static/js/common.js"></script>
   <script src="/static/js/upload.js"></script>
   <style>
-    /* Drop overlay styles */
+    /* Drop overlay styles - covers entire page for drag-and-drop anywhere */
     .drop-overlay {
       display: none;
       position: fixed;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: rgba(59, 130, 246, 0.1);
-      border: 4px dashed #3b82f6;
+      width: 100vw;
+      height: 100vh;
+      background-color: rgba(59, 130, 246, 0.15);
+      border: 6px dashed #3b82f6;
       z-index: 999;
       pointer-events: none;
       justify-content: center;
@@ -22,23 +22,37 @@
     }
     .drop-overlay.active {
       display: flex;
+      animation: fadeIn 0.2s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
     .drop-message {
       background-color: white;
       padding: 2rem 3rem;
       border-radius: 0.5rem;
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
       text-align: center;
+      pointer-events: none;
     }
     .drop-message i {
-      font-size: 3rem;
+      font-size: 4rem;
       color: #3b82f6;
       margin-bottom: 1rem;
+      display: block;
     }
     .drop-message p {
-      font-size: 1.25rem;
+      font-size: 1.5rem;
       font-weight: 600;
       color: #1f2937;
+      margin-bottom: 0.5rem;
+    }
+    .drop-message .drop-hint {
+      font-size: 1rem;
+      color: #6b7280;
+      font-weight: 400;
+      margin-top: 0.5rem;
     }
     
     /* Upload progress modal */
@@ -324,7 +338,8 @@
 <div id="dropOverlay" class="drop-overlay">
   <div class="drop-message">
     <i class="fas fa-cloud-upload-alt"></i>
-    <p>Drop files here to upload</p>
+    <p>Drop files anywhere to upload</p>
+    <div class="drop-hint">Supports PDF, Office docs, images, and more</div>
   </div>
 </div>
 

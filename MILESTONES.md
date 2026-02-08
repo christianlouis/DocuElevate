@@ -34,13 +34,14 @@ DocuElevate follows [Semantic Versioning 2.0.0](https://semver.org/):
 ### v0.3.3 - Security & Testing Hardening (February 2026)
 **Target Date:** February 15, 2026  
 **Status:** 🚧 In Progress  
-**Theme:** Security, Quality, Testing
+**Theme:** Security, Quality, Testing, UX Improvements
 
 #### Goals
 - [x] Fix critical security vulnerabilities (authlib, starlette)
 - [x] Implement comprehensive test suite
 - [x] Add security scanning (CodeQL, Bandit)
 - [x] Improve CI/CD pipeline
+- [x] Add drag-and-drop file upload to Files view
 - [ ] Achieve 60% test coverage
 - [ ] Add pre-commit hooks
 - [ ] Update all dependencies to latest secure versions
@@ -50,6 +51,8 @@ DocuElevate follows [Semantic Versioning 2.0.0](https://semver.org/):
 - [x] pytest configuration and fixtures
 - [x] API integration tests
 - [x] Configuration validation tests
+- [x] Drag-and-drop upload functionality in Files view
+- [x] Reusable upload.js module for code DRYness
 - [ ] Task processing tests
 - [ ] Storage provider integration tests
 - [x] Updated CI/CD workflows
