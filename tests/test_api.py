@@ -27,9 +27,6 @@ class TestHealthEndpoints:
         # Location header should point to setup wizard
         assert "Location" in response.headers
         assert response.headers["Location"] == "/setup?step=1"
-        
-        # Should NOT be a 500 error
-        assert response.status_code != 500
     
     def test_root_returns_200_when_setup_complete(self, client: TestClient):
         """Test that GET /?setup=complete bypasses the setup wizard check."""
