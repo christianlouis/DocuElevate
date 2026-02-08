@@ -20,19 +20,19 @@ from fastapi.testclient import TestClient
 @pytest.fixture(autouse=True)
 def mock_celery_tasks():
     """Mock all Celery tasks to prevent execution."""
-    # Patch where the tasks are USED (in app.api.files), not where they're defined
-    with patch("app.api.files.process_document.delay") as mock_process, \
-         patch("app.api.files.convert_to_pdf.delay") as mock_convert:
+    # Patch the entire task object where it's used (in app.api.files)
+    with patch("app.api.files.process_document") as mock_process_task, \
+         patch("app.api.files.convert_to_pdf") as mock_convert_task:
         
-        # Setup default return values
+        # Setup default return values for .delay()
         mock_task = MagicMock()
         mock_task.id = "test-task-id-123"
-        mock_process.return_value = mock_task
-        mock_convert.return_value = mock_task
+        mock_process_task.delay.return_value = mock_task
+        mock_convert_task.delay.return_value = mock_task
         
         yield {
-            "process_document": mock_process,
-            "convert_to_pdf": mock_convert
+            "process_document": mock_process_task.delay,
+            "convert_to_pdf": mock_convert_task.delay
         }
 
 
