@@ -73,7 +73,7 @@ The `app/config.py` Settings class provides these properties for accessing build
 Returns the application version with the following priority:
 1. `APP_VERSION` environment variable
 2. Contents of `VERSION` file
-3. Default: `"0.3.2-dev"`
+3. Default: `"0.5.0-dev"`
 
 ### `settings.build_date` (property)
 Returns the build date with the following priority:

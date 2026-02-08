@@ -15,16 +15,25 @@
   <div class="mb-8">
     <h1 class="text-3xl font-bold mb-2">Application Settings</h1>
     <p class="text-gray-600">
-      Configure application settings through the web interface. 
-      Settings saved here will take precedence over environment variables.
+      This is a convenience feature to view and edit application settings through the web interface.
     </p>
+    <div class="bg-blue-50 border-l-4 border-blue-500 text-blue-700 p-4 my-4" role="alert">
+      <p class="font-bold">📋 Settings Precedence Order:</p>
+      <ul class="list-disc list-inside ml-4 mt-2">
+        <li><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">DB</span> Database settings (highest priority) - explicitly saved via this UI</li>
+        <li><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">ENV</span> Environment variables - from .env file or system environment</li>
+        <li><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">DEFAULT</span> Default values - built-in application defaults</li>
+      </ul>
+    </div>
     <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 my-4" role="alert">
       <p class="font-bold">⚠️ Important Notes:</p>
       <ul class="list-disc list-inside ml-4 mt-2">
         <li>Settings marked with <span class="text-red-600">*</span> require an application restart to take effect.</li>
-        <li>Sensitive values (passwords, API keys) are masked for security.</li>
-        <li>Changes are persisted in the database and override environment variables.</li>
+        <li>Sensitive values (passwords, API keys) are <strong>encrypted at rest</strong> in the database <i class="fas fa-lock text-xs"></i>.</li>
+        <li>Use the <i class="fas fa-eye"></i> icon to temporarily show/hide sensitive values.</li>
+        <li>Saving a setting here stores it in the database and overrides environment variables.</li>
         <li>Only administrators can access and modify these settings.</li>
+        <li>All fields are optional - you can save just the settings you want to override.</li>
       </ul>
     </div>
   </div>
@@ -53,15 +62,29 @@
         <div class="border-b border-gray-200 pb-6 last:border-b-0">
           <div class="flex justify-between items-start">
             <div class="flex-1">
-              <label for="{{ setting.key }}" class="block text-sm font-medium text-gray-700 mb-1">
-                {{ setting.key.replace('_', ' ').title() }}
-                {% if setting.metadata.restart_required %}
-                <span class="text-red-600">*</span>
-                {% endif %}
-                {% if setting.metadata.required %}
-                <span class="text-red-600 text-xs">(required)</span>
-                {% endif %}
-              </label>
+              <div class="flex items-center gap-2 mb-1">
+                <label for="{{ setting.key }}" class="block text-sm font-medium text-gray-700">
+                  {{ setting.key.replace('_', ' ').title() }}
+                  {% if setting.metadata.restart_required %}
+                  <span class="text-red-600">*</span>
+                  {% endif %}
+                  {% if setting.metadata.required %}
+                  <span class="text-red-600 text-xs">(required)</span>
+                  {% endif %}
+                </label>
+                <!-- Source Indicator Badge -->
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                  {% if setting.source == 'database' %}
+                    bg-green-100 text-green-800
+                  {% elif setting.source == 'environment' %}
+                    bg-blue-100 text-blue-800
+                  {% else %}
+                    bg-gray-100 text-gray-800
+                  {% endif %}
+                " title="Value source: {{ setting.source }}">
+                  {{ setting.source_label }}
+                </span>
+              </div>
               
               <p class="text-xs text-gray-500 mb-2">
                 {{ setting.metadata.description }}
@@ -86,23 +109,35 @@
               <!-- Text Input -->
               <div class="relative">
                 {% if setting.metadata.sensitive %}
-                <input 
-                  :type="showPassword['{{ setting.key }}'] ? 'text' : 'password'"
-                  id="{{ setting.key }}" 
-                  name="{{ setting.key }}"
-                  x-model="formData['{{ setting.key }}']"
-                  class="setting-input w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="{{ setting.metadata.description }}"
-                  {% if setting.metadata.required %}required{% endif %}
-                />
-                <button 
-                  type="button"
-                  @click="togglePassword('{{ setting.key }}')"
-                  class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
-                >
-                  <i :class="showPassword['{{ setting.key }}'] ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
-                </button>
+                <!-- Sensitive Field with Show/Hide Toggle -->
+                <div class="relative">
+                  <input 
+                    :type="showPassword['{{ setting.key }}'] ? 'text' : 'password'"
+                    id="{{ setting.key }}" 
+                    name="{{ setting.key }}"
+                    x-model="formData['{{ setting.key }}']"
+                    class="setting-input w-full px-3 py-2 pr-24 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                    placeholder="{{ setting.metadata.description }}"
+                    autocomplete="off"
+                  />
+                  <div class="absolute inset-y-0 right-0 flex items-center pr-3 space-x-2">
+                    <!-- Encrypted indicator -->
+                    <span class="text-xs text-gray-400" title="Value is encrypted at rest in database">
+                      <i class="fas fa-lock"></i>
+                    </span>
+                    <!-- Show/Hide Toggle -->
+                    <button 
+                      type="button"
+                      @click="togglePassword('{{ setting.key }}')"
+                      class="text-gray-400 hover:text-gray-600 focus:outline-none"
+                      title="Show/hide value"
+                    >
+                      <i :class="showPassword['{{ setting.key }}'] ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                    </button>
+                  </div>
+                </div>
                 {% else %}
+                <!-- Non-Sensitive Field -->
                 <input 
                   type="text" 
                   id="{{ setting.key }}" 
@@ -110,7 +145,6 @@
                   x-model="formData['{{ setting.key }}']"
                   class="setting-input w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   placeholder="{{ setting.metadata.description }}"
-                  {% if setting.metadata.required %}required{% endif %}
                 />
                 {% endif %}
               </div>

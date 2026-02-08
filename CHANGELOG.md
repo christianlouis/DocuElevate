@@ -7,6 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-02-08
+
+### Added
+- **Settings Management System**: Database-backed configuration management with web UI
+  - Admin-only settings page at `/settings` with 102 settings across 10 categories
+  - REST API endpoints: `GET/POST /api/settings/{key}`, `POST /api/settings/bulk-update`, `DELETE /api/settings/{key}`
+  - Settings organized by category: Core, Authentication, AI Services, Storage Providers, Email, IMAP, Monitoring, Processing, Notifications, Feature Flags
+  - Form pre-filled with current values, all fields optional for flexible editing
+  - Bulk update support for changing multiple settings at once
+- **Encryption for Sensitive Settings**: Fernet symmetric encryption for database storage
+  - Automatic encryption/decryption for passwords, API keys, tokens, and secrets
+  - Encryption key derived from `SESSION_SECRET` via SHA256
+  - Values prefixed with `enc:` in database to identify encrypted data
+  - Graceful fallback if cryptography library unavailable (logs warning)
+  - Lock icon (🔒) in UI indicates encrypted fields
+- **Setup Wizard**: First-time configuration wizard for fresh installations
+  - 3-step wizard: Infrastructure → Security → AI Services
+  - Auto-detects missing critical settings and redirects from homepage
+  - Beautiful UI with progress indicators and step navigation
+  - Auto-generate option for session secrets
+  - Skippable for advanced users
+  - Settings saved encrypted to database
+- **Settings Precedence System**: Clear resolution order with visual indicators
+  - Precedence: Database > Environment Variables > Defaults
+  - Color-coded badges in UI: 🟢 DB (green), 🔵 ENV (blue), ⚪ DEFAULT (gray)
+  - Source detection for each setting shows where value originates
+  - Info section explaining precedence order
+- **OAuth Admin Support**: Enhanced authentication for settings access
+  - Admin flag set from OAuth group membership (`admin` or `administrators`)
+  - Proper decorator pattern for admin access control
+  - Session-based authorization with redirect on unauthorized access
+
+### Changed
+- Updated `requirements.txt` to include `cryptography>=41.0.0` for encryption
+- Enhanced settings service to auto-encrypt/decrypt sensitive values transparently
+- Improved `/settings` route with proper admin decorator (fixes redirect loop)
+- Updated settings template with enhanced UI: source badges, encryption indicators, show/hide toggles
+- Modified `app/views/general.py` to redirect to wizard when setup required
+
+### Fixed
+- Fixed `/settings` endpoint returning 301 redirect to `/` (converted to proper decorator)
+- Resolved redirect loop for logged-in non-admin users
+- Fixed OAuth users not receiving admin privileges from group membership
+
+### Documentation
+- Added [docs/SettingsManagement.md](docs/SettingsManagement.md) - Comprehensive user guide
+- Added [SETTINGS_IMPLEMENTATION.md](SETTINGS_IMPLEMENTATION.md) - Technical documentation
+- Added [FRAMEWORK_ANALYSIS.md](FRAMEWORK_ANALYSIS.md) - Research on existing frameworks
+- Added [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) - Feature tracking
+- Updated TODO.md with completed features
+- Updated MILESTONES.md with release details
+
+### Technical Details
+- New files:
+  - `app/utils/encryption.py` - Fernet encryption utilities
+  - `app/utils/setup_wizard.py` - Wizard detection and logic
+  - `app/views/wizard.py` - Wizard routes (GET/POST /setup)
+  - `frontend/templates/setup_wizard.html` - Wizard UI
+  - `frontend/templates/settings.html` - Enhanced settings page
+- Modified files:
+  - `app/utils/settings_service.py` - Encryption integration, 102 setting metadata
+  - `app/views/settings.py` - Fixed decorator, source detection
+  - `app/auth.py` - OAuth admin support
+  - `app/api/settings.py` - Enhanced admin checks
+  - `tests/test_settings.py` - Comprehensive test coverage
+
+### Security
+- Sensitive settings encrypted at rest in database using Fernet (AES-128-CBC + HMAC)
+- Encryption key derived from `SESSION_SECRET` (minimum 32 characters required)
+- Admin-only access enforced on all settings operations
+- Visual masking of sensitive values in UI by default
+- CodeQL security scan: 0 alerts
+
 ## [0.3.3] - 2026-02-08
 
 ### Added
@@ -22,9 +95,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated Upload page to use the new shared upload module
 - Improved drop zone visual styling with better colors and animations
 
-### Fixed
-- N/A
-
 ### Security
 - Continued security improvements from v0.3.2 (authlib, starlette updates)
 
@@ -32,24 +102,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Comprehensive test infrastructure with pytest
-- Security scanning with CodeQL and Bandit
+- Security scanning workflows (CodeQL, Bandit)
 - SECURITY_AUDIT.md documentation
-- API integration tests
-- Configuration validation tests
-- Enhanced CI/CD workflows
+- ROADMAP.md and MILESTONES.md planning documents
+- API integration tests and configuration validation tests
 - Pre-commit hooks configuration
 
 ### Changed
+- Updated authlib to 1.6.5+ (security fix)
+- Updated starlette to 0.49.1+ (DoS vulnerability fix)
+- Improved SESSION_SECRET validation and handling
+- Enhanced .gitignore for security
 - Updated README with improved documentation structure
-- Enhanced .gitignore for better security
 
 ### Fixed
-- Critical security vulnerabilities in authlib (upgraded to 1.6.5+)
-- Critical DoS vulnerability in starlette (upgraded to 0.49.1+)
-
-### Security
-- Improved SESSION_SECRET validation and handling
-- Enhanced security practices documentation
+- Critical security vulnerabilities in dependencies
+- Session security issues
 
 ## [0.3.1] - 2026-01-15
 
@@ -99,7 +167,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/christianlouis/DocuElevate/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/christianlouis/DocuElevate/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/christianlouis/DocuElevate/compare/v0.3.3...v0.5.0
 [0.3.3]: https://github.com/christianlouis/DocuElevate/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/christianlouis/DocuElevate/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/christianlouis/DocuElevate/compare/v0.3.0...v0.3.1

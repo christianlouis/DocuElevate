@@ -4,6 +4,7 @@ celery  # Task queue
 redis  # Message broker for Celery
 sqlalchemy  # Database ORM
 pydantic  # Data validation
+cryptography>=41.0.0  # Encryption for sensitive settings in database
 openai  # GPT integration for metadata extraction
 PyPDF2>=3.0.0  # PDF processing for text extraction, metadata editing and rotation (replaces PyMuPDF)
 requests  # HTTP client

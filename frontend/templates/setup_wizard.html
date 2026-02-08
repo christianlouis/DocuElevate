@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Setup Wizard - DocuElevate{% endblock %}
+
+{% block head_extra %}
+<style>
+  .wizard-input {
+    font-family: 'Courier New', monospace;
+  }
+  .progress-step {
+    transition: all 0.3s ease;
+  }
+  .progress-step.active {
+    background-color: #3b82f6;
+    color: white;
+  }
+  .progress-step.completed {
+    background-color: #10b981;
+    color: white;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-3xl mx-auto">
+    
+    <!-- Wizard Header -->
+    <div class="text-center mb-8">
+      <h1 class="text-4xl font-bold text-gray-900 mb-2">
+        <i class="fas fa-magic text-indigo-600"></i>
+        DocuElevate Setup Wizard
+      </h1>
+      <p class="text-lg text-gray-600">
+        Welcome! Let's configure your system in just a few steps.
+      </p>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="mb-8">
+      <div class="flex justify-between items-center mb-2">
+        <span class="text-sm font-medium text-gray-700">Step {{ current_step }} of {{ max_step }}</span>
+        <span class="text-sm font-medium text-gray-700">{{ progress_percent }}% Complete</span>
+      </div>
+      <div class="w-full bg-gray-200 rounded-full h-3">
+        <div class="bg-indigo-600 h-3 rounded-full transition-all duration-500" style="width: {{ progress_percent }}%"></div>
+      </div>
+      
+      <!-- Step Indicators -->
+      <div class="flex justify-between mt-4">
+        {% for step_num in range(1, max_step + 1) %}
+        <div class="flex flex-col items-center progress-step {% if step_num < current_step %}completed{% elif step_num == current_step %}active{% endif %}">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center border-2 {% if step_num < current_step %}bg-green-500 border-green-500 text-white{% elif step_num == current_step %}bg-indigo-600 border-indigo-600 text-white{% else %}bg-white border-gray-300 text-gray-500{% endif %}">
+            {% if step_num < current_step %}
+            <i class="fas fa-check"></i>
+            {% else %}
+            {{ step_num }}
+            {% endif %}
+          </div>
+          <span class="text-xs mt-1 {% if step_num == current_step %}text-indigo-600 font-semibold{% else %}text-gray-500{% endif %}">
+            {% if step_num == 1 %}Infrastructure{% elif step_num == 2 %}Security{% elif step_num == 3 %}AI Services{% endif %}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Wizard Card -->
+    <div class="bg-white rounded-lg shadow-xl overflow-hidden">
+      
+      <!-- Card Header -->
+      <div class="bg-indigo-600 px-6 py-4">
+        <h2 class="text-2xl font-bold text-white">
+          <i class="fas fa-cog mr-2"></i>
+          {{ step_category }}
+        </h2>
+        <p class="text-indigo-100 mt-1">Configure essential settings for this category</p>
+      </div>
+
+      <!-- Card Body -->
+      <form method="post" action="/setup" class="px-6 py-8">
+        <input type="hidden" name="step" value="{{ current_step }}">
+        
+        {% if request.query_params.get('error') == 'save_failed' %}
+        <div class="mb-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4" role="alert">
+          <p class="font-bold">⚠️ Error</p>
+          <p>Failed to save settings. Please try again.</p>
+        </div>
+        {% endif %}
+
+        <div class="space-y-6">
+          {% for setting in settings %}
+          <div class="border-b border-gray-200 pb-6 last:border-b-0">
+            <label for="{{ setting.key }}" class="block text-sm font-medium text-gray-900 mb-1">
+              {{ setting.label }}
+              {% if setting.default is none or setting.key in ['admin_password', 'openai_api_key', 'azure_ai_key', 'azure_endpoint'] %}
+              <span class="text-red-600">*</span>
+              {% endif %}
+            </label>
+            
+            <p class="text-xs text-gray-500 mb-3">
+              {{ setting.description }}
+            </p>
+
+            {% if setting.key == 'session_secret' %}
+            <!-- Special handling for session_secret with auto-generate -->
+            <div class="space-y-2">
+              <div class="flex items-center space-x-4">
+                <label class="inline-flex items-center">
+                  <input type="radio" name="session_secret_mode" value="auto" checked 
+                         class="form-radio text-indigo-600" 
+                         onchange="document.getElementById('session_secret').value = 'auto-generate'; document.getElementById('session_secret').disabled = true;">
+                  <span class="ml-2 text-sm">Auto-generate (recommended)</span>
+                </label>
+                <label class="inline-flex items-center">
+                  <input type="radio" name="session_secret_mode" value="manual"
+                         class="form-radio text-indigo-600"
+                         onchange="document.getElementById('session_secret').value = ''; document.getElementById('session_secret').disabled = false; document.getElementById('session_secret').focus();">
+                  <span class="ml-2 text-sm">Enter manually</span>
+                </label>
+              </div>
+              <input 
+                type="{% if setting.sensitive %}password{% else %}text{% endif %}"
+                id="{{ setting.key }}"
+                name="{{ setting.key }}"
+                value="auto-generate"
+                disabled
+                class="wizard-input w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-100"
+                placeholder="Will be auto-generated"
+              />
+            </div>
+            {% else %}
+            <!-- Regular input -->
+            <input 
+              type="{% if setting.sensitive %}password{% else %}text{% endif %}"
+              id="{{ setting.key }}"
+              name="{{ setting.key }}"
+              value="{{ setting.default if setting.default else '' }}"
+              class="wizard-input w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              placeholder="{{ setting.description }}"
+              {% if setting.default is none or setting.key in ['admin_password', 'openai_api_key', 'azure_ai_key', 'azure_endpoint'] %}required{% endif %}
+            />
+            {% endif %}
+            
+            {% if setting.key == 'admin_password' %}
+            <p class="mt-2 text-xs text-amber-600">
+              <i class="fas fa-exclamation-triangle"></i>
+              <strong>Important:</strong> Choose a strong password. This cannot be recovered if lost.
+            </p>
+            {% elif setting.sensitive %}
+            <p class="mt-2 text-xs text-gray-500">
+              <i class="fas fa-lock"></i>
+              This value will be encrypted at rest in the database.
+            </p>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+
+        <!-- Navigation Buttons -->
+        <div class="flex justify-between items-center mt-8 pt-6 border-t border-gray-200">
+          <div>
+            {% if current_step == 1 %}
+            <a href="/setup/skip" class="text-sm text-gray-600 hover:text-gray-900">
+              <i class="fas fa-forward"></i>
+              Skip setup (advanced users)
+            </a>
+            {% endif %}
+          </div>
+          
+          <div class="flex space-x-4">
+            {% if current_step > 1 %}
+            <a href="/setup?step={{ current_step - 1 }}" 
+               class="px-6 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+              <i class="fas fa-arrow-left mr-2"></i>
+              Previous
+            </a>
+            {% endif %}
+            
+            <button type="submit" 
+                    class="px-6 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-lg">
+              {% if current_step < max_step %}
+              Next Step
+              <i class="fas fa-arrow-right ml-2"></i>
+              {% else %}
+              Complete Setup
+              <i class="fas fa-check ml-2"></i>
+              {% endif %}
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Help Text -->
+    <div class="mt-6 text-center">
+      <p class="text-sm text-gray-600">
+        <i class="fas fa-info-circle"></i>
+        All settings can be changed later in the Settings page.
+      </p>
+      <p class="text-xs text-gray-500 mt-2">
+        Fields marked with <span class="text-red-600">*</span> are required.
+      </p>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// Auto-submit form when session_secret mode changes
+document.querySelectorAll('input[name="session_secret_mode"]').forEach(radio => {
+  radio.addEventListener('change', function() {
+    if (this.value === 'auto') {
+      document.getElementById('session_secret').value = 'auto-generate';
+    }
+  });
+});
+</script>
+{% endblock %}
