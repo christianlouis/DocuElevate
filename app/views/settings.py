@@ -110,12 +110,6 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
                 "app_version": settings.version
             }
         )
-            {
-                "request": request,
-                "settings_data": settings_data,
-                "app_version": settings.version
-            }
-        )
     except Exception as e:
         logger.error(f"Error loading settings page: {e}")
         raise HTTPException(
