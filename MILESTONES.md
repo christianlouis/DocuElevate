@@ -39,17 +39,15 @@ DocuElevate follows [Semantic Versioning 2.0.0](https://semver.org/):
 - Enhanced upload UI and functionality
 
 ### v0.3.2 (February 2026)
-- Production-ready document processing
-- Multi-provider storage support
-- Basic web UI and REST API
-- OAuth2 authentication
+- Security hardening (Authlib/Starlette updates)
+- Testing infrastructure implementation
+- CI/CD improvements
 
 ---
 
-## Upcoming Milestones
+## Completed Milestones
 
 ### v0.5.0 - Settings Management & Configuration (February 2026)
-**Target Date:** February 15, 2026  
 **Release Date:** February 8, 2026  
 **Status:** ✅ Released  
 **Theme:** Configuration Management, Security, User Experience
@@ -80,23 +78,6 @@ DocuElevate follows [Semantic Versioning 2.0.0](https://semver.org/):
 - **Source Indicators**: Visual badges showing where each setting value originates (🟢 DB, 🔵 ENV, ⚪ DEFAULT)
 - **Admin Access Control**: OAuth admin group support and proper decorator pattern for authorization
 
-#### Technical Improvements
-- Fixed /settings redirect loop issue
-- Added cryptography>=41.0.0 dependency
-- Created encryption utilities (app/utils/encryption.py)
-- Implemented settings service with auto-encrypt/decrypt
-- Built responsive wizard UI with progress indicators
-- Comprehensive test coverage for settings functionality
-
-#### Breaking Changes
-- None
-
-#### Migration Notes
-- Setup wizard automatically appears for fresh installations
-- Existing installations can skip wizard
-- All settings remain backward compatible with environment variables
-- Database settings override environment variables when present
-
 ---
 
 ### v0.3.3 - Drag-and-Drop Upload (February 2026)
@@ -104,74 +85,41 @@ DocuElevate follows [Semantic Versioning 2.0.0](https://semver.org/):
 **Status:** ✅ Released  
 **Theme:** User Experience Enhancement
 
-#### Features
-- Drag-and-drop file upload on Files page
-- Visual drop overlay with animations
-- Upload progress modal
-- Shared upload JavaScript module
+#### Goals
+- [x] Add drag-and-drop file upload to Files view
+- [x] Refactor upload logic for maintainability
+- [x] Improve visual feedback during file interactions
+
+#### Deliverables
+- [x] Drag-and-drop upload functionality in Files view
+- [x] Reusable `upload.js` module for code DRYness
+- [x] Visual drop overlay and progress modal
+- [x] Enhanced upload error handling
 
 ---
 
 ### v0.3.2 - Security & Testing Hardening (February 2026)
-**Target Date:** February 15, 2026  
-**Release Date:** February 8, 2026  
+**Release Date:** February 6, 2026  
 **Status:** ✅ Released  
-**Theme:** Security, Quality, Testing, Configuration Management
+**Theme:** Security, Quality, Testing
 
 #### Goals
 - [x] Fix critical security vulnerabilities (authlib, starlette)
 - [x] Implement comprehensive test suite
 - [x] Add security scanning (CodeQL, Bandit)
 - [x] Improve CI/CD pipeline
-- [x] **Implement database-backed settings management**
-- [x] **Add encryption for sensitive configuration**
-- [x] **Create setup wizard for first-time installation**
-- [ ] Achieve 60% test coverage (ongoing)
-- [ ] Add pre-commit hooks (ongoing)
-- [ ] Update all dependencies to latest secure versions (ongoing)
 
 #### Deliverables
 - [x] SECURITY_AUDIT.md documentation
 - [x] pytest configuration and fixtures
 - [x] API integration tests
 - [x] Configuration validation tests
-- [x] **Settings management UI at /settings**
-- [x] **Setup wizard at /setup**
-- [x] **Fernet encryption for sensitive settings**
-- [x] **Source indicators (DB/ENV/DEFAULT)**
-- [x] **Complete settings documentation**
-- [x] **Framework analysis (FRAMEWORK_ANALYSIS.md)**
-- [ ] Task processing tests (ongoing)
-- [ ] Storage provider integration tests (ongoing)
 - [x] Updated CI/CD workflows
-- [ ] Security best practices guide (ongoing)
-
-#### New Features
-- **Settings Management System**: Web-based admin UI for viewing and editing 102 application settings across 10 categories
-- **Encryption**: Fernet symmetric encryption for sensitive values (passwords, API keys, tokens) with key derived from SESSION_SECRET
-- **Setup Wizard**: 3-step wizard for first-time configuration (Infrastructure → Security → AI Services)
-- **Precedence System**: Settings resolved in order: Database > Environment Variables > Defaults
-- **Source Indicators**: Visual badges showing where each setting value originates (🟢 DB, 🔵 ENV, ⚪ DEFAULT)
-- **Admin Access Control**: OAuth admin group support and proper decorator pattern for authorization
-
-#### Technical Improvements
-- Fixed /settings redirect loop issue
-- Added cryptography>=41.0.0 dependency
-- Created encryption utilities (app/utils/encryption.py)
-- Implemented settings service with auto-encrypt/decrypt
-- Built responsive wizard UI with progress indicators
-- Comprehensive test coverage for settings functionality
-
-#### Breaking Changes
-- None
-
-#### Migration Notes
-- Setup wizard automatically appears for fresh installations
-- Existing installations can skip wizard
-- All settings remain backward compatible with environment variables
-- Database settings override environment variables when present
+- [x] Pre-commit hooks configuration
 
 ---
+
+## Upcoming Milestones
 
 ### v0.6.0 - Enhanced Search & UI Improvements (April 2026)
 **Target Date:** April 1, 2026  
@@ -225,9 +173,6 @@ DocuElevate follows [Semantic Versioning 2.0.0](https://semver.org/):
 - Integration examples and templates
 - Webhook payload documentation
 
-#### Breaking Changes
-- None
-
 ---
 
 ### v0.7.0 - Advanced AI & Multi-language (August 2026)
@@ -250,9 +195,6 @@ DocuElevate follows [Semantic Versioning 2.0.0](https://semver.org/):
 - Duplicate detection service
 - Translation framework (10+ languages)
 - Localized documentation
-
-#### Breaking Changes
-- Configuration file format changes (auto-migration script provided)
 
 ---
 
@@ -291,88 +233,6 @@ This is our first major release, marking production-ready enterprise capabilitie
   - Database replication support
   - Message queue clustering
 
-- **Observability**
-  - Comprehensive audit logs
-  - Prometheus metrics export
-  - Grafana dashboards
-  - APM integration (New Relic, DataDog)
-  - SLA monitoring
-
-- **Documentation**
-  - Enterprise deployment guide
-  - High availability setup
-  - Disaster recovery procedures
-  - Security compliance guide
-  - Professional services offerings
-
-#### Breaking Changes
-- Database schema migration (automatic with Alembic)
-- Configuration file restructure (migration tool provided)
-- API v1 deprecated (v2 required for new features)
-
-#### Migration Path
-- Detailed migration guide provided
-- Automated migration scripts
-- Rollback procedures documented
-- Migration support via GitHub Discussions
-
----
-
-### v1.1.0 - Collaboration & Analytics (January 2027)
-**Target Date:** January 15, 2027  
-**Status:** 📋 Planned  
-**Theme:** Collaboration, Reporting, Analytics
-
-#### Goals
-- Document sharing with expiring links
-- Comments and annotations
-- Version history
-- Analytics dashboard
-- Cost analysis
-- Export reports
-
-#### Deliverables
-- Sharing interface with permissions
-- Comment system with threading
-- Version control and diff viewer
-- Analytics dashboard with charts
-- Cost breakdown by provider
-- Report generation (PDF, CSV, Excel)
-- User activity tracking
-
-#### Breaking Changes
-- None
-
----
-
-### v2.0.0 - On-Premise AI & Platform Expansion (Q3 2027)
-**Target Date:** Q3 2027  
-**Status:** 🔮 Future  
-**Theme:** Self-hosting, Privacy, Platform Diversity
-
-#### Goals
-- Self-hosted AI models (no cloud dependencies)
-- Local LLM integration
-- Desktop and mobile applications
-- Offline-first capabilities
-- Enhanced privacy features
-- Plugin marketplace
-
-#### Deliverables
-- Tesseract/EasyOCR integration
-- Ollama/LLaMA support
-- Desktop app (Windows, Mac, Linux)
-- Mobile apps (iOS, Android)
-- Browser extensions (Chrome, Firefox)
-- Plugin SDK and marketplace
-- Offline mode
-
-#### Breaking Changes
-- Major API restructure (v3)
-- New authentication system
-- Configuration format change
-- Minimum Python version: 3.12
-
 ---
 
 ## Release Process
@@ -395,14 +255,6 @@ This is our first major release, marking production-ready enterprise capabilitie
 - Helm charts (future)
 - Documentation site update
 
-### Post-release
-- [ ] GitHub release created
-- [ ] Blog post published
-- [ ] Social media announcement
-- [ ] Community notification
-- [ ] Support documentation updated
-- [ ] Monitor for critical issues
-
 ---
 
 ## Version History
@@ -412,9 +264,10 @@ This is our first major release, marking production-ready enterprise capabilitie
 | v0.1.0 | 2024-Q1 | Initial Release | Released |
 | v0.2.0 | 2024-Q3 | Multi-provider Support | Released |
 | v0.3.0 | 2025-Q4 | UI & Authentication | Released |
+| v0.3.1 | 2026-01-15 | OAuth2 Integration | Released |
 | v0.3.2 | 2026-02-06 | Security Updates | Released |
 | v0.3.3 | 2026-02-08 | Drag-and-Drop Upload | Released |
-| v0.5.0 | 2026-02-08 | **Current Stable** - Settings Management | **Released** |
+| v0.5.0 | 2026-02-08 | **Settings & Encryption** | **Released** |
 | v0.6.0 | 2026-04 | Search & UX | Planned |
 | v0.7.0 | 2026-08 | Advanced AI | Planned |
 | v1.0.0 | 2026-11 | Enterprise | Planned |
@@ -437,18 +290,6 @@ This is our first major release, marking production-ready enterprise capabilitie
 - Critical vulnerabilities: Patched within 48 hours
 - High severity: Patched within 1 week
 - Medium/Low: Included in next regular release
-
----
-
-## Contributing to Milestones
-
-Want to contribute to a specific milestone?
-
-1. Check the [GitHub Projects](https://github.com/christianlouis/DocuElevate/projects) board
-2. Look for issues tagged with milestone labels
-3. Read [CONTRIBUTING.md](CONTRIBUTING.md)
-4. Comment on the issue you'd like to work on
-5. Submit a PR linked to the issue
 
 ---
 

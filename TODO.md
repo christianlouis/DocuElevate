@@ -114,7 +114,7 @@ This document tracks actionable tasks for the current development cycle. For lon
 - [ ] Add dark mode
 - [ ] Add loading spinners for async operations
 - [ ] Improve error messages for users
-- [ ] Add drag-and-drop file upload
+- [x] Add drag-and-drop file upload (completed 2026-02-08)
 - [ ] Add file type icons
 - [ ] Implement toast notifications
 - [ ] Add keyboard shortcuts
@@ -224,6 +224,9 @@ This document tracks actionable tasks for the current development cycle. For lon
 - [x] Created comprehensive settings documentation
 - [x] Added cryptography dependency for encryption
 - [x] Analyzed existing frameworks (justified custom implementation)
+- [x] Added drag-and-drop file upload to Files view
+- [x] Extracted reusable upload.js module for code reuse
+- [x] Enhanced UX with visual drop overlay and upload progress modal
 
 ### 2026-02-06
 - [x] Created comprehensive test infrastructure

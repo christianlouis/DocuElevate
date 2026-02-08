@@ -79,20 +79,24 @@ Users can choose to send documents to any combination of these destinations thro
 
 ## Features
 
+- **Intuitive File Upload**:  
+  - Drag-and-drop file upload on both Upload and Files pages—upload anywhere on the Files page
+  - Real-time upload progress with validation
+  - Support for PDF, Office documents, images, and more (up to 500MB per file)
 - **Document Upload & Storage**:  
-  - Manual uploads (via API or UI) to Dropbox, Nextcloud, Google Drive, or Paperless.  
+  - Manual uploads (via API or UI) to Dropbox, Nextcloud, Google Drive, or Paperless  
 - **OCR Processing (Azure)**:  
-  - Extract text from scanned PDFs using Azure Document Intelligence.  
+  - Extract text from scanned PDFs using Azure Document Intelligence  
 - **Metadata Extraction (OpenAI)**:  
-  - Use GPT to classify, label, or otherwise enrich the text with structured metadata.  
+  - Use GPT to classify, label, or otherwise enrich the text with structured metadata  
 - **PDF Conversion (Gotenberg)**:  
-  - Convert non-PDF attachments (e.g., Word docs, images) into PDFs.  
+  - Convert non-PDF attachments (e.g., Word docs, images) into PDFs  
 - **Document Management (Paperless NGX)**:  
-  - Store processed documents and metadata in a Paperless NGX instance.  
+  - Store processed documents and metadata in a Paperless NGX instance  
 - **IMAP Integration**:  
-  - Fetch documents from multiple mailboxes (including Gmail) and automatically enqueue them for processing.  
+  - Fetch documents from multiple mailboxes (including Gmail) and automatically enqueue them for processing  
 - **Authentication**:  
-  - Secure access to the system using **Authentik** for OAuth2-based login.  
+  - Secure access to the system using **Authentik** for OAuth2-based login
 
 ## Frameworks Used
 
