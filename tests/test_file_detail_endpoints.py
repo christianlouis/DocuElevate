@@ -150,6 +150,9 @@ class TestFilePreview:
         response = client.get(f"/api/files/{file_record.id}/preview?version=original")
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("application/pdf")
+        # Verify file is set to display inline, not download
+        assert "content-disposition" in response.headers
+        assert "inline" in response.headers["content-disposition"]
 
     def test_preview_processed_file_not_found(self, client: TestClient, db_session, sample_pdf_path):
         """Test getting processed file preview when it doesn't exist."""

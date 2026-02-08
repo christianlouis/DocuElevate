@@ -835,25 +835,15 @@
         
         // Process the dropped files
         processFiles(e.dataTransfer.files, uploadProgressContainer, uploadStatusMessage);
-        
-        // Optionally reload page after uploads complete (with a delay)
-        setTimeout(() => {
-          const fileStatuses = document.querySelectorAll('.file-status');
-          let allCompleted = true;
-          fileStatuses.forEach(status => {
-            if (!status.textContent.includes('Success') && !status.textContent.includes('Error')) {
-              allCompleted = false;
-            }
-          });
-          
-          if (allCompleted && fileStatuses.length > 0) {
-            // Refresh the page after a short delay to show the new files
-            setTimeout(() => {
-              window.location.reload();
-            }, 2000);
-          }
-        }, 1000);
       }
+    });
+    
+    // Listen for upload completion event and reload the page to show new files
+    window.addEventListener('allUploadsComplete', (e) => {
+      // Wait 2 seconds to let users see the success message
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
     });
     
     function closeUploadModal() {

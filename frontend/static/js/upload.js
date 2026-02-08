@@ -195,6 +195,12 @@ function updateOverallStatus(statusMessage) {
   
   if (completed === total) {
     statusMessage.textContent = `All uploads completed (${completed}/${total})`;
+    
+    // Trigger a custom event when all uploads are complete
+    const allUploadsComplete = new CustomEvent('allUploadsComplete', {
+      detail: { total: total, completed: completed }
+    });
+    window.dispatchEvent(allUploadsComplete);
   } else {
     statusMessage.textContent = `Uploading files (${completed}/${total})`;
   }
