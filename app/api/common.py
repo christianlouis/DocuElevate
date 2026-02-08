@@ -5,10 +5,11 @@ Common utilities for API routes
 import logging
 import os
 from pathlib import Path
+
 from fastapi import HTTPException, status
 
-from app.database import SessionLocal
 from app.config import settings
+from app.database import SessionLocal
 
 # Set up logging
 logger = logging.getLogger(__name__)

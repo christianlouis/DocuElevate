@@ -1,32 +1,31 @@
 #!/usr/bin/env python3
 
 import json
-import re
+import logging
 import os
-from app.config import settings
-from app.tasks.retry_config import BaseTaskWithRetry
-from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
+import re
+
+import openai
 
 # Import the shared Celery instance
 from app.celery_app import celery
-import openai
-import logging
-from app.utils import log_task_progress
+from app.config import settings
 from app.database import SessionLocal
 from app.models import FileRecord
+from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
+from app.tasks.retry_config import BaseTaskWithRetry
+from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
 
 # Initialize OpenAI client dynamically with better error handling
 try:
-    client = openai.OpenAI(
-        api_key=settings.openai_api_key,
-        base_url=settings.openai_base_url
-    )
+    client = openai.OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
     logger.info("OpenAI client initialized successfully")
 except Exception as e:
     logger.error(f"Failed to initialize OpenAI client: {e}")
     client = None
+
 
 def extract_json_from_text(text):
     """
@@ -42,16 +41,19 @@ def extract_json_from_text(text):
         start = text.find("{")
         end = text.rfind("}")
         if start != -1 and end != -1 and end > start:
-            return text[start:end+1]
+            return text[start : end + 1]
     return None
+
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
 def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: int = None):
     """Uses OpenAI to classify document metadata."""
     task_id = self.request.id
     logger.info(f"[{task_id}] Starting metadata extraction for: {filename}")
-    log_task_progress(task_id, "extract_metadata_with_gpt", "in_progress", f"Extracting metadata for {filename}", file_id=file_id)
-    
+    log_task_progress(
+        task_id, "extract_metadata_with_gpt", "in_progress", f"Extracting metadata for {filename}", file_id=file_id
+    )
+
     # Get file_id from database if not provided
     if file_id is None:
         tmp_dir = os.path.join(settings.workdir, "tmp")
@@ -61,38 +63,39 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
                 file_record = db.query(FileRecord).filter_by(local_filename=file_path).first()
                 if file_record:
                     file_id = file_record.id
-    
-    prompt = f"""
-You are a specialized document analyzer trained to extract structured metadata from documents.
-Your task is to analyze the given text and return a well-structured JSON object.
 
-Extract and return the following fields:
-1. **filename**: Machine-readable filename (YYYY-MM-DD_DescriptiveTitle, use only letters, numbers, periods, and underscores).
-2. **empfaenger**: The recipient, or "Unknown" if not found.
-3. **absender**: The sender, or "Unknown" if not found.
-4. **correspondent**: The entity or company that issued the document (shortest possible name, e.g., "Amazon" instead of "Amazon EU SARL, German branch").
-5. **kommunikationsart**: One of [Behoerdlicher_Brief, Rechnung, Kontoauszug, Vertrag, Quittung, Privater_Brief, Einladung, Gewerbliche_Korrespondenz, Newsletter, Werbung, Sonstiges].
-6. **kommunikationskategorie**: One of [Amtliche_Postbehoerdliche_Dokumente, Finanz_und_Vertragsdokumente, Geschaeftliche_Kommunikation, Private_Korrespondenz, Sonstige_Informationen].
-7. **document_type**: Precise classification (e.g., Invoice, Contract, Information, Unknown).
-8. **tags**: A list of up to 4 relevant thematic keywords.
-9. **language**: Detected document language (ISO 639-1 code, e.g., "de" or "en").
-10. **title**: A human-readable title summarizing the document content.
-11. **confidence_score**: A numeric value (0-100) indicating the confidence level of the extracted metadata.
-12. **reference_number**: Extracted invoice/order/reference number if available.
-13. **monetary_amounts**: A list of key monetary values detected in the document.
-
-### Important Rules:
-- **OCR Correction**: Assume the text has been corrected for OCR errors.
-- **Tagging**: Max 4 tags, avoiding generic or overly specific terms.
-- **Title**: Concise, no addresses, and contains key identifying features.
-- **Date Selection**: Use the most relevant date if multiple are found.
-- **Output Language**: Maintain the document's original language.
-
-Extracted text:
-{cleaned_text}
-
-Return only valid JSON with no additional commentary.
-"""
+    prompt = (
+        "You are a specialized document analyzer trained to extract structured metadata from documents.\n"
+        "Your task is to analyze the given text and return a well-structured JSON object.\n\n"
+        "Extract and return the following fields:\n"
+        "1. **filename**: Machine-readable filename "
+        "(YYYY-MM-DD_DescriptiveTitle, use only letters, numbers, periods, and underscores).\n"
+        "2. **empfaenger**: The recipient, or \"Unknown\" if not found.\n"
+        "3. **absender**: The sender, or \"Unknown\" if not found.\n"
+        "4. **correspondent**: The entity or company that issued the document "
+        "(shortest possible name, e.g., \"Amazon\" instead of \"Amazon EU SARL, German branch\").\n"
+        "5. **kommunikationsart**: One of [Behoerdlicher_Brief, Rechnung, Kontoauszug, Vertrag, "
+        "Quittung, Privater_Brief, Einladung, Gewerbliche_Korrespondenz, Newsletter, Werbung, Sonstiges].\n"
+        "6. **kommunikationskategorie**: One of [Amtliche_Postbehoerdliche_Dokumente, "
+        "Finanz_und_Vertragsdokumente, Geschaeftliche_Kommunikation, "
+        "Private_Korrespondenz, Sonstige_Informationen].\n"
+        "7. **document_type**: Precise classification (e.g., Invoice, Contract, Information, Unknown).\n"
+        "8. **tags**: A list of up to 4 relevant thematic keywords.\n"
+        "9. **language**: Detected document language (ISO 639-1 code, e.g., \"de\" or \"en\").\n"
+        "10. **title**: A human-readable title summarizing the document content.\n"
+        "11. **confidence_score**: A numeric value (0-100) indicating the confidence level "
+        "of the extracted metadata.\n"
+        "12. **reference_number**: Extracted invoice/order/reference number if available.\n"
+        "13. **monetary_amounts**: A list of key monetary values detected in the document.\n\n"
+        "### Important Rules:\n"
+        "- **OCR Correction**: Assume the text has been corrected for OCR errors.\n"
+        "- **Tagging**: Max 4 tags, avoiding generic or overly specific terms.\n"
+        "- **Title**: Concise, no addresses, and contains key identifying features.\n"
+        "- **Date Selection**: Use the most relevant date if multiple are found.\n"
+        "- **Output Language**: Maintain the document's original language.\n\n"
+        f"Extracted text:\n{cleaned_text}\n\n"
+        "Return only valid JSON with no additional commentary.\n"
+    )
 
     try:
         logger.info(f"[{task_id}] Sending classification request for {filename}...")
@@ -101,9 +104,9 @@ Return only valid JSON with no additional commentary.
             model=settings.openai_model,
             messages=[
                 {"role": "system", "content": "You are an intelligent document classifier."},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ],
-            temperature=0
+            temperature=0,
         )
 
         content = completion.choices[0].message.content
@@ -113,16 +116,22 @@ Return only valid JSON with no additional commentary.
         json_text = extract_json_from_text(content)
         if not json_text:
             logger.error(f"[{task_id}] Could not find valid JSON in GPT response for {filename}.")
-            log_task_progress(task_id, "extract_metadata_with_gpt", "failure", "Invalid JSON in response", file_id=file_id)
+            log_task_progress(
+                task_id, "extract_metadata_with_gpt", "failure", "Invalid JSON in response", file_id=file_id
+            )
             return {}
 
         metadata = json.loads(json_text)
         logger.info(f"[{task_id}] Extracted metadata: {metadata}")
-        log_task_progress(task_id, "parse_metadata", "success", f"Parsed metadata: {list(metadata.keys())}", file_id=file_id)
+        log_task_progress(
+            task_id, "parse_metadata", "success", f"Parsed metadata: {list(metadata.keys())}", file_id=file_id
+        )
 
         # Trigger the next step: embedding metadata into the PDF
         logger.info(f"[{task_id}] Queueing metadata embedding task")
-        log_task_progress(task_id, "extract_metadata_with_gpt", "success", "Metadata extracted, queuing embed task", file_id=file_id)
+        log_task_progress(
+            task_id, "extract_metadata_with_gpt", "success", "Metadata extracted, queuing embed task", file_id=file_id
+        )
         embed_metadata_into_pdf.delay(filename, cleaned_text, metadata, file_id)
 
         return {"s3_file": filename, "metadata": metadata}

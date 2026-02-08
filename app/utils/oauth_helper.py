@@ -4,7 +4,8 @@ Shared across multiple OAuth providers to reduce code duplication.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 import requests
 from fastapi import HTTPException, status
 

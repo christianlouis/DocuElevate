@@ -9,8 +9,9 @@ This module provides functionality to:
 
 import logging
 from typing import Any, Dict, List, Optional, Tuple
-from sqlalchemy.orm import Session
+
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from app.models import ApplicationSettings
 
@@ -67,7 +68,6 @@ SETTING_METADATA = {
         "required": True,
         "restart_required": True,
     },
-    
     # Authentication Settings
     "auth_enabled": {
         "category": "Authentication",
@@ -133,7 +133,6 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
-    
     # AI Services
     "openai_api_key": {
         "category": "AI Services",
@@ -183,7 +182,6 @@ SETTING_METADATA = {
         "required": True,
         "restart_required": False,
     },
-    
     # Storage Providers - Dropbox
     "dropbox_app_key": {
         "category": "Storage Providers",
@@ -217,7 +215,6 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
-    
     # Storage Providers - Nextcloud
     "nextcloud_upload_url": {
         "category": "Storage Providers",
@@ -251,7 +248,6 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
-    
     # Storage Providers - Paperless-ngx
     "paperless_ngx_api_token": {
         "category": "Storage Providers",
@@ -269,7 +265,6 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
-    
     # Storage Providers - Google Drive
     "google_drive_credentials_json": {
         "category": "Storage Providers",
@@ -327,7 +322,6 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
-    
     # Storage Providers - OneDrive
     "onedrive_client_id": {
         "category": "Storage Providers",
@@ -369,7 +363,6 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
-    
     # Storage Providers - WebDAV
     "webdav_url": {
         "category": "Storage Providers",
@@ -411,7 +404,6 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
-    
     # Storage Providers - FTP
     "ftp_host": {
         "category": "Storage Providers",
@@ -469,7 +461,6 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
-    
     # Storage Providers - SFTP
     "sftp_host": {
         "category": "Storage Providers",
@@ -535,7 +526,6 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
-    
     # Storage Providers - AWS S3
     "aws_access_key_id": {
         "category": "Storage Providers",
@@ -593,7 +583,6 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
-    
     # Email Settings
     "email_host": {
         "category": "Email",
@@ -651,7 +640,6 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
-    
     # IMAP Settings - Account 1
     "imap1_host": {
         "category": "IMAP",
@@ -709,7 +697,6 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
-    
     # IMAP Settings - Account 2
     "imap2_host": {
         "category": "IMAP",
@@ -767,7 +754,6 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
-    
     # Monitoring - Uptime Kuma
     "uptime_kuma_url": {
         "category": "Monitoring",
@@ -785,7 +771,6 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
-    
     # Processing Settings
     "http_request_timeout": {
         "category": "Processing",
@@ -811,7 +796,6 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
-    
     # Notifications Settings
     "notification_urls": {
         "category": "Notifications",
@@ -861,7 +845,6 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
-    
     # Feature Flags
     "allow_file_delete": {
         "category": "Feature Flags",
@@ -877,13 +860,13 @@ SETTING_METADATA = {
 def get_setting_from_db(db: Session, key: str) -> Optional[str]:
     """
     Retrieve a setting value from the database.
-    
+
     Automatically decrypts sensitive values if encryption is enabled.
-    
+
     Args:
         db: Database session
         key: Setting key to retrieve
-        
+
     Returns:
         Setting value as string (decrypted if necessary), or None if not found
     """
@@ -891,13 +874,14 @@ def get_setting_from_db(db: Session, key: str) -> Optional[str]:
         setting = db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
         if not setting:
             return None
-        
+
         # Check if this setting is sensitive and should be decrypted
         metadata = get_setting_metadata(key)
         if metadata.get("sensitive", False):
             from app.utils.encryption import decrypt_value
+
             return decrypt_value(setting.value)
-        
+
         return setting.value
     except SQLAlchemyError as e:
         logger.error(f"Error retrieving setting {key} from database: {e}")
@@ -907,14 +891,14 @@ def get_setting_from_db(db: Session, key: str) -> Optional[str]:
 def save_setting_to_db(db: Session, key: str, value: Optional[str]) -> bool:
     """
     Save or update a setting in the database.
-    
+
     Automatically encrypts sensitive values if encryption is enabled.
-    
+
     Args:
         db: Database session
         key: Setting key
         value: Setting value (as string)
-        
+
     Returns:
         True if successful, False otherwise
     """
@@ -922,16 +906,16 @@ def save_setting_to_db(db: Session, key: str, value: Optional[str]) -> bool:
         # Check if this setting is sensitive and should be encrypted
         metadata = get_setting_metadata(key)
         storage_value = value
-        
+
         if metadata.get("sensitive", False) and value:
             from app.utils.encryption import encrypt_value, is_encryption_available
-            
+
             if is_encryption_available():
                 storage_value = encrypt_value(value)
                 logger.debug(f"Encrypted sensitive setting: {key}")
             else:
                 logger.warning(f"Storing sensitive setting {key} in plaintext (encryption unavailable)")
-        
+
         setting = db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
         if setting:
             setting.value = storage_value
@@ -950,28 +934,29 @@ def save_setting_to_db(db: Session, key: str, value: Optional[str]) -> bool:
 def get_all_settings_from_db(db: Session) -> Dict[str, str]:
     """
     Retrieve all settings from the database.
-    
+
     Automatically decrypts sensitive values if encryption is enabled.
-    
+
     Args:
         db: Database session
-        
+
     Returns:
         Dictionary of setting key-value pairs (decrypted)
     """
     try:
         settings = db.query(ApplicationSettings).all()
         result = {}
-        
+
         for setting in settings:
             # Check if this setting is sensitive and should be decrypted
             metadata = get_setting_metadata(setting.key)
             if metadata.get("sensitive", False):
                 from app.utils.encryption import decrypt_value
+
                 result[setting.key] = decrypt_value(setting.value)
             else:
                 result[setting.key] = setting.value
-        
+
         return result
     except SQLAlchemyError as e:
         logger.error(f"Error retrieving all settings from database: {e}")
@@ -981,11 +966,11 @@ def get_all_settings_from_db(db: Session) -> Dict[str, str]:
 def delete_setting_from_db(db: Session, key: str) -> bool:
     """
     Delete a setting from the database.
-    
+
     Args:
         db: Database session
         key: Setting key to delete
-        
+
     Returns:
         True if successful, False otherwise
     """
@@ -1006,27 +991,30 @@ def delete_setting_from_db(db: Session, key: str) -> bool:
 def get_setting_metadata(key: str) -> Dict[str, Any]:
     """
     Get metadata for a specific setting.
-    
+
     Args:
         key: Setting key
-        
+
     Returns:
         Dictionary containing setting metadata
     """
-    return SETTING_METADATA.get(key, {
-        "category": "Other",
-        "description": f"Setting: {key}",
-        "type": "string",
-        "sensitive": False,
-        "required": False,
-        "restart_required": False,
-    })
+    return SETTING_METADATA.get(
+        key,
+        {
+            "category": "Other",
+            "description": f"Setting: {key}",
+            "type": "string",
+            "sensitive": False,
+            "required": False,
+            "restart_required": False,
+        },
+    )
 
 
 def get_settings_by_category() -> Dict[str, List[str]]:
     """
     Get settings organized by category.
-    
+
     Returns:
         Dictionary mapping category names to lists of setting keys
     """
@@ -1042,34 +1030,34 @@ def get_settings_by_category() -> Dict[str, List[str]]:
 def validate_setting_value(key: str, value: str) -> Tuple[bool, Optional[str]]:
     """
     Validate a setting value based on its metadata.
-    
+
     Args:
         key: Setting key
         value: Setting value to validate
-        
+
     Returns:
         Tuple of (is_valid, error_message)
     """
     metadata = get_setting_metadata(key)
     setting_type = metadata.get("type", "string")
-    
+
     # Check required fields
     if metadata.get("required", False) and not value:
         return False, f"{key} is required"
-    
+
     # Type-specific validation
     if setting_type == "boolean":
         if value.lower() not in ["true", "false", "1", "0", "yes", "no"]:
             return False, f"{key} must be a boolean value (true/false)"
-    
+
     elif setting_type == "integer":
         try:
             int(value)
         except ValueError:
             return False, f"{key} must be an integer"
-    
+
     # Special validation for specific keys
     if key == "session_secret" and value and len(value) < 32:
         return False, "session_secret must be at least 32 characters"
-    
+
     return True, None

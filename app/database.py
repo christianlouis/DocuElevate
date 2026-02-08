@@ -1,12 +1,12 @@
 # app/database.py
 
-import os
 import logging
+import os
 
 from sqlalchemy import create_engine, exc
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.engine.url import make_url
 
 from app.config import settings
 
@@ -31,7 +31,7 @@ def init_db():
     if url.get_backend_name() == "sqlite":
         # 2. Extract the database path from the URL
         database_path = url.database  # e.g. "/workdir/db/database.db" or ":memory:"
-        
+
         if database_path != ":memory:":
             # 3. Ensure directory exists
             db_dir = os.path.dirname(database_path)
@@ -43,7 +43,7 @@ def init_db():
             if not os.path.exists(database_path):
                 logger.info(f"Creating new SQLite database file at {database_path}")
                 open(database_path, "a").close()
-    
+
     # 5. Now create tables if they don't exist yet
     try:
         Base.metadata.create_all(bind=engine)

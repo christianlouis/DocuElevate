@@ -1,15 +1,17 @@
 """
 Base setup for views, containing shared functionality and imports.
 """
-from fastapi import APIRouter, Request, Depends, HTTPException
-from fastapi.templating import Jinja2Templates
-from pathlib import Path
-from sqlalchemy.orm import Session
-import logging
 
-from app.auth import require_login
-from app.database import SessionLocal
+import logging
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, HTTPException, Request  # noqa: F401
+from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session  # noqa: F401
+
+from app.auth import require_login  # noqa: F401
 from app.config import settings
+from app.database import SessionLocal
 
 # Set up Jinja2 templates
 templates_dir = Path(__file__).parent.parent.parent / "frontend" / "templates"
@@ -22,6 +24,7 @@ templates.env.globals["max"] = max
 # Customize Jinja2Templates to include app_version in all templates
 original_template_response = templates.TemplateResponse
 
+
 def template_response_with_version(*args, **kwargs):
     """Wrapper for TemplateResponse to include version in all templates"""
     # If context dict is provided, add version to it
@@ -31,10 +34,12 @@ def template_response_with_version(*args, **kwargs):
         kwargs["context"].setdefault("version", settings.version)
     return original_template_response(*args, **kwargs)
 
+
 templates.TemplateResponse = template_response_with_version
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
 
 def get_db():
     """

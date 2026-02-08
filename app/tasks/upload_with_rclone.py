@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
+import logging
 import os
 import subprocess
-import logging
+
+from app.celery_app import celery
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
-from app.celery_app import celery
 
 logger = logging.getLogger(__name__)
 

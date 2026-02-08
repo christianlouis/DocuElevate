@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
-import os
 import logging
+import os
+
 import boto3
 from botocore.exceptions import ClientError
+
+from app.celery_app import celery
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
-from app.celery_app import celery
 from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
@@ -76,12 +78,7 @@ def upload_to_s3(self, file_path: str, file_id: int = None):
             extra_args["ACL"] = settings.s3_acl
 
         # Upload file
-        s3_client.upload_file(
-            file_path,
-            settings.s3_bucket_name,
-            s3_key,
-            ExtraArgs=extra_args
-        )
+        s3_client.upload_file(file_path, settings.s3_bucket_name, s3_key, ExtraArgs=extra_args)
 
         # Generate URL to the file (useful for public files)
         # For private files, this is just a reference and won't be accessible directly
