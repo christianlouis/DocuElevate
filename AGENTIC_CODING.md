@@ -568,7 +568,7 @@ logger.info(f"Password: {password}")  # BAD!
 
 ---
 
-## 🔄 Git Workflow
+## 🔄 Git Workflow & Versioning
 
 ### Branch Names
 - `feature/description` - New features
@@ -577,28 +577,103 @@ logger.info(f"Password: {password}")  # BAD!
 - `refactor/description` - Code refactoring
 - `docs/description` - Documentation updates
 
-### Commit Messages
+### Conventional Commits (REQUIRED)
+
+**All commit messages MUST follow the Conventional Commits specification for automated versioning.**
+
+#### Format
 ```
-type(scope): Short description (max 72 chars)
+<type>(<scope>): <subject>
 
-Longer description if needed. Explain:
-- What changed
-- Why it changed
-- Any breaking changes
+<body>
 
-Fixes #123
+<footer>
 ```
 
-Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
+#### Commit Types and Version Bumps
+- **feat**: New feature → **minor version bump** (0.5.0 → 0.6.0)
+- **fix**: Bug fix → **patch version bump** (0.5.0 → 0.5.1)
+- **perf**: Performance improvement → **patch version bump**
+- **docs**: Documentation only → **no version bump**
+- **style**: Code style/formatting → **no version bump**
+- **refactor**: Code refactoring → **no version bump**
+- **test**: Test changes → **no version bump**
+- **build**: Build system changes → **no version bump**
+- **ci**: CI/CD changes → **no version bump**
+- **chore**: Other changes → **no version bump**
+
+#### Breaking Changes
+Add `!` after type/scope or include `BREAKING CHANGE:` in footer for **major version bump**:
+```
+feat(api)!: redesign authentication endpoints
+
+BREAKING CHANGE: OAuth2 tokens now required instead of API keys
+```
+Result: 0.5.0 → 1.0.0
+
+#### Scope Examples
+- `api` - REST API changes
+- `ui` - Frontend/UI changes
+- `auth` - Authentication
+- `storage` - Storage providers
+- `ocr` - OCR processing
+- `tasks` - Celery tasks
+- `config` - Configuration
+
+#### Good Commit Examples
+```
+feat(storage): add Amazon S3 storage provider
+
+Implements S3StorageProvider with upload, download, delete operations.
+Includes configuration for bucket, region, and credentials.
+
+Closes #123
+```
+
+```
+fix(ocr): handle PDFs without text layer
+
+Previously failed silently. Now properly processes through Azure.
+
+Fixes #456
+```
+
+```
+docs: update deployment guide with Docker Compose
+
+Added step-by-step instructions for Docker Compose deployment.
+```
+
+### Semantic Release Automation
+
+DocuElevate uses `python-semantic-release` for automated version management.
+
+#### How It Works
+1. **PR merges to main** with conventional commits
+2. **semantic-release analyzes** commit messages  
+3. **Automatic updates**:
+   - Bumps `VERSION` file
+   - Updates `CHANGELOG.md`
+   - Creates Git tag (e.g., `v0.6.0`)
+   - Creates GitHub Release
+   - Triggers Docker builds
+
+#### Agent Rules
+- ✅ **DO**: Write conventional commit messages
+- ✅ **DO**: Use correct commit types
+- ✅ **DO**: Include `BREAKING CHANGE:` when applicable
+- ❌ **DON'T**: Manually edit `VERSION` file
+- ❌ **DON'T**: Manually edit `CHANGELOG.md`
+- ❌ **DON'T**: Create version tags or releases manually
 
 ### Pull Requests
-1. Create PR with descriptive title
+1. Create PR with descriptive title (conventional format if single change)
 2. Fill out PR template
-3. Link related issues
+3. Link related issues  
 4. Ensure CI passes
 5. Request reviews
 6. Address feedback
-7. Squash merge when approved
+7. Merge when approved (commits retain conventional format)
 
 ---
 
@@ -607,6 +682,7 @@ Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 Before submitting code:
 
 - [ ] Code follows style guide (Black formatted)
+- [ ] Commit messages use conventional commit format
 - [ ] All tests pass (`pytest`)
 - [ ] New code has tests
 - [ ] Coverage doesn't decrease
@@ -614,7 +690,7 @@ Before submitting code:
 - [ ] No secrets or credentials in code
 - [ ] Linting passes (`flake8`, `pylint`)
 - [ ] Type hints added (`mypy` clean)
-- [ ] CHANGELOG.md updated (if user-facing)
+- [ ] No manual edits to `VERSION` or `CHANGELOG.md`
 - [ ] Security scan passed (`bandit`)
 
 Run full check:

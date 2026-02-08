@@ -105,10 +105,88 @@ DocuElevate is an intelligent document processing system that automates handling
 
 ### Git Workflow
 - Write clear, descriptive commit messages
+- **ALWAYS follow Conventional Commits format** (see below)
 - Keep commits focused and atomic
 - Run tests and linters before committing
 - Pre-commit hooks are configured (`.pre-commit-config.yaml`)
-- Follow conventional commits format when appropriate
+
+## Conventional Commits (REQUIRED)
+
+All commit messages MUST follow the [Conventional Commits](https://www.conventionalcommits.org/) specification.
+
+### Format
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+### Commit Types and Version Impact
+- **feat**: New feature → minor version bump (0.5.0 → 0.6.0)
+- **fix**: Bug fix → patch version bump (0.5.0 → 0.5.1)
+- **perf**: Performance improvement → patch version bump
+- **docs**: Documentation only → no version bump
+- **style**: Formatting changes → no version bump
+- **refactor**: Code refactoring → no version bump
+- **test**: Test changes → no version bump
+- **build**: Build system changes → no version bump
+- **ci**: CI/CD changes → no version bump
+- **chore**: Other changes → no version bump
+
+### Breaking Changes
+For breaking changes (major version bump), add `!` after type or include `BREAKING CHANGE:` in footer:
+```
+feat(api)!: redesign authentication endpoints
+
+BREAKING CHANGE: OAuth2 tokens now required instead of API keys.
+```
+Result: 0.5.0 → 1.0.0
+
+### Scope Examples
+- `api` - REST API changes
+- `ui` - Frontend changes
+- `auth` - Authentication
+- `storage` - Storage providers
+- `ocr` - OCR processing
+- `tasks` - Celery tasks
+- `config` - Configuration
+- `docs` - Documentation
+
+### Commit Examples
+```
+feat(storage): add Amazon S3 storage provider
+fix(ocr): handle PDFs without text layer
+docs: update deployment guide with Docker setup
+refactor(tasks): consolidate duplicate code
+test: add integration tests for upload API
+chore: update dependencies for security fixes
+```
+
+## Semantic Release Process
+
+### Automated Versioning
+DocuElevate uses `python-semantic-release` for automated version management:
+
+1. **On merge to main**: semantic-release analyzes commit messages
+2. **Automatic actions**:
+   - Determines next version from commit types
+   - Updates `VERSION` file
+   - Generates/updates `CHANGELOG.md`
+   - Creates Git tag with `v` prefix (e.g., `v0.6.0`)
+   - Creates GitHub Release with auto-generated notes
+   - Triggers Docker image builds with version tag
+
+### Agent Rules for Versioning
+- ✅ **DO**: Write conventional commit messages
+- ✅ **DO**: Use appropriate commit types for your changes
+- ✅ **DO**: Mark breaking changes explicitly
+- ❌ **DON'T**: Manually edit `VERSION` file
+- ❌ **DON'T**: Manually edit `CHANGELOG.md`
+- ❌ **DON'T**: Create version tags or GitHub Releases manually
+
+These files are managed entirely by the semantic-release automation.
 
 ### File Organization
 - Place API endpoints in `app/api/` organized by feature
