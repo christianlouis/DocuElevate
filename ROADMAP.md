@@ -1,13 +1,13 @@
 # DocuElevate Roadmap
 
-**Last Updated:** 2026-02-06  
+**Last Updated:** 2026-02-08  
 **Version:** 1.0
 
 ## Vision
 
 DocuElevate aims to be the premier open-source intelligent document processing platform, providing seamless integration with cloud storage providers, advanced AI-powered metadata extraction, and enterprise-grade security and scalability.
 
-## Current Status (v0.3.2)
+## Current Status (v0.3.3)
 
 ### Core Features ✅
 - Multi-provider document storage (Dropbox, Google Drive, OneDrive, Nextcloud, S3, etc.)
@@ -16,9 +16,12 @@ DocuElevate aims to be the premier open-source intelligent document processing p
 - AI-powered metadata extraction via OpenAI
 - PDF conversion via Gotenberg
 - Web UI for document upload and management
+- **Database-backed settings management with admin UI**
+- **Fernet encryption for sensitive configuration**
+- **Setup wizard for first-time installation**
 - REST API with OpenAPI documentation
 - Celery-based async task processing
-- OAuth2 authentication via Authentik
+- OAuth2 authentication via Authentik with admin group support
 
 ## Short-term Goals (Q1-Q2 2026) - v0.4.x to v0.5.x
 

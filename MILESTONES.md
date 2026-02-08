@@ -1,6 +1,6 @@
 # DocuElevate Milestones
 
-**Last Updated:** 2026-02-06
+**Last Updated:** 2026-02-08
 
 This document outlines the release milestones, versioning strategy, and detailed feature breakdown for DocuElevate.
 
@@ -19,9 +19,22 @@ DocuElevate follows [Semantic Versioning 2.0.0](https://semver.org/):
 
 ---
 
-## Current Release: v0.3.2 (February 2026)
+## Current Release: v0.3.3 (February 2026)
 
 ### Status: Stable
+- Production-ready document processing
+- Multi-provider storage support
+- **Database-backed settings management with encryption**
+- **Setup wizard for first-time configuration**
+- **Admin UI for runtime configuration**
+- OAuth2 authentication with admin group support
+- Basic web UI and REST API
+
+---
+
+## Previous Releases
+
+### v0.3.2 (February 2026)
 - Production-ready document processing
 - Multi-provider storage support
 - Basic web UI and REST API
@@ -33,30 +46,62 @@ DocuElevate follows [Semantic Versioning 2.0.0](https://semver.org/):
 
 ### v0.3.3 - Security & Testing Hardening (February 2026)
 **Target Date:** February 15, 2026  
-**Status:** 🚧 In Progress  
-**Theme:** Security, Quality, Testing
+**Release Date:** February 8, 2026  
+**Status:** ✅ Released  
+**Theme:** Security, Quality, Testing, Configuration Management
 
 #### Goals
 - [x] Fix critical security vulnerabilities (authlib, starlette)
 - [x] Implement comprehensive test suite
 - [x] Add security scanning (CodeQL, Bandit)
 - [x] Improve CI/CD pipeline
-- [ ] Achieve 60% test coverage
-- [ ] Add pre-commit hooks
-- [ ] Update all dependencies to latest secure versions
+- [x] **Implement database-backed settings management**
+- [x] **Add encryption for sensitive configuration**
+- [x] **Create setup wizard for first-time installation**
+- [ ] Achieve 60% test coverage (ongoing)
+- [ ] Add pre-commit hooks (ongoing)
+- [ ] Update all dependencies to latest secure versions (ongoing)
 
 #### Deliverables
 - [x] SECURITY_AUDIT.md documentation
 - [x] pytest configuration and fixtures
 - [x] API integration tests
 - [x] Configuration validation tests
-- [ ] Task processing tests
-- [ ] Storage provider integration tests
+- [x] **Settings management UI at /settings**
+- [x] **Setup wizard at /setup**
+- [x] **Fernet encryption for sensitive settings**
+- [x] **Source indicators (DB/ENV/DEFAULT)**
+- [x] **Complete settings documentation**
+- [x] **Framework analysis (FRAMEWORK_ANALYSIS.md)**
+- [ ] Task processing tests (ongoing)
+- [ ] Storage provider integration tests (ongoing)
 - [x] Updated CI/CD workflows
-- [ ] Security best practices guide
+- [ ] Security best practices guide (ongoing)
+
+#### New Features
+- **Settings Management System**: Web-based admin UI for viewing and editing 102 application settings across 10 categories
+- **Encryption**: Fernet symmetric encryption for sensitive values (passwords, API keys, tokens) with key derived from SESSION_SECRET
+- **Setup Wizard**: 3-step wizard for first-time configuration (Infrastructure → Security → AI Services)
+- **Precedence System**: Settings resolved in order: Database > Environment Variables > Defaults
+- **Source Indicators**: Visual badges showing where each setting value originates (🟢 DB, 🔵 ENV, ⚪ DEFAULT)
+- **Admin Access Control**: OAuth admin group support and proper decorator pattern for authorization
+
+#### Technical Improvements
+- Fixed /settings redirect loop issue
+- Added cryptography>=41.0.0 dependency
+- Created encryption utilities (app/utils/encryption.py)
+- Implemented settings service with auto-encrypt/decrypt
+- Built responsive wizard UI with progress indicators
+- Comprehensive test coverage for settings functionality
 
 #### Breaking Changes
 - None
+
+#### Migration Notes
+- Setup wizard automatically appears for fresh installations
+- Existing installations can skip wizard
+- All settings remain backward compatible with environment variables
+- Database settings override environment variables when present
 
 ---
 
@@ -299,8 +344,8 @@ This is our first major release, marking production-ready enterprise capabilitie
 | v0.1.0 | 2024-Q1 | Initial Release | Released |
 | v0.2.0 | 2024-Q3 | Multi-provider Support | Released |
 | v0.3.0 | 2025-Q4 | UI & Authentication | Released |
-| v0.3.2 | 2026-02 | Current Stable | Released |
-| v0.3.3 | 2026-02 | Security & Testing | In Progress |
+| v0.3.2 | 2026-02-06 | Security Updates | Released |
+| v0.3.3 | 2026-02-08 | **Current Stable** - Configuration Management | **Released** |
 | v0.4.0 | 2026-04 | Search & UX | Planned |
 | v0.5.0 | 2026-08 | Advanced AI | Planned |
 | v1.0.0 | 2026-11 | Enterprise | Planned |
