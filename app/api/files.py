@@ -578,6 +578,78 @@ def get_file_preview(
         raise HTTPException(status_code=500, detail=f"Error retrieving file preview: {str(e)}")
 
 
+@router.get("/files/{file_id}/download")
+@require_login
+def download_file(
+    request: Request,
+    file_id: int,
+    version: str = Query("original", description="original or processed"),
+    db: Session = Depends(get_db),
+):
+    """
+    Download file (original or processed version) as attachment.
+
+    Args:
+        file_id: ID of the file
+        version: "original" for tmp file, "processed" for processed file
+
+    Returns:
+        File content as attachment download
+    """
+    from fastapi.responses import FileResponse
+
+    try:
+        # Find the file record
+        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+
+        if not file_record:
+            raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
+
+        if version == "original":
+            # Return the original file from tmp
+            if not file_record.local_filename or not os.path.exists(file_record.local_filename):
+                raise HTTPException(status_code=404, detail="Original file not found on disk")
+
+            file_path = file_record.local_filename
+
+        elif version == "processed":
+            # Look for processed file in /workdir/processed/
+            workdir = settings.workdir
+            processed_dir = os.path.join(workdir, "processed")
+
+            # Try to find the processed file (same hash or UUID-based naming)
+            base_filename = os.path.splitext(file_record.original_filename)[0]
+            potential_paths = [
+                os.path.join(processed_dir, f"{file_record.filehash}.pdf"),
+                os.path.join(processed_dir, f"{base_filename}_processed.pdf"),
+                os.path.join(processed_dir, file_record.original_filename),
+            ]
+
+            file_path = None
+            for path in potential_paths:
+                if os.path.exists(path):
+                    file_path = path
+                    break
+
+            if not file_path:
+                raise HTTPException(status_code=404, detail="Processed file not found")
+        else:
+            raise HTTPException(status_code=400, detail="Invalid version parameter. Use 'original' or 'processed'")
+
+        # Return the file with attachment disposition to trigger download
+        return FileResponse(
+            path=file_path,
+            media_type=file_record.mime_type or "application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{file_record.original_filename}"'},
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error downloading file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error downloading file: {str(e)}")
+
+
 @router.post("/ui-upload")
 @require_login
 async def ui_upload(request: Request, file: UploadFile = File(...)):
