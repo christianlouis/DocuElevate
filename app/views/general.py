@@ -2,7 +2,7 @@
 General routes for the application homepage and basic pages.
 """
 from fastapi import Request, HTTPException, Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pathlib import Path
 from datetime import date
 from sqlalchemy.orm import Session
