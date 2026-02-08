@@ -1,3 +1,6 @@
+# Test environment files with real secrets - NEVER commit!
+.env.test
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

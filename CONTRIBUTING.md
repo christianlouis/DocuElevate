@@ -180,9 +180,37 @@ pip install -r requirements-dev.txt
 
 ### Running Tests
 
+For comprehensive testing documentation, see [docs/Testing.md](docs/Testing.md).
+
+Quick start:
+
 ```bash
+# Run all tests
 pytest
+
+# Run unit tests only (fast)
+pytest -m unit
+
+# Run with coverage
+pytest --cov=app --cov-report=term-missing
 ```
+
+#### Test Environment Configuration
+
+For tests requiring real API keys (integration tests):
+
+```bash
+# Copy test environment template
+cp .env.test.example .env.test
+
+# Edit .env.test with your TEST credentials (never production keys!)
+# The .env.test file is gitignored and will not be committed
+
+# Run integration tests
+pytest -m requires_external
+```
+
+**Important:** Use separate test accounts and API keys, never production credentials. See [docs/Testing.md](docs/Testing.md) for detailed setup instructions.
 
 ### Code Style
 

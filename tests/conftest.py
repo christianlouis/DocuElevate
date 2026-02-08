@@ -4,23 +4,50 @@ Pytest configuration and shared fixtures for DocuElevate tests.
 import os
 import tempfile
 import pytest
+from pathlib import Path
 from typing import Generator
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# Set test environment variables before importing app
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-os.environ["REDIS_URL"] = "redis://localhost:6379/1"
-os.environ["OPENAI_API_KEY"] = "test-key"
-os.environ["AZURE_AI_KEY"] = "test-key"
-os.environ["AZURE_REGION"] = "test"
-os.environ["AZURE_ENDPOINT"] = "https://test.cognitiveservices.azure.com/"
-os.environ["GOTENBERG_URL"] = "http://localhost:3000"
-os.environ["WORKDIR"] = "/tmp"
-os.environ["AUTH_ENABLED"] = "False"
-os.environ["SESSION_SECRET"] = "test_secret_key_for_testing_must_be_at_least_32_characters_long"
+# Load test environment variables from .env.test if it exists
+# This allows developers to use real API keys for integration tests locally
+# while keeping them out of version control
+def load_test_env():
+    """Load test environment from .env.test file if it exists."""
+    test_env_path = Path(__file__).parent.parent / ".env.test"
+    
+    if test_env_path.exists():
+        # Load variables from .env.test
+        with open(test_env_path) as f:
+            for line in f:
+                line = line.strip()
+                # Skip empty lines and comments
+                if not line or line.startswith("#"):
+                    continue
+                # Parse KEY=VALUE format
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    # Only set if not already set (allow environment override)
+                    if key not in os.environ:
+                        os.environ[key] = value
+
+# Load .env.test first if it exists
+load_test_env()
+
+# Set default test environment variables (used as fallbacks if not in .env.test)
+# These defaults ensure tests run without .env.test (e.g., in CI/CD)
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/1")
+os.environ.setdefault("OPENAI_API_KEY", "test-key")
+os.environ.setdefault("AZURE_AI_KEY", "test-key")
+os.environ.setdefault("AZURE_REGION", "test")
+os.environ.setdefault("AZURE_ENDPOINT", "https://test.cognitiveservices.azure.com/")
+os.environ.setdefault("GOTENBERG_URL", "http://localhost:3000")
+os.environ.setdefault("WORKDIR", "/tmp")
+os.environ.setdefault("AUTH_ENABLED", "False")
+os.environ.setdefault("SESSION_SECRET", "test_secret_key_for_testing_must_be_at_least_32_characters_long")
 
 from app.database import Base, get_db
 from app.main import app as fastapi_app
