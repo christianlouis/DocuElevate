@@ -878,16 +878,27 @@ def get_setting_from_db(db: Session, key: str) -> Optional[str]:
     """
     Retrieve a setting value from the database.
     
+    Automatically decrypts sensitive values if encryption is enabled.
+    
     Args:
         db: Database session
         key: Setting key to retrieve
         
     Returns:
-        Setting value as string, or None if not found
+        Setting value as string (decrypted if necessary), or None if not found
     """
     try:
         setting = db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
-        return setting.value if setting else None
+        if not setting:
+            return None
+        
+        # Check if this setting is sensitive and should be decrypted
+        metadata = get_setting_metadata(key)
+        if metadata.get("sensitive", False):
+            from app.utils.encryption import decrypt_value
+            return decrypt_value(setting.value)
+        
+        return setting.value
     except SQLAlchemyError as e:
         logger.error(f"Error retrieving setting {key} from database: {e}")
         return None
@@ -896,6 +907,8 @@ def get_setting_from_db(db: Session, key: str) -> Optional[str]:
 def save_setting_to_db(db: Session, key: str, value: Optional[str]) -> bool:
     """
     Save or update a setting in the database.
+    
+    Automatically encrypts sensitive values if encryption is enabled.
     
     Args:
         db: Database session
@@ -906,11 +919,24 @@ def save_setting_to_db(db: Session, key: str, value: Optional[str]) -> bool:
         True if successful, False otherwise
     """
     try:
+        # Check if this setting is sensitive and should be encrypted
+        metadata = get_setting_metadata(key)
+        storage_value = value
+        
+        if metadata.get("sensitive", False) and value:
+            from app.utils.encryption import encrypt_value, is_encryption_available
+            
+            if is_encryption_available():
+                storage_value = encrypt_value(value)
+                logger.debug(f"Encrypted sensitive setting: {key}")
+            else:
+                logger.warning(f"Storing sensitive setting {key} in plaintext (encryption unavailable)")
+        
         setting = db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
         if setting:
-            setting.value = value
+            setting.value = storage_value
         else:
-            setting = ApplicationSettings(key=key, value=value)
+            setting = ApplicationSettings(key=key, value=storage_value)
             db.add(setting)
         db.commit()
         logger.info(f"Saved setting {key} to database")
@@ -925,15 +951,28 @@ def get_all_settings_from_db(db: Session) -> Dict[str, str]:
     """
     Retrieve all settings from the database.
     
+    Automatically decrypts sensitive values if encryption is enabled.
+    
     Args:
         db: Database session
         
     Returns:
-        Dictionary of setting key-value pairs
+        Dictionary of setting key-value pairs (decrypted)
     """
     try:
         settings = db.query(ApplicationSettings).all()
-        return {setting.key: setting.value for setting in settings}
+        result = {}
+        
+        for setting in settings:
+            # Check if this setting is sensitive and should be decrypted
+            metadata = get_setting_metadata(setting.key)
+            if metadata.get("sensitive", False):
+                from app.utils.encryption import decrypt_value
+                result[setting.key] = decrypt_value(setting.value)
+            else:
+                result[setting.key] = setting.value
+        
+        return result
     except SQLAlchemyError as e:
         logger.error(f"Error retrieving all settings from database: {e}")
         return {}

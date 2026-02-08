@@ -14,7 +14,25 @@ router = APIRouter()
 
 @router.get("/", include_in_schema=False)
 async def serve_index(request: Request, db: Session = Depends(get_db)):
-    """Serve the index/home page."""
+    """
+    Serve the index/home page.
+    
+    If the system requires initial setup, redirect to the setup wizard.
+    """
+    # Check if setup wizard is needed
+    from app.utils.setup_wizard import is_setup_required
+    from app.utils.settings_service import get_setting_from_db
+    
+    # Check if setup was explicitly skipped
+    setup_skipped = get_setting_from_db(db, "_setup_wizard_skipped")
+    
+    # Check setup completion query param
+    setup_complete = request.query_params.get("setup") == "complete"
+    
+    if not setup_skipped and not setup_complete and is_setup_required():
+        logger.info("System requires initial setup, redirecting to wizard")
+        return RedirectResponse(url="/setup?step=1", status_code=303)
+    
     # Get provider information from config validator
     providers = get_provider_status()
     
