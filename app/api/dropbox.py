@@ -11,6 +11,7 @@ from typing import Optional
 
 from app.auth import require_login
 from app.config import settings
+from app.utils.oauth_helper import exchange_oauth_token
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -31,84 +32,30 @@ async def exchange_dropbox_token(
     Exchange an authorization code for a refresh token from Dropbox.
     This is done on the server to avoid exposing client secret in the browser.
     """
-    try:
-        logger.info("Starting Dropbox token exchange process")
-        
-        # Prepare the token request
-        token_url = "https://api.dropboxapi.com/oauth2/token"
-        
-        payload = {
-            'client_id': client_id,
-            'client_secret': client_secret,
-            'code': code,
-            'redirect_uri': redirect_uri,
-            'grant_type': 'authorization_code'
-        }
-        
-        # Log request details (excluding secret)
-        safe_payload = payload.copy()
-        safe_payload['client_secret'] = '[REDACTED]' 
-        safe_payload['code'] = f"{code[:5]}...{code[-5:]}" if len(code) > 10 else '[REDACTED]'
-        logger.info(f"Token exchange request payload: {safe_payload}")
-        
-        # Make the token request
-        logger.info("Sending POST request to Dropbox for token exchange")
-        response = requests.post(token_url, data=payload, timeout=settings.http_request_timeout)
-        
-        # Check if the request was successful
-        logger.info(f"Token exchange response status: {response.status_code}")
-        
-        if response.status_code != 200:
-            # Log the error response for debugging
-            try:
-                error_json = response.json()
-                logger.error(f"Token exchange failed with status {response.status_code}: {error_json}")
-                error_detail = error_json
-            except Exception as json_err:
-                logger.error(f"Failed to parse error response as JSON: {str(json_err)}")
-                logger.error(f"Raw response content: {response.content[:500]}")  # Limit log size
-                error_detail = {"error": "Unknown error", "raw_content_snippet": str(response.content[:100])}
-            
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Token exchange failed: {error_detail}"
-            )
-            
-        # Return the token response
-        token_data = response.json()
-        
-        # Validate the token response
-        if "refresh_token" not in token_data:
-            logger.error(f"Dropbox returned success but no refresh token found in response: {token_data.keys()}")
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Dropbox OAuth server returned success but no refresh token was included"
-            )
-        
-        # Calculate token length for logging
-        refresh_token_length = len(token_data.get("refresh_token", ""))
-        access_token_length = len(token_data.get("access_token", ""))
-        
-        logger.info(f"Successfully exchanged authorization code for Dropbox tokens. "
-                   f"Refresh token length: {refresh_token_length}, "
-                   f"Access token length: {access_token_length}")
-        
-        # Return just what's needed by the frontend
-        return {
-            "refresh_token": token_data["refresh_token"],
-            "access_token": token_data["access_token"],
-            "expires_in": token_data.get("expires_in", 14400)
-        }
-        
-    except HTTPException:
-        # Re-raise HTTP exceptions as they already have appropriate status codes
-        raise
-    except Exception as e:
-        logger.exception(f"Unexpected error during Dropbox token exchange: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to exchange token: {str(e)}"
-        )
+    # Prepare the token request
+    token_url = "https://api.dropboxapi.com/oauth2/token"
+    
+    payload = {
+        'client_id': client_id,
+        'client_secret': client_secret,
+        'code': code,
+        'redirect_uri': redirect_uri,
+        'grant_type': 'authorization_code'
+    }
+    
+    # Use shared OAuth helper (handles secure logging and error handling)
+    token_data = exchange_oauth_token(
+        provider_name="Dropbox",
+        token_url=token_url,
+        payload=payload
+    )
+    
+    # Return just what's needed by the frontend
+    return {
+        "refresh_token": token_data["refresh_token"],
+        "access_token": token_data["access_token"],
+        "expires_in": token_data.get("expires_in", 14400)
+    }
 
 @router.post("/dropbox/update-settings")
 @require_login

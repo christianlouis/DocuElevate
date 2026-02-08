@@ -28,6 +28,17 @@ def upload_with_rclone(file_path: str, destination: str):
     # Extract filename
     filename = os.path.basename(file_path)
     
+    # Validate destination format to prevent command injection
+    if ":" not in destination:
+        raise ValueError(f"Invalid destination format: {destination}. Expected format: remote:path")
+    
+    # Split and validate destination components
+    remote, remote_path = destination.split(":", 1)
+    
+    # Validate remote name (alphanumeric, underscore, hyphen only)
+    if not remote or not all(c.isalnum() or c in ('_', '-') for c in remote):
+        raise ValueError(f"Invalid remote name: {remote}")
+    
     # Check if rclone is installed and config exists
     rclone_config_path = os.path.join(settings.workdir, "rclone.conf")
     if not os.path.exists(rclone_config_path):
@@ -36,12 +47,6 @@ def upload_with_rclone(file_path: str, destination: str):
         raise ValueError(error_msg)
     
     try:
-        # Split destination into remote and path
-        if ":" not in destination:
-            raise ValueError(f"Invalid destination format: {destination}. Expected format: remote:path")
-        
-        remote, remote_path = destination.split(":", 1)
-        
         # Ensure the remote path exists (create folders if needed)
         mkdir_cmd = [
             "rclone", 
@@ -77,7 +82,8 @@ def upload_with_rclone(file_path: str, destination: str):
                 ]
                 link_result = subprocess.run(link_cmd, capture_output=True, text=True)
                 public_url = link_result.stdout.strip() if link_result.returncode == 0 else None
-            except Exception:
+            except (subprocess.SubprocessError, OSError) as e:
+                logger.warning(f"Failed to get public link for {filename}: {str(e)}")
                 public_url = None
             
             logger.info(f"Successfully uploaded {filename} to {destination}")
@@ -90,17 +96,17 @@ def upload_with_rclone(file_path: str, destination: str):
         else:
             error_msg = f"Failed to upload {filename} to {destination}: {result.stderr}"
             logger.error(error_msg)
-            raise Exception(error_msg)
+            raise RuntimeError(error_msg)
             
     except subprocess.CalledProcessError as e:
         error_msg = f"Rclone error: {e.stderr.decode('utf-8') if hasattr(e.stderr, 'decode') else e.stderr}"
         logger.error(error_msg)
-        raise Exception(error_msg)
+        raise RuntimeError(error_msg) from e
     
-    except Exception as e:
+    except (OSError, ValueError) as e:
         error_msg = f"Error uploading {filename} to {destination}: {str(e)}"
         logger.error(error_msg)
-        raise Exception(error_msg)
+        raise RuntimeError(error_msg) from e
 
 
 @celery.task(base=BaseTaskWithRetry)
@@ -161,9 +167,9 @@ def send_to_all_rclone_destinations(file_path: str):
         else:
             error_msg = f"Failed to list rclone remotes: {result.stderr}"
             logger.error(error_msg)
-            raise Exception(error_msg)
+            raise RuntimeError(error_msg)
             
-    except Exception as e:
+    except (subprocess.SubprocessError, OSError) as e:
         error_msg = f"Error setting up rclone uploads for {filename}: {str(e)}"
         logger.error(error_msg)
-        raise Exception(error_msg)
+        raise RuntimeError(error_msg) from e

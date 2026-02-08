@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 
 from app.auth import require_login
 from app.config import settings
+from app.utils.oauth_helper import exchange_oauth_token
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -31,84 +32,30 @@ async def exchange_google_drive_token(
     Exchange an authorization code for refresh and access tokens from Google.
     This is done on the server to avoid exposing client secret in the browser.
     """
-    try:
-        logger.info("Starting Google Drive token exchange process")
-        
-        # Prepare the token request
-        token_url = "https://oauth2.googleapis.com/token"
-        
-        payload = {
-            'client_id': client_id,
-            'client_secret': client_secret,
-            'code': code,
-            'redirect_uri': redirect_uri,
-            'grant_type': 'authorization_code'
-        }
-        
-        # Log request details (excluding secret)
-        safe_payload = payload.copy()
-        safe_payload['client_secret'] = '[REDACTED]' 
-        safe_payload['code'] = f"{code[:5]}...{code[-5:]}" if len(code) > 10 else '[REDACTED]'
-        logger.info(f"Token exchange request payload: {safe_payload}")
-        
-        # Make the token request
-        logger.info("Sending POST request to Google for token exchange")
-        response = requests.post(token_url, data=payload, timeout=settings.http_request_timeout)
-        
-        # Check if the request was successful
-        logger.info(f"Token exchange response status: {response.status_code}")
-        
-        if response.status_code != 200:
-            # Log the error response for debugging
-            try:
-                error_json = response.json()
-                logger.error(f"Token exchange failed with status {response.status_code}: {error_json}")
-                error_detail = error_json
-            except Exception as json_err:
-                logger.error(f"Failed to parse error response as JSON: {str(json_err)}")
-                logger.error(f"Raw response content: {response.content[:500]}")  # Limit log size
-                error_detail = {"error": "Unknown error", "raw_content_snippet": str(response.content[:100])}
-            
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Token exchange failed: {error_detail}"
-            )
-            
-        # Return the token response
-        token_data = response.json()
-        
-        # Validate the token response
-        if "refresh_token" not in token_data:
-            logger.error(f"Google returned success but no refresh token found in response: {token_data.keys()}")
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Google OAuth server returned success but no refresh token was included"
-            )
-        
-        # Calculate token length for logging
-        refresh_token_length = len(token_data.get("refresh_token", ""))
-        access_token_length = len(token_data.get("access_token", ""))
-        
-        logger.info(f"Successfully exchanged authorization code for Google Drive tokens. "
-                   f"Refresh token length: {refresh_token_length}, "
-                   f"Access token length: {access_token_length}")
-        
-        # Return just what's needed by the frontend
-        return {
-            "refresh_token": token_data["refresh_token"],
-            "access_token": token_data["access_token"],
-            "expires_in": token_data.get("expires_in", 3600)
-        }
-        
-    except HTTPException:
-        # Re-raise HTTP exceptions as they already have appropriate status codes
-        raise
-    except Exception as e:
-        logger.exception(f"Unexpected error during Google Drive token exchange: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to exchange token: {str(e)}"
-        )
+    # Prepare the token request
+    token_url = "https://oauth2.googleapis.com/token"
+    
+    payload = {
+        'client_id': client_id,
+        'client_secret': client_secret,
+        'code': code,
+        'redirect_uri': redirect_uri,
+        'grant_type': 'authorization_code'
+    }
+    
+    # Use shared OAuth helper (handles secure logging and error handling)
+    token_data = exchange_oauth_token(
+        provider_name="Google Drive",
+        token_url=token_url,
+        payload=payload
+    )
+    
+    # Return just what's needed by the frontend
+    return {
+        "refresh_token": token_data["refresh_token"],
+        "access_token": token_data["access_token"],
+        "expires_in": token_data.get("expires_in", 3600)
+    }
 
 @router.post("/google-drive/update-settings")
 @require_login
