@@ -10,9 +10,38 @@ class TestHealthEndpoints:
     """Tests for health check and status endpoints."""
     
     def test_root_endpoint(self, client: TestClient):
-        """Test that root endpoint redirects to UI."""
+        """Test that root endpoint redirects to UI or setup wizard."""
         response = client.get("/", follow_redirects=False)
-        assert response.status_code in [200, 307, 308]  # OK or redirect
+        # Accept 200 (OK), 303 (setup wizard redirect), 307/308 (other redirects)
+        assert response.status_code in [200, 303, 307, 308]
+    
+    def test_root_redirects_to_setup_wizard_when_setup_required(self, client: TestClient):
+        """Test that GET / redirects to setup wizard when setup is required."""
+        # With test env vars (OPENAI_API_KEY=test-key, AZURE_AI_KEY=test-key),
+        # is_setup_required() returns True, so we should get a redirect to /setup
+        response = client.get("/", follow_redirects=False)
+        
+        # Should return 303 See Other (setup wizard redirect)
+        assert response.status_code == 303
+        
+        # Location header should point to setup wizard
+        assert "Location" in response.headers
+        assert response.headers["Location"] == "/setup?step=1"
+    
+    def test_root_returns_200_when_setup_complete(self, client: TestClient):
+        """Test that GET /?setup=complete bypasses the setup wizard check."""
+        # The ?setup=complete query param should bypass the wizard check
+        response = client.get("/?setup=complete", follow_redirects=False)
+        
+        # Should return 200 OK (renders the index page)
+        assert response.status_code == 200
+    
+    def test_setup_wizard_page_accessible(self, client: TestClient):
+        """Test that GET /setup?step=1 returns 200."""
+        response = client.get("/setup?step=1")
+        
+        # Setup wizard page should be accessible
+        assert response.status_code == 200
     
     def test_docs_endpoint(self, client: TestClient):
         """Test that API documentation is accessible."""
