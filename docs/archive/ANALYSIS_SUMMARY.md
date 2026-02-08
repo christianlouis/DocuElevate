@@ -101,7 +101,7 @@ tests/
 - ✅ Added Bandit security scanning
 - ✅ Improved linting configuration (line length: 120)
 
-**New codeql.yaml:**
+**New codeql.yml:**
 - ✅ Security scanning for Python and JavaScript
 - ✅ Scheduled weekly scans
 - ✅ Runs on PRs and main branch pushes

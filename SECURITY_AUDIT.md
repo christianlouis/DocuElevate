@@ -238,7 +238,6 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
 2. **Penetration testing** - Professional security assessment
 3. **Bug bounty program** - Community security contributions
 4. **API key rotation** - Automated credential rotation
-5. **Consolidate CodeQL workflows** - Two workflows (codeql.yaml and codeql.yml) - consider keeping only one
 
 ## Security Contact
 
