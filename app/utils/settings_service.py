@@ -48,7 +48,7 @@ SETTING_METADATA = {
         "description": "External hostname for the application (e.g., docuelevate.example.com)",
         "type": "string",
         "sensitive": False,
-        "required": False,
+        "required": True,  # Required for OAuth redirects and external URLs
         "restart_required": True,
     },
     "debug": {
@@ -82,7 +82,7 @@ SETTING_METADATA = {
         "description": "Secret key for session encryption (min 32 characters)",
         "type": "string",
         "sensitive": True,
-        "required": False,
+        "required": True,  # Required when auth_enabled=True (validated in config.py)
         "restart_required": True,
     },
     "admin_username": {

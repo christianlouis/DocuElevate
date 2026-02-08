@@ -18,15 +18,21 @@ router = APIRouter()
 
 
 def require_admin_access(func):
-    """Decorator to require admin access for a route"""
+    """
+    Decorator to require admin access for a route.
+    
+    This decorator checks if the user in the session has admin privileges.
+    If not, redirects to the home page. Works with both sync and async functions,
+    though FastAPI route handlers should always be async.
+    """
     @wraps(func)
     async def wrapper(request: Request, *args, **kwargs):
         user = request.session.get("user")
         if not user or not user.get("is_admin"):
-            logger.warning(f"Non-admin user attempted to access settings page")
+            logger.warning(f"Non-admin user attempted to access admin-only route")
             return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
         
-        # Check if the wrapped function is a coroutine function
+        # FastAPI route handlers are async, but we support sync for flexibility
         if inspect.iscoroutinefunction(func):
             return await func(request, *args, **kwargs)
         else:
