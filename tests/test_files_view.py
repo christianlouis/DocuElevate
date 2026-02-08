@@ -68,3 +68,25 @@ class TestFilesView:
         # The key test: ensure the min/max functions work in the template
         # (they're used for pagination on lines 397 and 406 of files.html)
         _assert_no_template_errors(content)
+    
+    def test_files_view_includes_drag_drop_elements(self, client: TestClient, db_session):
+        """Test that the /files view includes drag-and-drop upload elements."""
+        # Access the /files view
+        response = client.get("/files")
+        assert response.status_code == 200
+        
+        content = response.text
+        
+        # Check that drag-and-drop elements are present
+        assert "dropOverlay" in content, "Drop overlay element should be present"
+        assert "uploadModal" in content, "Upload modal element should be present"
+        assert "drop-overlay" in content, "Drop overlay CSS class should be present"
+        assert "upload-modal" in content, "Upload modal CSS class should be present"
+        
+        # Check that the upload.js script is included
+        assert "/static/js/upload.js" in content, "upload.js script should be included"
+        
+        # Check for drag-and-drop event handlers
+        assert "dragenter" in content or "drag" in content, "Drag event handlers should be present"
+        assert "Drop files anywhere to upload" in content, "Drop message should be present"
+
