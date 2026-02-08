@@ -200,13 +200,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Historical Release Links
 
-**Note**: Tags v0.3.1, v0.3.2, v0.3.3, and v0.5.0 do not exist as GitHub Releases. The features described in those versions were included in the codebase but not formally released until later versions. Going forward (v0.6.0+), all releases will have corresponding GitHub Releases and tags.
+**Note**: Tags v0.3.1, v0.3.2, v0.3.3, and v0.5.0 do not exist as GitHub Releases. The features described in those versions were included in the codebase but not formally released. The latest actual release is 0.4.3. Going forward (v0.6.0+), all releases will have corresponding GitHub Releases and tags created automatically by semantic-release.
 
 [Unreleased]: https://github.com/christianlouis/DocuElevate/compare/0.4.3...HEAD
-[0.5.0]: https://github.com/christianlouis/DocuElevate/compare/0.4.3...HEAD
-[0.3.3]: https://github.com/christianlouis/DocuElevate/compare/0.4.3...HEAD
-[0.3.2]: https://github.com/christianlouis/DocuElevate/compare/0.4...0.4.3
-[0.3.1]: https://github.com/christianlouis/DocuElevate/compare/0.3...0.4
 [0.3.0]: https://github.com/christianlouis/DocuElevate/compare/0.2...0.3
 [0.2.0]: https://github.com/christianlouis/DocuElevate/compare/0.1...0.2
 [0.1.0]: https://github.com/christianlouis/DocuElevate/releases/tag/0.1

@@ -34,7 +34,6 @@ version = {file = "VERSION"}
 
 [tool.semantic_release]
 version_toml = []
-version_variables = ["VERSION:__version__"]
 version_source = "tag"
 commit_version_number = true
 tag_format = "v{version}"
