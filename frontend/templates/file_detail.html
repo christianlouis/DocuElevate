@@ -863,11 +863,23 @@
       <div>
         <h4 style="font-weight: 600; color: #2d3748; margin-bottom: 1rem;">Original File</h4>
         <div style="border: 2px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; background-color: #f7fafc;">
-          <embed src="/api/files/{{ file.id }}/preview?version=original" type="application/pdf" width="100%" height="600px" style="border: none;">
+          {% if file.mime_type and file.mime_type.startswith('image/') %}
+          <!-- Image preview -->
+          <img src="/api/files/{{ file.id }}/preview?version=original" alt="{{ file.original_filename }}" style="width: 100%; height: auto; display: block;">
+          {% elif file.mime_type and file.mime_type.startswith('text/') %}
+          <!-- Text file preview -->
+          <iframe src="/api/files/{{ file.id }}/preview?version=original" style="width: 100%; height: 600px; border: none;"></iframe>
+          {% else %}
+          <!-- PDF and other documents -->
+          <iframe src="/api/files/{{ file.id }}/preview?version=original" type="application/pdf" style="width: 100%; height: 600px; border: none;"></iframe>
+          {% endif %}
         </div>
-        <div style="margin-top: 0.5rem; text-align: center;">
+        <div style="margin-top: 0.5rem; text-align: center; display: flex; gap: 1rem; justify-content: center;">
           <a href="/api/files/{{ file.id }}/preview?version=original" target="_blank" style="color: #3182ce; text-decoration: none; font-size: 0.875rem;">
             <i class="fas fa-external-link-alt"></i> Open in new tab
+          </a>
+          <a href="/api/files/{{ file.id }}/preview?version=original" download="{{ file.original_filename }}" style="color: #3182ce; text-decoration: none; font-size: 0.875rem;">
+            <i class="fas fa-download"></i> Download
           </a>
         </div>
       </div>
@@ -877,11 +889,15 @@
       <div>
         <h4 style="font-weight: 600; color: #2d3748; margin-bottom: 1rem;">Processed File</h4>
         <div style="border: 2px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; background-color: #f7fafc;">
-          <embed src="/api/files/{{ file.id }}/preview?version=processed" type="application/pdf" width="100%" height="600px" style="border: none;">
+          <!-- Processed files are typically PDFs -->
+          <iframe src="/api/files/{{ file.id }}/preview?version=processed" type="application/pdf" style="width: 100%; height: 600px; border: none;"></iframe>
         </div>
-        <div style="margin-top: 0.5rem; text-align: center;">
+        <div style="margin-top: 0.5rem; text-align: center; display: flex; gap: 1rem; justify-content: center;">
           <a href="/api/files/{{ file.id }}/preview?version=processed" target="_blank" style="color: #3182ce; text-decoration: none; font-size: 0.875rem;">
             <i class="fas fa-external-link-alt"></i> Open in new tab
+          </a>
+          <a href="/api/files/{{ file.id }}/preview?version=processed" download="{{ file.original_filename }}" style="color: #3182ce; text-decoration: none; font-size: 0.875rem;">
+            <i class="fas fa-download"></i> Download
           </a>
         </div>
       </div>

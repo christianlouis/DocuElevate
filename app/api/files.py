@@ -568,7 +568,7 @@ def get_file_preview(
         return FileResponse(
             path=file_path,
             media_type=file_record.mime_type or "application/pdf",
-            filename=file_record.original_filename,
+            headers={"Content-Disposition": f'inline; filename="{file_record.original_filename}"'},
         )
 
     except HTTPException:
