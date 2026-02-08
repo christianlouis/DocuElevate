@@ -13,6 +13,81 @@ DocuElevate is an intelligent document processing system that automates handling
 - **Infrastructure**: Docker, Docker Compose, Alembic (migrations)
 - **Testing**: Pytest, pytest-asyncio, httpx
 
+## Supported Runtimes
+
+- **Python**: 3.11+ (3.11 and 3.12 specified in pyproject.toml)
+- **Docker**: Production images use `python:3.14.1` / `python:3.14.1-slim`
+- **Redis**: Alpine-based (`redis:alpine`)
+- **Gotenberg**: `gotenberg/gotenberg:latest` for PDF conversion
+
+## Build Commands
+
+```bash
+# Install production dependencies
+pip install -r requirements.txt
+
+# Install development dependencies (includes linters, test tools)
+pip install -r requirements-dev.txt
+
+# Run the FastAPI development server
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# Run the Celery worker (requires Redis)
+celery -A app.celery_worker worker -B --loglevel=info -Q document_processor,default,celery
+
+# Docker build and run
+docker compose up -d
+
+# Database migrations
+alembic upgrade head                              # Apply all migrations
+alembic revision --autogenerate -m "description"  # Create new migration
+```
+
+## Test Commands
+
+```bash
+# Run all tests with coverage (default via pyproject.toml addopts)
+pytest
+
+# Run tests by marker
+pytest -m unit
+pytest -m integration
+pytest -m "not requires_external"
+
+# Run a specific test file or test
+pytest tests/test_api.py -v
+pytest tests/test_api.py::test_function_name -v
+
+# Coverage report
+pytest --cov=app --cov-report=term-missing
+pytest --cov=app --cov-report=html
+```
+
+## Lint / Format Commands
+
+```bash
+# Format code with Black (line length 120)
+black app/ tests/
+
+# Sort imports with isort (Black-compatible profile)
+isort app/ tests/
+
+# Lint with flake8 (max line length 120, ignores E203/W503)
+flake8 app/ --max-line-length=120
+
+# Type checking with mypy
+mypy app/
+
+# Security lint with bandit (excludes tests)
+bandit -r app/
+
+# Check for dependency vulnerabilities
+safety check
+
+# Run all pre-commit hooks at once
+pre-commit run --all-files
+```
+
 ## Core Principles
 
 ### Code Quality
@@ -96,6 +171,47 @@ DocuElevate is an intelligent document processing system that automates handling
 - Log errors with context using Python's `logging` module
 - Return user-friendly error messages in API responses
 - Include error details in development, sanitize in production
+- In API endpoints, raise `HTTPException` with appropriate status codes (400, 401, 403, 404, 500)
+- In Celery tasks, use `self.retry(exc=e, countdown=60)` for transient errors; log and return error dict for permanent errors
+- Never use bare `except:` — always catch specific exception types
+- Wrap database operations in `try/except` with `db.rollback()` in the except block
+
+### Logging Conventions
+- Use Python's built-in `logging` module: `import logging; logger = logging.getLogger(__name__)`
+- **Log levels**:
+  - `logger.debug()` — detailed diagnostic information
+  - `logger.info()` — general operational events (document processed, task started)
+  - `logger.warning()` — recoverable issues (retrying, fallback used)
+  - `logger.error()` — errors that need attention (failed operations)
+  - `logger.critical()` — system-level failures requiring immediate action
+- **Always include context** in log messages: `logger.info(f"Processing document: {file_id}, user: {user_id}")`
+- **Never log sensitive data**: passwords, tokens, API keys, personal information
+- Use f-strings in log messages (consistent with project style)
+
+### Architectural Boundaries
+- **`app/api/`** — REST API endpoints only; organize by feature
+- **`app/tasks/`** — Celery background tasks only; keep idempotent
+- **`app/views/`** — UI routes serving Jinja2 templates
+- **`app/utils/`** — Shared utility functions and helpers
+- **`app/routes/`** — **Deprecated**; being migrated to `app/api/` — do not add new code here
+- **`app/models.py`** — All SQLAlchemy models (single file)
+- **`app/config.py`** — All configuration via Pydantic Settings (single file)
+- **`app/database.py`** — Database engine and session setup (single file)
+- **`app/auth.py`** — Authentication logic (single file)
+- **`frontend/templates/`** — Jinja2 templates; do not mix backend logic
+- **`frontend/static/`** — CSS, JS, images; keep JavaScript minimal
+- **`tests/`** — Test files mirroring `app/` structure
+- **`migrations/`** — Alembic migration scripts; always auto-generate with `alembic revision --autogenerate`
+
+### Don't Change Rules
+These files and directories are managed by automation or are critical infrastructure — **do not manually edit**:
+- **`VERSION`** — Managed by `python-semantic-release`; updated automatically on merge to main
+- **`CHANGELOG.md`** — Auto-generated from conventional commit messages by semantic-release
+- **`migrations/`** — Do not manually edit existing migration files; only create new ones via `alembic revision --autogenerate`
+- **Git tags and GitHub Releases** — Created automatically by semantic-release; never create manually
+- **`.pre-commit-config.yaml`** — Only change if adding/updating linting tools; do not remove existing hooks
+- **`pyproject.toml` `[tool.semantic_release]`** — Release configuration; do not modify without explicit approval
+- **`docker-compose.yaml` service names** — External systems depend on `api`, `worker`, `redis`, `gotenberg` names
 
 ### Dependencies
 - Add new dependencies to `requirements.txt` (production) or `requirements-dev.txt` (development)
