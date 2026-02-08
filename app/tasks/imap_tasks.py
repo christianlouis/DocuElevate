@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-import os
-import json
 import email
 import imaplib
+import json
 import logging
-import redis
+import os
 import re
 from datetime import datetime, timedelta, timezone
+
+import redis
 from celery import shared_task
+
 from app.config import settings
-from app.tasks.process_document import process_document  # Updated import
 from app.tasks.convert_to_pdf import convert_to_pdf  # new conversion task
+from app.tasks.process_document import process_document  # Updated import
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +20,7 @@ logger = logging.getLogger(__name__)
 redis_client = redis.StrictRedis.from_url(settings.redis_url, decode_responses=True)
 
 LOCK_KEY = "imap_lock"  # Unique key for locking
-LOCK_EXPIRE = 300       # Lock expires in 5 minutes
+LOCK_EXPIRE = 300  # Lock expires in 5 minutes
 
 # Local cache file for tracking processed emails
 CACHE_FILE = os.path.join(settings.workdir, "processed_mails.json")
@@ -141,20 +143,18 @@ def check_and_pull_mailbox(
     )
 
 
-def pull_inbox(mailbox_key, host, port, username, password, use_ssl,
-               delete_after_process):
+def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_after_process):
     """
     Connects to the IMAP inbox, fetches new unread emails from the last 3 days,
     and processes attachments while preserving the original unread status.
-    
+
     For Gmail:
       - Attempts to select the localized All Mail folder.
       - Runs an X-GM-RAW query: "in:anywhere in:unread newer_than:3d has:attachment".
-    
+
     For non-Gmail mailboxes, it falls back to selecting the INBOX with a SINCE/UNSEEN filter.
     """
-    logger.info("Connecting to %s at %s:%s (SSL=%s)",
-                mailbox_key, host, port, use_ssl)
+    logger.info("Connecting to %s at %s:%s (SSL=%s)", mailbox_key, host, port, use_ssl)
     processed_emails = load_processed_emails()
 
     try:
@@ -177,13 +177,11 @@ def pull_inbox(mailbox_key, host, port, username, password, use_ssl,
         else:
             # For non-Gmail, select INBOX and use SINCE/UNSEEN query.
             mail.select("INBOX")
-            since_date = (datetime.now(timezone.utc) - timedelta(days=3)
-                          ).strftime("%d-%b-%Y")
-            status, search_data = mail.search(None, f'(SINCE {since_date} UNSEEN)')
+            since_date = (datetime.now(timezone.utc) - timedelta(days=3)).strftime("%d-%b-%Y")
+            status, search_data = mail.search(None, f"(SINCE {since_date} UNSEEN)")
 
         if status != "OK":
-            logger.warning("Search failed on mailbox %s. Status=%s",
-                           mailbox_key, status)
+            logger.warning("Search failed on mailbox %s. Status=%s", mailbox_key, status)
             mail.close()
             mail.logout()
             return
@@ -194,8 +192,7 @@ def pull_inbox(mailbox_key, host, port, username, password, use_ssl,
         for num in msg_numbers:
             status, msg_data = mail.fetch(num, "(RFC822)")
             if status != "OK":
-                logger.warning("Failed to fetch message %s in %s. Status=%s",
-                               num, mailbox_key, status)
+                logger.warning("Failed to fetch message %s in %s. Status=%s", num, mailbox_key, status)
                 continue
 
             raw_email = msg_data[0][1]
@@ -213,8 +210,7 @@ def pull_inbox(mailbox_key, host, port, username, password, use_ssl,
             # For Gmail, check if the email already has the "Ingested" label.
             if is_gmail_host:
                 if email_already_has_label(mail, num, "Ingested"):
-                    logger.info("Skipping email %s in %s, already labeled 'Ingested'.",
-                                msg_id, mailbox_key)
+                    logger.info("Skipping email %s in %s, already labeled 'Ingested'.", msg_id, mailbox_key)
                     continue
 
             # Process attachments (and convert non-PDF files).
@@ -248,28 +244,28 @@ def pull_inbox(mailbox_key, host, port, username, password, use_ssl,
 def fetch_attachments_and_enqueue(email_message):
     """
     Extracts attachments from the email and processes only allowed file types.
-    
+
     Files are accepted if either:
     1. They have a MIME type from the ALLOWED_MIME_TYPES set, OR
     2. They have a '.pdf' file extension (regardless of MIME type)
-    
+
     Allowed file types include:
       - PDF: application/pdf or *.pdf extension
       - Microsoft Office files:
-          - Word: application/msword, 
+          - Word: application/msword,
             application/vnd.openxmlformats-officedocument.wordprocessingml.document
-          - Excel: application/vnd.ms-excel, 
+          - Excel: application/vnd.ms-excel,
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
-          - PowerPoint: application/vnd.ms-powerpoint, 
+          - PowerPoint: application/vnd.ms-powerpoint,
             application/vnd.openxmlformats-officedocument.presentationml.presentation
       - Other meaningful attachments:
           - Plain text: text/plain
           - CSV: text/csv
           - Rich Text Format: application/rtf, text/rtf
-    
+
     If the attachment is a PDF (by extension or MIME type), it is enqueued for upload;
     any other allowed file is enqueued for conversion to PDF.
-    
+
     Returns True if at least one allowed attachment was processed.
     """
     ALLOWED_MIME_TYPES = {
@@ -285,7 +281,7 @@ def fetch_attachments_and_enqueue(email_message):
         "application/rtf",
         "text/rtf",
     }
-    
+
     has_attachment = False
     for part in email_message.walk():
         if part.get_content_maintype() == "multipart":
@@ -296,13 +292,12 @@ def fetch_attachments_and_enqueue(email_message):
             continue
 
         # Check if it's a PDF file by extension, regardless of MIME type
-        is_pdf_by_extension = filename.lower().endswith('.pdf')
-        
+        is_pdf_by_extension = filename.lower().endswith(".pdf")
+
         mime_type = part.get_content_type()
         # Accept file if it has an allowed MIME type OR it's a PDF by extension
         if mime_type not in ALLOWED_MIME_TYPES and not is_pdf_by_extension:
-            logger.info("Skipping attachment %s with MIME type %s",
-                        filename, mime_type)
+            logger.info("Skipping attachment %s with MIME type %s", filename, mime_type)
             continue
 
         file_path = os.path.join(settings.workdir, filename)
@@ -331,7 +326,7 @@ def email_already_has_label(mail, msg_id, label="Ingested"):
         # Convert msg_id to bytes if it's an integer
         if isinstance(msg_id, int):
             msg_id = str(msg_id).encode()
-            
+
         label_status, label_data = mail.fetch(msg_id, "(X-GM-LABELS)")
         if label_status == "OK" and label_data and len(label_data) > 0:
             raw_labels = label_data[0][1].decode("utf-8", errors="ignore")
@@ -401,7 +396,7 @@ def find_all_mail_xlist(mail):
     Returns the folder name if found, otherwise None.
     """
     tag = mail._new_tag().decode("ascii")
-    command_str = f"{tag} XLIST \"\" \"*\""
+    command_str = f'{tag} XLIST "" "*"'
     mail.send((command_str + "\r\n").encode("utf-8"))
 
     all_mail_folder = None

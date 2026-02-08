@@ -1,5 +1,6 @@
 import hashlib
 
+
 def hash_file(filepath, chunk_size=65536):
     """
     Returns the SHA-256 hash of the file at 'filepath'.

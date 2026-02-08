@@ -1,26 +1,28 @@
 #!/usr/bin/env python3
 
-import os
 # Security Warning: FTP is an insecure protocol. FTPS (FTP_TLS) is strongly recommended.
 # This module attempts to use FTPS by default and falls back to plaintext FTP only if configured.
 import ftplib  # nosec B402 - FTP usage is intentional for legacy server support
+import logging
+import os
+
+from app.celery_app import celery
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
-from app.celery_app import celery
 from app.utils import log_task_progress
-import logging
 
 logger = logging.getLogger(__name__)
+
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
 def upload_to_ftp(self, file_path: str, file_id: int = None):
     """
     Uploads a file to an FTP server in the configured folder.
-    
+
     Security Note: This function prefers FTPS (FTP with TLS) for secure connections.
     Plaintext FTP is only used if FTPS fails and ftp_allow_plaintext=True (default).
     For security-critical environments, set ftp_allow_plaintext=False and ftp_use_tls=True.
-    
+
     Args:
         file_path: Path to the file to upload
         file_id: Optional file ID to associate with logs
@@ -49,24 +51,18 @@ def upload_to_ftp(self, file_path: str, file_id: int = None):
 
     try:
         # First attempt FTPS (FTP with TLS)
-        use_tls = getattr(settings, 'ftp_use_tls', True)  # Default to try TLS
-        allow_plaintext = getattr(settings, 'ftp_allow_plaintext', True)  # Default to allow plaintext fallback
-        
+        use_tls = getattr(settings, "ftp_use_tls", True)  # Default to try TLS
+        allow_plaintext = getattr(settings, "ftp_allow_plaintext", True)  # Default to allow plaintext fallback
+
         if use_tls:
             try:
                 logger.info(f"Attempting FTPS connection to {settings.ftp_host}")
                 ftp = ftplib.FTP_TLS()
-                ftp.connect(
-                    host=settings.ftp_host,
-                    port=settings.ftp_port or 21
-                )
-                
+                ftp.connect(host=settings.ftp_host, port=settings.ftp_port or 21)
+
                 # Login with credentials
-                ftp.login(
-                    user=settings.ftp_username, 
-                    passwd=settings.ftp_password
-                )
-                
+                ftp.login(user=settings.ftp_username, passwd=settings.ftp_password)
+
                 # Enable data protection - encrypt the data channel
                 ftp.prot_p()
                 logger.info("Successfully established FTPS connection with TLS")
@@ -79,53 +75,41 @@ def upload_to_ftp(self, file_path: str, file_id: int = None):
                     logger.warning(f"FTPS connection failed, falling back to regular FTP: {str(e)}")
                     # Fall back to regular FTP - only if explicitly allowed by configuration
                     ftp = ftplib.FTP()  # nosec B321 - Fallback to FTP intentional when configured
-                    ftp.connect(
-                        host=settings.ftp_host,
-                        port=settings.ftp_port or 21
-                    )
-                    
+                    ftp.connect(host=settings.ftp_host, port=settings.ftp_port or 21)
+
                     # Login with credentials
-                    ftp.login(
-                        user=settings.ftp_username, 
-                        passwd=settings.ftp_password
-                    )
+                    ftp.login(user=settings.ftp_username, passwd=settings.ftp_password)
         else:
             # Check if plaintext is allowed when TLS is explicitly disabled
             if not allow_plaintext:
                 error_msg = "Plaintext FTP is forbidden by configuration"
                 logger.error(error_msg)
                 raise Exception(error_msg)
-            
+
             # Directly use regular FTP if TLS is explicitly disabled
             logger.warning("Using plaintext FTP - connection is NOT encrypted!")
             ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when explicitly configured
-            ftp.connect(
-                host=settings.ftp_host,
-                port=settings.ftp_port or 21
-            )
-            
+            ftp.connect(host=settings.ftp_host, port=settings.ftp_port or 21)
+
             # Login with credentials
-            ftp.login(
-                user=settings.ftp_username, 
-                passwd=settings.ftp_password
-            )
-        
+            ftp.login(user=settings.ftp_username, passwd=settings.ftp_password)
+
         # Change to target directory if specified
         if settings.ftp_folder:
             try:
                 # Try to navigate to the directory, create if it doesn't exist
                 ftp_folder = settings.ftp_folder
                 # Remove leading slash if present
-                if ftp_folder.startswith('/'):
+                if ftp_folder.startswith("/"):
                     ftp_folder = ftp_folder[1:]
-                
+
                 # Try to change to the directory
                 try:
                     ftp.cwd(ftp_folder)
                 except ftplib.error_perm:
                     # Create directory structure if it doesn't exist
-                    folders = ftp_folder.split('/')
-                    current_dir = ''
+                    folders = ftp_folder.split("/")
+                    current_dir = ""
                     for folder in folders:
                         if folder:
                             current_dir += f"/{folder}"
@@ -138,24 +122,24 @@ def upload_to_ftp(self, file_path: str, file_id: int = None):
                 error_msg = f"Failed to change/create directory on FTP server: {str(e)}"
                 logger.error(error_msg)
                 raise Exception(error_msg)
-        
+
         # Upload the file
-        with open(file_path, 'rb') as file_data:
-            ftp.storbinary(f'STOR {filename}', file_data)
-        
+        with open(file_path, "rb") as file_data:
+            ftp.storbinary(f"STOR {filename}", file_data)
+
         # Close FTP connection
         ftp.quit()
-        
+
         logger.info(f"[{task_id}] Successfully uploaded {filename} to FTP server at {settings.ftp_host}")
         log_task_progress(task_id, "upload_to_ftp", "success", f"Uploaded to FTP: {filename}", file_id=file_id)
         return {
-            "status": "Completed", 
-            "file": file_path, 
+            "status": "Completed",
+            "file": file_path,
             "ftp_host": settings.ftp_host,
             "ftp_path": f"{settings.ftp_folder}/{filename}" if settings.ftp_folder else filename,
-            "used_tls": isinstance(ftp, ftplib.FTP_TLS)
+            "used_tls": isinstance(ftp, ftplib.FTP_TLS),
         }
-    
+
     except Exception as e:
         error_msg = f"Failed to upload {filename} to FTP server: {str(e)}"
         logger.error(f"[{task_id}] {error_msg}")

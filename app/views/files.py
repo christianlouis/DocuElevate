@@ -2,13 +2,14 @@
 File management views for displaying and managing files.
 """
 
-from fastapi import Request, Depends, Query
-from sqlalchemy.orm import Session
 from typing import Optional
 
-from app.views.base import APIRouter, templates, require_login, get_db, logger
-from app.utils.file_status import get_files_processing_status
+from fastapi import Depends, Query, Request
+from sqlalchemy.orm import Session
+
 from app.config import settings
+from app.utils.file_status import get_files_processing_status
+from app.views.base import APIRouter, get_db, logger, require_login, templates
 
 router = APIRouter()
 
@@ -31,8 +32,9 @@ def files_page(
     """
     try:
         # Import the model here to avoid circular imports
+        from sqlalchemy import asc, desc, or_
+
         from app.models import FileRecord, ProcessingLog
-        from sqlalchemy import desc, asc, or_
 
         # Start with base query
         query = db.query(FileRecord)
@@ -159,8 +161,9 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
     Return the file detail page showing processing history and file information
     """
     try:
-        from app.models import FileRecord, ProcessingLog
         import os
+
+        from app.models import FileRecord, ProcessingLog
 
         # Find the file record
         file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()

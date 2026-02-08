@@ -1,9 +1,9 @@
 # app/models.py
-#!/usr/bin/env python3
 
-from sqlalchemy import Column, String, Integer, DateTime, func, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, func
+
 from app.database import Base
+
 
 class DocumentMetadata(Base):
     __tablename__ = "documents"
@@ -15,11 +15,12 @@ class DocumentMetadata(Base):
     tags = Column(String)
     summary = Column(String)
 
+
 class FileRecord(Base):
     __tablename__ = "files"
 
     id = Column(Integer, primary_key=True, index=True)
-    
+
     # Hash of the file content (e.g. SHA-256)
     filehash = Column(String, unique=True, index=True, nullable=False)
 
@@ -38,20 +39,23 @@ class FileRecord(Base):
     # Timestamp when we inserted this record
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+
 class ProcessingLog(Base):
     __tablename__ = "processing_logs"
     id = Column(Integer, primary_key=True, index=True)
     file_id = Column(Integer, ForeignKey("files.id"), nullable=True)  # Optional file association
     task_id = Column(String, index=True)  # Celery task ID
-    step_name = Column(String)           # e.g., "OCR", "convert_to_pdf", "upload_s3"
-    status = Column(String)              # "pending", "in_progress", "success", "failure"
+    step_name = Column(String)  # e.g., "OCR", "convert_to_pdf", "upload_s3"
+    status = Column(String)  # "pending", "in_progress", "success", "failure"
     message = Column(String, nullable=True)  # Error text or success note
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
 
+
 class ApplicationSettings(Base):
     """Store application settings in database with precedence over environment variables"""
+
     __tablename__ = "application_settings"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     key = Column(String, unique=True, index=True, nullable=False)  # Setting key (e.g., 'database_url')
     value = Column(String, nullable=True)  # Setting value (stored as string, converted as needed)

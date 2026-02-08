@@ -1,6 +1,7 @@
 from app.database import SessionLocal
 from app.models import ProcessingLog
 
+
 def log_task_progress(task_id, step_name, status, message=None, file_id=None):
     """
     Logs the progress of a Celery task to the database.

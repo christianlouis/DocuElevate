@@ -1,13 +1,12 @@
-import os
-import inspect
 import hashlib
+import inspect
+import pathlib
 from functools import wraps
 
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Request, status
-from starlette.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
-import pathlib
+from starlette.responses import RedirectResponse
 
 from app.config import settings
 
@@ -63,35 +62,33 @@ def get_gravatar_url(email):
     """Generate a Gravatar URL for the given email"""
     email = email.lower().strip()
     # MD5 is used here for Gravatar's URL generation (not for security), so usedforsecurity=False
-    email_hash = hashlib.md5(email.encode('utf-8'), usedforsecurity=False).hexdigest()
+    email_hash = hashlib.md5(email.encode("utf-8"), usedforsecurity=False).hexdigest()
     return f"https://www.gravatar.com/avatar/{email_hash}?d=identicon"
 
 
 if AUTH_ENABLED:
+
     @router.get("/login")
     async def login(request: Request):
         """Show login page with appropriate authentication options"""
         return templates.TemplateResponse(
-            "login.html", 
+            "login.html",
             {
-                "request": request, 
+                "request": request,
                 "error": request.query_params.get("error"),
                 "message": request.query_params.get("message"),
                 "show_oauth": OAUTH_CONFIGURED,
                 "oauth_provider_name": OAUTH_PROVIDER_NAME,
-                "app_version": settings.version  # Changed from app_version to version
-            }
+                "app_version": settings.version,  # Changed from app_version to version
+            },
         )
 
     @router.get("/oauth-login")
     async def oauth_login(request: Request):
         """Handle OAuth login flow"""
         if not OAUTH_CONFIGURED:
-            return RedirectResponse(
-                url="/login?error=OAuth+not+configured",
-                status_code=status.HTTP_302_FOUND
-            )
-        
+            return RedirectResponse(url="/login?error=OAuth+not+configured", status_code=status.HTTP_302_FOUND)
+
         redirect_uri = request.url_for("oauth_callback")
         return await oauth.authentik.authorize_redirect(request, redirect_uri)
 
@@ -103,17 +100,16 @@ if AUTH_ENABLED:
             userinfo = token.get("userinfo")
             if not userinfo:
                 return RedirectResponse(
-                    url="/login?error=Failed+to+retrieve+user+information",
-                    status_code=status.HTTP_302_FOUND
+                    url="/login?error=Failed+to+retrieve+user+information", status_code=status.HTTP_302_FOUND
                 )
-                
+
             # Store user info in session
             user_data = dict(userinfo)
-            
+
             # Add Gravatar picture if no picture is provided
             if not user_data.get("picture") and user_data.get("email"):
                 user_data["picture"] = get_gravatar_url(user_data["email"])
-            
+
             # Check if user is admin based on OAuth groups or specific email
             # You can customize this logic based on your OAuth provider's attributes
             # For example, check if user has an "admin" group or specific email domain
@@ -122,23 +118,22 @@ if AUTH_ENABLED:
                 # Check if user is in admin group
                 groups = user_data.get("groups", [])
                 is_admin = "admin" in groups or "administrators" in groups
-            
+
             # Set is_admin flag (defaults to False for OAuth users unless they're in admin group)
             user_data["is_admin"] = is_admin
-            
+
             request.session["user"] = user_data
-            
+
             # Log the successful authentication
             print(f"User authenticated via OAuth: {user_data.get('email', 'No email')} (admin: {is_admin})")
-            
+
             # Redirect to original destination or default
             redirect_url = request.session.pop("redirect_after_login", "/upload")
             return RedirectResponse(url=redirect_url)
         except Exception as e:
             print(f"OAuth authentication error: {str(e)}")
             return RedirectResponse(
-                url=f"/login?error=Authentication+failed:+{str(e)}",
-                status_code=status.HTTP_302_FOUND
+                url=f"/login?error=Authentication+failed:+{str(e)}", status_code=status.HTTP_302_FOUND
             )
 
     @router.post("/auth")
@@ -147,9 +142,8 @@ if AUTH_ENABLED:
         form_data = await request.form()
         username = form_data.get("username")
         password = form_data.get("password")
-        
-        if (username == settings.admin_username and 
-            password == settings.admin_password):
+
+        if username == settings.admin_username and password == settings.admin_password:
             # Create user session
             request.session["user"] = {
                 "id": "admin",
@@ -157,25 +151,19 @@ if AUTH_ENABLED:
                 "email": f"{username}@local.docuelevate",
                 "preferred_username": username,
                 "picture": "/static/images/default-avatar.svg",
-                "is_admin": True
+                "is_admin": True,
             }
             # Redirect to original destination or default
             redirect_url = request.session.pop("redirect_after_login", "/upload")
             return RedirectResponse(url=redirect_url, status_code=302)
         else:
-            return RedirectResponse(
-                url="/login?error=Invalid+username+or+password", 
-                status_code=302
-            )
+            return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
 
     @router.get("/logout")
     async def logout(request: Request):
         """Handle user logout"""
         request.session.pop("user", None)
-        return RedirectResponse(
-            url="/login?message=You+have+been+logged+out+successfully", 
-            status_code=302
-        )
+        return RedirectResponse(url="/login?message=You+have+been+logged+out+successfully", status_code=302)
 
 
 @router.get("/api/auth/whoami")

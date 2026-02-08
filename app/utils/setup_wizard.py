@@ -5,7 +5,8 @@ Detects if the system needs initial setup and provides required settings list.
 """
 
 import logging
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 def get_required_settings() -> List[Dict[str, Any]]:
     """
     Get list of settings that are absolutely required for the system to operate.
-    
+
     Returns:
         List of required setting definitions with metadata
     """
@@ -27,7 +28,7 @@ def get_required_settings() -> List[Dict[str, Any]]:
             "sensitive": False,
             "default": "sqlite:///./app/database.db",
             "wizard_step": 1,
-            "wizard_category": "Core Infrastructure"
+            "wizard_category": "Core Infrastructure",
         },
         {
             "key": "redis_url",
@@ -37,7 +38,7 @@ def get_required_settings() -> List[Dict[str, Any]]:
             "sensitive": False,
             "default": "redis://localhost:6379/0",
             "wizard_step": 1,
-            "wizard_category": "Core Infrastructure"
+            "wizard_category": "Core Infrastructure",
         },
         {
             "key": "workdir",
@@ -47,7 +48,7 @@ def get_required_settings() -> List[Dict[str, Any]]:
             "sensitive": False,
             "default": "/workdir",
             "wizard_step": 1,
-            "wizard_category": "Core Infrastructure"
+            "wizard_category": "Core Infrastructure",
         },
         {
             "key": "gotenberg_url",
@@ -57,7 +58,7 @@ def get_required_settings() -> List[Dict[str, Any]]:
             "sensitive": False,
             "default": "http://gotenberg:3000",
             "wizard_step": 1,
-            "wizard_category": "Core Infrastructure"
+            "wizard_category": "Core Infrastructure",
         },
         {
             "key": "session_secret",
@@ -67,7 +68,7 @@ def get_required_settings() -> List[Dict[str, Any]]:
             "sensitive": True,
             "default": None,  # Should be generated
             "wizard_step": 2,
-            "wizard_category": "Security"
+            "wizard_category": "Security",
         },
         {
             "key": "admin_username",
@@ -77,7 +78,7 @@ def get_required_settings() -> List[Dict[str, Any]]:
             "sensitive": False,
             "default": "admin",
             "wizard_step": 2,
-            "wizard_category": "Security"
+            "wizard_category": "Security",
         },
         {
             "key": "admin_password",
@@ -87,7 +88,7 @@ def get_required_settings() -> List[Dict[str, Any]]:
             "sensitive": True,
             "default": None,  # Must be set
             "wizard_step": 2,
-            "wizard_category": "Security"
+            "wizard_category": "Security",
         },
         {
             "key": "openai_api_key",
@@ -97,7 +98,7 @@ def get_required_settings() -> List[Dict[str, Any]]:
             "sensitive": True,
             "default": None,
             "wizard_step": 3,
-            "wizard_category": "AI Services"
+            "wizard_category": "AI Services",
         },
         {
             "key": "azure_ai_key",
@@ -107,7 +108,7 @@ def get_required_settings() -> List[Dict[str, Any]]:
             "sensitive": True,
             "default": None,
             "wizard_step": 3,
-            "wizard_category": "AI Services"
+            "wizard_category": "AI Services",
         },
         {
             "key": "azure_region",
@@ -117,7 +118,7 @@ def get_required_settings() -> List[Dict[str, Any]]:
             "sensitive": False,
             "default": "eastus",
             "wizard_step": 3,
-            "wizard_category": "AI Services"
+            "wizard_category": "AI Services",
         },
         {
             "key": "azure_endpoint",
@@ -127,7 +128,7 @@ def get_required_settings() -> List[Dict[str, Any]]:
             "sensitive": False,
             "default": None,
             "wizard_step": 3,
-            "wizard_category": "AI Services"
+            "wizard_category": "AI Services",
         },
     ]
 
@@ -135,9 +136,9 @@ def get_required_settings() -> List[Dict[str, Any]]:
 def is_setup_required() -> bool:
     """
     Check if the system requires initial setup.
-    
+
     Returns True if any critical required settings are missing or have placeholder values.
-    
+
     Returns:
         True if setup wizard should be shown, False otherwise
     """
@@ -149,16 +150,16 @@ def is_setup_required() -> bool:
             ("openai_api_key", [None, "", "<OPENAI_API_KEY>", "test-key"]),
             ("azure_ai_key", [None, "", "<AZURE_AI_KEY>", "test-key"]),
         ]
-        
+
         for setting_key, invalid_values in critical_settings:
             value = getattr(settings, setting_key, None)
             if value in invalid_values:
                 logger.warning(f"Setup required: {setting_key} has placeholder or missing value")
                 return True
-        
+
         # All critical settings are configured
         return False
-        
+
     except Exception as e:
         logger.error(f"Error checking if setup required: {e}")
         # If we can't check, assume setup is not required (fail open)
@@ -168,45 +169,46 @@ def is_setup_required() -> bool:
 def get_missing_required_settings() -> List[str]:
     """
     Get list of required settings that are missing or have placeholder values.
-    
+
     Returns:
         List of setting keys that need to be configured
     """
     missing = []
-    
+
     for required_setting in get_required_settings():
         key = required_setting["key"]
         value = getattr(settings, key, None)
-        
+
         # Check if value is missing or is a placeholder
         placeholder_values = [
-            None, "", 
+            None,
+            "",
             f"<{key.upper()}>",
             "test-key",
             "your_secure_password",
             "changeme",
-            "INSECURE_DEFAULT_FOR_DEVELOPMENT_ONLY_DO_NOT_USE_IN_PRODUCTION_MINIMUM_32_CHARS"
+            "INSECURE_DEFAULT_FOR_DEVELOPMENT_ONLY_DO_NOT_USE_IN_PRODUCTION_MINIMUM_32_CHARS",
         ]
-        
+
         if value in placeholder_values:
             missing.append(key)
-    
+
     return missing
 
 
 def get_wizard_steps() -> Dict[int, List[Dict[str, Any]]]:
     """
     Get setup wizard steps organized by step number.
-    
+
     Returns:
         Dictionary mapping step number to list of settings in that step
     """
     steps = {}
-    
+
     for setting in get_required_settings():
         step_num = setting.get("wizard_step", 1)
         if step_num not in steps:
             steps[step_num] = []
         steps[step_num].append(setting)
-    
+
     return steps

@@ -1,14 +1,17 @@
 """
 User-related API endpoints
 """
-from fastapi import APIRouter, Request, HTTPException
-from hashlib import md5
+
 import logging
+from hashlib import md5
+
+from fastapi import APIRouter, HTTPException, Request
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
 
 async def whoami_handler(request: Request):
     """
@@ -26,17 +29,19 @@ async def whoami_handler(request: Request):
     # MD5 is used here for Gravatar's URL generation (not for security), so usedforsecurity=False
     email_hash = md5(email.strip().lower().encode(), usedforsecurity=False).hexdigest()
     gravatar_url = f"https://www.gravatar.com/avatar/{email_hash}?d=identicon"
-    
+
     # Add the gravatar URL to the user object instead of creating a new response
     user_response = user.copy()  # Create a copy to avoid modifying the session
     user_response["picture"] = gravatar_url
-    
+
     return user_response
+
 
 # Register the same handler under two different paths
 @router.get("/whoami")
 async def whoami(request: Request):
     return await whoami_handler(request)
+
 
 @router.get("/auth/whoami")
 async def auth_whoami(request: Request):

@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
 
+import json
+import logging
 import os
 import shutil
 import tempfile
-import logging
+
 import PyPDF2  # Replace fitz with PyPDF2
-import json
-from app.config import settings
-from app.tasks.retry_config import BaseTaskWithRetry
-from app.tasks.finalize_document_storage import finalize_document_storage
 
 # Import the shared Celery instance
 from app.celery_app import celery
-from app.utils import log_task_progress
+from app.config import settings
 from app.database import SessionLocal
 from app.models import FileRecord
+from app.tasks.finalize_document_storage import finalize_document_storage
+from app.tasks.retry_config import BaseTaskWithRetry
+from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ logger = logging.getLogger(__name__)
 # used (see line 70: tempfile.NamedTemporaryFile)
 TMP_SUBDIR = "tmp"
 PROCESSED_SUBDIR = "processed"
+
 
 def unique_filepath(directory, base_filename, extension=".pdf"):
     """
@@ -41,6 +43,7 @@ def unique_filepath(directory, base_filename, extension=".pdf"):
             return candidate
         counter += 1
 
+
 def persist_metadata(metadata, final_pdf_path):
     """
     Saves the metadata dictionary to a JSON file with the same base name as the final PDF.
@@ -52,6 +55,7 @@ def persist_metadata(metadata, final_pdf_path):
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(metadata, f, ensure_ascii=False, indent=2)
     return json_path
+
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
 def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, metadata: dict, file_id: int = None):
@@ -70,15 +74,21 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
     """
     task_id = self.request.id
     logger.info(f"[{task_id}] Starting metadata embedding for: {local_file_path}")
-    log_task_progress(task_id, "embed_metadata_into_pdf", "in_progress", f"Embedding metadata into {os.path.basename(local_file_path)}", file_id=file_id)
-    
+    log_task_progress(
+        task_id,
+        "embed_metadata_into_pdf",
+        "in_progress",
+        f"Embedding metadata into {os.path.basename(local_file_path)}",
+        file_id=file_id,
+    )
+
     # Get file_id from database if not provided (fallback only, prefer passing file_id explicitly)
     if file_id is None:
         with SessionLocal() as db:
             file_record = db.query(FileRecord).filter_by(local_filename=local_file_path).first()
             if file_record:
                 file_id = file_record.id
-    
+
     # Check for file existence; if not found, try the known shared tmp directory.
     if not os.path.exists(local_file_path):
         alt_path = os.path.join(settings.workdir, TMP_SUBDIR, os.path.basename(local_file_path))
@@ -93,7 +103,7 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
     original_file = local_file_path
     # Create a temporary file with the same extension as the original
     _, ext = os.path.splitext(local_file_path)
-    tmp_file = tempfile.NamedTemporaryFile(mode='wb', suffix=ext, prefix='processed_', delete=False)
+    tmp_file = tempfile.NamedTemporaryFile(mode="wb", suffix=ext, prefix="processed_", delete=False)
     processed_file = tmp_file.name
     tmp_file.close()
 
@@ -105,24 +115,26 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
         log_task_progress(task_id, "modify_pdf", "in_progress", "Modifying PDF metadata", file_id=file_id)
 
         # Open the PDF and modify metadata
-        with open(processed_file, 'rb') as file:
+        with open(processed_file, "rb") as file:
             pdf_reader = PyPDF2.PdfReader(file)
             pdf_writer = PyPDF2.PdfWriter()
-            
+
             # Copy all pages from the reader to the writer
             for page in pdf_reader.pages:
                 pdf_writer.add_page(page)
-            
+
             # Set PDF metadata
-            pdf_writer.add_metadata({
-                "/Title": metadata.get("filename", "Unknown Document"),
-                "/Author": metadata.get("absender", "Unknown"),
-                "/Subject": metadata.get("document_type", "Unknown"),
-                "/Keywords": ", ".join(metadata.get("tags", []))
-            })
-            
+            pdf_writer.add_metadata(
+                {
+                    "/Title": metadata.get("filename", "Unknown Document"),
+                    "/Author": metadata.get("absender", "Unknown"),
+                    "/Subject": metadata.get("document_type", "Unknown"),
+                    "/Keywords": ", ".join(metadata.get("tags", [])),
+                }
+            )
+
             # Write the modified PDF
-            with open(processed_file, 'wb') as output_file:
+            with open(processed_file, "wb") as output_file:
                 pdf_writer.write(output_file)
 
         logger.info(f"[{task_id}] Metadata embedded successfully in {processed_file}")
@@ -139,24 +151,36 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
         final_file_path = unique_filepath(final_dir, suggested_filename, extension=".pdf")
 
         logger.info(f"[{task_id}] Moving file to: {final_file_path}")
-        log_task_progress(task_id, "move_to_processed", "in_progress", f"Moving to processed: {suggested_filename}.pdf", file_id=file_id)
+        log_task_progress(
+            task_id,
+            "move_to_processed",
+            "in_progress",
+            f"Moving to processed: {suggested_filename}.pdf",
+            file_id=file_id,
+        )
         # Move the processed file using shutil.move to handle cross-device moves.
         shutil.move(processed_file, final_file_path)
         # Ensure the temporary file is deleted if it still exists.
         if os.path.exists(processed_file):
             os.remove(processed_file)
-        log_task_progress(task_id, "move_to_processed", "success", f"Moved to: {os.path.basename(final_file_path)}", file_id=file_id)
+        log_task_progress(
+            task_id, "move_to_processed", "success", f"Moved to: {os.path.basename(final_file_path)}", file_id=file_id
+        )
 
         # Persist the metadata into a JSON file with the same base name.
         logger.info(f"[{task_id}] Persisting metadata to JSON")
         log_task_progress(task_id, "save_metadata_json", "in_progress", "Saving metadata JSON", file_id=file_id)
         json_path = persist_metadata(metadata, final_file_path)
         logger.info(f"[{task_id}] Metadata persisted to {json_path}")
-        log_task_progress(task_id, "save_metadata_json", "success", f"Saved: {os.path.basename(json_path)}", file_id=file_id)
+        log_task_progress(
+            task_id, "save_metadata_json", "success", f"Saved: {os.path.basename(json_path)}", file_id=file_id
+        )
 
         # Trigger the next step: final storage.
         logger.info(f"[{task_id}] Queueing final storage task")
-        log_task_progress(task_id, "embed_metadata_into_pdf", "success", "Metadata embedded, queuing finalization", file_id=file_id)
+        log_task_progress(
+            task_id, "embed_metadata_into_pdf", "success", "Metadata embedded, queuing finalization", file_id=file_id
+        )
         finalize_document_storage.delay(original_file, final_file_path, metadata, file_id=file_id)
 
         # After triggering final storage, delete the original file if it is in workdir/tmp.
