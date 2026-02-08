@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-06  
 **Repository:** christianlouis/DocuElevate  
-**Current Version:** v0.3.3
+**Current Version:** v0.5.0
 
 ## Executive Summary
 

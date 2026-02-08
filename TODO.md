@@ -1,7 +1,7 @@
 # DocuElevate TODO List
 
 **Last Updated:** 2026-02-08  
-**Current Version:** v0.3.3
+**Current Version:** v0.5.0
 
 This document tracks actionable tasks for the current development cycle. For long-term planning, see [ROADMAP.md](ROADMAP.md) and [MILESTONES.md](MILESTONES.md).
 

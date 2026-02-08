@@ -7,7 +7,7 @@
 
 DocuElevate aims to be the premier open-source intelligent document processing platform, providing seamless integration with cloud storage providers, advanced AI-powered metadata extraction, and enterprise-grade security and scalability.
 
-## Current Status (v0.3.3)
+## Current Status (v0.5.0)
 
 ### Core Features ✅
 - Multi-provider document storage (Dropbox, Google Drive, OneDrive, Nextcloud, S3, etc.)
