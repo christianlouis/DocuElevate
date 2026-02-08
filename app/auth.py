@@ -114,10 +114,22 @@ if AUTH_ENABLED:
             if not user_data.get("picture") and user_data.get("email"):
                 user_data["picture"] = get_gravatar_url(user_data["email"])
             
+            # Check if user is admin based on OAuth groups or specific email
+            # You can customize this logic based on your OAuth provider's attributes
+            # For example, check if user has an "admin" group or specific email domain
+            is_admin = False
+            if "groups" in user_data:
+                # Check if user is in admin group
+                groups = user_data.get("groups", [])
+                is_admin = "admin" in groups or "administrators" in groups
+            
+            # Set is_admin flag (defaults to False for OAuth users unless they're in admin group)
+            user_data["is_admin"] = is_admin
+            
             request.session["user"] = user_data
             
             # Log the successful authentication
-            print(f"User authenticated via OAuth: {user_data.get('email', 'No email')}")
+            print(f"User authenticated via OAuth: {user_data.get('email', 'No email')} (admin: {is_admin})")
             
             # Redirect to original destination or default
             redirect_url = request.session.pop("redirect_after_login", "/upload")

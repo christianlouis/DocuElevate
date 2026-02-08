@@ -24,9 +24,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
-def require_admin(request: Request):
+def require_admin(request: Request) -> dict:
     """
     Dependency to ensure the user is an admin.
+    Raises HTTPException if not admin.
+    
+    Returns:
+        User dict from session
     """
     user = request.session.get("user")
     if not user or not user.get("is_admin"):

@@ -3,6 +3,8 @@ Settings management views for the application.
 """
 
 import logging
+import inspect
+from functools import wraps
 from fastapi import Request, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -15,25 +17,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def require_admin_access(request: Request):
-    """Check if user is admin and redirect if not"""
-    user = request.session.get("user")
-    if not user or not user.get("is_admin"):
-        logger.warning(f"Non-admin user attempted to access settings page")
-        return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
-    return None
+def require_admin_access(func):
+    """Decorator to require admin access for a route"""
+    @wraps(func)
+    async def wrapper(request: Request, *args, **kwargs):
+        user = request.session.get("user")
+        if not user or not user.get("is_admin"):
+            logger.warning(f"Non-admin user attempted to access settings page")
+            return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+        
+        # Check if the wrapped function is a coroutine function
+        if inspect.iscoroutinefunction(func):
+            return await func(request, *args, **kwargs)
+        else:
+            return func(request, *args, **kwargs)
+    return wrapper
 
 
 @router.get("/settings")
 @require_login
+@require_admin_access
 async def settings_page(request: Request, db: Session = Depends(get_db)):
     """
     Settings management page - admin only.
     """
-    # Check admin access
-    redirect = require_admin_access(request)
-    if redirect:
-        return redirect
     
     try:
         # Get settings organized by category
