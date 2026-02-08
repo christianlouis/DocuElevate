@@ -66,7 +66,9 @@ async def lifespan(app: FastAPI):
     config_issues = check_all_configs()
     
     # Log overall status
-    has_issues = any(config_issues['email']) or any(len(issues) > 0 for provider, issues in config_issues['storage'].items())
+    has_issues = any(config_issues['email']) or any(
+        len(issues) > 0 for provider, issues in config_issues['storage'].items()
+    )
     if has_issues:
         logging.warning("Application started with configuration issues - some features may be unavailable")
     else:
