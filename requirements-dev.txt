@@ -24,3 +24,6 @@ pre-commit>=3.6.0
 
 # License compliance
 pip-licenses==5.5.1  # For license compliance checking
+
+# Release automation
+python-semantic-release>=9.0.0
