@@ -6,6 +6,8 @@ This guide explains how to write, run, and configure tests for DocuElevate.
 
 - [Overview](#overview)
 - [Test Environment Setup](#test-environment-setup)
+  - [Local Development](#local-development-envtest)
+  - [GitHub Actions (CI/CD)](#github-actions-cicd-with-secrets)
 - [Running Tests](#running-tests)
 - [Writing Tests](#writing-tests)
 - [Test Types and Markers](#test-types-and-markers)
@@ -23,9 +25,18 @@ DocuElevate uses **pytest** as its testing framework with the following features
 - **Mocking** for external services (OpenAI, Azure, storage providers)
 - **Optional integration testing** with real API keys
 
+> **🔑 Quick Start for GitHub Actions:** If you want to run integration tests in CI/CD, see the **[GitHub Secrets Setup Guide](./GitHubSecretsSetup.md)** for step-by-step instructions on securely storing API keys.
+
 ## Test Environment Setup
 
-### Basic Setup (No API Keys Required)
+There are **two different approaches** for configuring test environments:
+
+1. **Local Development** - Use `.env.test` file (gitignored, stays on your machine)
+2. **GitHub Actions (CI/CD)** - Use GitHub Secrets (encrypted, stored in repository settings)
+
+### Local Development (.env.test)
+
+#### Basic Setup (No API Keys Required)
 
 For running unit tests with mocked external services:
 
@@ -39,9 +50,9 @@ pytest
 
 Tests will run successfully using mock values defined in `tests/conftest.py`. No additional configuration is needed.
 
-### Advanced Setup (Real API Keys for Integration Tests)
+#### Advanced Setup (Real API Keys for Integration Tests)
 
-For running integration tests against real external services:
+For running integration tests against real external services **on your local machine**:
 
 #### Step 1: Create Test Environment File
 
@@ -83,18 +94,158 @@ git status .env.test
 pytest -m requires_external
 ```
 
+### GitHub Actions (CI/CD) with Secrets
+
+For running integration tests in **GitHub Actions** (automated CI/CD), you need to store secrets in your repository settings. **Do NOT use `.env.test` for CI/CD** - it's only for local development.
+
+#### Step 1: Add Secrets to GitHub Repository
+
+1. Go to your repository on GitHub
+2. Navigate to **Settings** → **Secrets and variables** → **Actions**
+3. Click **"New repository secret"**
+4. Add each secret individually:
+
+| Secret Name | Example Value | Purpose |
+|-------------|---------------|---------|
+| `TEST_OPENAI_API_KEY` | `sk-test-abc123...` | OpenAI API for integration tests |
+| `TEST_AZURE_AI_KEY` | `abc123def456...` | Azure Document Intelligence |
+| `TEST_AWS_ACCESS_KEY_ID` | `AKIAIOSFODNN7EXAMPLE` | AWS S3 integration tests |
+| `TEST_AWS_SECRET_ACCESS_KEY` | `wJalrXUtnFEMI/...` | AWS S3 integration tests |
+| `TEST_S3_BUCKET_NAME` | `docuelevate-test` | S3 test bucket name |
+| `TEST_DROPBOX_REFRESH_TOKEN` | `sl.abcdef123...` | Dropbox integration tests |
+| `TEST_GOOGLE_DRIVE_CREDENTIALS` | `{"type":"service_account"...}` | Google Drive integration |
+
+> **💡 Tip:** Prefix all test secrets with `TEST_` to clearly distinguish them from production secrets.
+
+#### Step 2: Update GitHub Actions Workflow
+
+Edit `.github/workflows/tests.yaml` to use the secrets:
+
+```yaml
+- name: Run Tests
+  env:
+    # Core settings (from secrets)
+    OPENAI_API_KEY: ${{ secrets.TEST_OPENAI_API_KEY }}
+    AZURE_AI_KEY: ${{ secrets.TEST_AZURE_AI_KEY }}
+    
+    # Optional: Storage provider secrets for integration tests
+    AWS_ACCESS_KEY_ID: ${{ secrets.TEST_AWS_ACCESS_KEY_ID }}
+    AWS_SECRET_ACCESS_KEY: ${{ secrets.TEST_AWS_SECRET_ACCESS_KEY }}
+    S3_BUCKET_NAME: ${{ secrets.TEST_S3_BUCKET_NAME }}
+    
+    DROPBOX_REFRESH_TOKEN: ${{ secrets.TEST_DROPBOX_REFRESH_TOKEN }}
+    GOOGLE_DRIVE_CREDENTIALS_JSON: ${{ secrets.TEST_GOOGLE_DRIVE_CREDENTIALS }}
+    
+    # Other test settings (can be plain text)
+    DATABASE_URL: sqlite:///:memory:
+    REDIS_URL: redis://localhost:6379/0
+    WORKDIR: /tmp
+    AUTH_ENABLED: "False"
+  run: pytest tests/ -v --cov=app
+```
+
+#### Step 3: Configure Integration Test Triggers
+
+You have several options for when to run integration tests:
+
+**Option A: Run on Every Push (Recommended for small projects)**
+```yaml
+on: [push, pull_request]
+```
+
+**Option B: Run on Schedule (Recommended to save API costs)**
+```yaml
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Run integration tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # Allow manual triggering
+```
+
+**Option C: Separate Workflow for Integration Tests**
+
+Create `.github/workflows/integration-tests.yaml`:
+
+```yaml
+name: Integration Tests
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements-dev.txt
+      
+      - name: Run Integration Tests Only
+        env:
+          OPENAI_API_KEY: ${{ secrets.TEST_OPENAI_API_KEY }}
+          AZURE_AI_KEY: ${{ secrets.TEST_AZURE_AI_KEY }}
+          # ... other secrets ...
+        run: |
+          # Only run tests marked as requires_external
+          pytest -m requires_external -v
+```
+
+#### Step 4: Verify GitHub Actions Setup
+
+After configuring secrets:
+
+1. Go to **Actions** tab in your GitHub repository
+2. Manually trigger a workflow (if `workflow_dispatch` is enabled)
+3. Check the logs to ensure tests are using the secrets
+4. Verify integration tests are passing
+
+> **🔒 Security Note:** GitHub encrypts secrets and masks them in logs. They are never exposed in workflow output.
+
+#### Common GitHub Actions Configurations
+
+**Skip integration tests if secrets are missing:**
+```yaml
+- name: Run Integration Tests
+  if: ${{ secrets.TEST_OPENAI_API_KEY != '' }}
+  env:
+    OPENAI_API_KEY: ${{ secrets.TEST_OPENAI_API_KEY }}
+  run: pytest -m requires_external
+```
+
+**Run unit and integration tests separately:**
+```yaml
+- name: Run Unit Tests (Always)
+  run: pytest -m "unit" -v
+
+- name: Run Integration Tests (If secrets exist)
+  if: ${{ secrets.TEST_OPENAI_API_KEY != '' }}
+  env:
+    OPENAI_API_KEY: ${{ secrets.TEST_OPENAI_API_KEY }}
+  run: pytest -m "requires_external" -v
+```
+
 ### Environment Variable Loading Priority
 
 The test environment loads configuration in this order:
 
-1. **System environment variables** (highest priority)
-2. **`.env.test` file** (if exists)
-3. **Default mock values** in `conftest.py` (fallback)
+1. **System environment variables** (highest priority) - Used by GitHub Actions
+2. **`.env.test` file** (if exists) - Used for local development
+3. **Default mock values** in `conftest.py` (fallback) - Used when no secrets configured
 
 This means:
-- CI/CD systems can set environment variables directly
-- Developers can use `.env.test` for local testing
-- Tests run without any configuration (using mocks)
+- GitHub Actions sets environment variables directly from Secrets
+- Local developers use `.env.test` for convenience
+- Tests run without any configuration in basic scenarios (using mocks)
+- You can mix and match: set some vars in GitHub Secrets and let others use defaults
 
 ## Running Tests
 
@@ -584,13 +735,16 @@ with patch("app.api.documents.extract_metadata") as mock:
 
 ## Additional Resources
 
+- [GitHub Secrets Setup Guide](./GitHubSecretsSetup.md) - **Detailed guide for CI/CD secrets configuration**
 - [Pytest Documentation](https://docs.pytest.org/)
 - [FastAPI Testing](https://fastapi.tiangolo.com/tutorial/testing/)
 - [pytest-mock](https://pytest-mock.readthedocs.io/)
 - [Coverage.py](https://coverage.readthedocs.io/)
+- [GitHub Actions: Encrypted Secrets](https://docs.github.com/en/actions/security-guides/encrypted-secrets)
 
 ## Questions?
 
+- Check [GitHubSecretsSetup.md](./GitHubSecretsSetup.md) for CI/CD secrets configuration
 - Check [CONTRIBUTING.md](../CONTRIBUTING.md) for contribution guidelines
 - Review existing tests in `tests/` for examples
 - Open an issue on GitHub for test-related questions
