@@ -17,7 +17,7 @@ on:
       - main
 
 env:
-  IMAGE_NAME: christianlouis/document-processor
+  IMAGE_NAME: christianlouis/docuelevate
 
 jobs:
   docker:
@@ -58,7 +58,7 @@ jobs:
         with:
           images: |
             ${{ env.IMAGE_NAME }}
-            ghcr.io/${{ github.repository_owner }}/document-processor
+            ghcr.io/${{ github.repository_owner }}/docuelevate
 
       - name: Build and Push Docker Image with Provenance and SBOM
         uses: docker/build-push-action@v6
@@ -72,9 +72,9 @@ jobs:
           tags: |
             ${{ env.IMAGE_NAME }}:latest
             ${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/document-processor:latest
-            ghcr.io/${{ github.repository_owner }}/document-processor:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/docuelevate:latest
+            ghcr.io/${{ github.repository_owner }}/docuelevate:${{ github.sha }}
             ${{ startsWith(github.ref, 'refs/tags/') && format('{0}:{1}', env.IMAGE_NAME, env.VERSION) || '' }}
-            ${{ startsWith(github.ref, 'refs/tags/') && format('ghcr.io/{0}/document-processor:{1}', github.repository_owner, env.VERSION) || '' }}
+            ${{ startsWith(github.ref, 'refs/tags/') && format('ghcr.io/{0}/docuelevate:{1}', github.repository_owner, env.VERSION) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
