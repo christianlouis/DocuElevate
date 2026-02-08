@@ -2,6 +2,7 @@
 import os
 import logging
 import pathlib
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -34,30 +35,14 @@ if settings.auth_enabled and not settings.session_secret:
     raise ValueError("SESSION_SECRET must be set when AUTH_ENABLED=True. Generate one with: python -c 'import secrets; print(secrets.token_hex(32))'")
 SESSION_SECRET = settings.session_secret or "INSECURE_DEFAULT_FOR_DEVELOPMENT_ONLY_DO_NOT_USE_IN_PRODUCTION_MINIMUM_32_CHARS"
 
-app = FastAPI(title="DocuElevate")
 
-# 1) Session Middleware (for request.session to work)
-app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
-
-# 2) Respect the X-Forwarded-* headers from Traefik
-app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
-
-# 3) (Optional but recommended) Restrict valid hosts:
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=[
-    settings.external_hostname,
-    "localhost",
-    "127.0.0.1"
-])
-
-# Mount the static files directory
-static_dir = pathlib.Path(__file__).parents[1] / "frontend" / "static"
-if os.path.exists(static_dir):
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-else:
-    print(f"WARNING: Static directory not found at {static_dir}. Static files will not be served.")
-
-@app.on_event("startup")
-def on_startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Manage application lifespan events (startup and shutdown).
+    This replaces the deprecated @app.on_event decorators.
+    """
+    # Startup: Initialize database
     init_db()  # Create tables if they don't exist
     
     # Load settings from database after DB initialization
@@ -72,10 +57,7 @@ def on_startup():
         logging.error(f"Failed to load database settings: {e}")
     finally:
         db.close()
-
-@app.on_event("startup")
-async def startup_event():
-    """Run startup tasks for the application"""
+    
     # Force settings dump to log for troubleshooting
     from app.utils.config_validator import dump_all_settings
     dump_all_settings()
@@ -97,14 +79,38 @@ async def startup_event():
     
     # Send startup notification
     notify_startup()
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Run shutdown tasks for the application"""
+    
+    # Application is now running
+    yield
+    
+    # Shutdown: Cleanup tasks
     logging.info("Application shutting down")
     
     # Send shutdown notification
     notify_shutdown()
+
+
+app = FastAPI(title="DocuElevate", lifespan=lifespan)
+
+# 1) Session Middleware (for request.session to work)
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+
+# 2) Respect the X-Forwarded-* headers from Traefik
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+
+# 3) (Optional but recommended) Restrict valid hosts:
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=[
+    settings.external_hostname,
+    "localhost",
+    "127.0.0.1"
+])
+
+# Mount the static files directory
+static_dir = pathlib.Path(__file__).parents[1] / "frontend" / "static"
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+else:
+    print(f"WARNING: Static directory not found at {static_dir}. Static files will not be served.")
 
 # Custom exception handlers that return JSON for API routes and HTML for frontend routes
 @app.exception_handler(HTTPException)
