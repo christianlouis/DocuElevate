@@ -42,23 +42,29 @@ def resolve_file_path(file_path: str, subfolder: str = None) -> str:
     Raises:
         HTTPException: If the path attempts to escape the workdir
     """
-    # Build the base directory
+    # Get the workdir as the security boundary
+    workdir = Path(settings.workdir).resolve()
+
+    # Build the base directory (workdir or workdir/subfolder)
     if subfolder:
-        base_dir = Path(settings.workdir) / subfolder
+        base_dir = workdir / subfolder
     else:
-        base_dir = Path(settings.workdir)
+        base_dir = workdir
 
     # Resolve the file path
     if not os.path.isabs(file_path):
+        # Relative path: join with base_dir
         resolved_path = (base_dir / file_path).resolve()
     else:
+        # Absolute path: resolve as-is
         resolved_path = Path(file_path).resolve()
 
-    # Ensure the resolved path is within the base directory (path traversal protection)
+    # Ensure the resolved path is within workdir (path traversal protection)
+    # This checks both relative and absolute paths against workdir
     try:
-        resolved_path.relative_to(base_dir.resolve())
+        resolved_path.relative_to(workdir)
     except ValueError:
-        # Path is outside the base directory - potential path traversal attack
+        # Path is outside the workdir - potential path traversal attack
         logger.warning(f"Path traversal attempt detected: {file_path} -> {resolved_path}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file path: path traversal not allowed"

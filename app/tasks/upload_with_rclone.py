@@ -33,8 +33,9 @@ def upload_with_rclone(file_path: str, destination: str):
     # Split and validate destination components
     remote, remote_path = destination.split(":", 1)
 
-    # Validate remote name (alphanumeric, underscore, hyphen only)
-    if not remote or not all(c.isalnum() or c in ("_", "-") for c in remote):
+    # Validate remote name to prevent command injection
+    # Must start with alphanumeric, can contain alphanumeric, underscore, hyphen
+    if not remote or not remote[0].isalnum() or not all(c.isalnum() or c in ("_", "-") for c in remote):
         raise ValueError(f"Invalid remote name: {remote}")
 
     # Check if rclone is installed and config exists

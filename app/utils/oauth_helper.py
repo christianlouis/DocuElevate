@@ -4,7 +4,7 @@ Shared across multiple OAuth providers to reduce code duplication.
 """
 
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import requests
 from fastapi import HTTPException, status
 
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def exchange_oauth_token(
-    provider_name: str, token_url: str, payload: Dict[str, str], timeout: int = None
+    provider_name: str, token_url: str, payload: Dict[str, str], timeout: Optional[int] = None
 ) -> Dict[str, Any]:
     """
     Exchange an authorization code for tokens from an OAuth provider.
@@ -63,7 +63,7 @@ def exchange_oauth_token(
                 error_type = error_json.get("error", "unknown_error")
                 logger.error(f"Token exchange failed with status {response.status_code}: {error_type}")
                 error_detail = {"error": error_type, "error_description": error_json.get("error_description", "")}
-            except Exception as json_err:
+            except (ValueError, requests.exceptions.JSONDecodeError) as json_err:
                 logger.error(f"Failed to parse error response as JSON: {str(json_err)}")
                 error_detail = {"error": "Unknown error", "status_code": response.status_code}
 
