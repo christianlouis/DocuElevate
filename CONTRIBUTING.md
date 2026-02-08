@@ -31,8 +31,134 @@ We welcome feature requests! Please submit an issue with:
 1. Fork the repository
 2. Create a new branch for your changes
 3. Make your changes
-4. Run the tests to ensure everything works
-5. Submit a pull request with a clear description of the changes
+4. **Follow conventional commit format** (see below)
+5. Run the tests to ensure everything works
+6. Submit a pull request with a clear description of the changes
+
+## Commit Message Format
+
+DocuElevate follows the [Conventional Commits](https://www.conventionalcommits.org/) specification for commit messages. This enables automatic version bumping and changelog generation.
+
+### Format
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+### Type
+
+Must be one of the following:
+
+- **feat**: A new feature (triggers minor version bump)
+- **fix**: A bug fix (triggers patch version bump)
+- **docs**: Documentation only changes
+- **style**: Changes that don't affect code meaning (formatting, etc.)
+- **refactor**: Code change that neither fixes a bug nor adds a feature
+- **perf**: Performance improvement (triggers patch version bump)
+- **test**: Adding or updating tests
+- **build**: Changes to build system or dependencies
+- **ci**: Changes to CI configuration files and scripts
+- **chore**: Other changes that don't modify src or test files
+
+### Scope (Optional)
+
+The scope should be the name of the affected module or area:
+- `api` - REST API changes
+- `ui` - Frontend/UI changes
+- `auth` - Authentication changes
+- `storage` - Storage provider changes
+- `ocr` - OCR processing changes
+- `tasks` - Celery task changes
+- `config` - Configuration changes
+
+### Subject
+
+The subject contains a succinct description of the change:
+- Use imperative, present tense: "change" not "changed" nor "changes"
+- Don't capitalize first letter
+- No period (.) at the end
+
+### Breaking Changes
+
+For breaking changes, add `!` after the type/scope or include `BREAKING CHANGE:` in the footer:
+
+```
+feat!: redesign authentication API
+
+BREAKING CHANGE: The /api/auth endpoint now requires OAuth2 tokens instead of API keys.
+```
+
+This triggers a major version bump.
+
+### Examples
+
+```
+feat(storage): add support for Amazon S3 storage provider
+
+Add S3StorageProvider class with upload, download, and delete operations.
+Includes configuration options for bucket name, region, and credentials.
+
+Closes #123
+```
+
+```
+fix(ocr): handle PDF files without text layer
+
+Previously, PDFs without existing text layers would fail silently.
+Now properly processes them through Azure Document Intelligence.
+
+Fixes #456
+```
+
+```
+docs: update deployment guide with Docker Compose setup
+
+Added step-by-step instructions for deploying with Docker Compose,
+including environment variable configuration and service dependencies.
+```
+
+```
+chore: update dependencies to fix security vulnerabilities
+
+Updated authlib to 1.6.5+ and starlette to 0.49.1+
+```
+
+## Versioning and Releases
+
+DocuElevate uses [semantic-release](https://github.com/semantic-release/semantic-release) for automated version management and releases:
+
+- **Releases are automated**: When PRs are merged to `main`, semantic-release analyzes commit messages and automatically:
+  - Determines the next version number
+  - Updates the `VERSION` file
+  - Generates/updates `CHANGELOG.md`
+  - Creates a Git tag with `v` prefix (e.g., `v0.6.0`)
+  - Creates a GitHub Release with auto-generated notes
+  - Triggers Docker image builds with the new version tag
+
+- **Version Bumps**:
+  - `feat:` commits → minor version bump (0.5.0 → 0.6.0)
+  - `fix:` or `perf:` commits → patch version bump (0.5.0 → 0.5.1)
+  - `feat!:` or `BREAKING CHANGE:` → major version bump (0.5.0 → 1.0.0)
+  - Other commit types (docs, chore, etc.) → no version bump
+
+- **Manual Version Changes**: Do NOT manually edit `VERSION` or `CHANGELOG.md` - these are managed by semantic-release
+
+## Pull Request Checklist
+
+Before submitting a pull request:
+
+- [ ] Code follows the project style guide (Black, isort, flake8)
+- [ ] Commit messages follow conventional commit format
+- [ ] Tests added/updated for new functionality
+- [ ] Documentation updated if user-facing changes
+- [ ] No manual edits to `VERSION` or `CHANGELOG.md`
+- [ ] All tests pass locally
+- [ ] Pre-commit hooks pass
+- [ ] Security scan passes (if applicable)
 
 ## Development Environment
 
@@ -40,8 +166,8 @@ We welcome feature requests! Please submit an issue with:
 
 ```bash
 # Clone the repository
-git clone https://github.com/christianlouis/document-processor.git
-cd document-processor
+git clone https://github.com/christianlouis/DocuElevate.git
+cd DocuElevate
 
 # Create a virtual environment
 python -m venv venv

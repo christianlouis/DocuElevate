@@ -46,6 +46,12 @@ DocuElevate aims to be the premier open-source intelligent document processing p
   - [ ] Implement API key rotation
   - [ ] Add audit logging for sensitive operations
 
+- **Release Automation** (Completed ✅)
+  - [x] Implement semantic-release for automated versioning
+  - [x] Add conventional commit validation
+  - [x] Automate CHANGELOG generation
+  - [x] Integrate Docker builds with releases
+
 ### Features - v0.4.0
 - **Enhanced Search & Filtering**
   - [ ] Full-text search across documents
