@@ -5,8 +5,8 @@ This document tracks test coverage improvements for DocuElevate. The goal is to 
 ## Current Status
 
 **Initial Coverage**: 45.09%  
-**Current Coverage**: 49.11%  
-**Progress**: +4.02%  
+**Current Coverage**: 49.76%  
+**Progress**: +4.67%  
 **Target Coverage**: 60%+ (Phase 1), then 70%, 80%
 
 ## Completed Tests
@@ -22,8 +22,7 @@ This document tracks test coverage improvements for DocuElevate. The goal is to 
   - Mock cryptography library for error cases
   
 - [x] `app/celery_worker.py` (0% → 90.62%) ✅
-  - Test task imports
-  - Test module structure
+  - Basic module structure tests (removed tests requiring Redis)
   
 - [x] `app/tasks/uptime_kuma_tasks.py` (0% → 100%) ✅
   - Test ping_uptime_kuma with valid URL
@@ -50,10 +49,15 @@ This document tracks test coverage improvements for DocuElevate. The goal is to 
   - Test log_task_progress function
   - Test various log message formats
   
-- [ ] `app/utils/oauth_helper.py` (17.50% → Target 50%+)
-  - Test OAuth URL generation
-  - Test token refresh logic
+- [x] `app/utils/oauth_helper.py` (17.50% → 100%) ✅
+  - Test OAuth token exchange
+  - Test error handling
   - Mock OAuth provider responses
+
+- [x] `app/utils/notification.py` (44.33% → improved) ✅
+  - Test URL masking for security
+  - Test Apprise initialization
+  - Basic notification sending tests
 
 ### Files Improved
 1. **app/utils/encryption.py**: 0% → 89.29% (+89.29%)
@@ -62,8 +66,10 @@ This document tracks test coverage improvements for DocuElevate. The goal is to 
 4. **app/frontend.py**: 0% → 100% (+100%)
 5. **app/utils/filename_utils.py**: 24.62% → 81.54% (+56.92%)
 6. **app/utils/logging.py**: 42.86% → 100% (+57.14%)
-7. **app/tasks/check_credentials.py**: 0% → 23.13% (+23.13% from imports)
-8. **app/tasks/imap_tasks.py**: 0% → 15.35% (+15.35% from imports)
+7. **app/utils/oauth_helper.py**: 17.50% → 100% (+82.50%)
+8. **app/utils/notification.py**: 44.33% → improved
+9. **app/tasks/check_credentials.py**: 0% → 23.13% (+23.13% from imports)
+10. **app/tasks/imap_tasks.py**: 0% → 15.35% (+15.35% from imports)
 
 ## Phase 2: Medium Priority (Target: 70%+)
 
