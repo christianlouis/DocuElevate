@@ -1,8 +1,8 @@
 """
-Tests for simple re-export modules (app/utils.py, app/frontend.py, app/utils/config_validator.py)
+Tests for simple re-export modules (app/frontend.py, app/utils/config_validator.py)
 
 These modules are simple re-exports of functions from other modules.
-We test that imports work correctly.
+We test that imports work correctly, including the app.utils package.
 """
 
 import pytest
@@ -10,7 +10,7 @@ import pytest
 
 @pytest.mark.unit
 class TestUtilsReexports:
-    """Test that app/utils.py re-exports work correctly"""
+    """Test that app.utils package exports work correctly"""
 
     def test_hash_file_import(self):
         """Test that hash_file can be imported from app.utils"""
@@ -26,12 +26,12 @@ class TestUtilsReexports:
         # Function should exist and be callable
         assert callable(log_task_progress)
 
-    def test_utils_module_is_backward_compatible(self):
-        """Test that utils module maintains backward compatibility"""
-        # The module comment says it's deprecated but maintains compatibility
+    def test_utils_package_exports(self):
+        """Test that utils package exports expected functions"""
+        # The utils package should export functions via __init__.py
         import app.utils
 
-        # Module should exist and have expected attributes
+        # Package should exist and have expected attributes
         assert hasattr(app.utils, "hash_file")
         assert hasattr(app.utils, "log_task_progress")
 

@@ -5,7 +5,7 @@ from unittest.mock import patch, MagicMock
 
 @pytest.mark.unit
 class TestUtilsCompat:
-    """Tests for app/utils.py backward compatibility module."""
+    """Tests for app.utils package exports."""
 
     def test_imports_hash_file(self):
         """Test that hash_file can be imported from utils."""

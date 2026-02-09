@@ -30,8 +30,9 @@ This document tracks test coverage improvements for DocuElevate. The goal is to 
   - Test skipping when URL not configured
   - Test error handling for failed requests
   
-- [x] `app/utils.py` (0% → Still 0%) ⚠️
-  - Simple re-export module, coverage is from actual usage
+- [x] `app/utils/` package (exports via __init__.py) ✅
+  - Package exports tested in test_reexports.py
+  - Individual module coverage from actual usage
   
 - [x] `app/frontend.py` (0% → 100%) ✅
   - Simple re-export module, test imports work
