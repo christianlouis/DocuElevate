@@ -10,7 +10,7 @@ import pytest
 
 @pytest.mark.unit
 class TestUtilsReexports:
-    """Test that app/utils.py re-exports work correctly"""
+    """Test that app.utils package exports work correctly"""
 
     def test_hash_file_import(self):
         """Test that hash_file can be imported from app.utils"""
