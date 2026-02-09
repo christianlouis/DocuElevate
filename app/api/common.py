@@ -9,19 +9,9 @@ from pathlib import Path
 from fastapi import HTTPException, status
 
 from app.config import settings
-from app.database import SessionLocal
 
 # Set up logging
 logger = logging.getLogger(__name__)
-
-
-def get_db():
-    """Database dependency injection for routes"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 def resolve_file_path(file_path: str, subfolder: str = None) -> str:

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session  # noqa: F401
 
 from app.auth import require_login  # noqa: F401
 from app.config import settings
-from app.database import SessionLocal
+from app.database import get_db  # noqa: F401
 
 # Set up Jinja2 templates
 templates_dir = Path(__file__).parent.parent.parent / "frontend" / "templates"
@@ -39,14 +39,3 @@ templates.TemplateResponse = template_response_with_version
 
 # Set up logging
 logger = logging.getLogger(__name__)
-
-
-def get_db():
-    """
-    Dependency to get a database session.
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
