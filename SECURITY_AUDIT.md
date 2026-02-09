@@ -177,7 +177,7 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
 ### Dependency Management
 - ✅ Version pinning for security-critical packages (authlib, starlette)
 - ✅ Advisory database checks integrated into development workflow
-- ⏳ TODO: Add automated dependency vulnerability scanning in CI/CD
+- ⏳ TODO: Add automated dependency vulnerability scanning in CI/CD ([#171](https://github.com/christianlouis/DocuElevate/issues/171))
 
 ### Authentication & Secrets
 - ✅ Strong validation for SESSION_SECRET (minimum 32 characters)
@@ -196,8 +196,8 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
 - ✅ **COMPLETED:** Bandit (Python security linter) audit completed
 - ✅ **COMPLETED:** Bandit integrated into CI pipeline (fails on high/medium severity issues)
 - ✅ **COMPLETED:** CodeQL security scanning enabled in GitHub Actions
-- ⏳ **TODO:** Add dependency vulnerability scanning (Safety, pip-audit) to CI
-- ⏳ **TODO:** Make dependency scans blocking (fail on critical issues)
+- ⏳ **TODO:** Add dependency vulnerability scanning (Safety, pip-audit) to CI ([#171](https://github.com/christianlouis/DocuElevate/issues/171))
+- ⏳ **TODO:** Make dependency scans blocking (fail on critical issues) ([#171](https://github.com/christianlouis/DocuElevate/issues/171))
 
 ### Code Security
 - ✅ Authentication required on all sensitive endpoints (@require_login decorator)
@@ -205,31 +205,31 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
 - ✅ Unique filenames with UUID to prevent conflicts and overwrites
 - ⏳ **TODO:** Implement rate limiting on API endpoints
 - ⏳ **TODO:** Add CSRF protection for state-changing operations
-- ⏳ **TODO:** Implement request size limits
-- ⏳ **TODO:** Add comprehensive input sanitization for all user inputs
-- ⏳ **TODO:** Implement proper API key rotation mechanisms
+- ⏳ **TODO:** Implement request size limits ([#173](https://github.com/christianlouis/DocuElevate/issues/173))
+- ⏳ **TODO:** Add comprehensive input sanitization for all user inputs ([#172](https://github.com/christianlouis/DocuElevate/issues/172))
+- ⏳ **TODO:** Implement proper API key rotation mechanisms ([#168](https://github.com/christianlouis/DocuElevate/issues/168))
 
 ### Infrastructure Security
 - ✅ TrustedHostMiddleware configured (restricts valid hosts)
 - ✅ ProxyHeadersMiddleware for reverse proxy setup (X-Forwarded-* headers)
 - ✅ SessionMiddleware with strong secret validation
-- ⏳ **TODO:** Add security headers (HSTS, CSP, X-Frame-Options, X-Content-Type-Options)
-- ⏳ **TODO:** Implement proper CORS configuration (currently not configured)
-- ⏳ **TODO:** Add request logging with sensitive data masking
+- ⏳ **TODO:** Add security headers (HSTS, CSP, X-Frame-Options, X-Content-Type-Options) ([#174](https://github.com/christianlouis/DocuElevate/issues/174))
+- ⏳ **TODO:** Implement proper CORS configuration (currently not configured) ([#175](https://github.com/christianlouis/DocuElevate/issues/175))
+- ⏳ **TODO:** Add request logging with sensitive data masking ([#170](https://github.com/christianlouis/DocuElevate/issues/170))
 
 ## Recommendations
 
 ### High Priority
 1. ~~**Enable CodeQL scanning**~~ ✅ Already implemented - Two CodeQL workflows active
 2. **Implement rate limiting** - Prevent abuse and DoS attacks (consider slowapi or fastapi-limiter)
-3. **Add comprehensive input validation** - Prevent injection attacks
-4. **Add request size limits** - Prevent memory exhaustion from large uploads
+3. **Add comprehensive input validation** - Prevent injection attacks ([#172](https://github.com/christianlouis/DocuElevate/issues/172))
+4. **Add request size limits** - Prevent memory exhaustion from large uploads ([#173](https://github.com/christianlouis/DocuElevate/issues/173))
 5. **Implement CSRF protection** - Protect state-changing operations
 
 ### Medium Priority
-1. **Add security headers** - Improve browser-side security (HSTS, CSP, X-Frame-Options)
-2. **Configure CORS properly** - Currently no CORS middleware configured
-3. **Implement audit logging** - Track security-relevant events
+1. **Add security headers** - Improve browser-side security (HSTS, CSP, X-Frame-Options) ([#174](https://github.com/christianlouis/DocuElevate/issues/174))
+2. **Configure CORS properly** - Currently no CORS middleware configured ([#175](https://github.com/christianlouis/DocuElevate/issues/175))
+3. **Implement audit logging** - Track security-relevant events ([#170](https://github.com/christianlouis/DocuElevate/issues/170))
 4. **Add file upload size limits** - Prevent resource exhaustion
 5. **Document security architecture** - Security design decisions
 
@@ -237,7 +237,7 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
 1. **Security training documentation** - For contributors
 2. **Penetration testing** - Professional security assessment
 3. **Bug bounty program** - Community security contributions
-4. **API key rotation** - Automated credential rotation
+4. **API key rotation** - Automated credential rotation ([#168](https://github.com/christianlouis/DocuElevate/issues/168))
 
 ## Security Contact
 
