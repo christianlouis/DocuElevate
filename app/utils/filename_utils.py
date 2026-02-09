@@ -88,11 +88,11 @@ def sanitize_filename(filename):
     """
     # First, replace all path separators (both Unix and Windows style) with underscores
     sanitized = filename.replace("/", "_").replace("\\", "_")
-    
+
     # Replace characters that are problematic in various filesystems
     # Keep only alphanumeric, dash, underscore, period, and space
     sanitized = re.sub(r"[^\w\-\. ]", "_", sanitized)
-    
+
     # Remove or replace path traversal patterns
     # Replace specifically '..' to prevent path traversal while preserving single dots
     sanitized = sanitized.replace("..", "_")
