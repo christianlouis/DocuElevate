@@ -12,9 +12,9 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Upl
 from sqlalchemy import asc, desc, or_
 from sqlalchemy.orm import Session
 
-from app.api.common import get_db
 from app.auth import require_login
 from app.config import settings
+from app.database import get_db
 from app.models import FileRecord, ProcessingLog
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document

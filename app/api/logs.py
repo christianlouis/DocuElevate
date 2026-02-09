@@ -9,8 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from app.api.common import get_db
 from app.auth import require_login
+from app.database import get_db
 from app.models import FileRecord, ProcessingLog
 
 # Set up logging
