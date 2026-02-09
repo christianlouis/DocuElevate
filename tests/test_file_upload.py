@@ -296,11 +296,18 @@ class TestUploadSecurity:
         assert response.status_code == 200
         data = response.json()
         
-        # Backslashes should be removed or replaced
+        # On Unix systems, os.path.basename doesn't recognize Windows backslashes,
+        # so the full string goes to sanitize_filename which then:
+        # 1. Replaces backslashes with underscores
+        # 2. Replaces .. with underscores
+        # 3. Strips leading/trailing underscores
+        # Result: "windows_system32_config.pdf"
+        expected_filename = "windows_system32_config.pdf"
+        assert data["original_filename"] == expected_filename
+        # Verify no dangerous characters remain
         assert "\\" not in data["original_filename"]
         assert ".." not in data["original_filename"]
-        # Should contain sanitized version
-        assert "config.pdf" in data["original_filename"]
+        assert "/" not in data["original_filename"]
     
     def test_path_traversal_prevention_mixed_separators(self, client: TestClient, mock_celery_tasks):
         """Test handling of filenames with mixed path separators."""
@@ -315,11 +322,14 @@ class TestUploadSecurity:
         assert response.status_code == 200
         data = response.json()
         
-        # Should only keep the filename without any path components
+        # os.path.basename recognizes Unix / separators and extracts "file.pdf"
+        # sanitize_filename then ensures it's safe (already is in this case)
+        expected_filename = "file.pdf"
+        assert data["original_filename"] == expected_filename
+        # Verify no dangerous characters remain
         assert "/" not in data["original_filename"]
         assert "\\" not in data["original_filename"]
         assert ".." not in data["original_filename"]
-        assert "file.pdf" in data["original_filename"]
 
 
 @pytest.mark.integration

@@ -70,7 +70,7 @@ def get_unique_filename(original_path, check_exists_func=None):
 
 
 def sanitize_filename(filename):
-    """
+    r"""
     Sanitize a filename to ensure it's valid across different file systems
     and prevent path traversal attacks.
 
@@ -94,8 +94,8 @@ def sanitize_filename(filename):
     sanitized = re.sub(r"[^\w\-\. ]", "_", sanitized)
     
     # Remove or replace path traversal patterns
-    # Replace consecutive dots with a single underscore to prevent .. patterns
-    sanitized = re.sub(r"\.\.+", "_", sanitized)
+    # Replace specifically '..' to prevent path traversal while preserving single dots
+    sanitized = sanitized.replace("..", "_")
 
     # Replace multiple spaces/underscores with single ones
     sanitized = re.sub(r"__+", "_", sanitized)
