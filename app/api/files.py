@@ -19,6 +19,7 @@ from app.models import FileRecord, ProcessingLog
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document
 from app.utils.file_status import get_files_processing_status
+from app.utils.filename_utils import sanitize_filename
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -657,7 +658,10 @@ async def ui_upload(request: Request, file: UploadFile = File(...)):
     workdir = settings.workdir
 
     # Extract just the filename without any path components to prevent path traversal
-    safe_filename = os.path.basename(file.filename)
+    # First, use basename to remove any directory components
+    base_filename = os.path.basename(file.filename)
+    # Then sanitize the filename to remove special characters and ensure filesystem compatibility
+    safe_filename = sanitize_filename(base_filename)
 
     # Generate a unique filename with UUID to prevent overwriting and filename conflicts
     unique_id = str(uuid.uuid4())
