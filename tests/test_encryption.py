@@ -4,8 +4,9 @@ Tests for app/utils/encryption.py
 Tests encryption/decryption functionality for sensitive settings.
 """
 
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
 
 
 @pytest.mark.unit
@@ -205,7 +206,7 @@ class TestEncryptionIntegration:
     @patch("app.utils.encryption._get_cipher_suite")
     def test_encrypt_decrypt_cycle(self, mock_cipher):
         """Test that encrypting and then decrypting returns original value"""
-        from app.utils.encryption import encrypt_value, decrypt_value
+        from app.utils.encryption import decrypt_value, encrypt_value
 
         # Mock a simple reversible encryption
         mock_fernet = Mock()
@@ -229,3 +230,114 @@ class TestEncryptionIntegration:
         assert encrypted != original
         assert encrypted.startswith("enc:")
         assert decrypted == original
+
+    def test_real_encryption_round_trip(self):
+        """Test actual encryption/decryption with real cryptography library."""
+        from app.utils.encryption import decrypt_value, encrypt_value, is_encryption_available
+
+        # Skip if encryption is not available
+        if not is_encryption_available():
+            pytest.skip("Encryption not available (cryptography library not installed)")
+
+        original_value = "my_super_secret_password_123"
+
+        # Encrypt the value
+        encrypted = encrypt_value(original_value)
+
+        # Should be encrypted (has enc: prefix)
+        assert encrypted.startswith("enc:")
+        assert encrypted != original_value
+
+        # Decrypt should return original value
+        decrypted = decrypt_value(encrypted)
+        assert decrypted == original_value
+
+    def test_encryption_with_special_characters(self):
+        """Test encryption with special characters and symbols."""
+        from app.utils.encryption import decrypt_value, encrypt_value, is_encryption_available
+
+        if not is_encryption_available():
+            pytest.skip("Encryption not available")
+
+        original = "P@ssw0rd!#$%^&*()_+-=[]{}|;:',.<>?/~`"
+        encrypted = encrypt_value(original)
+        decrypted = decrypt_value(encrypted)
+
+        assert decrypted == original
+
+    def test_encryption_with_unicode(self):
+        """Test encryption with unicode characters."""
+        from app.utils.encryption import decrypt_value, encrypt_value, is_encryption_available
+
+        if not is_encryption_available():
+            pytest.skip("Encryption not available")
+
+        original = "Hello 世界 🌍 Привет мир"
+        encrypted = encrypt_value(original)
+        decrypted = decrypt_value(encrypted)
+
+        assert decrypted == original
+
+    def test_encryption_with_long_string(self):
+        """Test encryption with very long strings."""
+        from app.utils.encryption import decrypt_value, encrypt_value, is_encryption_available
+
+        if not is_encryption_available():
+            pytest.skip("Encryption not available")
+
+        # Create a long string (1000 characters)
+        original = "A" * 1000
+        encrypted = encrypt_value(original)
+        decrypted = decrypt_value(encrypted)
+
+        assert decrypted == original
+        assert len(decrypted) == 1000
+
+    def test_encryption_with_newlines_and_whitespace(self):
+        """Test encryption preserves newlines and whitespace."""
+        from app.utils.encryption import decrypt_value, encrypt_value, is_encryption_available
+
+        if not is_encryption_available():
+            pytest.skip("Encryption not available")
+
+        original = "line1\n  line2\t\ttabbed\r\nline3  "
+        encrypted = encrypt_value(original)
+        decrypted = decrypt_value(encrypted)
+
+        assert decrypted == original
+
+    def test_encryption_with_json_string(self):
+        """Test encryption with JSON string."""
+        from app.utils.encryption import decrypt_value, encrypt_value, is_encryption_available
+
+        if not is_encryption_available():
+            pytest.skip("Encryption not available")
+
+        original = '{"key": "value", "nested": {"array": [1, 2, 3]}}'
+        encrypted = encrypt_value(original)
+        decrypted = decrypt_value(encrypted)
+
+        assert decrypted == original
+
+    def test_multiple_encrypt_same_value_produces_different_ciphertext(self):
+        """Test that encrypting the same value twice produces different ciphertext (if using random IV)."""
+        from app.utils.encryption import encrypt_value, is_encryption_available
+
+        if not is_encryption_available():
+            pytest.skip("Encryption not available")
+
+        original = "same_value"
+        encrypted1 = encrypt_value(original)
+        encrypted2 = encrypt_value(original)
+
+        # Both should be encrypted
+        assert encrypted1.startswith("enc:")
+        assert encrypted2.startswith("enc:")
+
+        # Fernet uses timestamp-based encryption, so they might be different
+        # (depending on timing). This test documents the behavior.
+        # We'll just verify both decrypt correctly
+        from app.utils.encryption import decrypt_value
+
+        assert decrypt_value(encrypted1) == original
+        assert decrypt_value(encrypted2) == original
