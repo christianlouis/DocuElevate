@@ -88,4 +88,4 @@ class TestGravatarUrlVariations:
     def test_empty_string_email(self):
         """Test handling of empty string email."""
         url = get_gravatar_url("")
-        assert "gravatar.com" in url
+        assert url.startswith("https://www.gravatar.com/avatar/")
