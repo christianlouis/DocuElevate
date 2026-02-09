@@ -71,24 +71,38 @@ def get_unique_filename(original_path, check_exists_func=None):
 
 def sanitize_filename(filename):
     """
-    Sanitize a filename to ensure it's valid across different file systems.
+    Sanitize a filename to ensure it's valid across different file systems
+    and prevent path traversal attacks.
 
     Args:
         filename (str): The filename to sanitize
 
     Returns:
         str: A sanitized filename
+
+    Security:
+        - Removes path separators (/ and \)
+        - Prevents path traversal patterns (..)
+        - Replaces problematic characters with underscores
+        - Ensures compatibility across Windows, Linux, and macOS
     """
+    # First, replace all path separators (both Unix and Windows style) with underscores
+    sanitized = filename.replace("/", "_").replace("\\", "_")
+    
     # Replace characters that are problematic in various filesystems
     # Keep only alphanumeric, dash, underscore, period, and space
-    sanitized = re.sub(r"[^\w\-\. ]", "_", filename)
+    sanitized = re.sub(r"[^\w\-\. ]", "_", sanitized)
+    
+    # Remove or replace path traversal patterns
+    # Replace consecutive dots with a single underscore to prevent .. patterns
+    sanitized = re.sub(r"\.\.+", "_", sanitized)
 
     # Replace multiple spaces/underscores with single ones
     sanitized = re.sub(r"__+", "_", sanitized)
     sanitized = re.sub(r"  +", " ", sanitized)
 
-    # Trim leading/trailing spaces and periods which cause issues in Windows
-    sanitized = sanitized.strip(". ")
+    # Trim leading/trailing spaces, periods, and underscores which cause issues in Windows
+    sanitized = sanitized.strip(". _")
 
     # Ensure the filename isn't empty after sanitization
     if not sanitized or sanitized == ".":

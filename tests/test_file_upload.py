@@ -272,10 +272,54 @@ class TestUploadSecurity:
         assert response.status_code == 200
         data = response.json()
         
-        # Original filename should be preserved (sanitized by basename)
-        assert data["original_filename"] == special_filename
+        # Original filename should be sanitized (special chars replaced with underscores)
+        assert "!" not in data["original_filename"]
+        assert "@" not in data["original_filename"]
+        assert "#" not in data["original_filename"]
+        # Spaces and basic characters should be preserved
+        assert "file" in data["original_filename"]
+        assert ".pdf" in data["original_filename"]
         # Stored filename should have UUID and extension
         assert data["stored_filename"].endswith(".pdf")
+    
+    def test_path_traversal_prevention_windows_style(self, client: TestClient, mock_celery_tasks):
+        """Test that Windows-style path traversal attempts are prevented."""
+        # Try Windows-style path with backslashes
+        malicious_filename = "..\\..\\..\\windows\\system32\\config.pdf"
+        pdf_content = b"%PDF-1.4\n%EOF"
+        
+        response = client.post(
+            "/api/ui-upload",
+            files={"file": (malicious_filename, io.BytesIO(pdf_content), "application/pdf")}
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Backslashes should be removed or replaced
+        assert "\\" not in data["original_filename"]
+        assert ".." not in data["original_filename"]
+        # Should contain sanitized version
+        assert "config.pdf" in data["original_filename"]
+    
+    def test_path_traversal_prevention_mixed_separators(self, client: TestClient, mock_celery_tasks):
+        """Test handling of filenames with mixed path separators."""
+        malicious_filename = "../path\\to/file.pdf"
+        pdf_content = b"%PDF-1.4\n%EOF"
+        
+        response = client.post(
+            "/api/ui-upload",
+            files={"file": (malicious_filename, io.BytesIO(pdf_content), "application/pdf")}
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Should only keep the filename without any path components
+        assert "/" not in data["original_filename"]
+        assert "\\" not in data["original_filename"]
+        assert ".." not in data["original_filename"]
+        assert "file.pdf" in data["original_filename"]
 
 
 @pytest.mark.integration
