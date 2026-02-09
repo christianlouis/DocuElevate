@@ -1,9 +1,9 @@
 """Tests for app/auth.py module."""
+
 import hashlib
-import os
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from starlette.testclient import TestClient
 from fastapi import Request, status
 from starlette.responses import RedirectResponse
 
@@ -66,10 +66,11 @@ class TestRequireLogin:
 
     def test_noop_when_auth_disabled(self):
         """Test that require_login is a no-op when AUTH_ENABLED is False."""
+
         # AUTH_ENABLED is False in test environment
         def my_func():
             return "hello"
-        
+
         decorated = require_login(my_func)
         # When AUTH_ENABLED is False, the decorator returns the function unchanged
         assert decorated is my_func
@@ -80,18 +81,18 @@ class TestRequireLogin:
         with patch("app.auth.AUTH_ENABLED", True):
             # Import fresh to get patched AUTH_ENABLED
             from app.auth import require_login
-            
+
             @require_login
             async def protected_endpoint(request: Request):
                 return {"message": "success"}
-            
+
             mock_request = MagicMock(spec=Request)
             mock_request.session = {}
             mock_request.url = MagicMock()
             mock_request.url.__str__ = MagicMock(return_value="http://test.com/protected")
-            
+
             result = await protected_endpoint(mock_request)
-            
+
             assert isinstance(result, RedirectResponse)
             assert result.status_code == status.HTTP_302_FOUND
             assert "/login" in str(result.headers.get("location"))
@@ -101,19 +102,19 @@ class TestRequireLogin:
         """Test that require_login saves the original URL in session."""
         with patch("app.auth.AUTH_ENABLED", True):
             from app.auth import require_login
-            
+
             @require_login
             async def protected_endpoint(request: Request):
                 return {"message": "success"}
-            
+
             mock_request = MagicMock(spec=Request)
             mock_request.session = {}
             mock_request.url = MagicMock()
             original_url = "http://test.com/protected/page?param=value"
             mock_request.url.__str__ = MagicMock(return_value=original_url)
-            
+
             await protected_endpoint(mock_request)
-            
+
             assert mock_request.session.get("redirect_after_login") == original_url
 
     @pytest.mark.asyncio
@@ -121,16 +122,16 @@ class TestRequireLogin:
         """Test that require_login allows access when user is in session."""
         with patch("app.auth.AUTH_ENABLED", True):
             from app.auth import require_login
-            
+
             @require_login
             async def protected_endpoint(request: Request):
                 return {"message": "success", "user": request.session.get("user")}
-            
+
             mock_request = MagicMock(spec=Request)
             mock_request.session = {"user": {"id": "test_user", "name": "Test"}}
-            
+
             result = await protected_endpoint(mock_request)
-            
+
             assert result["message"] == "success"
             assert result["user"]["id"] == "test_user"
 
@@ -139,16 +140,16 @@ class TestRequireLogin:
         """Test that require_login correctly wraps async functions."""
         with patch("app.auth.AUTH_ENABLED", True):
             from app.auth import require_login
-            
+
             @require_login
             async def async_endpoint(request: Request, param: str):
                 return {"message": "async", "param": param}
-            
+
             mock_request = MagicMock(spec=Request)
             mock_request.session = {"user": {"id": "test"}}
-            
+
             result = await async_endpoint(mock_request, param="test_value")
-            
+
             assert result["message"] == "async"
             assert result["param"] == "test_value"
 
@@ -156,18 +157,19 @@ class TestRequireLogin:
         """Test that require_login correctly wraps sync functions."""
         with patch("app.auth.AUTH_ENABLED", True):
             from app.auth import require_login
-            
+
             @require_login
             def sync_endpoint(request: Request, param: str):
                 return {"message": "sync", "param": param}
-            
+
             mock_request = MagicMock(spec=Request)
             mock_request.session = {"user": {"id": "test"}}
-            
+
             # Call the decorated sync function
             import asyncio
+
             result = asyncio.run(sync_endpoint(request=mock_request, param="test_value"))
-            
+
             assert result["message"] == "sync"
             assert result["param"] == "test_value"
 
@@ -259,16 +261,16 @@ class TestSessionValidation:
         """Test require_login with user object missing typical fields."""
         with patch("app.auth.AUTH_ENABLED", True):
             from app.auth import require_login
-            
+
             @require_login
             async def protected_endpoint(request: Request):
                 return {"message": "success"}
-            
+
             # User object exists but is minimal
             mock_request = MagicMock(spec=Request)
             mock_request.session = {"user": {"id": "123"}}  # Missing name, email, etc.
-            
+
             result = await protected_endpoint(mock_request)
-            
+
             # Should still allow access as long as user key exists
             assert result["message"] == "success"
