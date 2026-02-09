@@ -1,7 +1,7 @@
 import pytest
 
 from app.config import settings
-from app.utils.notification import notify_file_processed, send_notification
+from app.utils.notification import notify_file_processed
 
 
 @pytest.mark.unit
