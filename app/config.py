@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     # Making Paperless optional
     paperless_ngx_api_token: Optional[str] = None
     paperless_host: Optional[str] = None
+    paperless_custom_field_absender: Optional[str] = None  # Name or ID of the "absender" custom field in Paperless
 
     azure_ai_key: str
     azure_region: str
