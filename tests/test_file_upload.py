@@ -11,9 +11,9 @@ Tests cover:
 """
 
 import io
-import os
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, Mock
 from fastapi.testclient import TestClient
 
 
@@ -427,7 +427,7 @@ class TestFileSplitting:
         # Mock settings to enable file splitting with a very small limit
         with patch.object(settings, "max_single_file_size", 100):  # 100 bytes limit
             # Mock the split_pdf_by_size function to return fake split files
-            with patch("app.api.files.split_pdf_by_size") as mock_split:
+            with patch("app.utils.file_splitting.split_pdf_by_size") as mock_split:
                 mock_split.return_value = [
                     "/workdir/test_part1.pdf",
                     "/workdir/test_part2.pdf",
@@ -435,7 +435,7 @@ class TestFileSplitting:
                 ]
 
                 # Mock should_split_file to return True
-                with patch("app.api.files.should_split_file", return_value=True):
+                with patch("app.utils.file_splitting.should_split_file", return_value=True):
                     with open(sample_pdf_path, "rb") as f:
                         response = client.post("/api/ui-upload", files={"file": ("large.pdf", f, "application/pdf")})
 
@@ -497,9 +497,9 @@ class TestFileSplitting:
         from app.config import settings
 
         with patch.object(settings, "max_single_file_size", 100):  # Small limit
-            with patch("app.api.files.should_split_file", return_value=True):
+            with patch("app.utils.file_splitting.should_split_file", return_value=True):
                 # Mock split_pdf_by_size to raise an exception
-                with patch("app.api.files.split_pdf_by_size", side_effect=Exception("Split failed")):
+                with patch("app.utils.file_splitting.split_pdf_by_size", side_effect=Exception("Split failed")):
                     with open(sample_pdf_path, "rb") as f:
                         response = client.post("/api/ui-upload", files={"file": ("document.pdf", f, "application/pdf")})
 
@@ -539,4 +539,3 @@ class TestFileSplitting:
 
             # Should be queued for conversion
             mock_celery_tasks["convert_to_pdf"].assert_called_once()
-
