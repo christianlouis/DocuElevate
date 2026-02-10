@@ -5,7 +5,6 @@ These tests verify that authentication properly protects endpoints when enabled.
 """
 
 import pytest
-from unittest.mock import patch
 
 
 @pytest.mark.integration
@@ -40,6 +39,7 @@ class TestSessionConfiguration:
     def test_session_secret_configured_in_conftest(self):
         """Test that SESSION_SECRET is configured in conftest.py."""
         import os
+
         session_secret = os.environ.get("SESSION_SECRET")
         assert session_secret is not None
         assert len(session_secret) >= 32, "SESSION_SECRET must be at least 32 characters"
@@ -47,7 +47,7 @@ class TestSessionConfiguration:
     def test_session_secret_meets_requirements_for_auth(self):
         """Test that SESSION_SECRET meets validation requirements."""
         from app.config import settings
-        
+
         # Session secret should always be configured (needed even when auth is disabled)
         assert settings.session_secret is not None
         assert len(settings.session_secret) >= 32
@@ -60,6 +60,7 @@ class TestAuthEnabledConfiguration:
     def test_auth_enabled_defaults_to_false_in_tests(self):
         """Test that AUTH_ENABLED defaults to False in test environment."""
         import os
+
         auth_enabled = os.environ.get("AUTH_ENABLED", "False")
         assert auth_enabled == "False", "Tests should run with AUTH_ENABLED=False by default"
 
@@ -67,10 +68,10 @@ class TestAuthEnabledConfiguration:
         """Test that AUTH_ENABLED can be enabled temporarily with patch."""
         import os
         from unittest.mock import patch
-        
+
         with patch.dict(os.environ, {"AUTH_ENABLED": "True"}):
             assert os.environ.get("AUTH_ENABLED") == "True"
-        
+
         # Should revert after context
         assert os.environ.get("AUTH_ENABLED") == "False"
 
@@ -89,10 +90,10 @@ class TestProtectedAPIEndpoints:
         # These should all work without authentication when auth is disabled
         response = client.get("/")
         assert response.status_code in [200, 302, 404]  # Valid responses
-        
+
         response = client.get("/api/files")
         assert response.status_code == 200
-        
+
         response = client.get("/api/logs")
         assert response.status_code == 200
 
@@ -100,11 +101,12 @@ class TestProtectedAPIEndpoints:
         """Test /whoami endpoint returns user data when user is in session."""
         # Even with auth disabled, if user is in session, whoami should work
         # This tests the endpoint logic itself
-        
+
         # We can't easily set session in TestClient, so we'll test the handler directly
-        from app.api.user import whoami_handler
         from unittest.mock import MagicMock
-        
+
+        from app.api.user import whoami_handler
+
         mock_request = MagicMock()
         mock_request.session = {
             "user": {
@@ -113,26 +115,29 @@ class TestProtectedAPIEndpoints:
                 "email": "test@example.com",
             }
         }
-        
+
         import asyncio
+
         result = asyncio.run(whoami_handler(mock_request))
-        
+
         assert result["id"] == "test123"
         assert result["email"] == "test@example.com"
         assert "picture" in result  # Gravatar URL should be added
 
     def test_whoami_raises_401_when_no_user(self):
         """Test /whoami handler raises 401 when no user in session."""
-        from app.api.user import whoami_handler
-        from fastapi import HTTPException
-        from unittest.mock import MagicMock
         import asyncio
-        
+        from unittest.mock import MagicMock
+
+        from fastapi import HTTPException
+
+        from app.api.user import whoami_handler
+
         mock_request = MagicMock()
         mock_request.session = {}
-        
+
         with pytest.raises(HTTPException) as exc_info:
             asyncio.run(whoami_handler(mock_request))
-        
+
         assert exc_info.value.status_code == 401
         assert "Not logged in" in exc_info.value.detail
