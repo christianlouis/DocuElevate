@@ -145,6 +145,50 @@ Depending on the system configuration, DocuElevate can perform:
 - **PDF Conversion** - Convert various file formats to PDF
 - **Document Distribution** - Store documents in Dropbox, Nextcloud, or Paperless NGX
 
+### Paperless-ngx Integration
+
+If Paperless-ngx is configured, DocuElevate can automatically upload processed documents and set custom fields with extracted metadata:
+
+1. **Automatic Upload**: After processing, documents are automatically uploaded to Paperless-ngx
+2. **Custom Fields Support**: DocuElevate can automatically populate custom fields in Paperless with extracted metadata
+3. **Flexible Field Mapping**: Map any extracted metadata field to any custom field in Paperless
+
+#### Setting Up Custom Fields
+
+**Basic Setup (Single Field)**:
+```bash
+# In your .env file
+PAPERLESS_CUSTOM_FIELD_ABSENDER=Absender
+```
+
+**Advanced Setup (Multiple Fields)**:
+```bash
+# Map multiple metadata fields to Paperless custom fields
+PAPERLESS_CUSTOM_FIELDS_MAPPING='{"absender": "Sender", "empfaenger": "Recipient", "language": "Language", "correspondent": "Correspondent"}'
+```
+
+**Available Metadata Fields**:
+- `absender` - Sender/author
+- `empfaenger` - Recipient
+- `correspondent` - Issuing company (short name)
+- `language` - Document language (e.g., "de", "en")
+- `document_type` - Classification (Invoice, Contract, etc.)
+- `reference_number` - Invoice/order/reference number
+- `kommunikationsart` - Communication type
+- `kommunikationskategorie` - Communication category
+- And more...
+
+**Requirements**:
+- Create the custom fields in Paperless-ngx first (Settings → Custom Fields)
+- The field names in your configuration must exactly match the names in Paperless
+- Ensure `PAPERLESS_HOST` and `PAPERLESS_NGX_API_TOKEN` are configured
+
+**How It Works**:
+1. DocuElevate extracts metadata from your documents using AI
+2. The document is uploaded to Paperless-ngx
+3. After successful upload, custom fields are automatically populated
+4. You can view the populated fields in your Paperless-ngx document details
+
 ## API Access
 
 For programmatic access, DocuElevate provides a comprehensive REST API:
