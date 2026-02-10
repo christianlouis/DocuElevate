@@ -220,7 +220,8 @@ class TestExtractMetadataFilenameValidation:
         """Test that invalid filename formats are rejected."""
         import re
         
-        # Valid pattern from sanitize_filename: alphanumeric, dash, underscore, period, space
+        # Valid pattern from extract_metadata_with_gpt.py
+        # TODO: Consider extracting this to a shared constant to avoid duplication
         valid_pattern = r'^[\w\-\. ]+$'
         
         # Test valid filenames
@@ -376,10 +377,10 @@ class TestFileUploadSecurity:
             # os.path.basename should extract just the filename
             basename = os.path.basename(malicious)
             
-            # Verify no path traversal remains
-            assert ".." not in basename or malicious.endswith("..")
-            assert "/" not in basename
-            assert "\\" not in basename
+            # Verify no path traversal remains in basename
+            assert ".." not in basename, f"Path traversal not removed: {malicious} -> {basename}"
+            assert "/" not in basename, f"Path separator not removed: {malicious} -> {basename}"
+            assert "\\" not in basename, f"Path separator not removed: {malicious} -> {basename}"
 
     def test_sanitize_after_basename(self):
         """Test that sanitization happens after basename extraction."""

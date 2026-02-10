@@ -129,15 +129,15 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
         import re
         filename = metadata.get("filename", "")
         if filename:
-            # Check if filename contains only safe characters (alphanumeric, dash, underscore, period, space)
-            # This matches the sanitize_filename behavior but validates before use
-            if not re.match(r'^[\w\-\. ]+$', filename):
+            # Check if filename contains only safe characters AND explicitly check for ".."
+            # Defense in depth: While the regex [\w\-\. ]+ already excludes / and \,
+            # we explicitly reject ".." to guard against:
+            # 1. Potential locale-specific \w behavior
+            # 2. Files literally named ".." which are valid but problematic
+            # 3. Future code changes that might relax the regex
+            if not re.match(r'^[\w\-\. ]+$', filename) or ".." in filename:
                 logger.warning(f"[{task_id}] Invalid filename format from GPT: '{filename}', using fallback")
                 # Reset to empty to trigger fallback to original filename
-                metadata["filename"] = ""
-            # Additional check: ensure no path traversal patterns
-            elif ".." in filename or "/" in filename or "\\" in filename:
-                logger.warning(f"[{task_id}] Path traversal attempt in GPT filename: '{filename}', using fallback")
                 metadata["filename"] = ""
         
         logger.info(f"[{task_id}] Extracted metadata: {metadata}")
