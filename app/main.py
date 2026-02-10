@@ -17,6 +17,7 @@ from app.api import router as api_router
 from app.auth import router as auth_router
 from app.config import settings
 from app.database import init_db
+from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.utils.config_validator import check_all_configs
 from app.utils.notification import init_apprise, notify_shutdown, notify_startup
 
@@ -99,13 +100,21 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="DocuElevate", lifespan=lifespan)
 
-# 1) Session Middleware (for request.session to work)
+# Middleware stack (order matters - applied in reverse order)
+# Last added middleware is executed first
+
+# 1) Security Headers Middleware (outermost - adds headers to final response)
+#    Configure via SECURITY_HEADERS_ENABLED environment variable
+#    Set to False if reverse proxy (Traefik, Nginx) handles security headers
+app.add_middleware(SecurityHeadersMiddleware, config=settings)
+
+# 2) Session Middleware (for request.session to work)
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 
-# 2) Respect the X-Forwarded-* headers from Traefik
+# 3) Respect the X-Forwarded-* headers from reverse proxy (Traefik, Nginx)
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
-# 3) (Optional but recommended) Restrict valid hosts:
+# 4) Restrict valid hosts to prevent Host header attacks
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=[settings.external_hostname, "localhost", "127.0.0.1"])
 
 # Mount the static files directory

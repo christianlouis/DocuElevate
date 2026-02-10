@@ -98,6 +98,110 @@ DocuElevate can monitor multiple IMAP mailboxes for document attachments. Each m
 | `AUTHENTIK_CONFIG_URL`  | Configuration URL for Authentik OpenID Connect.             |
 | `OAUTH_PROVIDER_NAME`   | Display name for the OAuth provider button.                  |
 
+### Security Headers
+
+DocuElevate supports HTTP security headers to improve browser-side security. **These headers are disabled by default** since most deployments use a reverse proxy (Traefik, Nginx, etc.) that already adds them. Enable only if deploying directly without a reverse proxy. See [Deployment Guide - Security Headers](DeploymentGuide.md#security-headers) for detailed configuration examples.
+
+#### Master Control
+
+| **Variable**                | **Description**                                                         | **Default** |
+|-----------------------------|-------------------------------------------------------------------------|-------------|
+| `SECURITY_HEADERS_ENABLED`  | Enable/disable security headers middleware. Set to `true` if deploying without reverse proxy. | `false` |
+
+#### Strict-Transport-Security (HSTS)
+
+Forces browsers to use HTTPS for all future requests to this domain. **Only effective over HTTPS.**
+
+| **Variable**                   | **Description**                                              | **Default**                              |
+|--------------------------------|--------------------------------------------------------------|------------------------------------------|
+| `SECURITY_HEADER_HSTS_ENABLED` | Enable HSTS header.                                          | `true`                                   |
+| `SECURITY_HEADER_HSTS_VALUE`   | HSTS header value (max-age in seconds, subdomain support).  | `max-age=31536000; includeSubDomains`   |
+
+**Common Values:**
+- `max-age=31536000; includeSubDomains` (1 year, recommended for production)
+- `max-age=300` (5 minutes, for testing)
+- `max-age=63072000; includeSubDomains; preload` (2 years with HSTS preload)
+
+#### Content-Security-Policy (CSP)
+
+Controls which resources browsers are allowed to load. Helps prevent XSS attacks and code injection.
+
+| **Variable**                  | **Description**                                              | **Default**                              |
+|-------------------------------|--------------------------------------------------------------|------------------------------------------|
+| `SECURITY_HEADER_CSP_ENABLED` | Enable CSP header.                                           | `true`                                   |
+| `SECURITY_HEADER_CSP_VALUE`   | CSP policy directives.                                       | See below                                |
+
+**Default Policy:**
+```
+default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;
+```
+
+**Common Customizations:**
+```bash
+# Stricter CSP (remove 'unsafe-inline', use nonces)
+SECURITY_HEADER_CSP_VALUE="default-src 'self'; script-src 'self'; style-src 'self';"
+
+# Allow specific external domains
+SECURITY_HEADER_CSP_VALUE="default-src 'self'; script-src 'self' https://cdn.example.com; style-src 'self' 'unsafe-inline';"
+```
+
+**Note:** The default policy includes `'unsafe-inline'` for compatibility with Tailwind CSS and inline JavaScript. For stricter security, use nonces or hashes.
+
+#### X-Frame-Options
+
+Prevents the page from being loaded in frames/iframes. Protects against clickjacking attacks.
+
+| **Variable**                             | **Description**                          | **Default** |
+|------------------------------------------|------------------------------------------|-------------|
+| `SECURITY_HEADER_X_FRAME_OPTIONS_ENABLED` | Enable X-Frame-Options header.          | `true`      |
+| `SECURITY_HEADER_X_FRAME_OPTIONS_VALUE`   | X-Frame-Options header value.           | `DENY`      |
+
+**Valid Values:**
+- `DENY` - Page cannot be displayed in a frame (most secure)
+- `SAMEORIGIN` - Page can only be displayed in a frame on the same origin
+- ~~`ALLOW-FROM uri`~~ - **Deprecated**: Page can only be displayed in a frame on the specified origin. This directive is deprecated in modern browsers; use CSP `frame-ancestors` directive instead.
+
+#### X-Content-Type-Options
+
+Prevents browsers from MIME-sniffing responses away from the declared content-type. Helps prevent XSS attacks.
+
+| **Variable**                                    | **Description**                          | **Default** |
+|-------------------------------------------------|------------------------------------------|-------------|
+| `SECURITY_HEADER_X_CONTENT_TYPE_OPTIONS_ENABLED` | Enable X-Content-Type-Options header.   | `true`      |
+
+**Note:** This header is always set to `nosniff` when enabled (no configuration needed).
+
+#### Configuration Examples
+
+**Reverse Proxy Deployment (Default - Traefik, Nginx):**
+```bash
+# Headers disabled by default - reverse proxy handles them
+# SECURITY_HEADERS_ENABLED=false  # Can be omitted
+```
+
+**Direct Deployment (No Reverse Proxy):**
+```bash
+# Enable all security headers
+SECURITY_HEADERS_ENABLED=true
+SECURITY_HEADER_HSTS_ENABLED=true
+SECURITY_HEADER_CSP_ENABLED=true
+SECURITY_HEADER_X_FRAME_OPTIONS_ENABLED=true
+SECURITY_HEADER_X_CONTENT_TYPE_OPTIONS_ENABLED=true
+```
+
+**Custom Configuration:**
+```bash
+# Enable headers but customize values
+SECURITY_HEADERS_ENABLED=true
+SECURITY_HEADER_HSTS_VALUE="max-age=300"  # 5 minutes for testing
+SECURITY_HEADER_X_FRAME_OPTIONS_VALUE="SAMEORIGIN"  # Allow same-origin framing
+SECURITY_HEADER_CSP_VALUE="default-src 'self'; script-src 'self' https://trusted-cdn.com;"
+```
+
+**See Also:**
+- [Deployment Guide - Security Headers](DeploymentGuide.md#security-headers) for Traefik/Nginx examples
+- [SECURITY_AUDIT.md](../SECURITY_AUDIT.md#infrastructure-security) for security rationale
+
 ### OpenAI & Azure Document Intelligence
 
 | **Variable**                     | **Description**                          | **How to Obtain**                                                        |

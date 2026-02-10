@@ -54,6 +54,129 @@ Access the web interface at `http://localhost:8000` and the API documentation at
 
 ## Production Considerations
 
+### Security Headers
+
+DocuElevate includes built-in support for HTTP security headers to improve browser-side security. **These headers are disabled by default** since most deployments use a reverse proxy (Traefik, Nginx, etc.) that already adds these headers.
+
+#### Supported Security Headers
+
+- **Strict-Transport-Security (HSTS)**: Forces browsers to use HTTPS for all future requests
+- **Content-Security-Policy (CSP)**: Controls which resources browsers are allowed to load
+- **X-Frame-Options**: Prevents the page from being loaded in frames (clickjacking protection)
+- **X-Content-Type-Options**: Prevents browsers from MIME-sniffing responses
+
+#### Reverse Proxy Deployment (Traefik, Nginx, etc.) - DEFAULT
+
+**Most deployments use a reverse proxy**, which is why security headers are disabled by default in DocuElevate. The reverse proxy should add these headers.
+
+```bash
+# In .env file (or omit - this is the default)
+SECURITY_HEADERS_ENABLED=false
+```
+
+##### Traefik Configuration Example
+
+Traefik can add security headers using middleware. Create a `docker-compose.yaml` with Traefik labels:
+
+```yaml
+services:
+  api:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.docuelevate.rule=Host(`docuelevate.example.com`)"
+      - "traefik.http.routers.docuelevate.entrypoints=websecure"
+      - "traefik.http.routers.docuelevate.tls=true"
+      - "traefik.http.routers.docuelevate.tls.certresolver=letsencrypt"
+      # Security headers middleware
+      - "traefik.http.routers.docuelevate.middlewares=security-headers@docker"
+      - "traefik.http.middlewares.security-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.security-headers.headers.contentSecurityPolicy=default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
+      - "traefik.http.middlewares.security-headers.headers.customFrameOptionsValue=DENY"
+      - "traefik.http.middlewares.security-headers.headers.contentTypeNosniff=true"
+```
+
+Then set `SECURITY_HEADERS_ENABLED=false` in your `.env` file.
+
+##### Nginx Configuration Example
+
+Add security headers to your Nginx configuration:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name docuelevate.example.com;
+    
+    # SSL configuration
+    ssl_certificate /etc/nginx/ssl/cert.pem;
+    ssl_certificate_key /etc/nginx/ssl/key.pem;
+    
+    # Security headers
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    
+    location / {
+        proxy_pass http://localhost:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Then keep `SECURITY_HEADERS_ENABLED=false` in your `.env` file (or omit it, as this is the default).
+
+#### Direct Deployment (No Reverse Proxy)
+
+If you're running DocuElevate **directly without a reverse proxy**, enable security headers:
+
+```bash
+# In .env file
+SECURITY_HEADERS_ENABLED=true
+```
+
+You can also configure individual headers:
+
+```bash
+SECURITY_HEADER_HSTS_ENABLED=true
+SECURITY_HEADER_CSP_ENABLED=true
+SECURITY_HEADER_X_FRAME_OPTIONS_ENABLED=true
+SECURITY_HEADER_X_CONTENT_TYPE_OPTIONS_ENABLED=true
+```
+
+**Note**: HSTS only works when serving content over HTTPS. If using HTTP for development, you can disable it:
+
+```bash
+SECURITY_HEADER_HSTS_ENABLED=false
+```
+
+#### Customizing Security Headers
+
+If you enable security headers, you can customize individual header values in your `.env` file:
+
+```bash
+# Customize HSTS (e.g., shorter duration for testing)
+SECURITY_HEADER_HSTS_VALUE="max-age=300"
+
+# Customize CSP (e.g., allow specific external domains)
+SECURITY_HEADER_CSP_VALUE="default-src 'self'; script-src 'self' https://cdn.example.com; style-src 'self' 'unsafe-inline';"
+
+# Allow framing from same origin
+SECURITY_HEADER_X_FRAME_OPTIONS_VALUE="SAMEORIGIN"
+```
+
+#### Security Considerations
+
+1. **HSTS and HTTPS**: HSTS only works over HTTPS. Ensure you have a valid SSL certificate before enabling HSTS.
+2. **CSP Testing**: The default CSP policy allows inline scripts and styles for compatibility. Test thoroughly before tightening.
+3. **Content-Security-Policy**: The default policy allows `'unsafe-inline'` for scripts and styles for compatibility with Tailwind CSS and inline JavaScript. For stricter security, consider using nonces or hashes.
+4. **X-Frame-Options**: Set to `DENY` by default. Change to `SAMEORIGIN` if you need to embed DocuElevate in iframes on the same domain.
+
+See the [Configuration Guide](ConfigurationGuide.md) for all security header options.
+
 ### Reverse Proxy Setup
 
 For production use, we recommend setting up a reverse proxy (like Nginx or Traefik) to handle HTTPS and domain routing:
