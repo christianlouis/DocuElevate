@@ -81,9 +81,11 @@ def split_pdf_by_size(pdf_path: str, max_size_bytes: int, output_dir: Optional[s
         temp_size = temp_buffer.tell()  # Get the size of the buffer
         temp_buffer.close()
 
+        exceeds_limit = temp_size > max_size_bytes
+
         # If adding this page exceeds the limit (and we have more than 1 page in current chunk)
         # save the previous chunk and start a new one
-        if temp_size > max_size_bytes and current_page_count > 1:
+        if exceeds_limit and current_page_count > 1:
 
             # Create a new writer without the last page
             previous_writer = PdfWriter()
@@ -103,7 +105,7 @@ def split_pdf_by_size(pdf_path: str, max_size_bytes: int, output_dir: Optional[s
             current_writer = PdfWriter()
             current_writer.add_page(page)
             current_page_count = 1
-        elif temp_size > max_size_bytes and current_page_count == 1:
+        elif exceeds_limit and current_page_count == 1:
             # Single page exceeds limit - this is a problem
             # We'll keep it anyway but log a warning
             logger.warning(
