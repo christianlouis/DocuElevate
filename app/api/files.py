@@ -390,6 +390,26 @@ def reprocess_single_file(request: Request, file_id: int, db: Session = Depends(
         raise HTTPException(status_code=500, detail=f"Error reprocessing file: {str(e)}")
 
 
+def _extract_text_from_pdf(file_path: str) -> str:
+    """
+    Extract text from a PDF file using PyPDF2.
+
+    Args:
+        file_path: Path to the PDF file
+
+    Returns:
+        Extracted text from all pages
+    """
+    import PyPDF2
+
+    extracted_text = ""
+    with open(file_path, "rb") as f:
+        pdf_reader = PyPDF2.PdfReader(f)
+        for page in pdf_reader.pages:
+            extracted_text += page.extract_text() + "\n"
+    return extracted_text
+
+
 def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -> dict:
     """
     Retry a specific pipeline processing step for a file.
@@ -428,19 +448,11 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
     elif step_name == "extract_metadata_with_gpt":
         from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 
-        # Extract text from the file to pass to GPT
         if not file_record.local_filename or not os.path.exists(file_record.local_filename):
             raise HTTPException(
                 status_code=400, detail="Local file not found on disk. Cannot retry metadata extraction."
             )
-        import PyPDF2
-
-        extracted_text = ""
-        with open(file_record.local_filename, "rb") as f:
-            pdf_reader = PyPDF2.PdfReader(f)
-            for page in pdf_reader.pages:
-                extracted_text += page.extract_text() + "\n"
-
+        extracted_text = _extract_text_from_pdf(file_record.local_filename)
         filename = os.path.basename(file_record.local_filename)
         task = extract_metadata_with_gpt.delay(filename, extracted_text, file_id)
     elif step_name == "embed_metadata_into_pdf":
@@ -467,18 +479,11 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
             raise HTTPException(
                 status_code=400, detail="Local file not found on disk. Cannot retry metadata embedding."
             )
-        # Re-extract text and metadata for embedding
-        import PyPDF2
-
-        extracted_text = ""
-        with open(file_record.local_filename, "rb") as f:
-            pdf_reader = PyPDF2.PdfReader(f)
-            for page in pdf_reader.pages:
-                extracted_text += page.extract_text() + "\n"
-
+        extracted_text = _extract_text_from_pdf(file_record.local_filename)
         filename = os.path.basename(file_record.local_filename)
-        # Pass empty metadata dict - the embed task will use whatever was last extracted
-        # The actual metadata should ideally be stored, but for retry we re-extract
+        # Empty metadata dict: embed_metadata_into_pdf will re-run with the provided text.
+        # The GPT extraction step must succeed first (validated above) to ensure
+        # the pipeline can produce new metadata during the subsequent re-extraction.
         task = embed_metadata_into_pdf.delay(filename, extracted_text, {}, file_id)
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported pipeline step: {step_name}")

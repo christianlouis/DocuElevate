@@ -156,10 +156,10 @@ class TestSubtaskRetry:
         assert data["subtask_name"] == "process_document"
         assert "task_id" in data
 
-        # Verify process_document.delay was called with file_id
+        # Verify process_document.delay was called with file_id to skip duplicate check
         mock_process_document.delay.assert_called_once()
-        call_kwargs = mock_process_document.delay.call_args
-        assert call_kwargs[1].get("file_id") == file_record.id or call_kwargs[0][-1] == file_record.id
+        call_args = mock_process_document.delay.call_args
+        assert call_args.kwargs.get("file_id") == file_record.id
 
     def test_retry_pipeline_step_ocr(self, client: TestClient, db_session, sample_pdf_path):
         """Test retrying the OCR pipeline step."""
