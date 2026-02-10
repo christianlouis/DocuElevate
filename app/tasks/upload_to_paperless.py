@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 
 POLL_MAX_ATTEMPTS = 10
 POLL_INTERVAL_SEC = 3
-UNKNOWN_VALUE = "Unknown"  # Magic value used to indicate missing metadata
+# Sentinel value used to indicate missing/unknown metadata that should not be set as custom fields
+METADATA_UNKNOWN_PLACEHOLDER = "Unknown"
 
 
 def _get_headers():
@@ -33,6 +34,25 @@ def _paperless_api_url(path: str) -> str:
     if not path.startswith("/"):
         path = "/" + path
     return f"{host}{path}"
+
+
+def normalize_metadata_value(value) -> str:
+    """
+    Normalizes a metadata value to a string suitable for Paperless custom fields.
+
+    Args:
+        value: The metadata value to normalize
+
+    Returns:
+        Empty string if value should be excluded, otherwise the string representation
+    """
+    if value is None:
+        return ""
+    str_value = str(value)
+    # Exclude empty strings and the "Unknown" placeholder
+    if not str_value or str_value == METADATA_UNKNOWN_PLACEHOLDER:
+        return ""
+    return str_value
 
 
 def poll_task_for_document_id(task_id: str) -> int:
@@ -127,13 +147,14 @@ def set_document_custom_fields(doc_id: int, custom_fields: dict, task_id: str) -
     # Build custom_fields array for PATCH request
     custom_fields_array = []
     for field_name, value in custom_fields.items():
-        # Ensure value is a string for consistent comparison
-        str_value = str(value) if value is not None else ""
-        if str_value and str_value != UNKNOWN_VALUE:  # Only set non-empty, non-Unknown values
+        normalized_value = normalize_metadata_value(value)
+        if normalized_value:  # Only set non-empty values
             try:
                 field_id = get_custom_field_id(field_name)
-                custom_fields_array.append({"field": field_id, "value": str_value})
-                logger.info(f"[{task_id}] Mapped custom field '{field_name}' to ID {field_id} with value '{str_value}'")
+                custom_fields_array.append({"field": field_id, "value": normalized_value})
+                logger.info(
+                    f"[{task_id}] Mapped custom field '{field_name}' to ID {field_id} with value '{normalized_value}'"
+                )
             except ValueError as e:
                 logger.warning(f"[{task_id}] {str(e)}, skipping this field")
                 continue

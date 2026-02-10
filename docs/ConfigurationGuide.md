@@ -250,7 +250,7 @@ DocuElevate extracts the following fields that can be mapped to Paperless custom
 PAPERLESS_CUSTOM_FIELDS_MAPPING='{"absender": "Sender", "empfaenger": "Recipient", "correspondent": "Correspondent", "language": "Language", "reference_number": "ReferenceNumber"}'
 ```
 
-**Note**: Custom fields must be created in your Paperless-ngx instance before DocuElevate can use them. The field names in the mapping (right side of the JSON) must exactly match the names in Paperless.
+**Note**: Custom fields must be created in your Paperless-ngx instance before DocuElevate can use them. The field names in the mapping (right side of the JSON) must **exactly** match the names in Paperless (case-sensitive).
 
 ### Dropbox
 
