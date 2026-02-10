@@ -164,6 +164,16 @@ class Settings(BaseSettings):
         default=True, description="Send notifications when files are successfully processed"
     )
 
+    # File upload size limits (for security - see SECURITY_AUDIT.md)
+    max_upload_size: int = Field(
+        default=1073741824,  # 1GB in bytes (1024 * 1024 * 1024)
+        description="Maximum file upload size in bytes. Default: 1GB. Prevents resource exhaustion attacks.",
+    )
+    max_single_file_size: Optional[int] = Field(
+        default=None,
+        description="Maximum size for a single file chunk in bytes. If set and file exceeds this, it will be split into smaller chunks for processing. Default: None (no splitting).",
+    )
+
     @validator("notification_urls", pre=True)
     def parse_notification_urls(cls, v):
         """Parse notification URLs from string or list"""

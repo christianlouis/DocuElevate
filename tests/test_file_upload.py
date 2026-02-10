@@ -11,9 +11,9 @@ Tests cover:
 """
 
 import io
-import os
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, Mock
 from fastapi.testclient import TestClient
 
 
@@ -157,13 +157,15 @@ class TestInvalidFileUploads:
     """Tests for handling invalid or problematic file uploads."""
 
     def test_upload_file_too_large(self, client: TestClient):
-        """Test that files over 500MB are rejected."""
+        """Test that files exceeding MAX_UPLOAD_SIZE are rejected."""
+        from app.config import settings
+
         # Create a large file content (mock it to avoid memory issues)
         large_content = b"x" * 1024  # 1KB for testing
 
         with patch("os.path.getsize") as mock_getsize:
-            # Mock the file size to be over 500MB
-            mock_getsize.return_value = 501 * 1024 * 1024  # 501MB
+            # Mock the file size to be over the configured limit
+            mock_getsize.return_value = settings.max_upload_size + 1
 
             response = client.post(
                 "/api/ui-upload", files={"file": ("huge.pdf", io.BytesIO(large_content), "application/pdf")}
@@ -171,6 +173,7 @@ class TestInvalidFileUploads:
 
             assert response.status_code == 413  # Request Entity Too Large
             assert "too large" in response.json()["detail"].lower()
+            assert "SECURITY_AUDIT.md" in response.json()["detail"]
 
     def test_upload_executable_file(self, client: TestClient, mock_celery_tasks):
         """Test that executable files are handled (attempted conversion)."""
@@ -411,3 +414,128 @@ class TestUploadMimeTypeDetection:
         assert response.status_code == 200
         # Should route to convert_to_pdf based on .jpg extension
         mock_celery_tasks["convert_to_pdf"].assert_called_once()
+
+
+@pytest.mark.integration
+class TestFileSplitting:
+    """Tests for file splitting functionality when MAX_SINGLE_FILE_SIZE is configured."""
+
+    def test_pdf_splitting_when_configured(self, client: TestClient, sample_pdf_path: str, mock_celery_tasks):
+        """Test that PDFs are split when they exceed MAX_SINGLE_FILE_SIZE."""
+        from app.config import settings
+
+        # Mock settings to enable file splitting with a very small limit
+        with patch.object(settings, "max_single_file_size", 100):  # 100 bytes limit
+            # Mock the split_pdf_by_size function to return fake split files
+            with patch("app.utils.file_splitting.split_pdf_by_size") as mock_split:
+                mock_split.return_value = [
+                    "/workdir/test_part1.pdf",
+                    "/workdir/test_part2.pdf",
+                    "/workdir/test_part3.pdf",
+                ]
+
+                # Mock should_split_file to return True
+                with patch("app.utils.file_splitting.should_split_file", return_value=True):
+                    with open(sample_pdf_path, "rb") as f:
+                        response = client.post("/api/ui-upload", files={"file": ("large.pdf", f, "application/pdf")})
+
+                    assert response.status_code == 200
+                    data = response.json()
+
+                    # Verify response indicates splitting occurred
+                    assert "split_into_parts" in data
+                    assert data["split_into_parts"] == 3
+                    assert "task_ids" in data
+                    assert len(data["task_ids"]) == 3
+                    assert "message" in data
+                    assert "split" in data["message"].lower()
+
+                    # Verify each split file was queued for processing
+                    assert mock_celery_tasks["process_document"].call_count == 3
+
+    def test_no_splitting_when_not_configured(self, client: TestClient, sample_pdf_path: str, mock_celery_tasks):
+        """Test that PDFs are not split when MAX_SINGLE_FILE_SIZE is None."""
+        from app.config import settings
+
+        # Ensure max_single_file_size is None (default)
+        with patch.object(settings, "max_single_file_size", None):
+            with open(sample_pdf_path, "rb") as f:
+                response = client.post("/api/ui-upload", files={"file": ("document.pdf", f, "application/pdf")})
+
+            assert response.status_code == 200
+            data = response.json()
+
+            # Verify no splitting occurred
+            assert "split_into_parts" not in data
+            assert "task_id" in data  # Single task ID, not task_ids array
+            assert data["status"] == "queued"
+
+            # Verify file was processed directly without splitting
+            mock_celery_tasks["process_document"].assert_called_once()
+
+    def test_no_splitting_for_small_files(self, client: TestClient, sample_pdf_path: str, mock_celery_tasks):
+        """Test that small PDFs are not split even when MAX_SINGLE_FILE_SIZE is configured."""
+        from app.config import settings
+
+        # Configure a very large limit
+        with patch.object(settings, "max_single_file_size", 1000000000):  # 1GB limit
+            with open(sample_pdf_path, "rb") as f:
+                response = client.post("/api/ui-upload", files={"file": ("small.pdf", f, "application/pdf")})
+
+            assert response.status_code == 200
+            data = response.json()
+
+            # Verify no splitting occurred for small file
+            assert "split_into_parts" not in data
+            assert "task_id" in data
+
+            # Verify file was processed directly
+            mock_celery_tasks["process_document"].assert_called_once()
+
+    def test_splitting_fallback_on_error(self, client: TestClient, sample_pdf_path: str, mock_celery_tasks):
+        """Test that if splitting fails, the file is processed as a whole."""
+        from app.config import settings
+
+        with patch.object(settings, "max_single_file_size", 100):  # Small limit
+            with patch("app.utils.file_splitting.should_split_file", return_value=True):
+                # Mock split_pdf_by_size to raise an exception
+                with patch("app.utils.file_splitting.split_pdf_by_size", side_effect=Exception("Split failed")):
+                    with open(sample_pdf_path, "rb") as f:
+                        response = client.post("/api/ui-upload", files={"file": ("document.pdf", f, "application/pdf")})
+
+                    # Should still succeed, falling back to processing the whole file
+                    assert response.status_code == 200
+                    data = response.json()
+
+                    # Verify no splitting data in response
+                    assert "split_into_parts" not in data
+                    assert "task_id" in data
+
+                    # File should be processed as a whole
+                    mock_celery_tasks["process_document"].assert_called_once()
+
+    def test_non_pdf_not_split(self, client: TestClient, mock_celery_tasks):
+        """Test that non-PDF files are never split, even with MAX_SINGLE_FILE_SIZE configured."""
+        from app.config import settings
+
+        with patch.object(settings, "max_single_file_size", 100):  # Small limit
+            # Upload an image file
+            image_content = (
+                b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+                b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
+                b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+            )
+
+            response = client.post(
+                "/api/ui-upload", files={"file": ("image.png", io.BytesIO(image_content), "image/png")}
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+
+            # Images should not be split (they're converted to PDF first)
+            assert "split_into_parts" not in data
+            assert "task_id" in data
+
+            # Should be queued for conversion
+            mock_celery_tasks["convert_to_pdf"].assert_called_once()

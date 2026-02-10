@@ -142,6 +142,36 @@ This document tracks security vulnerabilities found in DocuElevate and their rem
 - SSH keys
 - Explicit exclusion of patterns where needed
 
+### 5. File Upload Size Limits
+**Status:** ✅ FIXED  
+**Severity:** MEDIUM  
+**Description:** No configurable limits on file upload sizes could lead to resource exhaustion attacks and DoS.
+
+**Fix:** Implemented configurable file upload size limits with the following features:
+- `MAX_UPLOAD_SIZE`: Maximum file upload size in bytes (default: 1GB)
+- `MAX_SINGLE_FILE_SIZE`: Optional maximum size for a single file chunk
+- **Automatic page-based PDF splitting** for large PDFs when max_single_file_size is configured
+  - Splits PDFs at **page boundaries** using PyPDF2, NOT by byte position
+  - Each output file is a structurally valid, complete PDF
+  - No risk of corrupted or broken PDF files
+- Split files are processed sequentially to prevent overwhelming the system
+- Clear error messages referencing SECURITY_AUDIT.md for configuration details
+
+**Configuration:**
+```bash
+# Set maximum upload size (default: 1GB)
+MAX_UPLOAD_SIZE=1073741824
+
+# Optional: Enable file splitting for large PDFs
+MAX_SINGLE_FILE_SIZE=104857600  # 100MB chunks
+```
+
+**Security Benefits:**
+- Prevents resource exhaustion from extremely large uploads
+- Configurable limits allow adaptation to server capacity
+- File splitting enables processing of large documents without memory issues
+- Maintains support for large PDF files (up to 1GB by default) as required by use case
+
 ## Best Practices Implemented
 
 ### Security Scanning with Bandit
@@ -203,9 +233,10 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
 - ✅ Authentication required on all sensitive endpoints (@require_login decorator)
 - ✅ Path traversal protection in file uploads (basename sanitization)
 - ✅ Unique filenames with UUID to prevent conflicts and overwrites
+- ✅ File upload size limits with configurable maximum (default: 1GB)
+- ✅ Optional file splitting for large PDFs (when max_single_file_size is configured)
 - ⏳ **TODO:** Implement rate limiting on API endpoints
 - ⏳ **TODO:** Add CSRF protection for state-changing operations
-- ⏳ **TODO:** Implement request size limits ([#173](https://github.com/christianlouis/DocuElevate/issues/173))
 - ⏳ **TODO:** Add comprehensive input sanitization for all user inputs ([#172](https://github.com/christianlouis/DocuElevate/issues/172))
 - ⏳ **TODO:** Implement proper API key rotation mechanisms ([#168](https://github.com/christianlouis/DocuElevate/issues/168))
 
@@ -230,7 +261,7 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
 1. **Add security headers** - Improve browser-side security (HSTS, CSP, X-Frame-Options) ([#174](https://github.com/christianlouis/DocuElevate/issues/174))
 2. **Configure CORS properly** - Currently no CORS middleware configured ([#175](https://github.com/christianlouis/DocuElevate/issues/175))
 3. **Implement audit logging** - Track security-relevant events ([#170](https://github.com/christianlouis/DocuElevate/issues/170))
-4. **Add file upload size limits** - Prevent resource exhaustion
+4. ~~**Add file upload size limits**~~ ✅ Implemented - Configurable limits with 1GB default, optional file splitting
 5. **Document security architecture** - Security design decisions
 
 ### Low Priority

@@ -31,6 +31,47 @@ Control how the `/processall` endpoint handles large batches of files to prevent
 - Total queue time: (25-1) × 3 = 72 seconds
 - Prevents API rate limit issues and ensures smooth processing
 
+### File Upload Size Limits
+
+**Security Feature**: Control file upload sizes to prevent resource exhaustion attacks. See [SECURITY_AUDIT.md](../SECURITY_AUDIT.md#5-file-upload-size-limits) for security details.
+
+| **Variable**              | **Description**                                                                                              | **Default**   |
+|---------------------------|--------------------------------------------------------------------------------------------------------------|---------------|
+| `MAX_UPLOAD_SIZE`         | Maximum file upload size in bytes. Files exceeding this limit are rejected.                                | `1073741824` (1GB) |
+| `MAX_SINGLE_FILE_SIZE`    | Optional: Maximum size for a single file chunk in bytes. Files exceeding this are split into smaller parts. | `None` (no splitting) |
+
+**Configuration Examples:**
+
+```bash
+# Default: Allow up to 1GB uploads, no splitting
+MAX_UPLOAD_SIZE=1073741824
+
+# Conservative: 100MB max, split files over 50MB
+MAX_UPLOAD_SIZE=104857600
+MAX_SINGLE_FILE_SIZE=52428800
+
+# Large files: 2GB max, split files over 500MB
+MAX_UPLOAD_SIZE=2147483648
+MAX_SINGLE_FILE_SIZE=524288000
+```
+
+**File Splitting Behavior:**
+- When `MAX_SINGLE_FILE_SIZE` is configured and a PDF exceeds this size, it is automatically split into smaller chunks
+- **IMPORTANT:** Splitting is done at **PAGE BOUNDARIES**, not by byte position
+  - Uses PyPDF2 to properly parse PDF structure
+  - Each output file is a complete, valid PDF containing whole pages
+  - No risk of corrupted or broken PDF files
+  - Pages are distributed across output files to stay under size limit
+- Each chunk is processed sequentially as a separate task
+- Only works for PDF files (images and office documents are converted to PDF first)
+- Original file is removed after successful splitting
+- Useful for very large PDFs to prevent memory issues during processing
+
+**Use Cases:**
+- **Default (1GB, no splitting)**: Suitable for most deployments handling typical documents
+- **With splitting**: Recommended for servers with limited memory or when processing very large scanned documents
+- **Higher limits**: For environments specifically designed to handle large architectural plans, books, or scanned archives
+
 ### IMAP Configuration
 
 DocuElevate can monitor multiple IMAP mailboxes for document attachments. Each mailbox uses a numbered prefix (e.g., `IMAP1_`, `IMAP2_`).
