@@ -196,7 +196,11 @@ When rate limits are exceeded, check application logs for details:
 
 For more information on handling rate-limited responses in API clients, see [API Documentation - Rate Limiting](API.md#rate-limiting).
 
-#### Security Headers
+---
+
+## Security Headers Configuration
+
+DocuElevate supports HTTP security headers to improve browser-side security. **These headers are disabled by default** since most deployments use a reverse proxy (Traefik, Nginx, etc.) that already adds them. Enable only if deploying directly without a reverse proxy. See [Deployment Guide - Security Headers](DeploymentGuide.md#security-headers) for detailed configuration examples.
 
 #### Master Control
 
