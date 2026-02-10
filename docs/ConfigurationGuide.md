@@ -102,6 +102,102 @@ DocuElevate can monitor multiple IMAP mailboxes for document attachments. Each m
 
 DocuElevate supports HTTP security headers to improve browser-side security. **These headers are disabled by default** since most deployments use a reverse proxy (Traefik, Nginx, etc.) that already adds them. Enable only if deploying directly without a reverse proxy. See [Deployment Guide - Security Headers](DeploymentGuide.md#security-headers) for detailed configuration examples.
 
+### Rate Limiting
+
+DocuElevate implements rate limiting to protect against DoS attacks and API abuse. **Rate limiting is enabled by default** and uses Redis for distributed rate limiting across multiple workers.
+
+#### Master Control
+
+| **Variable**              | **Description**                                                                    | **Default** |
+|---------------------------|------------------------------------------------------------------------------------|-------------|
+| `RATE_LIMITING_ENABLED`   | Enable/disable rate limiting middleware. Recommended for production.               | `true`      |
+
+#### Rate Limit Configuration
+
+Rate limits are specified in the format `count/period`, where:
+- `count` is the maximum number of requests allowed
+- `period` is one of: `second`, `minute`, `hour`, `day`
+
+| **Variable**           | **Description**                                                      | **Default**      | **Applies To**                          |
+|------------------------|----------------------------------------------------------------------|------------------|-----------------------------------------|
+| `RATE_LIMIT_DEFAULT`   | Default rate limit for all API endpoints                             | `100/minute`     | Most API endpoints                      |
+| `RATE_LIMIT_UPLOAD`    | Rate limit for file upload endpoints (prevents resource exhaustion)  | `20/minute`      | `/api/ui-upload` and similar            |
+| `RATE_LIMIT_PROCESS`   | Rate limit for processing endpoints (OCR, metadata extraction)       | `30/minute`      | `/api/process`, OCR endpoints           |
+| `RATE_LIMIT_AUTH`      | Stricter rate limit for authentication (prevents brute force)        | `10/minute`      | Login, authentication endpoints         |
+
+#### How Rate Limiting Works
+
+1. **Per-User Tracking**: For authenticated requests, limits are enforced per user ID
+2. **Per-IP Tracking**: For unauthenticated requests, limits are enforced per IP address
+3. **429 Response**: When limit is exceeded, API returns `429 Too Many Requests` with `Retry-After` header
+4. **Redis Backend**: Uses Redis for distributed rate limiting (required for multi-worker deployments)
+5. **In-Memory Fallback**: Falls back to in-memory storage if Redis is unavailable (not recommended for production)
+
+#### Configuration Example
+
+```bash
+# Enable rate limiting (recommended for production)
+RATE_LIMITING_ENABLED=true
+
+# Configure Redis for distributed rate limiting
+REDIS_URL=redis://redis:6379/0
+
+# Customize rate limits
+RATE_LIMIT_DEFAULT=100/minute     # 100 requests per minute per user/IP
+RATE_LIMIT_UPLOAD=20/minute       # 20 uploads per minute
+RATE_LIMIT_PROCESS=30/minute      # 30 processing requests per minute
+RATE_LIMIT_AUTH=10/minute         # 10 auth attempts per minute (brute force protection)
+```
+
+#### Recommended Limits by Deployment Size
+
+**Small Deployment (1-10 users)**:
+```bash
+RATE_LIMIT_DEFAULT=200/minute
+RATE_LIMIT_UPLOAD=50/minute
+RATE_LIMIT_PROCESS=50/minute
+RATE_LIMIT_AUTH=20/minute
+```
+
+**Medium Deployment (10-100 users)**:
+```bash
+RATE_LIMIT_DEFAULT=100/minute
+RATE_LIMIT_UPLOAD=20/minute
+RATE_LIMIT_PROCESS=30/minute
+RATE_LIMIT_AUTH=10/minute
+```
+
+**Large Deployment (100+ users)**:
+```bash
+RATE_LIMIT_DEFAULT=50/minute
+RATE_LIMIT_UPLOAD=10/minute
+RATE_LIMIT_PROCESS=15/minute
+RATE_LIMIT_AUTH=5/minute
+```
+
+#### Disabling Rate Limiting (Development Only)
+
+For development or testing, you can disable rate limiting:
+
+```bash
+RATE_LIMITING_ENABLED=false
+```
+
+**Warning**: Do not disable rate limiting in production environments.
+
+#### Monitoring Rate Limits
+
+When rate limits are exceeded, check application logs for details:
+
+```
+2024-02-10 16:00:00 - Rate limiting by user: testuser
+2024-02-10 16:00:01 - Rate limit exceeded: 100 per 1 minute
+```
+
+For more information on handling rate-limited responses in API clients, see [API Documentation - Rate Limiting](API.md#rate-limiting).
+
+#### Security Headers
+
 #### Master Control
 
 | **Variable**                | **Description**                                                         | **Default** |

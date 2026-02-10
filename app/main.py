@@ -17,9 +17,11 @@ from app.api import router as api_router
 from app.auth import router as auth_router
 from app.config import settings
 from app.database import init_db
+from app.middleware.rate_limit import create_limiter, get_rate_limit_exceeded_handler
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.utils.config_validator import check_all_configs
 from app.utils.notification import init_apprise, notify_shutdown, notify_startup
+from slowapi.errors import RateLimitExceeded
 
 # Import the routers - now using views directly instead of frontend
 from app.views import router as frontend_router
@@ -99,6 +101,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="DocuElevate", lifespan=lifespan)
+
+# Initialize rate limiter and attach to app state
+limiter = create_limiter(redis_url=settings.redis_url, enabled=settings.rate_limiting_enabled)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, get_rate_limit_exceeded_handler())
 
 # Middleware stack (order matters - applied in reverse order)
 # Last added middleware is executed first

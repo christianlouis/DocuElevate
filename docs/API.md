@@ -7,6 +7,7 @@ DocuElevate provides a powerful REST API for programmatic access to all its feat
 - Base URL: `http://<your-docuelevate-instance>/api`
 - Authentication: OAuth2 (when enabled)
 - Response Format: JSON
+- Rate Limiting: Enabled by default (see Rate Limiting section below)
 
 ## Interactive API Documentation
 
@@ -15,6 +16,73 @@ The most up-to-date and interactive API documentation is available at:
 `http://<your-docuelevate-instance>/docs`
 
 This Swagger UI provides a complete reference with the ability to try out API calls directly from your browser.
+
+## Rate Limiting
+
+DocuElevate implements rate limiting to protect against abuse and DoS attacks. Rate limits are enforced per IP address for unauthenticated requests and per user for authenticated requests.
+
+### Default Limits
+
+- **Default endpoints**: 100 requests per minute
+- **File upload**: 20 requests per minute
+- **Document processing**: 30 requests per minute
+- **Authentication**: 10 requests per minute
+
+### Rate Limit Headers
+
+When a rate limit is exceeded, the API returns a `429 Too Many Requests` response:
+
+```json
+{
+  "detail": "Rate limit exceeded: 100 per 1 minute"
+}
+```
+
+The response includes a `Retry-After` header indicating when the client can retry the request.
+
+### Configuration
+
+Rate limits can be configured via environment variables:
+
+```bash
+RATE_LIMITING_ENABLED=true
+RATE_LIMIT_DEFAULT=100/minute
+RATE_LIMIT_UPLOAD=20/minute
+RATE_LIMIT_PROCESS=30/minute
+RATE_LIMIT_AUTH=10/minute
+```
+
+See [Configuration Guide](ConfigurationGuide.md) for more details.
+
+### Best Practices
+
+1. **Respect rate limits**: Monitor your request rates and implement backoff strategies
+2. **Cache responses**: Reduce unnecessary API calls by caching responses when appropriate
+3. **Batch operations**: Use bulk endpoints when available instead of making multiple individual requests
+4. **Handle 429 responses**: Implement retry logic with exponential backoff when rate limits are exceeded
+
+### Example: Handling Rate Limits
+
+```python
+import requests
+import time
+
+def make_api_request(url, max_retries=3):
+    """Make API request with rate limit handling."""
+    for attempt in range(max_retries):
+        response = requests.get(url)
+        
+        if response.status_code == 429:
+            # Rate limit exceeded
+            retry_after = int(response.headers.get('Retry-After', 60))
+            print(f"Rate limit exceeded. Retrying after {retry_after} seconds...")
+            time.sleep(retry_after)
+            continue
+        
+        return response
+    
+    raise Exception("Max retries exceeded")
+```
 
 ## Authentication
 
