@@ -177,3 +177,4 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "requires_external: Tests requiring external services")
     config.addinivalue_line("markers", "requires_db: Tests requiring database")
     config.addinivalue_line("markers", "requires_redis: Tests requiring Redis")
+    config.addinivalue_line("markers", "requires_docker: Tests requiring Docker")
