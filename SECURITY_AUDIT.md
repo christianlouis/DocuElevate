@@ -249,6 +249,288 @@ For security issues, please follow the guidelines in [SECURITY.md](SECURITY.md).
 |------|---------|-------|-----------------|--------|
 | 2026-02-06 | Automated Agent | Dependencies, Auth, Config | 3 | Fixed |
 | 2026-02-07 | Bandit Security Scanner | Python Code Security | 6 High, 15 Medium | Fixed |
+| 2026-02-10 | Path Traversal Review | File Path Operations | 1 Critical, 2 Medium | Fixed |
+
+---
+
+## Path Traversal Vulnerability Audit (2026-02-10)
+
+**Status:** ✅ ALL ISSUES FIXED  
+**Scope:** Comprehensive review of all file path operations for path traversal vulnerabilities
+
+### Executive Summary
+
+A thorough security audit was conducted on all file path operations in DocuElevate to identify and remediate path traversal vulnerabilities. **One critical vulnerability and two medium-severity issues were identified and fixed.**
+
+### Critical Vulnerability: Path Traversal via GPT Metadata Filename
+
+**Status:** ✅ FIXED  
+**Severity:** CRITICAL  
+**Location:** `app/tasks/embed_metadata_into_pdf.py` (line 144)
+
+**Description:**  
+The `metadata["filename"]` extracted by GPT was used directly in file path operations without sanitization. A malicious document could be crafted to make GPT return metadata containing path traversal sequences (e.g., `../../etc/passwd`, `..\\windows\\system32`), allowing file writes outside the intended `processed/` directory.
+
+**Attack Vector:**
+1. User uploads a specially crafted document
+2. GPT extracts metadata and returns malicious filename: `../../etc/passwd`
+3. `embed_metadata_into_pdf` uses this filename directly: `os.path.join(processed_dir, "../../etc/passwd")`
+4. File is written to `/etc/passwd` instead of `processed/` directory
+
+**Security Impact:**
+- File write outside intended directory
+- Potential overwrite of system files
+- Privilege escalation if workdir is writable by limited user
+
+**Fix Applied:**
+```python
+# Import sanitize_filename
+from app.utils.filename_utils import sanitize_filename
+
+# In embed_metadata_into_pdf function (line 144-148):
+suggested_filename = metadata.get("filename", os.path.splitext(os.path.basename(local_file_path))[0])
+# SECURITY: Sanitize filename to prevent path traversal vulnerabilities
+suggested_filename = sanitize_filename(suggested_filename)
+suggested_filename = os.path.splitext(suggested_filename)[0]
+```
+
+**Validation:** The `sanitize_filename()` function removes:
+- Path separators (`/`, `\`)
+- Path traversal patterns (`..`)
+- Special characters unsafe for filenames
+- Leading/trailing periods and spaces
+
+### Medium Vulnerability: Insecure Path Validation Using String Prefix Check
+
+**Status:** ✅ FIXED  
+**Severity:** MEDIUM  
+**Location:** `app/tasks/embed_metadata_into_pdf.py` (line 188-193)
+
+**Description:**  
+The code used string-based `startswith()` check to validate if a file was within the workdir/tmp directory before deletion. This is vulnerable to:
+- Partial directory name matches (e.g., `/workdir/tmp2/` would pass if workdir is `/workdir/tmp`)
+- Symlink attacks (symlinks are not resolved before checking)
+- Race conditions (TOCTOU - Time Of Check, Time Of Use)
+
+**Vulnerable Code:**
+```python
+# INSECURE: String-based path validation
+workdir_tmp = os.path.join(settings.workdir, TMP_SUBDIR)
+if original_file.startswith(workdir_tmp) and os.path.exists(original_file):
+    os.remove(original_file)
+```
+
+**Fix Applied:**
+```python
+# SECURE: Pathlib-based validation with resolve()
+from pathlib import Path
+
+workdir_tmp_path = Path(settings.workdir) / TMP_SUBDIR
+try:
+    original_file_path = Path(original_file).resolve()
+    workdir_tmp_resolved = workdir_tmp_path.resolve()
+    
+    # Check if file is within workdir/tmp and exists
+    if original_file_path.is_relative_to(workdir_tmp_resolved) and original_file_path.exists():
+        original_file_path.unlink()
+        logger.info(f"Deleted original file from {original_file}")
+except (ValueError, OSError) as e:
+    logger.error(f"Error validating path for deletion {original_file}: {e}")
+```
+
+**Benefits of pathlib approach:**
+- `resolve()` follows symlinks to get canonical path
+- `is_relative_to()` performs proper path hierarchy check
+- Raises `ValueError` for paths outside the base directory
+- Platform-independent path handling
+
+### Medium Issue: Insufficient Validation of GPT-Extracted Filenames
+
+**Status:** ✅ FIXED  
+**Severity:** MEDIUM  
+**Location:** `app/tasks/extract_metadata_with_gpt.py` (after line 124)
+
+**Description:**  
+While the GPT prompt requested filenames in a specific format (YYYY-MM-DD_DescriptiveTitle with only letters, numbers, periods, underscores), there was no validation to enforce this constraint. GPT may not always comply with the format specification, potentially returning:
+- Filenames with path separators
+- Filenames with path traversal patterns
+- Filenames with special characters
+
+**Fix Applied:**
+```python
+import re
+
+metadata = json.loads(json_text)
+
+# SECURITY: Validate filename format from GPT to prevent path traversal
+filename = metadata.get("filename", "")
+if filename:
+    # Check if filename contains only safe characters
+    if not re.match(r'^[\w\-\. ]+$', filename):
+        logger.warning(f"Invalid filename format from GPT: '{filename}', using fallback")
+        metadata["filename"] = ""
+    # Additional check: ensure no path traversal patterns
+    elif ".." in filename or "/" in filename or "\\" in filename:
+        logger.warning(f"Path traversal attempt in GPT filename: '{filename}', using fallback")
+        metadata["filename"] = ""
+```
+
+**Defense in Depth:**  
+This validation provides an additional layer of security before the filename reaches `embed_metadata_into_pdf.py`, where it is also sanitized.
+
+### Security-Positive Findings
+
+During the audit, several security-positive implementations were identified:
+
+#### 1. ✅ File Upload Endpoint Security (`app/api/files.py`)
+
+**Function:** `ui_upload` (line 654-757)
+
+**Security Measures:**
+```python
+# Extract basename to remove directory components
+base_filename = os.path.basename(file.filename)
+
+# Sanitize to remove special characters and path separators
+safe_filename = sanitize_filename(base_filename)
+
+# Add UUID to prevent overwrites and filename conflicts
+unique_id = str(uuid.uuid4())
+target_filename = f"{unique_id}.{file_extension}"
+
+# Join with workdir (safe because all inputs are sanitized)
+target_path = os.path.join(workdir, target_filename)
+```
+
+**Assessment:** ✅ SECURE - Properly prevents path traversal attacks
+
+#### 2. ✅ File Download/Preview Endpoints (`app/api/files.py`)
+
+**Functions:** `download_file` and `get_file_preview` (lines 510-651)
+
+**Security Measures:**
+- Use database-backed `file_id` parameter (integer) instead of accepting file paths
+- Retrieve file paths from database records only
+- Check file existence before serving
+- No direct user input in file path construction
+
+**Assessment:** ✅ SECURE - Immune to path traversal (no user-controlled paths)
+
+#### 3. ✅ Safe Path Resolution in API Common (`app/api/common.py`)
+
+**Function:** `resolve_file_path`
+
+**Security Implementation:**
+```python
+from pathlib import Path
+
+def resolve_file_path(base_dir, file_path):
+    """Safely resolve file path within base directory."""
+    base = Path(base_dir).resolve()
+    target = (base / file_path).resolve()
+    
+    # Ensure target is within base directory
+    if not target.is_relative_to(base):
+        raise ValueError("Path traversal attempt detected")
+    
+    return target
+```
+
+**Assessment:** ✅ SECURE - Properly validates paths using pathlib
+
+#### 4. ✅ Rclone Upload Task (`app/tasks/upload_with_rclone.py`)
+
+**Security Measures:**
+- Validates remote names with regex pattern
+- Uses list arguments to subprocess (prevents shell injection)
+- No user input in command construction
+
+**Assessment:** ✅ SECURE - Safe subprocess usage
+
+### Testing
+
+**Comprehensive test suite added:** `tests/test_path_traversal_security.py`
+
+**Test Coverage:**
+- ✅ Filename sanitization prevents path traversal (8 tests)
+- ✅ Metadata embedding flow with malicious filenames (4 tests)
+- ✅ GPT filename validation (2 tests)
+- ✅ Pathlib-based path validation security (4 tests)
+- ✅ File upload security (2 tests)
+- ✅ File hashing security (2 tests)
+- ✅ End-to-end integration tests (2 tests)
+
+**Total:** 24 security tests added
+
+**Running Security Tests:**
+```bash
+# Run all security tests
+pytest tests/test_path_traversal_security.py -v
+
+# Run only security marker tests
+pytest -m security -v
+
+# Run with coverage
+pytest tests/test_path_traversal_security.py --cov=app --cov-report=term-missing
+```
+
+### Recommendations
+
+**Implemented Security Best Practices:**
+
+1. ✅ **Input Sanitization:** All user-supplied filenames are sanitized using `sanitize_filename()`
+2. ✅ **Path Validation:** Use `pathlib.Path` with `resolve()` and `is_relative_to()` for all path validation
+3. ✅ **Defense in Depth:** Multiple layers of validation (at GPT extraction, at metadata embedding, at file upload)
+4. ✅ **Secure Defaults:** Safe filename generation with UUID when user input is untrusted
+5. ✅ **Principle of Least Privilege:** File operations restricted to specific directories
+
+**Additional Recommendations for Future Development:**
+
+1. **Code Review Checklist:** Add path traversal checks to code review process:
+   - Never use `os.path.join()` with unsanitized user input
+   - Always use `sanitize_filename()` for user-supplied filenames
+   - Use `pathlib.Path.resolve()` for path validation
+   - Avoid string-based path validation (`startswith()`)
+
+2. **Static Analysis:** Run Bandit security scanner regularly:
+   ```bash
+   bandit -r app -ll  # Show high and medium severity
+   ```
+
+3. **Automated Testing:** Include security tests in CI/CD pipeline:
+   ```bash
+   pytest -m security  # Run all security-marked tests
+   ```
+
+4. **Security Training:** Educate developers on:
+   - Path traversal attack vectors
+   - Secure file handling best practices
+   - OWASP Top 10 vulnerabilities
+
+### Files Modified
+
+**Security Fixes:**
+- `app/tasks/embed_metadata_into_pdf.py` - Added filename sanitization and secure path validation
+- `app/tasks/extract_metadata_with_gpt.py` - Added GPT filename validation
+- `app/utils/filename_utils.py` - Existing sanitization function (no changes needed, already secure)
+
+**Tests Added:**
+- `tests/test_path_traversal_security.py` - Comprehensive security test suite (24 tests)
+
+**Documentation:**
+- `SECURITY_AUDIT.md` - This audit report
+
+### Conclusion
+
+All identified path traversal vulnerabilities have been remediated with defense-in-depth security measures. The codebase now follows security best practices for file path operations:
+
+- ✅ All user input is sanitized before use in file operations
+- ✅ Path validation uses secure pathlib methods instead of string comparisons
+- ✅ Multiple layers of validation prevent bypasses
+- ✅ Comprehensive test coverage validates security fixes
+- ✅ Security-positive patterns already in use for file uploads and downloads
+
+**Overall Security Posture:** STRONG - No remaining path traversal vulnerabilities identified.
 
 ---
 

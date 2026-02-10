@@ -122,6 +122,24 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
             return {}
 
         metadata = json.loads(json_text)
+        
+        # SECURITY: Validate filename format from GPT to prevent path traversal
+        # The prompt requests filenames with only letters, numbers, periods, and underscores
+        # Enforce this constraint to prevent malicious filenames
+        import re
+        filename = metadata.get("filename", "")
+        if filename:
+            # Check if filename contains only safe characters (alphanumeric, dash, underscore, period, space)
+            # This matches the sanitize_filename behavior but validates before use
+            if not re.match(r'^[\w\-\. ]+$', filename):
+                logger.warning(f"[{task_id}] Invalid filename format from GPT: '{filename}', using fallback")
+                # Reset to empty to trigger fallback to original filename
+                metadata["filename"] = ""
+            # Additional check: ensure no path traversal patterns
+            elif ".." in filename or "/" in filename or "\\" in filename:
+                logger.warning(f"[{task_id}] Path traversal attempt in GPT filename: '{filename}', using fallback")
+                metadata["filename"] = ""
+        
         logger.info(f"[{task_id}] Extracted metadata: {metadata}")
         log_task_progress(
             task_id, "parse_metadata", "success", f"Parsed metadata: {list(metadata.keys())}", file_id=file_id

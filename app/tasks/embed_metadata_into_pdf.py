@@ -5,6 +5,7 @@ import logging
 import os
 import shutil
 import tempfile
+from pathlib import Path
 
 import PyPDF2  # Replace fitz with PyPDF2
 
@@ -16,6 +17,7 @@ from app.models import FileRecord
 from app.tasks.finalize_document_storage import finalize_document_storage
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils import log_task_progress
+from app.utils.filename_utils import sanitize_filename
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +143,10 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
         log_task_progress(task_id, "modify_pdf", "success", "PDF metadata embedded", file_id=file_id)
 
         # Use the suggested filename from metadata; if not provided, use the original basename.
+        # SECURITY: Sanitize filename to prevent path traversal vulnerabilities
         suggested_filename = metadata.get("filename", os.path.splitext(os.path.basename(local_file_path))[0])
+        # Sanitize the filename to remove path separators and dangerous characters
+        suggested_filename = sanitize_filename(suggested_filename)
         # Remove any extension and then add .pdf
         suggested_filename = os.path.splitext(suggested_filename)[0]
         # Define the final directory based on settings.workdir and ensure it exists.
@@ -184,13 +189,21 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
         finalize_document_storage.delay(original_file, final_file_path, metadata, file_id=file_id)
 
         # After triggering final storage, delete the original file if it is in workdir/tmp.
-        workdir_tmp = os.path.join(settings.workdir, TMP_SUBDIR)
-        if original_file.startswith(workdir_tmp) and os.path.exists(original_file):
-            try:
-                os.remove(original_file)
-                logger.info(f"[{task_id}] Deleted original file from {original_file}")
-            except Exception as e:
-                logger.error(f"[{task_id}] Could not delete original file {original_file}: {e}")
+        # SECURITY: Use pathlib for safe path validation to prevent path traversal
+        workdir_tmp_path = Path(settings.workdir) / TMP_SUBDIR
+        try:
+            original_file_path = Path(original_file).resolve()
+            workdir_tmp_resolved = workdir_tmp_path.resolve()
+            
+            # Check if file is within workdir/tmp and exists
+            if original_file_path.is_relative_to(workdir_tmp_resolved) and original_file_path.exists():
+                try:
+                    original_file_path.unlink()
+                    logger.info(f"[{task_id}] Deleted original file from {original_file}")
+                except Exception as e:
+                    logger.error(f"[{task_id}] Could not delete original file {original_file}: {e}")
+        except (ValueError, OSError) as e:
+            logger.error(f"[{task_id}] Error validating path for deletion {original_file}: {e}")
 
         return {"file": final_file_path, "metadata_file": json_path, "status": "Metadata embedded"}
 
