@@ -145,6 +145,38 @@ docker-compose up -d
 
 The API will be available at **`http://localhost:8000`**, and the API documentation is available at **`http://localhost:8000/docs`**.
 
+## Development & Testing
+
+### Running Tests
+
+DocuElevate includes comprehensive test coverage. To run tests:
+
+```bash
+# Install development dependencies
+pip install -r requirements-dev.txt
+
+# Run all tests
+pytest
+
+# Run with coverage report
+pytest --cov=app --cov-report=term-missing
+
+# Run only fast unit tests
+pytest -m unit
+```
+
+Tests are automatically configured with the necessary environment variables - **no manual setup required!**
+
+For detailed testing information, including integration tests with Docker and authentication testing, see the [Contributing Guide](CONTRIBUTING.md#running-tests).
+
+### Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
+- Code style guidelines
+- Commit message format (Conventional Commits)
+- Testing requirements
+- Pull request process
+
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.

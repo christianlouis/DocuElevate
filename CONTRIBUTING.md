@@ -180,16 +180,103 @@ pip install -r requirements-dev.txt
 
 ### Running Tests
 
+DocuElevate has comprehensive test coverage including unit tests, integration tests, and end-to-end tests. Tests are automatically configured with the necessary environment variables.
+
+#### Quick Test Commands
+
 ```bash
+# Run all tests (default configuration)
 pytest
+
+# Run with verbose output
+pytest -v
+
+# Run with coverage report
+pytest --cov=app --cov-report=term-missing
+
+# Run only unit tests (fast, no Docker required)
+pytest -m unit
+
+# Run only integration tests
+pytest -m integration
+
+# Run specific test file
+pytest tests/test_api.py -v
 ```
+
+#### Test Environment Configuration
+
+Tests automatically configure the required environment variables in `tests/conftest.py`:
+
+- `DATABASE_URL`: Uses SQLite in-memory database for fast, isolated tests
+- `AUTH_ENABLED`: Set to `False` by default for simpler unit tests
+- `SESSION_SECRET`: Pre-configured with a valid 32+ character secret for tests that need it
+- `OPENAI_API_KEY`, `AZURE_AI_KEY`, etc.: Pre-configured with test values
+
+**No manual environment setup is needed to run tests!**
+
+#### Testing with Authentication Enabled
+
+Some tests specifically verify authentication behavior with `AUTH_ENABLED=True`. These tests:
+
+1. Use `@patch("app.auth.AUTH_ENABLED", True)` to enable auth for specific tests
+2. Properly configure `SESSION_SECRET` (already set in conftest.py)
+3. Mock user sessions to test protected endpoints
+4. Verify login redirects and access control
+
+Example:
+```python
+from unittest.mock import patch
+
+@pytest.mark.integration
+def test_protected_endpoint_with_auth(client):
+    """Test endpoint requires authentication when auth is enabled."""
+    with patch("app.auth.AUTH_ENABLED", True):
+        # Test will verify redirect to /login
+        response = client.get("/protected-page")
+        assert response.status_code == 302
+```
+
+#### Integration Tests with Docker
+
+Some tests require Docker to spin up real infrastructure (PostgreSQL, Redis, WebDAV, etc.):
+
+```bash
+# Run integration tests that need Docker
+pytest -m requires_docker -v
+
+# Run end-to-end tests with full stack
+pytest -m e2e -v
+```
+
+See [tests/README_INTEGRATION_TESTS.md](tests/README_INTEGRATION_TESTS.md) for detailed information about integration testing.
+
+#### Test Markers
+
+Tests are organized using pytest markers:
+
+- `@pytest.mark.unit` - Fast unit tests with mocks
+- `@pytest.mark.integration` - Integration tests with some real services
+- `@pytest.mark.e2e` - Full end-to-end tests
+- `@pytest.mark.requires_docker` - Requires Docker to run
+- `@pytest.mark.slow` - Tests that take significant time
+- `@pytest.mark.security` - Security-related tests
+
+#### Running Tests in CI
+
+Tests run automatically in GitHub Actions for all pull requests. The CI environment:
+
+1. Installs all dependencies from `requirements-dev.txt`
+2. Runs pytest with coverage
+3. Uploads coverage reports to Codecov
+4. Fails the build if tests don't pass or coverage drops
 
 ### Code Style
 
 We use:
-- Black for Python code formatting
+- Black for Python code formatting (line length: 120)
 - Flake8 for linting
-- isort for import sorting
+- isort for import sorting (Black-compatible profile)
 
 ```bash
 # Format code
