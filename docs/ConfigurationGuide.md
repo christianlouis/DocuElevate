@@ -159,7 +159,7 @@ Prevents the page from being loaded in frames/iframes. Protects against clickjac
 **Valid Values:**
 - `DENY` - Page cannot be displayed in a frame (most secure)
 - `SAMEORIGIN` - Page can only be displayed in a frame on the same origin
-- `ALLOW-FROM uri` - Page can only be displayed in a frame on the specified origin (deprecated in modern browsers)
+- ~~`ALLOW-FROM uri`~~ - **Deprecated**: Page can only be displayed in a frame on the specified origin. This directive is deprecated in modern browsers; use CSP `frame-ancestors` directive instead.
 
 #### X-Content-Type-Options
 

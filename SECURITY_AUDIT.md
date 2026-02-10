@@ -727,7 +727,7 @@ All security headers are configurable via environment variables:
 - `SECURITY_AUDIT.md` - Updated infrastructure security status
 
 **Tests:**
-- `tests/test_security_headers.py` - Comprehensive test suite (24 tests)
+- `tests/test_security_headers.py` - Comprehensive test suite (11 tests)
   - Unit tests for individual headers
   - Integration tests for configuration loading
   - Security tests for header format validation
