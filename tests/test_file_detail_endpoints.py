@@ -3,9 +3,11 @@ Tests for file detail view improvements including reprocessing and preview endpo
 """
 
 import os
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
+
 from app.models import FileRecord, ProcessingLog
 
 
@@ -126,6 +128,127 @@ class TestSubtaskRetry:
         response = client.post(f"/api/files/{file_record.id}/retry-subtask?subtask_name=upload_to_dropbox")
         assert response.status_code == 400
         assert "processed file not found" in response.json()["detail"].lower()
+
+    @patch("app.api.files.process_document")
+    def test_retry_pipeline_step_process_document(
+        self, mock_process_document, client: TestClient, db_session, sample_pdf_path
+    ):
+        """Test retrying the process_document pipeline step."""
+        mock_task = MagicMock()
+        mock_task.id = "retry-task-123"
+        mock_process_document.delay.return_value = mock_task
+
+        file_record = FileRecord(
+            filehash="pipeline_retry1",
+            original_filename="pipeline.pdf",
+            local_filename=sample_pdf_path,
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+        db_session.refresh(file_record)
+
+        response = client.post(f"/api/files/{file_record.id}/retry-subtask?subtask_name=process_document")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert data["subtask_name"] == "process_document"
+        assert "task_id" in data
+
+        # Verify process_document.delay was called with file_id
+        mock_process_document.delay.assert_called_once()
+        call_kwargs = mock_process_document.delay.call_args
+        assert call_kwargs[1].get("file_id") == file_record.id or call_kwargs[0][-1] == file_record.id
+
+    def test_retry_pipeline_step_ocr(self, client: TestClient, db_session, sample_pdf_path):
+        """Test retrying the OCR pipeline step."""
+        mock_task = MagicMock()
+        mock_task.id = "ocr-retry-task"
+
+        file_record = FileRecord(
+            filehash="pipeline_retry2",
+            original_filename="ocr_retry.pdf",
+            local_filename=sample_pdf_path,
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+        db_session.refresh(file_record)
+
+        with patch(
+            "app.tasks.process_with_azure_document_intelligence.process_with_azure_document_intelligence"
+        ) as mock_azure:
+            mock_azure.delay.return_value = mock_task
+            response = client.post(
+                f"/api/files/{file_record.id}/retry-subtask?subtask_name=process_with_azure_document_intelligence"
+            )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert data["subtask_name"] == "process_with_azure_document_intelligence"
+
+    def test_retry_pipeline_step_metadata_extraction(self, client: TestClient, db_session, sample_pdf_path):
+        """Test retrying the metadata extraction pipeline step."""
+        mock_task = MagicMock()
+        mock_task.id = "gpt-retry-task"
+
+        file_record = FileRecord(
+            filehash="pipeline_retry3",
+            original_filename="gpt_retry.pdf",
+            local_filename=sample_pdf_path,
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+        db_session.refresh(file_record)
+
+        with patch("app.tasks.extract_metadata_with_gpt.extract_metadata_with_gpt") as mock_gpt:
+            mock_gpt.delay.return_value = mock_task
+            response = client.post(f"/api/files/{file_record.id}/retry-subtask?subtask_name=extract_metadata_with_gpt")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert data["subtask_name"] == "extract_metadata_with_gpt"
+
+    def test_retry_pipeline_step_embed_no_metadata(self, client: TestClient, db_session, sample_pdf_path):
+        """Test retrying embed_metadata_into_pdf without prior metadata extraction."""
+        file_record = FileRecord(
+            filehash="pipeline_retry4",
+            original_filename="embed_retry.pdf",
+            local_filename=sample_pdf_path,
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+        db_session.refresh(file_record)
+
+        # Try to retry embed without a successful metadata extraction log
+        response = client.post(f"/api/files/{file_record.id}/retry-subtask?subtask_name=embed_metadata_into_pdf")
+        assert response.status_code == 400
+        assert "retry extract_metadata_with_gpt first" in response.json()["detail"].lower()
+
+    def test_retry_pipeline_step_missing_local_file(self, client: TestClient, db_session):
+        """Test retrying a pipeline step when local file is missing."""
+        file_record = FileRecord(
+            filehash="pipeline_retry5",
+            original_filename="missing.pdf",
+            local_filename="/nonexistent/path/missing.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+        db_session.refresh(file_record)
+
+        response = client.post(
+            f"/api/files/{file_record.id}/retry-subtask?subtask_name=process_with_azure_document_intelligence"
+        )
+        assert response.status_code == 400
+        assert "not found on disk" in response.json()["detail"].lower()
 
 
 @pytest.mark.integration

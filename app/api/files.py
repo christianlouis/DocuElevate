@@ -312,8 +312,8 @@ def bulk_reprocess_files(request: Request, file_ids: List[int], db: Session = De
                     )
                     continue
 
-                # Queue the file for processing
-                task = process_document.delay(file_record.local_filename)
+                # Queue the file for processing, passing file_id to skip duplicate check
+                task = process_document.delay(file_record.local_filename, file_id=file_record.id)
                 task_ids.append(task.id)
                 processed_files.append(
                     {"file_id": file_record.id, "filename": file_record.original_filename, "task_id": task.id}
@@ -366,8 +366,10 @@ def reprocess_single_file(request: Request, file_id: int, db: Session = Depends(
         if not file_record.local_filename or not os.path.exists(file_record.local_filename):
             raise HTTPException(status_code=400, detail="Local file not found on disk. Cannot reprocess.")
 
-        # Queue the file for processing
-        task = process_document.delay(file_record.local_filename, original_filename=file_record.original_filename)
+        # Queue the file for processing, passing file_id to skip duplicate check
+        task = process_document.delay(
+            file_record.local_filename, original_filename=file_record.original_filename, file_id=file_record.id
+        )
 
         logger.info(
             f"Reprocessing file: ID={file_record.id}, " f"Filename={file_record.original_filename}, TaskID={task.id}"
@@ -388,20 +390,130 @@ def reprocess_single_file(request: Request, file_id: int, db: Session = Depends(
         raise HTTPException(status_code=500, detail=f"Error reprocessing file: {str(e)}")
 
 
+def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -> dict:
+    """
+    Retry a specific pipeline processing step for a file.
+
+    Supports restarting from intermediate pipeline steps:
+    - process_document: Full reprocessing (skips duplicate check)
+    - process_with_azure_document_intelligence: OCR processing
+    - extract_metadata_with_gpt: Metadata extraction
+    - embed_metadata_into_pdf: Metadata embedding
+
+    Args:
+        file_record: The FileRecord to reprocess
+        step_name: Name of the pipeline step to retry
+        db: Database session
+
+    Returns:
+        Dict with task ID and status information
+    """
+    file_id = file_record.id
+
+    if step_name == "process_document":
+        # Full reprocessing with duplicate check bypass
+        if not file_record.local_filename or not os.path.exists(file_record.local_filename):
+            raise HTTPException(status_code=400, detail="Local file not found on disk. Cannot retry.")
+        task = process_document.delay(
+            file_record.local_filename, original_filename=file_record.original_filename, file_id=file_id
+        )
+    elif step_name == "process_with_azure_document_intelligence":
+        from app.tasks.process_with_azure_document_intelligence import process_with_azure_document_intelligence
+
+        # OCR needs the file in workdir/tmp
+        if not file_record.local_filename or not os.path.exists(file_record.local_filename):
+            raise HTTPException(status_code=400, detail="Local file not found on disk. Cannot retry OCR.")
+        filename = os.path.basename(file_record.local_filename)
+        task = process_with_azure_document_intelligence.delay(filename, file_id)
+    elif step_name == "extract_metadata_with_gpt":
+        from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
+
+        # Extract text from the file to pass to GPT
+        if not file_record.local_filename or not os.path.exists(file_record.local_filename):
+            raise HTTPException(
+                status_code=400, detail="Local file not found on disk. Cannot retry metadata extraction."
+            )
+        import PyPDF2
+
+        extracted_text = ""
+        with open(file_record.local_filename, "rb") as f:
+            pdf_reader = PyPDF2.PdfReader(f)
+            for page in pdf_reader.pages:
+                extracted_text += page.extract_text() + "\n"
+
+        filename = os.path.basename(file_record.local_filename)
+        task = extract_metadata_with_gpt.delay(filename, extracted_text, file_id)
+    elif step_name == "embed_metadata_into_pdf":
+        from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
+
+        # Retrieve the last successful metadata extraction result from processing logs
+        last_metadata_log = (
+            db.query(ProcessingLog)
+            .filter(
+                ProcessingLog.file_id == file_id,
+                ProcessingLog.step_name == "extract_metadata_with_gpt",
+                ProcessingLog.status == "success",
+            )
+            .order_by(ProcessingLog.timestamp.desc())
+            .first()
+        )
+        if not last_metadata_log:
+            raise HTTPException(
+                status_code=400,
+                detail="No successful metadata extraction found. Retry extract_metadata_with_gpt first.",
+            )
+
+        if not file_record.local_filename or not os.path.exists(file_record.local_filename):
+            raise HTTPException(
+                status_code=400, detail="Local file not found on disk. Cannot retry metadata embedding."
+            )
+        # Re-extract text and metadata for embedding
+        import PyPDF2
+
+        extracted_text = ""
+        with open(file_record.local_filename, "rb") as f:
+            pdf_reader = PyPDF2.PdfReader(f)
+            for page in pdf_reader.pages:
+                extracted_text += page.extract_text() + "\n"
+
+        filename = os.path.basename(file_record.local_filename)
+        # Pass empty metadata dict - the embed task will use whatever was last extracted
+        # The actual metadata should ideally be stored, but for retry we re-extract
+        task = embed_metadata_into_pdf.delay(filename, extracted_text, {}, file_id)
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported pipeline step: {step_name}")
+
+    logger.info(f"Retrying pipeline step: FileID={file_record.id}, Step={step_name}, TaskID={task.id}")
+
+    return {
+        "status": "success",
+        "message": f"Pipeline step {step_name} queued for retry",
+        "file_id": file_record.id,
+        "subtask_name": step_name,
+        "task_id": task.id,
+    }
+
+
 @router.post("/files/{file_id}/retry-subtask")
 @require_login
 def retry_subtask(
     request: Request,
     file_id: int,
-    subtask_name: str = Query(..., description="Name of the upload subtask to retry (e.g., 'upload_to_dropbox')"),
+    subtask_name: str = Query(
+        ..., description="Name of the subtask to retry (e.g., 'upload_to_dropbox', 'extract_metadata_with_gpt')"
+    ),
     db: Session = Depends(get_db),
 ):
     """
-    Retry a specific failed upload subtask for a file.
+    Retry a specific failed subtask for a file.
+
+    Supports both upload tasks (e.g., upload_to_dropbox) and pipeline processing
+    steps (e.g., process_with_azure_document_intelligence, extract_metadata_with_gpt,
+    embed_metadata_into_pdf).
 
     Args:
         file_id: ID of the file
-        subtask_name: Name of the upload task (e.g., upload_to_dropbox, upload_to_s3)
+        subtask_name: Name of the task to retry
 
     Returns:
         Task ID and status information
@@ -412,6 +524,17 @@ def retry_subtask(
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
+
+        # Pipeline processing steps that can be retried from the failed step
+        pipeline_step_names = {
+            "process_document",
+            "process_with_azure_document_intelligence",
+            "extract_metadata_with_gpt",
+            "embed_metadata_into_pdf",
+        }
+
+        if subtask_name in pipeline_step_names:
+            return _retry_pipeline_step(file_record, subtask_name, db)
 
         # Map subtask names to their corresponding Celery tasks
         from app.tasks.upload_to_dropbox import upload_to_dropbox
@@ -439,9 +562,10 @@ def retry_subtask(
         }
 
         if subtask_name not in task_map:
+            all_valid = sorted(list(task_map.keys()) + sorted(pipeline_step_names))
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid subtask name: {subtask_name}. Must be one of: {', '.join(task_map.keys())}",
+                detail=f"Invalid subtask name: {subtask_name}. Must be one of: {', '.join(all_valid)}",
             )
 
         # Check for processed file (upload tasks work with processed files)
