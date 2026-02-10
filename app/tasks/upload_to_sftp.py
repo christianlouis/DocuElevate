@@ -48,12 +48,13 @@ def upload_to_sftp(self, file_path: str, file_id: int = None):
     ssh = paramiko.SSHClient()
 
     # Security: Host key verification
-    # WARNING: AutoAddPolicy automatically trusts unknown host keys (vulnerable to MITM attacks)
-    # For production, use RejectPolicy and configure known_hosts, or WarningPolicy at minimum
-    if getattr(settings, "sftp_disable_host_key_verification", True):
+    # By default (sftp_disable_host_key_verification=False), we use RejectPolicy for security
+    # Setting sftp_disable_host_key_verification=True disables verification (for testing only)
+    if getattr(settings, "sftp_disable_host_key_verification", False):
         logger.warning(
             "SFTP host key verification is DISABLED - connections are vulnerable to MITM attacks. "
-            "For production, set SFTP_DISABLE_HOST_KEY_VERIFICATION=false and configure known_hosts."
+            "This should only be used in development/testing. For production, remove "
+            "SFTP_DISABLE_HOST_KEY_VERIFICATION or set it to False and configure known_hosts."
         )
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # nosec B507 - Configurable, warns user
     else:
