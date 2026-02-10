@@ -127,11 +127,13 @@ def set_document_custom_fields(doc_id: int, custom_fields: dict, task_id: str) -
     # Build custom_fields array for PATCH request
     custom_fields_array = []
     for field_name, value in custom_fields.items():
-        if value and value != UNKNOWN_VALUE:  # Only set non-empty, non-Unknown values
+        # Ensure value is a string for consistent comparison
+        str_value = str(value) if value is not None else ""
+        if str_value and str_value != UNKNOWN_VALUE:  # Only set non-empty, non-Unknown values
             try:
                 field_id = get_custom_field_id(field_name)
-                custom_fields_array.append({"field": field_id, "value": value})
-                logger.info(f"[{task_id}] Mapped custom field '{field_name}' to ID {field_id} with value '{value}'")
+                custom_fields_array.append({"field": field_id, "value": str_value})
+                logger.info(f"[{task_id}] Mapped custom field '{field_name}' to ID {field_id} with value '{str_value}'")
             except ValueError as e:
                 logger.warning(f"[{task_id}] {str(e)}, skipping this field")
                 continue
@@ -251,18 +253,17 @@ def upload_to_paperless(self, file_path: str, file_id: int = None):
     if settings.paperless_custom_fields_mapping:
         try:
             # Parse JSON mapping: {"metadata_field": "PaperlessFieldName", ...}
-            import json
-
             field_mapping = json.loads(settings.paperless_custom_fields_mapping)
             logger.info(f"[{task_id}] Using custom fields mapping: {field_mapping}")
 
             # Map each metadata field to its corresponding Paperless custom field
             for metadata_field, paperless_field in field_mapping.items():
                 if metadata_field in metadata and metadata[metadata_field]:
-                    custom_fields_to_set[paperless_field] = metadata[metadata_field]
-                    logger.debug(
-                        f"[{task_id}] Mapping {metadata_field}='{metadata[metadata_field]}' to field '{paperless_field}'"
-                    )
+                    # Convert to string to ensure consistent comparison with UNKNOWN_VALUE
+                    value = str(metadata[metadata_field]) if metadata[metadata_field] is not None else ""
+                    if value and value != UNKNOWN_VALUE:
+                        custom_fields_to_set[paperless_field] = value
+                        logger.debug(f"[{task_id}] Mapping {metadata_field}='{value}' to field '{paperless_field}'")
         except json.JSONDecodeError as e:
             logger.error(f"[{task_id}] Failed to parse PAPERLESS_CUSTOM_FIELDS_MAPPING: {e}")
         except Exception as e:

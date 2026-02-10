@@ -169,7 +169,7 @@ PAPERLESS_CUSTOM_FIELDS_MAPPING='{"absender": "Sender", "empfaenger": "Recipient
 
 **Available Metadata Fields**:
 - `absender` - Sender/author
-- `empfaenger` - Recipient  
+- `empfaenger` - Recipient
 - `correspondent` - Issuing company (short name)
 - `language` - Document language (e.g., "de", "en")
 - `document_type` - Classification (Invoice, Contract, etc.)
