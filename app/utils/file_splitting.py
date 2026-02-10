@@ -5,6 +5,7 @@ This module provides functionality to split PDF files that exceed a certain size
 into smaller chunks for processing. Used when MAX_SINGLE_FILE_SIZE is configured.
 """
 
+import io
 import logging
 import os
 from typing import List, Optional
@@ -74,18 +75,15 @@ def split_pdf_by_size(pdf_path: str, max_size_bytes: int, output_dir: Optional[s
         current_writer.add_page(page)
         current_page_count += 1
 
-        # Write to temporary file to check size
-        temp_output_path = os.path.join(output_dir, f"{base_name}_part{part_number}_temp.pdf")
-        with open(temp_output_path, "wb") as temp_file:
-            current_writer.write(temp_file)
-
-        temp_size = os.path.getsize(temp_output_path)
+        # Check size in memory without writing to disk (performance optimization)
+        temp_buffer = io.BytesIO()
+        current_writer.write(temp_buffer)
+        temp_size = temp_buffer.tell()  # Get the size of the buffer
+        temp_buffer.close()
 
         # If adding this page exceeds the limit (and we have more than 1 page in current chunk)
         # save the previous chunk and start a new one
         if temp_size > max_size_bytes and current_page_count > 1:
-            # Remove the temporary file
-            os.remove(temp_output_path)
 
             # Create a new writer without the last page
             previous_writer = PdfWriter()
@@ -112,18 +110,17 @@ def split_pdf_by_size(pdf_path: str, max_size_bytes: int, output_dir: Optional[s
                 f"Single page (page {page_num + 1}) exceeds size limit "
                 f"({temp_size} > {max_size_bytes}). Keeping as separate file."
             )
-            # Rename temp file to final name
+            # Save this single page as a separate chunk
             output_path = os.path.join(output_dir, f"{base_name}_part{part_number}.pdf")
-            os.rename(temp_output_path, output_path)
+            with open(output_path, "wb") as output_file:
+                current_writer.write(output_file)
             output_files.append(output_path)
 
             # Start new chunk
             part_number += 1
             current_writer = PdfWriter()
             current_page_count = 0
-        else:
-            # Size is OK, remove temp file and continue
-            os.remove(temp_output_path)
+        # else: Size is OK, continue adding pages to current chunk
 
     # Save the last chunk if it has any pages
     if current_page_count > 0:
