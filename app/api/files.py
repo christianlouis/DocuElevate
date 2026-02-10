@@ -27,6 +27,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def get_limiter():
+    """Get the limiter from app state."""
+    from app.main import app
+
+    return app.state.limiter
+
+
 @router.get("/files")
 @require_login
 def list_files_api(

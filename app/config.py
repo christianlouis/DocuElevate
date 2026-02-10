@@ -213,6 +213,25 @@ class Settings(BaseSettings):
         default=True, description="Enable X-Content-Type-Options header (always set to 'nosniff')."
     )
 
+    # Rate Limiting Configuration (see SECURITY_AUDIT.md and docs/API.md)
+    # Protects against DoS attacks and API abuse
+    rate_limiting_enabled: bool = Field(
+        default=True,
+        description="Enable rate limiting middleware. Recommended for production to prevent abuse.",
+    )
+    rate_limit_default: str = Field(
+        default="100/minute",
+        description="Default rate limit for all endpoints (format: 'count/period', e.g., '100/minute', '1000/hour').",
+    )
+    rate_limit_upload: str = Field(
+        default="600/minute",
+        description="Rate limit for file upload endpoints to prevent resource exhaustion.",
+    )
+    rate_limit_auth: str = Field(
+        default="10/minute",
+        description="Stricter rate limit for authentication endpoints to prevent brute force attacks.",
+    )
+
     @validator("notification_urls", pre=True)
     def parse_notification_urls(cls, v):
         """Parse notification URLs from string or list"""
