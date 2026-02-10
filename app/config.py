@@ -224,7 +224,7 @@ class Settings(BaseSettings):
         description="Default rate limit for all endpoints (format: 'count/period', e.g., '100/minute', '1000/hour').",
     )
     rate_limit_upload: str = Field(
-        default="20/minute",
+        default="10/second",
         description="Rate limit for file upload endpoints to prevent resource exhaustion.",
     )
     rate_limit_process: str = Field(

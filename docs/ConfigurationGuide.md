@@ -121,7 +121,7 @@ Rate limits are specified in the format `count/period`, where:
 | **Variable**           | **Description**                                                      | **Default**      | **Applies To**                          |
 |------------------------|----------------------------------------------------------------------|------------------|-----------------------------------------|
 | `RATE_LIMIT_DEFAULT`   | Default rate limit for all API endpoints                             | `100/minute`     | Most API endpoints                      |
-| `RATE_LIMIT_UPLOAD`    | Rate limit for file upload endpoints (prevents resource exhaustion)  | `20/minute`      | `/api/ui-upload` and similar            |
+| `RATE_LIMIT_UPLOAD`    | Rate limit for file upload endpoints (prevents resource exhaustion)  | `10/second`      | `/api/ui-upload` and similar            |
 | `RATE_LIMIT_PROCESS`   | Rate limit for processing endpoints (OCR, metadata extraction)       | `30/minute`      | `/api/process`, OCR endpoints           |
 | `RATE_LIMIT_AUTH`      | Stricter rate limit for authentication (prevents brute force)        | `10/minute`      | Login, authentication endpoints         |
 
