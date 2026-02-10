@@ -57,6 +57,11 @@ MAX_SINGLE_FILE_SIZE=524288000
 
 **File Splitting Behavior:**
 - When `MAX_SINGLE_FILE_SIZE` is configured and a PDF exceeds this size, it is automatically split into smaller chunks
+- **IMPORTANT:** Splitting is done at **PAGE BOUNDARIES**, not by byte position
+  - Uses PyPDF2 to properly parse PDF structure
+  - Each output file is a complete, valid PDF containing whole pages
+  - No risk of corrupted or broken PDF files
+  - Pages are distributed across output files to stay under size limit
 - Each chunk is processed sequentially as a separate task
 - Only works for PDF files (images and office documents are converted to PDF first)
 - Original file is removed after successful splitting

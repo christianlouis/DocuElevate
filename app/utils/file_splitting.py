@@ -19,8 +19,16 @@ def split_pdf_by_size(pdf_path: str, max_size_bytes: int, output_dir: Optional[s
     """
     Split a PDF file into multiple smaller PDF files based on size constraints.
 
-    The function splits the PDF by distributing pages across multiple output files,
-    ensuring each output file stays under the specified size limit.
+    IMPORTANT: This function splits PDFs at PAGE BOUNDARIES, not by byte position.
+    It uses PyPDF2 to properly parse the PDF structure and distribute complete pages
+    across multiple valid output PDFs. This ensures:
+    - All output files are structurally valid and readable PDFs
+    - No corrupted or broken PDF files are created
+    - Each output file contains complete pages from the original document
+
+    The function adds pages to the current output file until adding another page
+    would exceed the size limit, then starts a new output file. This is NOT a
+    simple byte-level file split - it respects PDF page boundaries.
 
     Args:
         pdf_path: Path to the PDF file to split
@@ -28,15 +36,18 @@ def split_pdf_by_size(pdf_path: str, max_size_bytes: int, output_dir: Optional[s
         output_dir: Directory to save split files. If None, uses same directory as input file.
 
     Returns:
-        List of paths to the generated PDF files (in order)
+        List of paths to the generated PDF files (in order). Each file is a valid PDF
+        containing complete pages from the original document.
 
     Raises:
         FileNotFoundError: If the input PDF file doesn't exist
         ValueError: If max_size_bytes is too small to fit even one page
 
     Example:
-        >>> split_files = split_pdf_by_size("large.pdf", 50 * 1024 * 1024)  # 50MB max
+        >>> # Split a large PDF into chunks of max 50MB each
+        >>> split_files = split_pdf_by_size("large.pdf", 50 * 1024 * 1024)
         >>> print(f"Split into {len(split_files)} files")
+        >>> # Each file is a valid PDF with complete pages
     """
     # Validate input file exists
     if not os.path.exists(pdf_path):

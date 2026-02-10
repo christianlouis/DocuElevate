@@ -181,6 +181,44 @@ class TestSplitPdfBySize:
             if os.path.exists(split_file):
                 os.remove(split_file)
 
+    def test_split_pdfs_are_valid_and_readable(self, sample_multipage_pdf):
+        """Test that split PDFs are valid, complete PDFs that can be opened and read.
+
+        This test verifies that PDF splitting is done at PAGE BOUNDARIES,
+        not by byte position, ensuring no corrupted/broken PDFs are created.
+        """
+        max_size = 5000  # Small size to force splitting
+
+        split_files = split_pdf_by_size(sample_multipage_pdf, max_size)
+
+        try:
+            # Verify each split file is a valid, readable PDF
+            for split_file in split_files:
+                assert os.path.exists(split_file), f"Split file {split_file} should exist"
+
+                # Try to open and read the PDF - this will fail if PDF is corrupted
+                try:
+                    reader = PdfReader(split_file)
+                    # Verify it has pages (not an empty or broken PDF)
+                    assert len(reader.pages) > 0, f"Split PDF {split_file} should have pages"
+
+                    # Try to access first page content to ensure PDF structure is valid
+                    first_page = reader.pages[0]
+                    # If the PDF was corrupted by byte-splitting, this would raise an error
+                    _ = first_page.extract_text()  # This validates PDF structure
+
+                except Exception as e:
+                    pytest.fail(
+                        f"Split PDF {split_file} is corrupted or unreadable. "
+                        f"This indicates byte-level splitting instead of page-level splitting. Error: {e}"
+                    )
+
+        finally:
+            # Cleanup
+            for split_file in split_files:
+                if os.path.exists(split_file):
+                    os.remove(split_file)
+
 
 @pytest.mark.unit
 class TestShouldSplitFile:

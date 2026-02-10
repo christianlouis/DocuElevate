@@ -150,7 +150,10 @@ This document tracks security vulnerabilities found in DocuElevate and their rem
 **Fix:** Implemented configurable file upload size limits with the following features:
 - `MAX_UPLOAD_SIZE`: Maximum file upload size in bytes (default: 1GB)
 - `MAX_SINGLE_FILE_SIZE`: Optional maximum size for a single file chunk
-- Automatic file splitting for large PDFs when max_single_file_size is configured
+- **Automatic page-based PDF splitting** for large PDFs when max_single_file_size is configured
+  - Splits PDFs at **page boundaries** using PyPDF2, NOT by byte position
+  - Each output file is a structurally valid, complete PDF
+  - No risk of corrupted or broken PDF files
 - Split files are processed sequentially to prevent overwhelming the system
 - Clear error messages referencing SECURITY_AUDIT.md for configuration details
 
