@@ -55,13 +55,13 @@ This document tracks security vulnerabilities found in DocuElevate and their rem
 **Issue:** Using `paramiko.AutoAddPolicy()` automatically trusts unknown SSH host keys, making connections vulnerable to MITM attacks.
 
 **Remediation:**
-- Added configuration option `sftp_disable_host_key_verification` (default: True for backward compatibility)
-- When disabled (production recommended), uses `paramiko.RejectPolicy()` with system known_hosts
-- Added prominent security warnings when host key verification is disabled
-- Added `# nosec B507` annotation with justification
+- Added configuration option `sftp_disable_host_key_verification` (default: False for security)
+- When enabled (False), uses `paramiko.RejectPolicy()` with system known_hosts for secure verification
+- When disabled (True, for testing only), uses `AutoAddPolicy()` with security warnings
+- Added `# nosec B507` annotation with justification for the test/dev use case
 - Updated docstrings with security guidance
 
-**Production Recommendation:** Set `SFTP_DISABLE_HOST_KEY_VERIFICATION=false` and configure SSH known_hosts file.
+**Security Note:** The default value is now `False` (secure). For development/testing environments where host keys cannot be pre-configured, set `SFTP_DISABLE_HOST_KEY_VERIFICATION=True` (not recommended for production).
 
 #### 4. B113: Missing Timeout on HTTP Requests (MEDIUM SEVERITY) ✅ FIXED
 **Occurrences:** 15  
