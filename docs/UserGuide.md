@@ -145,6 +145,19 @@ Depending on the system configuration, DocuElevate can perform:
 - **PDF Conversion** - Convert various file formats to PDF
 - **Document Distribution** - Store documents in Dropbox, Nextcloud, or Paperless NGX
 
+### Paperless-ngx Integration
+
+If Paperless-ngx is configured, DocuElevate can automatically upload processed documents and set custom fields with extracted metadata:
+
+1. **Automatic Upload**: After processing, documents are automatically uploaded to Paperless-ngx
+2. **Custom Fields**: If configured via `PAPERLESS_CUSTOM_FIELD_ABSENDER`, the sender ("absender") information extracted by AI will be automatically set as a custom field in Paperless
+3. **Setup Requirements**:
+   - Create a custom field in Paperless-ngx (e.g., named "Absender" or "Sender")
+   - Set the `PAPERLESS_CUSTOM_FIELD_ABSENDER` environment variable to match your custom field name
+   - Ensure the custom field exists in Paperless before processing documents
+
+**Note**: The custom field feature requires that the field is already created in your Paperless-ngx instance. DocuElevate will look up the field by name and set its value automatically.
+
 ## API Access
 
 For programmatic access, DocuElevate provides a comprehensive REST API:

@@ -212,10 +212,11 @@ SECURITY_HEADER_CSP_VALUE="default-src 'self'; script-src 'self' https://trusted
 
 ### Paperless NGX
 
-| **Variable**                  | **Description**                                     |
-|-------------------------------|-----------------------------------------------------|
-| `PAPERLESS_NGX_API_TOKEN`     | API token for Paperless NGX.                       |
-| `PAPERLESS_HOST`              | Root URL for Paperless NGX (e.g. `https://paperless.example.com`). |
+| **Variable**                      | **Description**                                                                                     |
+|-----------------------------------|-----------------------------------------------------------------------------------------------------|
+| `PAPERLESS_NGX_API_TOKEN`         | API token for Paperless NGX.                                                                        |
+| `PAPERLESS_HOST`                  | Root URL for Paperless NGX (e.g. `https://paperless.example.com`).                                 |
+| `PAPERLESS_CUSTOM_FIELD_ABSENDER` | (Optional) Name of the custom field in Paperless-ngx to store the sender ("absender") information. If set, the extracted sender will be automatically set as a custom field after document upload. Example: `Absender` or `Sender` |
 
 ### Dropbox
 
