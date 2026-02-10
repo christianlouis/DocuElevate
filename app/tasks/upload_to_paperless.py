@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 POLL_MAX_ATTEMPTS = 10
 POLL_INTERVAL_SEC = 3
+UNKNOWN_VALUE = "Unknown"  # Magic value used to indicate missing metadata
 
 
 def _get_headers():
@@ -126,7 +127,7 @@ def set_document_custom_fields(doc_id: int, custom_fields: dict, task_id: str) -
     # Build custom_fields array for PATCH request
     custom_fields_array = []
     for field_name, value in custom_fields.items():
-        if value and value != "Unknown":  # Only set non-empty, non-Unknown values
+        if value and value != UNKNOWN_VALUE:  # Only set non-empty, non-Unknown values
             try:
                 field_id = get_custom_field_id(field_name)
                 custom_fields_array.append({"field": field_id, "value": value})
@@ -244,22 +245,56 @@ def upload_to_paperless(self, file_path: str, file_id: int = None):
     )
 
     # Set custom fields if configured and metadata available
-    if settings.paperless_custom_field_absender and metadata.get("absender"):
-        logger.info(f"[{task_id}] Setting custom fields for document {doc_id}")
-        log_task_progress(task_id, "set_custom_fields", "in_progress", "Setting custom fields", file_id=file_id)
+    custom_fields_to_set = {}
 
-        # Prepare custom fields to set
-        custom_fields_to_set = {}
-        if settings.paperless_custom_field_absender:
+    # First, check for the new flexible mapping configuration
+    if settings.paperless_custom_fields_mapping:
+        try:
+            # Parse JSON mapping: {"metadata_field": "PaperlessFieldName", ...}
+            import json
+
+            field_mapping = json.loads(settings.paperless_custom_fields_mapping)
+            logger.info(f"[{task_id}] Using custom fields mapping: {field_mapping}")
+
+            # Map each metadata field to its corresponding Paperless custom field
+            for metadata_field, paperless_field in field_mapping.items():
+                if metadata_field in metadata and metadata[metadata_field]:
+                    custom_fields_to_set[paperless_field] = metadata[metadata_field]
+                    logger.debug(
+                        f"[{task_id}] Mapping {metadata_field}='{metadata[metadata_field]}' to field '{paperless_field}'"
+                    )
+        except json.JSONDecodeError as e:
+            logger.error(f"[{task_id}] Failed to parse PAPERLESS_CUSTOM_FIELDS_MAPPING: {e}")
+        except Exception as e:
+            logger.error(f"[{task_id}] Error processing custom fields mapping: {e}")
+
+    # Fallback to legacy single-field configuration for backward compatibility
+    if settings.paperless_custom_field_absender and metadata.get("absender"):
+        # Only add if not already set by the mapping
+        if settings.paperless_custom_field_absender not in custom_fields_to_set:
             custom_fields_to_set[settings.paperless_custom_field_absender] = metadata.get("absender")
+            logger.debug(f"[{task_id}] Using legacy absender field configuration")
+
+    # Set custom fields if we have any to set
+    if custom_fields_to_set:
+        logger.info(f"[{task_id}] Setting {len(custom_fields_to_set)} custom field(s) for document {doc_id}")
+        log_task_progress(task_id, "set_custom_fields", "in_progress", "Setting custom fields", file_id=file_id)
 
         try:
             set_document_custom_fields(doc_id, custom_fields_to_set, task_id)
-            log_task_progress(task_id, "set_custom_fields", "success", "Custom fields set", file_id=file_id)
+            log_task_progress(
+                task_id,
+                "set_custom_fields",
+                "success",
+                f"Set {len(custom_fields_to_set)} custom field(s)",
+                file_id=file_id,
+            )
         except Exception as e:
             logger.error(f"[{task_id}] Failed to set custom fields: {e}")
             log_task_progress(task_id, "set_custom_fields", "failure", f"Failed: {str(e)}", file_id=file_id)
             # Don't fail the entire upload if custom fields fail
+    else:
+        logger.debug(f"[{task_id}] No custom fields configured or no metadata available")
 
     return {
         "status": "Completed",

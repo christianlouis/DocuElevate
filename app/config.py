@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     paperless_ngx_api_token: Optional[str] = None
     paperless_host: Optional[str] = None
     paperless_custom_field_absender: Optional[str] = None  # Name or ID of the "absender" custom field in Paperless
+    # JSON mapping of metadata field names to Paperless custom field names
+    # Example: {"absender": "Sender", "empfaenger": "Recipient", "language": "Language", "correspondent": "Correspondent"}
+    paperless_custom_fields_mapping: Optional[str] = None
 
     azure_ai_key: str
     azure_region: str

@@ -212,11 +212,45 @@ SECURITY_HEADER_CSP_VALUE="default-src 'self'; script-src 'self' https://trusted
 
 ### Paperless NGX
 
-| **Variable**                      | **Description**                                                                                     |
-|-----------------------------------|-----------------------------------------------------------------------------------------------------|
-| `PAPERLESS_NGX_API_TOKEN`         | API token for Paperless NGX.                                                                        |
-| `PAPERLESS_HOST`                  | Root URL for Paperless NGX (e.g. `https://paperless.example.com`).                                 |
-| `PAPERLESS_CUSTOM_FIELD_ABSENDER` | (Optional) Name of the custom field in Paperless-ngx to store the sender ("absender") information. If set, the extracted sender will be automatically set as a custom field after document upload. Example: `Absender` or `Sender` |
+| **Variable**                        | **Description**                                                                                     |
+|-------------------------------------|-----------------------------------------------------------------------------------------------------|
+| `PAPERLESS_NGX_API_TOKEN`           | API token for Paperless NGX.                                                                        |
+| `PAPERLESS_HOST`                    | Root URL for Paperless NGX (e.g. `https://paperless.example.com`).                                 |
+| `PAPERLESS_CUSTOM_FIELD_ABSENDER`   | (Optional, Legacy) Name of the custom field in Paperless-ngx to store the sender ("absender") information. If set, the extracted sender will be automatically set as a custom field after document upload. Example: `Absender` or `Sender` |
+| `PAPERLESS_CUSTOM_FIELDS_MAPPING`   | (Optional, Recommended) JSON mapping of extracted metadata fields to Paperless custom field names. This allows you to map multiple fields at once. Format: `{"metadata_field": "CustomFieldName", ...}`. See examples below. |
+
+#### Custom Fields Mapping Examples
+
+**Single Field (Legacy Method)**:
+```bash
+PAPERLESS_CUSTOM_FIELD_ABSENDER=Absender
+```
+
+**Multiple Fields (Recommended Method)**:
+```bash
+# Map multiple metadata fields to custom fields in Paperless
+PAPERLESS_CUSTOM_FIELDS_MAPPING='{"absender": "Sender", "empfaenger": "Recipient", "language": "Language"}'
+```
+
+**All Available Metadata Fields**:
+DocuElevate extracts the following fields that can be mapped to Paperless custom fields:
+- `absender` - Sender/author of the document
+- `empfaenger` - Recipient of the document
+- `correspondent` - The issuing entity/company (shortened name)
+- `document_type` - Type classification (Invoice, Contract, etc.)
+- `language` - Document language (ISO 639-1 code, e.g., "de", "en")
+- `kommunikationsart` - Communication type (German classification)
+- `kommunikationskategorie` - Communication category (German classification)
+- `reference_number` - Invoice/order/reference number if found
+- `title` - Human-readable document title
+- `tags` - List of thematic keywords (array)
+
+**Complete Example**:
+```bash
+PAPERLESS_CUSTOM_FIELDS_MAPPING='{"absender": "Sender", "empfaenger": "Recipient", "correspondent": "Correspondent", "language": "Language", "reference_number": "ReferenceNumber"}'
+```
+
+**Note**: Custom fields must be created in your Paperless-ngx instance before DocuElevate can use them. The field names in the mapping (right side of the JSON) must exactly match the names in Paperless.
 
 ### Dropbox
 
