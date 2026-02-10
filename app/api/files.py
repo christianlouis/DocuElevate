@@ -9,7 +9,7 @@ import uuid
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
-from sqlalchemy import asc, desc, or_
+from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 
 from app.auth import require_login
@@ -18,6 +18,7 @@ from app.database import get_db
 from app.models import FileRecord, ProcessingLog
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document
+from app.utils.file_queries import apply_status_filter
 from app.utils.file_status import get_files_processing_status
 from app.utils.filename_utils import sanitize_filename
 
@@ -85,36 +86,7 @@ def list_files_api(
         query = query.filter(FileRecord.mime_type == mime_type)
 
     # Apply status filter (before pagination for correct counts)
-    if status:
-        # Subquery to get file IDs matching the status
-        if status == "pending":
-            # Files with no logs
-            subq = db.query(ProcessingLog.file_id).distinct()
-            query = query.filter(~FileRecord.id.in_(subq))
-        elif status == "processing":
-            # Files with in_progress logs
-            subq = db.query(ProcessingLog.file_id).filter(ProcessingLog.status == "in_progress").distinct()
-            query = query.filter(FileRecord.id.in_(subq))
-        elif status == "failed":
-            # Files with failure logs
-            subq = db.query(ProcessingLog.file_id).filter(ProcessingLog.status == "failure").distinct()
-            query = query.filter(FileRecord.id.in_(subq))
-        elif status == "completed":
-            # Files with success logs but no failures or in_progress
-            success_files = (
-                db.query(ProcessingLog.file_id).filter(ProcessingLog.status == "success").distinct().subquery()
-            )
-
-            failed_files = (
-                db.query(ProcessingLog.file_id)
-                .filter(or_(ProcessingLog.status == "failure", ProcessingLog.status == "in_progress"))
-                .distinct()
-                .subquery()
-            )
-
-            query = query.filter(FileRecord.id.in_(db.query(success_files.c.file_id))).filter(
-                ~FileRecord.id.in_(db.query(failed_files.c.file_id))
-            )
+    query = apply_status_filter(query, db, status)
 
     # Get total count before pagination (after all filters)
     total_items = query.count()
