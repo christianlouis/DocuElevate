@@ -685,13 +685,17 @@ async def ui_upload(request: Request, file: UploadFile = File(...)):
     # Log the mapping between original and safe filename
     logger.info(f"Saved uploaded file '{safe_filename}' as '{target_filename}'")
 
-    # Check file size
+    # Check file size against configured maximum
     file_size = os.path.getsize(target_path)
-    max_size = 500 * 1024 * 1024  # 500MB
+    max_size = settings.max_upload_size
     if file_size > max_size:
         # Remove the file if it's too large
         os.remove(target_path)
-        raise HTTPException(status_code=413, detail=f"File too large: {file_size} bytes (max {max_size} bytes)")
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large: {file_size} bytes (max {max_size} bytes). "
+            f"See SECURITY_AUDIT.md for configuration details.",
+        )
 
     # Same set of allowed file types as in the IMAP task
     ALLOWED_MIME_TYPES = {
@@ -727,7 +731,49 @@ async def ui_upload(request: Request, file: UploadFile = File(...)):
     # Check if it's a PDF by extension or MIME type
     is_pdf = file_ext == ".pdf" or mime_type == "application/pdf"
 
-    if is_pdf:
+    # Check if file splitting is needed (only for PDFs)
+    from app.utils.file_splitting import should_split_file
+
+    should_split = is_pdf and should_split_file(target_path, settings.max_single_file_size)
+
+    if should_split:
+        # File needs to be split before processing
+        from app.utils.file_splitting import split_pdf_by_size
+
+        try:
+            logger.info(
+                f"File {target_path} ({file_size} bytes) exceeds max_single_file_size "
+                f"({settings.max_single_file_size} bytes). Splitting..."
+            )
+            split_files = split_pdf_by_size(target_path, settings.max_single_file_size)
+            logger.info(f"Split {target_path} into {len(split_files)} parts")
+
+            # Queue each split file for processing
+            task_ids = []
+            for split_file in split_files:
+                split_filename = os.path.basename(split_file)
+                task = process_document.delay(split_file, original_filename=split_filename)
+                task_ids.append(task.id)
+                logger.info(f"Enqueued split PDF part for processing: {split_file}")
+
+            # Remove the original file after successful splitting
+            os.remove(target_path)
+
+            return {
+                "task_ids": task_ids,
+                "status": "queued",
+                "original_filename": safe_filename,
+                "stored_filename": target_filename,
+                "split_into_parts": len(split_files),
+                "message": f"File split into {len(split_files)} parts for processing",
+            }
+        except Exception as e:
+            logger.exception(f"Failed to split file {target_path}: {str(e)}")
+            # Fall back to processing the whole file
+            logger.warning(f"Falling back to processing whole file due to split error: {str(e)}")
+            should_split = False
+
+    if is_pdf and not should_split:
         # If it's a PDF, process directly
         task = process_document.delay(target_path, original_filename=safe_filename)
         logger.info(f"Enqueued PDF for processing: {target_path}")
