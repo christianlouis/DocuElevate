@@ -24,9 +24,10 @@ DocuElevate implements rate limiting to protect against abuse and DoS attacks. R
 ### Default Limits
 
 - **Default endpoints**: 100 requests per minute
-- **File upload**: 20 requests per minute
-- **Document processing**: 30 requests per minute
+- **File upload**: 600 requests per minute
 - **Authentication**: 10 requests per minute
+
+**Note**: Document processing endpoints (OCR, metadata extraction) use built-in queue throttling to control processing rates and prevent upstream API overloads. No additional API-level rate limit is applied to processing endpoints.
 
 ### Rate Limit Headers
 
@@ -47,8 +48,7 @@ Rate limits can be configured via environment variables:
 ```bash
 RATE_LIMITING_ENABLED=true
 RATE_LIMIT_DEFAULT=100/minute
-RATE_LIMIT_UPLOAD=20/minute
-RATE_LIMIT_PROCESS=30/minute
+RATE_LIMIT_UPLOAD=600/minute
 RATE_LIMIT_AUTH=10/minute
 ```
 

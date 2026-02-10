@@ -121,9 +121,10 @@ Rate limits are specified in the format `count/period`, where:
 | **Variable**           | **Description**                                                      | **Default**      | **Applies To**                          |
 |------------------------|----------------------------------------------------------------------|------------------|-----------------------------------------|
 | `RATE_LIMIT_DEFAULT`   | Default rate limit for all API endpoints                             | `100/minute`     | Most API endpoints                      |
-| `RATE_LIMIT_UPLOAD`    | Rate limit for file upload endpoints (prevents resource exhaustion)  | `10/second`      | `/api/ui-upload` and similar            |
-| `RATE_LIMIT_PROCESS`   | Rate limit for processing endpoints (OCR, metadata extraction)       | `30/minute`      | `/api/process`, OCR endpoints           |
+| `RATE_LIMIT_UPLOAD`    | Rate limit for file upload endpoints (prevents resource exhaustion)  | `600/minute`     | `/api/ui-upload` and similar            |
 | `RATE_LIMIT_AUTH`      | Stricter rate limit for authentication (prevents brute force)        | `10/minute`      | Login, authentication endpoints         |
+
+**Note**: Processing endpoints (OCR, metadata extraction) use built-in queue throttling via Celery to control processing rates and prevent upstream API overloads. No additional API-level rate limit is configured for processing endpoints.
 
 #### How Rate Limiting Works
 
@@ -144,8 +145,7 @@ REDIS_URL=redis://redis:6379/0
 
 # Customize rate limits
 RATE_LIMIT_DEFAULT=100/minute     # 100 requests per minute per user/IP
-RATE_LIMIT_UPLOAD=20/minute       # 20 uploads per minute
-RATE_LIMIT_PROCESS=30/minute      # 30 processing requests per minute
+RATE_LIMIT_UPLOAD=600/minute      # 600 uploads per minute
 RATE_LIMIT_AUTH=10/minute         # 10 auth attempts per minute (brute force protection)
 ```
 
@@ -154,24 +154,21 @@ RATE_LIMIT_AUTH=10/minute         # 10 auth attempts per minute (brute force pro
 **Small Deployment (1-10 users)**:
 ```bash
 RATE_LIMIT_DEFAULT=200/minute
-RATE_LIMIT_UPLOAD=50/minute
-RATE_LIMIT_PROCESS=50/minute
+RATE_LIMIT_UPLOAD=1200/minute
 RATE_LIMIT_AUTH=20/minute
 ```
 
 **Medium Deployment (10-100 users)**:
 ```bash
 RATE_LIMIT_DEFAULT=100/minute
-RATE_LIMIT_UPLOAD=20/minute
-RATE_LIMIT_PROCESS=30/minute
+RATE_LIMIT_UPLOAD=600/minute
 RATE_LIMIT_AUTH=10/minute
 ```
 
 **Large Deployment (100+ users)**:
 ```bash
 RATE_LIMIT_DEFAULT=50/minute
-RATE_LIMIT_UPLOAD=10/minute
-RATE_LIMIT_PROCESS=15/minute
+RATE_LIMIT_UPLOAD=300/minute
 RATE_LIMIT_AUTH=5/minute
 ```
 

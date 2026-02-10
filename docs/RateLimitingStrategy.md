@@ -11,9 +11,10 @@ DocuElevate implements rate limiting using [SlowAPI](https://github.com/laurents
 All API endpoints are protected with a default rate limit unless explicitly exempted or configured otherwise:
 
 - **Default**: 100 requests per minute per IP/user
-- **File Upload**: 20 requests per minute (resource-intensive)
-- **Document Processing**: 30 requests per minute (CPU/API-intensive)
+- **File Upload**: 600 requests per minute per IP/user
 - **Authentication**: 10 requests per minute (brute force protection)
+
+**Note**: Document processing endpoints use built-in queue throttling via Celery to control processing rates and prevent upstream API overloads. No additional API-level rate limit is configured for processing endpoints.
 
 ## Endpoint Categories
 
@@ -35,52 +36,21 @@ All API endpoints are protected with a default rate limit unless explicitly exem
 
 ### 2. File Upload Endpoints (Resource Protection)
 
-**Rate Limit**: 20 requests per minute
+**Rate Limit**: 600 requests per minute
 
 **Endpoints**:
 - `POST /api/ui-upload` - Web UI file upload
 - `POST /api/upload` - API file upload
 
-**Rationale**: File uploads are resource-intensive operations that consume:
-- Network bandwidth
-- Disk I/O
-- Processing time
-- Storage space
+**Rationale**: File uploads consume network bandwidth, disk I/O, and storage space. A limit of 600 uploads per minute allows fast batch uploads while preventing resource exhaustion and abuse.
 
-Limiting to 20 uploads per minute prevents resource exhaustion while allowing legitimate batch uploads.
+**Implementation Status**: Configured via `RATE_LIMIT_UPLOAD` (default: `600/minute`)
 
 **Implementation Status**: Configured via `RATE_LIMIT_UPLOAD` (default: `20/minute`)
 
 ---
 
-### 3. Document Processing Endpoints (API/CPU Protection)
-
-**Rate Limit**: 30 requests per minute
-
-**Endpoints**:
-- `POST /api/process/` - Trigger document processing
-- `POST /api/send_to_dropbox/` - Send to Dropbox
-- `POST /api/send_to_google_drive/` - Send to Google Drive
-- `POST /api/send_to_onedrive/` - Send to OneDrive
-- `POST /api/send_to_paperless/` - Send to Paperless
-- `POST /api/send_to_all/` - Send to all destinations
-- `POST /api/processall/` - Batch process all files
-- `POST /api/azure/process/` - Azure OCR processing
-- `POST /api/openai/extract-metadata/` - OpenAI metadata extraction
-
-**Rationale**: These endpoints trigger:
-- External API calls (OpenAI, Azure)
-- CPU-intensive operations (OCR, PDF processing)
-- Network requests to cloud storage
-- Background Celery tasks
-
-A limit of 30 requests per minute protects both internal resources and prevents excessive API costs from external services.
-
-**Implementation Status**: Configured via `RATE_LIMIT_PROCESS` (default: `30/minute`)
-
----
-
-### 4. Read-Only API Endpoints (Default Limits)
+### 3. Read-Only API Endpoints (Default Limits)
 
 **Rate Limit**: 100 requests per minute
 
@@ -99,7 +69,7 @@ A limit of 30 requests per minute protects both internal resources and prevents 
 
 ---
 
-### 5. Frontend Routes (Default Limits)
+### 4. Frontend Routes (Default Limits)
 
 **Rate Limit**: 100 requests per minute
 
@@ -116,7 +86,7 @@ A limit of 30 requests per minute protects both internal resources and prevents 
 
 ---
 
-### 6. Webhook/Callback Endpoints (Higher Limits)
+### 5. Webhook/Callback Endpoints (Higher Limits)
 
 **Rate Limit**: Consider exemption or very high limits
 
@@ -129,7 +99,7 @@ A limit of 30 requests per minute protects both internal resources and prevents 
 
 ---
 
-### 7. Health/Diagnostic Endpoints (Exempt or High Limits)
+### 6. Health/Diagnostic Endpoints (Exempt or High Limits)
 
 **Rate Limit**: Potentially exempt for monitoring
 
