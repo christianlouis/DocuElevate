@@ -174,6 +174,43 @@ class Settings(BaseSettings):
         description="Maximum size for a single file chunk in bytes. If set and file exceeds this, it will be split into smaller chunks for processing. Default: None (no splitting).",
     )
 
+    # Security Headers Configuration (see SECURITY_AUDIT.md and docs/DeploymentGuide.md)
+    # When deploying behind a reverse proxy (Traefik, Nginx, etc.), disable these headers
+    # if your proxy already adds them to avoid duplication
+    security_headers_enabled: bool = Field(
+        default=True,
+        description="Enable security headers middleware. Set to False if reverse proxy handles headers.",
+    )
+
+    # Strict-Transport-Security (HSTS) - Forces HTTPS connections
+    security_header_hsts_enabled: bool = Field(
+        default=True, description="Enable HSTS header. Only effective over HTTPS."
+    )
+    security_header_hsts_value: str = Field(
+        default="max-age=31536000; includeSubDomains",
+        description="HSTS header value. Default: 1 year with subdomains.",
+    )
+
+    # Content-Security-Policy (CSP) - Controls resource loading
+    security_header_csp_enabled: bool = Field(default=True, description="Enable CSP header.")
+    security_header_csp_value: str = Field(
+        default="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;",
+        description="CSP header value. Customize based on your application's resource loading needs.",
+    )
+
+    # X-Frame-Options - Prevents clickjacking
+    security_header_x_frame_options_enabled: bool = Field(
+        default=True, description="Enable X-Frame-Options header."
+    )
+    security_header_x_frame_options_value: str = Field(
+        default="DENY", description="X-Frame-Options header value. Options: DENY, SAMEORIGIN, or ALLOW-FROM uri"
+    )
+
+    # X-Content-Type-Options - Prevents MIME sniffing
+    security_header_x_content_type_options_enabled: bool = Field(
+        default=True, description="Enable X-Content-Type-Options header (always set to 'nosniff')."
+    )
+
     @validator("notification_urls", pre=True)
     def parse_notification_urls(cls, v):
         """Parse notification URLs from string or list"""
