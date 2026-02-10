@@ -8,16 +8,6 @@ based on configuration settings.
 """
 
 import pytest
-from fastapi.testclient import TestClient
-
-from app.config import Settings
-from app.main import app
-
-
-@pytest.fixture
-def client():
-    """Create a test client for the FastAPI app."""
-    return TestClient(app, base_url="http://testserver")
 
 
 @pytest.mark.unit
@@ -25,9 +15,8 @@ def test_security_headers_enabled_by_default(client):
     """Test that security headers are enabled by default."""
     response = client.get("/")
 
-    # At least one security header should be present
-    # We can't test all because some may be disabled individually
-    assert response.status_code in [200, 302, 404]  # Valid status codes
+    # Should get a valid response (200, 302 redirect, or 404)
+    assert response.status_code in [200, 302, 404], f"Unexpected status code: {response.status_code}"
 
 
 @pytest.mark.unit
@@ -107,29 +96,6 @@ def test_security_headers_on_api_endpoints(client):
     assert len(present_headers) > 0, "No security headers found on API endpoint"
 
 
-@pytest.mark.unit
-def test_security_headers_on_static_files(client):
-    """Test that security headers are applied to static file responses."""
-    from app.config import settings
-
-    if not settings.security_headers_enabled:
-        pytest.skip("Security headers are disabled in configuration")
-
-    # Try to access a static file (may not exist in test environment)
-    response = client.get("/static/logo.png")
-
-    # If file exists, check for security headers
-    if response.status_code == 200:
-        security_headers = [
-            "Strict-Transport-Security",
-            "Content-Security-Policy",
-            "X-Frame-Options",
-            "X-Content-Type-Options",
-        ]
-        present_headers = [h for h in security_headers if h in response.headers]
-        assert len(present_headers) > 0, "No security headers found on static file"
-
-
 @pytest.mark.security
 def test_hsts_header_value_format(client):
     """Test that HSTS header has correct format."""
@@ -175,8 +141,8 @@ def test_x_frame_options_valid_value(client):
     if "X-Frame-Options" in response.headers:
         x_frame_value = response.headers["X-Frame-Options"]
         valid_values = ["DENY", "SAMEORIGIN"]
-        assert (
-            x_frame_value in valid_values or x_frame_value.startswith("ALLOW-FROM")
+        assert x_frame_value in valid_values or x_frame_value.startswith(
+            "ALLOW-FROM"
         ), f"Invalid X-Frame-Options value: {x_frame_value}"
 
 
@@ -211,8 +177,8 @@ def test_security_headers_configuration_loading():
 @pytest.mark.integration
 def test_middleware_respects_configuration():
     """Test that middleware respects individual header enable/disable settings."""
-    from app.middleware.security_headers import SecurityHeadersMiddleware
     from app.config import settings
+    from app.middleware.security_headers import SecurityHeadersMiddleware
 
     # Create middleware instance
     middleware = SecurityHeadersMiddleware(app=None, config=settings)

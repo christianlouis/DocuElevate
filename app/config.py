@@ -199,9 +199,7 @@ class Settings(BaseSettings):
     )
 
     # X-Frame-Options - Prevents clickjacking
-    security_header_x_frame_options_enabled: bool = Field(
-        default=True, description="Enable X-Frame-Options header."
-    )
+    security_header_x_frame_options_enabled: bool = Field(default=True, description="Enable X-Frame-Options header.")
     security_header_x_frame_options_value: str = Field(
         default="DENY", description="X-Frame-Options header value. Options: DENY, SAMEORIGIN, or ALLOW-FROM uri"
     )
