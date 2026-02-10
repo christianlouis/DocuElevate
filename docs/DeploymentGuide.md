@@ -56,7 +56,7 @@ Access the web interface at `http://localhost:8000` and the API documentation at
 
 ### Security Headers
 
-DocuElevate includes built-in support for HTTP security headers to improve browser-side security. These headers are enabled by default but can be configured based on your deployment scenario.
+DocuElevate includes built-in support for HTTP security headers to improve browser-side security. **These headers are disabled by default** since most deployments use a reverse proxy (Traefik, Nginx, etc.) that already adds these headers.
 
 #### Supported Security Headers
 
@@ -65,31 +65,12 @@ DocuElevate includes built-in support for HTTP security headers to improve brows
 - **X-Frame-Options**: Prevents the page from being loaded in frames (clickjacking protection)
 - **X-Content-Type-Options**: Prevents browsers from MIME-sniffing responses
 
-#### Direct Deployment (No Reverse Proxy)
+#### Reverse Proxy Deployment (Traefik, Nginx, etc.) - DEFAULT
 
-If you're running DocuElevate directly without a reverse proxy, security headers are enabled by default:
-
-```bash
-# In .env file
-SECURITY_HEADERS_ENABLED=true
-SECURITY_HEADER_HSTS_ENABLED=true
-SECURITY_HEADER_CSP_ENABLED=true
-SECURITY_HEADER_X_FRAME_OPTIONS_ENABLED=true
-SECURITY_HEADER_X_CONTENT_TYPE_OPTIONS_ENABLED=true
-```
-
-**Note**: HSTS only works when serving content over HTTPS. If using HTTP for development, you can disable it:
+**Most deployments use a reverse proxy**, which is why security headers are disabled by default in DocuElevate. The reverse proxy should add these headers.
 
 ```bash
-SECURITY_HEADER_HSTS_ENABLED=false
-```
-
-#### Reverse Proxy Deployment (Traefik, Nginx, etc.)
-
-When deploying behind a reverse proxy that adds security headers, **disable the built-in headers** to avoid duplication:
-
-```bash
-# In .env file
+# In .env file (or omit - this is the default)
 SECURITY_HEADERS_ENABLED=false
 ```
 
@@ -146,11 +127,35 @@ server {
 }
 ```
 
-Then set `SECURITY_HEADERS_ENABLED=false` in your `.env` file.
+Then keep `SECURITY_HEADERS_ENABLED=false` in your `.env` file (or omit it, as this is the default).
+
+#### Direct Deployment (No Reverse Proxy)
+
+If you're running DocuElevate **directly without a reverse proxy**, enable security headers:
+
+```bash
+# In .env file
+SECURITY_HEADERS_ENABLED=true
+```
+
+You can also configure individual headers:
+
+```bash
+SECURITY_HEADER_HSTS_ENABLED=true
+SECURITY_HEADER_CSP_ENABLED=true
+SECURITY_HEADER_X_FRAME_OPTIONS_ENABLED=true
+SECURITY_HEADER_X_CONTENT_TYPE_OPTIONS_ENABLED=true
+```
+
+**Note**: HSTS only works when serving content over HTTPS. If using HTTP for development, you can disable it:
+
+```bash
+SECURITY_HEADER_HSTS_ENABLED=false
+```
 
 #### Customizing Security Headers
 
-You can customize individual header values in your `.env` file:
+If you enable security headers, you can customize individual header values in your `.env` file:
 
 ```bash
 # Customize HSTS (e.g., shorter duration for testing)

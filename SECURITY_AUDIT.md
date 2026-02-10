@@ -245,8 +245,8 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
 - ✅ ProxyHeadersMiddleware for reverse proxy setup (X-Forwarded-* headers)
 - ✅ SessionMiddleware with strong secret validation
 - ✅ **Security headers middleware implemented** - Configurable HSTS, CSP, X-Frame-Options, X-Content-Type-Options ([#174](https://github.com/christianlouis/DocuElevate/issues/174))
-  - Enabled by default for direct deployment
-  - Configurable to disable when reverse proxy handles headers
+  - Disabled by default (typical deployment uses reverse proxy that adds headers)
+  - Can be enabled for direct deployment without reverse proxy
   - Individual header control and customization
   - Documented in DeploymentGuide.md and ConfigurationGuide.md
 - ⏳ **TODO:** Implement proper CORS configuration (currently not configured) ([#175](https://github.com/christianlouis/DocuElevate/issues/175))
@@ -656,27 +656,12 @@ SECURITY_HEADER_X_CONTENT_TYPE_OPTIONS_ENABLED=true
 
 ### Deployment Scenarios
 
-#### Direct Deployment (No Reverse Proxy)
+#### Reverse Proxy Deployment (Traefik, Nginx, etc.) - DEFAULT
 
-Security headers are **enabled by default** for direct deployments:
-
-```bash
-# .env configuration
-SECURITY_HEADERS_ENABLED=true
-SECURITY_HEADER_HSTS_ENABLED=true
-SECURITY_HEADER_CSP_ENABLED=true
-SECURITY_HEADER_X_FRAME_OPTIONS_ENABLED=true
-SECURITY_HEADER_X_CONTENT_TYPE_OPTIONS_ENABLED=true
-```
-
-All headers are added by the application middleware.
-
-#### Reverse Proxy Deployment (Traefik, Nginx, etc.)
-
-When deploying behind a reverse proxy that already adds security headers, **disable the middleware** to avoid duplication:
+**Most deployments use a reverse proxy**, which is why security headers are **disabled by default** in DocuElevate. The reverse proxy should add these headers.
 
 ```bash
-# .env configuration
+# .env configuration (or omit - this is the default)
 SECURITY_HEADERS_ENABLED=false
 ```
 
@@ -697,13 +682,28 @@ add_header X-Frame-Options "DENY" always;
 add_header X-Content-Type-Options "nosniff" always;
 ```
 
+#### Direct Deployment (No Reverse Proxy)
+
+If deploying directly without a reverse proxy, **enable security headers**:
+
+```bash
+# .env configuration
+SECURITY_HEADERS_ENABLED=true
+SECURITY_HEADER_HSTS_ENABLED=true
+SECURITY_HEADER_CSP_ENABLED=true
+SECURITY_HEADER_X_FRAME_OPTIONS_ENABLED=true
+SECURITY_HEADER_X_CONTENT_TYPE_OPTIONS_ENABLED=true
+```
+
+All headers are added by the application middleware.
+
 ### Configuration Options
 
 All security headers are configurable via environment variables:
 
 | Setting | Purpose | Default |
 |---------|---------|---------|
-| `SECURITY_HEADERS_ENABLED` | Master enable/disable | `true` |
+| `SECURITY_HEADERS_ENABLED` | Master enable/disable | `false` |
 | `SECURITY_HEADER_HSTS_ENABLED` | Enable HSTS | `true` |
 | `SECURITY_HEADER_HSTS_VALUE` | HSTS configuration | `max-age=31536000; includeSubDomains` |
 | `SECURITY_HEADER_CSP_ENABLED` | Enable CSP | `true` |
@@ -738,8 +738,8 @@ All security headers are configurable via environment variables:
 1. **Defense in Depth:** Multiple layers of browser-side security
 2. **Flexible Configuration:** Adapts to different deployment scenarios
 3. **Industry Best Practices:** Follows OWASP security recommendations
-4. **Easy Deployment:** Works out-of-the-box with sensible defaults
-5. **Reverse Proxy Compatible:** Can be disabled when proxy handles headers
+4. **Smart Defaults:** Disabled by default for typical reverse proxy deployments
+5. **Reverse Proxy Compatible:** Works seamlessly with Traefik, Nginx, etc.
 6. **Well Documented:** Comprehensive documentation for all scenarios
 
 ### Testing

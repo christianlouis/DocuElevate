@@ -100,13 +100,13 @@ DocuElevate can monitor multiple IMAP mailboxes for document attachments. Each m
 
 ### Security Headers
 
-DocuElevate supports HTTP security headers to improve browser-side security. These headers are enabled by default but should be disabled if your reverse proxy (Traefik, Nginx, etc.) already adds them. See [Deployment Guide - Security Headers](DeploymentGuide.md#security-headers) for detailed configuration examples.
+DocuElevate supports HTTP security headers to improve browser-side security. **These headers are disabled by default** since most deployments use a reverse proxy (Traefik, Nginx, etc.) that already adds them. Enable only if deploying directly without a reverse proxy. See [Deployment Guide - Security Headers](DeploymentGuide.md#security-headers) for detailed configuration examples.
 
 #### Master Control
 
 | **Variable**                | **Description**                                                         | **Default** |
 |-----------------------------|-------------------------------------------------------------------------|-------------|
-| `SECURITY_HEADERS_ENABLED`  | Enable/disable security headers middleware. Set to `false` if reverse proxy handles headers. | `true` |
+| `SECURITY_HEADERS_ENABLED`  | Enable/disable security headers middleware. Set to `true` if deploying without reverse proxy. | `false` |
 
 #### Strict-Transport-Security (HSTS)
 
@@ -173,20 +173,20 @@ Prevents browsers from MIME-sniffing responses away from the declared content-ty
 
 #### Configuration Examples
 
+**Reverse Proxy Deployment (Default - Traefik, Nginx):**
+```bash
+# Headers disabled by default - reverse proxy handles them
+# SECURITY_HEADERS_ENABLED=false  # Can be omitted
+```
+
 **Direct Deployment (No Reverse Proxy):**
 ```bash
-# Enable all security headers (default)
+# Enable all security headers
 SECURITY_HEADERS_ENABLED=true
 SECURITY_HEADER_HSTS_ENABLED=true
 SECURITY_HEADER_CSP_ENABLED=true
 SECURITY_HEADER_X_FRAME_OPTIONS_ENABLED=true
 SECURITY_HEADER_X_CONTENT_TYPE_OPTIONS_ENABLED=true
-```
-
-**Behind Reverse Proxy (Traefik, Nginx):**
-```bash
-# Disable security headers (let proxy handle them)
-SECURITY_HEADERS_ENABLED=false
 ```
 
 **Custom Configuration:**

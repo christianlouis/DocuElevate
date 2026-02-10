@@ -175,11 +175,11 @@ class Settings(BaseSettings):
     )
 
     # Security Headers Configuration (see SECURITY_AUDIT.md and docs/DeploymentGuide.md)
-    # When deploying behind a reverse proxy (Traefik, Nginx, etc.), disable these headers
-    # if your proxy already adds them to avoid duplication
+    # Disabled by default since most deployments use a reverse proxy (Traefik, Nginx, etc.)
+    # that already adds these headers. Enable if deploying directly without a reverse proxy.
     security_headers_enabled: bool = Field(
-        default=True,
-        description="Enable security headers middleware. Set to False if reverse proxy handles headers.",
+        default=False,
+        description="Enable security headers middleware. Set to True if deploying without reverse proxy.",
     )
 
     # Strict-Transport-Security (HSTS) - Forces HTTPS connections
