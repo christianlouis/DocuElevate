@@ -256,6 +256,38 @@
       max-height: 5000px;
       transition: max-height 0.5s ease-in;
     }
+
+    /* Verbose detail block */
+    .timeline-detail-toggle {
+      cursor: pointer;
+      color: #3182ce;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-top: 0.25rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .timeline-detail-toggle:hover {
+      color: #2c5aa0;
+    }
+    .timeline-detail {
+      display: none;
+      margin-top: 0.5rem;
+      background-color: #1a202c;
+      color: #e2e8f0;
+      padding: 0.75rem;
+      border-radius: 0.375rem;
+      font-family: monospace;
+      font-size: 0.75rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .timeline-detail.visible {
+      display: block;
+    }
     
     .no-logs {
       text-align: center;
@@ -590,6 +622,21 @@
         toggleIcon.classList.add('fa-chevron-up');
       }
     }
+
+    // Toggle verbose detail for a log entry
+    function toggleDetail(logId) {
+      const detail = document.getElementById('detail-' + logId);
+      const icon = document.getElementById('detail-icon-' + logId);
+      if (detail.classList.contains('visible')) {
+        detail.classList.remove('visible');
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-right');
+      } else {
+        detail.classList.add('visible');
+        icon.classList.remove('fa-chevron-right');
+        icon.classList.add('fa-chevron-up');
+      }
+    }
   </script>
   {% endif %}
 {% endblock %}
@@ -760,6 +807,13 @@
               <span class="timeline-task-id">Task: {{ log.task_id[:16] }}...</span>
               {% endif %}
             </div>
+            {% if log.detail %}
+            <div class="timeline-detail-toggle" onclick="toggleDetail({{ loop.index }})">
+              <i id="detail-icon-{{ loop.index }}" class="fas fa-chevron-right"></i>
+              <span>Show worker log detail</span>
+            </div>
+            <div id="detail-{{ loop.index }}" class="timeline-detail">{{ log.detail }}</div>
+            {% endif %}
           </div>
         </div>
         {% endfor %}

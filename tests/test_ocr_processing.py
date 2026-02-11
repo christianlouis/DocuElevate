@@ -24,7 +24,8 @@ from app.tasks.rotate_pdf_pages import rotate_pdf_pages, determine_rotation_angl
 class TestProcessWithAzureDocumentIntelligence:
     """Tests for Azure Document Intelligence OCR processing."""
 
-    def test_successful_ocr_processing(self, tmp_path):
+    @patch("app.tasks.process_with_azure_document_intelligence.log_task_progress")
+    def test_successful_ocr_processing(self, mock_log, tmp_path):
         """Test successful OCR processing with Azure Document Intelligence."""
         # Create tmp directory and test PDF file
         tmp_dir = tmp_path / "tmp"
@@ -120,7 +121,8 @@ startxref
             assert call_args[0][1] == "This is extracted text from OCR"
             assert call_args[0][3] == 1  # file_id
 
-    def test_file_not_found_error(self, tmp_path):
+    @patch("app.tasks.process_with_azure_document_intelligence.log_task_progress")
+    def test_file_not_found_error(self, mock_log, tmp_path):
         """Test that FileNotFoundError is raised when file doesn't exist."""
         with patch(
             "app.tasks.process_with_azure_document_intelligence.settings"
@@ -134,7 +136,8 @@ startxref
 
             assert "Local file not found" in str(exc_info.value)
 
-    def test_file_size_limit_exceeded(self, tmp_path):
+    @patch("app.tasks.process_with_azure_document_intelligence.log_task_progress")
+    def test_file_size_limit_exceeded(self, mock_log, tmp_path):
         """Test file size limit validation (500 MB)."""
         # Create tmp directory and test PDF file
         tmp_dir = tmp_path / "tmp"
@@ -163,7 +166,8 @@ startxref
             assert "Size limit exceeded" in result["status"]
             assert "500 MB" in result["error"]
 
-    def test_page_count_limit_exceeded(self, tmp_path):
+    @patch("app.tasks.process_with_azure_document_intelligence.log_task_progress")
+    def test_page_count_limit_exceeded(self, mock_log, tmp_path):
         """Test page count limit validation (2000 pages)."""
         # Create tmp directory and test PDF file
         tmp_dir = tmp_path / "tmp"
@@ -190,7 +194,8 @@ startxref
             assert "Page limit exceeded" in result["status"]
             assert "2000 pages" in result["error"]
 
-    def test_page_count_unknown_proceeds_with_processing(self, tmp_path):
+    @patch("app.tasks.process_with_azure_document_intelligence.log_task_progress")
+    def test_page_count_unknown_proceeds_with_processing(self, mock_log, tmp_path):
         """Test that processing continues when page count cannot be determined."""
         # Create tmp directory and test PDF file
         tmp_dir = tmp_path / "tmp"
@@ -238,7 +243,8 @@ startxref
             assert "error" not in result
             assert result["file"] == test_pdf.name
 
-    def test_page_rotation_detection(self, tmp_path):
+    @patch("app.tasks.process_with_azure_document_intelligence.log_task_progress")
+    def test_page_rotation_detection(self, mock_log, tmp_path):
         """Test detection and logging of page rotation."""
         # Create tmp directory and test PDF
         tmp_dir = tmp_path / "tmp"
@@ -295,7 +301,8 @@ startxref
             assert 1 not in rotation_data  # Page 2 has no rotation
             assert 2 in rotation_data and rotation_data[2] == 180
 
-    def test_azure_api_error_handling(self, tmp_path):
+    @patch("app.tasks.process_with_azure_document_intelligence.log_task_progress")
+    def test_azure_api_error_handling(self, mock_log, tmp_path):
         """Test error handling when Azure API fails."""
         # Create tmp directory and test PDF
         tmp_dir = tmp_path / "tmp"
@@ -430,7 +437,8 @@ startxref
 class TestRefineTextWithGPT:
     """Tests for OpenAI text refinement task."""
 
-    def test_successful_text_refinement(self):
+    @patch("app.tasks.refine_text_with_gpt.log_task_progress")
+    def test_successful_text_refinement(self, mock_log):
         """Test successful text refinement with OpenAI."""
         raw_text = "This is s0me text with OCR err0rs"
         filename = "test.pdf"
@@ -477,7 +485,8 @@ class TestRefineTextWithGPT:
                 filename, "This is some text with OCR errors"
             )
 
-    def test_openai_api_error(self):
+    @patch("app.tasks.refine_text_with_gpt.log_task_progress")
+    def test_openai_api_error(self, mock_log):
         """Test error handling when OpenAI API fails."""
         raw_text = "Test text"
         filename = "test.pdf"
@@ -549,7 +558,8 @@ class TestRotatePdfPages:
         # Round(135/90) = Round(1.5) = 2, so 2 * 90 = 180
         assert angle == 180
 
-    def test_rotate_pdf_pages_with_rotation(self, tmp_path):
+    @patch("app.tasks.rotate_pdf_pages.log_task_progress")
+    def test_rotate_pdf_pages_with_rotation(self, mock_log, tmp_path):
         """Test PDF rotation with rotation data."""
         # Create tmp directory and test PDF
         tmp_dir = tmp_path / "tmp"
@@ -623,7 +633,8 @@ startxref
                 test_pdf.name, extracted_text, 1
             )
 
-    def test_rotate_pdf_pages_no_rotation_needed(self, tmp_path):
+    @patch("app.tasks.rotate_pdf_pages.log_task_progress")
+    def test_rotate_pdf_pages_no_rotation_needed(self, mock_log, tmp_path):
         """Test PDF rotation when no rotation is needed."""
         # Create tmp directory and test PDF
         tmp_dir = tmp_path / "tmp"
@@ -656,7 +667,8 @@ startxref
             # Verify metadata extraction was still queued
             mock_extract.delay.assert_called_once()
 
-    def test_rotate_pdf_pages_zero_rotations(self, tmp_path):
+    @patch("app.tasks.rotate_pdf_pages.log_task_progress")
+    def test_rotate_pdf_pages_zero_rotations(self, mock_log, tmp_path):
         """Test PDF rotation when rotation data contains only zero angles."""
         # Create tmp directory and test PDF
         tmp_dir = tmp_path / "tmp"
@@ -686,7 +698,8 @@ startxref
             # Verify no rotation was applied
             assert result["status"] == "no_rotation_needed"
 
-    def test_rotate_pdf_pages_file_not_found(self, tmp_path):
+    @patch("app.tasks.rotate_pdf_pages.log_task_progress")
+    def test_rotate_pdf_pages_file_not_found(self, mock_log, tmp_path):
         """Test error handling when PDF file is not found."""
         # Create tmp directory but no PDF
         tmp_dir = tmp_path / "tmp"
@@ -717,7 +730,8 @@ startxref
             # Verify metadata extraction was still queued
             mock_extract.delay.assert_called_once()
 
-    def test_rotate_pdf_pages_continues_on_error(self, tmp_path):
+    @patch("app.tasks.rotate_pdf_pages.log_task_progress")
+    def test_rotate_pdf_pages_continues_on_error(self, mock_log, tmp_path):
         """Test that metadata extraction continues even if rotation fails."""
         # Create tmp directory and invalid PDF
         tmp_dir = tmp_path / "tmp"
@@ -751,7 +765,8 @@ startxref
             # Verify metadata extraction was still queued
             mock_extract.delay.assert_called_once()
 
-    def test_rotate_pdf_pages_with_string_keys(self, tmp_path):
+    @patch("app.tasks.rotate_pdf_pages.log_task_progress")
+    def test_rotate_pdf_pages_with_string_keys(self, mock_log, tmp_path):
         """Test that rotation data with string keys is properly handled."""
         # Create tmp directory and test PDF
         tmp_dir = tmp_path / "tmp"

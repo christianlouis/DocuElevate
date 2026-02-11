@@ -70,3 +70,77 @@ class TestGetDb:
         session = next(gen)
         # Force the generator to close
         gen.close()
+
+
+@pytest.mark.unit
+class TestSchemaMigrations:
+    """Tests for schema migration logic."""
+
+    def test_processing_log_detail_column_exists(self, db_session):
+        """Test that ProcessingLog has the detail column."""
+        from app.models import ProcessingLog
+
+        log = ProcessingLog(
+            task_id="test-task",
+            step_name="test_step",
+            status="success",
+            message="Short message",
+            detail="Verbose worker log output\nWith multiple lines",
+        )
+        db_session.add(log)
+        db_session.commit()
+        db_session.refresh(log)
+
+        assert log.detail == "Verbose worker log output\nWith multiple lines"
+
+    def test_processing_log_detail_nullable(self, db_session):
+        """Test that detail column is nullable (backward compatible)."""
+        from app.models import ProcessingLog
+
+        log = ProcessingLog(
+            task_id="test-task-2",
+            step_name="test_step",
+            status="success",
+            message="Short message",
+        )
+        db_session.add(log)
+        db_session.commit()
+        db_session.refresh(log)
+
+        assert log.detail is None
+
+    def test_migration_adds_detail_column(self, tmp_path):
+        """Test that _run_schema_migrations adds detail column to existing tables."""
+        from sqlalchemy import Column, Integer, String, create_engine, text
+        from sqlalchemy.orm import sessionmaker
+
+        from app.database import _run_schema_migrations
+
+        # Create a database with the old schema (no detail column)
+        db_path = str(tmp_path / "migration_test.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "CREATE TABLE processing_logs ("
+                    "id INTEGER PRIMARY KEY, "
+                    "file_id INTEGER, "
+                    "task_id VARCHAR, "
+                    "step_name VARCHAR, "
+                    "status VARCHAR, "
+                    "message VARCHAR, "
+                    "timestamp DATETIME)"
+                )
+            )
+
+        # Run migrations
+        _run_schema_migrations(engine)
+
+        # Verify detail column was added
+        from sqlalchemy import inspect
+
+        inspector = inspect(engine)
+        columns = [col["name"] for col in inspector.get_columns("processing_logs")]
+        assert "detail" in columns
+
+        engine.dispose()

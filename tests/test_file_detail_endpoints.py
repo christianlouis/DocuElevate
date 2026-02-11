@@ -213,8 +213,11 @@ class TestSubtaskRetry:
         assert data["status"] == "success"
         assert data["subtask_name"] == "extract_metadata_with_gpt"
 
-    def test_retry_pipeline_step_embed_no_metadata(self, client: TestClient, db_session, sample_pdf_path):
-        """Test retrying embed_metadata_into_pdf without prior metadata extraction."""
+    def test_retry_pipeline_step_embed_metadata(self, client: TestClient, db_session, sample_pdf_path):
+        """Test retrying embed_metadata_into_pdf re-triggers metadata extraction."""
+        mock_task = MagicMock()
+        mock_task.id = "embed-retry-task"
+
         file_record = FileRecord(
             filehash="pipeline_retry4",
             original_filename="embed_retry.pdf",
@@ -226,10 +229,17 @@ class TestSubtaskRetry:
         db_session.commit()
         db_session.refresh(file_record)
 
-        # Try to retry embed without a successful metadata extraction log
-        response = client.post(f"/api/files/{file_record.id}/retry-subtask?subtask_name=embed_metadata_into_pdf")
-        assert response.status_code == 400
-        assert "retry extract_metadata_with_gpt first" in response.json()["detail"].lower()
+        with patch("app.tasks.extract_metadata_with_gpt.extract_metadata_with_gpt") as mock_extract:
+            mock_extract.delay.return_value = mock_task
+            response = client.post(
+                f"/api/files/{file_record.id}/retry-subtask?subtask_name=embed_metadata_into_pdf"
+            )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert data["subtask_name"] == "embed_metadata_into_pdf"
+        # Verify extract_metadata_with_gpt.delay was called (which chains into embed)
+        mock_extract.delay.assert_called_once()
 
     def test_retry_pipeline_step_missing_local_file(self, client: TestClient, db_session):
         """Test retrying a pipeline step when local file is missing."""

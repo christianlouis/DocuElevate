@@ -48,9 +48,31 @@ def init_db():
     try:
         Base.metadata.create_all(bind=engine)
         logger.info("Database initialization complete (tables created if not exist).")
+
+        # 6. Run lightweight schema migrations for existing databases
+        _run_schema_migrations(engine)
     except exc.SQLAlchemyError as e:
         logger.error(f"Error initializing database: {e}")
         raise
+
+
+def _run_schema_migrations(engine):
+    """
+    Apply lightweight schema migrations for columns added after the initial release.
+    Each migration is idempotent and safe to run multiple times.
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+
+    # Migration: Add 'detail' column to processing_logs (added for verbose worker log output)
+    if "processing_logs" in inspector.get_table_names():
+        columns = [col["name"] for col in inspector.get_columns("processing_logs")]
+        if "detail" not in columns:
+            logger.info("Migrating processing_logs: adding 'detail' column")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE processing_logs ADD COLUMN detail TEXT"))
+            logger.info("Migration complete: 'detail' column added to processing_logs")
 
 
 def get_db():

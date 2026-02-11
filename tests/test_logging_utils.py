@@ -4,6 +4,8 @@ Tests for app/utils/logging.py
 Tests task progress logging functionality.
 """
 
+import logging
+
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
@@ -42,6 +44,7 @@ class TestTaskLogging:
             status="started",
             message="Processing document",
             file_id=456,
+            detail=None,
         )
 
         # Verify database operations
@@ -67,7 +70,7 @@ class TestTaskLogging:
 
         # Verify called with None for optional parameters
         mock_processing_log.assert_called_once_with(
-            task_id="task-456", step_name="upload", status="completed", message=None, file_id=None
+            task_id="task-456", step_name="upload", status="completed", message=None, file_id=None, detail=None
         )
 
         mock_db.add.assert_called_once()
@@ -127,6 +130,7 @@ class TestTaskLogging:
             status="success",
             message="Document processed successfully",
             file_id=999,
+            detail=None,
         )
 
         mock_db.add.assert_called_once()
@@ -174,3 +178,102 @@ class TestTaskLogging:
             assert mock_processing_log.called
             mock_db.add.assert_called()
             mock_db.commit.assert_called()
+
+    @patch("app.utils.logging.SessionLocal")
+    @patch("app.utils.logging.ProcessingLog")
+    def test_log_task_progress_with_explicit_detail(self, mock_processing_log, mock_session_local):
+        """Test logging with explicit detail preserves it."""
+        from app.utils.logging import log_task_progress
+
+        mock_db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = mock_db
+
+        mock_log_entry = Mock()
+        mock_processing_log.return_value = mock_log_entry
+
+        log_task_progress(
+            task_id="task-explicit",
+            step_name="test_step",
+            status="success",
+            message="Short message",
+            detail="Verbose detail output",
+        )
+
+        mock_processing_log.assert_called_once_with(
+            task_id="task-explicit",
+            step_name="test_step",
+            status="success",
+            message="Short message",
+            file_id=None,
+            detail="Verbose detail output",
+        )
+
+
+@pytest.mark.unit
+class TestTaskLogCollector:
+    """Test the TaskLogCollector handler."""
+
+    def test_collector_buffers_log_messages(self):
+        """Test that the collector buffers messages by task ID."""
+        from app.utils.logging import TaskLogCollector
+
+        collector = TaskLogCollector()
+        collector.setFormatter(logging.Formatter("%(message)s"))
+
+        logger = logging.getLogger("test_collector")
+        logger.addHandler(collector)
+        logger.setLevel(logging.DEBUG)
+
+        logger.info("[abc12345-task] Step 1 starting")
+        logger.info("[abc12345-task] Step 1 complete")
+        logger.info("[other-task-id] Different task")
+
+        result = collector.drain("abc12345-task")
+        assert "Step 1 starting" in result
+        assert "Step 1 complete" in result
+        assert "Different task" not in result
+
+        # After drain, buffer should be empty
+        assert collector.drain("abc12345-task") == ""
+
+        # Other task still has its messages
+        result2 = collector.drain("other-task-id")
+        assert "Different task" in result2
+
+        logger.removeHandler(collector)
+
+    def test_collector_ignores_short_ids(self):
+        """Test that the collector ignores short bracketed strings."""
+        from app.utils.logging import TaskLogCollector
+
+        collector = TaskLogCollector()
+        collector.setFormatter(logging.Formatter("%(message)s"))
+
+        logger = logging.getLogger("test_short_ids")
+        logger.addHandler(collector)
+        logger.setLevel(logging.DEBUG)
+
+        logger.info("[OK] short id")
+        assert collector.drain("OK") == ""
+
+        logger.removeHandler(collector)
+
+    def test_collector_handles_malformed_brackets(self):
+        """Test that the collector handles messages with [ but no ]."""
+        from app.utils.logging import TaskLogCollector
+
+        collector = TaskLogCollector()
+        collector.setFormatter(logging.Formatter("%(message)s"))
+
+        logger = logging.getLogger("test_malformed")
+        logger.addHandler(collector)
+        logger.setLevel(logging.DEBUG)
+
+        logger.info("[no closing bracket")
+        logger.info("no brackets at all")
+        logger.info("")
+
+        # Should not raise and should not buffer anything
+        assert collector.drain("no closing bracket") == ""
+
+        logger.removeHandler(collector)
