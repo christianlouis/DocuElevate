@@ -16,6 +16,7 @@ from app.api.onedrive import router as onedrive_router
 from app.api.openai import router as openai_router
 from app.api.process import router as process_router
 from app.api.settings import router as settings_router
+from app.api.url_upload import router as url_upload_router
 
 # Import all the individual routers
 from app.api.user import router as user_router
@@ -38,3 +39,4 @@ router.include_router(azure_router)
 router.include_router(google_drive_router)
 router.include_router(logs_router)
 router.include_router(settings_router)
+router.include_router(url_upload_router)
