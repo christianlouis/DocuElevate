@@ -53,7 +53,7 @@ jobs:
         run: |
           for f in VERSION BUILD_DATE GIT_SHA RUNTIME_INFO; do
             if [ -f "$f" ]; then
-              git add "$f"
+              git add -f "$f"
             fi
           done
           if ! git diff --staged --quiet; then
