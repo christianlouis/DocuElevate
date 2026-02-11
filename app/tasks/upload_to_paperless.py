@@ -245,13 +245,17 @@ def upload_to_paperless(self, file_path: str, file_id: int = None):
             resp.raise_for_status()
         except requests.exceptions.RequestException as exc:
             error_msg = f"Failed to upload to Paperless: {exc}"
+            response_text = getattr(exc.response, "text", "<no response>")
             logger.error(
                 f"[{task_id}] Failed to upload document '%s' to Paperless. Error: %s. Response=%s",
                 file_path,
                 exc,
-                getattr(exc.response, "text", "<no response>"),
+                response_text,
             )
-            log_task_progress(task_id, "upload_to_paperless", "failure", error_msg, file_id=file_id)
+            log_task_progress(
+                task_id, "upload_to_paperless", "failure", error_msg, file_id=file_id,
+                detail=f"Failed to upload document to Paperless.\nFile: {file_path}\nError: {exc}\nResponse: {response_text}",
+            )
             raise
 
         raw_task_id = resp.text.strip().strip('"').strip("'")

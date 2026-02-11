@@ -1,6 +1,6 @@
 # app/models.py
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func
 
 from app.database import Base
 
@@ -48,6 +48,7 @@ class ProcessingLog(Base):
     step_name = Column(String)  # e.g., "OCR", "convert_to_pdf", "upload_s3"
     status = Column(String)  # "pending", "in_progress", "success", "failure"
     message = Column(String, nullable=True)  # Error text or success note
+    detail = Column(Text, nullable=True)  # Verbose worker log output for diagnostics
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
 
 

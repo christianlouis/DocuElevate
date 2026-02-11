@@ -52,7 +52,10 @@ def process_document(self, original_local_file: str, original_filename: str = No
 
     if not os.path.exists(original_local_file):
         logger.error(f"[{task_id}] File {original_local_file} not found.")
-        log_task_progress(task_id, "process_document", "failure", "File not found")
+        log_task_progress(
+            task_id, "process_document", "failure", "File not found",
+            detail=f"File not found on disk: {original_local_file}",
+        )
         return {"error": "File not found"}
 
     # 0. Compute the file hash and check for duplicates
@@ -104,6 +107,12 @@ def process_document(self, original_local_file: str, original_filename: str = No
                     "success",
                     "Duplicate file detected, skipping",
                     file_id=existing.id,
+                    detail=(
+                        f"Duplicate file detected.\n"
+                        f"File hash: {filehash}\n"
+                        f"Existing file record ID: {existing.id}\n"
+                        f"Original filename: {original_filename}"
+                    ),
                 )
                 return {
                     "status": "duplicate_file",

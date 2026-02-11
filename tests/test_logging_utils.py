@@ -42,6 +42,7 @@ class TestTaskLogging:
             status="started",
             message="Processing document",
             file_id=456,
+            detail=None,
         )
 
         # Verify database operations
@@ -67,7 +68,7 @@ class TestTaskLogging:
 
         # Verify called with None for optional parameters
         mock_processing_log.assert_called_once_with(
-            task_id="task-456", step_name="upload", status="completed", message=None, file_id=None
+            task_id="task-456", step_name="upload", status="completed", message=None, file_id=None, detail=None
         )
 
         mock_db.add.assert_called_once()
@@ -127,6 +128,7 @@ class TestTaskLogging:
             status="success",
             message="Document processed successfully",
             file_id=999,
+            detail=None,
         )
 
         mock_db.add.assert_called_once()

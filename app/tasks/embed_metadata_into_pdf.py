@@ -98,7 +98,14 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
             local_file_path = alt_path
         else:
             logger.error(f"[{task_id}] Local file {local_file_path} not found, cannot embed metadata.")
-            log_task_progress(task_id, "embed_metadata_into_pdf", "failure", "File not found", file_id=file_id)
+            log_task_progress(
+                task_id, "embed_metadata_into_pdf", "failure", "File not found", file_id=file_id,
+                detail=(
+                    f"Local file not found, cannot embed metadata.\n"
+                    f"Tried path: {local_file_path}\n"
+                    f"Also tried: {alt_path}"
+                ),
+            )
             return {"error": "File not found"}
 
     # Work on a safe copy in a secure temporary directory
@@ -184,7 +191,14 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
         # Trigger the next step: final storage.
         logger.info(f"[{task_id}] Queueing final storage task")
         log_task_progress(
-            task_id, "embed_metadata_into_pdf", "success", "Metadata embedded, queuing finalization", file_id=file_id
+            task_id, "embed_metadata_into_pdf", "success", "Metadata embedded, queuing finalization", file_id=file_id,
+            detail=(
+                f"Metadata embedded into PDF successfully.\n"
+                f"Original file: {original_file}\n"
+                f"Final file: {final_file_path}\n"
+                f"Metadata JSON: {json_path}\n"
+                f"Suggested filename: {suggested_filename}.pdf"
+            ),
         )
         finalize_document_storage.delay(original_file, final_file_path, metadata, file_id=file_id)
 
@@ -209,7 +223,10 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
 
     except Exception as e:
         logger.exception(f"[{task_id}] Failed to embed metadata into {processed_file}: {e}")
-        log_task_progress(task_id, "embed_metadata_into_pdf", "failure", f"Exception: {str(e)}", file_id=file_id)
+        log_task_progress(
+            task_id, "embed_metadata_into_pdf", "failure", f"Exception: {str(e)}", file_id=file_id,
+            detail=f"Failed to embed metadata into {processed_file}.\nOriginal file: {original_file}\nException: {str(e)}",
+        )
         # Clean up temporary file in case of error
         if os.path.exists(processed_file):
             try:
