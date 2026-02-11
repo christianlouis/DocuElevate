@@ -156,6 +156,8 @@ markers = [
     "requires_external: Tests requiring external services (OpenAI, Azure, etc.)",
     "requires_db: Tests requiring database",
     "requires_redis: Tests requiring Redis",
+    "e2e: End-to-end tests with full infrastructure (requires Docker)",
+    "requires_docker: Tests requiring Docker containers (testcontainers)",
 ]
 
 # mypy configuration

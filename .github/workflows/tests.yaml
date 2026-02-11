@@ -40,7 +40,10 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run Tests
-        run: pytest tests/ -v --cov=app --cov-report=xml --cov-report=term --junitxml=junit.xml -o junit_family=legacy
+        # Exclude E2E tests (-m "not e2e") as they require Docker-in-Docker (testcontainers)
+        # which isn't well-supported in GitHub Actions without additional DinD configuration.
+        # E2E tests can be run locally with: pytest -m e2e
+        run: pytest tests/ -v --cov=app --cov-report=xml --cov-report=term --junitxml=junit.xml -o junit_family=legacy -m "not e2e"
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5

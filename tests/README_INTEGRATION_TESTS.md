@@ -359,7 +359,29 @@ docker volume prune -f
 
 ## CI/CD Integration
 
-### GitHub Actions Example
+### GitHub Actions - Current Configuration
+
+The DocuElevate CI workflow (`.github/workflows/tests.yaml`) **excludes E2E tests** by default because they require Docker-in-Docker (testcontainers), which requires additional configuration in GitHub Actions.
+
+```yaml
+- name: Run Tests
+  # Exclude E2E tests - they require Docker-in-Docker (testcontainers)
+  run: pytest tests/ -v --cov=app -m "not e2e"
+```
+
+**To run E2E tests locally:**
+```bash
+pytest -m e2e -v
+```
+
+**To run all tests including E2E locally:**
+```bash
+pytest tests/ -v
+```
+
+### GitHub Actions with E2E Support (Optional)
+
+If you want to enable E2E tests in CI, you need Docker-in-Docker setup:
 
 ```yaml
 name: Integration Tests
