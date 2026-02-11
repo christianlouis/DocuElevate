@@ -257,3 +257,91 @@ class TestFilenameUtilsEdgeCases:
         assert '"' not in result
         assert "|" not in result
         assert "?" not in result
+
+
+
+@pytest.mark.unit
+class TestUniqueFilepathWithCounter:
+    """Test unique filepath generation with numeric counter suffix"""
+
+    def test_get_unique_filepath_with_counter_no_collision(self, tmp_path):
+        """Test that original filename is returned when no collision exists"""
+        from app.utils.filename_utils import get_unique_filepath_with_counter
+
+        result = get_unique_filepath_with_counter(str(tmp_path), "document")
+        assert result == str(tmp_path / "document.pdf")
+
+    def test_get_unique_filepath_with_counter_single_collision(self, tmp_path):
+        """Test that -0001 suffix is added on first collision"""
+        from app.utils.filename_utils import get_unique_filepath_with_counter
+
+        # Create the base file
+        (tmp_path / "document.pdf").touch()
+
+        result = get_unique_filepath_with_counter(str(tmp_path), "document")
+        assert result == str(tmp_path / "document-0001.pdf")
+
+    def test_get_unique_filepath_with_counter_multiple_collisions(self, tmp_path):
+        """Test that counter increments correctly for multiple collisions"""
+        from app.utils.filename_utils import get_unique_filepath_with_counter
+
+        # Create files with base name and first two counter suffixes
+        (tmp_path / "document.pdf").touch()
+        (tmp_path / "document-0001.pdf").touch()
+        (tmp_path / "document-0002.pdf").touch()
+
+        result = get_unique_filepath_with_counter(str(tmp_path), "document")
+        assert result == str(tmp_path / "document-0003.pdf")
+
+    def test_get_unique_filepath_with_counter_custom_extension(self, tmp_path):
+        """Test with custom file extension"""
+        from app.utils.filename_utils import get_unique_filepath_with_counter
+
+        (tmp_path / "data.json").touch()
+
+        result = get_unique_filepath_with_counter(str(tmp_path), "data", extension=".json")
+        assert result == str(tmp_path / "data-0001.json")
+
+    def test_get_unique_filepath_with_counter_zero_padded(self, tmp_path):
+        """Test that counter uses zero-padded 4-digit format"""
+        from app.utils.filename_utils import get_unique_filepath_with_counter
+
+        (tmp_path / "invoice.pdf").touch()
+
+        result = get_unique_filepath_with_counter(str(tmp_path), "invoice")
+        # Should be -0001, not -1
+        assert result == str(tmp_path / "invoice-0001.pdf")
+        assert "-1.pdf" not in result
+
+    def test_get_unique_filepath_with_counter_preserves_filename(self, tmp_path):
+        """Test that complex filenames are preserved"""
+        from app.utils.filename_utils import get_unique_filepath_with_counter
+
+        filename = "2024-01-01_Invoice_Company-Name"
+        (tmp_path / f"{filename}.pdf").touch()
+
+        result = get_unique_filepath_with_counter(str(tmp_path), filename)
+        assert filename in result
+        assert result == str(tmp_path / f"{filename}-0001.pdf")
+
+    def test_get_unique_filepath_with_counter_high_count(self, tmp_path):
+        """Test that function handles high counter values"""
+        from app.utils.filename_utils import get_unique_filepath_with_counter
+
+        # Create files up to -0099
+        (tmp_path / "test.pdf").touch()
+        for i in range(1, 100):
+            (tmp_path / f"test-{i:04d}.pdf").touch()
+
+        result = get_unique_filepath_with_counter(str(tmp_path), "test")
+        assert result == str(tmp_path / "test-0100.pdf")
+
+    def test_get_unique_filepath_with_counter_directory_creation(self, tmp_path):
+        """Test with directory that already exists"""
+        from app.utils.filename_utils import get_unique_filepath_with_counter
+
+        # Directory already exists (tmp_path)
+        result = get_unique_filepath_with_counter(str(tmp_path), "newfile")
+        assert result == str(tmp_path / "newfile.pdf")
+        # File shouldn't be created, just path returned
+        assert not os.path.exists(result)

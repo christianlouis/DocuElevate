@@ -151,31 +151,46 @@ def process_document(self, original_local_file: str, original_filename: str = No
         file_uuid = str(uuid.uuid4())
         new_filename = f"{file_uuid}{file_ext}"
 
-        # 2. Save immutable copy to /workdir/original
-        # This copy serves as the permanent, untouched reference of the ingested file
-        original_dir = os.path.join(settings.workdir, "original")
-        os.makedirs(original_dir, exist_ok=True)
-        
-        # Use collision-resistant naming with -0001, -0002 suffixes
-        base_name = os.path.splitext(new_filename)[0]
-        original_file_path = get_unique_filepath_with_counter(original_dir, base_name, file_ext)
-        
-        logger.info(f"[{task_id}] Saving immutable original to: {original_file_path}")
-        log_task_progress(
-            task_id,
-            "save_original",
-            "in_progress",
-            f"Saving original to {os.path.basename(original_file_path)}",
-            file_id=new_record.id,
-        )
-        shutil.copy(original_local_file, original_file_path)
-        log_task_progress(
-            task_id,
-            "save_original",
-            "success",
-            f"Original saved: {os.path.basename(original_file_path)}",
-            file_id=new_record.id,
-        )
+        # 2. Save immutable copy to /workdir/original (only for new files, not reprocessing)
+        # For reprocessing, the original_file_path should already exist in the database
+        if file_id is None:  # New file - save original copy
+            # This copy serves as the permanent, untouched reference of the ingested file
+            original_dir = os.path.join(settings.workdir, "original")
+            os.makedirs(original_dir, exist_ok=True)
+            
+            # Use collision-resistant naming with -0001, -0002 suffixes
+            base_name = os.path.splitext(new_filename)[0]
+            original_file_path = get_unique_filepath_with_counter(original_dir, base_name, file_ext)
+            
+            logger.info(f"[{task_id}] Saving immutable original to: {original_file_path}")
+            log_task_progress(
+                task_id,
+                "save_original",
+                "in_progress",
+                f"Saving original to {os.path.basename(original_file_path)}",
+                file_id=new_record.id,
+            )
+            shutil.copy(original_local_file, original_file_path)
+            log_task_progress(
+                task_id,
+                "save_original",
+                "success",
+                f"Original saved: {os.path.basename(original_file_path)}",
+                file_id=new_record.id,
+            )
+            
+            # Update the DB with original_file_path
+            new_record.original_file_path = original_file_path
+        else:
+            # Reprocessing - original should already exist
+            logger.info(f"[{task_id}] Reprocessing: original file already saved at {new_record.original_file_path}")
+            log_task_progress(
+                task_id,
+                "save_original",
+                "success",
+                "Reprocessing: using existing original",
+                file_id=new_record.id,
+            )
 
         # 3. Copy to /workdir/tmp for processing
         tmp_dir = os.path.join(settings.workdir, "tmp")
@@ -200,9 +215,8 @@ def process_document(self, original_local_file: str, original_filename: str = No
             file_id=new_record.id,
         )
 
-        # Update the DB with file paths
+        # Update the DB with local_filename
         new_record.local_filename = new_local_path
-        new_record.original_file_path = original_file_path
         db.commit()
 
         # Store file_id before session closes to avoid DetachedInstanceError
