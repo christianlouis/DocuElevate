@@ -114,21 +114,25 @@ class TestMetricsCountingBugFixes:
         This simulates the bug where metrics show incorrect counts because
         they count all logs instead of just the latest per step.
         """
+        from datetime import datetime, timedelta
+        
         class MockLog:
-            def __init__(self, step_name, status):
+            def __init__(self, step_name, status, timestamp):
                 self.step_name = step_name
                 self.status = status
+                self.timestamp = timestamp
 
+        now = datetime.now()
         # Simulate logs ordered by timestamp desc (latest first)
         logs = [
             # Latest status for each step (all success)
-            MockLog("hash_file", "success"),
-            MockLog("create_file_record", "success"),
-            MockLog("extract_metadata_with_gpt", "success"),
+            MockLog("hash_file", "success", now - timedelta(minutes=1)),
+            MockLog("create_file_record", "success", now - timedelta(minutes=2)),
+            MockLog("extract_metadata_with_gpt", "success", now - timedelta(minutes=3)),
             # Older in_progress logs that should be ignored
-            MockLog("hash_file", "in_progress"),
-            MockLog("create_file_record", "in_progress"),
-            MockLog("extract_metadata_with_gpt", "in_progress"),
+            MockLog("hash_file", "in_progress", now - timedelta(minutes=5)),
+            MockLog("create_file_record", "in_progress", now - timedelta(minutes=6)),
+            MockLog("extract_metadata_with_gpt", "in_progress", now - timedelta(minutes=7)),
         ]
 
         summary = _compute_step_summary(logs)
@@ -144,24 +148,28 @@ class TestMetricsCountingBugFixes:
         Test that upload tasks are only counted once per destination,
         using the latest status.
         """
+        from datetime import datetime, timedelta
+        
         class MockLog:
-            def __init__(self, step_name, status):
+            def __init__(self, step_name, status, timestamp):
                 self.step_name = step_name
                 self.status = status
+                self.timestamp = timestamp
 
+        now = datetime.now()
         # Logs ordered by timestamp desc (latest first)
         logs = [
             # Latest status for uploads
-            MockLog("upload_to_dropbox", "success"),
-            MockLog("upload_to_s3", "success"),
-            MockLog("upload_to_nextcloud", "success"),
+            MockLog("upload_to_dropbox", "success", now - timedelta(minutes=1)),
+            MockLog("upload_to_s3", "success", now - timedelta(minutes=2)),
+            MockLog("upload_to_nextcloud", "success", now - timedelta(minutes=3)),
             # Queue logs (older, should use upload_to_ as latest)
-            MockLog("queue_dropbox", "success"),
-            MockLog("queue_s3", "in_progress"),
-            MockLog("queue_nextcloud", "success"),
+            MockLog("queue_dropbox", "success", now - timedelta(minutes=4)),
+            MockLog("queue_s3", "in_progress", now - timedelta(minutes=5)),
+            MockLog("queue_nextcloud", "success", now - timedelta(minutes=6)),
             # Even older in_progress logs
-            MockLog("upload_to_dropbox", "in_progress"),
-            MockLog("upload_to_s3", "in_progress"),
+            MockLog("upload_to_dropbox", "in_progress", now - timedelta(minutes=7)),
+            MockLog("upload_to_s3", "in_progress", now - timedelta(minutes=8)),
         ]
 
         summary = _compute_step_summary(logs)
@@ -177,24 +185,29 @@ class TestMetricsCountingBugFixes:
         Test the scenario from the issue: File with 6 actual uploads
         should show 6, not 12.
         """
+        from datetime import datetime, timedelta
+        
         class MockLog:
-            def __init__(self, step_name, status):
+            def __init__(self, step_name, status, timestamp):
                 self.step_name = step_name
                 self.status = status
+                self.timestamp = timestamp
 
+        now = datetime.now()
         # Simulate 6 successful uploads with their queue steps
         logs = []
         services = ["dropbox", "s3", "nextcloud", "google_drive", "onedrive", "webdav"]
         
-        # Add latest status (all success)
-        for service in services:
-            logs.append(MockLog(f"upload_to_{service}", "success"))
-            logs.append(MockLog(f"queue_{service}", "success"))
+        # Add latest status (all success) - most recent
+        for i, service in enumerate(services):
+            logs.append(MockLog(f"upload_to_{service}", "success", now - timedelta(minutes=i*2)))
+            logs.append(MockLog(f"queue_{service}", "success", now - timedelta(minutes=i*2+1)))
         
         # Add some older in_progress logs
-        for service in services:
-            logs.append(MockLog(f"upload_to_{service}", "in_progress"))
-            logs.append(MockLog(f"queue_{service}", "in_progress"))
+        base_offset = len(services) * 2
+        for i, service in enumerate(services):
+            logs.append(MockLog(f"upload_to_{service}", "in_progress", now - timedelta(minutes=base_offset+i*2)))
+            logs.append(MockLog(f"queue_{service}", "in_progress", now - timedelta(minutes=base_offset+i*2+1)))
 
         summary = _compute_step_summary(logs)
         
@@ -208,19 +221,23 @@ class TestMetricsCountingBugFixes:
         """
         Test that upload metrics correctly reflect mixed statuses.
         """
+        from datetime import datetime, timedelta
+        
         class MockLog:
-            def __init__(self, step_name, status):
+            def __init__(self, step_name, status, timestamp):
                 self.step_name = step_name
                 self.status = status
+                self.timestamp = timestamp
 
+        now = datetime.now()
         logs = [
-            # Latest statuses
-            MockLog("upload_to_dropbox", "success"),
-            MockLog("upload_to_s3", "failure"),
-            MockLog("upload_to_nextcloud", "in_progress"),
-            MockLog("queue_dropbox", "success"),
-            MockLog("queue_s3", "success"),
-            MockLog("queue_nextcloud", "success"),
+            # Latest statuses (ordered by timestamp desc)
+            MockLog("upload_to_dropbox", "success", now - timedelta(minutes=1)),
+            MockLog("upload_to_s3", "failure", now - timedelta(minutes=2)),
+            MockLog("upload_to_nextcloud", "in_progress", now - timedelta(minutes=3)),
+            MockLog("queue_dropbox", "success", now - timedelta(minutes=4)),
+            MockLog("queue_s3", "success", now - timedelta(minutes=5)),
+            MockLog("queue_nextcloud", "success", now - timedelta(minutes=6)),
         ]
 
         summary = _compute_step_summary(logs)
