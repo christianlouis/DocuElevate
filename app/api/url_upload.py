@@ -200,7 +200,9 @@ async def process_url(request: URLUploadRequest):
         safe_filename = "download"
 
     # Download file with security measures
-    target_path = None  # Initialize to None for cleanup in exception handlers
+    # Initialize target_path to None to prevent UnboundLocalError in exception handlers
+    # that may execute before target_path is assigned during error cases
+    target_path = None
     try:
         logger.info(f"Downloading file from URL: {url}")
 
