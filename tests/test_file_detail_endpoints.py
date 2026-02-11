@@ -231,9 +231,7 @@ class TestSubtaskRetry:
 
         with patch("app.tasks.extract_metadata_with_gpt.extract_metadata_with_gpt") as mock_extract:
             mock_extract.delay.return_value = mock_task
-            response = client.post(
-                f"/api/files/{file_record.id}/retry-subtask?subtask_name=embed_metadata_into_pdf"
-            )
+            response = client.post(f"/api/files/{file_record.id}/retry-subtask?subtask_name=embed_metadata_into_pdf")
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "success"
@@ -503,21 +501,25 @@ class TestStepSummary:
 
     def test_summary_with_mixed_statuses(self):
         """Test step summary with various statuses."""
+        from datetime import datetime, timedelta
+
         from app.views.files import _compute_step_summary
 
         # Create mock logs
         class MockLog:
-            def __init__(self, step_name, status):
+            def __init__(self, step_name, status, timestamp):
                 self.step_name = step_name
                 self.status = status
+                self.timestamp = timestamp
 
+        now = datetime.now()
         logs = [
-            MockLog("hash_file", "success"),
-            MockLog("create_file_record", "success"),
-            MockLog("extract_metadata_with_gpt", "failure"),
-            MockLog("upload_to_dropbox", "success"),
-            MockLog("upload_to_s3", "failure"),
-            MockLog("upload_to_nextcloud", "in_progress"),
+            MockLog("hash_file", "success", now - timedelta(minutes=5)),
+            MockLog("create_file_record", "success", now - timedelta(minutes=4)),
+            MockLog("extract_metadata_with_gpt", "failure", now - timedelta(minutes=3)),
+            MockLog("upload_to_dropbox", "success", now - timedelta(minutes=2)),
+            MockLog("upload_to_s3", "failure", now - timedelta(minutes=1)),
+            MockLog("upload_to_nextcloud", "in_progress", now),
         ]
 
         summary = _compute_step_summary(logs)

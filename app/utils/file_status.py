@@ -6,12 +6,15 @@ from typing import Dict, List
 
 from sqlalchemy.orm import Session
 
-from app.models import ProcessingLog
+from app.models import FileProcessingStep, ProcessingLog
+from app.utils.step_manager import get_file_overall_status, get_step_summary
 
 
 def get_file_processing_status(db: Session, file_id: int) -> Dict:
     """
-    Get the processing status for a file by checking its processing logs.
+    Get the processing status for a file by checking its processing steps.
+
+    This function now queries the FileProcessingStep table instead of scanning logs.
 
     Args:
         db: Database session
@@ -20,12 +23,23 @@ def get_file_processing_status(db: Session, file_id: int) -> Dict:
     Returns:
         dict with status, last_step, and has_errors
     """
-    # Get all logs for this file
-    logs = (
-        db.query(ProcessingLog).filter(ProcessingLog.file_id == file_id).order_by(ProcessingLog.timestamp.desc()).all()
+    # Use the new status table approach
+    overall_status = get_file_overall_status(db, file_id)
+
+    # Get the most recently updated step to determine last_step
+    latest_step = (
+        db.query(FileProcessingStep)
+        .filter(FileProcessingStep.file_id == file_id)
+        .order_by(FileProcessingStep.updated_at.desc())
+        .first()
     )
 
-    return _compute_status_from_logs(logs)
+    return {
+        "status": overall_status["status"],
+        "last_step": latest_step.step_name if latest_step else None,
+        "has_errors": overall_status["has_errors"],
+        "total_steps": overall_status["total_steps"],
+    }
 
 
 def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, Dict]:
@@ -39,26 +53,51 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
     Returns:
         dict mapping file_id to status dict
     """
-    # Get all logs for these files in one query
-    logs = (
-        db.query(ProcessingLog)
-        .filter(ProcessingLog.file_id.in_(file_ids))
-        .order_by(ProcessingLog.file_id, ProcessingLog.timestamp.desc())
-        .all()
-    )
+    # Get all steps for these files in one query
+    steps = db.query(FileProcessingStep).filter(FileProcessingStep.file_id.in_(file_ids)).all()
 
-    # Group logs by file_id
-    logs_by_file = {}
-    for log in logs:
-        if log.file_id not in logs_by_file:
-            logs_by_file[log.file_id] = []
-        logs_by_file[log.file_id].append(log)
+    # Group steps by file_id
+    steps_by_file = {}
+    for step in steps:
+        if step.file_id not in steps_by_file:
+            steps_by_file[step.file_id] = []
+        steps_by_file[step.file_id].append(step)
 
     # Compute status for each file
     result = {}
     for file_id in file_ids:
-        file_logs = logs_by_file.get(file_id, [])
-        result[file_id] = _compute_status_from_logs(file_logs)
+        file_steps = steps_by_file.get(file_id, [])
+        if not file_steps:
+            result[file_id] = {"status": "pending", "last_step": None, "has_errors": False, "total_steps": 0}
+        else:
+            # Compute overall status from steps
+            total_steps = len(file_steps)
+            completed_steps = sum(1 for s in file_steps if s.status == "success")
+            failed_steps = sum(1 for s in file_steps if s.status == "failure")
+            in_progress_steps = sum(1 for s in file_steps if s.status == "in_progress")
+            skipped_steps = sum(1 for s in file_steps if s.status == "skipped")
+
+            has_errors = failed_steps > 0
+
+            # Determine overall status
+            if has_errors:
+                status = "failed"
+            elif in_progress_steps > 0:
+                status = "processing"
+            elif completed_steps + skipped_steps == total_steps:
+                status = "completed"
+            else:
+                status = "pending"
+
+            # Get last updated step
+            latest_step = max(file_steps, key=lambda s: s.updated_at if s.updated_at else s.created_at)
+
+            result[file_id] = {
+                "status": status,
+                "last_step": latest_step.step_name,
+                "has_errors": has_errors,
+                "total_steps": total_steps,
+            }
 
     return result
 
@@ -66,6 +105,9 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
 def _compute_status_from_logs(logs: List[ProcessingLog]) -> Dict:
     """
     Compute processing status from a list of processing logs.
+
+    DEPRECATED: This function is kept for backwards compatibility.
+    New code should use the FileProcessingStep table instead.
 
     Args:
         logs: List of ProcessingLog objects (should be ordered by timestamp desc)
