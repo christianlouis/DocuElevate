@@ -126,17 +126,18 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
         # SECURITY: Validate filename format from GPT to prevent path traversal
         # The prompt requests filenames with only letters, numbers, periods, and underscores
         # Enforce this constraint to prevent malicious filenames
-        import re
-        filename = metadata.get("filename", "")
-        if filename:
+        suggested_filename = metadata.get("filename", "")
+        if suggested_filename:
             # Check if filename contains only safe characters AND explicitly check for ".."
             # Defense in depth: While the regex [\w\-\. ]+ already excludes / and \,
             # we explicitly reject ".." to guard against:
             # 1. Potential locale-specific \w behavior
             # 2. Files literally named ".." which are valid but problematic
             # 3. Future code changes that might relax the regex
-            if not re.match(r'^[\w\-\. ]+$', filename) or ".." in filename:
-                logger.warning(f"[{task_id}] Invalid filename format from GPT: '{filename}', using fallback")
+            if not re.match(r'^[\w\-\. ]+$', suggested_filename) or ".." in suggested_filename:
+                logger.warning(
+                    f"[{task_id}] Invalid filename format from GPT: '{suggested_filename}', using fallback"
+                )
                 # Reset to empty to trigger fallback to original filename
                 metadata["filename"] = ""
         
@@ -146,6 +147,7 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
         )
 
         # Trigger the next step: embedding metadata into the PDF
+        # Pass the original filename (UUID-based) so embed_metadata_into_pdf can find the file on disk
         logger.info(f"[{task_id}] Queueing metadata embedding task")
         log_task_progress(
             task_id, "extract_metadata_with_gpt", "success", "Metadata extracted, queuing embed task", file_id=file_id

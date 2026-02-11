@@ -456,35 +456,18 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
         filename = os.path.basename(file_record.local_filename)
         task = extract_metadata_with_gpt.delay(filename, extracted_text, file_id)
     elif step_name == "embed_metadata_into_pdf":
-        from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
+        from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt as extract_metadata_task
 
-        # Retrieve the last successful metadata extraction result from processing logs
-        last_metadata_log = (
-            db.query(ProcessingLog)
-            .filter(
-                ProcessingLog.file_id == file_id,
-                ProcessingLog.step_name == "extract_metadata_with_gpt",
-                ProcessingLog.status == "success",
-            )
-            .order_by(ProcessingLog.timestamp.desc())
-            .first()
-        )
-        if not last_metadata_log:
-            raise HTTPException(
-                status_code=400,
-                detail="No successful metadata extraction found. Retry extract_metadata_with_gpt first.",
-            )
-
+        # Retrying embed requires re-running metadata extraction first, because
+        # embed_metadata_into_pdf needs the actual metadata dict (not empty).
+        # Re-trigger extract_metadata_with_gpt which will chain into embed_metadata_into_pdf.
         if not file_record.local_filename or not os.path.exists(file_record.local_filename):
             raise HTTPException(
                 status_code=400, detail="Local file not found on disk. Cannot retry metadata embedding."
             )
         extracted_text = _extract_text_from_pdf(file_record.local_filename)
         filename = os.path.basename(file_record.local_filename)
-        # Empty metadata dict: embed_metadata_into_pdf will re-run with the provided text.
-        # The GPT extraction step must succeed first (validated above) to ensure
-        # the pipeline can produce new metadata during the subsequent re-extraction.
-        task = embed_metadata_into_pdf.delay(filename, extracted_text, {}, file_id)
+        task = extract_metadata_task.delay(filename, extracted_text, file_id)
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported pipeline step: {step_name}")
 
