@@ -69,6 +69,57 @@ def get_unique_filename(original_path, check_exists_func=None):
     return new_path
 
 
+def get_unique_filepath_with_counter(directory, base_filename, extension=".pdf"):
+    """
+    Returns a unique filepath in the specified directory using a numeric counter suffix.
+    If 'base_filename.pdf' exists, it will append '-0001', '-0002', etc.
+    
+    This function implements robust collision handling with zero-padded numeric suffixes
+    as required for document storage organization.
+    
+    Args:
+        directory (str): Directory path where the file will be stored
+        base_filename (str): Base name for the file (without extension)
+        extension (str): File extension including the dot (default: ".pdf")
+        
+    Returns:
+        str: Full path to a unique filename
+        
+    Examples:
+        >>> get_unique_filepath_with_counter("/workdir/original", "2024-01-01_Invoice")
+        "/workdir/original/2024-01-01_Invoice.pdf"  # If doesn't exist
+        
+        >>> get_unique_filepath_with_counter("/workdir/original", "2024-01-01_Invoice")
+        "/workdir/original/2024-01-01_Invoice-0001.pdf"  # If original exists
+    """
+    # Try the base filename first
+    candidate = os.path.join(directory, base_filename + extension)
+    if not os.path.exists(candidate):
+        return candidate
+    
+    # If base exists, try with counter suffix
+    counter = 1
+    while True:
+        # Use zero-padded 4-digit counter: -0001, -0002, etc.
+        suffix = f"-{counter:04d}"
+        candidate = os.path.join(directory, f"{base_filename}{suffix}{extension}")
+        if not os.path.exists(candidate):
+            return candidate
+        counter += 1
+        
+        # Sanity check to prevent infinite loops (very unlikely to reach)
+        if counter > 9999:
+            # Fall back to timestamp + UUID if somehow we have 10000 collisions
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            uuid_str = str(uuid.uuid4())[:8]
+            candidate = os.path.join(directory, f"{base_filename}-{timestamp}-{uuid_str}{extension}")
+            logger.warning(
+                f"Exceeded 9999 file collisions for {base_filename}, "
+                f"using timestamp+UUID: {os.path.basename(candidate)}"
+            )
+            return candidate
+
+
 def sanitize_filename(filename):
     r"""
     Sanitize a filename to ensure it's valid across different file systems

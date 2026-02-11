@@ -17,13 +17,13 @@ from app.tasks.process_with_azure_document_intelligence import (
     process_with_azure_document_intelligence,
 )
 from app.tasks.retry_config import BaseTaskWithRetry
-from app.utils import hash_file, log_task_progress
+from app.utils import get_unique_filepath_with_counter, hash_file, log_task_progress
 
 logger = logging.getLogger(__name__)
 
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
-def process_document(self, original_local_file: str, original_filename: str = None, file_id: int = None):
+def process_document(self, original_local_file: str, original_filename: str = None, file_id: int = None, force_cloud_ocr: bool = False):
     """
     Process a document file and trigger appropriate text extraction.
 
@@ -32,14 +32,18 @@ def process_document(self, original_local_file: str, original_filename: str = No
         original_filename: Optional original filename (if different from path basename)
         file_id: Optional existing file record ID. When provided, skips duplicate
                  detection and reuses the existing record (used for reprocessing).
+        force_cloud_ocr: If True, forces Azure Document Intelligence OCR processing
+                        regardless of embedded text quality. Used for re-processing.
 
     Steps:
       1. Check if we have a FileRecord entry (via SHA-256 hash). If found, skip re-processing.
          (Skipped when file_id is provided for reprocessing.)
       2. If not found, insert a new DB row and continue with the pipeline:
-         - Copy file to /workdir/tmp
+         - Save immutable copy to /workdir/original
+         - Copy file to /workdir/tmp for processing
          - Check for embedded text. If present, run local GPT extraction
          - Otherwise, queue Azure Document Intelligence processing
+      3. If force_cloud_ocr is True, skip local text extraction and use cloud OCR
     """
     task_id = self.request.id
     logger.info(f"[{task_id}] Starting document processing: {original_local_file}")
@@ -142,16 +146,43 @@ def process_document(self, original_local_file: str, original_filename: str = No
                 file_id=new_record.id,
             )
 
-        # 1. Generate a UUID-based filename and place it in /workdir/tmp
+        # 1. Generate a UUID-based filename for storage
         file_ext = os.path.splitext(original_local_file)[1]
         file_uuid = str(uuid.uuid4())
         new_filename = f"{file_uuid}{file_ext}"
 
+        # 2. Save immutable copy to /workdir/original
+        # This copy serves as the permanent, untouched reference of the ingested file
+        original_dir = os.path.join(settings.workdir, "original")
+        os.makedirs(original_dir, exist_ok=True)
+        
+        # Use collision-resistant naming with -0001, -0002 suffixes
+        base_name = os.path.splitext(new_filename)[0]
+        original_file_path = get_unique_filepath_with_counter(original_dir, base_name, file_ext)
+        
+        logger.info(f"[{task_id}] Saving immutable original to: {original_file_path}")
+        log_task_progress(
+            task_id,
+            "save_original",
+            "in_progress",
+            f"Saving original to {os.path.basename(original_file_path)}",
+            file_id=new_record.id,
+        )
+        shutil.copy(original_local_file, original_file_path)
+        log_task_progress(
+            task_id,
+            "save_original",
+            "success",
+            f"Original saved: {os.path.basename(original_file_path)}",
+            file_id=new_record.id,
+        )
+
+        # 3. Copy to /workdir/tmp for processing
         tmp_dir = os.path.join(settings.workdir, "tmp")
         os.makedirs(tmp_dir, exist_ok=True)
         new_local_path = os.path.join(tmp_dir, new_filename)
 
-        logger.info(f"[{task_id}] Copying file to: {new_local_path}")
+        logger.info(f"[{task_id}] Copying file to processing area: {new_local_path}")
         log_task_progress(
             task_id,
             "copy_file",
@@ -169,14 +200,35 @@ def process_document(self, original_local_file: str, original_filename: str = No
             file_id=new_record.id,
         )
 
-        # Update the DB with final local filename
+        # Update the DB with file paths
         new_record.local_filename = new_local_path
+        new_record.original_file_path = original_file_path
         db.commit()
 
         # Store file_id before session closes to avoid DetachedInstanceError
         file_id = new_record.id
 
     # 2. Check for embedded text (outside the DB session to avoid long open transactions)
+    # Skip local text extraction if force_cloud_ocr is True
+    if force_cloud_ocr:
+        logger.info(f"[{task_id}] Force Cloud OCR requested, skipping embedded text check")
+        log_task_progress(
+            task_id,
+            "check_text",
+            "success",
+            "Force Cloud OCR requested, queuing OCR",
+            file_id=file_id,
+        )
+        log_task_progress(
+            task_id,
+            "process_document",
+            "success",
+            "Queued for forced OCR processing",
+            file_id=file_id,
+        )
+        process_with_azure_document_intelligence.delay(new_filename, file_id)
+        return {"file": new_local_path, "status": "Queued for forced OCR", "file_id": file_id}
+    
     logger.info(f"[{task_id}] Checking for embedded text in PDF")
     log_task_progress(
         task_id,
