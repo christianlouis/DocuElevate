@@ -57,7 +57,7 @@ async def serve_index(request: Request, db: Session = Depends(get_db)):
         # Import the model here to avoid circular imports
         from app.models import FileRecord
 
-        processed_files = db.query(FileRecord).count()
+        processed_files = db.query(FileRecord.id).count()
     except Exception as e:
         # Log error but continue (don't break the page if DB query fails)
         logger.error(f"Error counting files: {str(e)}")

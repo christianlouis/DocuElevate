@@ -74,6 +74,21 @@ def _run_schema_migrations(engine):
                 conn.execute(text("ALTER TABLE processing_logs ADD COLUMN detail TEXT"))
             logger.info("Migration complete: 'detail' column added to processing_logs")
 
+    # Migration: Add file path columns to files table
+    if "files" in inspector.get_table_names():
+        columns = [col["name"] for col in inspector.get_columns("files")]
+        if "original_file_path" not in columns:
+            logger.info("Migrating files: adding 'original_file_path' column")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE files ADD COLUMN original_file_path VARCHAR"))
+            logger.info("Migration complete: 'original_file_path' column added to files")
+
+        if "processed_file_path" not in columns:
+            logger.info("Migrating files: adding 'processed_file_path' column")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE files ADD COLUMN processed_file_path VARCHAR"))
+            logger.info("Migration complete: 'processed_file_path' column added to files")
+
 
 def get_db():
     """
