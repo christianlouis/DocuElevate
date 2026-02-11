@@ -240,6 +240,28 @@ Reprocess a specific file. This queues the file for complete reprocessing throug
 - `404`: File not found
 - `400`: Local file not found on disk (cannot reprocess)
 
+**POST** `/api/files/{file_id}/reprocess-with-cloud-ocr`
+
+Reprocess a specific file with forced Cloud OCR, regardless of embedded text quality. This is useful for documents with low-quality embedded text or when higher quality OCR is needed.
+
+**Response**:
+```json
+{
+  "status": "success",
+  "message": "File queued for Cloud OCR reprocessing",
+  "file_id": 123,
+  "filename": "invoice.pdf",
+  "task_id": "a1b2c3d4-e5f6-7g8h-9i0j-k1l2m3n4o5p6",
+  "force_cloud_ocr": true
+}
+```
+
+**Error Responses**:
+- `404`: File not found
+- `400`: Neither original nor local file found on disk (cannot reprocess)
+
+**Note**: This endpoint forces Azure Document Intelligence OCR processing even if the PDF contains embedded text. The original file (if available) is used for reprocessing to ensure the highest quality result.
+
 ### File Preview
 
 **GET** `/api/files/{file_id}/preview`
@@ -248,8 +270,8 @@ Retrieve the file content for preview purposes.
 
 **Parameters**:
 - `version` (required): Either `original` or `processed`
-  - `original`: Returns the file as it was uploaded (from tmp directory)
-  - `processed`: Returns the file after metadata embedding (from processed directory)
+  - `original`: Returns the immutable original file from the original directory
+  - `processed`: Returns the file after metadata embedding from the processed directory
 
 **Response**: Returns the file content with appropriate MIME type for browser display.
 

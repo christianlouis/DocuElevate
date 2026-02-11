@@ -115,6 +115,12 @@ View the complete processing history with a timeline showing:
 - Network connectivity was lost during processing
 - Configuration has been updated and you want to reprocess with new settings
 
+**Force Cloud OCR**: For files with low-quality embedded text, you can use the "Reprocess with Cloud OCR" option to force high-quality Azure Document Intelligence OCR processing, even if the PDF already contains embedded text. This is useful when:
+- The embedded text quality is poor or contains errors
+- OCR accuracy needs to be improved
+- The embedded text is corrupted or garbled
+- You need the highest quality text extraction possible
+
 #### Process Flow Visualization
 The process flow visualization shows a visual representation of the document processing pipeline:
 - **Green indicators**: Successful stages
@@ -128,13 +134,18 @@ This helps you understand:
 
 #### File Previews
 If your file is still available on disk, you can preview it directly in the browser:
-- **Original File**: The file as it was uploaded
+- **Original File**: The immutable original file as it was first ingested
 - **Processed File**: The file after metadata has been embedded (if processing completed)
 
 Both previews support:
 - In-browser PDF viewing
 - Opening in a new tab for full-screen viewing
 - Side-by-side comparison of original and processed versions
+
+**Note**: The original file is stored in an immutable archive and is never modified. This ensures you always have access to the file exactly as it was uploaded, which is valuable for:
+- Auditing and compliance
+- Debugging processing issues
+- Reprocessing with improved algorithms
 
 ## Document Processing Features
 
