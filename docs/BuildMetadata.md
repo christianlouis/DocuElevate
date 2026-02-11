@@ -26,7 +26,7 @@ When the Docker image is built (locally or in CI/CD), the following happens:
    - `RUNTIME_INFO` - Contains detailed build information
 3. **The script syncs VERSION** from the latest git tag if out of sync
 4. **Docker copies these files** into the image during the build process
-4. **The application reads the files** at runtime via `app/config.py` properties
+5. **The application reads the files** at runtime via `app/config.py` properties
 
 ### File Structure
 
