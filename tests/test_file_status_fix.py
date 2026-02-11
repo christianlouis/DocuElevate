@@ -22,10 +22,11 @@ class TestFileStatusBugFixes:
         """
         Test that status doesn't show "processing" when old in_progress logs exist
         but latest status for all steps is success.
-        
+
         This simulates the bug where a file shows "Processing" even though
         all steps have completed successfully.
         """
+
         class MockLog:
             def __init__(self, step_name, status, timestamp):
                 self.step_name = step_name
@@ -46,7 +47,7 @@ class TestFileStatusBugFixes:
         ]
 
         result = _compute_status_from_logs(logs)
-        
+
         # Should be completed, not processing
         assert result["status"] == "completed"
         assert result["has_errors"] is False
@@ -56,6 +57,7 @@ class TestFileStatusBugFixes:
         Test that status correctly shows "processing" when there are
         actually in-progress tasks (based on latest status).
         """
+
         class MockLog:
             def __init__(self, step_name, status, timestamp):
                 self.step_name = step_name
@@ -72,7 +74,7 @@ class TestFileStatusBugFixes:
         ]
 
         result = _compute_status_from_logs(logs)
-        
+
         # Should be processing because one task is actually in progress
         assert result["status"] == "processing"
         assert result["has_errors"] is False
@@ -81,6 +83,7 @@ class TestFileStatusBugFixes:
         """
         Test that status shows "failed" when the latest status for any step is failure.
         """
+
         class MockLog:
             def __init__(self, step_name, status, timestamp):
                 self.step_name = step_name
@@ -97,7 +100,7 @@ class TestFileStatusBugFixes:
         ]
 
         result = _compute_status_from_logs(logs)
-        
+
         assert result["status"] == "failed"
         assert result["has_errors"] is True
 
@@ -110,12 +113,12 @@ class TestMetricsCountingBugFixes:
         """
         Test that main processing steps are only counted once per step,
         using the latest status, not counting all historical logs.
-        
+
         This simulates the bug where metrics show incorrect counts because
         they count all logs instead of just the latest per step.
         """
         from datetime import datetime, timedelta
-        
+
         class MockLog:
             def __init__(self, step_name, status, timestamp):
                 self.step_name = step_name
@@ -136,7 +139,7 @@ class TestMetricsCountingBugFixes:
         ]
 
         summary = _compute_step_summary(logs)
-        
+
         # Should count each main step only once
         assert summary["total_main_steps"] == 3
         assert summary["main"]["success"] == 3
@@ -149,7 +152,7 @@ class TestMetricsCountingBugFixes:
         using the latest status.
         """
         from datetime import datetime, timedelta
-        
+
         class MockLog:
             def __init__(self, step_name, status, timestamp):
                 self.step_name = step_name
@@ -173,7 +176,7 @@ class TestMetricsCountingBugFixes:
         ]
 
         summary = _compute_step_summary(logs)
-        
+
         # Should count unique upload destinations
         # Note: queue_X and upload_to_X are separate steps
         assert summary["total_upload_tasks"] == 6  # 3 upload_to + 3 queue
@@ -186,7 +189,7 @@ class TestMetricsCountingBugFixes:
         should show 6, not 12.
         """
         from datetime import datetime, timedelta
-        
+
         class MockLog:
             def __init__(self, step_name, status, timestamp):
                 self.step_name = step_name
@@ -197,20 +200,20 @@ class TestMetricsCountingBugFixes:
         # Simulate 6 successful uploads with their queue steps
         logs = []
         services = ["dropbox", "s3", "nextcloud", "google_drive", "onedrive", "webdav"]
-        
+
         # Add latest status (all success) - most recent
         for i, service in enumerate(services):
-            logs.append(MockLog(f"upload_to_{service}", "success", now - timedelta(minutes=i*2)))
-            logs.append(MockLog(f"queue_{service}", "success", now - timedelta(minutes=i*2+1)))
-        
+            logs.append(MockLog(f"upload_to_{service}", "success", now - timedelta(minutes=i * 2)))
+            logs.append(MockLog(f"queue_{service}", "success", now - timedelta(minutes=i * 2 + 1)))
+
         # Add some older in_progress logs
         base_offset = len(services) * 2
         for i, service in enumerate(services):
-            logs.append(MockLog(f"upload_to_{service}", "in_progress", now - timedelta(minutes=base_offset+i*2)))
-            logs.append(MockLog(f"queue_{service}", "in_progress", now - timedelta(minutes=base_offset+i*2+1)))
+            logs.append(MockLog(f"upload_to_{service}", "in_progress", now - timedelta(minutes=base_offset + i * 2)))
+            logs.append(MockLog(f"queue_{service}", "in_progress", now - timedelta(minutes=base_offset + i * 2 + 1)))
 
         summary = _compute_step_summary(logs)
-        
+
         # Should have 12 total upload tasks (6 upload_to + 6 queue)
         assert summary["total_upload_tasks"] == 12
         # All should be success (latest status)
@@ -222,7 +225,7 @@ class TestMetricsCountingBugFixes:
         Test that upload metrics correctly reflect mixed statuses.
         """
         from datetime import datetime, timedelta
-        
+
         class MockLog:
             def __init__(self, step_name, status, timestamp):
                 self.step_name = step_name
@@ -241,7 +244,7 @@ class TestMetricsCountingBugFixes:
         ]
 
         summary = _compute_step_summary(logs)
-        
+
         assert summary["total_upload_tasks"] == 6
         assert summary["uploads"]["success"] == 4  # 1 upload + 3 queue
         assert summary["uploads"]["failure"] == 1  # 1 upload
