@@ -1,4 +1,5 @@
 """Tests for app/tasks/imap_tasks.py module."""
+
 import os
 import json
 import pytest

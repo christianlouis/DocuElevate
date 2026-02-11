@@ -5,7 +5,7 @@ Google Drive API endpoints
 import logging
 import os
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Form, HTTPException, Request, status
 
@@ -23,11 +23,11 @@ router = APIRouter()
 @require_login
 async def exchange_google_drive_token(
     request: Request,
-    client_id: str = Form(...),
-    client_secret: str = Form(...),
-    redirect_uri: str = Form(...),
-    code: str = Form(...),
-    folder_id: Optional[str] = Form(None),
+    client_id: Annotated[str, Form(...)],
+    client_secret: Annotated[str, Form(...)],
+    redirect_uri: Annotated[str, Form(...)],
+    code: Annotated[str, Form(...)],
+    folder_id: Annotated[Optional[str], Form()] = None,
 ):
     """
     Exchange an authorization code for refresh and access tokens from Google.
@@ -59,11 +59,11 @@ async def exchange_google_drive_token(
 @require_login
 async def update_google_drive_settings(
     request: Request,
-    client_id: str = Form(None),
-    client_secret: str = Form(None),
-    refresh_token: str = Form(...),
-    folder_id: str = Form(None),
-    use_oauth: str = Form("true"),
+    refresh_token: Annotated[str, Form(...)],
+    client_id: Annotated[Optional[str], Form()] = None,
+    client_secret: Annotated[Optional[str], Form()] = None,
+    folder_id: Annotated[Optional[str], Form()] = None,
+    use_oauth: Annotated[str, Form()] = "true",
 ):
     """
     Update Google Drive settings in memory
@@ -328,11 +328,11 @@ def format_time_remaining(time_delta):
 @require_login
 async def save_dropbox_settings(
     request: Request,
-    client_id: str = Form(None),
-    client_secret: str = Form(None),
-    refresh_token: str = Form(...),
-    folder_id: str = Form(None),
-    use_oauth: str = Form("true"),
+    refresh_token: Annotated[str, Form(...)],
+    client_id: Annotated[Optional[str], Form()] = None,
+    client_secret: Annotated[Optional[str], Form()] = None,
+    folder_id: Annotated[Optional[str], Form()] = None,
+    use_oauth: Annotated[str, Form()] = "true",
 ):
     """
     Save Google Drive settings to the .env file
