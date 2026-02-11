@@ -2,10 +2,12 @@
 Tests for bulk file operations (delete and reprocess).
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
+
 from app.models import FileRecord, ProcessingLog
-from unittest.mock import patch, MagicMock
 
 
 @pytest.mark.integration
@@ -94,7 +96,7 @@ class TestBulkOperations:
 
     @patch("app.api.files.process_document")
     def test_bulk_reprocess_success(self, mock_process_document, client: TestClient, db_session):
-        """Test bulk reprocessing of files."""
+        """Test bulk reprocessing of files passes file_id to skip duplicate check."""
         # Setup mock
         mock_task = MagicMock()
         mock_task.id = "test-task-id"
@@ -124,6 +126,10 @@ class TestBulkOperations:
         assert data["status"] == "success"
         assert len(data["processed_files"]) == 2
         assert len(data["task_ids"]) == 2
+
+        # Verify that file_id was passed to skip duplicate check
+        for call_args in mock_process_document.delay.call_args_list:
+            assert "file_id" in call_args.kwargs or len(call_args.args) > 1
 
     @patch("app.api.files.process_document")
     def test_bulk_reprocess_missing_files(self, mock_process_document, client: TestClient, db_session):

@@ -799,6 +799,15 @@
           {% if stage.status == 'not_run' %}
           <div style="color: #718096; font-size: 0.875rem; font-style: italic;">Not executed</div>
           {% endif %}
+          {% if stage.can_retry and stage.status == 'failure' %}
+          <button 
+            id="retry-btn-{{ stage.key }}" 
+            class="retry-btn" 
+            onclick="retrySubtask('{{ stage.key }}', 'retry-btn-{{ stage.key }}')"
+            style="margin-top: 0.5rem;">
+            <i class="fas fa-redo"></i> Retry from this step
+          </button>
+          {% endif %}
           {% if stage.timestamp %}
           <div class="flow-timestamp">
             {{ stage.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}

@@ -6,12 +6,13 @@ and doesn't cause DetachedInstanceError when accessing database objects.
 """
 
 import os
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from sqlalchemy.orm import Session
 
-from app.tasks.process_document import process_document
 from app.models import FileRecord
+from app.tasks.process_document import process_document
 
 
 @pytest.mark.unit
@@ -85,11 +86,12 @@ startxref
     test_pdf.write_bytes(pdf_content)
 
     # Mock environment and dependencies
-    with patch("app.tasks.process_document.SessionLocal") as mock_session_local, patch(
-        "app.tasks.process_document.settings"
-    ) as mock_settings, patch("app.tasks.process_document.log_task_progress"), patch(
-        "app.tasks.process_document.extract_metadata_with_gpt"
-    ) as mock_extract:
+    with (
+        patch("app.tasks.process_document.SessionLocal") as mock_session_local,
+        patch("app.tasks.process_document.settings") as mock_settings,
+        patch("app.tasks.process_document.log_task_progress"),
+        patch("app.tasks.process_document.extract_metadata_with_gpt") as mock_extract,
+    ):
 
         # Setup mocks
         mock_settings.workdir = str(tmp_path)
@@ -147,8 +149,9 @@ def test_process_document_duplicate_file(db_session, tmp_path):
     existing_id = existing_record.id
 
     # Mock environment and dependencies
-    with patch("app.tasks.process_document.SessionLocal") as mock_session_local, patch(
-        "app.tasks.process_document.log_task_progress"
+    with (
+        patch("app.tasks.process_document.SessionLocal") as mock_session_local,
+        patch("app.tasks.process_document.log_task_progress"),
     ):
 
         # Setup mocks
@@ -213,11 +216,12 @@ startxref
     test_pdf.write_bytes(pdf_content)
 
     # Mock environment and dependencies
-    with patch("app.tasks.process_document.SessionLocal") as mock_session_local, patch(
-        "app.tasks.process_document.settings"
-    ) as mock_settings, patch("app.tasks.process_document.log_task_progress"), patch(
-        "app.tasks.process_document.process_with_azure_document_intelligence"
-    ) as mock_azure:
+    with (
+        patch("app.tasks.process_document.SessionLocal") as mock_session_local,
+        patch("app.tasks.process_document.settings") as mock_settings,
+        patch("app.tasks.process_document.log_task_progress"),
+        patch("app.tasks.process_document.process_with_azure_document_intelligence") as mock_azure,
+    ):
 
         # Setup mocks
         mock_settings.workdir = str(tmp_path)
@@ -242,3 +246,142 @@ startxref
 
         # The second argument should be the file_id
         assert call_args[0][1] == file_record.id
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_process_document_reprocess_skips_duplicate_check(db_session, tmp_path):
+    """
+    Test that reprocessing an existing file (with file_id) skips the duplicate check
+    and continues processing normally.
+    """
+    # Create a test PDF file with embedded text
+    test_pdf = tmp_path / "test.pdf"
+    pdf_content = b"""%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Resources <<
+/Font <<
+/F1 <<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
+>>
+>>
+>>
+/Contents 4 0 R
+>>
+endobj
+4 0 obj
+<<
+/Length 44
+>>
+stream
+BT
+/F1 12 Tf
+100 700 Td
+(Test content) Tj
+ET
+endstream
+endobj
+xref
+0 5
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000306 00000 n
+trailer
+<<
+/Size 5
+/Root 1 0 R
+>>
+startxref
+399
+%%EOF
+"""
+    test_pdf.write_bytes(pdf_content)
+
+    # Pre-create a FileRecord with the same hash (simulating an existing record)
+    from app.utils import hash_file
+
+    filehash = hash_file(str(test_pdf))
+
+    existing_record = FileRecord(
+        filehash=filehash,
+        original_filename="test.pdf",
+        local_filename=str(test_pdf),
+        file_size=len(pdf_content),
+        mime_type="application/pdf",
+    )
+    db_session.add(existing_record)
+    db_session.commit()
+    existing_id = existing_record.id
+
+    # Mock environment and dependencies
+    with (
+        patch("app.tasks.process_document.SessionLocal") as mock_session_local,
+        patch("app.tasks.process_document.settings") as mock_settings,
+        patch("app.tasks.process_document.log_task_progress"),
+        patch("app.tasks.process_document.extract_metadata_with_gpt") as mock_extract,
+    ):
+
+        # Setup mocks
+        mock_settings.workdir = str(tmp_path)
+        mock_session_local.return_value.__enter__.return_value = db_session
+        mock_session_local.return_value.__exit__.return_value = None
+        mock_extract.delay = MagicMock()
+
+        # Call with file_id to trigger reprocessing (should skip duplicate check)
+        result = process_document.run(str(test_pdf), file_id=existing_id)
+
+        # Verify that processing continued (not blocked by duplicate check)
+        assert result["status"] == "Text extracted locally"
+        assert result["file_id"] == existing_id
+
+        # Verify that extract_metadata_with_gpt was called
+        mock_extract.delay.assert_called_once()
+
+        # Verify that only one FileRecord still exists (no new record created)
+        assert db_session.query(FileRecord).count() == 1
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_process_document_reprocess_nonexistent_file_id(db_session, tmp_path):
+    """
+    Test that reprocessing with a non-existent file_id returns an error.
+    """
+    # Create a test PDF file
+    test_pdf = tmp_path / "test.pdf"
+    test_pdf.write_bytes(b"test content")
+
+    with (
+        patch("app.tasks.process_document.SessionLocal") as mock_session_local,
+        patch("app.tasks.process_document.log_task_progress"),
+    ):
+        mock_session_local.return_value.__enter__.return_value = db_session
+        mock_session_local.return_value.__exit__.return_value = None
+
+        # Call with a file_id that doesn't exist
+        result = process_document.run(str(test_pdf), file_id=99999)
+
+        # Verify error is returned
+        assert "error" in result
+        assert result["file_id"] == 99999

@@ -23,16 +23,19 @@ logger = logging.getLogger(__name__)
 
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
-def process_document(self, original_local_file: str, original_filename: str = None):
+def process_document(self, original_local_file: str, original_filename: str = None, file_id: int = None):
     """
     Process a document file and trigger appropriate text extraction.
 
     Args:
         original_local_file: Path to the file on disk
         original_filename: Optional original filename (if different from path basename)
+        file_id: Optional existing file record ID. When provided, skips duplicate
+                 detection and reuses the existing record (used for reprocessing).
 
     Steps:
       1. Check if we have a FileRecord entry (via SHA-256 hash). If found, skip re-processing.
+         (Skipped when file_id is provided for reprocessing.)
       2. If not found, insert a new DB row and continue with the pipeline:
          - Copy file to /workdir/tmp
          - Check for embedded text. If present, run local GPT extraction
@@ -74,43 +77,61 @@ def process_document(self, original_local_file: str, original_filename: str = No
 
     # Acquire DB session in the task
     with SessionLocal() as db:
-        existing = db.query(FileRecord).filter_by(filehash=filehash).one_or_none()
-        if existing:
-            logger.info(f"[{task_id}] Duplicate file detected (hash={filehash[:10]}...) Skipping processing.")
+        # When file_id is provided, we are reprocessing an existing file.
+        # Skip the duplicate check and reuse the existing record.
+        if file_id is not None:
+            existing_record = db.query(FileRecord).filter_by(id=file_id).one_or_none()
+            if existing_record is None:
+                logger.error(f"[{task_id}] File record with ID {file_id} not found for reprocessing.")
+                log_task_progress(task_id, "process_document", "failure", "File record not found", file_id=file_id)
+                return {"error": "File record not found", "file_id": file_id}
+            logger.info(f"[{task_id}] Reprocessing existing file record ID: {file_id}, skipping duplicate check.")
             log_task_progress(
                 task_id,
                 "process_document",
-                "success",
-                "Duplicate file detected, skipping",
-                file_id=existing.id,
+                "in_progress",
+                f"Reprocessing file record ID: {file_id}",
+                file_id=file_id,
             )
-            return {
-                "status": "duplicate_file",
-                "file_id": existing.id,
-                "detail": "File already processed.",
-            }
+            new_record = existing_record
+        else:
+            existing = db.query(FileRecord).filter_by(filehash=filehash).one_or_none()
+            if existing:
+                logger.info(f"[{task_id}] Duplicate file detected (hash={filehash[:10]}...) Skipping processing.")
+                log_task_progress(
+                    task_id,
+                    "process_document",
+                    "success",
+                    "Duplicate file detected, skipping",
+                    file_id=existing.id,
+                )
+                return {
+                    "status": "duplicate_file",
+                    "file_id": existing.id,
+                    "detail": "File already processed.",
+                }
 
-        # Not a duplicate -> insert a new record
-        logger.info(f"[{task_id}] Creating new file record in database")
-        log_task_progress(task_id, "create_file_record", "in_progress", "Creating file record")
-        new_record = FileRecord(
-            filehash=filehash,
-            original_filename=original_filename,
-            local_filename="",  # Will fill in after we move it
-            file_size=file_size,
-            mime_type=mime_type,
-        )
-        db.add(new_record)
-        db.commit()
-        db.refresh(new_record)
-        logger.info(f"[{task_id}] File record created with ID: {new_record.id}")
-        log_task_progress(
-            task_id,
-            "create_file_record",
-            "success",
-            f"File record ID: {new_record.id}",
-            file_id=new_record.id,
-        )
+            # Not a duplicate -> insert a new record
+            logger.info(f"[{task_id}] Creating new file record in database")
+            log_task_progress(task_id, "create_file_record", "in_progress", "Creating file record")
+            new_record = FileRecord(
+                filehash=filehash,
+                original_filename=original_filename,
+                local_filename="",  # Will fill in after we move it
+                file_size=file_size,
+                mime_type=mime_type,
+            )
+            db.add(new_record)
+            db.commit()
+            db.refresh(new_record)
+            logger.info(f"[{task_id}] File record created with ID: {new_record.id}")
+            log_task_progress(
+                task_id,
+                "create_file_record",
+                "success",
+                f"File record ID: {new_record.id}",
+                file_id=new_record.id,
+            )
 
         # 1. Generate a UUID-based filename and place it in /workdir/tmp
         file_ext = os.path.splitext(original_local_file)[1]
