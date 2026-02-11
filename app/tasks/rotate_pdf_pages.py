@@ -8,6 +8,7 @@ from app.celery_app import celery
 from app.config import settings
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.tasks.retry_config import BaseTaskWithRetry
+from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +49,8 @@ def determine_rotation_angle(detected_angle):
     return rotation_value
 
 
-@celery.task(base=BaseTaskWithRetry)
-def rotate_pdf_pages(filename: str, extracted_text: str, rotation_data=None, file_id: int = None):
+@celery.task(base=BaseTaskWithRetry, bind=True)
+def rotate_pdf_pages(self, filename: str, extracted_text: str, rotation_data=None, file_id: int = None):
     """
     Rotates pages in a PDF document based on detected rotation angles.
 
@@ -60,13 +61,24 @@ def rotate_pdf_pages(filename: str, extracted_text: str, rotation_data=None, fil
         file_id: Optional file ID to pass through to subsequent tasks
     """
     try:
+        task_id = self.request.id
+        log_task_progress(
+            task_id, "rotate_pdf_pages", "in_progress",
+            f"Checking page rotation for {filename}", file_id=file_id,
+        )
         pdf_path = os.path.join(settings.workdir, "tmp", filename)
         if not os.path.exists(pdf_path):
             raise FileNotFoundError(f"PDF file not found: {pdf_path}")
 
         # Skip rotation if no rotation data provided
         if not rotation_data:
-            logger.info(f"No rotation data provided for {filename}, proceeding with metadata extraction")
+            logger.info(
+                f"[{task_id}] No rotation data provided for {filename}, proceeding with metadata extraction"
+            )
+            log_task_progress(
+                task_id, "rotate_pdf_pages", "success",
+                "No rotation needed, proceeding to metadata extraction", file_id=file_id,
+            )
             extract_metadata_with_gpt.delay(filename, extracted_text, file_id)
             return {"file": filename, "status": "no_rotation_needed"}
 
@@ -76,14 +88,24 @@ def rotate_pdf_pages(filename: str, extracted_text: str, rotation_data=None, fil
             try:
                 normalized_rotation_data[int(key)] = float(value)
             except (ValueError, TypeError):
-                logger.warning(f"Invalid rotation data key-value: {key}:{value}")
+                logger.warning(f"[{task_id}] Invalid rotation data key-value: {key}:{value}")
 
         if not any(abs(angle) > 0 for angle in normalized_rotation_data.values()):
-            logger.info(f"No significant rotations detected in {filename}, proceeding with metadata extraction")
+            logger.info(
+                f"[{task_id}] No significant rotations detected in {filename}, proceeding with metadata extraction"
+            )
+            log_task_progress(
+                task_id, "rotate_pdf_pages", "success",
+                "No rotation needed, proceeding to metadata extraction", file_id=file_id,
+            )
             extract_metadata_with_gpt.delay(filename, extracted_text, file_id)
             return {"file": filename, "status": "no_rotation_needed"}
 
-        logger.info(f"Rotating {len(normalized_rotation_data)} pages in {filename}")
+        logger.info(f"[{task_id}] Rotating {len(normalized_rotation_data)} pages in {filename}")
+        log_task_progress(
+            task_id, "apply_rotation", "in_progress",
+            f"Rotating {len(normalized_rotation_data)} pages", file_id=file_id,
+        )
         applied_rotations = {}
 
         # Load the PDF
@@ -104,12 +126,13 @@ def rotate_pdf_pages(filename: str, extracted_text: str, rotation_data=None, fil
                         # PyPDF2 uses clockwise rotation in 90-degree increments
                         page.rotate(rotation_angle)
                         logger.info(
-                            f"Page {page_idx+1} rotated by {rotation_angle}° " f"(from detected {detected_angle}°)"
+                            f"[{task_id}] Page {page_idx+1} rotated by {rotation_angle}° "
+                            f"(from detected {detected_angle}°)"
                         )
                         applied_rotations[str(page_idx)] = rotation_angle
                     else:
                         logger.info(
-                            f"Page {page_idx+1} had detected angle {detected_angle}° "
+                            f"[{task_id}] Page {page_idx+1} had detected angle {detected_angle}° "
                             "but determined it doesn't need rotation"
                         )
 
@@ -120,15 +143,25 @@ def rotate_pdf_pages(filename: str, extracted_text: str, rotation_data=None, fil
                 pdf_writer.write(output_file)
 
         if applied_rotations:
-            logger.info(f"Successfully rotated PDF: {filename} with rotations: {json.dumps(applied_rotations)}")
+            logger.info(
+                f"[{task_id}] Successfully rotated PDF: {filename} with rotations: "
+                f"{json.dumps(applied_rotations)}"
+            )
         else:
             logger.info(
-                f"Detected rotations in {filename} but no rotations were actually applied "
+                f"[{task_id}] Detected rotations in {filename} but no rotations were actually applied "
                 "(angles too small or not multiples of 90°)"
             )
 
         # Continue with metadata extraction
         extract_metadata_with_gpt.delay(filename, extracted_text, file_id)
+
+        log_task_progress(
+            task_id, "rotate_pdf_pages", "success",
+            f"Rotation complete for {filename}",
+            file_id=file_id,
+            detail={"applied_rotations": applied_rotations},
+        )
 
         return {
             "file": filename,
@@ -138,7 +171,13 @@ def rotate_pdf_pages(filename: str, extracted_text: str, rotation_data=None, fil
         }
 
     except Exception as e:
-        logger.error(f"Error rotating PDF {filename}: {e}")
+        logger.error(f"[{task_id}] Error rotating PDF {filename}: {e}")
+        log_task_progress(
+            task_id, "rotate_pdf_pages", "failure",
+            f"Rotation failed: {str(e)}",
+            file_id=file_id,
+            detail={"error": str(e), "filename": filename},
+        )
         # Continue with metadata extraction despite rotation failure
         extract_metadata_with_gpt.delay(filename, extracted_text, file_id)
         return {"file": filename, "status": "rotation_failed", "error": str(e)}
