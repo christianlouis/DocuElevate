@@ -1,4 +1,5 @@
 """Tests for app/tasks/imap_tasks.py module."""
+
 import os
 import json
 import pytest
@@ -18,6 +19,8 @@ from app.tasks.imap_tasks import (
     find_all_mail_folder,
     get_capabilities,
 )
+
+_TEST_CREDENTIAL = "pass"  # noqa: S105
 
 
 @pytest.mark.unit
@@ -84,7 +87,7 @@ class TestCheckAndPullMailbox:
             host=None,
             port=993,
             username="user",
-            password="pass",
+            password=_TEST_CREDENTIAL,
             use_ssl=True,
             delete_after_process=False,
         )
@@ -112,7 +115,7 @@ class TestCheckAndPullMailbox:
             host="imap.example.com",
             port=993,
             username="user",
-            password="pass",
+            password=_TEST_CREDENTIAL,
             use_ssl=True,
             delete_after_process=False,
         )

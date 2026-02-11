@@ -4,6 +4,7 @@ Dropbox API endpoints
 
 import logging
 import os
+from typing import Annotated, Optional
 
 import requests
 from fastapi import APIRouter, Form, HTTPException, Request, status
@@ -22,11 +23,11 @@ router = APIRouter()
 @require_login
 async def exchange_dropbox_token(
     request: Request,
-    client_id: str = Form(...),
-    client_secret: str = Form(...),
-    redirect_uri: str = Form(...),
-    code: str = Form(...),
-    folder_path: str = Form(None),
+    client_id: Annotated[str, Form(...)],
+    client_secret: Annotated[str, Form(...)],
+    redirect_uri: Annotated[str, Form(...)],
+    code: Annotated[str, Form(...)],
+    folder_path: Annotated[Optional[str], Form()] = None,
 ):
     """
     Exchange an authorization code for a refresh token from Dropbox.
@@ -58,10 +59,10 @@ async def exchange_dropbox_token(
 @require_login
 async def update_dropbox_settings(
     request: Request,
-    app_key: str = Form(None),
-    app_secret: str = Form(None),
-    refresh_token: str = Form(...),
-    folder_path: str = Form(None),
+    refresh_token: Annotated[str, Form(...)],
+    app_key: Annotated[Optional[str], Form()] = None,
+    app_secret: Annotated[Optional[str], Form()] = None,
+    folder_path: Annotated[Optional[str], Form()] = None,
 ):
     """
     Update Dropbox settings in memory
@@ -182,10 +183,10 @@ async def test_dropbox_token(request: Request):
 @require_login
 async def save_dropbox_settings(
     request: Request,
-    app_key: str = Form(None),
-    app_secret: str = Form(None),
-    refresh_token: str = Form(...),
-    folder_path: str = Form(None),
+    refresh_token: Annotated[str, Form(...)],
+    app_key: Annotated[Optional[str], Form()] = None,
+    app_secret: Annotated[Optional[str], Form()] = None,
+    folder_path: Annotated[Optional[str], Form()] = None,
 ):
     """
     Save Dropbox settings to the .env file

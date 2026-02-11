@@ -7,6 +7,9 @@ Tests notification utilities and URL masking.
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
+_TEST_CREDENTIAL_URL = "https://user:password@example.com/notify"  # noqa: S105
+_TEST_QUERY_URL = "https://example.com/api?key=secret1&password=secret2&public=visible"  # noqa: S105
+
 
 @pytest.mark.unit
 class TestNotificationUrlMasking:
@@ -16,7 +19,7 @@ class TestNotificationUrlMasking:
         """Test masking of basic auth URLs"""
         from app.utils.notification import _mask_sensitive_url
 
-        url = "https://user:password@example.com/notify"
+        url = _TEST_CREDENTIAL_URL
         masked = _mask_sensitive_url(url)
 
         # Password should be masked
@@ -75,7 +78,7 @@ class TestNotificationUrlMasking:
         """Test masking with multiple sensitive parameters"""
         from app.utils.notification import _mask_sensitive_url
 
-        url = "https://example.com/api?key=secret1&password=secret2&public=visible"
+        url = _TEST_QUERY_URL
         masked = _mask_sensitive_url(url)
 
         # Sensitive params should be masked

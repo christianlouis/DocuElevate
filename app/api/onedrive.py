@@ -5,6 +5,7 @@ OneDrive API endpoints
 import logging
 import os
 from datetime import datetime, timedelta
+from typing import Annotated, Optional
 
 import requests
 from fastapi import APIRouter, Form, HTTPException, Request, status
@@ -23,11 +24,11 @@ router = APIRouter()
 @require_login
 async def exchange_onedrive_token(
     request: Request,
-    client_id: str = Form(...),
-    client_secret: str = Form(...),
-    redirect_uri: str = Form(...),
-    code: str = Form(...),
-    tenant_id: str = Form(...),
+    client_id: Annotated[str, Form(...)],
+    client_secret: Annotated[str, Form(...)],
+    redirect_uri: Annotated[str, Form(...)],
+    code: Annotated[str, Form(...)],
+    tenant_id: Annotated[str, Form(...)],
 ):
     """
     Exchange an authorization code for a refresh token.
@@ -197,11 +198,11 @@ def format_time_remaining(time_delta):
 @require_login
 async def save_onedrive_settings(
     request: Request,
-    client_id: str = Form(None),
-    client_secret: str = Form(None),
-    refresh_token: str = Form(...),
-    tenant_id: str = Form("common"),
-    folder_path: str = Form(None),
+    refresh_token: Annotated[str, Form(...)],
+    client_id: Annotated[Optional[str], Form()] = None,
+    client_secret: Annotated[Optional[str], Form()] = None,
+    tenant_id: Annotated[str, Form()] = "common",
+    folder_path: Annotated[Optional[str], Form()] = None,
 ):
     """
     Save OneDrive settings to the .env file
@@ -292,11 +293,11 @@ async def save_onedrive_settings(
 @require_login
 async def update_onedrive_settings(
     request: Request,
-    client_id: str = Form(None),
-    client_secret: str = Form(None),
-    refresh_token: str = Form(...),
-    tenant_id: str = Form("common"),
-    folder_path: str = Form(None),
+    refresh_token: Annotated[str, Form(...)],
+    client_id: Annotated[Optional[str], Form()] = None,
+    client_secret: Annotated[Optional[str], Form()] = None,
+    tenant_id: Annotated[str, Form()] = "common",
+    folder_path: Annotated[Optional[str], Form()] = None,
 ):
     """
     Update OneDrive settings in memory (without modifying .env file)

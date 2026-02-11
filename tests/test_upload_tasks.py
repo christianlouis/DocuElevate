@@ -13,13 +13,16 @@ from app.tasks.upload_to_webdav import upload_to_webdav
 from app.tasks.upload_to_google_drive import upload_to_google_drive
 from app.tasks.upload_to_email import upload_to_email
 
+_TEST_CREDENTIAL = "test_pass"  # noqa: S105
+
 
 @pytest.fixture
 def mock_settings():
     """Mock settings for upload tests."""
-    with patch("app.tasks.upload_to_onedrive.settings") as onedrive_settings, patch(
-        "app.tasks.upload_to_s3.settings"
-    ) as s3_settings:
+    with (
+        patch("app.tasks.upload_to_onedrive.settings") as onedrive_settings,
+        patch("app.tasks.upload_to_s3.settings") as s3_settings,
+    ):
         # OneDrive settings
         onedrive_settings.onedrive_client_id = "test_client_id"
         onedrive_settings.onedrive_client_secret = "test_secret"
@@ -42,10 +45,11 @@ def mock_settings():
 @pytest.mark.unit
 def test_upload_to_onedrive_accepts_file_id(sample_text_file, mock_settings):
     """Test that upload_to_onedrive accepts file_id parameter."""
-    with patch("app.tasks.upload_to_onedrive.get_onedrive_token") as mock_token, patch(
-        "app.tasks.upload_to_onedrive.create_upload_session"
-    ) as mock_session, patch("app.tasks.upload_to_onedrive.upload_large_file") as mock_upload, patch(
-        "app.tasks.upload_to_onedrive.log_task_progress"
+    with (
+        patch("app.tasks.upload_to_onedrive.get_onedrive_token") as mock_token,
+        patch("app.tasks.upload_to_onedrive.create_upload_session") as mock_session,
+        patch("app.tasks.upload_to_onedrive.upload_large_file") as mock_upload,
+        patch("app.tasks.upload_to_onedrive.log_task_progress"),
     ):
 
         # Setup mocks
@@ -65,10 +69,11 @@ def test_upload_to_onedrive_accepts_file_id(sample_text_file, mock_settings):
 @pytest.mark.unit
 def test_upload_to_onedrive_without_file_id(sample_text_file, mock_settings):
     """Test that upload_to_onedrive works without file_id parameter."""
-    with patch("app.tasks.upload_to_onedrive.get_onedrive_token") as mock_token, patch(
-        "app.tasks.upload_to_onedrive.create_upload_session"
-    ) as mock_session, patch("app.tasks.upload_to_onedrive.upload_large_file") as mock_upload, patch(
-        "app.tasks.upload_to_onedrive.log_task_progress"
+    with (
+        patch("app.tasks.upload_to_onedrive.get_onedrive_token") as mock_token,
+        patch("app.tasks.upload_to_onedrive.create_upload_session") as mock_session,
+        patch("app.tasks.upload_to_onedrive.upload_large_file") as mock_upload,
+        patch("app.tasks.upload_to_onedrive.log_task_progress"),
     ):
 
         # Setup mocks
@@ -86,8 +91,9 @@ def test_upload_to_onedrive_without_file_id(sample_text_file, mock_settings):
 @pytest.mark.unit
 def test_upload_to_s3_accepts_file_id(sample_text_file, mock_settings):
     """Test that upload_to_s3 accepts file_id parameter."""
-    with patch("app.tasks.upload_to_s3.boto3.client") as mock_boto_client, patch(
-        "app.tasks.upload_to_s3.log_task_progress"
+    with (
+        patch("app.tasks.upload_to_s3.boto3.client") as mock_boto_client,
+        patch("app.tasks.upload_to_s3.log_task_progress"),
     ):
 
         # Setup mock S3 client
@@ -107,8 +113,9 @@ def test_upload_to_s3_accepts_file_id(sample_text_file, mock_settings):
 @pytest.mark.unit
 def test_upload_to_s3_without_file_id(sample_text_file, mock_settings):
     """Test that upload_to_s3 works without file_id parameter."""
-    with patch("app.tasks.upload_to_s3.boto3.client") as mock_boto_client, patch(
-        "app.tasks.upload_to_s3.log_task_progress"
+    with (
+        patch("app.tasks.upload_to_s3.boto3.client") as mock_boto_client,
+        patch("app.tasks.upload_to_s3.log_task_progress"),
     ):
 
         # Setup mock S3 client
@@ -142,11 +149,12 @@ def test_upload_to_s3_file_not_found(mock_settings):
 @pytest.mark.unit
 def test_upload_to_onedrive_logs_with_file_id(sample_text_file, mock_settings):
     """Test that upload_to_onedrive properly logs with file_id."""
-    with patch("app.tasks.upload_to_onedrive.get_onedrive_token") as mock_token, patch(
-        "app.tasks.upload_to_onedrive.create_upload_session"
-    ) as mock_session, patch("app.tasks.upload_to_onedrive.upload_large_file") as mock_upload, patch(
-        "app.tasks.upload_to_onedrive.log_task_progress"
-    ) as mock_log:
+    with (
+        patch("app.tasks.upload_to_onedrive.get_onedrive_token") as mock_token,
+        patch("app.tasks.upload_to_onedrive.create_upload_session") as mock_session,
+        patch("app.tasks.upload_to_onedrive.upload_large_file") as mock_upload,
+        patch("app.tasks.upload_to_onedrive.log_task_progress") as mock_log,
+    ):
 
         # Setup mocks
         mock_token.return_value = "test_access_token"
@@ -168,9 +176,10 @@ def test_upload_to_onedrive_logs_with_file_id(sample_text_file, mock_settings):
 @pytest.mark.unit
 def test_upload_to_s3_logs_with_file_id(sample_text_file, mock_settings):
     """Test that upload_to_s3 properly logs with file_id."""
-    with patch("app.tasks.upload_to_s3.boto3.client") as mock_boto_client, patch(
-        "app.tasks.upload_to_s3.log_task_progress"
-    ) as mock_log:
+    with (
+        patch("app.tasks.upload_to_s3.boto3.client") as mock_boto_client,
+        patch("app.tasks.upload_to_s3.log_task_progress") as mock_log,
+    ):
 
         # Setup mock S3 client
         mock_s3 = Mock()
@@ -191,29 +200,32 @@ def test_upload_to_s3_logs_with_file_id(sample_text_file, mock_settings):
 
 # Tests for newly standardized upload tasks
 
+
 @pytest.mark.unit
 def test_upload_to_ftp_accepts_file_id(sample_text_file):
     """Test that upload_to_ftp accepts file_id parameter."""
-    with patch("app.tasks.upload_to_ftp.settings") as mock_settings, \
-         patch("app.tasks.upload_to_ftp.ftplib.FTP") as mock_ftp, \
-         patch("app.tasks.upload_to_ftp.log_task_progress"):
-        
+    with (
+        patch("app.tasks.upload_to_ftp.settings") as mock_settings,
+        patch("app.tasks.upload_to_ftp.ftplib.FTP") as mock_ftp,
+        patch("app.tasks.upload_to_ftp.log_task_progress"),
+    ):
+
         # Setup settings
         mock_settings.ftp_host = "ftp.example.com"
         mock_settings.ftp_port = 21
         mock_settings.ftp_username = "test_user"
-        mock_settings.ftp_password = "test_pass"
+        mock_settings.ftp_password = _TEST_CREDENTIAL
         mock_settings.ftp_folder = "uploads"
         mock_settings.ftp_use_tls = False
         mock_settings.ftp_allow_plaintext = True
-        
+
         # Setup mock FTP
         mock_ftp_instance = Mock()
         mock_ftp.return_value = mock_ftp_instance
-        
+
         # Call with file_id parameter
         result = upload_to_ftp.apply(args=[sample_text_file], kwargs={"file_id": 100}).get()
-        
+
         assert result["status"] == "Completed"
         assert result["file"] == sample_text_file
         assert result["ftp_host"] == "ftp.example.com"
@@ -222,45 +234,49 @@ def test_upload_to_ftp_accepts_file_id(sample_text_file):
 @pytest.mark.unit
 def test_upload_to_ftp_without_file_id(sample_text_file):
     """Test that upload_to_ftp works without file_id parameter."""
-    with patch("app.tasks.upload_to_ftp.settings") as mock_settings, \
-         patch("app.tasks.upload_to_ftp.ftplib.FTP") as mock_ftp, \
-         patch("app.tasks.upload_to_ftp.log_task_progress"):
-        
+    with (
+        patch("app.tasks.upload_to_ftp.settings") as mock_settings,
+        patch("app.tasks.upload_to_ftp.ftplib.FTP") as mock_ftp,
+        patch("app.tasks.upload_to_ftp.log_task_progress"),
+    ):
+
         # Setup settings
         mock_settings.ftp_host = "ftp.example.com"
         mock_settings.ftp_username = "test_user"
-        mock_settings.ftp_password = "test_pass"
+        mock_settings.ftp_password = _TEST_CREDENTIAL
         mock_settings.ftp_folder = None
         mock_settings.ftp_use_tls = False
         mock_settings.ftp_allow_plaintext = True
-        
+
         # Setup mock FTP
         mock_ftp_instance = Mock()
         mock_ftp.return_value = mock_ftp_instance
-        
+
         # Call without file_id parameter
         result = upload_to_ftp.apply(args=[sample_text_file]).get()
-        
+
         assert result["status"] == "Completed"
 
 
 @pytest.mark.unit
 def test_upload_to_sftp_accepts_file_id(sample_text_file):
     """Test that upload_to_sftp accepts file_id parameter."""
-    with patch("app.tasks.upload_to_sftp.settings") as mock_settings, \
-         patch("app.tasks.upload_to_sftp.paramiko.SSHClient") as mock_ssh, \
-         patch("app.tasks.upload_to_sftp.log_task_progress"), \
-         patch("app.tasks.upload_to_sftp.extract_remote_path") as mock_extract, \
-         patch("app.tasks.upload_to_sftp.get_unique_filename") as mock_unique:
-        
+    with (
+        patch("app.tasks.upload_to_sftp.settings") as mock_settings,
+        patch("app.tasks.upload_to_sftp.paramiko.SSHClient") as mock_ssh,
+        patch("app.tasks.upload_to_sftp.log_task_progress"),
+        patch("app.tasks.upload_to_sftp.extract_remote_path") as mock_extract,
+        patch("app.tasks.upload_to_sftp.get_unique_filename") as mock_unique,
+    ):
+
         # Setup settings
         mock_settings.sftp_host = "sftp.example.com"
         mock_settings.sftp_port = 22
         mock_settings.sftp_username = "test_user"
-        mock_settings.sftp_password = "test_pass"
+        mock_settings.sftp_password = _TEST_CREDENTIAL
         mock_settings.sftp_folder = "/uploads"
         mock_settings.workdir = "/tmp"
-        
+
         # Setup mocks
         mock_ssh_instance = Mock()
         mock_sftp = Mock()
@@ -268,10 +284,10 @@ def test_upload_to_sftp_accepts_file_id(sample_text_file):
         mock_ssh_instance.open_sftp.return_value = mock_sftp
         mock_extract.return_value = "/uploads/test.txt"
         mock_unique.return_value = "/uploads/test.txt"
-        
+
         # Call with file_id parameter
         result = upload_to_sftp.apply(args=[sample_text_file], kwargs={"file_id": 200}).get()
-        
+
         assert result["status"] == "Completed"
         assert result["file_path"] == sample_text_file
         assert "sftp_path" in result
@@ -280,25 +296,27 @@ def test_upload_to_sftp_accepts_file_id(sample_text_file):
 @pytest.mark.unit
 def test_upload_to_webdav_accepts_file_id(sample_text_file):
     """Test that upload_to_webdav accepts file_id parameter."""
-    with patch("app.tasks.upload_to_webdav.settings") as mock_settings, \
-         patch("app.tasks.upload_to_webdav.requests.put") as mock_put, \
-         patch("app.tasks.upload_to_webdav.log_task_progress"):
-        
+    with (
+        patch("app.tasks.upload_to_webdav.settings") as mock_settings,
+        patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
+        patch("app.tasks.upload_to_webdav.log_task_progress"),
+    ):
+
         # Setup settings
         mock_settings.webdav_url = "https://webdav.example.com/"
         mock_settings.webdav_username = "test_user"
-        mock_settings.webdav_password = "test_pass"
+        mock_settings.webdav_password = _TEST_CREDENTIAL
         mock_settings.webdav_folder = "uploads"
         mock_settings.webdav_verify_ssl = True
-        
+
         # Setup mock response
         mock_response = Mock()
         mock_response.status_code = 201
         mock_put.return_value = mock_response
-        
+
         # Call with file_id parameter
         result = upload_to_webdav.apply(args=[sample_text_file], kwargs={"file_id": 300}).get()
-        
+
         assert result["status"] == "Completed"
         assert result["file"] == sample_text_file
         assert "url" in result
@@ -307,20 +325,22 @@ def test_upload_to_webdav_accepts_file_id(sample_text_file):
 @pytest.mark.unit
 def test_upload_to_google_drive_accepts_file_id(sample_text_file):
     """Test that upload_to_google_drive accepts file_id parameter."""
-    with patch("app.tasks.upload_to_google_drive.get_google_drive_service") as mock_service, \
-         patch("app.tasks.upload_to_google_drive.MediaFileUpload") as mock_media, \
-         patch("app.tasks.upload_to_google_drive.extract_metadata_from_file") as mock_metadata, \
-         patch("app.tasks.upload_to_google_drive.settings") as mock_settings, \
-         patch("app.tasks.upload_to_google_drive.log_task_progress"):
-        
+    with (
+        patch("app.tasks.upload_to_google_drive.get_google_drive_service") as mock_service,
+        patch("app.tasks.upload_to_google_drive.MediaFileUpload"),
+        patch("app.tasks.upload_to_google_drive.extract_metadata_from_file") as mock_metadata,
+        patch("app.tasks.upload_to_google_drive.settings") as mock_settings,
+        patch("app.tasks.upload_to_google_drive.log_task_progress"),
+    ):
+
         # Setup settings
         mock_settings.google_drive_folder_id = "test_folder_id"
-        
+
         # Setup mocks
         mock_drive_service = Mock()
         mock_service.return_value = mock_drive_service
         mock_metadata.return_value = {}
-        
+
         mock_files = Mock()
         mock_drive_service.files.return_value = mock_files
         mock_create = Mock()
@@ -328,12 +348,12 @@ def test_upload_to_google_drive_accepts_file_id(sample_text_file):
         mock_create.execute.return_value = {
             "id": "file123",
             "name": "test.txt",
-            "webViewLink": "https://drive.google.com/file/d/file123"
+            "webViewLink": "https://drive.google.com/file/d/file123",
         }
-        
+
         # Call with file_id parameter
         result = upload_to_google_drive.apply(args=[sample_text_file], kwargs={"file_id": 400}).get()
-        
+
         assert result["status"] == "Completed"
         assert result["file_path"] == sample_text_file
         assert "google_drive_file_id" in result
@@ -342,37 +362,39 @@ def test_upload_to_google_drive_accepts_file_id(sample_text_file):
 @pytest.mark.unit
 def test_upload_to_email_accepts_file_id(sample_text_file):
     """Test that upload_to_email accepts file_id parameter."""
-    with patch("app.tasks.upload_to_email.settings") as mock_settings, \
-         patch("app.tasks.upload_to_email.smtplib.SMTP") as mock_smtp, \
-         patch("app.tasks.upload_to_email.get_email_template") as mock_template, \
-         patch("app.tasks.upload_to_email.extract_metadata_from_file") as mock_metadata, \
-         patch("app.tasks.upload_to_email.log_task_progress"), \
-         patch("app.tasks.upload_to_email._prepare_recipients") as mock_recipients, \
-         patch("app.tasks.upload_to_email._send_email_with_smtp") as mock_send, \
-         patch("app.tasks.upload_to_email.attach_logo") as mock_logo:
-        
+    with (
+        patch("app.tasks.upload_to_email.settings") as mock_settings,
+        patch("app.tasks.upload_to_email.smtplib.SMTP"),
+        patch("app.tasks.upload_to_email.get_email_template") as mock_template,
+        patch("app.tasks.upload_to_email.extract_metadata_from_file") as mock_metadata,
+        patch("app.tasks.upload_to_email.log_task_progress"),
+        patch("app.tasks.upload_to_email._prepare_recipients") as mock_recipients,
+        patch("app.tasks.upload_to_email._send_email_with_smtp") as mock_send,
+        patch("app.tasks.upload_to_email.attach_logo") as mock_logo,
+    ):
+
         # Setup settings
         mock_settings.email_host = "smtp.example.com"
         mock_settings.email_port = 587
         mock_settings.email_username = "test@example.com"
-        mock_settings.email_password = "test_pass"
+        mock_settings.email_password = _TEST_CREDENTIAL
         mock_settings.email_use_tls = True
         mock_settings.email_sender = "sender@example.com"
         mock_settings.external_hostname = "docuelevate.example.com"
-        
+
         # Setup mocks
         mock_recipients.return_value = (["recipient@example.com"], None)
         mock_send.return_value = None
         mock_metadata.return_value = {}
         mock_logo.return_value = False
-        
+
         mock_template_obj = Mock()
         mock_template_obj.render.return_value = "<html>Test email</html>"
         mock_template.return_value = mock_template_obj
-        
+
         # Call with file_id parameter
         result = upload_to_email.apply(args=[sample_text_file], kwargs={"file_id": 500}).get()
-        
+
         assert result["status"] == "Completed"
         assert result["file"] == sample_text_file
         assert "recipients" in result
@@ -381,11 +403,10 @@ def test_upload_to_email_accepts_file_id(sample_text_file):
 @pytest.mark.unit
 def test_upload_to_ftp_file_not_found():
     """Test that upload_to_ftp raises error for missing file."""
-    with patch("app.tasks.upload_to_ftp.settings") as mock_settings, \
-         patch("app.tasks.upload_to_ftp.log_task_progress"):
-        
+    with patch("app.tasks.upload_to_ftp.settings") as mock_settings, patch("app.tasks.upload_to_ftp.log_task_progress"):
+
         mock_settings.ftp_host = "ftp.example.com"
-        
+
         with pytest.raises(FileNotFoundError):
             upload_to_ftp.apply(args=["/nonexistent/file.pdf"], kwargs={"file_id": 1}).get()
 
@@ -393,13 +414,15 @@ def test_upload_to_ftp_file_not_found():
 @pytest.mark.unit
 def test_upload_to_sftp_file_not_found():
     """Test that upload_to_sftp raises error for missing file."""
-    with patch("app.tasks.upload_to_sftp.settings") as mock_settings, \
-         patch("app.tasks.upload_to_sftp.log_task_progress"):
-        
+    with (
+        patch("app.tasks.upload_to_sftp.settings") as mock_settings,
+        patch("app.tasks.upload_to_sftp.log_task_progress"),
+    ):
+
         mock_settings.sftp_host = "sftp.example.com"
         mock_settings.sftp_port = 22
         mock_settings.sftp_username = "test_user"
-        
+
         with pytest.raises(FileNotFoundError):
             upload_to_sftp.apply(args=["/nonexistent/file.pdf"], kwargs={"file_id": 1}).get()
 
@@ -407,11 +430,13 @@ def test_upload_to_sftp_file_not_found():
 @pytest.mark.unit
 def test_upload_to_webdav_file_not_found():
     """Test that upload_to_webdav raises error for missing file."""
-    with patch("app.tasks.upload_to_webdav.settings") as mock_settings, \
-         patch("app.tasks.upload_to_webdav.log_task_progress"):
-        
+    with (
+        patch("app.tasks.upload_to_webdav.settings") as mock_settings,
+        patch("app.tasks.upload_to_webdav.log_task_progress"),
+    ):
+
         mock_settings.webdav_url = "https://webdav.example.com/"
-        
+
         with pytest.raises(FileNotFoundError):
             upload_to_webdav.apply(args=["/nonexistent/file.pdf"], kwargs={"file_id": 1}).get()
 
@@ -419,15 +444,15 @@ def test_upload_to_webdav_file_not_found():
 @pytest.mark.unit
 def test_all_upload_tasks_have_consistent_signature(sample_text_file):
     """Test that all upload tasks accept file_id as a keyword parameter.
-    
+
     This test verifies that all upload tasks can be called with the same signature
     as used in send_to_all.py: task.delay(file_path, file_id=file_id)
-    
+
     Note: We use task.run to inspect the actual function signature because
     Celery tasks wrap the original function, and .run provides access to
     the unwrapped callable's signature.
     """
-    
+
     upload_tasks = [
         (upload_to_s3, "app.tasks.upload_to_s3"),
         (upload_to_ftp, "app.tasks.upload_to_ftp"),
@@ -436,19 +461,19 @@ def test_all_upload_tasks_have_consistent_signature(sample_text_file):
         (upload_to_google_drive, "app.tasks.upload_to_google_drive"),
         (upload_to_email, "app.tasks.upload_to_email"),
     ]
-    
+
     import inspect
-    
+
     for task, module_path in upload_tasks:
         # Use task.run to inspect the actual wrapped function's signature
         # This is necessary because Celery's task decorator wraps the original function
         sig = inspect.signature(task.run)
         params = list(sig.parameters.keys())
-        
+
         # Should have at least file_path and file_id parameters
         assert "file_path" in params, f"{task.name} missing file_path parameter"
         assert "file_id" in params, f"{task.name} missing file_id parameter"
-        
+
         # file_id should have a default value (None)
         assert sig.parameters["file_id"].default is None, f"{task.name} file_id should default to None"
 
@@ -456,29 +481,31 @@ def test_all_upload_tasks_have_consistent_signature(sample_text_file):
 @pytest.mark.unit
 def test_send_to_all_calls_upload_tasks_with_keyword_argument():
     """Test that send_to_all_destinations calls upload tasks with file_id as keyword argument.
-    
+
     Regression test for issue: upload_to_s3() takes 1 positional argument but 2 were given.
     This ensures that file_id is always passed as a keyword argument, not positional.
     """
     from app.tasks.send_to_all import send_to_all_destinations
-    
+
     test_file = "/tmp/test_file.pdf"
-    
+
     # Create the test file
     with open(test_file, "w") as f:
         f.write("test content")
-    
+
     try:
         # Mock all the upload functions and settings
-        with patch("app.tasks.send_to_all.upload_to_s3") as mock_s3, \
-             patch("app.tasks.send_to_all.settings") as mock_settings, \
-             patch("app.tasks.send_to_all.log_task_progress"), \
-             patch("app.tasks.send_to_all.SessionLocal"), \
-             patch("app.tasks.send_to_all.get_configured_services_from_validator") as mock_validator:
-            
+        with (
+            patch("app.tasks.send_to_all.upload_to_s3") as mock_s3,
+            patch("app.tasks.send_to_all.settings") as mock_settings,
+            patch("app.tasks.send_to_all.log_task_progress"),
+            patch("app.tasks.send_to_all.SessionLocal"),
+            patch("app.tasks.send_to_all.get_configured_services_from_validator") as mock_validator,
+        ):
+
             # Configure validator to return S3 as configured
             mock_validator.return_value = {"s3": True}
-            
+
             # Configure settings to enable only S3
             mock_settings.s3_bucket_name = "test-bucket"
             mock_settings.aws_access_key_id = "test-key"
@@ -493,26 +520,26 @@ def test_send_to_all_calls_upload_tasks_with_keyword_argument():
             mock_settings.email_host = None
             mock_settings.onedrive_client_id = None
             mock_settings.workdir = "/tmp"
-            
+
             # Mock the delay method to track how it's called
             mock_s3_task = Mock()
             mock_s3_task.id = "test-task-id"
             mock_s3.delay.return_value = mock_s3_task
-            
+
             # Call send_to_all_destinations with file_id
             result = send_to_all_destinations.apply(args=[test_file], kwargs={"file_id": 123}).get()
-            
+
             # Verify that upload_to_s3.delay was called with file_id as keyword argument
             mock_s3.delay.assert_called_once()
             call_args, call_kwargs = mock_s3.delay.call_args
-            
+
             # The call should be: delay(file_path, file_id=file_id)
             # So we expect 1 positional arg (file_path) and file_id in kwargs
             assert len(call_args) == 1, "Should have exactly 1 positional argument (file_path)"
             assert call_args[0] == test_file, "First positional arg should be file_path"
             assert "file_id" in call_kwargs, "file_id should be passed as keyword argument"
             assert call_kwargs["file_id"] == 123, "file_id value should be correct"
-    
+
     finally:
         # Clean up test file
         if os.path.exists(test_file):

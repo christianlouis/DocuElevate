@@ -1,6 +1,9 @@
 """Additional view tests to increase coverage."""
+
 import pytest
 from unittest.mock import patch, MagicMock
+
+_TEST_CREDENTIAL = "test"  # noqa: S105
 
 
 @pytest.mark.integration
@@ -31,7 +34,12 @@ class TestWizardPost:
         """Test POST wizard step 2."""
         response = client.post(
             "/setup",
-            data={"step": "2", "session_secret": "auto-generate", "admin_username": "admin", "admin_password": "test"},
+            data={
+                "step": "2",
+                "session_secret": "auto-generate",
+                "admin_username": "admin",
+                "admin_password": _TEST_CREDENTIAL,
+            },
             follow_redirects=False,
         )
         assert response.status_code in (200, 303)

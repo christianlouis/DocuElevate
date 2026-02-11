@@ -32,7 +32,6 @@ def test_rate_limit_configuration():
     assert hasattr(settings, "rate_limiting_enabled")
     assert hasattr(settings, "rate_limit_default")
     assert hasattr(settings, "rate_limit_upload")
-    assert hasattr(settings, "rate_limit_process")
     assert hasattr(settings, "rate_limit_auth")
 
     # Verify that settings are strings in correct format
@@ -40,8 +39,6 @@ def test_rate_limit_configuration():
     assert "/" in settings.rate_limit_default  # Should be like "100/minute"
     assert isinstance(settings.rate_limit_upload, str)
     assert "/" in settings.rate_limit_upload
-    assert isinstance(settings.rate_limit_process, str)
-    assert "/" in settings.rate_limit_process
     assert isinstance(settings.rate_limit_auth, str)
     assert "/" in settings.rate_limit_auth
 
@@ -224,7 +221,6 @@ def test_rate_limit_format_validation():
 
     assert validate_rate_limit(settings.rate_limit_default)
     assert validate_rate_limit(settings.rate_limit_upload)
-    assert validate_rate_limit(settings.rate_limit_process)
     assert validate_rate_limit(settings.rate_limit_auth)
 
 

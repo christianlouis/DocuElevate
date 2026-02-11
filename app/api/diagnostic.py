@@ -3,6 +3,7 @@ Diagnostic API endpoints
 """
 
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 
@@ -14,10 +15,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+CurrentUser = Annotated[dict, Depends(get_current_user)]
+
 
 @router.get("/diagnostic/settings")
 @require_login
-async def diagnostic_settings(request: Request, current_user: dict = Depends(get_current_user)):
+async def diagnostic_settings(request: Request, current_user: CurrentUser):
     """
     API endpoint to dump settings to the log and view basic config information
     This endpoint doesn't expose sensitive information like passwords or tokens

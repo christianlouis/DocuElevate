@@ -3,7 +3,7 @@ Processing logs API endpoints
 """
 
 import logging
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import desc
@@ -18,12 +18,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+DbSession = Annotated[Session, Depends(get_db)]
+
 
 @router.get("/logs")
 @require_login
 def list_processing_logs(
     request: Request,
-    db: Session = Depends(get_db),
+    db: DbSession,
     file_id: Optional[int] = Query(None, description="Filter by file ID"),
     task_id: Optional[str] = Query(None, description="Filter by task ID"),
     limit: int = Query(100, ge=1, le=1000, description="Number of logs to return"),
@@ -81,7 +83,7 @@ def list_processing_logs(
 
 @router.get("/logs/file/{file_id}")
 @require_login
-def get_file_processing_logs(request: Request, file_id: int, db: Session = Depends(get_db)):
+def get_file_processing_logs(request: Request, file_id: int, db: DbSession):
     """
     Get all processing logs for a specific file.
     Returns logs ordered by timestamp (oldest first to show processing flow).
@@ -125,7 +127,7 @@ def get_file_processing_logs(request: Request, file_id: int, db: Session = Depen
 
 @router.get("/logs/task/{task_id}")
 @require_login
-def get_task_processing_logs(request: Request, task_id: str, db: Session = Depends(get_db)):
+def get_task_processing_logs(request: Request, task_id: str, db: DbSession):
     """
     Get all processing logs for a specific task.
     Returns logs ordered by timestamp (oldest first to show processing flow).
