@@ -7,6 +7,9 @@ that endpoints remain accessible after code refactoring or reorganization.
 
 import pytest
 
+# Test constants
+TEST_URL = "https://example.com/test.pdf"
+
 
 @pytest.mark.unit
 class TestEndpointRegistration:
@@ -17,7 +20,7 @@ class TestEndpointRegistration:
         # Make a request to the endpoint - it should not return 404
         response = client.post(
             "/api/process-url",
-            json={"url": "https://example.com/test.pdf"}
+            json={"url": TEST_URL}
         )
         
         # The endpoint exists if we don't get a 404
@@ -34,7 +37,7 @@ class TestEndpointRegistration:
         # Try POST request
         response = client.post(
             "/api/process-url",
-            json={"url": "https://example.com/test.pdf"}
+            json={"url": TEST_URL}
         )
         
         # Should not return 405 (Method Not Allowed)
@@ -55,7 +58,7 @@ class TestEndpointRegistration:
             if method == "get":
                 response = client.get(endpoint)
             else:
-                response = client.post(endpoint, json={"url": "https://example.com/test.pdf"})
+                response = client.post(endpoint, json={"url": TEST_URL})
             
             # None of these should return 404
             assert response.status_code != 404, (
