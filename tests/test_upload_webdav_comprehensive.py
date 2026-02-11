@@ -532,14 +532,10 @@ class TestUploadToWebDAV:
 
     def test_module_importable(self):
         """Test that upload_to_webdav module is importable."""
-        from app.tasks.upload_to_webdav import upload_to_webdav
-
         assert callable(upload_to_webdav)
 
     def test_task_has_retry_configuration(self):
         """Test that the task has retry configuration from BaseTaskWithRetry."""
-        from app.tasks.upload_to_webdav import upload_to_webdav
-
         # BaseTaskWithRetry should provide retry configuration
         assert hasattr(upload_to_webdav, "max_retries")
         # BaseTaskWithRetry configures 3 retries

@@ -323,7 +323,7 @@ class TestS3Integration:
                 try:
                     s3_client.delete_object(Bucket=bucket, Key=s3_key)
                 except Exception as exc:
-                    logger.warning(f"Failed to clean up S3 test object {s3_key}: {exc}")
+                    logger.warning("Failed to clean up S3 test object %s: %s", s3_key, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -383,7 +383,7 @@ class TestDropboxIntegration:
                 try:
                     dbx.files_delete_v2(remote_path)
                 except Exception as exc:
-                    logger.warning(f"Failed to clean up Dropbox test file {remote_path}: {exc}")
+                    logger.warning("Failed to clean up Dropbox test file %s: %s", remote_path, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -474,7 +474,7 @@ class TestOneDriveIntegration:
                         timeout=30,
                     )
                 except Exception as exc:
-                    logger.warning(f"Failed to clean up OneDrive test file {filename}: {exc}")
+                    logger.warning("Failed to clean up OneDrive test file %s: %s", filename, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -488,7 +488,8 @@ class TestOneDriveIntegration:
 class TestAuthentikIntegration:
     """Verify Authentik / OpenID Connect discovery endpoint is reachable."""
 
-    def test_oidc_discovery_endpoint(self, original_env: dict) -> None:
+    @staticmethod
+    def test_oidc_discovery_endpoint(original_env: dict) -> None:
         """Validate that the OIDC discovery URL returns a valid JSON document."""
         import requests
 
@@ -502,7 +503,8 @@ class TestAuthentikIntegration:
         assert "authorization_endpoint" in data, "OIDC response missing 'authorization_endpoint'"
         assert "token_endpoint" in data, "OIDC response missing 'token_endpoint'"
 
-    def test_authentik_client_credentials_present(self, original_env: dict) -> None:
+    @staticmethod
+    def test_authentik_client_credentials_present(original_env: dict) -> None:
         """Validate that Authentik client credentials are configured alongside the config URL."""
         client_id = original_env.get("AUTHENTIK_CLIENT_ID")
         client_secret = original_env.get("AUTHENTIK_CLIENT_SECRET")
@@ -529,7 +531,8 @@ class TestFullOCRMetadataPipeline:
     Celery or Redis, by calling the service APIs directly.
     """
 
-    def test_ocr_then_metadata_extraction(self, original_env: dict) -> None:
+    @staticmethod
+    def test_ocr_then_metadata_extraction(original_env: dict) -> None:
         """Generate a PDF, OCR it with Azure, then extract metadata with OpenAI."""
         import re
 

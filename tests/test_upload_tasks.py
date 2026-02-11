@@ -327,7 +327,7 @@ def test_upload_to_google_drive_accepts_file_id(sample_text_file):
     """Test that upload_to_google_drive accepts file_id parameter."""
     with (
         patch("app.tasks.upload_to_google_drive.get_google_drive_service") as mock_service,
-        patch("app.tasks.upload_to_google_drive.MediaFileUpload") as mock_media,
+        patch("app.tasks.upload_to_google_drive.MediaFileUpload"),
         patch("app.tasks.upload_to_google_drive.extract_metadata_from_file") as mock_metadata,
         patch("app.tasks.upload_to_google_drive.settings") as mock_settings,
         patch("app.tasks.upload_to_google_drive.log_task_progress"),
@@ -364,7 +364,7 @@ def test_upload_to_email_accepts_file_id(sample_text_file):
     """Test that upload_to_email accepts file_id parameter."""
     with (
         patch("app.tasks.upload_to_email.settings") as mock_settings,
-        patch("app.tasks.upload_to_email.smtplib.SMTP") as mock_smtp,
+        patch("app.tasks.upload_to_email.smtplib.SMTP"),
         patch("app.tasks.upload_to_email.get_email_template") as mock_template,
         patch("app.tasks.upload_to_email.extract_metadata_from_file") as mock_metadata,
         patch("app.tasks.upload_to_email.log_task_progress"),
