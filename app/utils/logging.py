@@ -25,7 +25,7 @@ class TaskLogCollector(logging.Handler):
         try:
             msg = self.format(record)
             # Extract task_id from messages formatted as "[task_id] ..."
-            if msg and "[" in msg:
+            if msg and "[" in msg and "]" in msg:
                 start = msg.index("[")
                 end = msg.index("]", start)
                 task_id = msg[start + 1 : end].strip()
@@ -76,7 +76,7 @@ def log_task_progress(task_id, step_name, status, message=None, file_id=None, de
                 If not provided, buffered logger output is used automatically.
     """
     # Auto-capture buffered log output when no explicit detail is given
-    if detail is None and task_id:
+    if not detail and task_id:
         _ensure_collector_installed()
         collected = _collector.drain(task_id)
         if collected:

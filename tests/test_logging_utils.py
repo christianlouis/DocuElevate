@@ -257,3 +257,23 @@ class TestTaskLogCollector:
         assert collector.drain("OK") == ""
 
         logger.removeHandler(collector)
+
+    def test_collector_handles_malformed_brackets(self):
+        """Test that the collector handles messages with [ but no ]."""
+        from app.utils.logging import TaskLogCollector
+
+        collector = TaskLogCollector()
+        collector.setFormatter(logging.Formatter("%(message)s"))
+
+        logger = logging.getLogger("test_malformed")
+        logger.addHandler(collector)
+        logger.setLevel(logging.DEBUG)
+
+        logger.info("[no closing bracket")
+        logger.info("no brackets at all")
+        logger.info("")
+
+        # Should not raise and should not buffer anything
+        assert collector.drain("no closing bracket") == ""
+
+        logger.removeHandler(collector)
