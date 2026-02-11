@@ -6,6 +6,9 @@ from requests.exceptions import ConnectionError, Timeout, RequestException
 
 from app.tasks.upload_to_webdav import upload_to_webdav
 
+_TEST_CREDENTIAL = "test_pass"  # noqa: S105
+_TEST_CUSTOM_CREDENTIAL = "custom_password123"  # noqa: S105
+
 
 @pytest.mark.unit
 class TestUploadToWebDAV:
@@ -20,7 +23,7 @@ class TestUploadToWebDAV:
             # Setup settings
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = "uploads"
             mock_settings.webdav_verify_ssl = True
             mock_settings.http_request_timeout = 30
@@ -42,7 +45,7 @@ class TestUploadToWebDAV:
             # Verify requests.put was called correctly
             assert mock_put.called
             call_args = mock_put.call_args
-            assert call_args[1]["auth"] == ("test_user", "test_pass")
+            assert call_args[1]["auth"] == ("test_user", _TEST_CREDENTIAL)
             assert call_args[1]["verify"] is True
             assert call_args[1]["timeout"] == 30
             
@@ -62,7 +65,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = ""
             mock_settings.webdav_verify_ssl = True
             mock_settings.http_request_timeout = 30
@@ -84,7 +87,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = None
             mock_settings.webdav_verify_ssl = True
             mock_settings.http_request_timeout = 30
@@ -104,7 +107,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = None
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             
             with pytest.raises(ValueError, match="WebDAV URL is not configured"):
                 upload_to_webdav.apply(args=[sample_text_file]).get()
@@ -127,7 +130,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = "uploads"
             mock_settings.webdav_verify_ssl = True
             mock_settings.http_request_timeout = 30
@@ -149,7 +152,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = "nonexistent"
             mock_settings.webdav_verify_ssl = True
             mock_settings.http_request_timeout = 30
@@ -170,7 +173,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = "uploads"
             mock_settings.webdav_verify_ssl = True
             mock_settings.http_request_timeout = 30
@@ -191,7 +194,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = "uploads"
             mock_settings.webdav_verify_ssl = True
             mock_settings.http_request_timeout = 30
@@ -210,7 +213,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = "uploads"
             mock_settings.webdav_verify_ssl = True
             mock_settings.http_request_timeout = 30
@@ -229,7 +232,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = "uploads"
             mock_settings.webdav_verify_ssl = True
             mock_settings.http_request_timeout = 30
@@ -254,7 +257,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = "https://webdav.example.com"
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = "documents"
             mock_settings.webdav_verify_ssl = True
             mock_settings.http_request_timeout = 30
@@ -278,7 +281,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = "/uploads/documents"  # Leading slash
             mock_settings.webdav_verify_ssl = True
             mock_settings.http_request_timeout = 30
@@ -302,7 +305,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = ""  # Empty folder
             mock_settings.webdav_verify_ssl = True
             mock_settings.http_request_timeout = 30
@@ -323,7 +326,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = "uploads"
             mock_settings.webdav_verify_ssl = True
             mock_settings.http_request_timeout = 30
@@ -346,7 +349,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = "uploads"
             mock_settings.webdav_verify_ssl = False
             mock_settings.http_request_timeout = 30
@@ -369,7 +372,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "custom_user"
-            mock_settings.webdav_password = "custom_password123"
+            mock_settings.webdav_password = _TEST_CUSTOM_CREDENTIAL
             mock_settings.webdav_folder = "uploads"
             mock_settings.webdav_verify_ssl = True
             mock_settings.http_request_timeout = 30
@@ -382,7 +385,7 @@ class TestUploadToWebDAV:
             
             # Verify correct credentials were used
             call_kwargs = mock_put.call_args[1]
-            assert call_kwargs["auth"] == ("custom_user", "custom_password123")
+            assert call_kwargs["auth"] == ("custom_user", _TEST_CUSTOM_CREDENTIAL)
 
     def test_logging_on_success(self, sample_text_file):
         """Test that progress is logged on successful upload."""
@@ -392,7 +395,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = "uploads"
             mock_settings.webdav_verify_ssl = True
             mock_settings.http_request_timeout = 30
@@ -421,7 +424,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = "uploads"
             mock_settings.webdav_verify_ssl = True
             mock_settings.http_request_timeout = 30
@@ -449,7 +452,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = "uploads"
             mock_settings.webdav_verify_ssl = True
             mock_settings.http_request_timeout = 30
@@ -474,7 +477,7 @@ class TestUploadToWebDAV:
             
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
-            mock_settings.webdav_password = "test_pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = "uploads"
             mock_settings.webdav_verify_ssl = True
             mock_settings.http_request_timeout = 30

@@ -617,7 +617,8 @@ class TestExternalEnvVarConfiguration:
     layer correctly maps environment variables to Settings fields.
     """
 
-    def test_settings_reads_openai_base_url(self) -> None:
+    @staticmethod
+    def test_settings_reads_openai_base_url() -> None:
         """Test that OPENAI_BASE_URL is correctly loaded into Settings."""
         from app.config import Settings
 
@@ -636,7 +637,8 @@ class TestExternalEnvVarConfiguration:
         )
         assert config.openai_base_url == custom_url
 
-    def test_settings_reads_s3_configuration(self) -> None:
+    @staticmethod
+    def test_settings_reads_s3_configuration() -> None:
         """Test that S3-related settings are correctly loaded."""
         from app.config import Settings
 
@@ -660,7 +662,8 @@ class TestExternalEnvVarConfiguration:
         assert config.s3_bucket_name == "my-bucket"
         assert config.s3_folder_prefix == "uploads/"
 
-    def test_settings_reads_onedrive_configuration(self) -> None:
+    @staticmethod
+    def test_settings_reads_onedrive_configuration() -> None:
         """Test that OneDrive-related settings are correctly loaded."""
         from app.config import Settings
 
@@ -686,7 +689,8 @@ class TestExternalEnvVarConfiguration:
         assert config.onedrive_refresh_token == "refresh-abc"
         assert config.onedrive_folder_path == "Documents/Test"
 
-    def test_settings_reads_dropbox_configuration(self) -> None:
+    @staticmethod
+    def test_settings_reads_dropbox_configuration() -> None:
         """Test that Dropbox-related settings are correctly loaded."""
         from app.config import Settings
 
@@ -708,7 +712,8 @@ class TestExternalEnvVarConfiguration:
         assert config.dropbox_app_secret == "dbx-secret"
         assert config.dropbox_refresh_token == "dbx-refresh"
 
-    def test_settings_reads_authentik_configuration(self) -> None:
+    @staticmethod
+    def test_settings_reads_authentik_configuration() -> None:
         """Test that Authentik/OIDC settings are correctly loaded."""
         from app.config import Settings
 
@@ -730,7 +735,8 @@ class TestExternalEnvVarConfiguration:
         assert config.authentik_client_secret == "auth-secret"
         assert config.authentik_config_url == "https://auth.example.com/.well-known/openid-configuration"
 
-    def test_settings_optional_services_default_to_none(self) -> None:
+    @staticmethod
+    def test_settings_optional_services_default_to_none() -> None:
         """Test that optional external service settings default to None when not provided."""
         from app.config import Settings
 
@@ -766,7 +772,8 @@ class TestExternalEnvVarConfiguration:
 class TestPdfGenerator:
     """Verify that the test PDF generator produces valid PDFs with extractable text."""
 
-    def test_generate_default_pdf(self) -> None:
+    @staticmethod
+    def test_generate_default_pdf() -> None:
         """Test that generate_test_pdf creates a valid PDF with embedded text."""
         import PyPDF2
 
@@ -784,7 +791,8 @@ class TestPdfGenerator:
         finally:
             os.unlink(path)
 
-    def test_generate_custom_content_pdf(self) -> None:
+    @staticmethod
+    def test_generate_custom_content_pdf() -> None:
         """Test that generate_test_pdf accepts custom content."""
         import PyPDF2
 
@@ -798,7 +806,8 @@ class TestPdfGenerator:
         finally:
             os.unlink(path)
 
-    def test_generated_pdfs_are_unique(self) -> None:
+    @staticmethod
+    def test_generated_pdfs_are_unique() -> None:
         """Test that consecutive calls produce different PDFs."""
         path1 = generate_test_pdf()
         path2 = generate_test_pdf()

@@ -19,6 +19,8 @@ from app.tasks.imap_tasks import (
     get_capabilities,
 )
 
+_TEST_CREDENTIAL = "pass"  # noqa: S105
+
 
 @pytest.mark.unit
 class TestCleanupOldEntries:
@@ -84,7 +86,7 @@ class TestCheckAndPullMailbox:
             host=None,
             port=993,
             username="user",
-            password="pass",
+            password=_TEST_CREDENTIAL,
             use_ssl=True,
             delete_after_process=False,
         )
@@ -112,7 +114,7 @@ class TestCheckAndPullMailbox:
             host="imap.example.com",
             port=993,
             username="user",
-            password="pass",
+            password=_TEST_CREDENTIAL,
             use_ssl=True,
             delete_after_process=False,
         )

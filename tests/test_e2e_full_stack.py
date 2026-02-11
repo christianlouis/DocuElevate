@@ -34,6 +34,8 @@ from tests.fixtures_integration import (
     db_session_real,
 )
 
+_TEST_CREDENTIAL = "pass"  # noqa: S105
+
 
 @pytest.mark.integration
 @pytest.mark.requires_docker
@@ -131,7 +133,7 @@ class TestEndToEndWithRedis:
         with patch("app.tasks.upload_to_webdav.settings") as mock_settings:
             mock_settings.webdav_url = "http://test.com"
             mock_settings.webdav_username = "user"
-            mock_settings.webdav_password = "pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
 
             # This will queue the task in Redis
             result = upload_to_webdav.apply_async(args=["/tmp/test.txt"], kwargs={"file_id": 1})
@@ -232,7 +234,7 @@ class TestEndToEndWithRedis:
 
             mock_settings.webdav_url = "http://test.com/"
             mock_settings.webdav_username = "user"
-            mock_settings.webdav_password = "pass"
+            mock_settings.webdav_password = _TEST_CREDENTIAL
             mock_settings.webdav_folder = ""
             mock_settings.webdav_verify_ssl = False
             mock_settings.http_request_timeout = 30

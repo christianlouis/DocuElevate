@@ -24,6 +24,8 @@ from testcontainers.postgres import PostgresContainer
 from testcontainers.redis import RedisContainer
 from testcontainers.minio import MinioContainer
 
+_TEST_CREDENTIAL = "testpass"  # noqa: S105
+
 
 @pytest.fixture(scope="session")
 def postgres_container() -> Generator:
@@ -121,7 +123,7 @@ def webdav_container() -> Generator:
     container.with_exposed_ports(80)
     container.with_env("AUTH_TYPE", "Basic")
     container.with_env("USERNAME", "testuser")
-    container.with_env("PASSWORD", "testpass")
+    container.with_env("PASSWORD", _TEST_CREDENTIAL)
     
     container.start()
     time.sleep(2)
@@ -135,7 +137,7 @@ def webdav_container() -> Generator:
         "host": host,
         "port": port,
         "username": "testuser",
-        "password": "testpass",
+        "password": _TEST_CREDENTIAL,
     }
     
     container.stop()
@@ -151,7 +153,7 @@ def sftp_container() -> Generator:
     container = DockerContainer("atmoz/sftp:latest")
     container.with_exposed_ports(22)
     # Create user: username:password:uid:gid:directory
-    container.with_command("testuser:testpass:1001:1001:upload")
+    container.with_command(f"testuser:{_TEST_CREDENTIAL}:1001:1001:upload")
     
     container.start()
     time.sleep(3)  # SFTP server needs time to initialize
@@ -164,7 +166,7 @@ def sftp_container() -> Generator:
         "host": host,
         "port": port,
         "username": "testuser",
-        "password": "testpass",
+        "password": _TEST_CREDENTIAL,
         "folder": "/home/testuser/upload",
     }
     
@@ -205,7 +207,7 @@ def ftp_container() -> Generator:
     container.with_exposed_ports(21, 30000, 30001, 30002, 30003, 30004)
     container.with_env("PUBLICHOST", "localhost")
     container.with_env("FTP_USER_NAME", "testuser")
-    container.with_env("FTP_USER_PASS", "testpass")
+    container.with_env("FTP_USER_PASS", _TEST_CREDENTIAL)
     container.with_env("FTP_USER_HOME", "/home/testuser")
     
     container.start()
@@ -219,7 +221,7 @@ def ftp_container() -> Generator:
         "host": host,
         "port": port,
         "username": "testuser",
-        "password": "testpass",
+        "password": _TEST_CREDENTIAL,
         "folder": "/",
     }
     

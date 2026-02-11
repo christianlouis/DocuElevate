@@ -9,6 +9,8 @@ from starlette.responses import RedirectResponse
 
 from app.auth import get_current_user, get_gravatar_url, require_login
 
+_TEST_CREDENTIAL = "test"  # noqa: S105
+
 
 @pytest.mark.unit
 class TestGetCurrentUser:
@@ -217,7 +219,7 @@ class TestAuthEndpoints:
 
     def test_auth_post_not_available_when_auth_disabled(self, client):
         """Test that POST /auth returns 404 when auth is disabled."""
-        response = client.post("/auth", data={"username": "admin", "password": "test"})
+        response = client.post("/auth", data={"username": "admin", "password": _TEST_CREDENTIAL})
         assert response.status_code == 404
 
 

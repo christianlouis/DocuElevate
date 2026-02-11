@@ -13,6 +13,8 @@ from app.tasks.upload_to_webdav import upload_to_webdav
 from app.tasks.upload_to_google_drive import upload_to_google_drive
 from app.tasks.upload_to_email import upload_to_email
 
+_TEST_CREDENTIAL = "test_pass"  # noqa: S105
+
 
 @pytest.fixture
 def mock_settings():
@@ -202,7 +204,7 @@ def test_upload_to_ftp_accepts_file_id(sample_text_file):
         mock_settings.ftp_host = "ftp.example.com"
         mock_settings.ftp_port = 21
         mock_settings.ftp_username = "test_user"
-        mock_settings.ftp_password = "test_pass"
+        mock_settings.ftp_password = _TEST_CREDENTIAL
         mock_settings.ftp_folder = "uploads"
         mock_settings.ftp_use_tls = False
         mock_settings.ftp_allow_plaintext = True
@@ -229,7 +231,7 @@ def test_upload_to_ftp_without_file_id(sample_text_file):
         # Setup settings
         mock_settings.ftp_host = "ftp.example.com"
         mock_settings.ftp_username = "test_user"
-        mock_settings.ftp_password = "test_pass"
+        mock_settings.ftp_password = _TEST_CREDENTIAL
         mock_settings.ftp_folder = None
         mock_settings.ftp_use_tls = False
         mock_settings.ftp_allow_plaintext = True
@@ -257,7 +259,7 @@ def test_upload_to_sftp_accepts_file_id(sample_text_file):
         mock_settings.sftp_host = "sftp.example.com"
         mock_settings.sftp_port = 22
         mock_settings.sftp_username = "test_user"
-        mock_settings.sftp_password = "test_pass"
+        mock_settings.sftp_password = _TEST_CREDENTIAL
         mock_settings.sftp_folder = "/uploads"
         mock_settings.workdir = "/tmp"
         
@@ -287,7 +289,7 @@ def test_upload_to_webdav_accepts_file_id(sample_text_file):
         # Setup settings
         mock_settings.webdav_url = "https://webdav.example.com/"
         mock_settings.webdav_username = "test_user"
-        mock_settings.webdav_password = "test_pass"
+        mock_settings.webdav_password = _TEST_CREDENTIAL
         mock_settings.webdav_folder = "uploads"
         mock_settings.webdav_verify_ssl = True
         
@@ -355,7 +357,7 @@ def test_upload_to_email_accepts_file_id(sample_text_file):
         mock_settings.email_host = "smtp.example.com"
         mock_settings.email_port = 587
         mock_settings.email_username = "test@example.com"
-        mock_settings.email_password = "test_pass"
+        mock_settings.email_password = _TEST_CREDENTIAL
         mock_settings.email_use_tls = True
         mock_settings.email_sender = "sender@example.com"
         mock_settings.external_hostname = "docuelevate.example.com"

@@ -17,6 +17,9 @@ from app.tasks.upload_to_webdav import upload_to_webdav
 pytest.importorskip("testcontainers", reason="testcontainers not installed")
 from testcontainers.core.container import DockerContainer
 
+_TEST_CREDENTIAL = "testpass"  # noqa: S105
+_TEST_WRONG_CREDENTIAL = "wrongpass"  # noqa: S105
+
 
 @pytest.mark.integration
 @pytest.mark.requires_docker
@@ -35,7 +38,7 @@ class TestWebDAVIntegration:
         container.with_exposed_ports(80)
         container.with_env("AUTH_TYPE", "Basic")
         container.with_env("USERNAME", "testuser")
-        container.with_env("PASSWORD", "testpass")
+        container.with_env("PASSWORD", _TEST_CREDENTIAL)
         
         # Start the container
         container.start()
@@ -53,7 +56,7 @@ class TestWebDAVIntegration:
             "port": port,
             "url": f"http://{host}:{port}",
             "username": "testuser",
-            "password": "testpass"
+            "password": _TEST_CREDENTIAL
         }
         
         # Verify server is accessible
@@ -209,7 +212,7 @@ class TestWebDAVIntegration:
             
             mock_settings.webdav_url = webdav_server["url"] + "/"
             mock_settings.webdav_username = "wronguser"
-            mock_settings.webdav_password = "wrongpass"
+            mock_settings.webdav_password = _TEST_WRONG_CREDENTIAL
             mock_settings.webdav_folder = ""
             mock_settings.webdav_verify_ssl = False
             mock_settings.http_request_timeout = 30
