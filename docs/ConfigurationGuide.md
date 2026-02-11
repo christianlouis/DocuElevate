@@ -93,6 +93,7 @@ DocuElevate can monitor multiple IMAP mailboxes for document attachments. Each m
 | `SESSION_SECRET`        | Secret key used to encrypt sessions and cookies (at least 32 chars). |
 | `ADMIN_USERNAME`        | Username for basic authentication (when not using OIDC).     |
 | `ADMIN_PASSWORD`        | Password for basic authentication (when not using OIDC).     |
+| `ADMIN_GROUP_NAME`      | Group name in OIDC claims that grants admin access. Default: `admin`. |
 | `AUTHENTIK_CLIENT_ID`   | Client ID for Authentik OAuth2/OIDC authentication.          |
 | `AUTHENTIK_CLIENT_SECRET` | Client secret for Authentik OAuth2/OIDC authentication.    |
 | `AUTHENTIK_CONFIG_URL`  | Configuration URL for Authentik OpenID Connect.             |
@@ -519,6 +520,7 @@ AUTH_ENABLED=true
 SESSION_SECRET=a-very-long-and-secure-random-secret-key-string-for-session-encryption
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=your_secure_password
+ADMIN_GROUP_NAME=admin
 AUTHENTIK_CLIENT_ID=...
 AUTHENTIK_CLIENT_SECRET=...
 AUTHENTIK_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration

@@ -198,7 +198,7 @@ Settings are stored in the `application_settings` table with:
 - **Check authentication**: Make sure you're logged in
 - **Check admin status**: 
   - Local auth: Verify `ADMIN_USERNAME` and `ADMIN_PASSWORD` are correct
-  - OAuth: Verify your user is in the admin group
+  - OAuth: Verify your user is in the admin group (configurable via `ADMIN_GROUP_NAME`)
 - **Check logs**: Look for "Non-admin user attempted to access settings page" messages
 
 ### Settings Not Taking Effect

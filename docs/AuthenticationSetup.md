@@ -10,6 +10,7 @@ This guide explains how to configure authentication for DocuElevate to secure yo
 | `SESSION_SECRET`           | Secret key for session encryption (min 32 characters)    |
 | `ADMIN_USERNAME`           | Username for basic authentication                        |
 | `ADMIN_PASSWORD`           | Password for basic authentication                        |
+| `ADMIN_GROUP_NAME`         | OIDC group name that grants admin access (default: `admin`) |
 | `AUTHENTIK_CLIENT_ID`      | Client ID for OpenID Connect authentication              |
 | `AUTHENTIK_CLIENT_SECRET`  | Client secret for OpenID Connect authentication          |
 | `AUTHENTIK_CONFIG_URL`     | OpenID Connect discovery URL                             |
@@ -63,6 +64,7 @@ For smaller deployments or testing, simple authentication is easy to set up:
    SESSION_SECRET=your-secure-random-string-at-least-32-chars
    ADMIN_USERNAME=your_admin_username
    ADMIN_PASSWORD=your_secure_password
+   ADMIN_GROUP_NAME=admin
    ```
 
 2. Restart DocuElevate to apply the changes

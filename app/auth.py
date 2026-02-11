@@ -117,7 +117,8 @@ if AUTH_ENABLED:
             if "groups" in user_data:
                 # Check if user is in admin group
                 groups = user_data.get("groups", [])
-                is_admin = "admin" in groups or "administrators" in groups
+                admin_group = (settings.admin_group_name or "admin").strip().lower()
+                is_admin = admin_group in [group.lower() for group in groups]
 
             # Set is_admin flag (defaults to False for OAuth users unless they're in admin group)
             user_data["is_admin"] = is_admin

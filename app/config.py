@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     admin_username: Optional[str] = None
     admin_password: Optional[str] = None
     session_secret: Optional[str] = None
+    admin_group_name: str = "admin"
 
     # Authentik
     authentik_client_id: Optional[str] = None
