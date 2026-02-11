@@ -11,7 +11,7 @@ import uuid
 from typing import Optional
 
 import requests
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, HttpUrl, validator
 
 from app.auth import require_login
@@ -161,7 +161,7 @@ def validate_file_type(content_type: str, filename: str) -> bool:
 
 @router.post("/process-url")
 @require_login
-async def process_url(request: URLUploadRequest):
+async def process_url(request: Request, url_request: URLUploadRequest):
     """
     Download a file from a URL and enqueue it for processing.
 
@@ -172,7 +172,8 @@ async def process_url(request: URLUploadRequest):
     - Timeout protection: prevents hanging on slow/malicious servers
 
     Args:
-        request: URLUploadRequest with url and optional filename
+        request: Starlette Request object (used by require_login decorator)
+        url_request: URLUploadRequest with url and optional filename
 
     Returns:
         JSON with task_id and status
@@ -180,14 +181,14 @@ async def process_url(request: URLUploadRequest):
     Raises:
         HTTPException: If URL is invalid, unsafe, or file cannot be processed
     """
-    url = str(request.url)
+    url = str(url_request.url)
 
     # Validate URL safety (SSRF protection)
     validate_url_safety(url)
 
     # Parse URL to extract filename if not provided
-    if request.filename:
-        original_filename = request.filename
+    if url_request.filename:
+        original_filename = url_request.filename
     else:
         # Extract filename from URL path
         parsed = urllib.parse.urlparse(url)
