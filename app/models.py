@@ -30,6 +30,14 @@ class FileRecord(Base):
     # The name/path we store on disk (e.g. /workdir/tmp/<uuid>.pdf)
     local_filename = Column(String, nullable=False)
 
+    # Immutable original copy path (e.g. /workdir/original/<uuid>.pdf)
+    # This is the first copy made when the file is ingested
+    original_file_path = Column(String)
+
+    # Processed copy path (e.g. /workdir/processed/2024-01-01_Invoice.pdf)
+    # This is the final file with embedded metadata before upload
+    processed_file_path = Column(String)
+
     # Size of the file in bytes
     file_size = Column(Integer, nullable=False)
 

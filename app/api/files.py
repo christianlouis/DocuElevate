@@ -392,6 +392,72 @@ def reprocess_single_file(request: Request, file_id: int, db: DbSession):
         raise HTTPException(status_code=500, detail=f"Error reprocessing file: {str(e)}")
 
 
+@router.post("/files/{file_id}/reprocess-with-cloud-ocr")
+@require_login
+def reprocess_with_cloud_ocr(request: Request, file_id: int, db: DbSession):
+    """
+    Reprocess a single file with forced Cloud OCR processing.
+    
+    This endpoint forces Azure Document Intelligence OCR processing regardless
+    of whether the PDF contains embedded text. Useful for documents with 
+    low-quality embedded text or when higher quality OCR is needed.
+
+    Args:
+        file_id: ID of the file to reprocess with Cloud OCR
+
+    Returns:
+        Task ID and status information
+    """
+    try:
+        # Find the file record
+        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+
+        if not file_record:
+            raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
+
+        # Prefer using the original_file_path if available, otherwise fall back to local_filename
+        source_file = None
+        if file_record.original_file_path and os.path.exists(file_record.original_file_path):
+            source_file = file_record.original_file_path
+            logger.info(f"Using original file for Cloud OCR reprocessing: {source_file}")
+        elif file_record.local_filename and os.path.exists(file_record.local_filename):
+            source_file = file_record.local_filename
+            logger.info(f"Using local file for Cloud OCR reprocessing: {source_file}")
+        else:
+            raise HTTPException(
+                status_code=400, 
+                detail="Neither original nor local file found on disk. Cannot reprocess."
+            )
+
+        # Queue the file for processing with force_cloud_ocr=True
+        task = process_document.delay(
+            source_file,
+            original_filename=file_record.original_filename,
+            file_id=file_record.id,
+            force_cloud_ocr=True
+        )
+
+        logger.info(
+            f"Reprocessing file with Cloud OCR: ID={file_record.id}, "
+            f"Filename={file_record.original_filename}, TaskID={task.id}"
+        )
+
+        return {
+            "status": "success",
+            "message": "File queued for Cloud OCR reprocessing",
+            "file_id": file_record.id,
+            "filename": file_record.original_filename,
+            "task_id": task.id,
+            "force_cloud_ocr": True,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error reprocessing file {file_id} with Cloud OCR: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error reprocessing file with Cloud OCR: {str(e)}")
+
+
 def _extract_text_from_pdf(file_path: str) -> str:
     """
     Extract text from a PDF file using PyPDF2.

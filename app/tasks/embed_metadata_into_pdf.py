@@ -16,7 +16,7 @@ from app.database import SessionLocal
 from app.models import FileRecord
 from app.tasks.finalize_document_storage import finalize_document_storage
 from app.tasks.retry_config import BaseTaskWithRetry
-from app.utils import log_task_progress
+from app.utils import get_unique_filepath_with_counter, log_task_progress
 from app.utils.filename_utils import sanitize_filename
 
 logger = logging.getLogger(__name__)
@@ -30,32 +30,35 @@ TMP_SUBDIR = "tmp"
 PROCESSED_SUBDIR = "processed"
 
 
-def unique_filepath(directory, base_filename, extension=".pdf"):
-    """
-    Returns a unique filepath in the specified directory.
-    If 'base_filename.pdf' exists, it will append an underscore and counter.
-    """
-    candidate = os.path.join(directory, base_filename + extension)
-    if not os.path.exists(candidate):
-        return candidate
-    counter = 1
-    while True:
-        candidate = os.path.join(directory, f"{base_filename}_{counter}{extension}")
-        if not os.path.exists(candidate):
-            return candidate
-        counter += 1
-
-
-def persist_metadata(metadata, final_pdf_path):
+def persist_metadata(metadata, final_pdf_path, original_file_path=None, processed_file_path=None):
     """
     Saves the metadata dictionary to a JSON file with the same base name as the final PDF.
     For example, if final_pdf_path is "<workdir>/processed/MyFile.pdf",
     the metadata will be saved as "<workdir>/processed/MyFile.json".
+    
+    Optionally augments the metadata with file path references for traceability.
+    
+    Args:
+        metadata: Dictionary of metadata to save
+        final_pdf_path: Path to the final PDF file
+        original_file_path: Optional path to the immutable original file
+        processed_file_path: Optional path to the processed file
+        
+    Returns:
+        str: Path to the created JSON file
     """
     base, _ = os.path.splitext(final_pdf_path)
     json_path = base + ".json"
+    
+    # Augment metadata with file path references if provided
+    metadata_with_paths = metadata.copy()
+    if original_file_path:
+        metadata_with_paths["original_file_path"] = original_file_path
+    if processed_file_path:
+        metadata_with_paths["processed_file_path"] = processed_file_path
+    
     with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(metadata, f, ensure_ascii=False, indent=2)
+        json.dump(metadata_with_paths, f, ensure_ascii=False, indent=2)
     return json_path
 
 
@@ -159,15 +162,15 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
         # Define the final directory based on settings.workdir and ensure it exists.
         final_dir = os.path.join(settings.workdir, PROCESSED_SUBDIR)
         os.makedirs(final_dir, exist_ok=True)
-        # Get a unique filepath in case of collisions.
-        final_file_path = unique_filepath(final_dir, suggested_filename, extension=".pdf")
+        # Get a unique filepath in case of collisions using -0001, -0002 suffix format
+        final_file_path = get_unique_filepath_with_counter(final_dir, suggested_filename, extension=".pdf")
 
         logger.info(f"[{task_id}] Moving file to: {final_file_path}")
         log_task_progress(
             task_id,
             "move_to_processed",
             "in_progress",
-            f"Moving to processed: {suggested_filename}.pdf",
+            f"Moving to processed: {os.path.basename(final_file_path)}",
             file_id=file_id,
         )
         # Move the processed file using shutil.move to handle cross-device moves.
@@ -179,10 +182,28 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
             task_id, "move_to_processed", "success", f"Moved to: {os.path.basename(final_file_path)}", file_id=file_id
         )
 
+        # Get the original_file_path from the database
+        original_file_path = None
+        with SessionLocal() as db:
+            if file_id:
+                file_record = db.query(FileRecord).filter_by(id=file_id).first()
+                if file_record:
+                    original_file_path = file_record.original_file_path
+                    # Update the processed_file_path in the database
+                    file_record.processed_file_path = final_file_path
+                    db.commit()
+                    logger.info(f"[{task_id}] Updated database with processed_file_path: {final_file_path}")
+
         # Persist the metadata into a JSON file with the same base name.
+        # Include file path references for traceability
         logger.info(f"[{task_id}] Persisting metadata to JSON")
         log_task_progress(task_id, "save_metadata_json", "in_progress", "Saving metadata JSON", file_id=file_id)
-        json_path = persist_metadata(metadata, final_file_path)
+        json_path = persist_metadata(
+            metadata, 
+            final_file_path, 
+            original_file_path=original_file_path,
+            processed_file_path=final_file_path
+        )
         logger.info(f"[{task_id}] Metadata persisted to {json_path}")
         log_task_progress(
             task_id, "save_metadata_json", "success", f"Saved: {os.path.basename(json_path)}", file_id=file_id

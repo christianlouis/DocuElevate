@@ -3,31 +3,32 @@ import os
 import pytest
 from unittest.mock import patch, MagicMock
 
-from app.tasks.embed_metadata_into_pdf import unique_filepath, persist_metadata
+from app.tasks.embed_metadata_into_pdf import persist_metadata
+from app.utils.filename_utils import get_unique_filepath_with_counter
 
 
 @pytest.mark.unit
 class TestUniqueFilepath:
-    """Tests for unique_filepath function."""
+    """Tests for unique filepath collision handling - now using get_unique_filepath_with_counter."""
 
     def test_returns_path_when_no_conflict(self, tmp_path):
         """Test returns original path when no conflict."""
-        result = unique_filepath(str(tmp_path), "test", ".pdf")
+        result = get_unique_filepath_with_counter(str(tmp_path), "test", ".pdf")
         assert result == str(tmp_path / "test.pdf")
 
     def test_appends_counter_on_conflict(self, tmp_path):
-        """Test appends counter when file already exists."""
+        """Test appends -0001 counter when file already exists."""
         # Create the initial file
         (tmp_path / "test.pdf").touch()
-        result = unique_filepath(str(tmp_path), "test", ".pdf")
-        assert result == str(tmp_path / "test_1.pdf")
+        result = get_unique_filepath_with_counter(str(tmp_path), "test", ".pdf")
+        assert result == str(tmp_path / "test-0001.pdf")
 
     def test_increments_counter(self, tmp_path):
         """Test increments counter for multiple conflicts."""
         (tmp_path / "test.pdf").touch()
-        (tmp_path / "test_1.pdf").touch()
-        result = unique_filepath(str(tmp_path), "test", ".pdf")
-        assert result == str(tmp_path / "test_2.pdf")
+        (tmp_path / "test-0001.pdf").touch()
+        result = get_unique_filepath_with_counter(str(tmp_path), "test", ".pdf")
+        assert result == str(tmp_path / "test-0002.pdf")
 
 
 @pytest.mark.unit
