@@ -8,10 +8,10 @@ DocuElevate automatically generates and embeds build metadata (version, build da
 
 The following metadata is automatically generated and included in every build:
 
-1. **Build Date** - The UTC date when the build was created (format: YYYY-MM-DD)
+1. **Build Date** - The UTC date and time when the build was created (format: YYYY-MM-DDTHH:MM:SSZ)
 2. **Git Commit SHA** - The short Git commit hash (7 characters) of the code being built
 3. **Runtime Information** - A comprehensive summary including version, dates, commit info, and more
-4. **Application Version** - Read from the `VERSION` file (manually updated for releases)
+4. **Application Version** - Read from the `VERSION` file (automatically updated by semantic-release)
 
 ## How It Works
 
@@ -21,11 +21,12 @@ When the Docker image is built (locally or in CI/CD), the following happens:
 
 1. **GitHub Actions runs the metadata script** (`scripts/generate_build_metadata.sh`) before building the Docker image
 2. **The script generates three files:**
-   - `BUILD_DATE` - Contains the build date in YYYY-MM-DD format
+   - `BUILD_DATE` - Contains the build date and time in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)
    - `GIT_SHA` - Contains the short Git commit hash
    - `RUNTIME_INFO` - Contains detailed build information
-3. **Docker copies these files** into the image during the build process
-4. **The application reads the files** at runtime via `app/config.py` properties
+3. **The script syncs VERSION** from the latest git tag if out of sync
+4. **Docker copies these files** into the image during the build process
+5. **The application reads the files** at runtime via `app/config.py` properties
 
 ### File Structure
 
@@ -43,7 +44,7 @@ DocuElevate/
 
 **BUILD_DATE:**
 ```
-2026-02-07
+2026-02-11T14:38:06Z
 ```
 
 **GIT_SHA:**
@@ -55,13 +56,13 @@ DocuElevate/
 ```
 DocuElevate Build Information
 ==============================
-Version: 0.4.5-dev
-Build Date: 2026-02-07
+Version: 0.9.1
+Build Date: 2026-02-11T14:38:06Z
 Git Commit: 6812d0d2c42a4782e78840b052f0e6da24ec8543
 Git Short SHA: 6812d0d
 Git Branch: main
 Commit Date: 2026-02-07T19:32:04Z
-Build Timestamp: 2026-02-07T19:34:10Z
+Build Timestamp: 2026-02-11T14:38:06Z
 ==============================
 ```
 
@@ -73,7 +74,7 @@ The `app/config.py` Settings class provides these properties for accessing build
 Returns the application version with the following priority:
 1. `APP_VERSION` environment variable
 2. Contents of `VERSION` file
-3. Default: `"0.5.0-dev"`
+3. Default: `"unknown"`
 
 ### `settings.build_date` (property)
 Returns the build date with the following priority:
@@ -100,10 +101,10 @@ Returns detailed runtime information:
 from app.config import settings
 
 # Get version
-version = settings.version  # "0.4.5-dev"
+version = settings.version  # "0.9.1"
 
 # Get build date
-build_date = settings.build_date  # "2026-02-07"
+build_date = settings.build_date  # "2026-02-11T14:38:06Z"
 
 # Get Git SHA
 git_sha = settings.git_sha  # "6812d0d"
@@ -165,9 +166,9 @@ To generate build metadata locally:
 
 # Output:
 # Generating build metadata...
-# ✓ BUILD_DATE: 2026-02-07
+# ✓ BUILD_DATE: 2026-02-11T14:38:06Z
 # ✓ GIT_SHA: 6812d0d
-# ✓ VERSION: 0.4.5-dev
+# ✓ VERSION (from file): 0.9.1
 # ✓ RUNTIME_INFO generated
 ```
 
@@ -203,7 +204,7 @@ You can override any metadata value using environment variables:
 export APP_VERSION="1.0.0-custom"
 
 # Override build date
-export BUILD_DATE="2026-01-15"
+export BUILD_DATE="2026-01-15T10:30:00Z"
 
 # Override Git SHA
 export GIT_COMMIT_SHA="abc1234"
@@ -219,20 +220,14 @@ This is useful for:
 
 ## Updating the Version
 
-The `VERSION` file must be **manually updated** for releases:
+The `VERSION` file is **automatically updated** by semantic-release based on conventional commits. The `generate_build_metadata.sh` script also syncs the `VERSION` file from the latest git tag if it's out of date.
 
-```bash
-# Update version for a new release
-echo "0.5.0" > VERSION
-
-# Commit the change
-git add VERSION
-git commit -m "Bump version to 0.5.0"
-git tag v0.5.0
-git push origin main --tags
-```
-
-The build metadata script will automatically include this version in all builds.
+The semantic-release workflow:
+1. Analyzes conventional commit messages on the `main` branch
+2. Determines the next version number (major, minor, or patch bump)
+3. Creates a git tag (e.g., `v0.10.0`)
+4. Runs `generate_build_metadata.sh` as the build command, which syncs the `VERSION` file
+5. Commits and pushes updated build metadata files
 
 ## Troubleshooting
 
@@ -274,27 +269,39 @@ docker build --no-cache -t docuelevate .
 
 1. **Always run the script before building** - The CI/CD pipeline does this automatically
 2. **Don't commit generated files** - `GIT_SHA` and `RUNTIME_INFO` are in `.gitignore`
-3. **Update VERSION manually** - Only update for actual releases
+3. **Use conventional commits** - Semantic-release determines versions from commit messages
 4. **Use semantic versioning** - Follow `MAJOR.MINOR.PATCH` format
-5. **Tag releases in Git** - Create Git tags for version releases
+5. **Don't manually edit VERSION** - It's managed by semantic-release and the build script
 
 ## CI/CD Pipeline Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ GitHub Actions Workflow                                     │
+│ Semantic Release Workflow (on push to main)                 │
+├─────────────────────────────────────────────────────────────┤
+│ 1. Analyze conventional commits                             │
+│ 2. Determine next version (major/minor/patch)               │
+│ 3. Create git tag (e.g., v0.10.0)                           │
+│ 4. Run build_command (generate_build_metadata.sh)           │
+│    - Syncs VERSION file from latest git tag                 │
+│    - Creates BUILD_DATE (with time)                         │
+│    - Creates GIT_SHA                                        │
+│    - Creates RUNTIME_INFO                                   │
+│ 5. Commit and push updated metadata files                   │
+│ 6. Create GitHub Release                                    │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Docker CI Workflow (on push to main)                        │
 ├─────────────────────────────────────────────────────────────┤
 │ 1. Checkout Code                                            │
 │ 2. Generate Build Metadata (run script)                     │
-│    - Creates BUILD_DATE                                     │
-│    - Creates GIT_SHA                                        │
-│    - Creates RUNTIME_INFO                                   │
+│    - Syncs VERSION from git tag                             │
+│    - Creates BUILD_DATE, GIT_SHA, RUNTIME_INFO              │
 │ 3. Build Docker Image                                       │
-│    - Copies VERSION (from git)                              │
-│    - Copies BUILD_DATE (generated)                          │
-│    - Copies GIT_SHA (generated)                             │
-│    - Copies RUNTIME_INFO (generated)                        │
-│ 4. Push to Docker Hub / GHCR                                │
+│    - Copies VERSION, BUILD_DATE, GIT_SHA, RUNTIME_INFO      │
+│ 4. Push to Docker Hub                                       │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -315,11 +322,9 @@ docker build --no-cache -t docuelevate .
 
 Potential improvements to the build metadata system:
 
-1. **Automated version bumping** - Automatically increment version based on commits
-2. **Changelog generation** - Auto-generate changelog from Git history
-3. **Build number tracking** - Track sequential build numbers
-4. **Deployment tracking** - Record when/where each build was deployed
-5. **Performance metrics** - Include build time, image size, etc.
+1. **Build number tracking** - Track sequential build numbers
+2. **Deployment tracking** - Record when/where each build was deployed
+3. **Performance metrics** - Include build time, image size, etc.
 
 ## Related Documentation
 

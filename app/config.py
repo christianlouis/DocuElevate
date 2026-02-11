@@ -284,7 +284,7 @@ class Settings(BaseSettings):
                 return f.read().strip()
 
         # Default version if not found
-        return "0.5.0-dev"
+        return "unknown"
 
     @property
     def git_sha(self) -> str:

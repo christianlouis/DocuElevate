@@ -117,6 +117,22 @@ class TestBuildMetadataConfiguration:
             auth_enabled=False
         )
         assert config.build_date == "2026-01-15"
+
+    def test_build_date_with_time_from_environment(self, monkeypatch):
+        """Test that build_date supports ISO 8601 format with time."""
+        monkeypatch.setenv("BUILD_DATE", "2026-01-15T10:30:00Z")
+        config = Settings(
+            database_url="sqlite:///test.db",
+            redis_url="redis://localhost:6379",
+            openai_api_key="test",
+            azure_ai_key="test",
+            azure_region="test",
+            azure_endpoint="https://test.example.com",
+            gotenberg_url="http://localhost:3000",
+            workdir="/tmp",
+            auth_enabled=False
+        )
+        assert config.build_date == "2026-01-15T10:30:00Z"
     
     def test_git_sha_from_environment(self, monkeypatch):
         """Test that git_sha is read from GIT_COMMIT_SHA environment variable."""
@@ -153,6 +169,25 @@ class TestBuildMetadataConfiguration:
         )
         # When no file or env var exists, should return "unknown"
         assert config.git_sha == "unknown"
+
+    def test_version_default_when_no_file_or_env(self, monkeypatch, tmp_path):
+        """Test that version defaults to 'unknown' when no VERSION file or env var exists."""
+        import app.config
+        monkeypatch.setattr(app.config.os.path, 'dirname', lambda x: str(tmp_path))
+
+        config = Settings(
+            database_url="sqlite:///test.db",
+            redis_url="redis://localhost:6379",
+            openai_api_key="test",
+            azure_ai_key="test",
+            azure_region="test",
+            azure_endpoint="https://test.example.com",
+            gotenberg_url="http://localhost:3000",
+            workdir="/tmp",
+            auth_enabled=False
+        )
+        # When no file or env var exists, should return "unknown"
+        assert config.version == "unknown"
     
     def test_runtime_info_property(self):
         """Test that runtime_info returns build information."""
