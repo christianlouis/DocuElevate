@@ -243,7 +243,7 @@ class TestAzureDocumentIntelligenceIntegration:
             assert result.content, "Azure OCR returned no content"
             assert len(result.content) > 10, f"OCR text too short: {result.content[:50]}"
 
-            # Verify the generated text is recognisable
+            # Verify the generated text is recognizable
             assert (
                 "Acme" in result.content or "Invoice" in result.content
             ), f"OCR text does not contain expected keywords: {result.content[:200]}"
