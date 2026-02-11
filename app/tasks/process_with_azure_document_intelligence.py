@@ -46,35 +46,37 @@ def get_pdf_page_count(file_path):
         return None
 
 
-def check_page_rotation(result, filename):
+def check_page_rotation(result, filename, task_id=None):
     """
     Checks if pages in the document are rotated and logs the rotation information.
 
     Args:
         result: The AnalyzeResult from Azure Document Intelligence API
         filename: The name of the file being processed
+        task_id: Optional Celery task ID for log prefixing
 
     Returns:
         dict: Dictionary mapping page indices (integers) to rotation angles
     """
-    logger.info(f"Checking rotation for document: {filename}")
+    prefix = f"[{task_id}] " if task_id else ""
+    logger.info(f"{prefix}Checking rotation for document: {filename}")
     rotation_data = {}
 
     if not hasattr(result, "pages") or not result.pages:
-        logger.warning(f"No page information available for rotation check: {filename}")
+        logger.warning(f"{prefix}No page information available for rotation check: {filename}")
         return rotation_data
 
     for i, page in enumerate(result.pages):
         if hasattr(page, "angle"):
             rotation_angle = page.angle
             if rotation_angle != 0:
-                logger.info(f"Page {i+1} is rotated by {rotation_angle} degrees")
+                logger.info(f"{prefix}Page {i+1} is rotated by {rotation_angle} degrees")
                 # Store page index as integer, not string
                 rotation_data[i] = rotation_angle
             else:
-                logger.info(f"Page {i+1} has no rotation (0 degrees)")
+                logger.info(f"{prefix}Page {i+1} has no rotation (0 degrees)")
         else:
-            logger.info(f"Page {i+1} rotation information not available")
+            logger.info(f"{prefix}Page {i+1} rotation information not available")
 
     return rotation_data
 
@@ -157,7 +159,7 @@ def process_with_azure_document_intelligence(self, filename: str, file_id: int =
         operation_id = poller.details["operation_id"]
 
         # Check and log page rotation information
-        rotation_data = check_page_rotation(result, filename)
+        rotation_data = check_page_rotation(result, filename, task_id=task_id)
 
         # Retrieve the processed searchable PDF
         response = document_intelligence_client.get_analyze_result_pdf(model_id=result.model_id, result_id=operation_id)
