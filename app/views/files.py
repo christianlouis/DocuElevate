@@ -175,8 +175,14 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
         # Compute processing flow for visualization
         flow_data = _compute_processing_flow(logs)
 
-        # Compute step-aligned summary
-        step_summary = _compute_step_summary(logs)
+        # Compute step-aligned summary from status table (preferred) or fallback to logs
+        try:
+            from app.utils.step_manager import get_step_summary as get_step_summary_from_table
+
+            step_summary = get_step_summary_from_table(db, file_id)
+        except Exception:
+            # Fallback to log-based computation if status table not available
+            step_summary = _compute_step_summary(logs)
 
         return templates.TemplateResponse(
             "file_detail.html",

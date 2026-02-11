@@ -1,6 +1,6 @@
 # app/models.py
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 
 from app.database import Base
 
@@ -38,6 +38,27 @@ class FileRecord(Base):
 
     # Timestamp when we inserted this record
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class FileProcessingStep(Base):
+    """
+    Tracks the current status of each processing step for a file.
+    This provides a definitive, queryable state for each step without scanning logs.
+    """
+
+    __tablename__ = "file_processing_steps"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey("files.id"), nullable=False, index=True)
+    step_name = Column(String, nullable=False, index=True)  # e.g., "hash_file", "upload_to_dropbox"
+    status = Column(String, nullable=False)  # "pending", "in_progress", "success", "failure", "skipped"
+    started_at = Column(DateTime(timezone=True), nullable=True)  # When step started
+    completed_at = Column(DateTime(timezone=True), nullable=True)  # When step finished (success/failure)
+    error_message = Column(Text, nullable=True)  # Error message if status is "failure"
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (UniqueConstraint("file_id", "step_name", name="unique_file_step"),)
 
 
 class ProcessingLog(Base):
