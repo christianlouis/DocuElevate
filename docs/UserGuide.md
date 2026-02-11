@@ -97,11 +97,50 @@ When you click on a file, you'll see a comprehensive detail view with the follow
 
 #### File Information
 This section displays metadata about the file:
+#### File Information
+This section displays metadata about the file:
 - File ID and original filename
 - File hash (SHA-256)
 - File size and MIME type
 - Creation timestamp
-- Local path and disk status
+- Original file path and status (shows if the immutable original is available)
+- Processed file path and status (shows if the final processed file is available)
+
+#### Extracted Metadata (GPT)
+If metadata has been extracted by GPT, this section displays structured information including:
+- **Document Type**: Classification (Invoice, Receipt, Contract, etc.)
+- **Suggested Filename**: AI-recommended filename based on content
+- **Document Date**: Extracted date from document
+- **Sender (Absender)**: Sender or issuing party information
+- **Recipient (Empfänger)**: Recipient information
+- **Amount (Betrag)**: Financial amounts (for invoices, receipts)
+- **Account Number**: Bank account information
+- **Tags**: Document categories and labels
+
+**Show JSON**: Click this button to toggle the full metadata in JSON format. This is useful for:
+- Viewing all extracted fields at once
+- Debugging metadata extraction issues
+- Copying metadata for external use
+- Understanding the complete data structure
+
+#### Document Previews
+View your documents side-by-side in embedded PDF viewers:
+- **Original Document**: The immutable original file as first ingested, before any processing
+- **Processed Document**: The final file with embedded metadata
+
+**Features**:
+- In-browser PDF rendering for immediate viewing
+- Side-by-side comparison of original vs processed versions
+- Full 600px height previews for detailed review
+- **View Extracted Text** buttons below each preview to see the full text content
+
+**Text Extraction Modals**: Click "View Extracted Text" to open a fullscreen modal showing:
+- Complete extracted text from OCR or PDF text layer
+- Dark-themed, scrollable display for easy reading
+- Copy-friendly pre-formatted text
+- Close by clicking the close button or clicking outside the modal
+
+**Note**: The original file is stored in an immutable archive (`workdir/original/`) and is never modified. The processed file is stored in `workdir/processed/` with the suggested filename and embedded metadata.
 
 #### Processing History
 View the complete processing history with a timeline showing:
@@ -138,11 +177,23 @@ If your file is still available on disk, you can preview it directly in the brow
 - **Processed File**: The file after metadata has been embedded (if processing completed)
 
 Both previews support:
-- In-browser PDF viewing
-- Opening in a new tab for full-screen viewing
+- In-browser PDF viewing with embedded viewer
 - Side-by-side comparison of original and processed versions
+- Full text extraction viewing via modal overlays
 
-**Note**: The original file is stored in an immutable archive and is never modified. This ensures you always have access to the file exactly as it was uploaded, which is valuable for:
+**View Extracted Text**: Each preview includes a button to view the complete extracted text in a fullscreen modal. When you click this button:
+- The system extracts text from the PDF file on-demand using PyPDF2
+- A loading indicator shows while extraction is in progress
+- The extracted text is displayed in a scrollable, copy-friendly format
+- The text is cached so subsequent views load instantly
+
+This is useful for:
+- Verifying OCR accuracy
+- Searching within document content
+- Copying text for external use
+- Reading documents without downloading them
+
+**Note**: The original file is stored in an immutable archive (`workdir/original/`) and is never modified. This ensures you always have access to the file exactly as it was uploaded, which is valuable for:
 - Auditing and compliance
 - Debugging processing issues
 - Reprocessing with improved algorithms

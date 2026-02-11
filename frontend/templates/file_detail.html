@@ -2,6 +2,12 @@
 {% block title %}File Details{% endblock %}
 
 {% block head_extra %}
+  <!-- PDF.js library (Apache 2.0 License - compatible) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    // Configure PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
   <style>
     .detail-container {
       max-width: 1200px;
@@ -497,6 +503,80 @@
       background-color: #cbd5e0;
       cursor: not-allowed;
     }
+    
+    /* Text Modal Styles */
+    .text-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.7);
+      z-index: 1000;
+      overflow-y: auto;
+      padding: 2rem;
+    }
+    .text-modal-content {
+      background-color: white;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    }
+    
+    /* PDF Canvas Viewer Styles */
+    .pdf-viewer-container {
+      border: 2px solid #e2e8f0;
+      border-radius: 0.5rem;
+      overflow: hidden;
+      background-color: #f7fafc;
+      position: relative;
+    }
+    .pdf-canvas-wrapper {
+      overflow-y: auto;
+      max-height: 600px;
+      background-color: #525252;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1rem;
+    }
+    .pdf-canvas {
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      margin-bottom: 0.5rem;
+      background-color: white;
+    }
+    .pdf-controls {
+      background-color: #2d3748;
+      color: white;
+      padding: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.875rem;
+    }
+    .pdf-nav-btn {
+      background-color: #4299e1;
+      color: white;
+      border: none;
+      padding: 0.25rem 0.75rem;
+      border-radius: 0.25rem;
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+    .pdf-nav-btn:hover {
+      background-color: #3182ce;
+    }
+    .pdf-nav-btn:disabled {
+      background-color: #718096;
+      cursor: not-allowed;
+    }
+    .pdf-loading {
+      text-align: center;
+      padding: 3rem;
+      color: #718096;
+    }
   </style>
   {% if file %}
   <script>
@@ -637,6 +717,191 @@
         icon.classList.add('fa-chevron-up');
       }
     }
+    
+    // JavaScript for metadata JSON toggle
+    function toggleMetadata() {
+      const jsonView = document.getElementById('metadata-json-view');
+      const icon = document.getElementById('metadata-toggle-icon');
+      const btn = document.getElementById('metadata-toggle-btn');
+      
+      if (jsonView.style.display === 'none') {
+        jsonView.style.display = 'block';
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+        btn.innerHTML = '<i id="metadata-toggle-icon" class="fas fa-chevron-up"></i> Hide JSON';
+      } else {
+        jsonView.style.display = 'none';
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+        btn.innerHTML = '<i id="metadata-toggle-icon" class="fas fa-chevron-down"></i> Show JSON';
+      }
+    }
+    
+    // JavaScript for text modal toggle with on-demand loading
+    let textCache = { original: null, processed: null };
+    
+    async function loadAndShowText(type, fileId) {
+      const modalId = type + '-text-modal';
+      const loadingId = type + '-text-loading';
+      const contentId = type + '-text-content';
+      
+      // Show modal immediately
+      toggleTextModal(modalId);
+      
+      // If already loaded, just show it
+      if (textCache[type]) {
+        document.getElementById(loadingId).style.display = 'none';
+        document.getElementById(contentId).style.display = 'block';
+        document.getElementById(contentId).textContent = textCache[type];
+        return;
+      }
+      
+      // Show loading state
+      document.getElementById(loadingId).style.display = 'block';
+      document.getElementById(contentId).style.display = 'none';
+      
+      try {
+        const response = await fetch(`/files/${fileId}/text/${type}`);
+        if (!response.ok) {
+          throw new Error('Failed to extract text');
+        }
+        
+        const data = await response.json();
+        textCache[type] = data.text;
+        
+        // Show the text
+        document.getElementById(loadingId).style.display = 'none';
+        document.getElementById(contentId).style.display = 'block';
+        document.getElementById(contentId).textContent = data.text;
+      } catch (error) {
+        console.error('Error loading text:', error);
+        document.getElementById(loadingId).innerHTML = `
+          <div style="color: #f56565;">
+            <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+            <p>Failed to extract text from PDF</p>
+            <p style="font-size: 0.875rem;">${error.message}</p>
+          </div>
+        `;
+      }
+    }
+    
+    function toggleTextModal(modalId) {
+      const modal = document.getElementById(modalId);
+      if (modal.style.display === 'none' || modal.style.display === '') {
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden'; // Prevent background scrolling
+      } else {
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto'; // Re-enable scrolling
+      }
+    }
+    
+    // Close modal when clicking outside the content
+    window.onclick = function(event) {
+      const modals = document.querySelectorAll('.text-modal');
+      modals.forEach(modal => {
+        if (event.target === modal) {
+          modal.style.display = 'none';
+          document.body.style.overflow = 'auto';
+        }
+      });
+    }
+    
+    // PDF.js viewer functionality
+    const pdfViewers = {
+      original: { currentPage: 1, totalPages: 0, pdfDoc: null },
+      processed: { currentPage: 1, totalPages: 0, pdfDoc: null }
+    };
+    
+    async function loadPDF(type, fileId) {
+      const url = `/files/${fileId}/preview/${type}`;
+      const canvasWrapper = document.getElementById(`${type}-canvas-wrapper`);
+      
+      try {
+        // Load PDF document
+        const loadingTask = pdfjsLib.getDocument(url);
+        const pdf = await loadingTask.promise;
+        
+        pdfViewers[type].pdfDoc = pdf;
+        pdfViewers[type].totalPages = pdf.numPages;
+        pdfViewers[type].currentPage = 1;
+        
+        // Clear loading message and render first page
+        canvasWrapper.innerHTML = '';
+        await renderPage(type);
+        updatePageInfo(type);
+      } catch (error) {
+        console.error(`Error loading ${type} PDF:`, error);
+        canvasWrapper.innerHTML = `
+          <div class="pdf-loading">
+            <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: #f56565; margin-bottom: 1rem;"></i>
+            <p style="color: #f56565;">Failed to load PDF</p>
+          </div>
+        `;
+      }
+    }
+    
+    async function renderPage(type) {
+      const viewer = pdfViewers[type];
+      if (!viewer.pdfDoc) return;
+      
+      const canvasWrapper = document.getElementById(`${type}-canvas-wrapper`);
+      const page = await viewer.pdfDoc.getPage(viewer.currentPage);
+      
+      // Calculate scale to fit container width (max 600px width)
+      const viewport = page.getViewport({ scale: 1.0 });
+      const scale = Math.min(600 / viewport.width, 2.0);
+      const scaledViewport = page.getViewport({ scale });
+      
+      // Create canvas for this page
+      const canvas = document.createElement('canvas');
+      canvas.className = 'pdf-canvas';
+      canvas.height = scaledViewport.height;
+      canvas.width = scaledViewport.width;
+      
+      const context = canvas.getContext('2d');
+      const renderContext = {
+        canvasContext: context,
+        viewport: scaledViewport
+      };
+      
+      // Clear previous canvas and render new one
+      canvasWrapper.innerHTML = '';
+      canvasWrapper.appendChild(canvas);
+      
+      await page.render(renderContext).promise;
+    }
+    
+    function changePage(type, delta) {
+      const viewer = pdfViewers[type];
+      const newPage = viewer.currentPage + delta;
+      
+      if (newPage >= 1 && newPage <= viewer.totalPages) {
+        viewer.currentPage = newPage;
+        renderPage(type);
+        updatePageInfo(type);
+      }
+    }
+    
+    function updatePageInfo(type) {
+      const viewer = pdfViewers[type];
+      document.getElementById(`${type}-page-info`).textContent = 
+        `Page ${viewer.currentPage} of ${viewer.totalPages}`;
+      
+      document.getElementById(`${type}-prev-btn`).disabled = viewer.currentPage === 1;
+      document.getElementById(`${type}-next-btn`).disabled = viewer.currentPage === viewer.totalPages;
+    }
+    
+    // Load PDFs when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+      const fileId = {{ file.id | tojson }};
+      {% if original_file_exists %}
+      loadPDF('original', fileId);
+      {% endif %}
+      {% if processed_file_exists %}
+      loadPDF('processed', fileId);
+      {% endif %}
+    });
   </script>
   {% endif %}
 {% endblock %}
@@ -683,13 +948,15 @@
         <span class="detail-value">{{ file.created_at.strftime('%Y-%m-%d %H:%M:%S') if file.created_at else 'N/A' }}</span>
       </div>
       <div class="detail-item">
-        <span class="detail-label">Local Path</span>
-        <span class="detail-value" style="font-family: monospace; font-size: 0.875rem;">{{ file.local_filename }}</span>
+        <span class="detail-label">Original File Path</span>
+        <span class="detail-value" style="font-family: monospace; font-size: 0.875rem;">
+          {{ file.original_file_path if file.original_file_path else 'N/A' }}
+        </span>
       </div>
       <div class="detail-item">
-        <span class="detail-label">File on Disk</span>
+        <span class="detail-label">Original File Status</span>
         <span class="detail-value">
-          {% if file_exists %}
+          {% if original_file_exists %}
           <span class="file-status-indicator exists">
             <i class="fas fa-check-circle"></i> File exists
           </span>
@@ -700,6 +967,217 @@
           {% endif %}
         </span>
       </div>
+      <div class="detail-item">
+        <span class="detail-label">Processed File Path</span>
+        <span class="detail-value" style="font-family: monospace; font-size: 0.875rem;">
+          {{ file.processed_file_path if file.processed_file_path else 'N/A' }}
+        </span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">Processed File Status</span>
+        <span class="detail-value">
+          {% if processed_file_exists %}
+          <span class="file-status-indicator exists">
+            <i class="fas fa-check-circle"></i> File exists
+          </span>
+          {% else %}
+          <span class="file-status-indicator missing">
+            <i class="fas fa-times-circle"></i> File not found
+          </span>
+          {% endif %}
+        </span>
+      </div>
+    </div>
+  </div>
+  
+  <!-- GPT Metadata Card -->
+  {% if gpt_metadata %}
+  <div class="detail-card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <h3 style="margin: 0;">Extracted Metadata (GPT)</h3>
+      <button id="metadata-toggle-btn" onclick="toggleMetadata()" style="background-color: #4299e1; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;">
+        <i id="metadata-toggle-icon" class="fas fa-chevron-down"></i> Show JSON
+      </button>
+    </div>
+    
+    <div class="detail-grid">
+      {% if gpt_metadata.document_type %}
+      <div class="detail-item">
+        <span class="detail-label">Document Type</span>
+        <span class="detail-value">{{ gpt_metadata.document_type }}</span>
+      </div>
+      {% endif %}
+      
+      {% if gpt_metadata.filename %}
+      <div class="detail-item">
+        <span class="detail-label">Suggested Filename</span>
+        <span class="detail-value" style="font-family: monospace; font-size: 0.875rem;">{{ gpt_metadata.filename }}</span>
+      </div>
+      {% endif %}
+      
+      {% if gpt_metadata.date %}
+      <div class="detail-item">
+        <span class="detail-label">Document Date</span>
+        <span class="detail-value">{{ gpt_metadata.date }}</span>
+      </div>
+      {% endif %}
+      
+      {% if gpt_metadata.absender %}
+      <div class="detail-item">
+        <span class="detail-label">Sender (Absender)</span>
+        <span class="detail-value">{{ gpt_metadata.absender }}</span>
+      </div>
+      {% endif %}
+      
+      {% if gpt_metadata.empfaenger %}
+      <div class="detail-item">
+        <span class="detail-label">Recipient (Empfänger)</span>
+        <span class="detail-value">{{ gpt_metadata.empfaenger }}</span>
+      </div>
+      {% endif %}
+      
+      {% if gpt_metadata.betrag %}
+      <div class="detail-item">
+        <span class="detail-label">Amount (Betrag)</span>
+        <span class="detail-value">{{ gpt_metadata.betrag }}</span>
+      </div>
+      {% endif %}
+      
+      {% if gpt_metadata.kontonummer %}
+      <div class="detail-item">
+        <span class="detail-label">Account Number</span>
+        <span class="detail-value" style="font-family: monospace;">{{ gpt_metadata.kontonummer }}</span>
+      </div>
+      {% endif %}
+      
+      {% if gpt_metadata.tags %}
+      <div class="detail-item">
+        <span class="detail-label">Tags</span>
+        <span class="detail-value">
+          {% if gpt_metadata.tags is string %}
+            {{ gpt_metadata.tags }}
+          {% else %}
+            {{ ', '.join(gpt_metadata.tags) }}
+          {% endif %}
+        </span>
+      </div>
+      {% endif %}
+    </div>
+    
+    <!-- Collapsible JSON view -->
+    <div id="metadata-json-view" style="display: none; margin-top: 1rem;">
+      <pre style="background-color: #1a202c; color: #e2e8f0; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; font-size: 0.875rem; line-height: 1.5;">{{ gpt_metadata | tojson(indent=2) }}</pre>
+    </div>
+  </div>
+  {% endif %}
+  
+  <!-- PDF Preview Card -->
+  <div class="detail-card">
+    <h3>Document Previews</h3>
+    
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 1rem;">
+      <!-- Original PDF Preview -->
+      <div>
+        <h4 style="font-weight: 600; color: #2d3748; margin-bottom: 0.5rem;">Original Document</h4>
+        {% if original_file_exists %}
+        <div class="pdf-viewer-container" id="original-pdf-container">
+          <div class="pdf-controls">
+            <button class="pdf-nav-btn" onclick="changePage('original', -1)" id="original-prev-btn">← Previous</button>
+            <span id="original-page-info">Loading...</span>
+            <button class="pdf-nav-btn" onclick="changePage('original', 1)" id="original-next-btn">Next →</button>
+          </div>
+          <div class="pdf-canvas-wrapper" id="original-canvas-wrapper">
+            <div class="pdf-loading">
+              <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+              <p>Loading PDF...</p>
+            </div>
+          </div>
+        </div>
+        <button 
+          onclick="loadAndShowText('original', {{ file.id }})" 
+          style="margin-top: 0.5rem; background-color: #4299e1; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600; width: 100%;"
+        >
+          <i class="fas fa-file-alt"></i> View Extracted Text
+        </button>
+        {% else %}
+        <div style="text-align: center; padding: 3rem; background-color: #f7fafc; border-radius: 0.5rem; color: #718096;">
+          <i class="fas fa-file-pdf" style="font-size: 3rem; opacity: 0.5; margin-bottom: 1rem;"></i>
+          <p>Original file not available</p>
+        </div>
+        {% endif %}
+      </div>
+      
+      <!-- Processed PDF Preview -->
+      <div>
+        <h4 style="font-weight: 600; color: #2d3748; margin-bottom: 0.5rem;">Processed Document</h4>
+        {% if processed_file_exists %}
+        <div class="pdf-viewer-container" id="processed-pdf-container">
+          <div class="pdf-controls">
+            <button class="pdf-nav-btn" onclick="changePage('processed', -1)" id="processed-prev-btn">← Previous</button>
+            <span id="processed-page-info">Loading...</span>
+            <button class="pdf-nav-btn" onclick="changePage('processed', 1)" id="processed-next-btn">Next →</button>
+          </div>
+          <div class="pdf-canvas-wrapper" id="processed-canvas-wrapper">
+            <div class="pdf-loading">
+              <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+              <p>Loading PDF...</p>
+            </div>
+          </div>
+        </div>
+        <button 
+          onclick="loadAndShowText('processed', {{ file.id }})" 
+          style="margin-top: 0.5rem; background-color: #48bb78; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600; width: 100%;"
+        >
+          <i class="fas fa-file-alt"></i> View Extracted Text
+        </button>
+        {% else %}
+        <div style="text-align: center; padding: 3rem; background-color: #f7fafc; border-radius: 0.5rem; color: #718096;">
+          <i class="fas fa-file-pdf" style="font-size: 3rem; opacity: 0.5; margin-bottom: 1rem;"></i>
+          <p>Processed file not available yet</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  
+  <!-- Text Modals (Hidden by default, loaded on-demand) -->
+  <!-- Original Text Modal -->
+  <div id="original-text-modal" class="text-modal" style="display: none;">
+    <div class="text-modal-content">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 2px solid #e2e8f0;">
+        <h3 style="margin: 0; color: #2d3748;">Extracted Text (Original)</h3>
+        <button 
+          onclick="toggleTextModal('original-text-modal')" 
+          style="background-color: #f56565; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;"
+        >
+          <i class="fas fa-times"></i> Close
+        </button>
+      </div>
+      <div id="original-text-loading" style="text-align: center; padding: 3rem; color: #4299e1;">
+        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+        <p>Extracting text from PDF...</p>
+      </div>
+      <pre id="original-text-content" style="display: none; background-color: #1a202c; color: #e2e8f0; padding: 1.5rem; border-radius: 0.5rem; max-height: 600px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; font-size: 0.875rem; line-height: 1.6;"></pre>
+    </div>
+  </div>
+  
+  <!-- Processed Text Modal -->
+  <div id="processed-text-modal" class="text-modal" style="display: none;">
+    <div class="text-modal-content">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 2px solid #e2e8f0;">
+        <h3 style="margin: 0; color: #2d3748;">Extracted Text (Processed)</h3>
+        <button 
+          onclick="toggleTextModal('processed-text-modal')" 
+          style="background-color: #f56565; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;"
+        >
+          <i class="fas fa-times"></i> Close
+        </button>
+      </div>
+      <div id="processed-text-loading" style="text-align: center; padding: 3rem; color: #48bb78;">
+        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+        <p>Extracting text from PDF...</p>
+      </div>
+      <pre id="processed-text-content" style="display: none; background-color: #1a202c; color: #e2e8f0; padding: 1.5rem; border-radius: 0.5rem; max-height: 600px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; font-size: 0.875rem; line-height: 1.6;"></pre>
     </div>
   </div>
   

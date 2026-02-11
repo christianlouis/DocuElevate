@@ -2,6 +2,7 @@
 File management views for displaying and managing files.
 """
 
+import os
 from typing import Optional
 
 from fastapi import Depends, Query, Request
@@ -133,6 +134,7 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
     Return the file detail page showing processing history and file information
     """
     try:
+        import json
         import os
 
         from app.models import FileRecord, ProcessingLog
@@ -153,24 +155,28 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
             .all()
         )
 
-        # Check if file exists on disk
-        file_exists = os.path.exists(file_record.local_filename) if file_record.local_filename else False
+        # Check if original file exists (use persisted path from database)
+        original_file_exists = False
+        if file_record.original_file_path and os.path.exists(file_record.original_file_path):
+            original_file_exists = True
 
-        # Check if processed file exists
-        processed_exists = False
-        workdir = settings.workdir
-        processed_dir = os.path.join(workdir, "processed")
-        if os.path.exists(processed_dir):
-            base_filename = os.path.splitext(file_record.original_filename)[0]
-            potential_paths = [
-                os.path.join(processed_dir, f"{file_record.filehash}.pdf"),
-                os.path.join(processed_dir, f"{base_filename}_processed.pdf"),
-                os.path.join(processed_dir, file_record.original_filename),
-            ]
-            for path in potential_paths:
-                if os.path.exists(path):
-                    processed_exists = True
-                    break
+        # Check if processed file exists (use persisted path from database)
+        processed_file_exists = False
+        if file_record.processed_file_path and os.path.exists(file_record.processed_file_path):
+            processed_file_exists = True
+
+        # Load metadata from JSON file if it exists
+        gpt_metadata = None
+        if file_record.processed_file_path:
+            # Metadata JSON file is stored alongside the processed PDF
+            metadata_path = os.path.splitext(file_record.processed_file_path)[0] + ".json"
+            if os.path.exists(metadata_path):
+                try:
+                    with open(metadata_path, "r", encoding="utf-8") as f:
+                        gpt_metadata = json.load(f)
+                        logger.debug(f"Loaded GPT metadata from {metadata_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to load metadata from {metadata_path}: {e}")
 
         # Compute processing flow for visualization
         flow_data = _compute_processing_flow(logs)
@@ -190,8 +196,9 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
                 "request": request,
                 "file": file_record,
                 "logs": logs,
-                "file_exists": file_exists,
-                "processed_exists": processed_exists,
+                "original_file_exists": original_file_exists,
+                "processed_file_exists": processed_file_exists,
+                "gpt_metadata": gpt_metadata,
                 "flow_data": flow_data,
                 "step_summary": step_summary,
             },
@@ -396,3 +403,137 @@ def _compute_step_summary(logs):
         "total_main_steps": len(main_steps_seen),
         "total_upload_tasks": len(upload_tasks_seen),
     }
+
+
+@router.get("/files/{file_id}/preview/original")
+@require_login
+def preview_original_file(request: Request, file_id: int, db: Session = Depends(get_db)):
+    """
+    Serve the original (pre-processing) PDF file for preview
+    """
+    import os
+
+    from fastapi import HTTPException, status
+    from fastapi.responses import FileResponse
+
+    from app.models import FileRecord
+
+    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    if not file_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    if not file_record.original_file_path or not os.path.exists(file_record.original_file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Original file not found on disk")
+
+    return FileResponse(
+        path=file_record.original_file_path,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "inline"},
+    )
+
+
+@router.get("/files/{file_id}/preview/processed")
+@require_login
+def preview_processed_file(request: Request, file_id: int, db: Session = Depends(get_db)):
+    """
+    Serve the processed (with embedded metadata) PDF file for preview
+    """
+    import os
+
+    from fastapi import HTTPException, status
+    from fastapi.responses import FileResponse
+
+    from app.models import FileRecord
+
+    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    if not file_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    if not file_record.processed_file_path or not os.path.exists(file_record.processed_file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Processed file not found on disk")
+
+    return FileResponse(
+        path=file_record.processed_file_path,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "inline"},
+    )
+
+
+@router.get("/files/{file_id}/text/original")
+@require_login
+def get_original_text(request: Request, file_id: int, db: Session = Depends(get_db)):
+    """
+    Extract and return text from the original PDF file on-demand
+    """
+    import os
+
+    from fastapi import HTTPException, status
+    from fastapi.responses import JSONResponse
+
+    from app.models import FileRecord
+
+    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    if not file_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    if not file_record.original_file_path or not os.path.exists(file_record.original_file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Original file not found on disk")
+
+    try:
+        # Extract text from PDF using PyPDF2
+        from PyPDF2 import PdfReader
+
+        reader = PdfReader(file_record.original_file_path)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text() + "\n\n"
+
+        if not text.strip():
+            text = "(No text could be extracted from this PDF - it may be a scanned image without OCR)"
+
+        return JSONResponse(content={"text": text.strip(), "page_count": len(reader.pages)})
+    except Exception as e:
+        logger.error(f"Error extracting text from original file {file_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to extract text: {str(e)}"
+        )
+
+
+@router.get("/files/{file_id}/text/processed")
+@require_login
+def get_processed_text(request: Request, file_id: int, db: Session = Depends(get_db)):
+    """
+    Extract and return text from the processed PDF file on-demand
+    """
+    import os
+
+    from fastapi import HTTPException, status
+    from fastapi.responses import JSONResponse
+
+    from app.models import FileRecord
+
+    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    if not file_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    if not file_record.processed_file_path or not os.path.exists(file_record.processed_file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Processed file not found on disk")
+
+    try:
+        # Extract text from PDF using PyPDF2
+        from PyPDF2 import PdfReader
+
+        reader = PdfReader(file_record.processed_file_path)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text() + "\n\n"
+
+        if not text.strip():
+            text = "(No text could be extracted from this PDF - it may be a scanned image without OCR)"
+
+        return JSONResponse(content={"text": text.strip(), "page_count": len(reader.pages)})
+    except Exception as e:
+        logger.error(f"Error extracting text from processed file {file_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to extract text: {str(e)}"
+        )
