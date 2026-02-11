@@ -6,7 +6,7 @@ import logging
 import mimetypes
 import os
 import uuid
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from sqlalchemy import asc, desc
@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+DbSession = Annotated[Session, Depends(get_db)]
+
 
 def get_limiter():
     """Get the limiter from app state."""
@@ -39,7 +41,7 @@ def get_limiter():
 @require_login
 def list_files_api(
     request: Request,
-    db: Session = Depends(get_db),
+    db: DbSession,
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(50, ge=1, le=200, description="Items per page"),
     sort_by: str = Query(
@@ -152,7 +154,7 @@ def _get_file_processing_status(db: Session, file_id: int) -> dict:
 
 @router.get("/files/{file_id}")
 @require_login
-def get_file_details(request: Request, file_id: int, db: Session = Depends(get_db)):
+def get_file_details(request: Request, file_id: int, db: DbSession):
     """
     Get detailed information about a specific file including processing history.
     """
@@ -205,7 +207,7 @@ def get_file_details(request: Request, file_id: int, db: Session = Depends(get_d
 
 @router.delete("/files/{file_id}")
 @require_login
-def delete_file_record(request: Request, file_id: int, db: Session = Depends(get_db)):
+def delete_file_record(request: Request, file_id: int, db: DbSession):
     """
     Delete a file record from the database.
     This only removes the database entry, not the actual file.
@@ -240,7 +242,7 @@ def delete_file_record(request: Request, file_id: int, db: Session = Depends(get
 
 @router.post("/files/bulk-delete")
 @require_login
-def bulk_delete_files(request: Request, file_ids: List[int], db: Session = Depends(get_db)):
+def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
     """
     Delete multiple file records from the database.
     This only removes the database entries, not the actual files.
@@ -284,7 +286,7 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: Session = Depen
 
 @router.post("/files/bulk-reprocess")
 @require_login
-def bulk_reprocess_files(request: Request, file_ids: List[int], db: Session = Depends(get_db)):
+def bulk_reprocess_files(request: Request, file_ids: List[int], db: DbSession):
     """
     Reprocess multiple files by queuing them for processing.
     """
@@ -345,7 +347,7 @@ def bulk_reprocess_files(request: Request, file_ids: List[int], db: Session = De
 
 @router.post("/files/{file_id}/reprocess")
 @require_login
-def reprocess_single_file(request: Request, file_id: int, db: Session = Depends(get_db)):
+def reprocess_single_file(request: Request, file_id: int, db: DbSession):
     """
     Reprocess a single file by queuing it for processing again.
 
@@ -487,10 +489,10 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
 def retry_subtask(
     request: Request,
     file_id: int,
+    db: DbSession,
     subtask_name: str = Query(
         ..., description="Name of the subtask to retry (e.g., 'upload_to_dropbox', 'extract_metadata_with_gpt')"
     ),
-    db: Session = Depends(get_db),
 ):
     """
     Retry a specific failed subtask for a file.
@@ -603,8 +605,8 @@ def retry_subtask(
 def get_file_preview(
     request: Request,
     file_id: int,
+    db: DbSession,
     version: str = Query("original", description="original or processed"),
-    db: Session = Depends(get_db),
 ):
     """
     Get file content for preview (original or processed version).
@@ -675,8 +677,8 @@ def get_file_preview(
 def download_file(
     request: Request,
     file_id: int,
+    db: DbSession,
     version: str = Query("original", description="original or processed"),
-    db: Session = Depends(get_db),
 ):
     """
     Download file (original or processed version) as attachment.

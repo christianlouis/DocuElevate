@@ -3,7 +3,7 @@ API endpoints for managing application settings.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Annotated, Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -39,6 +39,10 @@ def require_admin(request: Request) -> dict:
     return user
 
 
+DbSession = Annotated[Session, Depends(get_db)]
+AdminUser = Annotated[dict, Depends(require_admin)]
+
+
 class SettingUpdate(BaseModel):
     """Model for updating a setting"""
 
@@ -63,7 +67,7 @@ class SettingsListResponse(BaseModel):
 
 
 @router.get("/", response_model=SettingsListResponse)
-async def get_settings(request: Request, db: Session = Depends(get_db), admin: dict = Depends(require_admin)):
+async def get_settings(request: Request, db: DbSession, admin: AdminUser):
     """
     Get all application settings with metadata.
     Admin only.
@@ -89,7 +93,7 @@ async def get_settings(request: Request, db: Session = Depends(get_db), admin: d
 
 
 @router.get("/{key}", response_model=SettingResponse)
-async def get_setting(key: str, request: Request, db: Session = Depends(get_db), admin: dict = Depends(require_admin)):
+async def get_setting(key: str, request: Request, db: DbSession, admin: AdminUser):
     """
     Get a specific setting by key.
     Admin only.
@@ -114,8 +118,8 @@ async def update_setting(
     key: str,
     setting: SettingUpdate,
     request: Request,
-    db: Session = Depends(get_db),
-    admin: dict = Depends(require_admin),
+    db: DbSession,
+    admin: AdminUser,
 ):
     """
     Update a specific setting.
@@ -156,9 +160,7 @@ async def update_setting(
 
 
 @router.delete("/{key}")
-async def delete_setting(
-    key: str, request: Request, db: Session = Depends(get_db), admin: dict = Depends(require_admin)
-):
+async def delete_setting(key: str, request: Request, db: DbSession, admin: AdminUser):
     """
     Delete a setting from the database (reverts to environment variable or default).
     Admin only.
@@ -182,9 +184,7 @@ async def delete_setting(
 
 
 @router.post("/bulk-update")
-async def bulk_update_settings(
-    updates: list[SettingUpdate], request: Request, db: Session = Depends(get_db), admin: dict = Depends(require_admin)
-):
+async def bulk_update_settings(updates: list[SettingUpdate], request: Request, db: DbSession, admin: AdminUser):
     """
     Update multiple settings at once.
     Admin only.
