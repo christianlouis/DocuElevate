@@ -347,8 +347,8 @@ def _compute_step_summary(logs):
     main_counts = {"queued": 0, "in_progress": 0, "success": 0, "failure": 0}
     upload_counts = {"queued": 0, "in_progress": 0, "success": 0, "failure": 0}
 
-    # Track which steps we've seen
-    main_steps_seen = set()
+    # Track latest status for each step (logs are ordered by timestamp desc)
+    main_steps_seen = {}
     upload_tasks_seen = {}
 
     for log in logs:
@@ -363,15 +363,20 @@ def _compute_step_summary(logs):
         is_upload = any(step_name.startswith(prefix) for prefix in upload_prefixes)
 
         if is_upload:
-            # Track latest status for each unique upload task
-            upload_tasks_seen[step_name] = status
+            # Track latest status for each unique upload task (first seen is latest)
+            if step_name not in upload_tasks_seen:
+                upload_tasks_seen[step_name] = status
         elif step_name in main_steps:
-            # Track latest status for main steps
-            main_steps_seen.add(step_name)
-            if status in main_counts:
-                main_counts[status] += 1
+            # Track latest status for main steps (first seen is latest)
+            if step_name not in main_steps_seen:
+                main_steps_seen[step_name] = status
 
-    # Count upload task statuses
+    # Count main step statuses from latest status per step
+    for task_status in main_steps_seen.values():
+        if task_status in main_counts:
+            main_counts[task_status] += 1
+
+    # Count upload task statuses from latest status per task
     for task_status in upload_tasks_seen.values():
         if task_status in upload_counts:
             upload_counts[task_status] += 1

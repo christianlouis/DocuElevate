@@ -76,13 +76,20 @@ def _compute_status_from_logs(logs: List[ProcessingLog]) -> Dict:
     if not logs:
         return {"status": "pending", "last_step": None, "has_errors": False, "total_steps": 0}
 
-    # Check for failures
-    has_errors = any(log.status == "failure" for log in logs)
+    # Get the latest status for each unique step
+    # Since logs are ordered by timestamp desc, the first occurrence is the latest
+    latest_by_step = {}
+    for log in logs:
+        if log.step_name not in latest_by_step:
+            latest_by_step[log.step_name] = log
 
-    # Check if any in progress
-    in_progress = any(log.status == "in_progress" for log in logs)
+    # Check for failures in latest statuses
+    has_errors = any(log.status == "failure" for log in latest_by_step.values())
 
-    # Get the latest log
+    # Check if any step is currently in progress (based on latest status per step)
+    in_progress = any(log.status == "in_progress" for log in latest_by_step.values())
+
+    # Get the overall latest log
     latest_log = logs[0]
 
     # Determine overall status
