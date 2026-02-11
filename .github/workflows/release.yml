@@ -49,14 +49,16 @@ jobs:
           semantic-release version
           semantic-release publish
       
-      - name: Update VERSION file if changed
+      - name: Update build metadata files if changed
         run: |
-          if [ -f VERSION ]; then
-            git add VERSION
-            if ! git diff --staged --quiet; then
-              git commit -m "chore(release): update VERSION file [skip ci]"
-              git push
+          for f in VERSION BUILD_DATE GIT_SHA RUNTIME_INFO; do
+            if [ -f "$f" ]; then
+              git add "$f"
             fi
+          done
+          if ! git diff --staged --quiet; then
+            git commit -m "chore(release): update build metadata files [skip ci]"
+            git push
           fi
       
       - name: Trigger Docker Build on Tag
