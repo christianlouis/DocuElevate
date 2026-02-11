@@ -4,13 +4,44 @@ Pytest configuration and shared fixtures for DocuElevate tests.
 
 import os
 import tempfile
-from typing import Generator
+from typing import Dict, Generator, Optional
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+
+# Capture original environment variables before overriding with test defaults.
+# This allows integration tests to detect when real API credentials are available
+# (e.g., injected via GitHub Actions secrets) and run live API verification.
+_EXTERNAL_API_ENV_KEYS = [
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "AZURE_AI_KEY",
+    "AZURE_ENDPOINT",
+    "AZURE_REGION",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "S3_BUCKET_NAME",
+    "S3_FOLDER_PREFIX",
+    "DROPBOX_APP_KEY",
+    "DROPBOX_APP_SECRET",
+    "DROPBOX_REFRESH_TOKEN",
+    "ONEDRIVE_CLIENT_ID",
+    "ONEDRIVE_CLIENT_SECRET",
+    "ONEDRIVE_REFRESH_TOKEN",
+    "ONEDRIVE_TENANT_ID",
+    "ONEDRIVE_FOLDER_PATH",
+    "GOOGLE_DRIVE_CREDENTIALS_JSON",
+    "GOOGLE_DRIVE_FOLDER_ID",
+    "AUTHENTIK_CLIENT_ID",
+    "AUTHENTIK_CLIENT_SECRET",
+    "AUTHENTIK_CONFIG_URL",
+    "SESSION_SECRET",
+]
+_PLACEHOLDER_VALUES = {"test-key", "test", "", "NOT_SET"}
+_original_env: Dict[str, Optional[str]] = {key: os.environ.get(key) for key in _EXTERNAL_API_ENV_KEYS}
 
 # Set test environment variables before importing app
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
@@ -165,6 +196,26 @@ def mock_openai_response():
 def mock_azure_response():
     """Mock Azure Document Intelligence API response for testing."""
     return {"analyzeResult": {"content": "Test document content extracted by OCR", "pages": [{"pageNumber": 1}]}}
+
+
+def has_real_env(*keys: str) -> bool:
+    """Check if real (non-placeholder) environment variables were set before test overrides.
+
+    Returns True only if ALL specified keys had non-placeholder values in the
+    original environment.  Used by integration tests to decide whether to skip
+    when real credentials are unavailable.
+    """
+    for key in keys:
+        value = _original_env.get(key)
+        if value is None or value in _PLACEHOLDER_VALUES:
+            return False
+    return True
+
+
+@pytest.fixture(scope="session")
+def original_env() -> Dict[str, Optional[str]]:
+    """Provide access to the original environment variables captured before test overrides."""
+    return dict(_original_env)
 
 
 # Markers for categorizing tests
