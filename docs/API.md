@@ -97,9 +97,11 @@ curl -X GET "http://<your-docuelevate-instance>/api/files" \
 
 ### Document Upload
 
-**POST** `/api/upload`
+#### Upload from Computer
 
-Upload one or more files for processing.
+**POST** `/api/ui-upload`
+
+Upload one or more files from your computer for processing.
 
 **Request**: 
 - Multipart form data with file(s)
@@ -112,6 +114,68 @@ Upload one or more files for processing.
   "message": "Files uploaded and queued for processing"
 }
 ```
+
+#### Upload from URL
+
+**POST** `/api/process-url`
+
+Download a file from a URL and enqueue it for processing.
+
+**Security Features**:
+- SSRF protection: Blocks private IPs, localhost, and cloud metadata endpoints
+- File type validation: Only allows supported document/image types
+- File size limits: Enforces maximum upload size
+- Timeout protection: Prevents hanging on slow/malicious servers
+
+**Request Body**:
+```json
+{
+  "url": "https://example.com/document.pdf",
+  "filename": "my-document.pdf"  // optional
+}
+```
+
+**Response**:
+```json
+{
+  "task_id": "abc123",
+  "status": "queued",
+  "message": "File downloaded from URL and queued for processing",
+  "filename": "document.pdf",
+  "size": 1024000
+}
+```
+
+**Error Responses**:
+- `400`: Invalid URL, unsupported file type, or SSRF protection triggered
+- `408`: Request timeout (server too slow)
+- `413`: File too large
+- `502`: Connection error
+- `404`: File not found at URL
+- `500`: Server error
+
+**Supported File Types**:
+- PDF documents
+- Microsoft Office (Word, Excel, PowerPoint)
+- Images (JPEG, PNG, GIF, BMP, TIFF, WebP, SVG)
+- Plain text and CSV files
+
+**Example**:
+```bash
+curl -X POST "http://localhost:8000/api/process-url" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/invoice.pdf",
+    "filename": "march-invoice.pdf"
+  }'
+```
+
+**SSRF Protection**:
+The endpoint blocks access to:
+- Private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+- Localhost (127.0.0.1, ::1)
+- Link-local addresses (169.254.0.0/16)
+- Cloud metadata endpoints (169.254.169.254, metadata.google.internal)
 
 ### Get Files
 
