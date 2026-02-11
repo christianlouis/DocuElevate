@@ -259,7 +259,6 @@ class TestMetricsCountingBugFixes:
         This test ensures the function correctly selects the latest status per step
         based on timestamp, not position in the list.
         """
-        from datetime import datetime, timedelta
 
         class MockLog:
             def __init__(self, step_name, status, timestamp):
@@ -299,7 +298,6 @@ class TestMetricsCountingBugFixes:
 
         This ensures the function truly is order-independent.
         """
-        from datetime import datetime, timedelta
 
         class MockLog:
             def __init__(self, step_name, status, timestamp):

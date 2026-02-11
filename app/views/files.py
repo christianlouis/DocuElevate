@@ -375,12 +375,12 @@ def _compute_step_summary(logs):
                 main_steps_seen[step_name] = (log.timestamp, status)
 
     # Count main step statuses from latest status per step
-    for timestamp, task_status in main_steps_seen.values():
+    for _, task_status in main_steps_seen.values():
         if task_status in main_counts:
             main_counts[task_status] += 1
 
     # Count upload task statuses from latest status per task
-    for timestamp, task_status in upload_tasks_seen.values():
+    for _, task_status in upload_tasks_seen.values():
         if task_status in upload_counts:
             upload_counts[task_status] += 1
 
