@@ -7,8 +7,9 @@ This test module verifies that:
 3. Files with completed steps show "completed" not "processing"
 """
 
-import pytest
 from datetime import datetime, timedelta
+
+import pytest
 
 from app.utils.file_status import _compute_status_from_logs
 from app.views.files import _compute_step_summary
@@ -249,3 +250,84 @@ class TestMetricsCountingBugFixes:
         assert summary["uploads"]["success"] == 4  # 1 upload + 3 queue
         assert summary["uploads"]["failure"] == 1  # 1 upload
         assert summary["uploads"]["in_progress"] == 1  # 1 upload
+
+    def test_order_independent_ascending(self):
+        """
+        Test that _compute_step_summary works correctly with ascending order logs
+        (as used in production by file_detail_page).
+
+        This test ensures the function correctly selects the latest status per step
+        based on timestamp, not position in the list.
+        """
+        from datetime import datetime, timedelta
+
+        class MockLog:
+            def __init__(self, step_name, status, timestamp):
+                self.step_name = step_name
+                self.status = status
+                self.timestamp = timestamp
+
+        now = datetime.now()
+        # Logs ordered by timestamp ASCENDING (oldest first) - like production
+        logs = [
+            # Older in_progress logs (should be ignored)
+            MockLog("hash_file", "in_progress", now - timedelta(minutes=7)),
+            MockLog("create_file_record", "in_progress", now - timedelta(minutes=6)),
+            MockLog("extract_metadata_with_gpt", "in_progress", now - timedelta(minutes=5)),
+            MockLog("upload_to_dropbox", "in_progress", now - timedelta(minutes=4)),
+            # Latest status for each step (all success) - at the end
+            MockLog("hash_file", "success", now - timedelta(minutes=3)),
+            MockLog("create_file_record", "success", now - timedelta(minutes=2)),
+            MockLog("extract_metadata_with_gpt", "success", now - timedelta(minutes=1)),
+            MockLog("upload_to_dropbox", "success", now),
+        ]
+
+        summary = _compute_step_summary(logs)
+
+        # Should use latest status (success) not first seen (in_progress)
+        assert summary["total_main_steps"] == 3
+        assert summary["main"]["success"] == 3
+        assert summary["main"]["in_progress"] == 0
+
+        assert summary["total_upload_tasks"] == 1
+        assert summary["uploads"]["success"] == 1
+        assert summary["uploads"]["in_progress"] == 0
+
+    def test_order_independent_mixed(self):
+        """
+        Test that _compute_step_summary works correctly with randomly ordered logs.
+
+        This ensures the function truly is order-independent.
+        """
+        from datetime import datetime, timedelta
+
+        class MockLog:
+            def __init__(self, step_name, status, timestamp):
+                self.step_name = step_name
+                self.status = status
+                self.timestamp = timestamp
+
+        now = datetime.now()
+        # Logs in mixed order
+        logs = [
+            MockLog("upload_to_s3", "in_progress", now - timedelta(minutes=8)),
+            MockLog("hash_file", "success", now - timedelta(minutes=1)),  # Latest for hash_file
+            MockLog("upload_to_dropbox", "in_progress", now - timedelta(minutes=7)),
+            MockLog("hash_file", "in_progress", now - timedelta(minutes=5)),  # Older, should be ignored
+            MockLog("upload_to_s3", "failure", now - timedelta(minutes=2)),  # Latest for S3
+            MockLog("create_file_record", "in_progress", now - timedelta(minutes=6)),
+            MockLog("upload_to_dropbox", "success", now),  # Latest for Dropbox
+            MockLog("create_file_record", "success", now - timedelta(minutes=3)),  # Latest for create
+        ]
+
+        summary = _compute_step_summary(logs)
+
+        # Should correctly identify latest status for each step
+        assert summary["total_main_steps"] == 2
+        assert summary["main"]["success"] == 2  # hash_file and create_file_record
+        assert summary["main"]["in_progress"] == 0
+
+        assert summary["total_upload_tasks"] == 2
+        assert summary["uploads"]["success"] == 1  # dropbox
+        assert summary["uploads"]["failure"] == 1  # s3
+        assert summary["uploads"]["in_progress"] == 0
