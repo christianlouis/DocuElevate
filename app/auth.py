@@ -130,9 +130,7 @@ async def oauth_callback(request: Request):
         return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
     except Exception as e:
         print(f"OAuth authentication error: {str(e)}")
-        return RedirectResponse(
-            url=f"/login?error=Authentication+failed:+{str(e)}", status_code=status.HTTP_302_FOUND
-        )
+        return RedirectResponse(url=f"/login?error=Authentication+failed:+{str(e)}", status_code=status.HTTP_302_FOUND)
 
 
 async def auth(request: Request):
