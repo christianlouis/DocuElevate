@@ -264,12 +264,18 @@ Tests are organized using pytest markers:
 
 #### Running Tests in CI
 
-Tests run automatically in GitHub Actions for all pull requests. The CI environment:
+Tests run automatically in GitHub Actions for all pull requests. The CI workflow splits every check into an **independent parallel job** so that a failure in one tool never blocks the others:
 
-1. Installs all dependencies from `requirements-dev.txt`
-2. Runs pytest with coverage
-3. Uploads coverage reports to Codecov
-4. Fails the build if tests don't pass or coverage drops
+| Job | Tool | What it checks |
+|--------|--------|--------------------------------------|
+| `test` | pytest | Unit/integration tests + coverage |
+| `flake8`| flake8 | PEP 8 style |
+| `black` | black | Code formatting |
+| `mypy` | mypy | Static type checking |
+| `pylint`| pylint | Code quality |
+| `bandit`| bandit | Security vulnerabilities |
+
+All jobs are enforced — failures in any linter will block the PR. For full details see [docs/CIWorkflow.md](docs/CIWorkflow.md).
 
 ### Code Style
 
@@ -317,6 +323,7 @@ DocuElevate/
 ### Documentation
 - **[AGENTIC_CODING.md](AGENTIC_CODING.md)** - Comprehensive guide for AI agents and developers
 - **[README.md](README.md)** - Project overview and quickstart
+- **[docs/CIWorkflow.md](docs/CIWorkflow.md)** - CI pipeline and linter details for maintainers
 - **[ROADMAP.md](ROADMAP.md)** - Future features and long-term vision
 - **[MILESTONES.md](MILESTONES.md)** - Release planning and versioning
 - **[TODO.md](TODO.md)** - Current tasks and priorities
