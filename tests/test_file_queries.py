@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import FileRecord, ProcessingLog
+from app.models import FileRecord, FileProcessingStep
 from app.utils.file_queries import apply_status_filter
 
 
@@ -28,7 +28,7 @@ def db_session():
 @pytest.fixture
 def sample_files(db_session):
     """Create sample files with different processing statuses."""
-    # File 1: pending (no logs)
+    # File 1: pending (no steps)
     file1 = FileRecord(
         filehash="hash1",
         original_filename="pending.pdf",
@@ -39,7 +39,7 @@ def sample_files(db_session):
     db_session.add(file1)
     db_session.flush()
 
-    # File 2: processing (has in_progress log)
+    # File 2: processing (has in_progress step)
     file2 = FileRecord(
         filehash="hash2",
         original_filename="processing.pdf",
@@ -50,16 +50,14 @@ def sample_files(db_session):
     db_session.add(file2)
     db_session.flush()
 
-    log2 = ProcessingLog(
+    step2 = FileProcessingStep(
         file_id=file2.id,
-        task_id="task2",
         step_name="extract_text",
         status="in_progress",
-        message="Processing...",
     )
-    db_session.add(log2)
+    db_session.add(step2)
 
-    # File 3: failed (has failure log)
+    # File 3: failed (has failure step)
     file3 = FileRecord(
         filehash="hash3",
         original_filename="failed.pdf",
@@ -70,16 +68,15 @@ def sample_files(db_session):
     db_session.add(file3)
     db_session.flush()
 
-    log3 = ProcessingLog(
+    step3 = FileProcessingStep(
         file_id=file3.id,
-        task_id="task3",
         step_name="extract_text",
         status="failure",
-        message="Error occurred",
+        error_message="Error occurred",
     )
-    db_session.add(log3)
+    db_session.add(step3)
 
-    # File 4: completed (has success log, no failures)
+    # File 4: completed (has success step, no failures)
     file4 = FileRecord(
         filehash="hash4",
         original_filename="completed.pdf",
@@ -90,10 +87,10 @@ def sample_files(db_session):
     db_session.add(file4)
     db_session.flush()
 
-    log4 = ProcessingLog(file_id=file4.id, task_id="task4", step_name="extract_text", status="success", message="Done")
-    db_session.add(log4)
+    step4 = FileProcessingStep(file_id=file4.id, step_name="extract_text", status="success")
+    db_session.add(step4)
 
-    # File 5: completed with multiple success logs
+    # File 5: completed with multiple success steps
     file5 = FileRecord(
         filehash="hash5",
         original_filename="completed2.pdf",
@@ -104,21 +101,17 @@ def sample_files(db_session):
     db_session.add(file5)
     db_session.flush()
 
-    log5a = ProcessingLog(
+    step5a = FileProcessingStep(
         file_id=file5.id,
-        task_id="task5a",
         step_name="extract_text",
         status="success",
-        message="Step 1 done",
     )
-    log5b = ProcessingLog(
+    step5b = FileProcessingStep(
         file_id=file5.id,
-        task_id="task5b",
         step_name="extract_metadata_with_gpt",
         status="success",
-        message="Step 2 done",
     )
-    db_session.add_all([log5a, log5b])
+    db_session.add_all([step5a, step5b])
 
     # File 6: has success but also failure (should be filtered out from completed)
     file6 = FileRecord(
@@ -131,21 +124,18 @@ def sample_files(db_session):
     db_session.add(file6)
     db_session.flush()
 
-    log6a = ProcessingLog(
+    step6a = FileProcessingStep(
         file_id=file6.id,
-        task_id="task6a",
         step_name="extract_text",
         status="success",
-        message="Step 1 done",
     )
-    log6b = ProcessingLog(
+    step6b = FileProcessingStep(
         file_id=file6.id,
-        task_id="task6b",
         step_name="upload_to_s3",
         status="failure",
-        message="Upload failed",
+        error_message="Upload failed",
     )
-    db_session.add_all([log6a, log6b])
+    db_session.add_all([step6a, step6b])
 
     db_session.commit()
 
@@ -172,12 +162,12 @@ def test_apply_status_filter_none(db_session, sample_files):
 
 @pytest.mark.unit
 def test_apply_status_filter_pending(db_session, sample_files):
-    """Test filtering for pending files (no logs)."""
+    """Test filtering for pending files (no steps)."""
     query = db_session.query(FileRecord)
     filtered_query = apply_status_filter(query, db_session, "pending")
     results = filtered_query.all()
 
-    # Should return only file1 (no logs)
+    # Should return only file1 (no steps)
     assert len(results) == 1
     assert results[0].filehash == "hash1"
     assert results[0].original_filename == "pending.pdf"
@@ -190,7 +180,7 @@ def test_apply_status_filter_processing(db_session, sample_files):
     filtered_query = apply_status_filter(query, db_session, "processing")
     results = filtered_query.all()
 
-    # Should return only file2 (has in_progress log)
+    # Should return only file2 (has in_progress step)
     assert len(results) == 1
     assert results[0].filehash == "hash2"
     assert results[0].original_filename == "processing.pdf"
@@ -203,7 +193,7 @@ def test_apply_status_filter_failed(db_session, sample_files):
     filtered_query = apply_status_filter(query, db_session, "failed")
     results = filtered_query.all()
 
-    # Should return file3 and file6 (both have failure logs)
+    # Should return file3 and file6 (both have failure steps)
     assert len(results) == 2
     filehashes = {r.filehash for r in results}
     assert "hash3" in filehashes
@@ -217,7 +207,7 @@ def test_apply_status_filter_completed(db_session, sample_files):
     filtered_query = apply_status_filter(query, db_session, "completed")
     results = filtered_query.all()
 
-    # Should return file4 and file5 (success logs, no failures)
+    # Should return file4 and file5 (success steps, no failures)
     # file6 should NOT be included (has both success and failure)
     assert len(results) == 2
     filehashes = {r.filehash for r in results}

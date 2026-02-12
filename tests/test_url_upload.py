@@ -167,11 +167,26 @@ class TestURLUploadValidation:
 class TestURLUploadEndpoint:
     """Integration tests for URL upload endpoint"""
 
-    def test_process_url_requires_authentication(self, client, monkeypatch):
+    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.process_document")
+    def test_process_url_requires_authentication(self, mock_process_document, mock_requests_get, client, monkeypatch):
         """Test that endpoint requires authentication when auth is enabled"""
+        # Mock successful download to prevent actual HTTP requests
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "1024"}
+        mock_response.iter_content = Mock(return_value=[b"PDF content"])
+        mock_response.raise_for_status = Mock()
+        mock_requests_get.return_value = mock_response
+
+        # Mock Celery task
+        mock_task = Mock()
+        mock_task.id = "test-task-id"
+        mock_process_document.delay.return_value = mock_task
+
         # Temporarily enable auth for this test
         monkeypatch.setenv("AUTH_ENABLED", "True")
-        
+
         # Since we can't easily reload the app config, we'll just test that the endpoint exists
         # In production with auth enabled, it would redirect or return 401
         response = client.post("/api/process-url", json={"url": "https://example.com/file.pdf"})

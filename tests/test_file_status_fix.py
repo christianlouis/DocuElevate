@@ -1,331 +1,203 @@
 """
-Tests for file status and metrics calculation bug fixes.
+Tests for file status and metrics calculation using FileProcessingStep model.
 
 This test module verifies that:
-1. Status calculation only considers the latest status per unique step
-2. Metrics counting only uses the latest status per unique step
+1. Status calculation uses FileProcessingStep entries correctly
+2. Metrics counting uses FileProcessingStep entries correctly
 3. Files with completed steps show "completed" not "processing"
 """
 
 from datetime import datetime, timedelta
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
-from app.utils.file_status import _compute_status_from_logs
-from app.views.files import _compute_step_summary
+from app.database import Base
+from app.models import FileRecord, FileProcessingStep
+from app.utils.step_manager import get_file_overall_status, get_step_summary, initialize_file_steps, update_step_status
+
+
+@pytest.fixture
+def db_session():
+    """Create an in-memory SQLite database for testing."""
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+    yield session
+    session.close()
+    Base.metadata.drop_all(engine)
 
 
 @pytest.mark.unit
-class TestFileStatusBugFixes:
-    """Test fixes for status calculation bugs."""
+class TestFileStatusCalculation:
+    """Test file status calculation using FileProcessingStep."""
 
-    def test_status_not_stuck_on_old_in_progress(self):
+    def test_status_completed_when_all_steps_success(self, db_session):
         """
-        Test that status doesn't show "processing" when old in_progress logs exist
-        but latest status for all steps is success.
-
-        This simulates the bug where a file shows "Processing" even though
-        all steps have completed successfully.
+        Test that status shows "completed" when all steps are success.
         """
+        # Create file and initialize steps
+        file_record = FileRecord(
+            filehash="test1",
+            original_filename="test.pdf",
+            local_filename="/tmp/test.pdf",
+            file_size=1024
+        )
+        db_session.add(file_record)
+        db_session.commit()
 
-        class MockLog:
-            def __init__(self, step_name, status, timestamp):
-                self.step_name = step_name
-                self.status = status
-                self.timestamp = timestamp
+        initialize_file_steps(db_session, file_record.id)
 
-        now = datetime.now()
-        # Simulate logs ordered by timestamp desc (latest first)
-        logs = [
-            # Latest logs (all success)
-            MockLog("upload_to_dropbox", "success", now - timedelta(minutes=1)),
-            MockLog("extract_metadata_with_gpt", "success", now - timedelta(minutes=2)),
-            MockLog("check_text", "success", now - timedelta(minutes=3)),
-            # Older in_progress logs that should be ignored
-            MockLog("upload_to_dropbox", "in_progress", now - timedelta(minutes=5)),
-            MockLog("extract_metadata_with_gpt", "in_progress", now - timedelta(minutes=6)),
-            MockLog("check_text", "in_progress", now - timedelta(minutes=7)),
-        ]
+        # Mark all steps as success
+        from app.utils.step_manager import MAIN_PROCESSING_STEPS
+        for step_name in MAIN_PROCESSING_STEPS:
+            update_step_status(db_session, file_record.id, step_name, "success")
 
-        result = _compute_status_from_logs(logs)
+        result = get_file_overall_status(db_session, file_record.id)
 
-        # Should be completed, not processing
         assert result["status"] == "completed"
         assert result["has_errors"] is False
 
-    def test_status_shows_processing_for_active_tasks(self):
+    def test_status_processing_when_steps_in_progress(self, db_session):
         """
-        Test that status correctly shows "processing" when there are
-        actually in-progress tasks (based on latest status).
+        Test that status shows "processing" when there are in_progress steps.
         """
+        file_record = FileRecord(
+            filehash="test2",
+            original_filename="test2.pdf",
+            local_filename="/tmp/test2.pdf",
+            file_size=2048
+        )
+        db_session.add(file_record)
+        db_session.commit()
 
-        class MockLog:
-            def __init__(self, step_name, status, timestamp):
-                self.step_name = step_name
-                self.status = status
-                self.timestamp = timestamp
+        initialize_file_steps(db_session, file_record.id)
 
-        now = datetime.now()
-        logs = [
-            # One task actually in progress
-            MockLog("upload_to_dropbox", "in_progress", now - timedelta(minutes=1)),
-            # Other tasks completed
-            MockLog("extract_metadata_with_gpt", "success", now - timedelta(minutes=2)),
-            MockLog("check_text", "success", now - timedelta(minutes=3)),
-        ]
+        # Mark some steps as success, one as in_progress
+        update_step_status(db_session, file_record.id, "create_file_record", "success")
+        update_step_status(db_session, file_record.id, "check_text", "in_progress")
 
-        result = _compute_status_from_logs(logs)
+        result = get_file_overall_status(db_session, file_record.id)
 
-        # Should be processing because one task is actually in progress
         assert result["status"] == "processing"
         assert result["has_errors"] is False
 
-    def test_status_shows_failed_when_latest_has_failure(self):
+    def test_status_failed_when_steps_have_failure(self, db_session):
         """
-        Test that status shows "failed" when the latest status for any step is failure.
+        Test that status shows "failed" when any step has failure status.
         """
+        file_record = FileRecord(
+            filehash="test3",
+            original_filename="test3.pdf",
+            local_filename="/tmp/test3.pdf",
+            file_size=3072
+        )
+        db_session.add(file_record)
+        db_session.commit()
 
-        class MockLog:
-            def __init__(self, step_name, status, timestamp):
-                self.step_name = step_name
-                self.status = status
-                self.timestamp = timestamp
+        initialize_file_steps(db_session, file_record.id)
 
-        now = datetime.now()
-        logs = [
-            # One task failed (latest status)
-            MockLog("upload_to_s3", "failure", now - timedelta(minutes=1)),
-            # Other tasks completed
-            MockLog("upload_to_dropbox", "success", now - timedelta(minutes=2)),
-            MockLog("extract_metadata_with_gpt", "success", now - timedelta(minutes=3)),
-        ]
+        # Mark some steps as success, one as failure
+        update_step_status(db_session, file_record.id, "create_file_record", "success")
+        update_step_status(db_session, file_record.id, "check_text", "success")
+        update_step_status(db_session, file_record.id, "extract_text", "failure", error_message="OCR failed")
 
-        result = _compute_status_from_logs(logs)
+        result = get_file_overall_status(db_session, file_record.id)
 
         assert result["status"] == "failed"
         assert result["has_errors"] is True
 
 
 @pytest.mark.unit
-class TestMetricsCountingBugFixes:
-    """Test fixes for metrics counting bugs."""
+class TestMetricsCounting:
+    """Test metrics counting using FileProcessingStep."""
 
-    def test_main_steps_not_double_counted(self):
+    def test_main_steps_counted_correctly(self, db_session):
         """
-        Test that main processing steps are only counted once per step,
-        using the latest status, not counting all historical logs.
-
-        This simulates the bug where metrics show incorrect counts because
-        they count all logs instead of just the latest per step.
+        Test that main processing steps are counted correctly.
         """
-        from datetime import datetime, timedelta
+        file_record = FileRecord(
+            filehash="test4",
+            original_filename="test4.pdf",
+            local_filename="/tmp/test4.pdf",
+            file_size=4096
+        )
+        db_session.add(file_record)
+        db_session.commit()
 
-        class MockLog:
-            def __init__(self, step_name, status, timestamp):
-                self.step_name = step_name
-                self.status = status
-                self.timestamp = timestamp
+        initialize_file_steps(db_session, file_record.id)
 
-        now = datetime.now()
-        # Simulate logs ordered by timestamp desc (latest first)
-        logs = [
-            # Latest status for each step (all success)
-            MockLog("hash_file", "success", now - timedelta(minutes=1)),
-            MockLog("create_file_record", "success", now - timedelta(minutes=2)),
-            MockLog("extract_metadata_with_gpt", "success", now - timedelta(minutes=3)),
-            # Older in_progress logs that should be ignored
-            MockLog("hash_file", "in_progress", now - timedelta(minutes=5)),
-            MockLog("create_file_record", "in_progress", now - timedelta(minutes=6)),
-            MockLog("extract_metadata_with_gpt", "in_progress", now - timedelta(minutes=7)),
-        ]
+        # Mark some steps with different statuses
+        update_step_status(db_session, file_record.id, "create_file_record", "success")
+        update_step_status(db_session, file_record.id, "check_text", "success")
+        update_step_status(db_session, file_record.id, "extract_text", "in_progress")
 
-        summary = _compute_step_summary(logs)
+        summary = get_step_summary(db_session, file_record.id)
 
-        # Should count each main step only once
-        assert summary["total_main_steps"] == 3
-        assert summary["main"]["success"] == 3
-        assert summary["main"]["in_progress"] == 0  # No steps actually in progress
-        assert summary["main"]["failure"] == 0
+        # Should count each step once
+        from app.utils.step_manager import MAIN_PROCESSING_STEPS
+        assert summary["total_main_steps"] == len(MAIN_PROCESSING_STEPS)
+        assert summary["main"]["success"] == 2
+        assert summary["main"]["in_progress"] == 1
 
-    def test_upload_tasks_not_double_counted(self):
+    def test_upload_tasks_counted_correctly(self, db_session):
         """
-        Test that upload tasks are only counted once per destination,
-        using the latest status.
+        Test that upload tasks are counted correctly.
         """
-        from datetime import datetime, timedelta
+        file_record = FileRecord(
+            filehash="test5",
+            original_filename="test5.pdf",
+            local_filename="/tmp/test5.pdf",
+            file_size=5120
+        )
+        db_session.add(file_record)
+        db_session.commit()
 
-        class MockLog:
-            def __init__(self, step_name, status, timestamp):
-                self.step_name = step_name
-                self.status = status
-                self.timestamp = timestamp
+        initialize_file_steps(db_session, file_record.id)
+        from app.utils.step_manager import add_upload_steps
+        add_upload_steps(db_session, file_record.id, ["dropbox", "s3", "nextcloud"])
 
-        now = datetime.now()
-        # Logs ordered by timestamp desc (latest first)
-        logs = [
-            # Latest status for uploads
-            MockLog("upload_to_dropbox", "success", now - timedelta(minutes=1)),
-            MockLog("upload_to_s3", "success", now - timedelta(minutes=2)),
-            MockLog("upload_to_nextcloud", "success", now - timedelta(minutes=3)),
-            # Queue logs (older, should use upload_to_ as latest)
-            MockLog("queue_dropbox", "success", now - timedelta(minutes=4)),
-            MockLog("queue_s3", "in_progress", now - timedelta(minutes=5)),
-            MockLog("queue_nextcloud", "success", now - timedelta(minutes=6)),
-            # Even older in_progress logs
-            MockLog("upload_to_dropbox", "in_progress", now - timedelta(minutes=7)),
-            MockLog("upload_to_s3", "in_progress", now - timedelta(minutes=8)),
-        ]
+        # Mark upload steps with different statuses
+        update_step_status(db_session, file_record.id, "upload_to_dropbox", "success")
+        update_step_status(db_session, file_record.id, "upload_to_s3", "failure")
+        update_step_status(db_session, file_record.id, "upload_to_nextcloud", "in_progress")
 
-        summary = _compute_step_summary(logs)
+        summary = get_step_summary(db_session, file_record.id)
 
-        # Should count unique upload destinations
-        # Note: queue_X and upload_to_X are separate steps
-        assert summary["total_upload_tasks"] == 6  # 3 upload_to + 3 queue
-        assert summary["uploads"]["success"] == 5  # All uploads success, 2 queue success
-        assert summary["uploads"]["in_progress"] == 1  # 1 queue in_progress
-
-    def test_accurate_metrics_for_completed_file(self):
-        """
-        Test the scenario from the issue: File with 6 actual uploads
-        should show 6, not 12.
-        """
-        from datetime import datetime, timedelta
-
-        class MockLog:
-            def __init__(self, step_name, status, timestamp):
-                self.step_name = step_name
-                self.status = status
-                self.timestamp = timestamp
-
-        now = datetime.now()
-        # Simulate 6 successful uploads with their queue steps
-        logs = []
-        services = ["dropbox", "s3", "nextcloud", "google_drive", "onedrive", "webdav"]
-
-        # Add latest status (all success) - most recent
-        for i, service in enumerate(services):
-            logs.append(MockLog(f"upload_to_{service}", "success", now - timedelta(minutes=i * 2)))
-            logs.append(MockLog(f"queue_{service}", "success", now - timedelta(minutes=i * 2 + 1)))
-
-        # Add some older in_progress logs
-        base_offset = len(services) * 2
-        for i, service in enumerate(services):
-            logs.append(MockLog(f"upload_to_{service}", "in_progress", now - timedelta(minutes=base_offset + i * 2)))
-            logs.append(MockLog(f"queue_{service}", "in_progress", now - timedelta(minutes=base_offset + i * 2 + 1)))
-
-        summary = _compute_step_summary(logs)
-
-        # Should have 12 total upload tasks (6 upload_to + 6 queue)
-        assert summary["total_upload_tasks"] == 12
-        # All should be success (latest status)
-        assert summary["uploads"]["success"] == 12
-        assert summary["uploads"]["in_progress"] == 0
-
-    def test_mixed_upload_statuses(self):
-        """
-        Test that upload metrics correctly reflect mixed statuses.
-        """
-        from datetime import datetime, timedelta
-
-        class MockLog:
-            def __init__(self, step_name, status, timestamp):
-                self.step_name = step_name
-                self.status = status
-                self.timestamp = timestamp
-
-        now = datetime.now()
-        logs = [
-            # Latest statuses (ordered by timestamp desc)
-            MockLog("upload_to_dropbox", "success", now - timedelta(minutes=1)),
-            MockLog("upload_to_s3", "failure", now - timedelta(minutes=2)),
-            MockLog("upload_to_nextcloud", "in_progress", now - timedelta(minutes=3)),
-            MockLog("queue_dropbox", "success", now - timedelta(minutes=4)),
-            MockLog("queue_s3", "success", now - timedelta(minutes=5)),
-            MockLog("queue_nextcloud", "success", now - timedelta(minutes=6)),
-        ]
-
-        summary = _compute_step_summary(logs)
-
-        assert summary["total_upload_tasks"] == 6
-        assert summary["uploads"]["success"] == 4  # 1 upload + 3 queue
-        assert summary["uploads"]["failure"] == 1  # 1 upload
-        assert summary["uploads"]["in_progress"] == 1  # 1 upload
-
-    def test_order_independent_ascending(self):
-        """
-        Test that _compute_step_summary works correctly with ascending order logs
-        (as used in production by file_detail_page).
-
-        This test ensures the function correctly selects the latest status per step
-        based on timestamp, not position in the list.
-        """
-
-        class MockLog:
-            def __init__(self, step_name, status, timestamp):
-                self.step_name = step_name
-                self.status = status
-                self.timestamp = timestamp
-
-        now = datetime.now()
-        # Logs ordered by timestamp ASCENDING (oldest first) - like production
-        logs = [
-            # Older in_progress logs (should be ignored)
-            MockLog("hash_file", "in_progress", now - timedelta(minutes=7)),
-            MockLog("create_file_record", "in_progress", now - timedelta(minutes=6)),
-            MockLog("extract_metadata_with_gpt", "in_progress", now - timedelta(minutes=5)),
-            MockLog("upload_to_dropbox", "in_progress", now - timedelta(minutes=4)),
-            # Latest status for each step (all success) - at the end
-            MockLog("hash_file", "success", now - timedelta(minutes=3)),
-            MockLog("create_file_record", "success", now - timedelta(minutes=2)),
-            MockLog("extract_metadata_with_gpt", "success", now - timedelta(minutes=1)),
-            MockLog("upload_to_dropbox", "success", now),
-        ]
-
-        summary = _compute_step_summary(logs)
-
-        # Should use latest status (success) not first seen (in_progress)
-        assert summary["total_main_steps"] == 3
-        assert summary["main"]["success"] == 3
-        assert summary["main"]["in_progress"] == 0
-
-        assert summary["total_upload_tasks"] == 1
+        # Should count only upload_to_* steps (not queue_* steps)
+        assert summary["total_upload_tasks"] == 3
         assert summary["uploads"]["success"] == 1
-        assert summary["uploads"]["in_progress"] == 0
+        assert summary["uploads"]["failure"] == 1
+        assert summary["uploads"]["in_progress"] == 1
 
-    def test_order_independent_mixed(self):
+    def test_accurate_metrics_for_completed_file(self, db_session):
         """
-        Test that _compute_step_summary works correctly with randomly ordered logs.
-
-        This ensures the function truly is order-independent.
+        Test metrics for a file with multiple successful uploads.
         """
+        file_record = FileRecord(
+            filehash="test6",
+            original_filename="test6.pdf",
+            local_filename="/tmp/test6.pdf",
+            file_size=6144
+        )
+        db_session.add(file_record)
+        db_session.commit()
 
-        class MockLog:
-            def __init__(self, step_name, status, timestamp):
-                self.step_name = step_name
-                self.status = status
-                self.timestamp = timestamp
+        initialize_file_steps(db_session, file_record.id)
+        from app.utils.step_manager import add_upload_steps
+        services = ["dropbox", "s3", "nextcloud", "google_drive", "onedrive", "webdav"]
+        add_upload_steps(db_session, file_record.id, services)
 
-        now = datetime.now()
-        # Logs in mixed order
-        logs = [
-            MockLog("upload_to_s3", "in_progress", now - timedelta(minutes=8)),
-            MockLog("hash_file", "success", now - timedelta(minutes=1)),  # Latest for hash_file
-            MockLog("upload_to_dropbox", "in_progress", now - timedelta(minutes=7)),
-            MockLog("hash_file", "in_progress", now - timedelta(minutes=5)),  # Older, should be ignored
-            MockLog("upload_to_s3", "failure", now - timedelta(minutes=2)),  # Latest for S3
-            MockLog("create_file_record", "in_progress", now - timedelta(minutes=6)),
-            MockLog("upload_to_dropbox", "success", now),  # Latest for Dropbox
-            MockLog("create_file_record", "success", now - timedelta(minutes=3)),  # Latest for create
-        ]
+        # Mark all uploads as success
+        for service in services:
+            update_step_status(db_session, file_record.id, f"upload_to_{service}", "success")
 
-        summary = _compute_step_summary(logs)
+        summary = get_step_summary(db_session, file_record.id)
 
-        # Should correctly identify latest status for each step
-        assert summary["total_main_steps"] == 2
-        assert summary["main"]["success"] == 2  # hash_file and create_file_record
-        assert summary["main"]["in_progress"] == 0
-
-        assert summary["total_upload_tasks"] == 2
-        assert summary["uploads"]["success"] == 1  # dropbox
-        assert summary["uploads"]["failure"] == 1  # s3
+        # Should have 6 upload_to_* tasks
+        assert summary["total_upload_tasks"] == 6
+        assert summary["uploads"]["success"] == 6
+        assert summary["uploads"]["failure"] == 0
         assert summary["uploads"]["in_progress"] == 0
