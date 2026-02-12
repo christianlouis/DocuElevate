@@ -3,11 +3,13 @@
 import os
 from typing import Any, List, Optional, Union
 
-from pydantic import Field, validator
-from pydantic_settings import BaseSettings
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env")
+
     database_url: str
     redis_url: str
     openai_api_key: str
@@ -265,7 +267,8 @@ class Settings(BaseSettings):
         description="Stricter rate limit for authentication endpoints to prevent brute force attacks.",
     )
 
-    @validator("notification_urls", pre=True)
+    @field_validator("notification_urls", mode="before")
+    @classmethod
     def parse_notification_urls(cls, v):
         """Parse notification URLs from string or list"""
         if isinstance(v, str):
@@ -276,12 +279,13 @@ class Settings(BaseSettings):
             return []
         return v
 
-    @validator("session_secret")
-    def validate_session_secret(cls, v, values):
+    @field_validator("session_secret")
+    @classmethod
+    def validate_session_secret(cls, v, info):
         """Validate that session_secret is set and has sufficient length when auth is enabled"""
-        if values.get("auth_enabled") and not v:
+        if info.data.get("auth_enabled") and not v:
             raise ValueError("SESSION_SECRET must be set when AUTH_ENABLED=True")
-        if values.get("auth_enabled") and v and len(v) < 32:
+        if info.data.get("auth_enabled") and v and len(v) < 32:
             raise ValueError("SESSION_SECRET must be at least 32 characters long")
         return v
 
@@ -346,29 +350,6 @@ class Settings(BaseSettings):
 
         # Return basic info if file not found
         return f"Version: {self.version}\nBuild Date: {self.build_date}\nGit SHA: {self.git_sha}"
-
-    class Config:
-        env_file = ".env"
-
-        # Convert string representations of booleans to actual booleans
-        # and strip quotes from string values
-        @classmethod
-        def parse_env_var(cls, field_name: str, raw_val: str) -> Any:
-            # First, strip quotes from the value if it's a string
-            if isinstance(raw_val, str):
-                if (raw_val.startswith('"') and raw_val.endswith('"')) or (
-                    raw_val.startswith("'") and raw_val.endswith("'")
-                ):
-                    raw_val = raw_val[1:-1]
-                raw_val = raw_val.strip()
-
-            # Convert string representations of booleans to actual booleans
-            if field_name.endswith("_enabled") or field_name == "debug":
-                if raw_val.lower() in ("false", "0", "no", "n", "f"):
-                    return False
-                if raw_val.lower() in ("true", "1", "yes", "y", "t"):
-                    return True
-            return raw_val
 
 
 settings = Settings()
