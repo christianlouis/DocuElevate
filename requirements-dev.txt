@@ -20,6 +20,10 @@ mypy>=1.8.0
 pylint>=3.0.0
 isort>=5.13.0
 
+# Type stubs for mypy
+types-requests>=2.31.0
+types-paramiko>=3.0.0
+
 # Security scanning
 bandit>=1.7.6
 safety>=3.0.0
