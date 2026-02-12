@@ -51,13 +51,13 @@ class TestFileProcessingStepModel:
         db_session.commit()
 
         # Create a processing step
-        step = FileProcessingStep(file_id=file_record.id, step_name="hash_file", status="success")
+        step = FileProcessingStep(file_id=file_record.id, step_name="create_file_record", status="success")
         db_session.add(step)
         db_session.commit()
 
         assert step.id is not None
         assert step.file_id == file_record.id
-        assert step.step_name == "hash_file"
+        assert step.step_name == "create_file_record"
         assert step.status == "success"
 
     def test_unique_constraint(self, db_session: Session):
@@ -70,12 +70,12 @@ class TestFileProcessingStepModel:
         db_session.commit()
 
         # Create first step
-        step1 = FileProcessingStep(file_id=file_record.id, step_name="hash_file", status="in_progress")
+        step1 = FileProcessingStep(file_id=file_record.id, step_name="create_file_record", status="in_progress")
         db_session.add(step1)
         db_session.commit()
 
         # Try to create duplicate step - should fail
-        step2 = FileProcessingStep(file_id=file_record.id, step_name="hash_file", status="success")
+        step2 = FileProcessingStep(file_id=file_record.id, step_name="create_file_record", status="success")
         db_session.add(step2)
 
         with pytest.raises(Exception):  # SQLAlchemy will raise an integrity error
@@ -145,12 +145,12 @@ class TestStepManager:
 
         # Update a step that doesn't exist yet
         now = datetime.now()
-        update_step_status(db_session, file_record.id, "hash_file", "in_progress", started_at=now)
+        update_step_status(db_session, file_record.id, "create_file_record", "in_progress", started_at=now)
 
         # Verify step was created
         step = (
             db_session.query(FileProcessingStep)
-            .filter(FileProcessingStep.file_id == file_record.id, FileProcessingStep.step_name == "hash_file")
+            .filter(FileProcessingStep.file_id == file_record.id, FileProcessingStep.step_name == "create_file_record")
             .first()
         )
 
@@ -172,13 +172,13 @@ class TestStepManager:
         # Update an existing step
         now = datetime.now()
         update_step_status(
-            db_session, file_record.id, "hash_file", "success", started_at=now - timedelta(seconds=5), completed_at=now
+            db_session, file_record.id, "create_file_record", "success", started_at=now - timedelta(seconds=5), completed_at=now
         )
 
         # Verify step was updated
         step = (
             db_session.query(FileProcessingStep)
-            .filter(FileProcessingStep.file_id == file_record.id, FileProcessingStep.step_name == "hash_file")
+            .filter(FileProcessingStep.file_id == file_record.id, FileProcessingStep.step_name == "create_file_record")
             .first()
         )
 
@@ -197,21 +197,21 @@ class TestStepManager:
 
         initialize_file_steps(db_session, file_record.id)
 
-        # Update some steps
+        # Update some steps - use actual step names from MAIN_PROCESSING_STEPS
         now = datetime.now()
-        update_step_status(db_session, file_record.id, "hash_file", "success", completed_at=now)
-        update_step_status(db_session, file_record.id, "create_file_record", "in_progress", started_at=now)
-        update_step_status(db_session, file_record.id, "check_text", "failure", error_message="Failed to check text")
+        update_step_status(db_session, file_record.id, "create_file_record", "success", completed_at=now)
+        update_step_status(db_session, file_record.id, "check_text", "in_progress", started_at=now)
+        update_step_status(db_session, file_record.id, "extract_text", "failure", error_message="Failed to extract text")
 
         # Get all step statuses
         status_map = get_file_step_status(db_session, file_record.id)
 
         assert len(status_map) == len(MAIN_PROCESSING_STEPS)
-        assert status_map["hash_file"]["status"] == "success"
-        assert status_map["hash_file"]["completed_at"] == now
-        assert status_map["create_file_record"]["status"] == "in_progress"
-        assert status_map["check_text"]["status"] == "failure"
-        assert status_map["check_text"]["error_message"] == "Failed to check text"
+        assert status_map["create_file_record"]["status"] == "success"
+        assert status_map["create_file_record"]["completed_at"] == now
+        assert status_map["check_text"]["status"] == "in_progress"
+        assert status_map["extract_text"]["status"] == "failure"
+        assert status_map["extract_text"]["error_message"] == "Failed to extract text"
 
     def test_get_file_overall_status_pending(self, db_session: Session):
         """Test overall status for a file with pending steps."""
@@ -242,9 +242,9 @@ class TestStepManager:
         initialize_file_steps(db_session, file_record.id)
 
         # Mark some steps as complete and one as in progress
-        update_step_status(db_session, file_record.id, "hash_file", "success")
         update_step_status(db_session, file_record.id, "create_file_record", "success")
-        update_step_status(db_session, file_record.id, "check_text", "in_progress")
+        update_step_status(db_session, file_record.id, "check_text", "success")
+        update_step_status(db_session, file_record.id, "extract_text", "in_progress")
 
         status = get_file_overall_status(db_session, file_record.id)
 
@@ -285,9 +285,9 @@ class TestStepManager:
         initialize_file_steps(db_session, file_record.id)
 
         # Mark some steps as success and one as failure
-        update_step_status(db_session, file_record.id, "hash_file", "success")
         update_step_status(db_session, file_record.id, "create_file_record", "success")
-        update_step_status(db_session, file_record.id, "check_text", "failure", error_message="OCR failed")
+        update_step_status(db_session, file_record.id, "check_text", "success")
+        update_step_status(db_session, file_record.id, "extract_text", "failure", error_message="OCR failed")
 
         status = get_file_overall_status(db_session, file_record.id)
 
@@ -308,12 +308,12 @@ class TestStepManager:
         add_upload_steps(db_session, file_record.id, ["dropbox", "s3", "nextcloud"])
 
         # Update statuses
-        update_step_status(db_session, file_record.id, "hash_file", "success")
         update_step_status(db_session, file_record.id, "create_file_record", "success")
-        update_step_status(db_session, file_record.id, "check_text", "in_progress")
+        update_step_status(db_session, file_record.id, "check_text", "success")
+        update_step_status(db_session, file_record.id, "extract_text", "in_progress")
         update_step_status(db_session, file_record.id, "upload_to_dropbox", "success")
         update_step_status(db_session, file_record.id, "upload_to_s3", "failure")
-        update_step_status(db_session, file_record.id, "queue_nextcloud", "in_progress")
+        update_step_status(db_session, file_record.id, "upload_to_nextcloud", "in_progress")
 
         summary = get_step_summary(db_session, file_record.id)
 
@@ -322,10 +322,10 @@ class TestStepManager:
         assert summary["main"]["in_progress"] == 1
         assert summary["main"]["queued"] >= 5  # Remaining pending steps
 
-        # Check upload counts
+        # Check upload counts (only upload_to_* steps, not queue_* steps)
         assert summary["uploads"]["success"] == 1
         assert summary["uploads"]["failure"] == 1
         assert summary["uploads"]["in_progress"] == 1
 
         assert summary["total_main_steps"] == len(MAIN_PROCESSING_STEPS)
-        assert summary["total_upload_tasks"] == 6  # 3 destinations x 2 steps each
+        assert summary["total_upload_tasks"] == 3  # 3 upload_to_* steps counted
