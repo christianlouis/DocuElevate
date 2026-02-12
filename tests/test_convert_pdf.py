@@ -178,10 +178,6 @@ class TestConvertToPdf:
         mock_response.content = b"%PDF-1.4 converted content"
         mock_post.return_value = mock_response
 
-        # Mock task context
-        mock_task = MagicMock()
-        mock_task.request.id = "test-task-id"
-
         # Mock file type detection
         with patch("app.tasks.convert_to_pdf._detect_mime_type") as mock_detect_mime:
             with patch("app.tasks.convert_to_pdf._detect_extension") as mock_detect_ext:
@@ -194,7 +190,8 @@ class TestConvertToPdf:
                     )
                     mock_detect_ext.return_value = ".docx"
 
-                    result = convert_to_pdf.__wrapped__(mock_task, "/tmp/test.docx", "document.docx")
+                    convert_to_pdf.request.id = "test-task-id"
+                    result = convert_to_pdf.__wrapped__("/tmp/test.docx", "document.docx")
 
                     # Verify Gotenberg was called
                     mock_post.assert_called_once()
@@ -214,13 +211,11 @@ class TestConvertToPdf:
     @patch("app.tasks.convert_to_pdf.log_task_progress")
     def test_returns_none_when_gotenberg_url_not_configured(self, mock_log_progress):
         """Test returns None when Gotenberg URL is not configured."""
-        mock_task = MagicMock()
-        mock_task.request.id = "test-task-id"
-
         with patch("app.tasks.convert_to_pdf.settings") as mock_settings:
             mock_settings.gotenberg_url = None
 
-            result = convert_to_pdf.__wrapped__(mock_task, "/tmp/test.docx")
+            convert_to_pdf.request.id = "test-task-id"
+            result = convert_to_pdf.__wrapped__("/tmp/test.docx")
 
             assert result is None
             # Verify error was logged
@@ -230,9 +225,6 @@ class TestConvertToPdf:
     @patch("app.tasks.convert_to_pdf.log_task_progress")
     def test_returns_none_when_file_type_unknown(self, mock_log_progress):
         """Test returns None when file type cannot be determined."""
-        mock_task = MagicMock()
-        mock_task.request.id = "test-task-id"
-
         with patch("app.tasks.convert_to_pdf._detect_mime_type") as mock_detect_mime:
             with patch("app.tasks.convert_to_pdf._detect_extension") as mock_detect_ext:
                 with patch("app.tasks.convert_to_pdf.settings") as mock_settings:
@@ -240,7 +232,8 @@ class TestConvertToPdf:
                     mock_detect_mime.return_value = (None, None)
                     mock_detect_ext.return_value = ""
 
-                    result = convert_to_pdf.__wrapped__(mock_task, "/tmp/unknown_file")
+                    convert_to_pdf.request.id = "test-task-id"
+                    result = convert_to_pdf.__wrapped__("/tmp/unknown_file")
 
                     assert result is None
 
@@ -255,9 +248,6 @@ class TestConvertToPdf:
         mock_response.content = b"%PDF-1.4 converted image"
         mock_post.return_value = mock_response
 
-        mock_task = MagicMock()
-        mock_task.request.id = "test-task-id"
-
         with patch("app.tasks.convert_to_pdf._detect_mime_type") as mock_detect_mime:
             with patch("app.tasks.convert_to_pdf._detect_extension") as mock_detect_ext:
                 with patch("app.tasks.convert_to_pdf.settings") as mock_settings:
@@ -266,7 +256,8 @@ class TestConvertToPdf:
                     mock_detect_mime.return_value = ("image/jpeg", None)
                     mock_detect_ext.return_value = ".jpg"
 
-                    result = convert_to_pdf.__wrapped__(mock_task, "/tmp/photo.jpg")
+                    convert_to_pdf.request.id = "test-task-id"
+                    result = convert_to_pdf.__wrapped__("/tmp/photo.jpg")
 
                     # Verify LibreOffice endpoint was used for images
                     mock_post.assert_called_once()
@@ -285,9 +276,6 @@ class TestConvertToPdf:
         mock_response.content = b"%PDF-1.4 converted html"
         mock_post.return_value = mock_response
 
-        mock_task = MagicMock()
-        mock_task.request.id = "test-task-id"
-
         with patch("app.tasks.convert_to_pdf._detect_mime_type") as mock_detect_mime:
             with patch("app.tasks.convert_to_pdf._detect_extension") as mock_detect_ext:
                 with patch("app.tasks.convert_to_pdf.settings") as mock_settings:
@@ -296,7 +284,8 @@ class TestConvertToPdf:
                     mock_detect_mime.return_value = ("text/html", None)
                     mock_detect_ext.return_value = ".html"
 
-                    result = convert_to_pdf.__wrapped__(mock_task, "/tmp/page.html")
+                    convert_to_pdf.request.id = "test-task-id"
+                    result = convert_to_pdf.__wrapped__("/tmp/page.html")
 
                     # Verify Chromium endpoint was used
                     mock_post.assert_called_once()
@@ -314,9 +303,6 @@ class TestConvertToPdf:
         mock_response.content = b"%PDF-1.4 converted markdown"
         mock_post.return_value = mock_response
 
-        mock_task = MagicMock()
-        mock_task.request.id = "test-task-id"
-
         with patch("app.tasks.convert_to_pdf._detect_mime_type") as mock_detect_mime:
             with patch("app.tasks.convert_to_pdf._detect_extension") as mock_detect_ext:
                 with patch("app.tasks.convert_to_pdf.settings") as mock_settings:
@@ -330,7 +316,8 @@ class TestConvertToPdf:
                                 mock_exists.return_value = True
                                 mock_dirname.return_value = "/tmp"
 
-                                result = convert_to_pdf.__wrapped__(mock_task, "/tmp/readme.md")
+                                convert_to_pdf.request.id = "test-task-id"
+                                result = convert_to_pdf.__wrapped__("/tmp/readme.md")
 
                                 # Verify Chromium markdown endpoint was used
                                 mock_post.assert_called_once()
@@ -347,9 +334,6 @@ class TestConvertToPdf:
         mock_response.text = "Internal Server Error"
         mock_post.return_value = mock_response
 
-        mock_task = MagicMock()
-        mock_task.request.id = "test-task-id"
-
         with patch("app.tasks.convert_to_pdf._detect_mime_type") as mock_detect_mime:
             with patch("app.tasks.convert_to_pdf._detect_extension") as mock_detect_ext:
                 with patch("app.tasks.convert_to_pdf.settings") as mock_settings:
@@ -358,7 +342,8 @@ class TestConvertToPdf:
                     mock_detect_mime.return_value = ("application/pdf", None)
                     mock_detect_ext.return_value = ".pdf"
 
-                    result = convert_to_pdf.__wrapped__(mock_task, "/tmp/test.pdf")
+                    convert_to_pdf.request.id = "test-task-id"
+                    result = convert_to_pdf.__wrapped__("/tmp/test.pdf")
 
                     assert result is None
                     # Verify error was logged
@@ -372,9 +357,6 @@ class TestConvertToPdf:
         """Test handling of network exceptions during conversion."""
         mock_post.side_effect = Exception("Connection timeout")
 
-        mock_task = MagicMock()
-        mock_task.request.id = "test-task-id"
-
         with patch("app.tasks.convert_to_pdf._detect_mime_type") as mock_detect_mime:
             with patch("app.tasks.convert_to_pdf._detect_extension") as mock_detect_ext:
                 with patch("app.tasks.convert_to_pdf.settings") as mock_settings:
@@ -383,7 +365,8 @@ class TestConvertToPdf:
                     mock_detect_mime.return_value = ("application/pdf", None)
                     mock_detect_ext.return_value = ".pdf"
 
-                    result = convert_to_pdf.__wrapped__(mock_task, "/tmp/test.pdf")
+                    convert_to_pdf.request.id = "test-task-id"
+                    result = convert_to_pdf.__wrapped__("/tmp/test.pdf")
 
                     assert result is None
 
@@ -398,9 +381,6 @@ class TestConvertToPdf:
         mock_response.content = b"%PDF-1.4"
         mock_post.return_value = mock_response
 
-        mock_task = MagicMock()
-        mock_task.request.id = "test-task-id"
-
         with patch("app.tasks.convert_to_pdf._detect_mime_type") as mock_detect_mime:
             with patch("app.tasks.convert_to_pdf._detect_extension") as mock_detect_ext:
                 with patch("app.tasks.convert_to_pdf.settings") as mock_settings:
@@ -409,7 +389,8 @@ class TestConvertToPdf:
                     mock_detect_mime.return_value = ("application/vnd.ms-excel", None)
                     mock_detect_ext.return_value = ".xls"
 
-                    result = convert_to_pdf.__wrapped__(mock_task, "/tmp/uuid.xls", "report.xls")
+                    convert_to_pdf.request.id = "test-task-id"
+                    result = convert_to_pdf.__wrapped__("/tmp/uuid.xls", "report.xls")
 
                     # Verify process_document was called with modified original filename
                     mock_process.delay.assert_called_once()
