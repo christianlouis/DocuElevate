@@ -183,20 +183,21 @@ class TestTestGoogleDriveToken:
 
     @patch("app.config.settings")
     def test_test_token_oauth_not_configured(self, mock_settings, client: TestClient):
-        """Test when OAuth is enabled but not fully configured."""
+        """Test when OAuth is enabled but credentials are not configured."""
         mock_settings.google_drive_use_oauth = True
         mock_settings.google_drive_client_id = None
         mock_settings.google_drive_client_secret = None
         mock_settings.google_drive_refresh_token = None
 
+        # Patch credentials to avoid network calls
         with patch("google.oauth2.credentials.Credentials"):
             response = client.get("/api/google-drive/test-token")
         
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "error"
-        # Check for either "not configured" or network error (both are acceptable)
-        assert "not fully configured" in data["message"].lower() or "failed" in data["message"].lower()
+        # Should specifically report not configured
+        assert "not fully configured" in data["message"].lower()
 
     @patch("app.tasks.upload_to_google_drive.get_drive_service_oauth")
     @patch("app.config.settings")
@@ -289,14 +290,15 @@ class TestGetGoogleDriveTokenInfo:
         """Test when OAuth is not enabled."""
         mock_settings.google_drive_use_oauth = False
 
+        # Patch credentials to avoid network calls
         with patch("google.oauth2.credentials.Credentials"):
             response = client.get("/api/google-drive/get-token-info")
         
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "error"
-        # Accept either "not enabled" or network error messages
-        assert "not enabled" in data["message"].lower() or "failed" in data["message"].lower()
+        # Should specifically report OAuth not enabled
+        assert "not enabled" in data["message"].lower()
 
     @patch("app.config.settings")
     def test_get_token_info_not_configured(self, mock_settings, client: TestClient):
@@ -381,10 +383,12 @@ class TestFormatTimeRemaining:
         from app.api.google_drive import format_time_remaining
         from datetime import timedelta
         
-        time_left = timedelta(days=1)
+        time_left = timedelta(days=1, hours=0)
         result = format_time_remaining(time_left)
+        # Should use singular "day" not plural "days"
         assert "1 day" in result
-        assert "days" not in result or "1 day" in result
+        # Should not have "1 days" (plural)
+        assert "1 days" not in result
 
 
 @pytest.mark.unit

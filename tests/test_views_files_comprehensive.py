@@ -665,9 +665,31 @@ startxref
 
     def test_get_processed_text_no_text_extracted(self, client: TestClient, db_session, tmp_path):
         """Test when no text can be extracted from PDF."""
-        # Create empty/minimal PDF
+        # Create a valid but minimal PDF with no text
         pdf_path = tmp_path / "empty.pdf"
-        pdf_path.write_bytes(b"%PDF-1.4\n%%EOF")
+        pdf_content = b"""%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>
+endobj
+xref
+0 4
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+trailer
+<< /Size 4 /Root 1 0 R >>
+startxref
+197
+%%EOF
+"""
+        pdf_path.write_bytes(pdf_content)
         
         file = FileRecord(
             filehash="hash1",
@@ -681,5 +703,9 @@ startxref
         db_session.commit()
 
         response = client.get(f"/files/{file.id}/text/processed")
-        # Should return 200 with message about no text
-        assert response.status_code in [200, 500]  # Might fail parsing minimal PDF
+        # Should return 200 with empty text or message about no text
+        assert response.status_code == 200
+        data = response.json()
+        assert "text" in data
+        # Text should be empty or contain "No text" message
+        assert data["text"] == "" or "No text" in data["text"]
