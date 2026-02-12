@@ -9,12 +9,15 @@ from app.utils.config_validator.masking import mask_sensitive_value
 
 logger = logging.getLogger(__name__)
 
+# Pydantic model attributes that should not be iterated as user settings
+_PYDANTIC_INTERNALS = {"model_computed_fields", "model_config", "model_extra", "model_fields", "model_fields_set"}
+
 
 def dump_all_settings():
     """Log all settings values for diagnostic purposes"""
     logger.info("--- DUMPING ALL SETTINGS FOR DIAGNOSTIC PURPOSES ---")
     for key in dir(settings):
-        if not key.startswith("_") and not callable(getattr(settings, key)):
+        if not key.startswith("_") and key not in _PYDANTIC_INTERNALS and not callable(getattr(settings, key)):
             value = getattr(settings, key)
             # Mask sensitive values in logs
             if (
@@ -190,8 +193,8 @@ def get_settings_for_display(show_values=False):
             key
             for key in dir(settings)
             if not key.startswith("_")
+            and key not in _PYDANTIC_INTERNALS
             and not callable(getattr(settings, key))
-            and key not in ["model_computed_fields", "model_config", "model_extra", "model_fields", "model_fields_set"]
         ]
     )
 

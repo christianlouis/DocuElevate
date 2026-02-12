@@ -12,7 +12,7 @@ from typing import Optional
 
 import requests
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, HttpUrl, validator
+from pydantic import BaseModel, HttpUrl, field_validator
 
 from app.auth import require_login
 from app.config import settings
@@ -31,7 +31,8 @@ class URLUploadRequest(BaseModel):
     url: HttpUrl
     filename: Optional[str] = None
 
-    @validator("url")
+    @field_validator("url")
+    @classmethod
     def validate_url_scheme(cls, v):
         """Ensure only HTTP/HTTPS schemes are allowed"""
         parsed = urllib.parse.urlparse(str(v))
