@@ -127,7 +127,7 @@ async def oauth_callback(request: Request):
 
         # Redirect to original destination or default
         redirect_url = request.session.pop("redirect_after_login", "/upload")
-        return RedirectResponse(url=redirect_url)
+        return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
     except Exception as e:
         print(f"OAuth authentication error: {str(e)}")
         return RedirectResponse(

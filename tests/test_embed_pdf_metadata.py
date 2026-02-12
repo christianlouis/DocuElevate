@@ -443,10 +443,12 @@ class TestEmbedMetadataIntoPdf:
                     with patch("app.tasks.embed_metadata_into_pdf.Path") as mock_path_class:
                         # Mock Path for deletion logic
                         mock_original_path = MagicMock()
-                        mock_original_path.exists.return_value = True
-                        mock_original_path.is_relative_to.return_value = True
+                        mock_resolved_path = MagicMock()
+                        mock_resolved_path.exists.return_value = True
+                        mock_resolved_path.is_relative_to.return_value = True
+                        mock_original_path.resolve.return_value = mock_resolved_path
                         mock_workdir_path = MagicMock()
-                        mock_path_class.side_effect = [mock_workdir_path, mock_original_path, mock_workdir_path]
+                        mock_path_class.side_effect = [mock_workdir_path, mock_original_path]
 
                         with patch("app.tasks.embed_metadata_into_pdf.os.remove"):
                             with patch("app.tasks.embed_metadata_into_pdf.settings") as mock_settings:
@@ -458,5 +460,5 @@ class TestEmbedMetadataIntoPdf:
                                     "/workdir/tmp/test.pdf", "text", {"filename": "test.pdf"}, file_id=333
                                 )
 
-                                # Verify unlink (delete) was called
-                                mock_original_path.unlink.assert_called_once()
+                                # Verify unlink (delete) was called on the resolved path
+                                mock_resolved_path.unlink.assert_called_once()

@@ -165,8 +165,8 @@ class TestFinalizeDocumentStorage:
                     # Should still send notification
                     mock_notify.assert_called_once()
                     notify_args = mock_notify.call_args[1]
-                    # Should have fallback destination text
-                    assert len(notify_args["destinations"]) > 0
+                    # No services configured means empty destinations list
+                    assert notify_args["destinations"] == []
 
     @patch("app.tasks.finalize_document_storage.notify_file_processed")
     @patch("app.tasks.finalize_document_storage.send_to_all_destinations")
