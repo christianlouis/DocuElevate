@@ -20,11 +20,8 @@ class TestUploadToNextcloud:
         """Test that missing file raises FileNotFoundError."""
         from app.tasks.upload_to_nextcloud import upload_to_nextcloud
 
-        mock_self = MagicMock()
-        mock_self.request.id = "test-task"
-
         with pytest.raises(FileNotFoundError):
-            upload_to_nextcloud.__wrapped__(mock_self, "/nonexistent/file.pdf", file_id=1)
+            upload_to_nextcloud.__wrapped__("/nonexistent/file.pdf", file_id=1)
 
     @patch("app.tasks.upload_to_nextcloud.log_task_progress")
     @patch("app.tasks.upload_to_nextcloud.settings")

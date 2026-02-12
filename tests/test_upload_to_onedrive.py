@@ -333,11 +333,8 @@ class TestUploadToOnedrive:
         """Test that missing file raises FileNotFoundError."""
         from app.tasks.upload_to_onedrive import upload_to_onedrive
 
-        mock_self = MagicMock()
-        mock_self.request.id = "test-task"
-
         with pytest.raises(FileNotFoundError):
-            upload_to_onedrive.__wrapped__(mock_self, "/nonexistent/file.pdf", file_id=1)
+            upload_to_onedrive.__wrapped__("/nonexistent/file.pdf", file_id=1)
 
     @patch("app.tasks.upload_to_onedrive.log_task_progress")
     @patch("app.tasks.upload_to_onedrive.settings")
@@ -350,11 +347,8 @@ class TestUploadToOnedrive:
         test_file = tmp_path / "test.pdf"
         test_file.write_bytes(b"test content")
 
-        mock_self = MagicMock()
-        mock_self.request.id = "test-task"
-
         with pytest.raises(ValueError, match="client ID is not configured"):
-            upload_to_onedrive.__wrapped__(mock_self, str(test_file), file_id=1)
+            upload_to_onedrive.__wrapped__(str(test_file), file_id=1)
 
     @patch("app.tasks.upload_to_onedrive.upload_large_file")
     @patch("app.tasks.upload_to_onedrive.create_upload_session")

@@ -199,11 +199,8 @@ class TestUploadToDropbox:
         """Test that missing file raises FileNotFoundError."""
         from app.tasks.upload_to_dropbox import upload_to_dropbox
 
-        mock_self = MagicMock()
-        mock_self.request.id = "test-task"
-
         with pytest.raises(FileNotFoundError):
-            upload_to_dropbox.__wrapped__(mock_self, "/nonexistent/file.pdf", file_id=1)
+            upload_to_dropbox.__wrapped__("/nonexistent/file.pdf", file_id=1)
 
     @patch("app.tasks.upload_to_dropbox.log_task_progress")
     @patch("app.tasks.upload_to_dropbox.settings")

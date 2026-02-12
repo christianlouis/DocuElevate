@@ -394,11 +394,8 @@ class TestUploadToPaperless:
     @patch("app.tasks.upload_to_paperless.log_task_progress")
     def test_file_not_found(self, mock_log):
         """Test that missing file raises FileNotFoundError."""
-        mock_self = MagicMock()
-        mock_self.request.id = "test-task"
-
         with pytest.raises(FileNotFoundError):
-            upload_to_paperless.__wrapped__(mock_self, "/nonexistent/file.pdf", file_id=1)
+            upload_to_paperless.__wrapped__("/nonexistent/file.pdf", file_id=1)
 
     @patch("app.tasks.upload_to_paperless.set_document_custom_fields")
     @patch("app.tasks.upload_to_paperless.poll_task_for_document_id")
@@ -466,11 +463,8 @@ class TestUploadToPaperless:
         test_file = tmp_path / "test.pdf"
         test_file.write_bytes(b"%PDF-1.4 test content")
 
-        mock_self = MagicMock()
-        mock_self.request.id = "test-task"
-
         with pytest.raises(ValueError, match="not fully configured"):
-            upload_to_paperless.__wrapped__(mock_self, str(test_file), file_id=1)
+            upload_to_paperless.__wrapped__(str(test_file), file_id=1)
 
     @patch("app.tasks.upload_to_paperless.requests.post")
     @patch("app.tasks.upload_to_paperless.settings")
@@ -488,11 +482,8 @@ class TestUploadToPaperless:
         mock_exc.response = None
         mock_post.side_effect = mock_exc
 
-        mock_self = MagicMock()
-        mock_self.request.id = "test-task"
-
         with pytest.raises(requests.exceptions.ConnectionError):
-            upload_to_paperless.__wrapped__(mock_self, str(test_file), file_id=1)
+            upload_to_paperless.__wrapped__(str(test_file), file_id=1)
 
     @patch("app.tasks.upload_to_paperless.set_document_custom_fields")
     @patch("app.tasks.upload_to_paperless.poll_task_for_document_id")
