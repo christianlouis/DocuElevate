@@ -89,6 +89,19 @@ def _run_schema_migrations(engine):
                 conn.execute(text("ALTER TABLE files ADD COLUMN processed_file_path VARCHAR"))
             logger.info("Migration complete: 'processed_file_path' column added to files")
 
+        # Migration: Add deduplication columns to files table
+        if "is_duplicate" not in columns:
+            logger.info("Migrating files: adding 'is_duplicate' column")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE files ADD COLUMN is_duplicate BOOLEAN DEFAULT FALSE NOT NULL"))
+            logger.info("Migration complete: 'is_duplicate' column added to files")
+
+        if "duplicate_of_id" not in columns:
+            logger.info("Migrating files: adding 'duplicate_of_id' column")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE files ADD COLUMN duplicate_of_id INTEGER"))
+            logger.info("Migration complete: 'duplicate_of_id' column added to files")
+
 
 def get_db():
     """
