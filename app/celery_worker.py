@@ -33,6 +33,7 @@ from app.tasks.upload_to_s3 import upload_to_s3  # noqa: F401
 from app.tasks.upload_to_sftp import upload_to_sftp  # noqa: F401
 from app.tasks.upload_to_webdav import upload_to_webdav  # noqa: F401
 from app.tasks.uptime_kuma_tasks import ping_uptime_kuma  # noqa: F401
+from app.tasks.monitor_stalled_steps import monitor_stalled_steps  # noqa: F401
 
 celery.conf.task_routes = {
     "app.tasks.*": {"queue": "default"},
@@ -78,6 +79,12 @@ celery.conf.beat_schedule = {
         "task": "app.tasks.check_credentials.check_credentials",
         "schedule": crontab(hour="0", minute="0"),  # Midnight
         "options": {"expires": 3600},  # 1 hour expiry
+    },
+    # Monitor for stalled processing steps every minute
+    "monitor-stalled-steps": {
+        "task": "app.tasks.monitor_stalled_steps.monitor_stalled_steps",
+        "schedule": crontab(minute="*/1"),  # Every minute
+        "options": {"expires": 55},  # Must complete within 55 seconds
     },
 }
 

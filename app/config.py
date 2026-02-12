@@ -189,6 +189,12 @@ class Settings(BaseSettings):
         description="Show the 'Check for Duplicates' step in processing history. If False, the check is still performed but not displayed. Default: True.",
     )
 
+    # Processing step timeout - prevents files from getting stuck in "in_progress" state
+    step_timeout: int = Field(
+        default=600,
+        description="Timeout in seconds for processing steps. If a step is 'in_progress' for longer than this, it will be marked as failed. Default: 600 seconds (10 minutes).",
+    )
+
     # Security Headers Configuration (see SECURITY_AUDIT.md and docs/DeploymentGuide.md)
     # Disabled by default since most deployments use a reverse proxy (Traefik, Nginx, etc.)
     # that already adds these headers. Enable if deploying directly without a reverse proxy.

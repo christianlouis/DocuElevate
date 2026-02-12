@@ -110,8 +110,13 @@ def process_document(self, original_local_file: str, original_filename: str = No
             )
             new_record = existing_record
         else:
+            # Check for duplicate only if this is a new file (not reprocessing)
+            # IMPORTANT: Only consider it a duplicate if it matches a DIFFERENT file
             existing = db.query(FileRecord).filter_by(filehash=filehash).one_or_none()
-            if existing and settings.enable_deduplication:
+            
+            # A file is only a duplicate if it matches a different file's hash
+            # (not its own hash when reprocessing)
+            if existing and existing.id != file_id and settings.enable_deduplication:
                 logger.info(f"[{task_id}] Duplicate file detected (hash={filehash[:10]}...) Skipping processing.")
                 # Log the deduplication result without creating a new database record
                 # This avoids UNIQUE constraint violations on filehash
