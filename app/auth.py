@@ -66,105 +66,110 @@ def get_gravatar_url(email):
     return f"https://www.gravatar.com/avatar/{email_hash}?d=identicon"
 
 
-if AUTH_ENABLED:
+async def login(request: Request):
+    """Show login page with appropriate authentication options"""
+    return templates.TemplateResponse(
+        "login.html",
+        {
+            "request": request,
+            "error": request.query_params.get("error"),
+            "message": request.query_params.get("message"),
+            "show_oauth": OAUTH_CONFIGURED,
+            "oauth_provider_name": OAUTH_PROVIDER_NAME,
+            "app_version": settings.version,  # Changed from app_version to version
+        },
+    )
 
-    @router.get("/login")
-    async def login(request: Request):
-        """Show login page with appropriate authentication options"""
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "error": request.query_params.get("error"),
-                "message": request.query_params.get("message"),
-                "show_oauth": OAUTH_CONFIGURED,
-                "oauth_provider_name": OAUTH_PROVIDER_NAME,
-                "app_version": settings.version,  # Changed from app_version to version
-            },
-        )
 
-    @router.get("/oauth-login")
-    async def oauth_login(request: Request):
-        """Handle OAuth login flow"""
-        if not OAUTH_CONFIGURED:
-            return RedirectResponse(url="/login?error=OAuth+not+configured", status_code=status.HTTP_302_FOUND)
+async def oauth_login(request: Request):
+    """Handle OAuth login flow"""
+    if not OAUTH_CONFIGURED:
+        return RedirectResponse(url="/login?error=OAuth+not+configured", status_code=status.HTTP_302_FOUND)
 
-        redirect_uri = request.url_for("oauth_callback")
-        return await oauth.authentik.authorize_redirect(request, redirect_uri)
+    redirect_uri = request.url_for("oauth_callback")
+    return await oauth.authentik.authorize_redirect(request, redirect_uri)
 
-    @router.get("/oauth-callback")
-    async def oauth_callback(request: Request):
-        """Handle OAuth callback from provider"""
-        try:
-            token = await oauth.authentik.authorize_access_token(request)
-            userinfo = token.get("userinfo")
-            if not userinfo:
-                return RedirectResponse(
-                    url="/login?error=Failed+to+retrieve+user+information", status_code=status.HTTP_302_FOUND
-                )
 
-            # Store user info in session
-            user_data = dict(userinfo)
-
-            # Add Gravatar picture if no picture is provided
-            if not user_data.get("picture") and user_data.get("email"):
-                user_data["picture"] = get_gravatar_url(user_data["email"])
-
-            # Check if user is admin based on OAuth groups or specific email
-            # You can customize this logic based on your OAuth provider's attributes
-            # For example, check if user has an "admin" group or specific email domain
-            is_admin = False
-            if "groups" in user_data:
-                # Check if user is in admin group
-                groups = user_data.get("groups", [])
-                admin_group = (settings.admin_group_name or "admin").strip().lower()
-                is_admin = admin_group in [group.lower() for group in groups]
-
-            # Set is_admin flag (defaults to False for OAuth users unless they're in admin group)
-            user_data["is_admin"] = is_admin
-
-            request.session["user"] = user_data
-
-            # Log the successful authentication
-            print(f"User authenticated via OAuth: {user_data.get('email', 'No email')} (admin: {is_admin})")
-
-            # Redirect to original destination or default
-            redirect_url = request.session.pop("redirect_after_login", "/upload")
-            return RedirectResponse(url=redirect_url)
-        except Exception as e:
-            print(f"OAuth authentication error: {str(e)}")
+async def oauth_callback(request: Request):
+    """Handle OAuth callback from provider"""
+    try:
+        token = await oauth.authentik.authorize_access_token(request)
+        userinfo = token.get("userinfo")
+        if not userinfo:
             return RedirectResponse(
-                url=f"/login?error=Authentication+failed:+{str(e)}", status_code=status.HTTP_302_FOUND
+                url="/login?error=Failed+to+retrieve+user+information", status_code=status.HTTP_302_FOUND
             )
 
-    @router.post("/auth")
-    async def auth(request: Request):
-        """Handle local username/password authentication"""
-        form_data = await request.form()
-        username = form_data.get("username")
-        password = form_data.get("password")
+        # Store user info in session
+        user_data = dict(userinfo)
 
-        if username == settings.admin_username and password == settings.admin_password:
-            # Create user session
-            request.session["user"] = {
-                "id": "admin",
-                "name": "Administrator",
-                "email": f"{username}@local.docuelevate",
-                "preferred_username": username,
-                "picture": "/static/images/default-avatar.svg",
-                "is_admin": True,
-            }
-            # Redirect to original destination or default
-            redirect_url = request.session.pop("redirect_after_login", "/upload")
-            return RedirectResponse(url=redirect_url, status_code=302)
-        else:
-            return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
+        # Add Gravatar picture if no picture is provided
+        if not user_data.get("picture") and user_data.get("email"):
+            user_data["picture"] = get_gravatar_url(user_data["email"])
 
-    @router.get("/logout")
-    async def logout(request: Request):
-        """Handle user logout"""
-        request.session.pop("user", None)
-        return RedirectResponse(url="/login?message=You+have+been+logged+out+successfully", status_code=302)
+        # Check if user is admin based on OAuth groups or specific email
+        # You can customize this logic based on your OAuth provider's attributes
+        # For example, check if user has an "admin" group or specific email domain
+        is_admin = False
+        if "groups" in user_data:
+            # Check if user is in admin group
+            groups = user_data.get("groups", [])
+            admin_group = (settings.admin_group_name or "admin").strip().lower()
+            is_admin = admin_group in [group.lower() for group in groups]
+
+        # Set is_admin flag (defaults to False for OAuth users unless they're in admin group)
+        user_data["is_admin"] = is_admin
+
+        request.session["user"] = user_data
+
+        # Log the successful authentication
+        print(f"User authenticated via OAuth: {user_data.get('email', 'No email')} (admin: {is_admin})")
+
+        # Redirect to original destination or default
+        redirect_url = request.session.pop("redirect_after_login", "/upload")
+        return RedirectResponse(url=redirect_url)
+    except Exception as e:
+        print(f"OAuth authentication error: {str(e)}")
+        return RedirectResponse(
+            url=f"/login?error=Authentication+failed:+{str(e)}", status_code=status.HTTP_302_FOUND
+        )
+
+
+async def auth(request: Request):
+    """Handle local username/password authentication"""
+    form_data = await request.form()
+    username = form_data.get("username")
+    password = form_data.get("password")
+
+    if username == settings.admin_username and password == settings.admin_password:
+        # Create user session
+        request.session["user"] = {
+            "id": "admin",
+            "name": "Administrator",
+            "email": f"{username}@local.docuelevate",
+            "preferred_username": username,
+            "picture": "/static/images/default-avatar.svg",
+            "is_admin": True,
+        }
+        # Redirect to original destination or default
+        redirect_url = request.session.pop("redirect_after_login", "/upload")
+        return RedirectResponse(url=redirect_url, status_code=302)
+    else:
+        return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
+
+
+async def logout(request: Request):
+    """Handle user logout"""
+    request.session.pop("user", None)
+    return RedirectResponse(url="/login?message=You+have+been+logged+out+successfully", status_code=302)
+
+
+if AUTH_ENABLED:
+    router.add_api_route("/login", login, methods=["GET"])
+    router.add_api_route("/oauth-login", oauth_login, methods=["GET"])
+    router.add_api_route("/oauth-callback", oauth_callback, methods=["GET"])
+    router.add_api_route("/auth", auth, methods=["POST"])
+    router.add_api_route("/logout", logout, methods=["GET"])
 
 
 @router.get("/api/auth/whoami")

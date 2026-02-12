@@ -163,7 +163,7 @@ class TestRequireLogin:
             mock_request.session = {"user": {"id": "123"}}
             mock_request.url = "http://localhost/test"
 
-            result = test_sync_endpoint(mock_request)
+            result = await test_sync_endpoint(mock_request)
 
             assert result == {"message": "success"}
 
@@ -180,7 +180,7 @@ class TestRequireLogin:
             mock_request.session = {}
             mock_request.url = "http://localhost/protected"
 
-            result = test_sync_endpoint(mock_request)
+            result = await test_sync_endpoint(mock_request)
 
             assert isinstance(result, RedirectResponse)
             assert result.status_code == status.HTTP_302_FOUND
@@ -192,43 +192,42 @@ class TestOAuthConfiguration:
 
     def test_oauth_not_configured_without_credentials(self):
         """Test OAuth is not configured when credentials are missing."""
-        with patch("app.auth.settings") as mock_settings:
-            mock_settings.auth_enabled = True
-            mock_settings.authentik_client_id = None
-            mock_settings.authentik_client_secret = None
+        import importlib
 
-            # Re-import to trigger configuration logic
-            import importlib
+        import app.auth
 
-            import app.auth
+        try:
+            with patch("app.config.settings") as mock_settings:
+                mock_settings.auth_enabled = True
+                mock_settings.authentik_client_id = None
+                mock_settings.authentik_client_secret = None
 
+                importlib.reload(app.auth)
+
+                assert app.auth.OAUTH_CONFIGURED is False
+        finally:
             importlib.reload(app.auth)
-
-            from app.auth import OAUTH_CONFIGURED
-
-            assert OAUTH_CONFIGURED is False
 
     def test_oauth_configured_with_credentials(self):
         """Test OAuth is configured when credentials are provided."""
-        with patch("app.auth.settings") as mock_settings:
-            with patch("app.auth.oauth") as mock_oauth:
+        import importlib
+
+        import app.auth
+
+        try:
+            with patch("app.config.settings") as mock_settings:
                 mock_settings.auth_enabled = True
                 mock_settings.authentik_client_id = "test_client_id"
                 mock_settings.authentik_client_secret = "test_secret"
                 mock_settings.authentik_config_url = "https://auth.example.com/.well-known/openid-configuration"
                 mock_settings.oauth_provider_name = "Test SSO"
 
-                # Re-import to trigger configuration logic
-                import importlib
-
-                import app.auth
-
                 importlib.reload(app.auth)
 
-                from app.auth import OAUTH_CONFIGURED, OAUTH_PROVIDER_NAME
-
-                assert OAUTH_CONFIGURED is True
-                assert OAUTH_PROVIDER_NAME == "Test SSO"
+                assert app.auth.OAUTH_CONFIGURED is True
+                assert app.auth.OAUTH_PROVIDER_NAME == "Test SSO"
+        finally:
+            importlib.reload(app.auth)
 
 
 @pytest.mark.unit

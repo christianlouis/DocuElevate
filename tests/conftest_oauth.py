@@ -205,8 +205,8 @@ def oauth_enabled_app(oauth_config: Dict[str, str]):
         from fastapi.testclient import TestClient
         from app.main import app
         
-        # Create test client
-        client = TestClient(app)
+        # Create test client with base_url to satisfy TrustedHostMiddleware
+        client = TestClient(app, base_url="http://localhost")
         
         yield client
         
