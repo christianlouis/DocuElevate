@@ -44,8 +44,7 @@ class TestFinalizeDocumentStorage:
         with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=True):
             with patch("app.tasks.finalize_document_storage.os.path.getsize", return_value=102400):
                 with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="test_document.pdf"):
-                    mock_task = MagicMock()
-                    mock_task.request.id = "test-task-id"
+                    finalize_document_storage.request.id = "test-task-id"
 
                     metadata = {
                         "filename": "test_document.pdf",
@@ -54,7 +53,6 @@ class TestFinalizeDocumentStorage:
                     }
 
                     result = finalize_document_storage.__wrapped__(
-                        mock_task,
                         original_file="/tmp/original.pdf",
                         processed_file="/workdir/processed/test_document.pdf",
                         metadata=metadata,
@@ -108,11 +106,9 @@ class TestFinalizeDocumentStorage:
                         with patch("app.tasks.finalize_document_storage.settings") as mock_settings:
                             mock_settings.workdir = "/tmp"
 
-                            mock_task = MagicMock()
-                            mock_task.request.id = "test-task-id"
+                            finalize_document_storage.request.id = "test-task-id"
 
                             result = finalize_document_storage.__wrapped__(
-                                mock_task,
                                 original_file="/tmp/original.pdf",
                                 processed_file="/workdir/processed/doc.pdf",
                                 metadata={"filename": "doc.pdf"},
@@ -154,11 +150,9 @@ class TestFinalizeDocumentStorage:
         with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=True):
             with patch("app.tasks.finalize_document_storage.os.path.getsize", return_value=1024):
                 with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="test.pdf"):
-                    mock_task = MagicMock()
-                    mock_task.request.id = "test-task-id"
+                    finalize_document_storage.request.id = "test-task-id"
 
                     result = finalize_document_storage.__wrapped__(
-                        mock_task,
                         original_file="/tmp/original.pdf",
                         processed_file="/workdir/processed/test.pdf",
                         metadata={"filename": "test.pdf"},
@@ -198,11 +192,9 @@ class TestFinalizeDocumentStorage:
         with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=True):
             with patch("app.tasks.finalize_document_storage.os.path.getsize", return_value=2048):
                 with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="file.pdf"):
-                    mock_task = MagicMock()
-                    mock_task.request.id = "test-task-id"
+                    finalize_document_storage.request.id = "test-task-id"
 
                     result = finalize_document_storage.__wrapped__(
-                        mock_task,
                         original_file="/tmp/original.pdf",
                         processed_file="/workdir/processed/file.pdf",
                         metadata={"filename": "file.pdf"},
@@ -243,11 +235,9 @@ class TestFinalizeDocumentStorage:
         with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=True):
             with patch("app.tasks.finalize_document_storage.os.path.getsize", return_value=4096):
                 with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="doc.pdf"):
-                    mock_task = MagicMock()
-                    mock_task.request.id = "test-task-id"
+                    finalize_document_storage.request.id = "test-task-id"
 
                     result = finalize_document_storage.__wrapped__(
-                        mock_task,
                         original_file="/tmp/original.pdf",
                         processed_file="/workdir/processed/doc.pdf",
                         metadata={"filename": "doc.pdf"},
@@ -283,11 +273,9 @@ class TestFinalizeDocumentStorage:
         # File doesn't exist
         with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=False):
             with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="missing.pdf"):
-                mock_task = MagicMock()
-                mock_task.request.id = "test-task-id"
+                finalize_document_storage.request.id = "test-task-id"
 
                 result = finalize_document_storage.__wrapped__(
-                    mock_task,
                     original_file="/tmp/original.pdf",
                     processed_file="/workdir/processed/missing.pdf",
                     metadata={"filename": "missing.pdf"},
@@ -330,11 +318,9 @@ class TestFinalizeDocumentStorage:
         with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=True):
             with patch("app.tasks.finalize_document_storage.os.path.getsize", return_value=8192):
                 with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="test.pdf"):
-                    mock_task = MagicMock()
-                    mock_task.request.id = "test-task-id"
+                    finalize_document_storage.request.id = "test-task-id"
 
                     result = finalize_document_storage.__wrapped__(
-                        mock_task,
                         original_file="/tmp/original.pdf",
                         processed_file="/workdir/processed/test.pdf",
                         metadata={"filename": "test.pdf"},
@@ -372,11 +358,9 @@ class TestFinalizeDocumentStorage:
         with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=True):
             with patch("app.tasks.finalize_document_storage.os.path.getsize", return_value=1024):
                 with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="file.pdf"):
-                    mock_task = MagicMock()
-                    mock_task.request.id = "test-task-id"
+                    finalize_document_storage.request.id = "test-task-id"
 
                     result = finalize_document_storage.__wrapped__(
-                        mock_task,
                         original_file="/tmp/original.pdf",
                         processed_file="/workdir/processed/file.pdf",
                         metadata={"filename": "file.pdf"},
