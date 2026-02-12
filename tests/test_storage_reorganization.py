@@ -119,15 +119,74 @@ startxref
     def test_reprocessing_preserves_original(self, db_session, tmp_path):
         """Test that reprocessing doesn't create a duplicate original"""
         from app.tasks.process_document import process_document
-        
-        # Create test file and original
+
+        # Create test file and original with valid PDF content
+        pdf_content = b"""%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Resources <<
+/Font <<
+/F1 <<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
+>>
+>>
+>>
+/Contents 4 0 R
+>>
+endobj
+4 0 obj
+<<
+/Length 44
+>>
+stream
+BT
+/F1 12 Tf
+100 700 Td
+(Test content) Tj
+ET
+endstream
+endobj
+xref
+0 5
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000306 00000 n
+trailer
+<<
+/Size 5
+/Root 1 0 R
+>>
+startxref
+399
+%%EOF
+"""
         test_pdf = tmp_path / "test.pdf"
-        test_pdf.write_bytes(b"%PDF-1.4\ntest")
-        
+        test_pdf.write_bytes(pdf_content)
+
         original_dir = tmp_path / "original"
         original_dir.mkdir()
         original_file = original_dir / "existing-original.pdf"
-        original_file.write_bytes(b"%PDF-1.4\noriginal")
+        original_file.write_bytes(pdf_content)
         
         # Create existing file record
         file_record = FileRecord(
