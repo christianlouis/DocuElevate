@@ -6,7 +6,7 @@ sqlalchemy  # Database ORM
 pydantic  # Data validation
 cryptography>=41.0.0  # Encryption for sensitive settings in database
 openai  # GPT integration for metadata extraction
-PyPDF2>=3.0.0  # PDF processing for text extraction, metadata editing and rotation (replaces PyMuPDF)
+pypdf>=3.9.0  # PDF processing for text extraction, metadata editing and rotation (upgraded from PyPDF2 to fix CVE-2023-36464)
 requests  # HTTP client
 puremagic>=1.25,<2.0  # File type detection (pure Python)
 filetype>=1.2.0,<2.0  # File type detection fallback (pure Python)

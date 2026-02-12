@@ -230,7 +230,7 @@ httpx>=0.26.0
 
 ### Medium Priority (Next Month)
 - [ ] Fix Pydantic V1 → V2 migration warnings
-- [ ] Migrate from PyPDF2 to pypdf (modern fork)
+- [x] Migrate from PyPDF2 to pypdf (modern fork) - ✅ Completed 2026-02-12
 - [ ] Consolidate storage provider code
 - [ ] Add API pagination
 - [ ] Implement retry logic for Celery tasks

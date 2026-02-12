@@ -1,11 +1,50 @@
 # Security Audit Report
 
-**Date:** 2026-02-07  
+**Date:** 2026-02-12  
 **Status:** Bandit Security Scan Completed - All Critical/High/Medium Issues Resolved
 
 ## Executive Summary
 
 This document tracks security vulnerabilities found in DocuElevate and their remediation status. A comprehensive security audit using Bandit has been completed, with all critical, high, and medium severity issues addressed.
+
+## Recent Security Fixes
+
+### CVE-2023-36464: PyPDF2/pypdf Infinite Loop Vulnerability ✅ FIXED (2026-02-12)
+
+**Severity:** Moderate (CVSS: 5.5)  
+**CVE:** [CVE-2023-36464](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2023-36464)  
+**Advisory:** [GHSA-4vvm-4w3v-6mr8](https://github.com/advisories/GHSA-4vvm-4w3v-6mr8)
+
+**Issue:** Certain versions of PyPDF2 (>=2.2.0, <=3.0.1) and pypdf (prior to 3.9.0) contain a vulnerability where specially crafted PDF files can trigger an infinite loop in `__parse_content_stream`, causing 100% CPU usage and potential denial of service.
+
+**Impact:**
+- **Availability:** High (can block process and consume 100% CPU)
+- **Confidentiality:** None
+- **Integrity:** None
+- **Attack Vector:** Local
+- **Privileges Required:** None
+
+**Remediation:**
+- Upgraded from `PyPDF2>=3.0.0` (vulnerable) to `pypdf>=3.9.0` (fixed)
+- Updated all imports from `PyPDF2` to `pypdf` across the codebase
+- Verified pypdf 6.7.0 installed successfully
+- **Files Updated:**
+  - `requirements.txt` - Updated dependency specification
+  - `app/tasks/process_document.py`
+  - `app/tasks/rotate_pdf_pages.py`
+  - `app/utils/file_splitting.py`
+  - `app/tasks/embed_metadata_into_pdf.py`
+  - `app/tasks/process_with_azure_document_intelligence.py`
+  - `app/views/files.py`
+  - `app/api/files.py`
+  - `tests/test_external_integrations.py`
+  - `tests/test_file_splitting.py`
+
+**Testing:** All affected modules verified for syntax correctness and basic import functionality.
+
+**References:**
+- [py-pdf/pypdf#1828](https://github.com/py-pdf/pypdf/pull/1828) - Fix implementation
+- [py-pdf/pypdf#969](https://github.com/py-pdf/pypdf/pull/969) - Issue introduction
 
 ## Bandit Security Scan Results (2026-02-07)
 
@@ -151,7 +190,7 @@ This document tracks security vulnerabilities found in DocuElevate and their rem
 - `MAX_UPLOAD_SIZE`: Maximum file upload size in bytes (default: 1GB)
 - `MAX_SINGLE_FILE_SIZE`: Optional maximum size for a single file chunk
 - **Automatic page-based PDF splitting** for large PDFs when max_single_file_size is configured
-  - Splits PDFs at **page boundaries** using PyPDF2, NOT by byte position
+  - Splits PDFs at **page boundaries** using pypdf, NOT by byte position
   - Each output file is a structurally valid, complete PDF
   - No risk of corrupted or broken PDF files
 - Split files are processed sequentially to prevent overwhelming the system

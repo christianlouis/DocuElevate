@@ -7,7 +7,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-import PyPDF2  # Replace fitz with PyPDF2
+import pypdf  # Upgraded from PyPDF2 to fix CVE-2023-36464
 
 # Import the shared Celery instance
 from app.celery_app import celery
@@ -128,8 +128,8 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
 
         # Open the PDF and modify metadata
         with open(processed_file, "rb") as file:
-            pdf_reader = PyPDF2.PdfReader(file)
-            pdf_writer = PyPDF2.PdfWriter()
+            pdf_reader = pypdf.PdfReader(file)
+            pdf_writer = pypdf.PdfWriter()
 
             # Copy all pages from the reader to the writer
             for page in pdf_reader.pages:

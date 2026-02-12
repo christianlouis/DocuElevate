@@ -778,7 +778,7 @@ class TestPdfGenerator:
     @staticmethod
     def test_generate_default_pdf() -> None:
         """Test that generate_test_pdf creates a valid PDF with embedded text."""
-        import PyPDF2
+        import pypdf  # Upgraded from PyPDF2 to fix CVE-2023-36464
 
         path = generate_test_pdf()
         try:
@@ -786,7 +786,7 @@ class TestPdfGenerator:
             assert os.path.getsize(path) > 100
 
             with open(path, "rb") as f:
-                reader = PyPDF2.PdfReader(f)
+                reader = pypdf.PdfReader(f)
                 assert len(reader.pages) >= 1
                 text = reader.pages[0].extract_text()
                 assert "Invoice" in text
@@ -797,13 +797,13 @@ class TestPdfGenerator:
     @staticmethod
     def test_generate_custom_content_pdf() -> None:
         """Test that generate_test_pdf accepts custom content."""
-        import PyPDF2
+        import pypdf  # Upgraded from PyPDF2 to fix CVE-2023-36464
 
         custom = "Custom test content for verification"
         path = generate_test_pdf(content=custom)
         try:
             with open(path, "rb") as f:
-                reader = PyPDF2.PdfReader(f)
+                reader = pypdf.PdfReader(f)
                 text = reader.pages[0].extract_text()
                 assert "Custom test content" in text
         finally:

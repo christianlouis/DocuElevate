@@ -205,7 +205,7 @@ The following is a summary of the licenses used by our direct dependencies:
 | SQLAlchemy | MIT     |
 | Pydantic   | MIT     |
 | OpenAI     | MIT     |
-| PyPDF2     | BSD     |
+| pypdf      | BSD     |
 | Requests   | Apache 2.0 |
 | puremagic  | MIT     |
 | filetype   | MIT     |
