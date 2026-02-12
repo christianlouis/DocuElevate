@@ -182,57 +182,52 @@ def oauth_enabled_app(oauth_config: Dict[str, str]):
         Configured test client
     """
     import os
-    from unittest.mock import patch
-    
-    # Save original values
-    original_auth_enabled = os.environ.get("AUTH_ENABLED")
-    original_client_id = os.environ.get("AUTHENTIK_CLIENT_ID")
-    original_client_secret = os.environ.get("AUTHENTIK_CLIENT_SECRET")
-    original_config_url = os.environ.get("AUTHENTIK_CONFIG_URL")
-    
+
+    from app.main import app
+    import app.auth as auth_module
+    from app.auth import login, oauth_login, oauth_callback, auth, logout
+
+    # Save original state
+    original_auth_enabled = auth_module.AUTH_ENABLED
+    original_oauth_configured = auth_module.OAUTH_CONFIGURED
+    original_oauth_provider = auth_module.OAUTH_PROVIDER_NAME
+    original_route_count = len(app.router.routes)
+
     try:
-        # Enable auth and configure OAuth
-        os.environ["AUTH_ENABLED"] = "True"
-        os.environ["AUTHENTIK_CLIENT_ID"] = oauth_config["client_id"]
-        os.environ["AUTHENTIK_CLIENT_SECRET"] = oauth_config["client_secret"]
-        os.environ["AUTHENTIK_CONFIG_URL"] = oauth_config["server_metadata_url"]
-        
-        # Need to reload the app module to pick up new config
-        import importlib
-        from app import auth
-        importlib.reload(auth)
-        
+        # Enable auth and configure OAuth flags
+        auth_module.AUTH_ENABLED = True
+        auth_module.OAUTH_CONFIGURED = True
+        auth_module.OAUTH_PROVIDER_NAME = oauth_config.get("provider_name", "Test SSO")
+
+        # Register OAuth client
+        auth_module.oauth.register(
+            name="authentik",
+            client_id=oauth_config["client_id"],
+            client_secret=oauth_config["client_secret"],
+            server_metadata_url=oauth_config["server_metadata_url"],
+            client_kwargs={"scope": "openid profile email"},
+        )
+
+        # Add auth routes directly to the app (since include_router was called at startup
+        # with AUTH_ENABLED=False, routes weren't registered)
+        app.add_api_route("/login", login, methods=["GET"])
+        app.add_api_route("/oauth-login", oauth_login, methods=["GET"])
+        app.add_api_route("/oauth-callback", oauth_callback, methods=["GET"], name="oauth_callback")
+        app.add_api_route("/auth", auth, methods=["POST"])
+        app.add_api_route("/logout", logout, methods=["GET"])
+
         from fastapi.testclient import TestClient
-        from app.main import app
-        
-        # Create test client
-        client = TestClient(app)
-        
+
+        # Create test client with base_url to satisfy TrustedHostMiddleware
+        client = TestClient(app, base_url="http://localhost")
+
         yield client
-        
+
     finally:
-        # Restore original values
-        if original_auth_enabled is not None:
-            os.environ["AUTH_ENABLED"] = original_auth_enabled
-        else:
-            os.environ.pop("AUTH_ENABLED", None)
-        
-        if original_client_id is not None:
-            os.environ["AUTHENTIK_CLIENT_ID"] = original_client_id
-        else:
-            os.environ.pop("AUTHENTIK_CLIENT_ID", None)
-            
-        if original_client_secret is not None:
-            os.environ["AUTHENTIK_CLIENT_SECRET"] = original_client_secret
-        else:
-            os.environ.pop("AUTHENTIK_CLIENT_SECRET", None)
-            
-        if original_config_url is not None:
-            os.environ["AUTHENTIK_CONFIG_URL"] = original_config_url
-        else:
-            os.environ.pop("AUTHENTIK_CONFIG_URL", None)
-        
-        # Reload auth module to restore original state
-        import importlib
-        from app import auth
-        importlib.reload(auth)
+        # Restore original auth state
+        auth_module.AUTH_ENABLED = original_auth_enabled
+        auth_module.OAUTH_CONFIGURED = original_oauth_configured
+        auth_module.OAUTH_PROVIDER_NAME = original_oauth_provider
+
+        # Remove added routes
+        app.router.routes = app.router.routes[:original_route_count]

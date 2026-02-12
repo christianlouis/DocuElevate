@@ -136,7 +136,7 @@ class TestRateLimitDecorators:
         
         # Mock limiter to return a simple passthrough decorator
         mock_limiter = MagicMock()
-        mock_limiter.exempt.return_value = lambda f: f
+        mock_limiter.exempt.side_effect = lambda f: f
         mock_get_limiter.return_value = mock_limiter
         
         # Decorate function

@@ -1,7 +1,7 @@
 """Comprehensive unit tests for app/tasks/extract_metadata_with_gpt.py module."""
 
 import json
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -89,12 +89,11 @@ class TestExtractMetadataWithGpt:
         })
         mock_client.chat.completions.create.return_value = mock_completion
 
-        # Mock the task context
-        mock_task = MagicMock()
-        mock_task.request.id = "test-task-id"
+        # Set task request context directly on the Celery task
+        extract_metadata_with_gpt.request.id = "test-task-id"
 
         # Call the underlying function directly (not through Celery)
-        result = extract_metadata_with_gpt.__wrapped__(mock_task, "test_invoice.pdf", "Invoice from Amazon for 99.99 EUR", 123)
+        result = extract_metadata_with_gpt.__wrapped__("test_invoice.pdf", "Invoice from Amazon for 99.99 EUR", 123)
 
         # Verify OpenAI was called
         mock_client.chat.completions.create.assert_called_once()
@@ -123,10 +122,9 @@ class TestExtractMetadataWithGpt:
         mock_completion.choices[0].message.content = '```json\n{"filename": "test.pdf", "document_type": "Unknown"}\n```'
         mock_client.chat.completions.create.return_value = mock_completion
 
-        mock_task = MagicMock()
-        mock_task.request.id = "test-task-id"
+        extract_metadata_with_gpt.request.id = "test-task-id"
 
-        result = extract_metadata_with_gpt.__wrapped__(mock_task, "test.pdf", "Sample text", 456)
+        result = extract_metadata_with_gpt.__wrapped__("test.pdf", "Sample text", 456)
 
         assert result["metadata"]["filename"] == "test.pdf"
         assert result["metadata"]["document_type"] == "Unknown"
@@ -141,10 +139,9 @@ class TestExtractMetadataWithGpt:
         mock_completion.choices[0].message.content = "This is not valid JSON at all"
         mock_client.chat.completions.create.return_value = mock_completion
 
-        mock_task = MagicMock()
-        mock_task.request.id = "test-task-id"
+        extract_metadata_with_gpt.request.id = "test-task-id"
 
-        result = extract_metadata_with_gpt.__wrapped__(mock_task, "test.pdf", "Sample text", 789)
+        result = extract_metadata_with_gpt.__wrapped__("test.pdf", "Sample text", 789)
 
         assert result == {}
         mock_embed_task.delay.assert_not_called()
@@ -159,10 +156,9 @@ class TestExtractMetadataWithGpt:
         """Test handling of OpenAI API exceptions."""
         mock_client.chat.completions.create.side_effect = Exception("API Error: Rate limit exceeded")
 
-        mock_task = MagicMock()
-        mock_task.request.id = "test-task-id"
+        extract_metadata_with_gpt.request.id = "test-task-id"
 
-        result = extract_metadata_with_gpt.__wrapped__(mock_task, "test.pdf", "Sample text", 101)
+        result = extract_metadata_with_gpt.__wrapped__("test.pdf", "Sample text", 101)
 
         assert result == {}
         mock_embed_task.delay.assert_not_called()
@@ -192,11 +188,9 @@ class TestExtractMetadataWithGpt:
         # Mock file existence
         with patch("app.tasks.extract_metadata_with_gpt.os.path.exists", return_value=True):
             with patch("app.tasks.extract_metadata_with_gpt.settings.workdir", "/tmp"):
-                mock_task = MagicMock()
-                mock_task.request.id = "test-task-id"
+                extract_metadata_with_gpt.request.id = "test-task-id"
 
                 result = extract_metadata_with_gpt.__wrapped__(
-                    mock_task,
                     filename="test.pdf",
                     cleaned_text="Sample text",
                     file_id=None  # Not provided
@@ -219,10 +213,9 @@ class TestExtractMetadataWithGpt:
         })
         mock_client.chat.completions.create.return_value = mock_completion
 
-        mock_task = MagicMock()
-        mock_task.request.id = "test-task-id"
+        extract_metadata_with_gpt.request.id = "test-task-id"
 
-        result = extract_metadata_with_gpt.__wrapped__(mock_task, "test.pdf", "Sample text", 202)
+        result = extract_metadata_with_gpt.__wrapped__("test.pdf", "Sample text", 202)
 
         # Filename should be sanitized (empty or safe)
         assert result["metadata"]["filename"] == ""
@@ -240,10 +233,9 @@ class TestExtractMetadataWithGpt:
         })
         mock_client.chat.completions.create.return_value = mock_completion
 
-        mock_task = MagicMock()
-        mock_task.request.id = "test-task-id"
+        extract_metadata_with_gpt.request.id = "test-task-id"
 
-        result = extract_metadata_with_gpt.__wrapped__(mock_task, "test.pdf", "Sample text", 303)
+        result = extract_metadata_with_gpt.__wrapped__("test.pdf", "Sample text", 303)
 
         # Filename with .. should be rejected
         assert result["metadata"]["filename"] == ""
@@ -260,10 +252,9 @@ class TestExtractMetadataWithGpt:
         })
         mock_client.chat.completions.create.return_value = mock_completion
 
-        mock_task = MagicMock()
-        mock_task.request.id = "test-task-id"
+        extract_metadata_with_gpt.request.id = "test-task-id"
 
-        result = extract_metadata_with_gpt.__wrapped__(mock_task, "test.pdf", "Sample text", 404)
+        result = extract_metadata_with_gpt.__wrapped__("test.pdf", "Sample text", 404)
 
         # Valid filename should be preserved
         assert result["metadata"]["filename"] == "2024-01-15_Invoice_Amazon.pdf"
@@ -277,10 +268,9 @@ class TestExtractMetadataWithGpt:
         mock_completion.choices[0].message.content = '{"unexpected_field": "value"}'
         mock_client.chat.completions.create.return_value = mock_completion
 
-        mock_task = MagicMock()
-        mock_task.request.id = "test-task-id"
+        extract_metadata_with_gpt.request.id = "test-task-id"
 
-        result = extract_metadata_with_gpt.__wrapped__(mock_task, "test.pdf", "Sample text", 505)
+        result = extract_metadata_with_gpt.__wrapped__("test.pdf", "Sample text", 505)
 
         # Should still extract the JSON even if fields are unexpected
         assert "metadata" in result
