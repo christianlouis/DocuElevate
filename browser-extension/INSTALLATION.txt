@@ -1,0 +1,124 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║                                                                      ║
+║          DocuElevate Browser Extension - Installation Guide         ║
+║                                                                      ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+📦 INSTALLATION STEPS
+
+For Chrome / Edge / Chromium-based browsers:
+
+  1. Open your browser
+  2. Navigate to extensions page:
+     • Chrome: chrome://extensions/
+     • Edge: edge://extensions/
+     
+  3. Enable "Developer mode" (toggle in top right)
+  
+  4. Click "Load unpacked"
+  
+  5. Select the browser-extension folder
+  
+  6. Extension is now installed! 🎉
+
+For Firefox:
+
+  1. Open Firefox
+  2. Navigate to: about:debugging#/runtime/this-firefox
+  3. Click "Load Temporary Add-on"
+  4. Select manifest.json in browser-extension folder
+  5. Extension is installed (temporary) 🎉
+
+⚙️  CONFIGURATION
+
+  1. Click the DocuElevate icon in toolbar
+  2. Enter your server URL:
+     https://your-docuelevate-server.com
+     
+  3. (Optional) Add session cookie if auth enabled:
+     session=your_session_value
+     
+  4. Click "Save Configuration"
+  5. Ready to use! 🚀
+
+🎯 USAGE
+
+Method 1: Extension Popup
+  • Click extension icon
+  • Current URL is displayed
+  • (Optional) Enter custom filename
+  • Click "Send to DocuElevate"
+
+Method 2: Context Menu
+  • Right-click on any link
+  • Select "Send to DocuElevate"
+  • Notification shows result
+
+Method 3: Current Page
+  • Right-click on page
+  • Select "Send to DocuElevate"
+  • Notification shows result
+
+✅ VERIFICATION
+
+Extension should show:
+  • Icon in browser toolbar
+  • "Send to DocuElevate" in right-click menu
+  • Configuration popup when clicked
+  • Browser notifications for sent files
+
+🔐 SECURITY
+
+Permissions:
+  • activeTab - Get current tab URL
+  • storage - Save configuration
+  • contextMenus - Add right-click option
+  • notifications - Show alerts
+
+Privacy:
+  • No data collection
+  • No browsing tracking
+  • No third-party communication
+  • Only talks to YOUR server
+
+📚 DOCUMENTATION
+
+Complete guides available:
+  • README.md - Full user guide
+  • QUICKSTART.md - 5-minute setup
+  • VISUAL_GUIDE.md - UI mockups
+  • PERMISSIONS.md - Security details
+  • test.html - Testing page
+
+🐛 TROUBLESHOOTING
+
+Problem: Extension not appearing
+  → Check developer mode is enabled
+  → Reload the extension
+  
+Problem: Can't connect to server
+  → Verify server URL is correct
+  → Check server is running
+  → Try: http://localhost:8000 for local
+
+Problem: Authentication error
+  → Add session cookie in settings
+  → Log in to DocuElevate first
+  → Copy session cookie value
+
+Problem: Unsupported file type
+  → Only PDF, Office docs, images supported
+  → Check file has correct extension
+
+📞 SUPPORT
+
+Need help?
+  • Check browser-extension/README.md
+  • See docs/BrowserExtension.md
+  • Open issue on GitHub
+
+═══════════════════════════════════════════════════════════════════════
+
+🎉 Installation Complete! Start sending files to DocuElevate!
+
+═══════════════════════════════════════════════════════════════════════
