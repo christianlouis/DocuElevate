@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocuElevate</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="../icons/icon48.png" alt="DocuElevate" class="logo">
+            <h1>DocuElevate</h1>
+        </div>
+
+        <div id="config-section" class="section">
+            <h2>Configuration</h2>
+            <div class="form-group">
+                <label for="server-url">DocuElevate Server URL:</label>
+                <input type="url" id="server-url" placeholder="https://docuelevate.example.com" required>
+            </div>
+            <div class="form-group">
+                <label for="session-cookie">Session Cookie (optional):</label>
+                <input type="text" id="session-cookie" placeholder="session=your_session_value">
+                <small>Required if authentication is enabled</small>
+            </div>
+            <button id="save-config" class="btn btn-primary">Save Configuration</button>
+        </div>
+
+        <div id="send-section" class="section hidden">
+            <h2>Send File to DocuElevate</h2>
+            <div class="info-box">
+                <p><strong>Current URL:</strong></p>
+                <p id="current-url" class="url-display"></p>
+            </div>
+            <div class="form-group">
+                <label for="filename">Filename (optional):</label>
+                <input type="text" id="filename" placeholder="Leave blank to use URL filename">
+            </div>
+            <button id="send-file" class="btn btn-primary">Send to DocuElevate</button>
+            <button id="show-config" class="btn btn-secondary">Change Settings</button>
+        </div>
+
+        <div id="status-section" class="section hidden">
+            <div id="status-message"></div>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
