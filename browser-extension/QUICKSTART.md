@@ -114,8 +114,9 @@ If your DocuElevate server requires authentication:
 
 ## Need Help?
 
-- Check the [Troubleshooting Guide](../docs/Troubleshooting.md)
+- Check the [Browser Extension Guide](../docs/BrowserExtension.md) for detailed troubleshooting
 - Review the [API Documentation](../docs/API.md)
+- See the main [Troubleshooting Guide](../docs/Troubleshooting.md) for general issues
 - Open an issue on [GitHub](https://github.com/christianlouis/DocuElevate/issues)
 
 ---

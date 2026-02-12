@@ -3,7 +3,7 @@
 // This script runs on all web pages to detect file URLs
 // and enable communication between page content and the extension
 
-// Listen for messages from the popup
+// Listen for messages from the popup (reserved for future use)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'GET_PAGE_INFO') {
         // Return information about the current page
@@ -12,7 +12,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             title: document.title
         };
         sendResponse(pageInfo);
+        return true; // Indicates response will be sent asynchronously
     }
+    return false; // No async response
 });
 
 // Detect if current page is a direct file link
