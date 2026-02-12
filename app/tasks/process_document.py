@@ -113,32 +113,19 @@ def process_document(self, original_local_file: str, original_filename: str = No
             existing = db.query(FileRecord).filter_by(filehash=filehash).one_or_none()
             if existing and settings.enable_deduplication:
                 logger.info(f"[{task_id}] Duplicate file detected (hash={filehash[:10]}...) Skipping processing.")
-                # Create a file record for this duplicate with is_duplicate=True
-                duplicate_record = FileRecord(
-                    filehash=filehash,
-                    original_filename=original_filename,
-                    local_filename="",
-                    file_size=file_size,
-                    mime_type=mime_type,
-                    is_duplicate=True,
-                    duplicate_of_id=existing.id,
-                )
-                db.add(duplicate_record)
-                db.commit()
-                db.refresh(duplicate_record)
-                
+                # Log the deduplication result without creating a new database record
+                # This avoids UNIQUE constraint violations on filehash
                 if settings.enable_deduplication and settings.show_deduplication_step:
                     log_task_progress(
                         task_id,
                         "check_for_duplicates",
                         "success",
                         f"Duplicate detected - matching file ID {existing.id}",
-                        file_id=duplicate_record.id,
+                        file_id=existing.id,
                         detail=(
                             f"Duplicate file detected.\n"
                             f"File hash: {filehash}\n"
                             f"Original file record ID: {existing.id}\n"
-                            f"This file record ID: {duplicate_record.id}\n"
                             f"Original filename: {original_filename}"
                         ),
                     )
@@ -147,7 +134,7 @@ def process_document(self, original_local_file: str, original_filename: str = No
                     "process_document",
                     "success",
                     "Duplicate file detected, skipping",
-                    file_id=duplicate_record.id,
+                    file_id=existing.id,
                     detail=(
                         f"Duplicate file detected.\n"
                         f"File hash: {filehash}\n"
@@ -157,7 +144,7 @@ def process_document(self, original_local_file: str, original_filename: str = No
                 )
                 return {
                     "status": "duplicate_file",
-                    "file_id": duplicate_record.id,
+                    "file_id": existing.id,
                     "original_file_id": existing.id,
                     "detail": "File already processed.",
                 }
