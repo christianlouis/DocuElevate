@@ -134,7 +134,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run Mypy
-        run: mypy app/ --ignore-missing-imports
+        run: mypy app/
 
   # ── Pylint ─────────────────────────────────────────────────────────────
   pylint:
@@ -155,7 +155,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run Pylint
-        run: pylint app/ --max-line-length=120 --disable=C0111,C0103,R0903
+        run: pylint app/
 
   # ── Bandit ─────────────────────────────────────────────────────────────
   bandit:
