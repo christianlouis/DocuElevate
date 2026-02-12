@@ -193,12 +193,13 @@ disable_error_code = [
     "type-var",         # Type variable constraints with ORM generics
     "method-assign",    # Dynamic method assignment patterns
     "call-arg",         # Dynamic call signatures in framework code
-    "import-untyped",   # Third-party libraries without complete type stubs
 ]
 
 # pylint configuration
-[tool.pylint."messages control"]
+[tool.pylint.format]
 max-line-length = 120
+
+[tool.pylint."messages control"]
 disable = [
     "C0111",  # missing-docstring (already documented functions use docstrings selectively)
     "C0103",  # invalid-name (project uses domain-specific naming conventions)
