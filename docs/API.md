@@ -99,6 +99,106 @@ curl -X GET "http://<your-docuelevate-instance>/api/files" \
 
 #### Upload from Computer
 
+Upload a file from your computer to DocuElevate for processing.
+
+**Endpoint**: `POST /api/upload`
+
+**Request**:
+```bash
+curl -X POST "http://<your-docuelevate-instance>/api/upload" \
+  -H "Authorization: Bearer <your-token>" \
+  -F "file=@/path/to/document.pdf"
+```
+
+**Response (201 Created)**:
+```json
+{
+  "task_id": "abc-123-def",
+  "status": "queued",
+  "message": "File uploaded and queued for processing",
+  "filename": "document.pdf"
+}
+```
+
+#### Upload from URL
+
+Download and process a file from a URL. This endpoint is used by the browser extension.
+
+**Endpoint**: `POST /api/process-url`
+
+**Security Features**:
+- SSRF protection (blocks private IPs, localhost, cloud metadata endpoints)
+- File type validation (only supported document/image types)
+- File size limits (enforces maximum upload size)
+- Timeout protection (prevents hanging on slow/malicious servers)
+
+**Request**:
+```bash
+curl -X POST "http://<your-docuelevate-instance>/api/process-url" \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/document.pdf",
+    "filename": "custom-name.pdf"
+  }'
+```
+
+**Request Body**:
+```json
+{
+  "url": "https://example.com/document.pdf",
+  "filename": "optional-custom-name.pdf"
+}
+```
+
+**Response (200 OK)**:
+```json
+{
+  "task_id": "abc-123-def",
+  "status": "queued",
+  "message": "File downloaded from URL and queued for processing",
+  "filename": "document.pdf",
+  "size": 1048576
+}
+```
+
+**Error Responses**:
+
+```json
+// 400 Bad Request - Invalid URL or unsupported file type
+{
+  "detail": "Unsupported file type: text/html. Supported types: PDF, Office documents, images, plain text"
+}
+
+// 400 Bad Request - Private IP (SSRF protection)
+{
+  "detail": "Access to private/internal IP addresses is not allowed for security reasons"
+}
+
+// 408 Request Timeout
+{
+  "detail": "Request timeout: server took too long to respond"
+}
+
+// 413 Payload Too Large
+{
+  "detail": "File too large: 2097152 bytes (max 1048576 bytes)"
+}
+
+// 502 Bad Gateway
+{
+  "detail": "Failed to connect to URL: Connection refused"
+}
+```
+
+**Usage with Browser Extension**:
+
+The DocuElevate browser extension uses this endpoint to send files directly from your browser. See the [Browser Extension Guide](BrowserExtension.md) for installation and usage instructions.
+
+**Supported File Types**:
+- Documents: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV, RTF
+- Images: JPG, PNG, GIF, BMP, TIFF, WebP, SVG
+
 **POST** `/api/ui-upload`
 
 Upload one or more files from your computer for processing.

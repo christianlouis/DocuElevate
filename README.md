@@ -46,6 +46,7 @@ The project includes a **UI** for uploading and managing files, and an API docum
 ## Documentation Index
 
 - [User Guide](docs/UserGuide.md) - How to use DocuElevate
+- [Browser Extension Guide](docs/BrowserExtension.md) - Install and use the browser extension
 - [API Documentation](docs/API.md) - API reference
 - [Deployment Guide](docs/DeploymentGuide.md) - How to deploy DocuElevate
 - [Configuration Guide](docs/ConfigurationGuide.md) - Available configuration options
@@ -72,10 +73,11 @@ DocuElevate follows a streamlined document processing workflow:
 </div>
 
 ### Document Ingestion
-Documents enter DocuElevate through three possible channels:
+Documents enter DocuElevate through four possible channels:
 1. **Web Upload**: Users manually upload files via the web interface
-2. **Email Attachments**: Automatic polling of configured IMAP mailboxes (supports multiple accounts)
-3. **API**: Direct programmatic uploads via the REST API
+2. **Browser Extension**: Send files directly from your browser with one click
+3. **Email Attachments**: Automatic polling of configured IMAP mailboxes (supports multiple accounts)
+4. **API**: Direct programmatic uploads via the REST API
 
 ### Processing Pipeline
 Every document goes through the following steps:
@@ -102,8 +104,13 @@ Users can choose to send documents to any combination of these destinations thro
   - Drag-and-drop file upload on both Upload and Files pages—upload anywhere on the Files page
   - Real-time upload progress with validation
   - Support for PDF, Office documents, images, and more (up to 500MB per file)
+- **Browser Extension**:  
+  - Send files directly from your browser to DocuElevate with one click
+  - Compatible with Chrome, Firefox, Edge, and other Chromium-based browsers
+  - Context menu integration for quick access
+  - See [Browser Extension Guide](docs/BrowserExtension.md) for installation and usage
 - **Document Upload & Storage**:  
-  - Manual uploads (via API or UI) to Dropbox, Nextcloud, Google Drive, or Paperless  
+  - Manual uploads (via API or UI) to Dropbox, Nextcloud, Google Drive, or Paperless
 - **OCR Processing (Azure)**:  
   - Extract text from scanned PDFs using Azure Document Intelligence  
 - **Metadata Extraction (OpenAI)**:  
