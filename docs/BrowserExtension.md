@@ -302,12 +302,30 @@ To debug the extension:
 
 Possible future improvements:
 
-- OAuth2 authentication instead of session cookies
+- **OAuth2 authentication** instead of session cookies
+  - Current session cookie approach has limitations:
+    - Session cookies expire and need manual refresh
+    - Users must manually copy cookie from browser DevTools
+    - No automatic token refresh mechanism
+  - OAuth2 would provide:
+    - Automatic token refresh
+    - Better security with short-lived access tokens
+    - Easier user experience (login flow instead of cookie copying)
 - File preview before sending
 - Batch processing multiple URLs
 - Progress indication for large files
 - History of sent files
 - Custom processing options (OCR language, metadata fields, etc.)
+
+### Session Cookie Security Best Practices
+
+For users of the current implementation:
+
+1. **Keep session cookies secure**: Never share your session cookie value
+2. **Refresh regularly**: Session cookies expire; update the extension when you log in again
+3. **Use HTTPS**: Always use HTTPS for your DocuElevate server
+4. **Clear on logout**: Remove the session cookie from extension when logging out
+5. **Private browsing**: Session cookies from private/incognito windows have shorter lifetimes
 
 ## Related Documentation
 

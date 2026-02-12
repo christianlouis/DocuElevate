@@ -121,7 +121,8 @@ sendFileBtn.addEventListener('click', async () => {
             try {
                 const result = await response.json();
                 errorMessage = result.detail || errorMessage;
-            } catch (e) {
+            } catch (jsonError) {
+                // Server returned non-JSON error response
                 errorMessage = `HTTP ${response.status}: ${response.statusText}`;
             }
             showStatus(`Error: ${errorMessage}`, 'error');

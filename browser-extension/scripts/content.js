@@ -1,9 +1,11 @@
 // Content script for DocuElevate browser extension
 
-// This script runs on all web pages to detect file URLs
-// and enable communication between page content and the extension
+// This script runs on all web pages to enable communication
+// between page content and the extension
 
-// Listen for messages from the popup (reserved for future use)
+// Message handler reserved for future functionality
+// Future use case: Extract additional page metadata or interact with page content
+// Currently not used - can be removed if not needed
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'GET_PAGE_INFO') {
         // Return information about the current page
