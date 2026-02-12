@@ -7,10 +7,11 @@ actual file uploads against it, then verify the files were uploaded successfully
 
 import os
 import time
-import pytest
-import requests
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
+import requests
 
 from app.tasks.upload_to_webdav import upload_to_webdav
 

@@ -1,8 +1,10 @@
 """Tests for app/tasks/check_credentials.py module."""
+
 import json
 import os
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from app.tasks.check_credentials import (
     MockRequest,
@@ -95,6 +97,7 @@ class TestUnwrapDecoratedFunction:
 
     def test_returns_same_function_if_not_decorated(self):
         """Test returns same function if not decorated."""
+
         def my_func():
             return "hello"
 
@@ -103,6 +106,7 @@ class TestUnwrapDecoratedFunction:
 
     def test_unwraps_decorated_function(self):
         """Test unwraps decorated function."""
+
         def inner():
             return "hello"
 
@@ -116,6 +120,7 @@ class TestUnwrapDecoratedFunction:
 
     def test_unwraps_multiple_levels(self):
         """Test unwraps multiple levels of decoration."""
+
         def original():
             return "hello"
 

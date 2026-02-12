@@ -1,12 +1,14 @@
 """Tests for app/utils/setup_wizard.py module."""
-import pytest
+
 from unittest.mock import patch
 
+import pytest
+
 from app.utils.setup_wizard import (
-    get_required_settings,
-    is_setup_required,
     get_missing_required_settings,
+    get_required_settings,
     get_wizard_steps,
+    is_setup_required,
 )
 
 
@@ -115,7 +117,7 @@ class TestGetWizardSteps:
         all_step_keys = []
         for settings_list in steps.values():
             all_step_keys.extend([s["key"] for s in settings_list])
-        
+
         required_keys = [s["key"] for s in get_required_settings()]
         for key in required_keys:
             assert key in all_step_keys, f"Setting {key} not assigned to any wizard step"

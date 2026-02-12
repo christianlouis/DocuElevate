@@ -29,8 +29,9 @@ class TestURLUploadValidation:
 
     def test_validate_url_scheme_ftp_rejected(self):
         """Test that FTP URLs are rejected"""
-        from app.api.url_upload import URLUploadRequest
         from pydantic import ValidationError
+
+        from app.api.url_upload import URLUploadRequest
 
         with pytest.raises(ValidationError) as exc_info:
             URLUploadRequest(url="ftp://example.com/file.pdf")
@@ -39,8 +40,9 @@ class TestURLUploadValidation:
 
     def test_validate_url_scheme_file_rejected(self):
         """Test that file:// URLs are rejected"""
-        from app.api.url_upload import URLUploadRequest
         from pydantic import ValidationError
+
+        from app.api.url_upload import URLUploadRequest
 
         with pytest.raises(ValidationError) as exc_info:
             URLUploadRequest(url="file:///etc/passwd")
@@ -126,17 +128,14 @@ class TestURLUploadValidation:
         # Word
         assert validate_file_type("application/msword", "file.doc") is True
         assert (
-            validate_file_type(
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "file.docx"
-            )
+            validate_file_type("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "file.docx")
             is True
         )
 
         # Excel
         assert validate_file_type("application/vnd.ms-excel", "file.xls") is True
         assert (
-            validate_file_type("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "file.xlsx")
-            is True
+            validate_file_type("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "file.xlsx") is True
         )
 
     def test_validate_file_type_images_allowed(self):
@@ -248,9 +247,7 @@ class TestURLUploadEndpoint:
     @patch("app.api.url_upload.requests.get")
     def test_process_url_blocks_metadata_endpoint(self, mock_requests_get, client):
         """Test that cloud metadata endpoints are blocked"""
-        response = client.post(
-            "/api/process-url", json={"url": "http://169.254.169.254/latest/meta-data/"}
-        )
+        response = client.post("/api/process-url", json={"url": "http://169.254.169.254/latest/meta-data/"})
 
         assert response.status_code == 400
         data = response.json()
@@ -341,9 +338,7 @@ class TestURLUploadEndpoint:
 
     @patch("app.api.url_upload.requests.get")
     @patch("app.api.url_upload.process_document")
-    def test_process_url_with_custom_filename(
-        self, mock_process_document, mock_requests_get, client, tmp_path
-    ):
+    def test_process_url_with_custom_filename(self, mock_process_document, mock_requests_get, client, tmp_path):
         """Test URL upload with custom filename"""
         # Mock successful download
         mock_response = Mock()
@@ -369,9 +364,7 @@ class TestURLUploadEndpoint:
 
     @patch("app.api.url_upload.requests.get")
     @patch("app.api.url_upload.process_document")
-    def test_process_url_extracts_filename_from_url(
-        self, mock_process_document, mock_requests_get, client, tmp_path
-    ):
+    def test_process_url_extracts_filename_from_url(self, mock_process_document, mock_requests_get, client, tmp_path):
         """Test that filename is extracted from URL when not provided"""
         # Mock successful download
         mock_response = Mock()

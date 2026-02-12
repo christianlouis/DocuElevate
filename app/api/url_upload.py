@@ -277,7 +277,7 @@ async def process_url(request: Request, url_request: URLUploadRequest):
         return {
             "task_id": task.id,
             "status": "queued",
-            "message": f"File downloaded from URL and queued for processing",
+            "message": "File downloaded from URL and queued for processing",
             "filename": safe_filename,
             "size": downloaded_size,
         }

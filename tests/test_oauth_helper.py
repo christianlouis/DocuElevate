@@ -4,8 +4,9 @@ Tests for app/utils/oauth_helper.py
 Tests OAuth token exchange helper functions.
 """
 
-import pytest
 from unittest.mock import Mock, patch
+
+import pytest
 import requests
 from fastapi import HTTPException
 
@@ -51,9 +52,7 @@ class TestOAuthTokenExchange:
         assert result["expires_in"] == 3600
 
         # Verify request was made correctly
-        mock_post.assert_called_once_with(
-            "https://oauth.example.com/token", data=payload, timeout=30
-        )
+        mock_post.assert_called_once_with("https://oauth.example.com/token", data=payload, timeout=30)
 
     @patch("app.utils.oauth_helper.requests.post")
     @patch("app.utils.oauth_helper.settings")
@@ -81,9 +80,7 @@ class TestOAuthTokenExchange:
         )
 
         # Verify custom timeout was used
-        mock_post.assert_called_once_with(
-            "https://oauth.example.com/token", data=payload, timeout=60
-        )
+        mock_post.assert_called_once_with("https://oauth.example.com/token", data=payload, timeout=60)
 
     @patch("app.utils.oauth_helper.requests.post")
     @patch("app.utils.oauth_helper.settings")
@@ -200,9 +197,7 @@ class TestOAuthTokenExchange:
         # Mock error response with invalid JSON
         mock_response = Mock()
         mock_response.status_code = 400
-        mock_response.json.side_effect = requests.exceptions.JSONDecodeError(
-            "Invalid JSON", "", 0
-        )
+        mock_response.json.side_effect = requests.exceptions.JSONDecodeError("Invalid JSON", "", 0)
         mock_post.return_value = mock_response
 
         payload = {"grant_type": "authorization_code"}

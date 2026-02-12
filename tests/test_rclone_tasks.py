@@ -1,7 +1,9 @@
 """Tests for app/tasks/upload_with_rclone.py module."""
+
 import os
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from app.tasks.upload_with_rclone import upload_with_rclone
 

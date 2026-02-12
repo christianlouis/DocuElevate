@@ -3,15 +3,17 @@ Tests for upload tasks including OneDrive, S3, FTP, SFTP, WebDAV, Google Drive, 
 """
 
 import os
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+
+from app.tasks.upload_to_email import upload_to_email
+from app.tasks.upload_to_ftp import upload_to_ftp
+from app.tasks.upload_to_google_drive import upload_to_google_drive
 from app.tasks.upload_to_onedrive import upload_to_onedrive
 from app.tasks.upload_to_s3 import upload_to_s3
-from app.tasks.upload_to_ftp import upload_to_ftp
 from app.tasks.upload_to_sftp import upload_to_sftp
 from app.tasks.upload_to_webdav import upload_to_webdav
-from app.tasks.upload_to_google_drive import upload_to_google_drive
-from app.tasks.upload_to_email import upload_to_email
 
 _TEST_CREDENTIAL = "test_pass"  # noqa: S105
 

@@ -13,6 +13,7 @@ from app.tasks.convert_to_pdf import convert_to_pdf  # noqa: F401
 from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf  # noqa: F401
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt  # noqa: F401
 from app.tasks.imap_tasks import pull_all_inboxes  # noqa: F401
+from app.tasks.monitor_stalled_steps import monitor_stalled_steps  # noqa: F401
 
 # **Ensure all tasks are imported before Celery starts**
 from app.tasks.process_document import process_document  # noqa: F401
@@ -33,7 +34,6 @@ from app.tasks.upload_to_s3 import upload_to_s3  # noqa: F401
 from app.tasks.upload_to_sftp import upload_to_sftp  # noqa: F401
 from app.tasks.upload_to_webdav import upload_to_webdav  # noqa: F401
 from app.tasks.uptime_kuma_tasks import ping_uptime_kuma  # noqa: F401
-from app.tasks.monitor_stalled_steps import monitor_stalled_steps  # noqa: F401
 
 celery.conf.task_routes = {
     "app.tasks.*": {"queue": "default"},

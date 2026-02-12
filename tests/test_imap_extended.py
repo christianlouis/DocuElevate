@@ -1,16 +1,18 @@
 """Extended tests for app/tasks/imap_tasks.py module."""
-import os
+
 import json
-import pytest
+import os
 from datetime import datetime, timezone
-from unittest.mock import patch, MagicMock
 from email.message import EmailMessage
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from app.tasks.imap_tasks import (
-    save_processed_emails,
-    load_processed_emails,
     fetch_attachments_and_enqueue,
     find_all_mail_xlist,
+    load_processed_emails,
+    save_processed_emails,
 )
 
 
@@ -41,9 +43,7 @@ class TestFetchAttachmentsExtended:
         msg = EmailMessage()
         msg["Subject"] = "Test"
         # Create attachment with wrong MIME type but .pdf extension
-        msg.add_attachment(
-            b"%PDF-1.4", maintype="application", subtype="octet-stream", filename="invoice.pdf"
-        )
+        msg.add_attachment(b"%PDF-1.4", maintype="application", subtype="octet-stream", filename="invoice.pdf")
 
         with patch("app.tasks.imap_tasks.settings") as mock_settings:
             mock_settings.workdir = str(tmp_path)

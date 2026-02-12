@@ -1,12 +1,14 @@
 """Tests for app/utils/config_validator/validators.py module."""
-import pytest
+
 from unittest.mock import patch
 
+import pytest
+
 from app.utils.config_validator.validators import (
-    validate_storage_configs,
+    check_all_configs,
     validate_email_config,
     validate_notification_config,
-    check_all_configs,
+    validate_storage_configs,
 )
 
 

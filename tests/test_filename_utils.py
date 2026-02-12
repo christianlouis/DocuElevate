@@ -4,11 +4,12 @@ Tests for app/utils/filename_utils.py
 Tests filename sanitization and manipulation functions.
 """
 
-import pytest
 import os
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import Mock, patch
-from datetime import datetime
+
+import pytest
 
 
 @pytest.mark.unit
@@ -257,7 +258,6 @@ class TestFilenameUtilsEdgeCases:
         assert '"' not in result
         assert "|" not in result
         assert "?" not in result
-
 
 
 @pytest.mark.unit

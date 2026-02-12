@@ -4,11 +4,11 @@ Security tests for path traversal vulnerabilities.
 Tests all file path operations to ensure they properly prevent path traversal attacks.
 """
 
-import os
 import json
+import os
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -389,8 +389,9 @@ class TestFileUploadSecurity:
 
     def test_sanitize_after_basename(self):
         """Test that sanitization happens after basename extraction."""
-        from app.utils.filename_utils import sanitize_filename
         import os
+
+        from app.utils.filename_utils import sanitize_filename
 
         malicious = "../../../passwd.pdf"
 
@@ -442,9 +443,10 @@ class TestEndToEndPathTraversal:
 
     def test_full_upload_flow_prevents_traversal(self, tmp_path):
         """Test complete upload flow prevents path traversal."""
-        from app.utils.filename_utils import sanitize_filename
         import os
         import uuid
+
+        from app.utils.filename_utils import sanitize_filename
 
         # Simulate ui_upload flow
         malicious_upload_filename = "../../../etc/passwd"
@@ -472,8 +474,9 @@ class TestEndToEndPathTraversal:
 
     def test_metadata_embedding_flow_prevents_traversal(self, tmp_path):
         """Test metadata embedding flow prevents path traversal."""
-        from app.utils.filename_utils import sanitize_filename
         import os
+
+        from app.utils.filename_utils import sanitize_filename
 
         # Simulate GPT returning malicious filename
         gpt_metadata = {

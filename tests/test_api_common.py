@@ -1,7 +1,9 @@
 """Tests for app/api/common.py module."""
+
 import os
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 from app.api.common import resolve_file_path
 

@@ -1,7 +1,9 @@
 """Tests for app/api/user.py module."""
-import pytest
+
 from hashlib import md5
 from unittest.mock import MagicMock
+
+import pytest
 
 from app.api.user import whoami_handler
 

@@ -397,9 +397,9 @@ def reprocess_single_file(request: Request, file_id: int, db: DbSession):
 def reprocess_with_cloud_ocr(request: Request, file_id: int, db: DbSession):
     """
     Reprocess a single file with forced Cloud OCR processing.
-    
+
     This endpoint forces Azure Document Intelligence OCR processing regardless
-    of whether the PDF contains embedded text. Useful for documents with 
+    of whether the PDF contains embedded text. Useful for documents with
     low-quality embedded text or when higher quality OCR is needed.
 
     Args:
@@ -425,16 +425,12 @@ def reprocess_with_cloud_ocr(request: Request, file_id: int, db: DbSession):
             logger.info(f"Using local file for Cloud OCR reprocessing: {source_file}")
         else:
             raise HTTPException(
-                status_code=400, 
-                detail="Neither original nor local file found on disk. Cannot reprocess."
+                status_code=400, detail="Neither original nor local file found on disk. Cannot reprocess."
             )
 
         # Queue the file for processing with force_cloud_ocr=True
         task = process_document.delay(
-            source_file,
-            original_filename=file_record.original_filename,
-            file_id=file_record.id,
-            force_cloud_ocr=True
+            source_file, original_filename=file_record.original_filename, file_id=file_record.id, force_cloud_ocr=True
         )
 
         logger.info(

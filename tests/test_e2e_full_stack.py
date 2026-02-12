@@ -7,9 +7,10 @@ and test the complete application workflow from API request to file upload.
 
 import os
 import time
+from unittest.mock import patch
+
 import pytest
 import requests
-from unittest.mock import patch
 
 # Import testcontainers requirement
 pytest.importorskip("testcontainers", reason="testcontainers not installed")
@@ -22,16 +23,16 @@ except ModuleNotFoundError:
     _has_psycopg2 = False
 
 from tests.fixtures_integration import (
-    postgres_container,
-    redis_container,
-    gotenberg_container,
-    webdav_container,
-    sftp_container,
-    minio_container,
-    full_infrastructure,
     celery_app,
     celery_worker,
     db_session_real,
+    full_infrastructure,
+    gotenberg_container,
+    minio_container,
+    postgres_container,
+    redis_container,
+    sftp_container,
+    webdav_container,
 )
 
 _TEST_CREDENTIAL = "pass"  # noqa: S105
@@ -117,8 +118,9 @@ class TestEndToEndWithRedis:
 
         This verifies the Redis broker is working correctly.
         """
-        from app.tasks.upload_to_webdav import upload_to_webdav
         import redis
+
+        from app.tasks.upload_to_webdav import upload_to_webdav
 
         # Connect to Redis directly
         r = redis.from_url(redis_container["url"])

@@ -103,9 +103,7 @@ def upload_with_rclone(self, file_path: str, destination: str):
     except (OSError, ValueError) as e:
         error_msg = f"Error uploading {filename} to {destination}: {str(e)}"
         logger.error(f"[{task_id}] {error_msg}")
-        log_task_progress(
-            task_id, "upload_with_rclone", "failure", f"Upload failed for {filename}", detail=error_msg
-        )
+        log_task_progress(task_id, "upload_with_rclone", "failure", f"Upload failed for {filename}", detail=error_msg)
         raise RuntimeError(error_msg) from e
 
 

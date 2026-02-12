@@ -1,4 +1,5 @@
 """Tests for app/tasks/extract_metadata_with_gpt.py module."""
+
 import pytest
 
 from app.tasks.extract_metadata_with_gpt import extract_json_from_text

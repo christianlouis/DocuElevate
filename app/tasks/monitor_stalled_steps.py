@@ -34,7 +34,7 @@ def monitor_stalled_steps():
     try:
         with SessionLocal() as db:
             stalled_count = mark_stalled_steps_as_failed(db)
-            
+
             if stalled_count > 0:
                 logger.warning(
                     f"[{datetime.utcnow().isoformat()}] "
@@ -42,13 +42,10 @@ def monitor_stalled_steps():
                     f"Marked as failed due to timeout."
                 )
             else:
-                logger.debug(
-                    f"[{datetime.utcnow().isoformat()}] "
-                    f"No stalled steps found."
-                )
-                
+                logger.debug(f"[{datetime.utcnow().isoformat()}] " f"No stalled steps found.")
+
             return {"recovered": stalled_count}
-            
+
     except Exception as e:
         logger.error(f"Error in monitor_stalled_steps task: {e}", exc_info=True)
         return {"error": str(e), "recovered": 0}

@@ -10,7 +10,7 @@ from typing import Optional
 from sqlalchemy import or_
 from sqlalchemy.orm import Query, Session
 
-from app.models import FileRecord, FileProcessingStep
+from app.models import FileProcessingStep, FileRecord
 
 
 def apply_status_filter(query: Query, db: Session, status: Optional[str]) -> Query:
@@ -19,13 +19,13 @@ def apply_status_filter(query: Query, db: Session, status: Optional[str]) -> Que
 
     This function modifies a SQLAlchemy query to filter files based on their
     processing status by examining associated FileProcessingStep entries.
-    
+
     Only tracks "real" processing steps that represent user-facing status:
     - Main steps: create_file_record, check_text, extract_text, process_with_azure_document_intelligence,
                   extract_metadata_with_gpt, embed_metadata_into_pdf, finalize_document_storage,
                   send_to_all_destinations
     - Upload steps: queue_*, upload_to_*
-    
+
     Diagnostic/internal steps (poll_task, upload_file, set_custom_fields, etc.) are ignored
     as they may not complete properly and don't affect the actual status.
 
@@ -53,7 +53,7 @@ def apply_status_filter(query: Query, db: Session, status: Optional[str]) -> Que
     # Define which steps are "real" status-determining steps
     # Only high-level logical steps and actual upload destinations (not queue_* steps)
     from app.config import settings
-    
+
     REAL_STEPS = {
         "create_file_record",
         "check_text",
@@ -75,16 +75,13 @@ def apply_status_filter(query: Query, db: Session, status: Optional[str]) -> Que
         "upload_to_email",
         "upload_to_s3",
     }
-    
+
     # Add check_for_duplicates if deduplication is enabled
     if settings.enable_deduplication:
         REAL_STEPS.add("check_for_duplicates")
 
     # Filter to only real steps
-    real_steps_subq = (
-        db.query(FileProcessingStep)
-        .filter(FileProcessingStep.step_name.in_(REAL_STEPS))
-    )
+    real_steps_subq = db.query(FileProcessingStep).filter(FileProcessingStep.step_name.in_(REAL_STEPS))
 
     if status == "pending":
         # Files with no real steps (never started processing)
@@ -102,14 +99,15 @@ def apply_status_filter(query: Query, db: Session, status: Optional[str]) -> Que
         # Files where all real steps are either success or skipped (no failures or in_progress)
         # Exclude duplicates from completed
         query = query.filter(FileRecord.is_duplicate.is_(False))
-        
+
         # Get files that have real steps
         files_with_real_steps = real_steps_subq.distinct().subquery()
 
         # Get files with failures or in_progress on real steps
         files_with_issues = (
-            real_steps_subq
-            .filter(or_(FileProcessingStep.status == "failure", FileProcessingStep.status == "in_progress"))
+            real_steps_subq.filter(
+                or_(FileProcessingStep.status == "failure", FileProcessingStep.status == "in_progress")
+            )
             .distinct()
             .subquery()
         )

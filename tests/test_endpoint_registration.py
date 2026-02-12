@@ -5,8 +5,9 @@ This test module serves as a regression prevention mechanism to ensure
 that endpoints remain accessible after code refactoring or reorganization.
 """
 
-import pytest
 from unittest.mock import Mock, patch
+
+import pytest
 
 # Test constants
 TEST_URL = "https://example.com/test.pdf"
@@ -34,10 +35,7 @@ class TestEndpointRegistration:
         mock_process_document.delay.return_value = mock_task
 
         # Make a request to the endpoint - it should not return 404
-        response = client.post(
-            "/api/process-url",
-            json={"url": TEST_URL}
-        )
+        response = client.post("/api/process-url", json={"url": TEST_URL})
 
         # The endpoint exists if we don't get a 404
         # We may get other errors (401, 400, 500, etc.) due to validation or missing mocks,
@@ -66,10 +64,7 @@ class TestEndpointRegistration:
         mock_process_document.delay.return_value = mock_task
 
         # Try POST request
-        response = client.post(
-            "/api/process-url",
-            json={"url": TEST_URL}
-        )
+        response = client.post("/api/process-url", json={"url": TEST_URL})
 
         # Should not return 405 (Method Not Allowed)
         assert response.status_code != 405, (

@@ -7,10 +7,6 @@ This module provides convenient decorators to apply rate limits to specific endp
 Import the limiter from main.py state and use these decorators to protect endpoints.
 """
 
-from functools import wraps
-
-from fastapi import Request
-
 # Import will happen at runtime to avoid circular dependencies
 _limiter = None
 
@@ -28,13 +24,13 @@ def get_limiter():
 def limit(rate_limit: str):
     """
     Apply a rate limit to an endpoint.
-    
+
     Args:
         rate_limit: Rate limit string (e.g., "10/minute", "100/hour")
-        
+
     Returns:
         Decorator function
-        
+
     Example:
         @router.post("/login")
         @limit("10/minute")
@@ -53,10 +49,10 @@ def limit(rate_limit: str):
 def exempt():
     """
     Exempt an endpoint from rate limiting.
-    
+
     Returns:
         Decorator function
-        
+
     Example:
         @router.get("/health")
         @exempt()

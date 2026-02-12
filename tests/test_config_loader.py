@@ -1,4 +1,5 @@
 """Tests for app/utils/config_loader.py module."""
+
 import pytest
 
 from app.utils.config_loader import convert_setting_value

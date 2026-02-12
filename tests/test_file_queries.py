@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import FileRecord, FileProcessingStep
+from app.models import FileProcessingStep, FileRecord
 from app.utils.file_queries import apply_status_filter
 
 

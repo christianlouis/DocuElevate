@@ -1,4 +1,5 @@
 """Tests for app/api/openai.py module."""
+
 import pytest
 
 

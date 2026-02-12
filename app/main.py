@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from slowapi.errors import RateLimitExceeded
 from starlette.config import Config
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -21,7 +22,6 @@ from app.middleware.rate_limit import create_limiter, get_rate_limit_exceeded_ha
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.utils.config_validator import check_all_configs
 from app.utils.notification import init_apprise, notify_shutdown, notify_startup
-from slowapi.errors import RateLimitExceeded
 
 # Import the routers - now using views directly instead of frontend
 from app.views import router as frontend_router

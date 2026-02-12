@@ -96,7 +96,7 @@ def log_task_progress(task_id, step_name, status, message=None, file_id=None, de
             detail=detail,
         )
         db.add(log_entry)
-        
+
         # Update FileProcessingStep table (for status tracking) if file_id is provided
         if file_id and step_name:
             # Find or create the step record
@@ -105,9 +105,9 @@ def log_task_progress(task_id, step_name, status, message=None, file_id=None, de
                 .filter(FileProcessingStep.file_id == file_id, FileProcessingStep.step_name == step_name)
                 .first()
             )
-            
+
             now = datetime.utcnow()
-            
+
             if not step_record:
                 # Create new step record
                 step_record = FileProcessingStep(
@@ -128,5 +128,5 @@ def log_task_progress(task_id, step_name, status, message=None, file_id=None, de
                     step_record.completed_at = now
                 if status == "failure":
                     step_record.error_message = message or detail
-        
+
         db.commit()

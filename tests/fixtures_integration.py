@@ -14,16 +14,17 @@ These tests exercise the full application stack end-to-end.
 
 import os
 import time
-import pytest
-from typing import Generator
 from pathlib import Path
+from typing import Generator
+
+import pytest
 
 # Import testcontainers
 pytest.importorskip("testcontainers", reason="testcontainers not installed")
 from testcontainers.core.container import DockerContainer
+from testcontainers.minio import MinioContainer
 from testcontainers.postgres import PostgresContainer
 from testcontainers.redis import RedisContainer
-from testcontainers.minio import MinioContainer
 
 _TEST_CREDENTIAL = "testpass"  # noqa: S105
 
@@ -300,6 +301,7 @@ def db_session_real(postgres_container):
     """
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
+
     from app.database import Base
 
     # Create engine using PostgreSQL container

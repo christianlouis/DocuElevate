@@ -1,13 +1,15 @@
 """Extended tests for app/tasks/check_credentials.py module."""
+
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from app.tasks.check_credentials import (
-    sync_test_openai_connection,
     sync_test_azure_connection,
     sync_test_dropbox_token,
     sync_test_google_drive_token,
     sync_test_onedrive_token,
+    sync_test_openai_connection,
 )
 
 

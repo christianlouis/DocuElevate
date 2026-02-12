@@ -1,6 +1,8 @@
 """Additional tests for upload_to_ftp task."""
+
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 @pytest.mark.unit
@@ -10,4 +12,5 @@ class TestUploadToFtp:
     def test_module_imports(self):
         """Test that the module can be imported."""
         from app.tasks.upload_to_ftp import upload_to_ftp
+
         assert callable(upload_to_ftp)

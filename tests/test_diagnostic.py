@@ -1,4 +1,5 @@
 """Tests for app/api/diagnostic.py module."""
+
 import pytest
 
 

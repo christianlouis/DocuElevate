@@ -1,16 +1,19 @@
 """
 Unit tests for configuration and security validation.
 """
-import pytest
+
 import os
+
+import pytest
 from pydantic import ValidationError
+
 from app.config import Settings
 
 
 @pytest.mark.unit
 class TestConfigurationValidation:
     """Tests for configuration validation."""
-    
+
     def test_session_secret_required_with_auth(self):
         """Test that SESSION_SECRET is required when auth is enabled."""
         with pytest.raises(ValidationError) as exc_info:
@@ -24,10 +27,10 @@ class TestConfigurationValidation:
                 gotenberg_url="http://localhost:3000",
                 workdir="/tmp",
                 auth_enabled=True,
-                session_secret=None
+                session_secret=None,
             )
         assert "SESSION_SECRET must be set" in str(exc_info.value)
-    
+
     def test_session_secret_minimum_length(self):
         """Test that SESSION_SECRET must be at least 32 characters."""
         with pytest.raises(ValidationError) as exc_info:
@@ -41,10 +44,10 @@ class TestConfigurationValidation:
                 gotenberg_url="http://localhost:3000",
                 workdir="/tmp",
                 auth_enabled=True,
-                session_secret="short"
+                session_secret="short",
             )
         assert "at least 32 characters" in str(exc_info.value)
-    
+
     def test_valid_configuration(self):
         """Test that valid configuration is accepted."""
         config = Settings(
@@ -57,11 +60,11 @@ class TestConfigurationValidation:
             gotenberg_url="http://localhost:3000",
             workdir="/tmp",
             auth_enabled=True,
-            session_secret="a" * 32  # 32 character secret
+            session_secret="a" * 32,  # 32 character secret
         )
         assert config.auth_enabled is True
         assert len(config.session_secret) == 32
-    
+
     def test_auth_disabled_no_session_secret_required(self):
         """Test that SESSION_SECRET is not required when auth is disabled."""
         config = Settings(
@@ -74,18 +77,16 @@ class TestConfigurationValidation:
             gotenberg_url="http://localhost:3000",
             workdir="/tmp",
             auth_enabled=False,
-            session_secret=None
+            session_secret=None,
         )
         assert config.auth_enabled is False
         assert config.session_secret is None
 
 
-
-
 @pytest.mark.unit
 class TestBuildMetadataConfiguration:
     """Tests for build metadata configuration."""
-    
+
     def test_version_from_environment(self, monkeypatch):
         """Test that version is read from APP_VERSION environment variable."""
         monkeypatch.setenv("APP_VERSION", "1.2.3-test")
@@ -98,10 +99,10 @@ class TestBuildMetadataConfiguration:
             azure_endpoint="https://test.example.com",
             gotenberg_url="http://localhost:3000",
             workdir="/tmp",
-            auth_enabled=False
+            auth_enabled=False,
         )
         assert config.version == "1.2.3-test"
-    
+
     def test_build_date_from_environment(self, monkeypatch):
         """Test that build_date is read from BUILD_DATE environment variable."""
         monkeypatch.setenv("BUILD_DATE", "2026-01-15")
@@ -114,7 +115,7 @@ class TestBuildMetadataConfiguration:
             azure_endpoint="https://test.example.com",
             gotenberg_url="http://localhost:3000",
             workdir="/tmp",
-            auth_enabled=False
+            auth_enabled=False,
         )
         assert config.build_date == "2026-01-15"
 
@@ -130,10 +131,10 @@ class TestBuildMetadataConfiguration:
             azure_endpoint="https://test.example.com",
             gotenberg_url="http://localhost:3000",
             workdir="/tmp",
-            auth_enabled=False
+            auth_enabled=False,
         )
         assert config.build_date == "2026-01-15T10:30:00Z"
-    
+
     def test_git_sha_from_environment(self, monkeypatch):
         """Test that git_sha is read from GIT_COMMIT_SHA environment variable."""
         monkeypatch.setenv("GIT_COMMIT_SHA", "abc1234")
@@ -146,16 +147,17 @@ class TestBuildMetadataConfiguration:
             azure_endpoint="https://test.example.com",
             gotenberg_url="http://localhost:3000",
             workdir="/tmp",
-            auth_enabled=False
+            auth_enabled=False,
         )
         assert config.git_sha == "abc1234"
-    
+
     def test_git_sha_default(self, monkeypatch, tmp_path):
         """Test that git_sha defaults to 'unknown' when not set."""
         # Mock the file system to ensure no GIT_SHA file exists
         import app.config
-        monkeypatch.setattr(app.config.os.path, 'dirname', lambda x: str(tmp_path))
-        
+
+        monkeypatch.setattr(app.config.os.path, "dirname", lambda x: str(tmp_path))
+
         config = Settings(
             database_url="sqlite:///test.db",
             redis_url="redis://localhost:6379",
@@ -165,7 +167,7 @@ class TestBuildMetadataConfiguration:
             azure_endpoint="https://test.example.com",
             gotenberg_url="http://localhost:3000",
             workdir="/tmp",
-            auth_enabled=False
+            auth_enabled=False,
         )
         # When no file or env var exists, should return "unknown"
         assert config.git_sha == "unknown"
@@ -173,7 +175,8 @@ class TestBuildMetadataConfiguration:
     def test_version_default_when_no_file_or_env(self, monkeypatch, tmp_path):
         """Test that version defaults to 'unknown' when no VERSION file or env var exists."""
         import app.config
-        monkeypatch.setattr(app.config.os.path, 'dirname', lambda x: str(tmp_path))
+
+        monkeypatch.setattr(app.config.os.path, "dirname", lambda x: str(tmp_path))
 
         config = Settings(
             database_url="sqlite:///test.db",
@@ -184,11 +187,11 @@ class TestBuildMetadataConfiguration:
             azure_endpoint="https://test.example.com",
             gotenberg_url="http://localhost:3000",
             workdir="/tmp",
-            auth_enabled=False
+            auth_enabled=False,
         )
         # When no file or env var exists, should return "unknown"
         assert config.version == "unknown"
-    
+
     def test_runtime_info_property(self):
         """Test that runtime_info returns build information."""
         config = Settings(
@@ -200,7 +203,7 @@ class TestBuildMetadataConfiguration:
             azure_endpoint="https://test.example.com",
             gotenberg_url="http://localhost:3000",
             workdir="/tmp",
-            auth_enabled=False
+            auth_enabled=False,
         )
         runtime_info = config.runtime_info
         # Should contain version, build_date, and git_sha in some form
@@ -210,7 +213,7 @@ class TestBuildMetadataConfiguration:
 @pytest.mark.unit
 class TestNotificationConfiguration:
     """Tests for notification configuration parsing."""
-    
+
     def test_notification_urls_from_string(self):
         """Test parsing notification URLs from comma-separated string."""
         config = Settings(
@@ -223,12 +226,12 @@ class TestNotificationConfiguration:
             gotenberg_url="http://localhost:3000",
             workdir="/tmp",
             auth_enabled=False,
-            notification_urls="discord://webhook1,telegram://webhook2"
+            notification_urls="discord://webhook1,telegram://webhook2",
         )
         assert len(config.notification_urls) == 2
         assert "discord://webhook1" in config.notification_urls
         assert "telegram://webhook2" in config.notification_urls
-    
+
     def test_notification_urls_from_list(self):
         """Test that notification URLs can be provided as a list."""
         config = Settings(
@@ -241,7 +244,7 @@ class TestNotificationConfiguration:
             gotenberg_url="http://localhost:3000",
             workdir="/tmp",
             auth_enabled=False,
-            notification_urls=["discord://webhook1", "telegram://webhook2"]
+            notification_urls=["discord://webhook1", "telegram://webhook2"],
         )
         assert len(config.notification_urls) == 2
 
@@ -250,7 +253,7 @@ class TestNotificationConfiguration:
 @pytest.mark.security
 class TestSecurityConfiguration:
     """Tests for security-related configuration."""
-    
+
     def test_no_default_credentials_in_config(self):
         """Test that no default credentials are present in configuration."""
         # This test ensures we don't accidentally have hardcoded credentials
@@ -263,15 +266,15 @@ class TestSecurityConfiguration:
             azure_endpoint="https://test.example.com",
             gotenberg_url="http://localhost:3000",
             workdir="/tmp",
-            auth_enabled=False
+            auth_enabled=False,
         )
-        
+
         # Ensure optional credentials are actually optional (None)
         assert config.dropbox_app_key is None
         assert config.dropbox_app_secret is None
         assert config.nextcloud_password is None
         assert config.paperless_ngx_api_token is None
-    
+
     def test_optional_services_dont_require_credentials(self):
         """Test that application can start without optional service credentials."""
         config = Settings(
@@ -283,8 +286,8 @@ class TestSecurityConfiguration:
             azure_endpoint="https://test.example.com",
             gotenberg_url="http://localhost:3000",
             workdir="/tmp",
-            auth_enabled=False
+            auth_enabled=False,
         )
-        
+
         # Should not raise an error
         assert config.database_url == "sqlite:///test.db"

@@ -1,6 +1,8 @@
 """Tests for app/views/settings.py module."""
+
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from app.views.settings import require_admin_access
 
@@ -12,6 +14,7 @@ class TestRequireAdminAccess:
     @pytest.mark.asyncio
     async def test_redirects_non_admin_user(self):
         """Test that non-admin users are redirected."""
+
         @require_admin_access
         async def dummy_route(request):
             return {"success": True}
@@ -25,6 +28,7 @@ class TestRequireAdminAccess:
     @pytest.mark.asyncio
     async def test_redirects_when_no_user(self):
         """Test that unauthenticated users are redirected."""
+
         @require_admin_access
         async def dummy_route(request):
             return {"success": True}
@@ -38,6 +42,7 @@ class TestRequireAdminAccess:
     @pytest.mark.asyncio
     async def test_allows_admin_user(self):
         """Test that admin users can access the route."""
+
         @require_admin_access
         async def dummy_route(request):
             return {"success": True}

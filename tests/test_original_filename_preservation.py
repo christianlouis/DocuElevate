@@ -87,11 +87,12 @@ startxref
     original_filename = "Apostille Sverige.pdf"
 
     # Mock environment and dependencies
-    with patch("app.tasks.process_document.SessionLocal") as mock_session_local, patch(
-        "app.tasks.process_document.settings"
-    ) as mock_settings, patch("app.tasks.process_document.log_task_progress"), patch(
-        "app.tasks.process_document.extract_metadata_with_gpt"
-    ) as mock_extract:
+    with (
+        patch("app.tasks.process_document.SessionLocal") as mock_session_local,
+        patch("app.tasks.process_document.settings") as mock_settings,
+        patch("app.tasks.process_document.log_task_progress"),
+        patch("app.tasks.process_document.extract_metadata_with_gpt") as mock_extract,
+    ):
 
         # Setup mocks
         mock_settings.workdir = str(tmp_path)
@@ -187,11 +188,12 @@ startxref
     test_pdf.write_bytes(pdf_content)
 
     # Mock environment and dependencies
-    with patch("app.tasks.process_document.SessionLocal") as mock_session_local, patch(
-        "app.tasks.process_document.settings"
-    ) as mock_settings, patch("app.tasks.process_document.log_task_progress"), patch(
-        "app.tasks.process_document.extract_metadata_with_gpt"
-    ) as mock_extract:
+    with (
+        patch("app.tasks.process_document.SessionLocal") as mock_session_local,
+        patch("app.tasks.process_document.settings") as mock_settings,
+        patch("app.tasks.process_document.log_task_progress"),
+        patch("app.tasks.process_document.extract_metadata_with_gpt") as mock_extract,
+    ):
 
         # Setup mocks
         mock_settings.workdir = str(tmp_path)

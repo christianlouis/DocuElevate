@@ -2,13 +2,11 @@
 File management views for displaying and managing files.
 """
 
-import os
 from typing import Optional
 
 from fastapi import Depends, Query, Request
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.utils.file_queries import apply_status_filter
 from app.utils.file_status import get_files_processing_status
 from app.views.base import APIRouter, get_db, logger, require_login, templates
@@ -34,9 +32,9 @@ def files_page(
     """
     try:
         # Import the model here to avoid circular imports
-        from sqlalchemy import asc, desc, or_
+        from sqlalchemy import asc, desc
 
-        from app.models import FileRecord, ProcessingLog
+        from app.models import FileRecord
 
         # Start with base query
         query = db.query(FileRecord)
@@ -233,9 +231,10 @@ def _compute_processing_flow(logs):
         "finalize_document_storage": {"label": "Finalize & Queue Distribution", "next": ["send_to_all_destinations"]},
         "send_to_all_destinations": {"label": "Upload to Destinations", "next": [], "has_branches": True},
     }
-    
+
     # Filter out deduplication step if not enabled or if not showing it
     from app.config import settings
+
     if not settings.enable_deduplication or not settings.show_deduplication_step:
         stages.pop("check_for_duplicates", None)
         # Update the next pointer for create_file_record
@@ -354,21 +353,23 @@ def _compute_step_summary(logs):
     based on timestamp, regardless of input log ordering.
     """
     from app.config import settings
-    
+
     # Count statuses for main processing steps (not uploads)
     main_steps = []
     if settings.enable_deduplication and settings.show_deduplication_step:
         main_steps.append("check_for_duplicates")
-    main_steps.extend([
-        "create_file_record",
-        "check_text",
-        "extract_text",
-        "process_with_azure_document_intelligence",
-        "extract_metadata_with_gpt",
-        "embed_metadata_into_pdf",
-        "finalize_document_storage",
-        "send_to_all_destinations",
-    ])
+    main_steps.extend(
+        [
+            "create_file_record",
+            "check_text",
+            "extract_text",
+            "process_with_azure_document_intelligence",
+            "extract_metadata_with_gpt",
+            "embed_metadata_into_pdf",
+            "finalize_document_storage",
+            "send_to_all_destinations",
+        ]
+    )
 
     upload_prefixes = ["upload_to_", "queue_"]
 

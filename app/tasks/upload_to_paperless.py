@@ -274,8 +274,15 @@ def upload_to_paperless(self, file_path: str, file_id: int = None):
                 response_text,
             )
             log_task_progress(
-                task_id, "upload_to_paperless", "failure", error_msg, file_id=file_id,
-                detail=f"Failed to upload document to Paperless.\nFile: {file_path}\nError: {exc}\nResponse: {response_text}",
+                task_id,
+                "upload_to_paperless",
+                "failure",
+                error_msg,
+                file_id=file_id,
+                detail=(
+                    f"Failed to upload document to Paperless.\n"
+                    f"File: {file_path}\nError: {exc}\nResponse: {response_text}"
+                ),
             )
             raise
 
@@ -322,9 +329,9 @@ def upload_to_paperless(self, file_path: str, file_id: int = None):
             # Map each metadata field to its corresponding Paperless custom field
             for metadata_field, paperless_field in field_mapping.items():
                 if metadata_field in metadata and metadata[metadata_field]:
-                    # Convert to string to ensure consistent comparison with UNKNOWN_VALUE
+                    # Convert to string to ensure consistent comparison
                     value = str(metadata[metadata_field]) if metadata[metadata_field] is not None else ""
-                    if value and value != UNKNOWN_VALUE:
+                    if value and value != METADATA_UNKNOWN_PLACEHOLDER:
                         custom_fields_to_set[paperless_field] = value
                         logger.debug(f"[{task_id}] Mapping {metadata_field}='{value}' to field '{paperless_field}'")
         except json.JSONDecodeError as e:

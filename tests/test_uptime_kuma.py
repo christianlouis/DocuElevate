@@ -4,8 +4,9 @@ Tests for app/tasks/uptime_kuma_tasks.py
 Tests Uptime Kuma health check ping functionality.
 """
 
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
 import requests
 
 
@@ -43,9 +44,7 @@ class TestUptimeKumaTasks:
 
         # Should return True on success
         assert result is True
-        mock_get.assert_called_once_with(
-            "https://uptime.example.com/ping/123", timeout=10
-        )
+        mock_get.assert_called_once_with("https://uptime.example.com/ping/123", timeout=10)
         mock_response.raise_for_status.assert_called_once()
 
     @patch("app.tasks.uptime_kuma_tasks.requests.get")
@@ -93,9 +92,7 @@ class TestUptimeKumaTasks:
         # Mock HTTP error
         mock_response = Mock()
         mock_response.status_code = 500
-        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
-            "500 Server Error"
-        )
+        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("500 Server Error")
         mock_get.return_value = mock_response
 
         result = ping_uptime_kuma()

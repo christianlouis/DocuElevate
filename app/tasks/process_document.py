@@ -24,7 +24,9 @@ logger = logging.getLogger(__name__)
 
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
-def process_document(self, original_local_file: str, original_filename: str = None, file_id: int = None, force_cloud_ocr: bool = False):
+def process_document(
+    self, original_local_file: str, original_filename: str = None, file_id: int = None, force_cloud_ocr: bool = False
+):
     """
     Process a document file and trigger appropriate text extraction.
 
@@ -58,7 +60,10 @@ def process_document(self, original_local_file: str, original_filename: str = No
     if not os.path.exists(original_local_file):
         logger.error(f"[{task_id}] File {original_local_file} not found.")
         log_task_progress(
-            task_id, "process_document", "failure", "File not found",
+            task_id,
+            "process_document",
+            "failure",
+            "File not found",
             detail=f"File not found on disk: {original_local_file}",
         )
         return {"error": "File not found"}
@@ -71,7 +76,7 @@ def process_document(self, original_local_file: str, original_filename: str = No
     else:
         logger.info(f"[{task_id}] Computing file hash (deduplication disabled)...")
         filehash = hash_file(original_local_file)
-    
+
     # Use provided original_filename or fall back to basename of path
     if original_filename is None:
         original_filename = os.path.basename(original_local_file)
@@ -81,7 +86,7 @@ def process_document(self, original_local_file: str, original_filename: str = No
         mime_type = "application/octet-stream"
 
     logger.info(f"[{task_id}] File hash: {filehash[:10]}..., Size: {file_size} bytes, MIME: {mime_type}")
-    
+
     # Log deduplication step result (only if enabled)
     if settings.enable_deduplication:
         log_task_progress(
@@ -113,13 +118,15 @@ def process_document(self, original_local_file: str, original_filename: str = No
         else:
             # Check for duplicate only if this is a new file (not reprocessing)
             # IMPORTANT: Only consider it a duplicate if it matches a DIFFERENT file
-            existing = db.query(FileRecord).filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False)).order_by(FileRecord.created_at.asc()).first()
+            existing = (
+                db.query(FileRecord)
+                .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False))
+                .order_by(FileRecord.created_at.asc())
+                .first()
+            )
             if existing is None:
                 existing = (
-                    db.query(FileRecord)
-                    .filter(FileRecord.filehash == filehash)
-                    .order_by(FileRecord.id.asc())
-                    .first()
+                    db.query(FileRecord).filter(FileRecord.filehash == filehash).order_by(FileRecord.id.asc()).first()
                 )
 
             # A file is only a duplicate if it matches a different file's hash
@@ -215,11 +222,11 @@ def process_document(self, original_local_file: str, original_filename: str = No
             # This copy serves as the permanent, untouched reference of the ingested file
             original_dir = os.path.join(settings.workdir, "original")
             os.makedirs(original_dir, exist_ok=True)
-            
+
             # Use collision-resistant naming with -0001, -0002 suffixes
             base_name = os.path.splitext(new_filename)[0]
             original_file_path = get_unique_filepath_with_counter(original_dir, base_name, file_ext)
-            
+
             logger.info(f"[{task_id}] Saving immutable original to: {original_file_path}")
             log_task_progress(
                 task_id,
@@ -236,7 +243,7 @@ def process_document(self, original_local_file: str, original_filename: str = No
                 f"Original saved: {os.path.basename(original_file_path)}",
                 file_id=new_record.id,
             )
-            
+
             # Update the DB with original_file_path
             new_record.original_file_path = original_file_path
         else:
@@ -308,7 +315,7 @@ def process_document(self, original_local_file: str, original_filename: str = No
         )
         process_with_azure_document_intelligence.delay(new_filename, file_id)
         return {"file": new_local_path, "status": "Queued for forced OCR", "file_id": file_id}
-    
+
     # If the file is not a PDF, skip embedded text check and convert to PDF first
     is_pdf = mime_type == "application/pdf" or os.path.splitext(new_local_path)[1].lower() == ".pdf"
     if not is_pdf:
@@ -403,7 +410,7 @@ def process_document(self, original_local_file: str, original_filename: str = No
             f"Extracted {len(extracted_text)} characters",
             file_id=file_id,
         )
-        
+
         # Mark Azure OCR as skipped since we extracted text locally
         log_task_progress(
             task_id,
@@ -438,7 +445,7 @@ def process_document(self, original_local_file: str, original_filename: str = No
         "No embedded text, queuing OCR",
         file_id=file_id,
     )
-    
+
     # Mark local text extraction as skipped since we're using Azure OCR
     log_task_progress(
         task_id,
@@ -447,7 +454,7 @@ def process_document(self, original_local_file: str, original_filename: str = No
         "No embedded text, using Azure OCR instead",
         file_id=file_id,
     )
-    
+
     log_task_progress(
         task_id,
         "process_document",

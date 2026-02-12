@@ -6,14 +6,11 @@ for files that were processed before the status tracking table was created.
 """
 
 import logging
-from datetime import datetime
 from typing import Dict, List
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import FileProcessingStep, FileRecord, ProcessingLog
-from app.utils.step_manager import MAIN_PROCESSING_STEPS
+from app.models import FileProcessingStep, ProcessingLog
 
 logger = logging.getLogger(__name__)
 
