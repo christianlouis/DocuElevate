@@ -182,7 +182,7 @@ Both previews support:
 - Full text extraction viewing via modal overlays
 
 **View Extracted Text**: Each preview includes a button to view the complete extracted text in a fullscreen modal. When you click this button:
-- The system extracts text from the PDF file on-demand using PyPDF2
+- The system extracts text from the PDF file on-demand using pypdf
 - A loading indicator shows while extraction is in progress
 - The extracted text is displayed in a scrollable, copy-friendly format
 - The text is cached so subsequent views load instantly

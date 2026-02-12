@@ -52,9 +52,9 @@ OpenAI (MIT License)
 Copyright (c) 2023 OpenAI
 https://github.com/openai/openai-python
 
-PyPDF2 (BSD License)
-Copyright (c) 2006-2008, Mathieu Fenniak
-https://github.com/py-pdf/PyPDF2
+pypdf (BSD License)
+Copyright (c) 2006-2024, pypdf contributors
+https://github.com/py-pdf/pypdf
 
 Requests (Apache 2.0 License)
 Copyright 2019 Kenneth Reitz

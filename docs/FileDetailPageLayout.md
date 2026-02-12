@@ -15,7 +15,7 @@ POST /api/files/{id}/retry-subtask    → Retry specific task
 ## Text Extraction
 
 Text extraction is performed **on-demand** when the user clicks "View Extracted Text":
-- Uses PyPDF2 to extract text from PDF files in real-time
+- Uses pypdf to extract text from PDF files in real-time
 - Returns JSON: `{"text": "...", "page_count": 3}`
 - Client-side caching prevents re-extraction on subsequent views
 - Loading indicator shown during extraction
