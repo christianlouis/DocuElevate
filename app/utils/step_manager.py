@@ -10,11 +10,12 @@ from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models import FileProcessingStep
 
 # Define the expected processing steps for a standard file workflow
-MAIN_PROCESSING_STEPS = [
-    "hash_file",
+# The "check_for_duplicates" step is conditionally included based on enable_deduplication setting
+BASE_MAIN_PROCESSING_STEPS = [
     "create_file_record",
     "check_text",
     "extract_text",  # Or "process_with_azure_document_intelligence"
@@ -23,6 +24,16 @@ MAIN_PROCESSING_STEPS = [
     "finalize_document_storage",
     "send_to_all_destinations",
 ]
+
+OPTIONAL_PROCESSING_STEPS = {
+    "check_for_duplicates": settings.enable_deduplication,  # Only if deduplication is enabled
+}
+
+# Combine steps based on configuration
+MAIN_PROCESSING_STEPS = []
+if settings.enable_deduplication:
+    MAIN_PROCESSING_STEPS.append("check_for_duplicates")
+MAIN_PROCESSING_STEPS.extend(BASE_MAIN_PROCESSING_STEPS)
 
 
 def initialize_file_steps(db: Session, file_id: int, include_uploads: bool = False) -> None:
@@ -188,6 +199,10 @@ def get_file_overall_status(db: Session, file_id: int) -> Dict:
         "send_to_all_destinations",
     }
     
+    # Add check_for_duplicates if deduplication is enabled
+    if settings.enable_deduplication:
+        REAL_MAIN_STEPS.add("check_for_duplicates")
+    
     all_steps = db.query(FileProcessingStep).filter(FileProcessingStep.file_id == file_id).all()
     
     # Filter to only real steps
@@ -269,6 +284,10 @@ def get_step_summary(db: Session, file_id: int) -> Dict:
         "finalize_document_storage",
         "send_to_all_destinations",
     }
+    
+    # Add check_for_duplicates if deduplication is enabled
+    if settings.enable_deduplication:
+        REAL_MAIN_STEPS.add("check_for_duplicates")
     
     steps = db.query(FileProcessingStep).filter(FileProcessingStep.file_id == file_id).all()
 

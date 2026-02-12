@@ -62,10 +62,15 @@ def process_document(self, original_local_file: str, original_filename: str = No
         )
         return {"error": "File not found"}
 
-    # 0. Compute the file hash and check for duplicates
-    logger.info(f"[{task_id}] Computing file hash...")
-    log_task_progress(task_id, "hash_file", "in_progress", "Computing file hash")
-    filehash = hash_file(original_local_file)
+    # 0. Check for duplicate files (if enabled)
+    if settings.enable_deduplication:
+        logger.info(f"[{task_id}] Computing file hash for deduplication check...")
+        log_task_progress(task_id, "check_for_duplicates", "in_progress", "Computing file hash for deduplication")
+        filehash = hash_file(original_local_file)
+    else:
+        logger.info(f"[{task_id}] Computing file hash (deduplication disabled)...")
+        filehash = hash_file(original_local_file)
+    
     # Use provided original_filename or fall back to basename of path
     if original_filename is None:
         original_filename = os.path.basename(original_local_file)
@@ -75,12 +80,15 @@ def process_document(self, original_local_file: str, original_filename: str = No
         mime_type = "application/octet-stream"
 
     logger.info(f"[{task_id}] File hash: {filehash[:10]}..., Size: {file_size} bytes, MIME: {mime_type}")
-    log_task_progress(
-        task_id,
-        "hash_file",
-        "success",
-        f"Hash: {filehash[:10]}..., Size: {file_size} bytes",
-    )
+    
+    # Log deduplication step result (only if enabled)
+    if settings.enable_deduplication:
+        log_task_progress(
+            task_id,
+            "check_for_duplicates",
+            "in_progress",
+            f"Hash: {filehash[:10]}..., checking for duplicates",
+        )
 
     # Acquire DB session in the task
     with SessionLocal() as db:
@@ -103,29 +111,66 @@ def process_document(self, original_local_file: str, original_filename: str = No
             new_record = existing_record
         else:
             existing = db.query(FileRecord).filter_by(filehash=filehash).one_or_none()
-            if existing:
+            if existing and settings.enable_deduplication:
                 logger.info(f"[{task_id}] Duplicate file detected (hash={filehash[:10]}...) Skipping processing.")
+                # Create a file record for this duplicate with is_duplicate=True
+                duplicate_record = FileRecord(
+                    filehash=filehash,
+                    original_filename=original_filename,
+                    local_filename="",
+                    file_size=file_size,
+                    mime_type=mime_type,
+                    is_duplicate=True,
+                    duplicate_of_id=existing.id,
+                )
+                db.add(duplicate_record)
+                db.commit()
+                db.refresh(duplicate_record)
+                
+                if settings.enable_deduplication and settings.show_deduplication_step:
+                    log_task_progress(
+                        task_id,
+                        "check_for_duplicates",
+                        "success",
+                        f"Duplicate detected - matching file ID {existing.id}",
+                        file_id=duplicate_record.id,
+                        detail=(
+                            f"Duplicate file detected.\n"
+                            f"File hash: {filehash}\n"
+                            f"Original file record ID: {existing.id}\n"
+                            f"This file record ID: {duplicate_record.id}\n"
+                            f"Original filename: {original_filename}"
+                        ),
+                    )
                 log_task_progress(
                     task_id,
                     "process_document",
                     "success",
                     "Duplicate file detected, skipping",
-                    file_id=existing.id,
+                    file_id=duplicate_record.id,
                     detail=(
                         f"Duplicate file detected.\n"
                         f"File hash: {filehash}\n"
-                        f"Existing file record ID: {existing.id}\n"
+                        f"Original file record ID: {existing.id}\n"
                         f"Original filename: {original_filename}"
                     ),
                 )
                 return {
                     "status": "duplicate_file",
-                    "file_id": existing.id,
+                    "file_id": duplicate_record.id,
+                    "original_file_id": existing.id,
                     "detail": "File already processed.",
                 }
 
-            # Not a duplicate -> insert a new record
+            # Not a duplicate (or deduplication disabled) -> insert a new record
             logger.info(f"[{task_id}] Creating new file record in database")
+            if settings.enable_deduplication and settings.show_deduplication_step:
+                log_task_progress(
+                    task_id,
+                    "check_for_duplicates",
+                    "success",
+                    "New file - no duplicates found",
+                )
             log_task_progress(task_id, "create_file_record", "in_progress", "Creating file record")
             new_record = FileRecord(
                 filehash=filehash,
@@ -133,6 +178,7 @@ def process_document(self, original_local_file: str, original_filename: str = No
                 local_filename="",  # Will fill in after we move it
                 file_size=file_size,
                 mime_type=mime_type,
+                is_duplicate=False,
             )
             db.add(new_record)
             db.commit()

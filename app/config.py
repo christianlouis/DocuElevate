@@ -179,6 +179,16 @@ class Settings(BaseSettings):
         description="Maximum size for a single file chunk in bytes. If set and file exceeds this, it will be split into smaller chunks for processing. Default: None (no splitting).",
     )
 
+    # Deduplication settings - prevents processing of duplicate files
+    enable_deduplication: bool = Field(
+        default=True,
+        description="Enable deduplication check before processing. If enabled, files with the same SHA-256 hash as previously processed files will not be processed again. Default: True (enabled).",
+    )
+    show_deduplication_step: bool = Field(
+        default=True,
+        description="Show the 'Check for Duplicates' step in processing history. If False, the check is still performed but not displayed. Default: True.",
+    )
+
     # Security Headers Configuration (see SECURITY_AUDIT.md and docs/DeploymentGuide.md)
     # Disabled by default since most deployments use a reverse proxy (Traefik, Nginx, etc.)
     # that already adds these headers. Enable if deploying directly without a reverse proxy.

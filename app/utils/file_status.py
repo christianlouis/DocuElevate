@@ -62,6 +62,8 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
         dict mapping file_id to status dict
     """
     # Define which steps are "real" status-determining steps
+    from app.config import settings
+    
     REAL_STEPS = {
         "create_file_record",
         "check_text",
@@ -83,6 +85,10 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
         "upload_to_email",
         "upload_to_s3",
     }
+    
+    # Add check_for_duplicates if deduplication is enabled
+    if settings.enable_deduplication:
+        REAL_STEPS.add("check_for_duplicates")
 
     # Get all REAL steps for these files in one query
     steps = (

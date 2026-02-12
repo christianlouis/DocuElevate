@@ -217,7 +217,7 @@ def _compute_processing_flow(logs):
     """
     # Define the main processing stages
     stages = {
-        "hash_file": {"label": "File Upload & Hash", "next": ["create_file_record"]},
+        "check_for_duplicates": {"label": "Check for Duplicates", "next": ["create_file_record"]},
         "create_file_record": {"label": "Create File Record", "next": ["check_text"]},
         "check_text": {
             "label": "Check Embedded Text",
@@ -233,6 +233,14 @@ def _compute_processing_flow(logs):
         "finalize_document_storage": {"label": "Finalize & Queue Distribution", "next": ["send_to_all_destinations"]},
         "send_to_all_destinations": {"label": "Upload to Destinations", "next": [], "has_branches": True},
     }
+    
+    # Filter out deduplication step if not enabled or if not showing it
+    from app.config import settings
+    if not settings.enable_deduplication or not settings.show_deduplication_step:
+        stages.pop("check_for_duplicates", None)
+        # Update the next pointer for create_file_record
+        if "create_file_record" in stages:
+            stages["create_file_record"]["next"] = ["check_text"]
 
     # Define upload sub-tasks (branches)
     upload_tasks = {
@@ -345,9 +353,13 @@ def _compute_step_summary(logs):
     Note: This function is order-independent - it selects the latest status per step
     based on timestamp, regardless of input log ordering.
     """
+    from app.config import settings
+    
     # Count statuses for main processing steps (not uploads)
-    main_steps = [
-        "hash_file",
+    main_steps = []
+    if settings.enable_deduplication and settings.show_deduplication_step:
+        main_steps.append("check_for_duplicates")
+    main_steps.extend([
         "create_file_record",
         "check_text",
         "extract_text",
@@ -356,7 +368,7 @@ def _compute_step_summary(logs):
         "embed_metadata_into_pdf",
         "finalize_document_storage",
         "send_to_all_destinations",
-    ]
+    ])
 
     upload_prefixes = ["upload_to_", "queue_"]
 

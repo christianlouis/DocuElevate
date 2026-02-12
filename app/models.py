@@ -1,6 +1,6 @@
 # app/models.py
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func, Boolean
 
 from app.database import Base
 
@@ -43,6 +43,13 @@ class FileRecord(Base):
 
     # MIME type or extension (optional)
     mime_type = Column(String)
+    
+    # Deduplication tracking: True if this file is a duplicate of another file
+    # When a duplicate is detected, this file record is created but marked as duplicate
+    is_duplicate = Column(Boolean, default=False, nullable=False, index=True)
+    
+    # If this is a duplicate, record the ID of the original file for reference
+    duplicate_of_id = Column(Integer, ForeignKey("files.id"), nullable=True)
 
     # Timestamp when we inserted this record
     created_at = Column(DateTime(timezone=True), server_default=func.now())

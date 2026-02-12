@@ -52,6 +52,8 @@ def apply_status_filter(query: Query, db: Session, status: Optional[str]) -> Que
 
     # Define which steps are "real" status-determining steps
     # Only high-level logical steps and actual upload destinations (not queue_* steps)
+    from app.config import settings
+    
     REAL_STEPS = {
         "create_file_record",
         "check_text",
@@ -73,6 +75,10 @@ def apply_status_filter(query: Query, db: Session, status: Optional[str]) -> Que
         "upload_to_email",
         "upload_to_s3",
     }
+    
+    # Add check_for_duplicates if deduplication is enabled
+    if settings.enable_deduplication:
+        REAL_STEPS.add("check_for_duplicates")
 
     # Filter to only real steps
     real_steps_subq = (
