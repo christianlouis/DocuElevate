@@ -2,7 +2,7 @@ import logging
 import os
 
 import azure.core.exceptions
-import PyPDF2
+import pypdf  # Upgraded from PyPDF2 to fix CVE-2023-36464
 from azure.ai.documentintelligence import DocumentIntelligenceClient
 from azure.ai.documentintelligence.models import AnalyzeOutputOption, AnalyzeResult
 from azure.core.credentials import AzureKeyCredential
@@ -39,7 +39,7 @@ def get_pdf_page_count(file_path):
     """Get the number of pages in a PDF file."""
     try:
         with open(file_path, "rb") as file:
-            pdf_reader = PyPDF2.PdfReader(file)
+            pdf_reader = pypdf.PdfReader(file)
             return len(pdf_reader.pages)
     except Exception as e:
         logger.error(f"Error getting PDF page count: {e}")

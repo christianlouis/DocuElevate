@@ -492,8 +492,8 @@ def get_original_text(request: Request, file_id: int, db: Session = Depends(get_
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Original file not found on disk")
 
     try:
-        # Extract text from PDF using PyPDF2
-        from PyPDF2 import PdfReader
+        # Extract text from PDF using pypdf
+        from pypdf import PdfReader  # Upgraded from PyPDF2 to fix CVE-2023-36464
 
         reader = PdfReader(file_record.original_file_path)
         text = ""
@@ -532,8 +532,8 @@ def get_processed_text(request: Request, file_id: int, db: Session = Depends(get
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Processed file not found on disk")
 
     try:
-        # Extract text from PDF using PyPDF2
-        from PyPDF2 import PdfReader
+        # Extract text from PDF using pypdf
+        from pypdf import PdfReader  # Upgraded from PyPDF2 to fix CVE-2023-36464
 
         reader = PdfReader(file_record.processed_file_path)
         text = ""

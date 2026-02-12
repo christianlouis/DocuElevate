@@ -460,7 +460,7 @@ def reprocess_with_cloud_ocr(request: Request, file_id: int, db: DbSession):
 
 def _extract_text_from_pdf(file_path: str) -> str:
     """
-    Extract text from a PDF file using PyPDF2.
+    Extract text from a PDF file using pypdf.
 
     Args:
         file_path: Path to the PDF file
@@ -468,11 +468,11 @@ def _extract_text_from_pdf(file_path: str) -> str:
     Returns:
         Extracted text from all pages
     """
-    import PyPDF2
+    import pypdf  # Upgraded from PyPDF2 to fix CVE-2023-36464
 
     extracted_text = ""
     with open(file_path, "rb") as f:
-        pdf_reader = PyPDF2.PdfReader(f)
+        pdf_reader = pypdf.PdfReader(f)
         for page in pdf_reader.pages:
             extracted_text += page.extract_text() + "\n"
     return extracted_text

@@ -2,7 +2,7 @@ import json
 import logging
 import os
 
-import PyPDF2
+import pypdf  # Upgraded from PyPDF2 to fix CVE-2023-36464
 
 from app.celery_app import celery
 from app.config import settings
@@ -21,7 +21,7 @@ def determine_rotation_angle(detected_angle):
         detected_angle: The angle detected by Azure Document Intelligence
 
     Returns:
-        int: The angle to rotate the page in PyPDF2 (must be multiple of 90 degrees)
+        int: The angle to rotate the page in pypdf (must be multiple of 90 degrees)
     """
     # Normalize angle to be between 0 and 360
     normalized_angle = detected_angle % 360
@@ -35,15 +35,15 @@ def determine_rotation_angle(detected_angle):
     # For angles close to 90, 180, or 270 degrees (±5°), round to nearest 90° increment
     for target in [90, 180, 270]:
         if abs(normalized_angle - target) < 5:
-            # PyPDF2 uses clockwise rotation, so we need to use the complementary angle
+            # pypdf uses clockwise rotation, so we need to use the complementary angle
             rotation_value = (360 - target) % 360
             logger.info(f"Detected angle {detected_angle}° is close to {target}°, will rotate by {rotation_value}°")
             return rotation_value
 
     # For other significant angles, round to nearest 90° increment
-    # (PyPDF2 only supports rotations in 90-degree increments)
+    # (pypdf only supports rotations in 90-degree increments)
     closest_90_multiple = round(normalized_angle / 90) * 90
-    # Convert to PyPDF2 rotation value (clockwise)
+    # Convert to pypdf rotation value (clockwise)
     rotation_value = (360 - closest_90_multiple) % 360
     logger.info(f"Detected angle {detected_angle}° rounded to {closest_90_multiple}°, will rotate by {rotation_value}°")
     return rotation_value
@@ -110,8 +110,8 @@ def rotate_pdf_pages(self, filename: str, extracted_text: str, rotation_data=Non
 
         # Load the PDF
         with open(pdf_path, "rb") as file:
-            pdf_reader = PyPDF2.PdfReader(file)
-            pdf_writer = PyPDF2.PdfWriter()
+            pdf_reader = pypdf.PdfReader(file)
+            pdf_writer = pypdf.PdfWriter()
 
             # Process each page
             for page_idx in range(len(pdf_reader.pages)):
@@ -123,7 +123,7 @@ def rotate_pdf_pages(self, filename: str, extracted_text: str, rotation_data=Non
                     rotation_angle = determine_rotation_angle(detected_angle)
 
                     if rotation_angle > 0:
-                        # PyPDF2 uses clockwise rotation in 90-degree increments
+                        # pypdf uses clockwise rotation in 90-degree increments
                         page.rotate(rotation_angle)
                         logger.info(
                             f"[{task_id}] Page {page_idx+1} rotated by {rotation_angle}° "

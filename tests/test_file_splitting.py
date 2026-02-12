@@ -12,7 +12,7 @@ import os
 import tempfile
 
 import pytest
-from PyPDF2 import PdfReader, PdfWriter
+from pypdf import PdfReader, PdfWriter  # Upgraded from PyPDF2 to fix CVE-2023-36464
 
 from app.utils.file_splitting import should_split_file, split_pdf_by_size
 

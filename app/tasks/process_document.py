@@ -6,8 +6,8 @@ import os
 import shutil
 import uuid
 
-import PyPDF2  # Replace fitz with PyPDF2
-from PyPDF2.errors import PdfReadError
+import pypdf  # Upgraded from PyPDF2 to fix CVE-2023-36464
+from pypdf.errors import PdfReadError
 
 from app.celery_app import celery
 from app.config import settings
@@ -343,7 +343,7 @@ def process_document(self, original_local_file: str, original_filename: str = No
     )
     try:
         with open(new_local_path, "rb") as file:
-            pdf_reader = PyPDF2.PdfReader(file)
+            pdf_reader = pypdf.PdfReader(file)
             has_text = False
             for page in pdf_reader.pages:
                 if page.extract_text().strip():
@@ -391,7 +391,7 @@ def process_document(self, original_local_file: str, original_filename: str = No
         )
         extracted_text = ""
         with open(new_local_path, "rb") as file:
-            pdf_reader = PyPDF2.PdfReader(file)
+            pdf_reader = pypdf.PdfReader(file)
             for page in pdf_reader.pages:
                 extracted_text += page.extract_text() + "\n"
 
