@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.models import FileRecord, ProcessingLog
+from app.models import FileProcessingStep, FileRecord, ProcessingLog
 
 
 @pytest.mark.integration
@@ -178,7 +178,7 @@ class TestStatusFilter:
     def test_status_filter_pending(self, client: TestClient, db_session):
         """Test filtering files by pending status."""
         # Create files with different statuses
-        # File 1: Pending (no logs)
+        # File 1: Pending (no processing steps)
         file1 = FileRecord(
             filehash="hash1",
             original_filename="pending.pdf",
@@ -188,7 +188,7 @@ class TestStatusFilter:
         )
         db_session.add(file1)
 
-        # File 2: Processing (has in_progress log)
+        # File 2: Processing (has in_progress step)
         file2 = FileRecord(
             filehash="hash2",
             original_filename="processing.pdf",
@@ -199,14 +199,12 @@ class TestStatusFilter:
         db_session.add(file2)
         db_session.flush()
 
-        log2 = ProcessingLog(
+        step2 = FileProcessingStep(
             file_id=file2.id,
-            task_id="task2",
-            step_name="OCR",
+            step_name="extract_text",
             status="in_progress",
-            message="Processing...",
         )
-        db_session.add(log2)
+        db_session.add(step2)
         db_session.commit()
 
         # Test pending filter
@@ -229,14 +227,12 @@ class TestStatusFilter:
         db_session.add(file_record)
         db_session.flush()
 
-        log = ProcessingLog(
+        step = FileProcessingStep(
             file_id=file_record.id,
-            task_id="task1",
-            step_name="OCR",
+            step_name="extract_text",
             status="in_progress",
-            message="Processing...",
         )
-        db_session.add(log)
+        db_session.add(step)
         db_session.commit()
 
         # Test processing filter
@@ -257,14 +253,12 @@ class TestStatusFilter:
         db_session.add(file_record)
         db_session.flush()
 
-        log = ProcessingLog(
+        step = FileProcessingStep(
             file_id=file_record.id,
-            task_id="task1",
-            step_name="OCR",
+            step_name="extract_text",
             status="success",
-            message="Completed",
         )
-        db_session.add(log)
+        db_session.add(step)
         db_session.commit()
 
         # Test completed filter
@@ -285,14 +279,13 @@ class TestStatusFilter:
         db_session.add(file_record)
         db_session.flush()
 
-        log = ProcessingLog(
+        step = FileProcessingStep(
             file_id=file_record.id,
-            task_id="task1",
-            step_name="OCR",
+            step_name="extract_text",
             status="failure",
-            message="Failed",
+            error_message="Failed",
         )
-        db_session.add(log)
+        db_session.add(step)
         db_session.commit()
 
         # Test failed filter

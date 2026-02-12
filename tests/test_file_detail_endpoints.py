@@ -514,7 +514,7 @@ class TestStepSummary:
 
         now = datetime.now()
         logs = [
-            MockLog("hash_file", "success", now - timedelta(minutes=5)),
+            MockLog("check_text", "success", now - timedelta(minutes=5)),
             MockLog("create_file_record", "success", now - timedelta(minutes=4)),
             MockLog("extract_metadata_with_gpt", "failure", now - timedelta(minutes=3)),
             MockLog("upload_to_dropbox", "success", now - timedelta(minutes=2)),

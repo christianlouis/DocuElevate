@@ -3,7 +3,7 @@ Tests for file listing, pagination, filtering, and detail endpoints.
 """
 import pytest
 from fastapi.testclient import TestClient
-from app.models import FileRecord, ProcessingLog
+from app.models import FileProcessingStep, FileRecord, ProcessingLog
 from datetime import datetime
 
 
@@ -186,15 +186,13 @@ class TestFileListingPagination:
         db_session.add(file_record)
         db_session.commit()
         
-        # Add a processing log
-        log = ProcessingLog(
+        # Add a processing step (used for status determination)
+        step = FileProcessingStep(
             file_id=file_record.id,
-            task_id="test_task",
-            step_name="test_step",
+            step_name="extract_text",
             status="success",
-            message="Test message"
         )
-        db_session.add(log)
+        db_session.add(step)
         db_session.commit()
         
         response = client.get("/api/files")
@@ -223,7 +221,16 @@ class TestFileDetailEndpoint:
         db_session.add(file_record)
         db_session.commit()
         
-        # Add processing logs
+        # Add processing steps (used for status determination)
+        for step_name, status in [("extract_text", "success"), ("extract_metadata_with_gpt", "in_progress"), ("embed_metadata_into_pdf", "success")]:
+            step = FileProcessingStep(
+                file_id=file_record.id,
+                step_name=step_name,
+                status=status,
+            )
+            db_session.add(step)
+
+        # Add processing logs (for the logs section)
         for i, status in enumerate(["success", "in_progress", "success"]):
             log = ProcessingLog(
                 file_id=file_record.id,
@@ -270,33 +277,32 @@ class TestFileDetailEndpoint:
         db_session.add(file_record)
         db_session.commit()
         
-        # Test 1: No logs = pending
+        # Test 1: No steps = pending
         response = client.get(f"/api/files/{file_record.id}")
         assert response.status_code == 200
         assert response.json()["processing_status"]["status"] == "pending"
         
-        # Test 2: Success log = completed
-        log = ProcessingLog(
+        # Test 2: Success step = completed
+        step = FileProcessingStep(
             file_id=file_record.id,
-            task_id="task_1",
-            step_name="step_1",
-            status="success"
+            step_name="extract_text",
+            status="success",
         )
-        db_session.add(log)
+        db_session.add(step)
         db_session.commit()
         
         response = client.get(f"/api/files/{file_record.id}")
         assert response.status_code == 200
         assert response.json()["processing_status"]["status"] == "completed"
         
-        # Test 3: Failure log = failed
-        log2 = ProcessingLog(
+        # Test 3: Failure step = failed
+        step2 = FileProcessingStep(
             file_id=file_record.id,
-            task_id="task_2",
-            step_name="step_2",
-            status="failure"
+            step_name="extract_metadata_with_gpt",
+            status="failure",
+            error_message="API error",
         )
-        db_session.add(log2)
+        db_session.add(step2)
         db_session.commit()
         
         response = client.get(f"/api/files/{file_record.id}")

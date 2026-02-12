@@ -163,10 +163,14 @@ def test_process_document_duplicate_file(db_session, tmp_path):
 
         # Verify that duplicate was detected
         assert result["status"] == "duplicate_file"
-        assert result["file_id"] == existing_id
+        assert result["original_file_id"] == existing_id
 
-        # Verify only one FileRecord exists
-        assert db_session.query(FileRecord).count() == 1
+        # A new duplicate FileRecord is created alongside the original
+        assert db_session.query(FileRecord).count() == 2
+        duplicate = db_session.query(FileRecord).filter(FileRecord.is_duplicate.is_(True)).first()
+        assert duplicate is not None
+        assert duplicate.duplicate_of_id == existing_id
+        assert result["file_id"] == duplicate.id
 
 
 @pytest.mark.unit
