@@ -12,9 +12,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             title: document.title
         };
         sendResponse(pageInfo);
-        return true; // Indicates response will be sent asynchronously
     }
-    return false; // No async response
 });
 
 // Detect if current page is a direct file link

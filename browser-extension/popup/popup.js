@@ -109,18 +109,22 @@ sendFileBtn.addEventListener('click', async () => {
             credentials: 'include'
         });
         
-        const result = await response.json();
-        
         if (response.ok) {
+            const result = await response.json();
             showStatus(
                 `✓ File sent successfully! Task ID: ${result.task_id}\nFilename: ${result.filename}`,
                 'success'
             );
         } else {
-            showStatus(
-                `Error: ${result.detail || 'Failed to send file'}`,
-                'error'
-            );
+            // Try to parse JSON error, fall back to status text
+            let errorMessage = 'Failed to send file';
+            try {
+                const result = await response.json();
+                errorMessage = result.detail || errorMessage;
+            } catch (e) {
+                errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+            }
+            showStatus(`Error: ${errorMessage}`, 'error');
         }
     } catch (error) {
         showStatus(

@@ -4,13 +4,18 @@
 chrome.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') {
         console.log('DocuElevate extension installed');
-        // Open options page on first install
-        chrome.tabs.create({
-            url: chrome.runtime.getURL('popup/popup.html')
-        });
+        // Note: We don't open the popup automatically to avoid poor UX
+        // User can click the extension icon to configure
     } else if (details.reason === 'update') {
         console.log('DocuElevate extension updated');
     }
+    
+    // Create context menu item
+    chrome.contextMenus.create({
+        id: 'send-to-docuelevate',
+        title: 'Send to DocuElevate',
+        contexts: ['link', 'page']
+    });
 });
 
 // Listen for messages from content script or popup
@@ -58,15 +63,6 @@ async function handleSendUrl(data) {
     
     return await response.json();
 }
-
-// Add context menu item for sending URLs
-chrome.runtime.onInstalled.addListener(() => {
-    chrome.contextMenus.create({
-        id: 'send-to-docuelevate',
-        title: 'Send to DocuElevate',
-        contexts: ['link', 'page']
-    });
-});
 
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
