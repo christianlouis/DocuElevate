@@ -46,6 +46,14 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
     """
     Get processing status for multiple files efficiently.
 
+    Only counts "real" processing steps that represent user-facing status:
+    - Main steps: create_file_record, check_text, extract_text, process_with_azure_document_intelligence,
+                  extract_metadata_with_gpt, embed_metadata_into_pdf, finalize_document_storage,
+                  send_to_all_destinations
+    - Upload steps: upload_to_*
+    
+    Diagnostic/internal steps (poll_task, upload_file, set_custom_fields, etc.) are ignored.
+
     Args:
         db: Database session
         file_ids: List of file IDs
@@ -53,8 +61,35 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
     Returns:
         dict mapping file_id to status dict
     """
-    # Get all steps for these files in one query
-    steps = db.query(FileProcessingStep).filter(FileProcessingStep.file_id.in_(file_ids)).all()
+    # Define which steps are "real" status-determining steps
+    REAL_STEPS = {
+        "create_file_record",
+        "check_text",
+        "extract_text",
+        "process_with_azure_document_intelligence",
+        "extract_metadata_with_gpt",
+        "embed_metadata_into_pdf",
+        "finalize_document_storage",
+        "send_to_all_destinations",
+        "upload_to_dropbox",
+        "upload_to_paperless",
+        "upload_to_google_drive",
+        "upload_to_ftp",
+        "upload_to_onedrive",
+        "upload_to_webdav",
+        "upload_to_sftp",
+        "upload_to_nextcloud",
+        "upload_to_paperless_ngx",
+        "upload_to_email",
+        "upload_to_s3",
+    }
+
+    # Get all REAL steps for these files in one query
+    steps = (
+        db.query(FileProcessingStep)
+        .filter(FileProcessingStep.file_id.in_(file_ids), FileProcessingStep.step_name.in_(REAL_STEPS))
+        .all()
+    )
 
     # Group steps by file_id
     steps_by_file = {}

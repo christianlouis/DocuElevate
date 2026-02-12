@@ -1,9 +1,10 @@
 import logging
 import threading
 from collections import defaultdict
+from datetime import datetime
 
 from app.database import SessionLocal
-from app.models import ProcessingLog
+from app.models import FileProcessingStep, ProcessingLog
 
 
 class TaskLogCollector(logging.Handler):
@@ -66,6 +67,8 @@ def log_task_progress(task_id, step_name, status, message=None, file_id=None, de
     If no explicit detail is provided, automatically drains any buffered
     worker log output for this task ID and stores it as the detail.
 
+    Also updates the FileProcessingStep table for definitive status tracking.
+
     Args:
         task_id: The Celery task ID
         step_name: Name of the processing step
@@ -83,6 +86,7 @@ def log_task_progress(task_id, step_name, status, message=None, file_id=None, de
             detail = collected
 
     with SessionLocal() as db:
+        # Log to ProcessingLog (for historical viewing)
         log_entry = ProcessingLog(
             task_id=task_id,
             step_name=step_name,
@@ -92,4 +96,37 @@ def log_task_progress(task_id, step_name, status, message=None, file_id=None, de
             detail=detail,
         )
         db.add(log_entry)
+        
+        # Update FileProcessingStep table (for status tracking) if file_id is provided
+        if file_id and step_name:
+            # Find or create the step record
+            step_record = (
+                db.query(FileProcessingStep)
+                .filter(FileProcessingStep.file_id == file_id, FileProcessingStep.step_name == step_name)
+                .first()
+            )
+            
+            now = datetime.utcnow()
+            
+            if not step_record:
+                # Create new step record
+                step_record = FileProcessingStep(
+                    file_id=file_id,
+                    step_name=step_name,
+                    status=status,
+                    started_at=now if status == "in_progress" else None,
+                    completed_at=now if status in ("success", "failure", "skipped") else None,
+                    error_message=message if status == "failure" else None,
+                )
+                db.add(step_record)
+            else:
+                # Update existing step record
+                step_record.status = status
+                if status == "in_progress" and not step_record.started_at:
+                    step_record.started_at = now
+                if status in ("success", "failure", "skipped"):
+                    step_record.completed_at = now
+                if status == "failure":
+                    step_record.error_message = message or detail
+        
         db.commit()

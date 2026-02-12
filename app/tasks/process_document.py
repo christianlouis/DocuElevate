@@ -233,6 +233,14 @@ def process_document(self, original_local_file: str, original_filename: str = No
             "Force Cloud OCR requested, queuing OCR",
             file_id=file_id,
         )
+        # Mark local text extraction as skipped since force_cloud_ocr was requested
+        log_task_progress(
+            task_id,
+            "extract_text",
+            "skipped",
+            "Force cloud OCR requested, skipping local extraction",
+            file_id=file_id,
+        )
         log_task_progress(
             task_id,
             "process_document",
@@ -292,6 +300,15 @@ def process_document(self, original_local_file: str, original_filename: str = No
             f"Extracted {len(extracted_text)} characters",
             file_id=file_id,
         )
+        
+        # Mark Azure OCR as skipped since we extracted text locally
+        log_task_progress(
+            task_id,
+            "process_with_azure_document_intelligence",
+            "skipped",
+            "Local text extraction succeeded, Azure OCR not needed",
+            file_id=file_id,
+        )
 
         # Call metadata extraction directly
         logger.info(f"[{task_id}] Queueing metadata extraction")
@@ -318,6 +335,16 @@ def process_document(self, original_local_file: str, original_filename: str = No
         "No embedded text, queuing OCR",
         file_id=file_id,
     )
+    
+    # Mark local text extraction as skipped since we're using Azure OCR
+    log_task_progress(
+        task_id,
+        "extract_text",
+        "skipped",
+        "No embedded text, using Azure OCR instead",
+        file_id=file_id,
+    )
+    
     log_task_progress(
         task_id,
         "process_document",

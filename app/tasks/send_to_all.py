@@ -18,8 +18,8 @@ from app.tasks.upload_to_paperless import upload_to_paperless
 from app.tasks.upload_to_s3 import upload_to_s3
 from app.tasks.upload_to_sftp import upload_to_sftp
 from app.tasks.upload_to_webdav import upload_to_webdav
-from app.utils import log_task_progress
 from app.utils.config_validator import get_provider_status
+from app.utils.logging import log_task_progress
 
 logger = logging.getLogger(__name__)
 

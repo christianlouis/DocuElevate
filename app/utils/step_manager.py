@@ -156,6 +156,9 @@ def get_file_step_status(db: Session, file_id: int) -> Dict[str, Dict]:
 def get_file_overall_status(db: Session, file_id: int) -> Dict:
     """
     Get the overall processing status for a file based on its steps.
+    
+    Only considers "real" processing steps that represent user-facing status.
+    Ignores diagnostic/internal steps like poll_task, upload_file, etc.
 
     Args:
         db: Database session
@@ -172,7 +175,28 @@ def get_file_overall_status(db: Session, file_id: int) -> Dict:
             "in_progress_steps": 2
         }
     """
-    steps = db.query(FileProcessingStep).filter(FileProcessingStep.file_id == file_id).all()
+    # Define which steps are "real" status-determining steps
+    # Only high-level logical steps, not implementation sub-steps
+    REAL_MAIN_STEPS = {
+        "create_file_record",
+        "check_text",
+        "extract_text",
+        "process_with_azure_document_intelligence",
+        "extract_metadata_with_gpt",
+        "embed_metadata_into_pdf",
+        "finalize_document_storage",
+        "send_to_all_destinations",
+    }
+    
+    all_steps = db.query(FileProcessingStep).filter(FileProcessingStep.file_id == file_id).all()
+    
+    # Filter to only real steps
+    steps = [
+        s for s in all_steps
+        if s.step_name in REAL_MAIN_STEPS 
+        or s.step_name.startswith("queue_")
+        or s.step_name.startswith("upload_to_")
+    ]
 
     if not steps:
         return {
@@ -217,6 +241,9 @@ def get_step_summary(db: Session, file_id: int) -> Dict:
     """
     Get a summary of main steps vs upload steps with status counts.
 
+    Only counts "real" processing steps that represent user-facing status.
+    Ignores diagnostic/internal steps like poll_task, upload_file, etc.
+
     Args:
         db: Database session
         file_id: ID of the file
@@ -230,12 +257,23 @@ def get_step_summary(db: Session, file_id: int) -> Dict:
             "total_upload_tasks": 6
         }
     """
+    # Define which steps are "real" status-determining steps
+    # Only high-level logical steps, not implementation sub-steps
+    REAL_MAIN_STEPS = {
+        "create_file_record",
+        "check_text",
+        "extract_text",
+        "process_with_azure_document_intelligence",
+        "extract_metadata_with_gpt",
+        "embed_metadata_into_pdf",
+        "finalize_document_storage",
+        "send_to_all_destinations",
+    }
+    
     steps = db.query(FileProcessingStep).filter(FileProcessingStep.file_id == file_id).all()
 
     main_counts = {"queued": 0, "in_progress": 0, "success": 0, "failure": 0, "skipped": 0}
     upload_counts = {"queued": 0, "in_progress": 0, "success": 0, "failure": 0, "skipped": 0}
-
-    upload_prefixes = ["upload_to_", "queue_"]
 
     main_steps_count = 0
     upload_steps_count = 0
@@ -246,14 +284,21 @@ def get_step_summary(db: Session, file_id: int) -> Dict:
         if status == "pending":
             status = "queued"
 
-        # Check if it's an upload task
-        is_upload = any(step.step_name.startswith(prefix) for prefix in upload_prefixes)
+        # Check if it's an upload task (only count actual upload_to_* steps, not queue_* steps)
+        is_upload = step.step_name.startswith("upload_to_")
+        
+        # Only count "real" steps
+        is_real_step = step.step_name in REAL_MAIN_STEPS or is_upload or step.step_name.startswith("queue_")
+
+        if not is_real_step:
+            # Skip diagnostic/internal steps like poll_task, upload_file, set_custom_fields, etc.
+            continue
 
         if is_upload:
             if status in upload_counts:
                 upload_counts[status] += 1
             upload_steps_count += 1
-        elif step.step_name in MAIN_PROCESSING_STEPS:
+        elif step.step_name in REAL_MAIN_STEPS:
             if status in main_counts:
                 main_counts[status] += 1
             main_steps_count += 1
@@ -264,3 +309,4 @@ def get_step_summary(db: Session, file_id: int) -> Dict:
         "total_main_steps": main_steps_count,
         "total_upload_tasks": upload_steps_count,
     }
+
