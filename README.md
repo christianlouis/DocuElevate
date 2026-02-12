@@ -207,6 +207,8 @@ The following is a summary of the licenses used by our direct dependencies:
 | OpenAI     | MIT     |
 | PyPDF2     | BSD     |
 | Requests   | Apache 2.0 |
+| puremagic  | MIT     |
+| filetype   | MIT     |
 | Dropbox    | MIT     |
 | Azure AI Document Intelligence | MIT |
 | Authlib    | BSD     |

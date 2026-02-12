@@ -90,6 +90,10 @@
       background-color: #FEE2E2;
       color: #991B1B;
     }
+    .status-duplicate {
+      background-color: #E5E7EB;
+      color: #374151;
+    }
     
     /* Step summary section */
     .step-summary {
@@ -928,7 +932,9 @@
         <div style="font-size: 1.5rem; font-weight: 600; color: #1f2937;">
           {% set main_completed = step_summary.main.success + step_summary.main.skipped %}
           {% set uploads_completed = step_summary.uploads.success + step_summary.uploads.skipped %}
-          {% if step_summary.main.failure > 0 or step_summary.uploads.failure > 0 %}
+          {% if file.is_duplicate %}
+            <i class="fas fa-copy" style="color: #6b7280; margin-right: 0.5rem;"></i>Duplicate
+          {% elif step_summary.main.failure > 0 or step_summary.uploads.failure > 0 %}
             <i class="fas fa-times-circle" style="color: #dc2626; margin-right: 0.5rem;"></i>Failed
           {% elif step_summary.main["in_progress"] > 0 or step_summary.uploads["in_progress"] > 0 %}
             <i class="fas fa-circle-notch" style="color: #f59e0b; margin-right: 0.5rem; animation: spin 1s linear infinite;"></i>Processing

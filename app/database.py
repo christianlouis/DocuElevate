@@ -102,6 +102,21 @@ def _run_schema_migrations(engine):
                 conn.execute(text("ALTER TABLE files ADD COLUMN duplicate_of_id INTEGER"))
             logger.info("Migration complete: 'duplicate_of_id' column added to files")
 
+        # Migration: Drop unique index on filehash to allow duplicate records
+        try:
+            indexes = inspector.get_indexes("files")
+            unique_filehash_indexes = [
+                index for index in indexes if index.get("unique") and "filehash" in index.get("column_names", [])
+            ]
+            if unique_filehash_indexes:
+                logger.info("Migrating files: dropping unique index on 'filehash'")
+                with engine.begin() as conn:
+                    for index in unique_filehash_indexes:
+                        conn.execute(text(f"DROP INDEX IF EXISTS {index['name']}"))
+                logger.info("Migration complete: unique index on 'filehash' removed")
+        except Exception as exc:
+            logger.warning(f"Skipping filehash unique index drop: {exc}")
+
 
 def get_db():
     """

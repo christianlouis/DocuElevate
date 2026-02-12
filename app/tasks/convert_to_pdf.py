@@ -2,7 +2,10 @@
 import logging
 import mimetypes
 import os
+from typing import Optional, Tuple
 
+import filetype
+import puremagic
 import requests
 from celery import shared_task
 
@@ -13,8 +16,115 @@ from app.utils import log_task_progress
 logger = logging.getLogger(__name__)
 
 
+def _detect_mime_type_from_magic(file_path: str) -> Optional[str]:
+    """
+    Detect MIME type from file headers using platform-agnostic libraries.
+
+    Args:
+        file_path: Path to the file on disk.
+
+    Returns:
+        Detected MIME type or None if unknown.
+    """
+    try:
+        matches = puremagic.from_file(file_path)
+        if matches:
+            return matches[0].mime_type
+    except puremagic.PureError:
+        pass
+
+    guess = filetype.guess(file_path)
+    if guess:
+        return guess.mime
+
+    return None
+
+
+def _detect_mime_type(file_path: str, original_filename: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Detect MIME type using extension, original filename, or magic bytes.
+
+    Args:
+        file_path: Path to the file on disk.
+        original_filename: Optional original filename provided at upload time.
+
+    Returns:
+        Tuple of detected MIME type and encoding.
+    """
+    mime_type, encoding = mimetypes.guess_type(file_path)
+    if mime_type:
+        return mime_type, encoding
+
+    if original_filename:
+        mime_type, encoding = mimetypes.guess_type(original_filename)
+        if mime_type:
+            return mime_type, encoding
+
+    return _detect_mime_type_from_magic(file_path), encoding
+
+
+def _detect_extension(file_path: str, original_filename: Optional[str], mime_type: Optional[str]) -> str:
+    """
+    Detect file extension from file path, original filename, or MIME type.
+
+    Args:
+        file_path: Path to the file on disk.
+        original_filename: Optional original filename provided at upload time.
+        mime_type: Detected MIME type if available.
+
+    Returns:
+        File extension with leading dot (e.g., ".pdf") or empty string if unknown.
+    """
+    file_ext = os.path.splitext(file_path)[1].lower()
+    if file_ext:
+        return file_ext
+
+    if original_filename:
+        file_ext = os.path.splitext(original_filename)[1].lower()
+        if file_ext:
+            return file_ext
+
+    if mime_type:
+        return mimetypes.guess_extension(mime_type) or ""
+
+    try:
+        matches = puremagic.from_file(file_path)
+        if matches and matches[0].extension:
+            return f".{matches[0].extension.lstrip('.')}"
+    except puremagic.PureError:
+        pass
+
+    guess = filetype.guess(file_path)
+    if guess and guess.extension:
+        return f".{guess.extension.lstrip('.')}"
+
+    return ""
+
+
+def _build_filename(file_path: str, original_filename: Optional[str], file_ext: str) -> str:
+    """
+    Build a filename for upload that includes a valid extension when possible.
+
+    Args:
+        file_path: Path to the file on disk.
+        original_filename: Optional original filename provided at upload time.
+        file_ext: Detected file extension.
+
+    Returns:
+        Filename to send to Gotenberg.
+    """
+    if original_filename and os.path.splitext(original_filename)[1]:
+        return original_filename
+
+    base_name = os.path.basename(file_path)
+    if file_ext and not base_name.lower().endswith(file_ext):
+        return f"{base_name}{file_ext}"
+
+    return base_name
+
+
 @shared_task(bind=True)
-def convert_to_pdf(self, file_path, original_filename=None):
+def convert_to_pdf(self, file_path: str, original_filename: Optional[str] = None) -> Optional[str]:
     """
     Converts a file to PDF using Gotenberg's API.
     Determines the appropriate Gotenberg endpoint based on the file's MIME type.
@@ -35,9 +145,23 @@ def convert_to_pdf(self, file_path, original_filename=None):
         return
 
     # Try to guess the MIME type based on file content and extension
-    mime_type, encoding = mimetypes.guess_type(file_path)
-    file_ext = os.path.splitext(file_path)[1].lower()
+    mime_type, encoding = _detect_mime_type(file_path, original_filename)
+    file_ext = _detect_extension(file_path, original_filename, mime_type)
     logger.info(f"[{task_id}] Guessed MIME type for '{file_path}' is: {mime_type}, extension: {file_ext}")
+    if not mime_type and not file_ext:
+        log_task_progress(
+            task_id,
+            "detect_file_type",
+            "failure",
+            "Unable to determine file type for conversion",
+            detail=(
+                f"File: {file_path}\n"
+                f"Original filename: {original_filename or 'N/A'}\n"
+                "No extension and no detectable magic header."
+            ),
+        )
+        logger.error(f"[{task_id}] Unable to determine file type for conversion: {file_path}")
+        return None
     log_task_progress(task_id, "detect_file_type", "success", f"File type: {mime_type or file_ext}")
 
     # Determine which Gotenberg endpoint to use
@@ -91,7 +215,7 @@ def convert_to_pdf(self, file_path, original_filename=None):
         or file_ext in IMAGE_EXTENSIONS
     ):
         endpoint = f"{gotenberg_url}/forms/libreoffice/convert"
-        files = {"files": (os.path.basename(file_path), open(file_path, "rb"))}
+        files = {"files": (_build_filename(file_path, original_filename, file_ext), open(file_path, "rb"))}
 
         # Add some quality settings for better PDF output
         form_data = {
@@ -176,7 +300,7 @@ def convert_to_pdf(self, file_path, original_filename=None):
     # Fallback to LibreOffice for everything else
     else:
         endpoint = f"{gotenberg_url}/forms/libreoffice/convert"
-        files = {"files": (os.path.basename(file_path), open(file_path, "rb"))}
+        files = {"files": (_build_filename(file_path, original_filename, file_ext), open(file_path, "rb"))}
         logger.warning(f"Using fallback conversion for unknown type: {mime_type} / {file_ext}")
 
     if not endpoint:

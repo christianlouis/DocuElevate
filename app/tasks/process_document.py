@@ -7,6 +7,7 @@ import shutil
 import uuid
 
 import PyPDF2  # Replace fitz with PyPDF2
+from PyPDF2.errors import PdfReadError
 
 from app.celery_app import celery
 from app.config import settings
@@ -112,25 +113,44 @@ def process_document(self, original_local_file: str, original_filename: str = No
         else:
             # Check for duplicate only if this is a new file (not reprocessing)
             # IMPORTANT: Only consider it a duplicate if it matches a DIFFERENT file
-            existing = db.query(FileRecord).filter_by(filehash=filehash).one_or_none()
-            
+            existing = db.query(FileRecord).filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False)).order_by(FileRecord.created_at.asc()).first()
+            if existing is None:
+                existing = (
+                    db.query(FileRecord)
+                    .filter(FileRecord.filehash == filehash)
+                    .order_by(FileRecord.id.asc())
+                    .first()
+                )
+
             # A file is only a duplicate if it matches a different file's hash
             # (not its own hash when reprocessing)
             if existing and existing.id != file_id and settings.enable_deduplication:
                 logger.info(f"[{task_id}] Duplicate file detected (hash={filehash[:10]}...) Skipping processing.")
-                # Log the deduplication result without creating a new database record
-                # This avoids UNIQUE constraint violations on filehash
+                duplicate_record = FileRecord(
+                    filehash=filehash,
+                    original_filename=original_filename,
+                    local_filename="",
+                    file_size=file_size,
+                    mime_type=mime_type,
+                    is_duplicate=True,
+                    duplicate_of_id=existing.id,
+                )
+                db.add(duplicate_record)
+                db.commit()
+                db.refresh(duplicate_record)
+
                 if settings.enable_deduplication and settings.show_deduplication_step:
                     log_task_progress(
                         task_id,
                         "check_for_duplicates",
                         "success",
                         f"Duplicate detected - matching file ID {existing.id}",
-                        file_id=existing.id,
+                        file_id=duplicate_record.id,
                         detail=(
                             f"Duplicate file detected.\n"
                             f"File hash: {filehash}\n"
                             f"Original file record ID: {existing.id}\n"
+                            f"This file record ID: {duplicate_record.id}\n"
                             f"Original filename: {original_filename}"
                         ),
                     )
@@ -139,7 +159,7 @@ def process_document(self, original_local_file: str, original_filename: str = No
                     "process_document",
                     "success",
                     "Duplicate file detected, skipping",
-                    file_id=existing.id,
+                    file_id=duplicate_record.id,
                     detail=(
                         f"Duplicate file detected.\n"
                         f"File hash: {filehash}\n"
@@ -149,7 +169,7 @@ def process_document(self, original_local_file: str, original_filename: str = No
                 )
                 return {
                     "status": "duplicate_file",
-                    "file_id": existing.id,
+                    "file_id": duplicate_record.id,
                     "original_file_id": existing.id,
                     "detail": "File already processed.",
                 }
@@ -289,6 +309,30 @@ def process_document(self, original_local_file: str, original_filename: str = No
         process_with_azure_document_intelligence.delay(new_filename, file_id)
         return {"file": new_local_path, "status": "Queued for forced OCR", "file_id": file_id}
     
+    # If the file is not a PDF, skip embedded text check and convert to PDF first
+    is_pdf = mime_type == "application/pdf" or os.path.splitext(new_local_path)[1].lower() == ".pdf"
+    if not is_pdf:
+        logger.info(f"[{task_id}] Non-PDF file detected, queuing PDF conversion before OCR")
+        log_task_progress(
+            task_id,
+            "check_text",
+            "skipped",
+            "Non-PDF file detected, converting to PDF",
+            file_id=file_id,
+        )
+        log_task_progress(
+            task_id,
+            "process_document",
+            "success",
+            "Queued for PDF conversion",
+            file_id=file_id,
+        )
+        celery.send_task(
+            "app.tasks.convert_to_pdf.convert_to_pdf",
+            args=[new_local_path, original_filename],
+        )
+        return {"file": new_local_path, "status": "Queued for PDF conversion", "file_id": file_id}
+
     logger.info(f"[{task_id}] Checking for embedded text in PDF")
     log_task_progress(
         task_id,
@@ -297,13 +341,34 @@ def process_document(self, original_local_file: str, original_filename: str = No
         "Checking for embedded text",
         file_id=file_id,
     )
-    with open(new_local_path, "rb") as file:
-        pdf_reader = PyPDF2.PdfReader(file)
-        has_text = False
-        for page in pdf_reader.pages:
-            if page.extract_text().strip():
-                has_text = True
-                break
+    try:
+        with open(new_local_path, "rb") as file:
+            pdf_reader = PyPDF2.PdfReader(file)
+            has_text = False
+            for page in pdf_reader.pages:
+                if page.extract_text().strip():
+                    has_text = True
+                    break
+    except PdfReadError as exc:
+        logger.warning(f"[{task_id}] PDF read error during embedded text check: {exc}")
+        log_task_progress(
+            task_id,
+            "check_text",
+            "in_progress",
+            "PDF read error, retrying embedded text check",
+            file_id=file_id,
+            detail=str(exc),
+        )
+        raise self.retry(
+            exc=exc,
+            countdown=10,
+            kwargs={
+                "original_local_file": original_local_file,
+                "original_filename": original_filename,
+                "file_id": file_id,
+                "force_cloud_ocr": force_cloud_ocr,
+            },
+        )
 
     if has_text:
         logger.info(f"[{task_id}] PDF {original_local_file} contains embedded text. Processing locally.")

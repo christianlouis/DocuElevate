@@ -22,7 +22,8 @@ class FileRecord(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     # Hash of the file content (e.g. SHA-256)
-    filehash = Column(String, unique=True, index=True, nullable=False)
+    # Note: duplicates are allowed so filehash is not unique
+    filehash = Column(String, index=True, nullable=False)
 
     # The name of the file as it was originally uploaded (if known)
     original_filename = Column(String)

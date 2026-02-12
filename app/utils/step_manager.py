@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import FileProcessingStep
+from app.models import FileProcessingStep, FileRecord
 
 # Define the expected processing steps for a standard file workflow
 # The "check_for_duplicates" step is conditionally included based on enable_deduplication setting
@@ -186,6 +186,19 @@ def get_file_overall_status(db: Session, file_id: int) -> Dict:
             "in_progress_steps": 2
         }
     """
+    # If file is marked as duplicate, return duplicate status immediately
+    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).one_or_none()
+    if file_record and file_record.is_duplicate:
+        return {
+            "status": "duplicate",
+            "has_errors": False,
+            "total_steps": 0,
+            "completed_steps": 0,
+            "failed_steps": 0,
+            "in_progress_steps": 0,
+            "skipped_steps": 0,
+        }
+
     # Define which steps are "real" status-determining steps
     # Only high-level logical steps, not implementation sub-steps
     REAL_MAIN_STEPS = {

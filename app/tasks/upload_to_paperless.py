@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import time
+from typing import Optional
 
 import requests
 
@@ -55,7 +56,23 @@ def normalize_metadata_value(value) -> str:
     return str_value
 
 
-def poll_task_for_document_id(task_id: str) -> int:
+def _is_duplicate_error(result_message: str) -> bool:
+    """
+    Determine whether a Paperless task failure indicates a duplicate document.
+
+    Args:
+        result_message: Failure result string from Paperless.
+
+    Returns:
+        True if the message indicates a duplicate, otherwise False.
+    """
+    if not result_message:
+        return False
+    lowered = result_message.lower()
+    return "duplicate" in lowered and "not consuming" in lowered
+
+
+def poll_task_for_document_id(task_id: str) -> Optional[int]:
     """
     Polls /api/tasks/?task_id=<uuid> until we get status=SUCCESS or FAILURE,
     or until we run out of attempts.
@@ -92,7 +109,11 @@ def poll_task_for_document_id(task_id: str) -> int:
                     return int(doc_str)
                 raise RuntimeError(f"Task {task_id} completed but no doc ID found. Task info: {task_info}")
             elif status == "FAILURE":
-                raise RuntimeError(f"Task {task_id} failed: {task_info.get('result')}")
+                result_message = task_info.get("result")
+                if _is_duplicate_error(result_message):
+                    logger.info("Task %s reported duplicate document: %s", task_id, result_message)
+                    return None
+                raise RuntimeError(f"Task {task_id} failed: {result_message}")
 
         attempts += 1
         time.sleep(POLL_INTERVAL_SEC)
@@ -266,6 +287,23 @@ def upload_to_paperless(self, file_path: str, file_id: int = None):
     logger.info(f"[{task_id}] Polling for document ID")
     log_task_progress(task_id, "poll_task", "in_progress", "Waiting for Paperless processing", file_id=file_id)
     doc_id = poll_task_for_document_id(raw_task_id)
+    if doc_id is None:
+        logger.info(f"[{task_id}] Paperless reported duplicate for {file_path}; skipping upload")
+        log_task_progress(
+            task_id,
+            "upload_to_paperless",
+            "skipped",
+            "Duplicate document detected by Paperless - skipping",
+            file_id=file_id,
+            detail="Paperless reported duplicate; document was not consumed.",
+        )
+        return {
+            "status": "Duplicate",
+            "paperless_task_id": raw_task_id,
+            "paperless_document_id": None,
+            "file_path": file_path,
+        }
+
     logger.info(f"[{task_id}] Document {file_path} successfully ingested => ID={doc_id}")
     log_task_progress(
         task_id, "upload_to_paperless", "success", f"Uploaded to Paperless: Doc ID {doc_id}", file_id=file_id

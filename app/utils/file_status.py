@@ -6,7 +6,7 @@ from typing import Dict, List
 
 from sqlalchemy.orm import Session
 
-from app.models import FileProcessingStep, ProcessingLog
+from app.models import FileProcessingStep, FileRecord, ProcessingLog
 from app.utils.step_manager import get_file_overall_status, get_step_summary
 
 
@@ -23,6 +23,15 @@ def get_file_processing_status(db: Session, file_id: int) -> Dict:
     Returns:
         dict with status, last_step, and has_errors
     """
+    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).one_or_none()
+    if file_record and file_record.is_duplicate:
+        return {
+            "status": "duplicate",
+            "last_step": "check_for_duplicates",
+            "has_errors": False,
+            "total_steps": 0,
+        }
+
     # Use the new status table approach
     overall_status = get_file_overall_status(db, file_id)
 
@@ -61,6 +70,12 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
     Returns:
         dict mapping file_id to status dict
     """
+    # Preload duplicate flags for all files
+    duplicate_flags = {
+        record.id: record.is_duplicate
+        for record in db.query(FileRecord.id, FileRecord.is_duplicate).filter(FileRecord.id.in_(file_ids)).all()
+    }
+
     # Define which steps are "real" status-determining steps
     from app.config import settings
     
@@ -107,6 +122,14 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
     # Compute status for each file
     result = {}
     for file_id in file_ids:
+        if duplicate_flags.get(file_id):
+            result[file_id] = {
+                "status": "duplicate",
+                "last_step": "check_for_duplicates",
+                "has_errors": False,
+                "total_steps": 0,
+            }
+            continue
         file_steps = steps_by_file.get(file_id, [])
         if not file_steps:
             result[file_id] = {"status": "pending", "last_step": None, "has_errors": False, "total_steps": 0}

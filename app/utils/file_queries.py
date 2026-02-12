@@ -100,6 +100,9 @@ def apply_status_filter(query: Query, db: Session, status: Optional[str]) -> Que
         query = query.filter(FileRecord.id.in_(db.query(subq.c.file_id)))
     elif status == "completed":
         # Files where all real steps are either success or skipped (no failures or in_progress)
+        # Exclude duplicates from completed
+        query = query.filter(FileRecord.is_duplicate.is_(False))
+        
         # Get files that have real steps
         files_with_real_steps = real_steps_subq.distinct().subquery()
 
@@ -115,5 +118,8 @@ def apply_status_filter(query: Query, db: Session, status: Optional[str]) -> Que
         query = query.filter(FileRecord.id.in_(db.query(files_with_real_steps.c.file_id))).filter(
             ~FileRecord.id.in_(db.query(files_with_issues.c.file_id))
         )
+    elif status == "duplicate":
+        # Files marked as duplicates
+        query = query.filter(FileRecord.is_duplicate.is_(True))
 
     return query

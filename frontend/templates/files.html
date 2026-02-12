@@ -159,6 +159,10 @@
       background-color: #FEE2E2;
       color: #991B1B;
     }
+    .status-duplicate {
+      background-color: #E5E7EB;
+      color: #374151;
+    }
     
     /* Action buttons */
     .action-btn {
@@ -393,6 +397,7 @@
           <option value="processing" {% if status == "processing" %}selected{% endif %}>Processing</option>
           <option value="completed" {% if status == "completed" %}selected{% endif %}>Completed</option>
           <option value="failed" {% if status == "failed" %}selected{% endif %}>Failed</option>
+          <option value="duplicate" {% if status == "duplicate" %}selected{% endif %}>Duplicate</option>
         </select>
       </div>
       
@@ -585,9 +590,6 @@
     }
     
     function viewFileDetail(fileId, event) {
-      if (event && event.target.closest('.action-btn')) {
-        return; // Don't navigate if clicking action button
-      }
       if (event) event.stopPropagation();
       window.location.href = `/files/${fileId}/detail`;
     }
