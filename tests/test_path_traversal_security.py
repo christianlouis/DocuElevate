@@ -95,8 +95,7 @@ class TestEmbedMetadataPathTraversal:
 
     def test_malicious_filename_in_metadata_is_sanitized(self, tmp_path):
         """Test that malicious filenames from GPT metadata are sanitized."""
-        from app.tasks.embed_metadata_into_pdf import unique_filepath
-        from app.utils.filename_utils import sanitize_filename
+        from app.utils.filename_utils import get_unique_filepath_with_counter, sanitize_filename
 
         # Simulate malicious metadata from GPT
         malicious_filename = "../../etc/passwd"
@@ -110,7 +109,7 @@ class TestEmbedMetadataPathTraversal:
         assert "\\" not in sanitized
 
         # Verify unique_filepath with sanitized name stays in directory
-        result = unique_filepath(str(tmp_path), sanitized, ".pdf")
+        result = get_unique_filepath_with_counter(str(tmp_path), sanitized, ".pdf")
         result_path = Path(result)
 
         # Ensure result is within tmp_path
@@ -118,8 +117,7 @@ class TestEmbedMetadataPathTraversal:
 
     def test_embed_metadata_validates_filename_field(self, tmp_path):
         """Test that embed_metadata_into_pdf sanitizes the filename from metadata."""
-        from app.tasks.embed_metadata_into_pdf import unique_filepath
-        from app.utils.filename_utils import sanitize_filename
+        from app.utils.filename_utils import get_unique_filepath_with_counter, sanitize_filename
 
         # Test various malicious filenames
         malicious_filenames = [
@@ -136,7 +134,7 @@ class TestEmbedMetadataPathTraversal:
             sanitized = sanitize_filename(malicious)
 
             # Verify no path traversal is possible
-            result = unique_filepath(str(tmp_path), sanitized, ".pdf")
+            result = get_unique_filepath_with_counter(str(tmp_path), sanitized, ".pdf")
             result_path = Path(result)
 
             # Result must be direct child of tmp_path
