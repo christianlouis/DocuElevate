@@ -2,10 +2,12 @@
 Tests for API error handling - ensuring JSON responses for API routes.
 """
 
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
+
 from app.models import FileRecord
-from unittest.mock import patch
 
 
 @pytest.mark.integration
@@ -16,18 +18,18 @@ class TestAPIErrorHandling:
     def test_delete_nonexistent_file_returns_json_404(self, client: TestClient):
         """Test that deleting a non-existent file returns JSON 404, not HTML."""
         response = client.delete("/api/files/99999")
-        
+
         # Should return 404
         assert response.status_code == 404
-        
+
         # Should be JSON, not HTML
         content_type = response.headers.get("content-type", "")
         assert "application/json" in content_type, f"Expected JSON but got {content_type}"
-        
+
         # Should not contain HTML
         assert not response.text.startswith("<!DOCTYPE"), "Response should be JSON, not HTML"
         assert not response.text.startswith("<html"), "Response should be JSON, not HTML"
-        
+
         # Should have valid JSON with detail field
         data = response.json()
         assert "detail" in data
@@ -50,18 +52,18 @@ class TestAPIErrorHandling:
         # Mock settings to disable file deletion
         with patch("app.api.files.settings.allow_file_delete", False):
             response = client.delete(f"/api/files/{file_id}")
-        
+
         # Should return 403
         assert response.status_code == 403
-        
+
         # Should be JSON, not HTML
         content_type = response.headers.get("content-type", "")
         assert "application/json" in content_type, f"Expected JSON but got {content_type}"
-        
+
         # Should not contain HTML
         assert not response.text.startswith("<!DOCTYPE"), "Response should be JSON, not HTML"
         assert not response.text.startswith("<html"), "Response should be JSON, not HTML"
-        
+
         # Should have valid JSON with detail field
         data = response.json()
         assert "detail" in data
@@ -84,18 +86,18 @@ class TestAPIErrorHandling:
         # Mock db.delete to raise an exception
         with patch.object(db_session, "delete", side_effect=Exception("Database error")):
             response = client.delete(f"/api/files/{file_id}")
-        
+
         # Should return 500
         assert response.status_code == 500
-        
+
         # Should be JSON, not HTML
         content_type = response.headers.get("content-type", "")
         assert "application/json" in content_type, f"Expected JSON but got {content_type}"
-        
+
         # Should not contain HTML
         assert not response.text.startswith("<!DOCTYPE"), "Response should be JSON, not HTML"
         assert not response.text.startswith("<html"), "Response should be JSON, not HTML"
-        
+
         # Should have valid JSON with detail field
         data = response.json()
         assert "detail" in data
@@ -103,14 +105,14 @@ class TestAPIErrorHandling:
     def test_list_files_api_returns_json(self, client: TestClient, db_session):
         """Test that the files listing API returns JSON."""
         response = client.get("/api/files")
-        
+
         # Should return 200
         assert response.status_code == 200
-        
+
         # Should be JSON
         content_type = response.headers.get("content-type", "")
         assert "application/json" in content_type
-        
+
         # Should return a dict with files and pagination
         data = response.json()
         assert isinstance(data, dict)
@@ -126,10 +128,10 @@ class TestAPIErrorHandling:
     def test_frontend_404_returns_html(self, client: TestClient):
         """Test that 404 on non-API routes returns HTML (not JSON)."""
         response = client.get("/nonexistent-page")
-        
+
         # Should return 404
         assert response.status_code == 404
-        
+
         # Note: FastAPI's HTTPException handler now returns JSON for all routes
         # because HTTPException is a general exception, not a 404-specific one
         # Our handler checks if it's an API route, but for non-existent routes,

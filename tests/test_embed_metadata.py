@@ -1,7 +1,9 @@
 """Tests for app/tasks/embed_metadata_into_pdf.py module."""
+
 import os
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from app.tasks.embed_metadata_into_pdf import persist_metadata
 from app.utils.filename_utils import get_unique_filepath_with_counter

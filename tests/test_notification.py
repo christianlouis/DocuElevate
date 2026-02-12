@@ -4,8 +4,9 @@ Tests for app/utils/notification.py
 Tests notification utilities and URL masking.
 """
 
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
 
 _TEST_CREDENTIAL_URL = "https://user:password@example.com/notify"  # noqa: S105
 _TEST_QUERY_URL = "https://example.com/api?key=secret1&password=secret2&public=visible"  # noqa: S105
@@ -133,8 +134,8 @@ class TestAppriseInitialization:
     @patch("app.utils.notification.settings")
     def test_init_apprise_with_configured_urls(self, mock_settings, mock_apprise_class):
         """Test Apprise initialization with configured URLs"""
-        from app.utils.notification import init_apprise
         import app.utils.notification
+        from app.utils.notification import init_apprise
 
         # Reset global
         app.utils.notification._apprise = None
@@ -162,8 +163,8 @@ class TestAppriseInitialization:
     @patch("app.utils.notification.settings")
     def test_init_apprise_no_urls_configured(self, mock_settings, mock_apprise_class):
         """Test Apprise initialization without configured URLs"""
-        from app.utils.notification import init_apprise
         import app.utils.notification
+        from app.utils.notification import init_apprise
 
         # Reset global
         app.utils.notification._apprise = None
@@ -188,8 +189,8 @@ class TestAppriseInitialization:
     @patch("app.utils.notification.settings")
     def test_init_apprise_caches_instance(self, mock_settings, mock_apprise_class):
         """Test that Apprise instance is cached"""
-        from app.utils.notification import init_apprise
         import app.utils.notification
+        from app.utils.notification import init_apprise
 
         # Reset global
         app.utils.notification._apprise = None
@@ -214,8 +215,8 @@ class TestAppriseInitialization:
     @patch("app.utils.notification.settings")
     def test_init_apprise_handles_add_failure(self, mock_settings, mock_apprise_class):
         """Test handling when adding notification URL fails"""
-        from app.utils.notification import init_apprise
         import app.utils.notification
+        from app.utils.notification import init_apprise
 
         # Reset global
         app.utils.notification._apprise = None

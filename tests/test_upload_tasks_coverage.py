@@ -1,15 +1,17 @@
 """Tests to increase coverage for upload task modules."""
-import os
-import pytest
-from unittest.mock import patch, MagicMock
 
-from app.tasks.upload_to_paperless import upload_to_paperless
+import os
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from app.tasks.upload_to_ftp import upload_to_ftp
 from app.tasks.upload_to_nextcloud import upload_to_nextcloud
 from app.tasks.upload_to_onedrive import upload_to_onedrive
+from app.tasks.upload_to_paperless import upload_to_paperless
 from app.tasks.upload_to_s3 import upload_to_s3
 from app.tasks.upload_to_sftp import upload_to_sftp
 from app.tasks.upload_to_webdav import upload_to_webdav
-from app.tasks.upload_to_ftp import upload_to_ftp
 
 
 @pytest.mark.unit

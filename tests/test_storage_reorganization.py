@@ -5,8 +5,8 @@ Tests the new functionality for storing immutable originals and processed copies
 collision handling, and forced Cloud OCR reprocessing.
 """
 
-import os
 import json
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -23,7 +23,7 @@ class TestImmutableOriginalStorage:
     def test_new_file_saves_original_copy(self, db_session, tmp_path):
         """Test that a new file creates an immutable original copy"""
         from app.tasks.process_document import process_document
-        
+
         # Create test PDF
         test_pdf = tmp_path / "test_input.pdf"
         pdf_content = b"""%PDF-1.4
@@ -86,7 +86,7 @@ startxref
 %%EOF
 """
         test_pdf.write_bytes(pdf_content)
-        
+
         # Setup mocks
         with (
             patch("app.tasks.process_document.SessionLocal") as mock_session_local,
@@ -98,18 +98,18 @@ startxref
             mock_session_local.return_value.__enter__.return_value = db_session
             mock_session_local.return_value.__exit__.return_value = None
             mock_extract.delay = MagicMock()
-            
+
             # Call process_document
             result = process_document(str(test_pdf), original_filename="test_input.pdf")
-            
+
             # Verify original directory was created
             original_dir = tmp_path / "original"
             assert original_dir.exists()
-            
+
             # Verify an original file was saved
             original_files = list(original_dir.glob("*.pdf"))
             assert len(original_files) > 0
-            
+
             # Verify database record has original_file_path
             file_record = db_session.query(FileRecord).first()
             assert file_record is not None
@@ -187,7 +187,7 @@ startxref
         original_dir.mkdir()
         original_file = original_dir / "existing-original.pdf"
         original_file.write_bytes(pdf_content)
-        
+
         # Create existing file record
         file_record = FileRecord(
             filehash="abc123",
@@ -195,11 +195,11 @@ startxref
             local_filename=str(test_pdf),
             original_file_path=str(original_file),
             file_size=100,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file_record)
         db_session.commit()
-        
+
         # Setup mocks
         with (
             patch("app.tasks.process_document.SessionLocal") as mock_session_local,
@@ -211,11 +211,11 @@ startxref
             mock_session_local.return_value.__enter__.return_value = db_session
             mock_session_local.return_value.__exit__.return_value = None
             mock_extract.delay = MagicMock()
-            
+
             # Reprocess with file_id
             original_count = len(list(original_dir.glob("*.pdf")))
             process_document(str(test_pdf), file_id=file_record.id)
-            
+
             # Should not create new original file
             new_count = len(list(original_dir.glob("*.pdf")))
             assert new_count == original_count
@@ -228,16 +228,16 @@ class TestCollisionHandling:
     def test_collision_handling_in_processed_dir(self, tmp_path):
         """Test that collision handling works in processed directory"""
         from app.utils.filename_utils import get_unique_filepath_with_counter
-        
+
         processed_dir = tmp_path / "processed"
         processed_dir.mkdir()
-        
+
         # Create first file
         (processed_dir / "2024-01-01_Invoice.pdf").touch()
-        
+
         # Get unique path for same filename
         result = get_unique_filepath_with_counter(str(processed_dir), "2024-01-01_Invoice")
-        
+
         assert "2024-01-01_Invoice-0001.pdf" in result
         assert os.path.exists(str(processed_dir / "2024-01-01_Invoice.pdf"))
 
@@ -249,34 +249,27 @@ class TestMetadataAugmentation:
     def test_metadata_includes_file_paths(self, tmp_path):
         """Test that persisted metadata includes original and processed paths"""
         from app.tasks.embed_metadata_into_pdf import persist_metadata
-        
-        metadata = {
-            "filename": "2024-01-01_Invoice",
-            "document_type": "Invoice",
-            "tags": ["finance", "2024"]
-        }
-        
+
+        metadata = {"filename": "2024-01-01_Invoice", "document_type": "Invoice", "tags": ["finance", "2024"]}
+
         processed_file = tmp_path / "processed" / "2024-01-01_Invoice.pdf"
         processed_file.parent.mkdir(parents=True)
         processed_file.touch()
-        
+
         original_path = "/workdir/original/abc123.pdf"
         processed_path = str(processed_file)
-        
+
         json_path = persist_metadata(
-            metadata, 
-            str(processed_file),
-            original_file_path=original_path,
-            processed_file_path=processed_path
+            metadata, str(processed_file), original_file_path=original_path, processed_file_path=processed_path
         )
-        
+
         # Verify JSON was created
         assert os.path.exists(json_path)
-        
+
         # Verify content
-        with open(json_path, 'r') as f:
+        with open(json_path, "r") as f:
             saved_metadata = json.load(f)
-        
+
         assert "original_file_path" in saved_metadata
         assert saved_metadata["original_file_path"] == original_path
         assert "processed_file_path" in saved_metadata
@@ -292,7 +285,7 @@ class TestForceCloudOCR:
     def test_force_cloud_ocr_parameter(self, db_session, tmp_path):
         """Test that force_cloud_ocr parameter skips local text extraction"""
         from app.tasks.process_document import process_document
-        
+
         # Create PDF with embedded text
         test_pdf = tmp_path / "with_text.pdf"
         pdf_content = b"""%PDF-1.4
@@ -355,7 +348,7 @@ startxref
 %%EOF
 """
         test_pdf.write_bytes(pdf_content)
-        
+
         with (
             patch("app.tasks.process_document.SessionLocal") as mock_session_local,
             patch("app.tasks.process_document.settings") as mock_settings,
@@ -366,10 +359,10 @@ startxref
             mock_session_local.return_value.__enter__.return_value = db_session
             mock_session_local.return_value.__exit__.return_value = None
             mock_azure.delay = MagicMock()
-            
+
             # Process with force_cloud_ocr=True
             result = process_document(str(test_pdf), force_cloud_ocr=True)
-            
+
             # Should queue Azure OCR, not local extraction
             mock_azure.delay.assert_called_once()
             assert result["status"] == "Queued for forced OCR"

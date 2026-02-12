@@ -1,9 +1,11 @@
 """Tests for app/database.py module."""
-import os
-import pytest
-from unittest.mock import patch, MagicMock
 
-from app.database import init_db, get_db
+import os
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from app.database import get_db, init_db
 
 
 @pytest.mark.unit

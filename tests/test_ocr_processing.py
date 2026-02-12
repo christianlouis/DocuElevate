@@ -6,18 +6,19 @@ These tests verify OCR processing logic with mocked external AI/ML services
 """
 
 import os
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, Mock
 from azure.ai.documentintelligence.models import AnalyzeResult
 
 from app.tasks.process_with_azure_document_intelligence import (
-    process_with_azure_document_intelligence,
-    get_pdf_page_count,
-    check_page_rotation,
     AZURE_DOC_INTELLIGENCE_LIMITS,
+    check_page_rotation,
+    get_pdf_page_count,
+    process_with_azure_document_intelligence,
 )
 from app.tasks.refine_text_with_gpt import refine_text_with_gpt
-from app.tasks.rotate_pdf_pages import rotate_pdf_pages, determine_rotation_angle
+from app.tasks.rotate_pdf_pages import determine_rotation_angle, rotate_pdf_pages
 
 
 @pytest.mark.unit
@@ -86,22 +87,20 @@ startxref
         mock_client.begin_analyze_document.return_value = mock_poller
         mock_client.get_analyze_result_pdf.return_value = iter([b"searchable pdf content"])
 
-        with patch(
-            "app.tasks.process_with_azure_document_intelligence.document_intelligence_client",
-            mock_client,
-        ), patch(
-            "app.tasks.process_with_azure_document_intelligence.settings"
-        ) as mock_settings, patch(
-            "app.tasks.process_with_azure_document_intelligence.rotate_pdf_pages"
-        ) as mock_rotate:
+        with (
+            patch(
+                "app.tasks.process_with_azure_document_intelligence.document_intelligence_client",
+                mock_client,
+            ),
+            patch("app.tasks.process_with_azure_document_intelligence.settings") as mock_settings,
+            patch("app.tasks.process_with_azure_document_intelligence.rotate_pdf_pages") as mock_rotate,
+        ):
 
             mock_settings.workdir = str(tmp_path)
             mock_rotate.delay = MagicMock()
 
             # Run the task
-            result = process_with_azure_document_intelligence.run(
-                filename=test_pdf.name, file_id=1
-            )
+            result = process_with_azure_document_intelligence.run(filename=test_pdf.name, file_id=1)
 
             # Verify results
             assert result["file"] == test_pdf.name
@@ -124,15 +123,11 @@ startxref
     @patch("app.tasks.process_with_azure_document_intelligence.log_task_progress")
     def test_file_not_found_error(self, mock_log, tmp_path):
         """Test that FileNotFoundError is raised when file doesn't exist."""
-        with patch(
-            "app.tasks.process_with_azure_document_intelligence.settings"
-        ) as mock_settings:
+        with patch("app.tasks.process_with_azure_document_intelligence.settings") as mock_settings:
             mock_settings.workdir = str(tmp_path)
 
             with pytest.raises(FileNotFoundError) as exc_info:
-                process_with_azure_document_intelligence.run(
-                    filename="nonexistent.pdf", file_id=1
-                )
+                process_with_azure_document_intelligence.run(filename="nonexistent.pdf", file_id=1)
 
             assert "Local file not found" in str(exc_info.value)
 
@@ -145,21 +140,16 @@ startxref
         test_pdf = tmp_dir / "large.pdf"
         test_pdf.write_bytes(b"dummy content")
 
-        with patch(
-            "app.tasks.process_with_azure_document_intelligence.settings"
-        ) as mock_settings, patch(
-            "app.tasks.process_with_azure_document_intelligence.os.path.getsize"
-        ) as mock_getsize:
+        with (
+            patch("app.tasks.process_with_azure_document_intelligence.settings") as mock_settings,
+            patch("app.tasks.process_with_azure_document_intelligence.os.path.getsize") as mock_getsize,
+        ):
 
             mock_settings.workdir = str(tmp_path)
             # Mock file size to be larger than 500 MB
-            mock_getsize.return_value = AZURE_DOC_INTELLIGENCE_LIMITS[
-                "max_file_size_bytes"
-            ] + 1024
+            mock_getsize.return_value = AZURE_DOC_INTELLIGENCE_LIMITS["max_file_size_bytes"] + 1024
 
-            result = process_with_azure_document_intelligence.run(
-                filename=test_pdf.name, file_id=1
-            )
+            result = process_with_azure_document_intelligence.run(filename=test_pdf.name, file_id=1)
 
             # Verify error response
             assert "error" in result
@@ -175,19 +165,16 @@ startxref
         test_pdf = tmp_dir / "many_pages.pdf"
         test_pdf.write_bytes(b"%PDF-1.4\n%%EOF")  # Minimal valid PDF
 
-        with patch(
-            "app.tasks.process_with_azure_document_intelligence.settings"
-        ) as mock_settings, patch(
-            "app.tasks.process_with_azure_document_intelligence.get_pdf_page_count"
-        ) as mock_page_count:
+        with (
+            patch("app.tasks.process_with_azure_document_intelligence.settings") as mock_settings,
+            patch("app.tasks.process_with_azure_document_intelligence.get_pdf_page_count") as mock_page_count,
+        ):
 
             mock_settings.workdir = str(tmp_path)
             # Mock page count to exceed limit
             mock_page_count.return_value = AZURE_DOC_INTELLIGENCE_LIMITS["max_pages"] + 1
 
-            result = process_with_azure_document_intelligence.run(
-                filename=test_pdf.name, file_id=1
-            )
+            result = process_with_azure_document_intelligence.run(filename=test_pdf.name, file_id=1)
 
             # Verify error response
             assert "error" in result
@@ -219,15 +206,14 @@ startxref
         mock_client.begin_analyze_document.return_value = mock_poller
         mock_client.get_analyze_result_pdf.return_value = iter([b"content"])
 
-        with patch(
-            "app.tasks.process_with_azure_document_intelligence.document_intelligence_client",
-            mock_client,
-        ), patch(
-            "app.tasks.process_with_azure_document_intelligence.settings"
-        ) as mock_settings, patch(
-            "app.tasks.process_with_azure_document_intelligence.get_pdf_page_count"
-        ) as mock_page_count, patch(
-            "app.tasks.process_with_azure_document_intelligence.rotate_pdf_pages"
+        with (
+            patch(
+                "app.tasks.process_with_azure_document_intelligence.document_intelligence_client",
+                mock_client,
+            ),
+            patch("app.tasks.process_with_azure_document_intelligence.settings") as mock_settings,
+            patch("app.tasks.process_with_azure_document_intelligence.get_pdf_page_count") as mock_page_count,
+            patch("app.tasks.process_with_azure_document_intelligence.rotate_pdf_pages"),
         ):
 
             mock_settings.workdir = str(tmp_path)
@@ -235,9 +221,7 @@ startxref
             mock_page_count.return_value = None
 
             # Should not raise an error
-            result = process_with_azure_document_intelligence.run(
-                filename=test_pdf.name, file_id=1
-            )
+            result = process_with_azure_document_intelligence.run(filename=test_pdf.name, file_id=1)
 
             # Verify processing continued
             assert "error" not in result
@@ -275,21 +259,19 @@ startxref
         mock_client.begin_analyze_document.return_value = mock_poller
         mock_client.get_analyze_result_pdf.return_value = iter([b"content"])
 
-        with patch(
-            "app.tasks.process_with_azure_document_intelligence.document_intelligence_client",
-            mock_client,
-        ), patch(
-            "app.tasks.process_with_azure_document_intelligence.settings"
-        ) as mock_settings, patch(
-            "app.tasks.process_with_azure_document_intelligence.rotate_pdf_pages"
-        ) as mock_rotate:
+        with (
+            patch(
+                "app.tasks.process_with_azure_document_intelligence.document_intelligence_client",
+                mock_client,
+            ),
+            patch("app.tasks.process_with_azure_document_intelligence.settings") as mock_settings,
+            patch("app.tasks.process_with_azure_document_intelligence.rotate_pdf_pages") as mock_rotate,
+        ):
 
             mock_settings.workdir = str(tmp_path)
             mock_rotate.delay = MagicMock()
 
-            result = process_with_azure_document_intelligence.run(
-                filename=test_pdf.name, file_id=2
-            )
+            result = process_with_azure_document_intelligence.run(filename=test_pdf.name, file_id=2)
 
             # Verify rotation data was passed correctly
             mock_rotate.delay.assert_called_once()
@@ -311,24 +293,21 @@ startxref
         test_pdf.write_bytes(b"%PDF-1.4\n%%EOF")
 
         mock_client = Mock()
-        mock_client.begin_analyze_document.side_effect = Exception(
-            "Azure API connection failed"
-        )
+        mock_client.begin_analyze_document.side_effect = Exception("Azure API connection failed")
 
-        with patch(
-            "app.tasks.process_with_azure_document_intelligence.document_intelligence_client",
-            mock_client,
-        ), patch(
-            "app.tasks.process_with_azure_document_intelligence.settings"
-        ) as mock_settings:
+        with (
+            patch(
+                "app.tasks.process_with_azure_document_intelligence.document_intelligence_client",
+                mock_client,
+            ),
+            patch("app.tasks.process_with_azure_document_intelligence.settings") as mock_settings,
+        ):
 
             mock_settings.workdir = str(tmp_path)
 
             # Should raise the exception
             with pytest.raises(Exception) as exc_info:
-                process_with_azure_document_intelligence.run(
-                    filename=test_pdf.name, file_id=1
-                )
+                process_with_azure_document_intelligence.run(filename=test_pdf.name, file_id=1)
 
             assert "Azure API connection failed" in str(exc_info.value)
 
@@ -456,13 +435,11 @@ class TestRefineTextWithGPT:
         # Import the module to patch the correct function
         from app.tasks import extract_metadata_with_gpt as metadata_module
 
-        with patch(
-            "app.tasks.refine_text_with_gpt.client", mock_client
-        ), patch.object(
-            metadata_module, "extract_metadata_with_gpt"
-        ) as mock_extract, patch(
-            "app.tasks.refine_text_with_gpt.settings"
-        ) as mock_settings:
+        with (
+            patch("app.tasks.refine_text_with_gpt.client", mock_client),
+            patch.object(metadata_module, "extract_metadata_with_gpt") as mock_extract,
+            patch("app.tasks.refine_text_with_gpt.settings") as mock_settings,
+        ):
 
             mock_settings.openai_model = "gpt-4"
             mock_extract.delay = MagicMock()
@@ -481,9 +458,7 @@ class TestRefineTextWithGPT:
             assert call_kwargs["messages"][1]["content"] == raw_text
 
             # Verify metadata extraction was queued
-            mock_extract.delay.assert_called_once_with(
-                filename, "This is some text with OCR errors"
-            )
+            mock_extract.delay.assert_called_once_with(filename, "This is some text with OCR errors")
 
     @patch("app.tasks.refine_text_with_gpt.log_task_progress")
     def test_openai_api_error(self, mock_log):
@@ -492,15 +467,12 @@ class TestRefineTextWithGPT:
         filename = "test.pdf"
 
         mock_client = Mock()
-        mock_client.chat.completions.create.side_effect = Exception(
-            "OpenAI API error"
-        )
+        mock_client.chat.completions.create.side_effect = Exception("OpenAI API error")
 
-        with patch(
-            "app.tasks.refine_text_with_gpt.client", mock_client
-        ), patch(
-            "app.tasks.refine_text_with_gpt.settings"
-        ) as mock_settings:
+        with (
+            patch("app.tasks.refine_text_with_gpt.client", mock_client),
+            patch("app.tasks.refine_text_with_gpt.settings") as mock_settings,
+        ):
 
             mock_settings.openai_model = "gpt-4"
 
@@ -606,11 +578,10 @@ startxref
         rotation_data = {0: 90}  # Rotate first page by 90 degrees
         extracted_text = "Test text"
 
-        with patch(
-            "app.tasks.rotate_pdf_pages.settings"
-        ) as mock_settings, patch(
-            "app.tasks.rotate_pdf_pages.extract_metadata_with_gpt"
-        ) as mock_extract:
+        with (
+            patch("app.tasks.rotate_pdf_pages.settings") as mock_settings,
+            patch("app.tasks.rotate_pdf_pages.extract_metadata_with_gpt") as mock_extract,
+        ):
 
             mock_settings.workdir = str(tmp_path)
             mock_extract.delay = MagicMock()
@@ -629,9 +600,7 @@ startxref
             assert "0" in result["applied_rotations"]
 
             # Verify metadata extraction was queued
-            mock_extract.delay.assert_called_once_with(
-                test_pdf.name, extracted_text, 1
-            )
+            mock_extract.delay.assert_called_once_with(test_pdf.name, extracted_text, 1)
 
     @patch("app.tasks.rotate_pdf_pages.log_task_progress")
     def test_rotate_pdf_pages_no_rotation_needed(self, mock_log, tmp_path):
@@ -644,11 +613,10 @@ startxref
 
         extracted_text = "Test text"
 
-        with patch(
-            "app.tasks.rotate_pdf_pages.settings"
-        ) as mock_settings, patch(
-            "app.tasks.rotate_pdf_pages.extract_metadata_with_gpt"
-        ) as mock_extract:
+        with (
+            patch("app.tasks.rotate_pdf_pages.settings") as mock_settings,
+            patch("app.tasks.rotate_pdf_pages.extract_metadata_with_gpt") as mock_extract,
+        ):
 
             mock_settings.workdir = str(tmp_path)
             mock_extract.delay = MagicMock()
@@ -679,11 +647,10 @@ startxref
         rotation_data = {0: 0, 1: 0}  # All pages have 0 rotation
         extracted_text = "Test text"
 
-        with patch(
-            "app.tasks.rotate_pdf_pages.settings"
-        ) as mock_settings, patch(
-            "app.tasks.rotate_pdf_pages.extract_metadata_with_gpt"
-        ) as mock_extract:
+        with (
+            patch("app.tasks.rotate_pdf_pages.settings") as mock_settings,
+            patch("app.tasks.rotate_pdf_pages.extract_metadata_with_gpt") as mock_extract,
+        ):
 
             mock_settings.workdir = str(tmp_path)
             mock_extract.delay = MagicMock()
@@ -705,11 +672,10 @@ startxref
         tmp_dir = tmp_path / "tmp"
         tmp_dir.mkdir()
 
-        with patch(
-            "app.tasks.rotate_pdf_pages.settings"
-        ) as mock_settings, patch(
-            "app.tasks.rotate_pdf_pages.extract_metadata_with_gpt"
-        ) as mock_extract:
+        with (
+            patch("app.tasks.rotate_pdf_pages.settings") as mock_settings,
+            patch("app.tasks.rotate_pdf_pages.extract_metadata_with_gpt") as mock_extract,
+        ):
 
             mock_settings.workdir = str(tmp_path)
             mock_extract.delay = MagicMock()
@@ -742,11 +708,10 @@ startxref
         rotation_data = {0: 90}
         extracted_text = "Test text"
 
-        with patch(
-            "app.tasks.rotate_pdf_pages.settings"
-        ) as mock_settings, patch(
-            "app.tasks.rotate_pdf_pages.extract_metadata_with_gpt"
-        ) as mock_extract:
+        with (
+            patch("app.tasks.rotate_pdf_pages.settings") as mock_settings,
+            patch("app.tasks.rotate_pdf_pages.extract_metadata_with_gpt") as mock_extract,
+        ):
 
             mock_settings.workdir = str(tmp_path)
             mock_extract.delay = MagicMock()
@@ -814,11 +779,10 @@ startxref
         rotation_data = {"0": "90"}
         extracted_text = "Test text"
 
-        with patch(
-            "app.tasks.rotate_pdf_pages.settings"
-        ) as mock_settings, patch(
-            "app.tasks.rotate_pdf_pages.extract_metadata_with_gpt"
-        ) as mock_extract:
+        with (
+            patch("app.tasks.rotate_pdf_pages.settings") as mock_settings,
+            patch("app.tasks.rotate_pdf_pages.extract_metadata_with_gpt") as mock_extract,
+        ):
 
             mock_settings.workdir = str(tmp_path)
             mock_extract.delay = MagicMock()

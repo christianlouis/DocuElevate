@@ -35,28 +35,28 @@ def persist_metadata(metadata, final_pdf_path, original_file_path=None, processe
     Saves the metadata dictionary to a JSON file with the same base name as the final PDF.
     For example, if final_pdf_path is "<workdir>/processed/MyFile.pdf",
     the metadata will be saved as "<workdir>/processed/MyFile.json".
-    
+
     Optionally augments the metadata with file path references for traceability.
-    
+
     Args:
         metadata: Dictionary of metadata to save
         final_pdf_path: Path to the final PDF file
         original_file_path: Optional path to the immutable original file
         processed_file_path: Optional path to the processed file
-        
+
     Returns:
         str: Path to the created JSON file
     """
     base, _ = os.path.splitext(final_pdf_path)
     json_path = base + ".json"
-    
+
     # Augment metadata with file path references if provided
     metadata_with_paths = metadata.copy()
     if original_file_path:
         metadata_with_paths["original_file_path"] = original_file_path
     if processed_file_path:
         metadata_with_paths["processed_file_path"] = processed_file_path
-    
+
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(metadata_with_paths, f, ensure_ascii=False, indent=2)
     return json_path
@@ -102,7 +102,11 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
         else:
             logger.error(f"[{task_id}] Local file {local_file_path} not found, cannot embed metadata.")
             log_task_progress(
-                task_id, "embed_metadata_into_pdf", "failure", "File not found", file_id=file_id,
+                task_id,
+                "embed_metadata_into_pdf",
+                "failure",
+                "File not found",
+                file_id=file_id,
                 detail=(
                     f"Local file not found, cannot embed metadata.\n"
                     f"Tried path: {local_file_path}\n"
@@ -199,10 +203,7 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
         logger.info(f"[{task_id}] Persisting metadata to JSON")
         log_task_progress(task_id, "save_metadata_json", "in_progress", "Saving metadata JSON", file_id=file_id)
         json_path = persist_metadata(
-            metadata, 
-            final_file_path, 
-            original_file_path=original_file_path,
-            processed_file_path=final_file_path
+            metadata, final_file_path, original_file_path=original_file_path, processed_file_path=final_file_path
         )
         logger.info(f"[{task_id}] Metadata persisted to {json_path}")
         log_task_progress(
@@ -212,7 +213,11 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
         # Trigger the next step: final storage.
         logger.info(f"[{task_id}] Queueing final storage task")
         log_task_progress(
-            task_id, "embed_metadata_into_pdf", "success", "Metadata embedded, queuing finalization", file_id=file_id,
+            task_id,
+            "embed_metadata_into_pdf",
+            "success",
+            "Metadata embedded, queuing finalization",
+            file_id=file_id,
             detail=(
                 f"Metadata embedded into PDF successfully.\n"
                 f"Original file: {original_file}\n"
@@ -229,7 +234,7 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
         try:
             original_file_path = Path(original_file).resolve()
             workdir_tmp_resolved = workdir_tmp_path.resolve()
-            
+
             # Check if file is within workdir/tmp and exists
             if original_file_path.is_relative_to(workdir_tmp_resolved) and original_file_path.exists():
                 try:
@@ -245,8 +250,15 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
     except Exception as e:
         logger.exception(f"[{task_id}] Failed to embed metadata into {processed_file}: {e}")
         log_task_progress(
-            task_id, "embed_metadata_into_pdf", "failure", f"Exception: {str(e)}", file_id=file_id,
-            detail=f"Failed to embed metadata into {processed_file}.\nOriginal file: {original_file}\nException: {str(e)}",
+            task_id,
+            "embed_metadata_into_pdf",
+            "failure",
+            f"Exception: {str(e)}",
+            file_id=file_id,
+            detail=(
+                f"Failed to embed metadata into {processed_file}.\n"
+                f"Original file: {original_file}\nException: {str(e)}"
+            ),
         )
         # Clean up temporary file in case of error
         if os.path.exists(processed_file):

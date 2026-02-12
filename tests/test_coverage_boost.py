@@ -1,6 +1,8 @@
 """Tests to boost coverage for various small modules."""
+
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 @pytest.mark.unit
@@ -10,11 +12,13 @@ class TestUtilsCompat:
     def test_imports_hash_file(self):
         """Test that hash_file can be imported from utils."""
         from app.utils import hash_file
+
         assert callable(hash_file)
 
     def test_imports_log_task_progress(self):
         """Test that log_task_progress can be imported from utils."""
         from app.utils import log_task_progress
+
         assert callable(log_task_progress)
 
 
@@ -25,31 +29,37 @@ class TestConfigValidatorCompat:
     def test_imports_validate_email_config(self):
         """Test backward compatible import."""
         from app.utils.config_validator import validate_email_config
+
         assert callable(validate_email_config)
 
     def test_imports_validate_storage_configs(self):
         """Test backward compatible import."""
         from app.utils.config_validator import validate_storage_configs
+
         assert callable(validate_storage_configs)
 
     def test_imports_mask_sensitive_value(self):
         """Test backward compatible import."""
         from app.utils.config_validator import mask_sensitive_value
+
         assert callable(mask_sensitive_value)
 
     def test_imports_get_provider_status(self):
         """Test backward compatible import."""
         from app.utils.config_validator import get_provider_status
+
         assert callable(get_provider_status)
 
     def test_imports_dump_all_settings(self):
         """Test backward compatible import."""
         from app.utils.config_validator import dump_all_settings
+
         assert callable(dump_all_settings)
 
     def test_imports_check_all_configs(self):
         """Test backward compatible import."""
         from app.utils.config_validator import check_all_configs
+
         assert callable(check_all_configs)
 
 
@@ -60,6 +70,7 @@ class TestCeleryWorkerImport:
     def test_celery_worker_module_exists(self):
         """Test that celery_worker module can be found."""
         import importlib
+
         spec = importlib.util.find_spec("app.celery_worker")
         assert spec is not None
 
@@ -71,22 +82,26 @@ class TestSettingsDisplayMasking:
     def test_dump_all_settings_masks_passwords(self):
         """Test that passwords are masked in settings dump."""
         from app.utils.config_validator.settings_display import dump_all_settings
+
         # Should not raise
         dump_all_settings()
 
     def test_dump_all_settings_masks_tokens(self):
         """Test that tokens are masked in settings dump."""
         from app.utils.config_validator.settings_display import dump_all_settings
+
         dump_all_settings()
 
     def test_dump_all_settings_masks_keys(self):
         """Test that API keys are masked in settings dump."""
         from app.utils.config_validator.settings_display import dump_all_settings
+
         dump_all_settings()
 
     def test_get_settings_for_display_categories(self):
         """Test that all expected categories are returned."""
         from app.utils.config_validator.settings_display import get_settings_for_display
+
         result = get_settings_for_display(show_values=True)
         # Should have multiple categories
         assert len(result) > 3
@@ -102,6 +117,7 @@ class TestNotificationInit:
         """Test init_apprise when no URLs configured."""
         mock_settings.notification_urls = []
         from app.utils.notification import init_apprise
+
         result = init_apprise()
         assert result is not None
 
@@ -111,6 +127,7 @@ class TestNotificationInit:
         """Test init_apprise with URLs configured."""
         mock_settings.notification_urls = ["json://localhost"]
         from app.utils.notification import init_apprise
+
         result = init_apprise()
         assert result is not None
 
@@ -127,6 +144,7 @@ class TestNotificationFileProcessed:
         mock_send.return_value = True
 
         from app.utils.notification import notify_file_processed
+
         result = notify_file_processed(
             filename="test.pdf",
             file_size=1048576,
@@ -144,6 +162,7 @@ class TestNotificationFileProcessed:
         mock_send.return_value = True
 
         from app.utils.notification import notify_file_processed
+
         result = notify_file_processed(
             filename="small.pdf",
             file_size=512,  # Less than 1KB
@@ -165,6 +184,7 @@ class TestNotificationCeleryFailure:
         mock_send.return_value = True
 
         from app.utils.notification import notify_celery_failure
+
         result = notify_celery_failure(
             task_name="process_document",
             task_id="task-123",
@@ -188,6 +208,7 @@ class TestNotificationCredentialFailure:
         mock_send.return_value = True
 
         from app.utils.notification import notify_credential_failure
+
         result = notify_credential_failure(
             service_name="OpenAI",
             error="Invalid API key",
@@ -208,6 +229,7 @@ class TestNotificationStartupShutdown:
         mock_send.return_value = True
 
         from app.utils.notification import notify_startup
+
         result = notify_startup()
         assert result is True
 
@@ -220,5 +242,6 @@ class TestNotificationStartupShutdown:
         mock_send.return_value = True
 
         from app.utils.notification import notify_shutdown
+
         result = notify_shutdown()
         assert result is True

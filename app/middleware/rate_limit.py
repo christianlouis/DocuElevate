@@ -21,7 +21,6 @@ from typing import Callable
 
 from fastapi import Request
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 logger = logging.getLogger(__name__)
@@ -30,14 +29,14 @@ logger = logging.getLogger(__name__)
 def get_identifier(request: Request) -> str:
     """
     Get unique identifier for rate limiting.
-    
+
     Uses authenticated user ID if available, otherwise falls back to IP address.
     This provides better rate limiting for authenticated users and prevents
     IP-based bypassing for authenticated endpoints.
-    
+
     Args:
         request: FastAPI request object
-        
+
     Returns:
         Unique identifier string for rate limiting
     """
@@ -50,7 +49,7 @@ def get_identifier(request: Request) -> str:
             if identifier:
                 logger.debug(f"Rate limiting by user: {identifier}")
                 return f"user:{identifier}"
-    
+
     # Fall back to IP address for unauthenticated requests
     ip = get_remote_address(request)
     logger.debug(f"Rate limiting by IP: {ip}")
@@ -60,11 +59,11 @@ def get_identifier(request: Request) -> str:
 def create_limiter(redis_url: str = None, enabled: bool = True) -> Limiter:
     """
     Create and configure the rate limiter.
-    
+
     Args:
         redis_url: Redis connection URL for distributed rate limiting
         enabled: Whether rate limiting is enabled (default: True)
-        
+
     Returns:
         Configured Limiter instance
     """
@@ -76,10 +75,10 @@ def create_limiter(redis_url: str = None, enabled: bool = True) -> Limiter:
             default_limits=["10000/minute"],  # Effectively unlimited
             enabled=False,
         )
-    
+
     # Use Redis if available, otherwise fall back to in-memory
     storage_uri = redis_url if redis_url else "memory://"
-    
+
     if redis_url:
         logger.info(f"Rate limiting enabled with Redis backend: {redis_url}")
     else:
@@ -87,7 +86,7 @@ def create_limiter(redis_url: str = None, enabled: bool = True) -> Limiter:
             "Rate limiting using in-memory storage (not suitable for production with multiple workers). "
             "Configure REDIS_URL for distributed rate limiting."
         )
-    
+
     # Create limiter with default limits
     # Default: 100 requests per minute per IP/user
     limiter = Limiter(
@@ -97,7 +96,7 @@ def create_limiter(redis_url: str = None, enabled: bool = True) -> Limiter:
         strategy="fixed-window",  # Can be: fixed-window, moving-window, or fixed-window-elastic-expiry
         enabled=True,
     )
-    
+
     logger.info("Rate limiter initialized successfully")
     return limiter
 
@@ -105,10 +104,10 @@ def create_limiter(redis_url: str = None, enabled: bool = True) -> Limiter:
 def get_rate_limit_exceeded_handler() -> Callable:
     """
     Get the rate limit exceeded exception handler.
-    
+
     Returns a handler that provides user-friendly 429 responses with
     Retry-After header when rate limit is exceeded.
-    
+
     Returns:
         Exception handler function
     """

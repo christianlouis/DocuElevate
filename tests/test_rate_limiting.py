@@ -101,8 +101,9 @@ def test_rate_limit_exceeded_returns_429(client):
 @pytest.mark.security
 def test_rate_limiting_uses_correct_identifier():
     """Test that rate limiting uses IP or user ID as identifier."""
-    from app.middleware.rate_limit import get_identifier
     from fastapi import Request
+
+    from app.middleware.rate_limit import get_identifier
 
     # Create a mock request
     class MockRequest:
@@ -157,8 +158,9 @@ def test_limiter_disabled():
 @pytest.mark.integration
 def test_rate_limit_exception_handler_registered():
     """Test that rate limit exception handler is registered."""
-    from app.main import app
     from slowapi.errors import RateLimitExceeded
+
+    from app.main import app
 
     # Verify exception handler is registered
     assert RateLimitExceeded in app.exception_handlers

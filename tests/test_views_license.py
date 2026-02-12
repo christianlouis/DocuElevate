@@ -1,4 +1,5 @@
 """Tests for app/views/license_routes.py module."""
+
 import pytest
 
 

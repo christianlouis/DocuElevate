@@ -1,4 +1,5 @@
 """Tests for app/views/onedrive.py module."""
+
 import pytest
 
 

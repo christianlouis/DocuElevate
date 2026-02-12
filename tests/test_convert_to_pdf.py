@@ -1,7 +1,9 @@
 """Tests for app/tasks/convert_to_pdf.py module."""
+
 import os
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 @pytest.mark.unit
@@ -11,6 +13,7 @@ class TestConvertToPdfMimeTypes:
     def test_office_extensions_set(self):
         """Test that the task module is importable."""
         from app.tasks.convert_to_pdf import convert_to_pdf
+
         assert callable(convert_to_pdf)
 
     @patch("app.tasks.convert_to_pdf.requests")
@@ -25,6 +28,7 @@ class TestConvertToPdfMimeTypes:
             mock_self.request.id = "test-task-id"
 
             from app.tasks.convert_to_pdf import convert_to_pdf
+
             result = convert_to_pdf.__wrapped__(mock_self, "/tmp/test.docx")
             assert result is None
 
@@ -46,5 +50,6 @@ class TestConvertToPdfMimeTypes:
             mock_self.request.id = "test-task-id"
 
             from app.tasks.convert_to_pdf import convert_to_pdf
+
             result = convert_to_pdf.__wrapped__(mock_self, str(test_file))
             assert result is None

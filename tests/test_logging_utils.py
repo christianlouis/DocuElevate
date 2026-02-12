@@ -5,9 +5,9 @@ Tests task progress logging functionality.
 """
 
 import logging
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
 
 
 @pytest.mark.unit
@@ -64,9 +64,7 @@ class TestTaskLogging:
         mock_processing_log.return_value = mock_log_entry
 
         # Call without message
-        log_task_progress(
-            task_id="task-456", step_name="upload", status="completed", message=None, file_id=None
-        )
+        log_task_progress(task_id="task-456", step_name="upload", status="completed", message=None, file_id=None)
 
         # Verify called with None for optional parameters
         mock_processing_log.assert_called_once_with(
@@ -89,9 +87,7 @@ class TestTaskLogging:
         mock_processing_log.return_value = mock_log_entry
 
         # Call without file_id
-        log_task_progress(
-            task_id="task-789", step_name="metadata", status="running", message="Extracting metadata"
-        )
+        log_task_progress(task_id="task-789", step_name="metadata", status="running", message="Extracting metadata")
 
         # file_id should default to None
         mock_processing_log.assert_called_once()

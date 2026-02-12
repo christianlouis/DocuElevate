@@ -172,7 +172,12 @@ class TestStepManager:
         # Update an existing step
         now = datetime.now()
         update_step_status(
-            db_session, file_record.id, "create_file_record", "success", started_at=now - timedelta(seconds=5), completed_at=now
+            db_session,
+            file_record.id,
+            "create_file_record",
+            "success",
+            started_at=now - timedelta(seconds=5),
+            completed_at=now,
         )
 
         # Verify step was updated
@@ -201,7 +206,9 @@ class TestStepManager:
         now = datetime.now()
         update_step_status(db_session, file_record.id, "create_file_record", "success", completed_at=now)
         update_step_status(db_session, file_record.id, "check_text", "in_progress", started_at=now)
-        update_step_status(db_session, file_record.id, "extract_text", "failure", error_message="Failed to extract text")
+        update_step_status(
+            db_session, file_record.id, "extract_text", "failure", error_message="Failed to extract text"
+        )
 
         # Get all step statuses
         status_map = get_file_step_status(db_session, file_record.id)

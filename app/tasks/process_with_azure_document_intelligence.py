@@ -101,8 +101,11 @@ def process_with_azure_document_intelligence(self, filename: str, file_id: int =
     """
     task_id = self.request.id
     log_task_progress(
-        task_id, "process_with_azure_document_intelligence", "in_progress",
-        f"Starting OCR for {filename}", file_id=file_id,
+        task_id,
+        "process_with_azure_document_intelligence",
+        "in_progress",
+        f"Starting OCR for {filename}",
+        file_id=file_id,
     )
     try:
         tmp_file_path = os.path.join(settings.workdir, "tmp", filename)
@@ -117,8 +120,12 @@ def process_with_azure_document_intelligence(self, filename: str, file_id: int =
             )
             logger.error(f"[{task_id}] {error_msg}")
             log_task_progress(
-                task_id, "validate_file", "failure",
-                f"File too large: {filename}", file_id=file_id, detail=error_msg,
+                task_id,
+                "validate_file",
+                "failure",
+                f"File too large: {filename}",
+                file_id=file_id,
+                detail=error_msg,
             )
             return {"error": error_msg, "file": filename, "status": "Failed - Size limit exceeded"}
 
@@ -130,8 +137,12 @@ def process_with_azure_document_intelligence(self, filename: str, file_id: int =
                 error_msg = f"PDF page count ({page_count}) exceeds Azure Document Intelligence limit of 2000 pages"
                 logger.error(f"[{task_id}] {error_msg}")
                 log_task_progress(
-                    task_id, "validate_file", "failure",
-                    f"Too many pages: {filename}", file_id=file_id, detail=error_msg,
+                    task_id,
+                    "validate_file",
+                    "failure",
+                    f"Too many pages: {filename}",
+                    file_id=file_id,
+                    detail=error_msg,
                 )
                 return {"error": error_msg, "file": filename, "status": "Failed - Page limit exceeded"}
             if page_count is None:
@@ -140,14 +151,20 @@ def process_with_azure_document_intelligence(self, filename: str, file_id: int =
                 )
 
         log_task_progress(
-            task_id, "validate_file", "success",
-            f"File validation passed for {filename}", file_id=file_id,
+            task_id,
+            "validate_file",
+            "success",
+            f"File validation passed for {filename}",
+            file_id=file_id,
         )
 
         logger.info(f"[{task_id}] Processing {filename} with Azure Document Intelligence OCR.")
         log_task_progress(
-            task_id, "call_azure_ocr", "in_progress",
-            f"Sending {filename} to Azure Document Intelligence", file_id=file_id,
+            task_id,
+            "call_azure_ocr",
+            "in_progress",
+            f"Sending {filename} to Azure Document Intelligence",
+            file_id=file_id,
         )
 
         # Open and send the document for processing
@@ -173,8 +190,11 @@ def process_with_azure_document_intelligence(self, filename: str, file_id: int =
         logger.info(f"[{task_id}] Extracted text for {filename}: {len(extracted_text)} characters")
 
         log_task_progress(
-            task_id, "call_azure_ocr", "success",
-            f"Azure OCR completed for {filename}", file_id=file_id,
+            task_id,
+            "call_azure_ocr",
+            "success",
+            f"Azure OCR completed for {filename}",
+            file_id=file_id,
             detail=f"Extracted {len(extracted_text)} characters, {len(rotation_data)} rotated pages detected",
         )
 
@@ -182,8 +202,11 @@ def process_with_azure_document_intelligence(self, filename: str, file_id: int =
         rotate_pdf_pages.delay(filename, extracted_text, rotation_data, file_id)
 
         log_task_progress(
-            task_id, "process_with_azure_document_intelligence", "success",
-            f"OCR processing complete for {filename}", file_id=file_id,
+            task_id,
+            "process_with_azure_document_intelligence",
+            "success",
+            f"OCR processing complete for {filename}",
+            file_id=file_id,
             detail=f"Searchable PDF saved, {len(extracted_text)} characters extracted",
         )
 
@@ -191,7 +214,11 @@ def process_with_azure_document_intelligence(self, filename: str, file_id: int =
     except Exception as e:
         logger.error(f"[{task_id}] Error processing {filename} with Azure Document Intelligence: {e}")
         log_task_progress(
-            task_id, "process_with_azure_document_intelligence", "failure",
-            f"OCR failed for {filename}", file_id=file_id, detail=str(e),
+            task_id,
+            "process_with_azure_document_intelligence",
+            "failure",
+            f"OCR failed for {filename}",
+            file_id=file_id,
+            detail=str(e),
         )
         raise

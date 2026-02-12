@@ -1,23 +1,24 @@
 """Tests for app/tasks/imap_tasks.py module."""
 
-import os
 import json
-import pytest
+import os
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch, MagicMock
 from email.message import EmailMessage
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from app.tasks.imap_tasks import (
-    load_processed_emails,
-    save_processed_emails,
-    cleanup_old_entries,
     check_and_pull_mailbox,
-    fetch_attachments_and_enqueue,
+    cleanup_old_entries,
     email_already_has_label,
-    mark_as_processed_with_star,
-    mark_as_processed_with_label,
+    fetch_attachments_and_enqueue,
     find_all_mail_folder,
     get_capabilities,
+    load_processed_emails,
+    mark_as_processed_with_label,
+    mark_as_processed_with_star,
+    save_processed_emails,
 )
 
 _TEST_CREDENTIAL = "pass"  # noqa: S105

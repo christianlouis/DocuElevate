@@ -1,4 +1,5 @@
 """Tests for app/views/wizard.py module."""
+
 import pytest
 
 

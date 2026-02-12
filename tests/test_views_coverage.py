@@ -1,7 +1,8 @@
 """Additional view tests to increase coverage."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 _TEST_CREDENTIAL = "test"  # noqa: S105
 

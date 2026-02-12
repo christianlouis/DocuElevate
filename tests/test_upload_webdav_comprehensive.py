@@ -1,9 +1,10 @@
 """Comprehensive tests for upload_to_webdav task."""
 
 import os
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import patch, Mock, MagicMock
-from requests.exceptions import ConnectionError, Timeout, RequestException
+from requests.exceptions import ConnectionError, RequestException, Timeout
 
 from app.tasks.upload_to_webdav import upload_to_webdav
 

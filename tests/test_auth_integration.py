@@ -1,9 +1,11 @@
 """Integration tests for auth.py with AUTH_ENABLED=True scenarios."""
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-import hashlib
 
-from app.auth import get_gravatar_url, get_current_user, require_login
+import hashlib
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from app.auth import get_current_user, get_gravatar_url, require_login
 
 
 @pytest.mark.unit
@@ -20,8 +22,9 @@ class TestRequireLoginWithAuth:
                 return {"success": True}
 
             # Manually create the decorator behavior
-            from functools import wraps
             import inspect
+            from functools import wraps
+
             from fastapi import status
             from starlette.responses import RedirectResponse
 
@@ -45,10 +48,11 @@ class TestRequireLoginWithAuth:
     @pytest.mark.asyncio
     async def test_require_login_allows_authenticated_user(self):
         """Test that require_login allows through when user exists in session."""
-        from functools import wraps
         import inspect
-        from starlette.responses import RedirectResponse
+        from functools import wraps
+
         from fastapi import status
+        from starlette.responses import RedirectResponse
 
         async def my_route(request):
             return {"success": True}

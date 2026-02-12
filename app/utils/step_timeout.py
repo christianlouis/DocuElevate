@@ -32,9 +32,7 @@ def get_step_timeout() -> int:
 
 
 def mark_stalled_steps_as_failed(
-    db: Session, 
-    timeout_seconds: Optional[int] = None,
-    file_id: Optional[int] = None
+    db: Session, timeout_seconds: Optional[int] = None, file_id: Optional[int] = None
 ) -> int:
     """
     Find and mark any in-progress steps that have exceeded the timeout as failed.
@@ -75,8 +73,7 @@ def mark_stalled_steps_as_failed(
         return 0
 
     logger.warning(
-        f"Found {len(stalled_steps)} stalled step(s) that exceeded "
-        f"{timeout_seconds}s timeout. Marking as failed."
+        f"Found {len(stalled_steps)} stalled step(s) that exceeded " f"{timeout_seconds}s timeout. Marking as failed."
     )
 
     count = 0

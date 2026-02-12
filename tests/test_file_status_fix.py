@@ -14,7 +14,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import FileRecord, FileProcessingStep
+from app.models import FileProcessingStep, FileRecord
 from app.utils.step_manager import get_file_overall_status, get_step_summary, initialize_file_steps, update_step_status
 
 
@@ -40,10 +40,7 @@ class TestFileStatusCalculation:
         """
         # Create file and initialize steps
         file_record = FileRecord(
-            filehash="test1",
-            original_filename="test.pdf",
-            local_filename="/tmp/test.pdf",
-            file_size=1024
+            filehash="test1", original_filename="test.pdf", local_filename="/tmp/test.pdf", file_size=1024
         )
         db_session.add(file_record)
         db_session.commit()
@@ -52,6 +49,7 @@ class TestFileStatusCalculation:
 
         # Mark all steps as success
         from app.utils.step_manager import MAIN_PROCESSING_STEPS
+
         for step_name in MAIN_PROCESSING_STEPS:
             update_step_status(db_session, file_record.id, step_name, "success")
 
@@ -65,10 +63,7 @@ class TestFileStatusCalculation:
         Test that status shows "processing" when there are in_progress steps.
         """
         file_record = FileRecord(
-            filehash="test2",
-            original_filename="test2.pdf",
-            local_filename="/tmp/test2.pdf",
-            file_size=2048
+            filehash="test2", original_filename="test2.pdf", local_filename="/tmp/test2.pdf", file_size=2048
         )
         db_session.add(file_record)
         db_session.commit()
@@ -89,10 +84,7 @@ class TestFileStatusCalculation:
         Test that status shows "failed" when any step has failure status.
         """
         file_record = FileRecord(
-            filehash="test3",
-            original_filename="test3.pdf",
-            local_filename="/tmp/test3.pdf",
-            file_size=3072
+            filehash="test3", original_filename="test3.pdf", local_filename="/tmp/test3.pdf", file_size=3072
         )
         db_session.add(file_record)
         db_session.commit()
@@ -119,10 +111,7 @@ class TestMetricsCounting:
         Test that main processing steps are counted correctly.
         """
         file_record = FileRecord(
-            filehash="test4",
-            original_filename="test4.pdf",
-            local_filename="/tmp/test4.pdf",
-            file_size=4096
+            filehash="test4", original_filename="test4.pdf", local_filename="/tmp/test4.pdf", file_size=4096
         )
         db_session.add(file_record)
         db_session.commit()
@@ -138,6 +127,7 @@ class TestMetricsCounting:
 
         # Should count each step once
         from app.utils.step_manager import MAIN_PROCESSING_STEPS
+
         assert summary["total_main_steps"] == len(MAIN_PROCESSING_STEPS)
         assert summary["main"]["success"] == 2
         assert summary["main"]["in_progress"] == 1
@@ -147,16 +137,14 @@ class TestMetricsCounting:
         Test that upload tasks are counted correctly.
         """
         file_record = FileRecord(
-            filehash="test5",
-            original_filename="test5.pdf",
-            local_filename="/tmp/test5.pdf",
-            file_size=5120
+            filehash="test5", original_filename="test5.pdf", local_filename="/tmp/test5.pdf", file_size=5120
         )
         db_session.add(file_record)
         db_session.commit()
 
         initialize_file_steps(db_session, file_record.id)
         from app.utils.step_manager import add_upload_steps
+
         add_upload_steps(db_session, file_record.id, ["dropbox", "s3", "nextcloud"])
 
         # Mark upload steps with different statuses
@@ -177,16 +165,14 @@ class TestMetricsCounting:
         Test metrics for a file with multiple successful uploads.
         """
         file_record = FileRecord(
-            filehash="test6",
-            original_filename="test6.pdf",
-            local_filename="/tmp/test6.pdf",
-            file_size=6144
+            filehash="test6", original_filename="test6.pdf", local_filename="/tmp/test6.pdf", file_size=6144
         )
         db_session.add(file_record)
         db_session.commit()
 
         initialize_file_steps(db_session, file_record.id)
         from app.utils.step_manager import add_upload_steps
+
         services = ["dropbox", "s3", "nextcloud", "google_drive", "onedrive", "webdav"]
         add_upload_steps(db_session, file_record.id, services)
 

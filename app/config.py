@@ -33,7 +33,8 @@ class Settings(BaseSettings):
     paperless_host: Optional[str] = None
     paperless_custom_field_absender: Optional[str] = None  # Name of the "absender" custom field in Paperless
     # JSON mapping of metadata field names to Paperless custom field names
-    # Example: {"absender": "Sender", "empfaenger": "Recipient", "language": "Language", "correspondent": "Correspondent"}
+    # Example: {"absender": "Sender", "empfaenger": "Recipient",
+    #           "language": "Language", "correspondent": "Correspondent"}
     paperless_custom_fields_mapping: Optional[str] = None
 
     azure_ai_key: str
@@ -176,23 +177,35 @@ class Settings(BaseSettings):
     )
     max_single_file_size: Optional[int] = Field(
         default=None,
-        description="Maximum size for a single file chunk in bytes. If set and file exceeds this, it will be split into smaller chunks for processing. Default: None (no splitting).",
+        description=(
+            "Maximum size for a single file chunk in bytes. If set and file exceeds this,"
+            " it will be split into smaller chunks for processing. Default: None (no splitting)."
+        ),
     )
 
     # Deduplication settings - prevents processing of duplicate files
     enable_deduplication: bool = Field(
         default=True,
-        description="Enable deduplication check before processing. If enabled, files with the same SHA-256 hash as previously processed files will not be processed again. Default: True (enabled).",
+        description=(
+            "Enable deduplication check before processing. If enabled, files with the same SHA-256 hash"
+            " as previously processed files will not be processed again. Default: True (enabled)."
+        ),
     )
     show_deduplication_step: bool = Field(
         default=True,
-        description="Show the 'Check for Duplicates' step in processing history. If False, the check is still performed but not displayed. Default: True.",
+        description=(
+            "Show the 'Check for Duplicates' step in processing history."
+            " If False, the check is still performed but not displayed. Default: True."
+        ),
     )
 
     # Processing step timeout - prevents files from getting stuck in "in_progress" state
     step_timeout: int = Field(
         default=600,
-        description="Timeout in seconds for processing steps. If a step is 'in_progress' for longer than this, it will be marked as failed. Default: 600 seconds (10 minutes).",
+        description=(
+            "Timeout in seconds for processing steps. If a step is 'in_progress' for longer than this,"
+            " it will be marked as failed. Default: 600 seconds (10 minutes)."
+        ),
     )
 
     # Security Headers Configuration (see SECURITY_AUDIT.md and docs/DeploymentGuide.md)
@@ -215,7 +228,10 @@ class Settings(BaseSettings):
     # Content-Security-Policy (CSP) - Controls resource loading
     security_header_csp_enabled: bool = Field(default=True, description="Enable CSP header.")
     security_header_csp_value: str = Field(
-        default="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;",
+        default=(
+            "default-src 'self'; script-src 'self' 'unsafe-inline';"
+            " style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
+        ),
         description="CSP header value. Customize based on your application's resource loading needs.",
     )
 

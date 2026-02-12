@@ -1,4 +1,5 @@
 """Tests for app/api/process.py module."""
+
 import pytest
 
 
@@ -44,6 +45,7 @@ class TestProcessEndpoints:
     def test_processall_endpoint(self, client, tmp_path):
         """Test POST /api/processall with no PDF files in workdir."""
         from unittest.mock import patch
+
         with patch("app.api.process.settings") as mock_settings:
             mock_settings.workdir = str(tmp_path)
             response = client.post("/api/processall")

@@ -1,7 +1,9 @@
 """Tests for app/tasks/finalize_document_storage.py module."""
+
 import os
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 @pytest.mark.unit
@@ -18,4 +20,5 @@ class TestFinalizeDocumentStorageHelpers:
     def test_module_imports(self):
         """Test that the module can be imported without errors."""
         from app.tasks.finalize_document_storage import finalize_document_storage
+
         assert callable(finalize_document_storage)

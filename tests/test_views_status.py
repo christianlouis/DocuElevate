@@ -1,4 +1,5 @@
 """Tests for app/views/status.py module."""
+
 import pytest
 
 

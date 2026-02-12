@@ -7,7 +7,7 @@ from typing import Dict, List
 from sqlalchemy.orm import Session
 
 from app.models import FileProcessingStep, FileRecord, ProcessingLog
-from app.utils.step_manager import get_file_overall_status, get_step_summary
+from app.utils.step_manager import get_file_overall_status
 
 
 def get_file_processing_status(db: Session, file_id: int) -> Dict:
@@ -60,7 +60,7 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
                   extract_metadata_with_gpt, embed_metadata_into_pdf, finalize_document_storage,
                   send_to_all_destinations
     - Upload steps: upload_to_*
-    
+
     Diagnostic/internal steps (poll_task, upload_file, set_custom_fields, etc.) are ignored.
 
     Args:
@@ -78,7 +78,7 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
 
     # Define which steps are "real" status-determining steps
     from app.config import settings
-    
+
     REAL_STEPS = {
         "create_file_record",
         "check_text",
@@ -100,7 +100,7 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
         "upload_to_email",
         "upload_to_s3",
     }
-    
+
     # Add check_for_duplicates if deduplication is enabled
     if settings.enable_deduplication:
         REAL_STEPS.add("check_for_duplicates")

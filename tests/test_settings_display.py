@@ -1,6 +1,8 @@
 """Tests for app/utils/config_validator/settings_display.py module."""
-import pytest
+
 from unittest.mock import patch
+
+import pytest
 
 from app.utils.config_validator.settings_display import dump_all_settings, get_settings_for_display
 

@@ -1,7 +1,9 @@
 """Additional tests for upload task modules."""
+
 import os
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 @pytest.mark.unit
@@ -23,6 +25,7 @@ class TestUploadToNextcloud:
             mock_settings.workdir = "/tmp"
 
             from app.tasks.upload_to_nextcloud import upload_to_nextcloud
+
             result = upload_to_nextcloud.__wrapped__(mock_self, "/nonexistent/file.pdf")
 
 
