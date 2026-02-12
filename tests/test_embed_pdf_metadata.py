@@ -125,9 +125,7 @@ class TestEmbedMetadataIntoPdf:
                         with patch("app.tasks.embed_metadata_into_pdf.settings") as mock_settings:
                             mock_settings.workdir = "/workdir"
 
-                            # Mock task context
-                            mock_task = MagicMock()
-                            mock_task.request.id = "test-task-id"
+                            embed_metadata_into_pdf.request.id = "test-task-id"
 
                             metadata = {
                                 "filename": "2024-01-15_Invoice.pdf",
@@ -137,7 +135,7 @@ class TestEmbedMetadataIntoPdf:
                             }
 
                             result = embed_metadata_into_pdf.__wrapped__(
-                                mock_task, "/workdir/tmp/test.pdf", "Sample text", metadata, file_id=123
+                                "/workdir/tmp/test.pdf", "Sample text", metadata, file_id=123
                             )
 
                             # Verify PDF metadata was set
@@ -167,11 +165,10 @@ class TestEmbedMetadataIntoPdf:
             with patch("app.tasks.embed_metadata_into_pdf.settings") as mock_settings:
                 mock_settings.workdir = "/workdir"
 
-                mock_task = MagicMock()
-                mock_task.request.id = "test-task-id"
+                embed_metadata_into_pdf.request.id = "test-task-id"
 
                 result = embed_metadata_into_pdf.__wrapped__(
-                    mock_task, "/nonexistent/file.pdf", "text", {"filename": "test.pdf"}, file_id=123
+                    "/nonexistent/file.pdf", "text", {"filename": "test.pdf"}, file_id=123
                 )
 
                 assert result == {"error": "File not found"}
@@ -220,11 +217,10 @@ class TestEmbedMetadataIntoPdf:
                                     with patch("app.tasks.embed_metadata_into_pdf.tempfile.NamedTemporaryFile"):
                                         mock_settings.workdir = "/workdir"
 
-                                        mock_task = MagicMock()
-                                        mock_task.request.id = "test-task-id"
+                                        embed_metadata_into_pdf.request.id = "test-task-id"
 
                                         result = embed_metadata_into_pdf.__wrapped__(
-                                            mock_task, "/workdir/tmp/test.pdf", "text", {"filename": "test.pdf"}
+                                            "/workdir/tmp/test.pdf", "text", {"filename": "test.pdf"}
                                         )
 
                                         # Verify database was queried
@@ -253,11 +249,10 @@ class TestEmbedMetadataIntoPdf:
                         with patch("app.tasks.embed_metadata_into_pdf.settings") as mock_settings:
                             mock_settings.workdir = "/workdir"
 
-                            mock_task = MagicMock()
-                            mock_task.request.id = "test-task-id"
+                            embed_metadata_into_pdf.request.id = "test-task-id"
 
                             result = embed_metadata_into_pdf.__wrapped__(
-                                mock_task, "/workdir/tmp/test.pdf", "text", {"filename": "test.pdf"}, file_id=789
+                                "/workdir/tmp/test.pdf", "text", {"filename": "test.pdf"}, file_id=789
                             )
 
                             assert "error" in result
@@ -318,14 +313,13 @@ class TestEmbedMetadataIntoPdf:
                         with patch("app.tasks.embed_metadata_into_pdf.settings") as mock_settings:
                             mock_settings.workdir = "/workdir"
 
-                            mock_task = MagicMock()
-                            mock_task.request.id = "test-task-id"
+                            embed_metadata_into_pdf.request.id = "test-task-id"
 
                             # Try to embed metadata with malicious filename
                             metadata = {"filename": "../../../etc/passwd"}
 
                             result = embed_metadata_into_pdf.__wrapped__(
-                                mock_task, "/workdir/tmp/test.pdf", "text", metadata, file_id=111
+                                "/workdir/tmp/test.pdf", "text", metadata, file_id=111
                             )
 
                             # Verify sanitize_filename was called
@@ -383,14 +377,13 @@ class TestEmbedMetadataIntoPdf:
                         with patch("app.tasks.embed_metadata_into_pdf.settings") as mock_settings:
                             mock_settings.workdir = "/workdir"
 
-                            mock_task = MagicMock()
-                            mock_task.request.id = "test-task-id"
+                            embed_metadata_into_pdf.request.id = "test-task-id"
 
                             # Metadata with missing fields
                             metadata = {}
 
                             result = embed_metadata_into_pdf.__wrapped__(
-                                mock_task, "/workdir/tmp/test.pdf", "text", metadata, file_id=222
+                                "/workdir/tmp/test.pdf", "text", metadata, file_id=222
                             )
 
                             # Verify PDF metadata was set with defaults
@@ -459,11 +452,10 @@ class TestEmbedMetadataIntoPdf:
                             with patch("app.tasks.embed_metadata_into_pdf.settings") as mock_settings:
                                 mock_settings.workdir = "/workdir"
 
-                                mock_task = MagicMock()
-                                mock_task.request.id = "test-task-id"
+                                embed_metadata_into_pdf.request.id = "test-task-id"
 
                                 result = embed_metadata_into_pdf.__wrapped__(
-                                    mock_task, "/workdir/tmp/test.pdf", "text", {"filename": "test.pdf"}, file_id=333
+                                    "/workdir/tmp/test.pdf", "text", {"filename": "test.pdf"}, file_id=333
                                 )
 
                                 # Verify unlink (delete) was called
