@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Extension Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        .test-section {
+            background: #f8f9fa;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .test-link {
+            display: block;
+            margin: 10px 0;
+            padding: 10px;
+            background: #e7f3ff;
+            border-left: 4px solid #0066cc;
+            text-decoration: none;
+            color: #0066cc;
+            border-radius: 4px;
+        }
+        .test-link:hover {
+            background: #d1e7ff;
+        }
+        .instructions {
+            background: #fffbea;
+            border: 1px solid #ffd700;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 DocuElevate Browser Extension Test Page</h1>
+    
+    <div class="instructions">
+        <h2>How to Test</h2>
+        <ol>
+            <li>Make sure the DocuElevate browser extension is installed and configured</li>
+            <li>Test Method 1: Click the extension icon and send the current page URL</li>
+            <li>Test Method 2: Right-click on any link below and select "Send to DocuElevate"</li>
+            <li>Test Method 3: Navigate to a link below and then use the extension popup</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>📄 Sample Document Links</h2>
+        <p>These links point to sample documents that can be processed by DocuElevate:</p>
+        
+        <a href="https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf" 
+           class="test-link" target="_blank">
+            📕 Sample PDF Document (dummy.pdf)
+        </a>
+        
+        <a href="https://file-examples.com/storage/fe783c0bd90d0e9c119e536/2017/10/file-sample_150kB.pdf" 
+           class="test-link" target="_blank">
+            📗 Example PDF File (file-sample_150kB.pdf)
+        </a>
+        
+        <a href="https://www.learningcontainer.com/wp-content/uploads/2019/09/sample-pdf-file.pdf" 
+           class="test-link" target="_blank">
+            📘 Learning Container Sample PDF
+        </a>
+    </div>
+
+    <div class="test-section">
+        <h2>🖼️ Sample Image Links</h2>
+        <p>These links point to sample images that can be processed:</p>
+        
+        <a href="https://via.placeholder.com/800x600.png" 
+           class="test-link" target="_blank">
+            🖼️ Placeholder Image (PNG, 800x600)
+        </a>
+        
+        <a href="https://via.placeholder.com/1024x768.jpg" 
+           class="test-link" target="_blank">
+            📷 Placeholder Image (JPG, 1024x768)
+        </a>
+    </div>
+
+    <div class="test-section">
+        <h2>✅ Expected Behavior</h2>
+        <ul>
+            <li><strong>Extension Popup:</strong> Should show the current page URL and allow sending it</li>
+            <li><strong>Context Menu:</strong> Right-click should show "Send to DocuElevate" option</li>
+            <li><strong>Success Notification:</strong> Browser notification with task ID should appear</li>
+            <li><strong>Error Handling:</strong> Clear error messages if something goes wrong</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>🔍 Testing Checklist</h2>
+        <ul>
+            <li>✓ Extension icon appears in browser toolbar</li>
+            <li>✓ Popup opens when clicking extension icon</li>
+            <li>✓ Configuration can be saved (server URL)</li>
+            <li>✓ Current URL is displayed in popup</li>
+            <li>✓ "Send to DocuElevate" appears in context menu</li>
+            <li>✓ Files are successfully sent to DocuElevate</li>
+            <li>✓ Success notification appears</li>
+            <li>✓ Task ID is displayed in notification</li>
+            <li>✓ Error messages are clear and helpful</li>
+        </ul>
+    </div>
+
+    <div class="instructions">
+        <h2>🐛 Troubleshooting</h2>
+        <p>If the extension doesn't work:</p>
+        <ol>
+            <li>Check that the extension is enabled in <code>chrome://extensions/</code></li>
+            <li>Verify your DocuElevate server URL is correct</li>
+            <li>Open DevTools (F12) and check the Console for errors</li>
+            <li>Make sure your DocuElevate server is running and accessible</li>
+            <li>If using authentication, verify your session cookie is valid</li>
+        </ol>
+    </div>
+
+    <footer style="margin-top: 50px; padding-top: 20px; border-top: 2px solid #dee2e6; color: #6c757d;">
+        <p>DocuElevate Browser Extension Test Page</p>
+        <p>For more information, see the <a href="../README.md">Browser Extension README</a></p>
+    </footer>
+</body>
+</html>
