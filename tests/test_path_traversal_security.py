@@ -144,8 +144,8 @@ class TestEmbedMetadataPathTraversal:
     @patch("app.tasks.embed_metadata_into_pdf.SessionLocal")
     @patch("app.tasks.embed_metadata_into_pdf.log_task_progress")
     @patch("app.tasks.embed_metadata_into_pdf.finalize_document_storage")
-    @patch("PyPDF2.PdfReader")
-    @patch("PyPDF2.PdfWriter")
+    @patch("pypdf.PdfReader")
+    @patch("pypdf.PdfWriter")
     def test_embed_metadata_full_flow_with_malicious_filename(
         self,
         mock_pdf_writer,
