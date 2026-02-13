@@ -1,7 +1,7 @@
 """Additional tests for upload_to_ftp task."""
 
 import ftplib
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -152,7 +152,7 @@ class TestUploadToFtp:
         mock_settings.ftp_use_tls = True
 
         mock_ftp = Mock()
-        mock_ftp.cwd.side_effect = [ftplib.error_perm("No such directory"), None]
+        mock_ftp.cwd.side_effect = [ftplib.error_perm("No such directory"), None]  # noqa: S321
         mock_ftp_tls.return_value = mock_ftp
 
         mock_self = Mock()
@@ -248,8 +248,8 @@ class TestUploadToFtp:
         mock_settings.ftp_use_tls = True
 
         mock_ftp = Mock()
-        mock_ftp.cwd.side_effect = ftplib.error_perm("Permission denied")
-        mock_ftp.mkd.side_effect = ftplib.error_perm("Cannot create directory")
+        mock_ftp.cwd.side_effect = ftplib.error_perm("Permission denied")  # noqa: S321
+        mock_ftp.mkd.side_effect = ftplib.error_perm("Cannot create directory")  # noqa: S321
         mock_ftp_tls.return_value = mock_ftp
 
         mock_self = Mock()

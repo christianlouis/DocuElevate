@@ -1,7 +1,7 @@
 """Tests for app/tasks/upload_to_google_drive.py module."""
 
 import json
-from unittest.mock import MagicMock, Mock, mock_open, patch
+from unittest.mock import Mock, patch
 
 import pytest
 from google.auth.exceptions import RefreshError

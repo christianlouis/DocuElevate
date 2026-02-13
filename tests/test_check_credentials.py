@@ -2,7 +2,7 @@
 
 import json
 import os
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -12,9 +12,6 @@ from app.tasks.check_credentials import (
     get_failure_state,
     save_failure_state,
     sync_test_azure_connection,
-    sync_test_dropbox_token,
-    sync_test_google_drive_token,
-    sync_test_onedrive_token,
     sync_test_openai_connection,
     unwrap_decorated_function,
 )

@@ -87,21 +87,21 @@ def convert_setting_value(value: Optional[str], field_type: Any) -> Any:
         field_type = next((arg for arg in args if arg is not type(None)), str)
 
     # Convert based on type
-    if field_type == bool:
+    if field_type is bool:
         return value.lower() in ("true", "1", "yes", "y", "t")
-    elif field_type == int:
+    elif field_type is int:
         try:
             return int(value)
         except ValueError:
             logger.warning(f"Failed to convert '{value}' to int, returning 0")
             return 0
-    elif field_type == float:
+    elif field_type is float:
         try:
             return float(value)
         except ValueError:
             logger.warning(f"Failed to convert '{value}' to float, returning 0.0")
             return 0.0
-    elif field_type == list or getattr(field_type, "__origin__", None) == list:
+    elif field_type is list or getattr(field_type, "__origin__", None) is list:
         # Handle list types - assume comma-separated values
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]

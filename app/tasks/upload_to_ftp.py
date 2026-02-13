@@ -57,7 +57,7 @@ def upload_to_ftp(self, file_path: str, file_id: int = None):
         if use_tls:
             try:
                 logger.info(f"Attempting FTPS connection to {settings.ftp_host}")
-                ftp = ftplib.FTP_TLS()
+                ftp = ftplib.FTP_TLS()  # noqa: S321
                 ftp.connect(host=settings.ftp_host, port=settings.ftp_port or 21)
 
                 # Login with credentials
@@ -74,7 +74,7 @@ def upload_to_ftp(self, file_path: str, file_id: int = None):
                 else:
                     logger.warning(f"FTPS connection failed, falling back to regular FTP: {str(e)}")
                     # Fall back to regular FTP - only if explicitly allowed by configuration
-                    ftp = ftplib.FTP()  # nosec B321 - Fallback to FTP intentional when configured
+                    ftp = ftplib.FTP()  # nosec B321 - Fallback to FTP intentional when configured  # noqa: S321
                     ftp.connect(host=settings.ftp_host, port=settings.ftp_port or 21)
 
                     # Login with credentials
@@ -88,7 +88,7 @@ def upload_to_ftp(self, file_path: str, file_id: int = None):
 
             # Directly use regular FTP if TLS is explicitly disabled
             logger.warning("Using plaintext FTP - connection is NOT encrypted!")
-            ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when explicitly configured
+            ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when explicitly configured  # noqa: S321
             ftp.connect(host=settings.ftp_host, port=settings.ftp_port or 21)
 
             # Login with credentials

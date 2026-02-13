@@ -207,9 +207,10 @@ class TestSecurityHeadersMiddleware:
     @pytest.mark.asyncio
     async def test_dispatch_adds_headers_when_enabled(self):
         """Test dispatch adds security headers when enabled."""
+        from fastapi import Response
+
         from app.config import settings
         from app.middleware.security_headers import SecurityHeadersMiddleware
-        from fastapi import Response
 
         if not settings.security_headers_enabled:
             pytest.skip("Security headers disabled in configuration")
@@ -231,9 +232,9 @@ class TestSecurityHeadersMiddleware:
     @pytest.mark.asyncio
     async def test_dispatch_skips_headers_when_disabled(self):
         """Test dispatch skips headers when disabled."""
-        from app.config import settings
-        from app.middleware.security_headers import SecurityHeadersMiddleware
         from fastapi import Response
+
+        from app.middleware.security_headers import SecurityHeadersMiddleware
 
         # Create a config copy with headers disabled
         mock_config = Mock()
@@ -254,8 +255,9 @@ class TestSecurityHeadersMiddleware:
 
     def test_add_security_headers_hsts(self):
         """Test _add_security_headers adds HSTS header."""
-        from app.middleware.security_headers import SecurityHeadersMiddleware
         from fastapi import Response
+
+        from app.middleware.security_headers import SecurityHeadersMiddleware
 
         mock_config = Mock()
         mock_config.security_headers_enabled = True
@@ -275,8 +277,9 @@ class TestSecurityHeadersMiddleware:
 
     def test_add_security_headers_csp(self):
         """Test _add_security_headers adds CSP header."""
-        from app.middleware.security_headers import SecurityHeadersMiddleware
         from fastapi import Response
+
+        from app.middleware.security_headers import SecurityHeadersMiddleware
 
         mock_config = Mock()
         mock_config.security_headers_enabled = True
@@ -296,8 +299,9 @@ class TestSecurityHeadersMiddleware:
 
     def test_add_security_headers_x_frame_options(self):
         """Test _add_security_headers adds X-Frame-Options header."""
-        from app.middleware.security_headers import SecurityHeadersMiddleware
         from fastapi import Response
+
+        from app.middleware.security_headers import SecurityHeadersMiddleware
 
         mock_config = Mock()
         mock_config.security_headers_enabled = True
@@ -317,8 +321,9 @@ class TestSecurityHeadersMiddleware:
 
     def test_add_security_headers_x_content_type_options(self):
         """Test _add_security_headers adds X-Content-Type-Options header."""
-        from app.middleware.security_headers import SecurityHeadersMiddleware
         from fastapi import Response
+
+        from app.middleware.security_headers import SecurityHeadersMiddleware
 
         mock_config = Mock()
         mock_config.security_headers_enabled = True
@@ -337,8 +342,9 @@ class TestSecurityHeadersMiddleware:
 
     def test_add_all_security_headers(self):
         """Test _add_security_headers adds all headers when all enabled."""
-        from app.middleware.security_headers import SecurityHeadersMiddleware
         from fastapi import Response
+
+        from app.middleware.security_headers import SecurityHeadersMiddleware
 
         mock_config = Mock()
         mock_config.security_headers_enabled = True

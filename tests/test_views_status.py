@@ -240,7 +240,6 @@ class TestContainerInfoDetection:
     @patch("builtins.open", new_callable=mock_open, read_data="12:docker:/abc123456789")
     def test_extracts_container_id(self, mock_file, mock_exists):
         """Test extracts container ID from cgroup."""
-        from app.views.status import status_dashboard
 
         mock_exists.return_value = True
 
@@ -250,7 +249,6 @@ class TestContainerInfoDetection:
     @patch("app.views.status.os.path.exists")
     def test_handles_missing_cgroup_file(self, mock_exists):
         """Test handles missing cgroup file gracefully."""
-        from app.views.status import status_dashboard
 
         mock_exists.side_effect = [True, False]  # Docker env exists, but cgroup doesn't
 
@@ -259,7 +257,6 @@ class TestContainerInfoDetection:
     @patch("app.views.status.settings")
     def test_includes_runtime_info_when_available(self, mock_settings):
         """Test includes runtime info when available."""
-        from app.views.status import status_dashboard
 
         mock_settings.runtime_info = "Python 3.11.5 on Linux"
 

@@ -1,11 +1,8 @@
 """Tests for app/tasks/upload_to_email.py module."""
 
 import json
-import os
-import smtplib
 import socket
 from email.mime.multipart import MIMEMultipart
-from pathlib import Path
 from unittest.mock import MagicMock, Mock, mock_open, patch
 
 import pytest

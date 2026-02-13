@@ -57,7 +57,7 @@ def upload_with_rclone(self, file_path: str, destination: str):
         # Ensure the remote path exists (create folders if needed)
         mkdir_cmd = ["rclone", "mkdir", "--config", rclone_config_path, destination]
 
-        subprocess.run(mkdir_cmd, check=True, capture_output=True)
+        subprocess.run(mkdir_cmd, check=True, capture_output=True)  # noqa: S603
 
         # Construct the upload command
         upload_cmd = ["rclone", "copy", "--config", rclone_config_path, file_path, destination, "--progress"]
@@ -65,14 +65,14 @@ def upload_with_rclone(self, file_path: str, destination: str):
         log_task_progress(task_id, "rclone_upload", "in_progress", f"Executing rclone copy to {destination}")
 
         # Execute the upload command
-        result = subprocess.run(upload_cmd, check=True, capture_output=True, text=True)
+        result = subprocess.run(upload_cmd, check=True, capture_output=True, text=True)  # noqa: S603
 
         # Check if upload was successful
         if result.returncode == 0:
             # Try to get a public link if possible
             try:
                 link_cmd = ["rclone", "link", "--config", rclone_config_path, f"{destination}/{filename}"]
-                link_result = subprocess.run(link_cmd, capture_output=True, text=True, check=False)
+                link_result = subprocess.run(link_cmd, capture_output=True, text=True, check=False)  # noqa: S603
                 public_url = link_result.stdout.strip() if link_result.returncode == 0 else None
             except (subprocess.SubprocessError, OSError) as e:
                 logger.warning(f"[{task_id}] Failed to get public link for {filename}: {str(e)}")
@@ -135,7 +135,7 @@ def send_to_all_rclone_destinations(self, file_path: str):
     # Get list of configured destinations from rclone
     try:
         remotes_cmd = ["rclone", "listremotes", "--config", rclone_config_path]
-        result = subprocess.run(remotes_cmd, check=True, capture_output=True, text=True)
+        result = subprocess.run(remotes_cmd, check=True, capture_output=True, text=True)  # noqa: S603
 
         if result.returncode == 0:
             # Process the list of remotes
