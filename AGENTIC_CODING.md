@@ -75,7 +75,7 @@ DocuElevate/
 
 #### Python Style
 ```python
-# Use Black formatting (line length: 120)
+# Use Ruff formatting (line length: 120)
 # Use type hints
 def process_document(file_path: str, metadata: Dict[str, Any]) -> DocumentMetadata:
     """
@@ -681,17 +681,17 @@ DocuElevate uses `python-semantic-release` for automated version management.
 
 Before submitting code:
 
-- [ ] Code follows style guide (Black formatted)
+- [ ] Code follows style guide (Ruff formatted)
 - [ ] Commit messages use conventional commit format
 - [ ] All tests pass (`pytest`)
 - [ ] New code has tests
 - [ ] Coverage doesn't decrease
 - [ ] Documentation updated if needed
 - [ ] No secrets or credentials in code
-- [ ] Linting passes (`flake8`, `pylint`)
+- [ ] Linting passes (`ruff check`)
 - [ ] Type hints added (`mypy` clean)
 - [ ] No manual edits to `VERSION` or `CHANGELOG.md`
-- [ ] Security scan passed (`bandit`)
+- [ ] Security scan passed (included in `ruff check`)
 
 Run full check:
 ```bash
