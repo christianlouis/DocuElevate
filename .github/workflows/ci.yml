@@ -43,11 +43,16 @@ jobs:
       - name: Install Ruff
         run: pip install ruff
 
-      - name: Run Ruff Check
-        run: ruff check --fix app/ tests/
+      - name: Show Ruff version (debug)
+        run: ruff --version
 
-      - name: Run Ruff Format
-        run: ruff format --fix --check app/ tests/
+      - name: Run Ruff Lint (check)
+        # ruff check can --fix locally, but CI should only check (no modifications)
+        run: ruff check app/ tests/
+
+      - name: Run Ruff Format check
+        # ruff format only supports --check; do not pass --fix here
+        run: ruff format --check app/ tests/
 
   # ══════════════════════════════════════════════════════════════════════════
   # Stage 2: Tests & Type Checking (run in parallel after lint passes)
