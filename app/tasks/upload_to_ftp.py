@@ -53,6 +53,7 @@ def upload_to_ftp(self, file_path: str, file_id: int = None):
         # First attempt FTPS (FTP with TLS)
         use_tls = getattr(settings, "ftp_use_tls", True)  # Default to try TLS
         allow_plaintext = getattr(settings, "ftp_allow_plaintext", True)  # Default to allow plaintext fallback
+        used_tls = False  # Track whether we successfully used TLS
 
         if use_tls:
             try:
@@ -66,6 +67,7 @@ def upload_to_ftp(self, file_path: str, file_id: int = None):
                 # Enable data protection - encrypt the data channel
                 ftp.prot_p()
                 logger.info("Successfully established FTPS connection with TLS")
+                used_tls = True
             except Exception as e:
                 if not allow_plaintext:
                     error_msg = f"FTPS connection failed and plaintext FTP is forbidden: {str(e)}"
@@ -137,7 +139,7 @@ def upload_to_ftp(self, file_path: str, file_id: int = None):
             "file": file_path,
             "ftp_host": settings.ftp_host,
             "ftp_path": f"{settings.ftp_folder}/{filename}" if settings.ftp_folder else filename,
-            "used_tls": isinstance(ftp, ftplib.FTP_TLS),
+            "used_tls": used_tls,
         }
 
     except Exception as e:

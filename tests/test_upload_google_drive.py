@@ -328,7 +328,7 @@ class TestUploadToGoogleDriveTask:
         mock_self = Mock()
         mock_self.request.id = "test-task-id"
 
-        result = upload_to_google_drive(mock_self, "/tmp/test.pdf", include_metadata=True)
+        result = upload_to_google_drive(mock_self, "/tmp/test.pdf", True)
 
         assert result["metadata_included"] is True
 
@@ -368,7 +368,7 @@ class TestUploadToGoogleDriveTask:
         mock_self = Mock()
         mock_self.request.id = "test-task-id"
 
-        result = upload_to_google_drive(mock_self, "/tmp/test.pdf", include_metadata=True)
+        result = upload_to_google_drive(mock_self, "/tmp/test.pdf", True)
 
         # Verify the create call was made
         mock_files.create.assert_called_once()
