@@ -219,6 +219,7 @@ class TestTruncatePropertyValue:
 class TestUploadToGoogleDriveTask:
     """Tests for upload_to_google_drive task."""
 
+    @patch("app.tasks.upload_to_google_drive.os.path.splitext")
     @patch("app.tasks.upload_to_google_drive.os.path.basename")
     @patch("app.tasks.upload_to_google_drive.get_google_drive_service")
     @patch("app.tasks.upload_to_google_drive.extract_metadata_from_file")
@@ -227,11 +228,12 @@ class TestUploadToGoogleDriveTask:
     @patch("app.tasks.upload_to_google_drive.MediaFileUpload")
     @patch("app.tasks.upload_to_google_drive.settings")
     def test_uploads_file_successfully(
-        self, mock_settings, mock_media, mock_exists, mock_log, mock_extract, mock_service, mock_basename
+        self, mock_settings, mock_media, mock_exists, mock_log, mock_extract, mock_service, mock_basename, mock_splitext
     ):
         """Test uploads file to Google Drive successfully."""
         mock_exists.return_value = True
         mock_basename.return_value = "test.pdf"
+        mock_splitext.return_value = ("/tmp/test", ".pdf")
         mock_settings.google_drive_folder_id = "folder_123"
 
         mock_extract.return_value = {}
@@ -259,7 +261,7 @@ class TestUploadToGoogleDriveTask:
 
         assert result["status"] == "Completed"
         assert result["google_drive_file_id"] == "file_123"
-        assert "webViewLink" in result["google_drive_web_link"]
+        assert result["google_drive_web_link"] == "https://drive.google.com/file/d/file_123"
 
     @patch("app.tasks.upload_to_google_drive.os.path.basename")
     @patch("app.tasks.upload_to_google_drive.log_task_progress")
@@ -275,14 +277,18 @@ class TestUploadToGoogleDriveTask:
         with pytest.raises(FileNotFoundError):
             upload_to_google_drive(mock_self, "/nonexistent/file.pdf")
 
+    @patch("app.tasks.upload_to_google_drive.os.path.splitext")
     @patch("app.tasks.upload_to_google_drive.os.path.basename")
     @patch("app.tasks.upload_to_google_drive.get_google_drive_service")
     @patch("app.tasks.upload_to_google_drive.log_task_progress")
     @patch("app.tasks.upload_to_google_drive.os.path.exists")
-    def test_raises_error_when_service_init_fails(self, mock_exists, mock_log, mock_service, mock_basename):
+    def test_raises_error_when_service_init_fails(
+        self, mock_exists, mock_log, mock_service, mock_basename, mock_splitext
+    ):
         """Test raises error when service initialization fails."""
         mock_exists.return_value = True
         mock_basename.return_value = "test.pdf"
+        mock_splitext.return_value = ("/tmp/test", ".pdf")
         mock_service.return_value = None
 
         mock_self = Mock()
@@ -291,6 +297,8 @@ class TestUploadToGoogleDriveTask:
         with pytest.raises(Exception, match="Failed to initialize Google Drive service"):
             upload_to_google_drive(mock_self, "/tmp/test.pdf")
 
+    @patch("app.tasks.upload_to_google_drive.os.path.splitext")
+    @patch("app.tasks.upload_to_google_drive.os.path.splitext")
     @patch("app.tasks.upload_to_google_drive.os.path.basename")
     @patch("app.tasks.upload_to_google_drive.get_google_drive_service")
     @patch("app.tasks.upload_to_google_drive.extract_metadata_from_file")
@@ -299,11 +307,12 @@ class TestUploadToGoogleDriveTask:
     @patch("app.tasks.upload_to_google_drive.MediaFileUpload")
     @patch("app.tasks.upload_to_google_drive.settings")
     def test_includes_metadata_in_upload(
-        self, mock_settings, mock_media, mock_exists, mock_log, mock_extract, mock_service, mock_basename
+        self, mock_settings, mock_media, mock_exists, mock_log, mock_extract, mock_service, mock_basename, mock_splitext
     ):
         """Test includes metadata in upload."""
         mock_exists.return_value = True
         mock_basename.return_value = "test.pdf"
+        mock_splitext.return_value = ("/tmp/test", ".pdf")
         mock_settings.google_drive_folder_id = None
 
         metadata = {"document_type": "invoice", "amount": "100.00", "date": "2024-01-01"}
@@ -332,6 +341,7 @@ class TestUploadToGoogleDriveTask:
 
         assert result["metadata_included"] is True
 
+    @patch("app.tasks.upload_to_google_drive.os.path.splitext")
     @patch("app.tasks.upload_to_google_drive.os.path.basename")
     @patch("app.tasks.upload_to_google_drive.get_google_drive_service")
     @patch("app.tasks.upload_to_google_drive.extract_metadata_from_file")
@@ -340,11 +350,12 @@ class TestUploadToGoogleDriveTask:
     @patch("app.tasks.upload_to_google_drive.MediaFileUpload")
     @patch("app.tasks.upload_to_google_drive.settings")
     def test_skips_nested_metadata_objects(
-        self, mock_settings, mock_media, mock_exists, mock_log, mock_extract, mock_service, mock_basename
+        self, mock_settings, mock_media, mock_exists, mock_log, mock_extract, mock_service, mock_basename, mock_splitext
     ):
         """Test skips nested objects in metadata."""
         mock_exists.return_value = True
         mock_basename.return_value = "test.pdf"
+        mock_splitext.return_value = ("/tmp/test", ".pdf")
         mock_settings.google_drive_folder_id = None
 
         metadata = {"simple_field": "value", "nested_object": {"key": "value"}, "nested_list": [1, 2, 3]}
@@ -380,6 +391,7 @@ class TestUploadToGoogleDriveTask:
             assert "nested_object" not in file_metadata["properties"]
             assert "nested_list" not in file_metadata["properties"]
 
+    @patch("app.tasks.upload_to_google_drive.os.path.splitext")
     @patch("app.tasks.upload_to_google_drive.os.path.basename")
     @patch("app.tasks.upload_to_google_drive.get_google_drive_service")
     @patch("app.tasks.upload_to_google_drive.log_task_progress")
@@ -387,11 +399,12 @@ class TestUploadToGoogleDriveTask:
     @patch("app.tasks.upload_to_google_drive.MediaFileUpload")
     @patch("app.tasks.upload_to_google_drive.settings")
     def test_handles_upload_exception(
-        self, mock_settings, mock_media, mock_exists, mock_log, mock_service, mock_basename
+        self, mock_settings, mock_media, mock_exists, mock_log, mock_service, mock_basename, mock_splitext
     ):
         """Test handles upload exception."""
         mock_exists.return_value = True
         mock_basename.return_value = "test.pdf"
+        mock_splitext.return_value = ("/tmp/test", ".pdf")
         mock_settings.google_drive_folder_id = None
 
         mock_drive_service = Mock()
@@ -406,6 +419,7 @@ class TestUploadToGoogleDriveTask:
         with pytest.raises(Exception, match="Failed to upload"):
             upload_to_google_drive(mock_self, "/tmp/test.pdf")
 
+    @patch("app.tasks.upload_to_google_drive.os.path.splitext")
     @patch("app.tasks.upload_to_google_drive.os.path.basename")
     @patch("app.tasks.upload_to_google_drive.get_google_drive_service")
     @patch("app.tasks.upload_to_google_drive.extract_metadata_from_file")
@@ -414,10 +428,11 @@ class TestUploadToGoogleDriveTask:
     @patch("app.tasks.upload_to_google_drive.MediaFileUpload")
     @patch("app.tasks.upload_to_google_drive.settings")
     def test_sets_parent_folder_when_configured(
-        self, mock_settings, mock_media, mock_exists, mock_log, mock_extract, mock_service, mock_basename
+        self, mock_settings, mock_media, mock_exists, mock_log, mock_extract, mock_service, mock_basename, mock_splitext
     ):
         """Test sets parent folder when configured."""
         mock_basename.return_value = "test.pdf"
+        mock_splitext.return_value = ("/tmp/test", ".pdf")
         mock_exists.return_value = True
         mock_settings.google_drive_folder_id = "parent_folder_123"
         mock_extract.return_value = {}

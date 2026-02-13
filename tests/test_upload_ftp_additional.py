@@ -168,7 +168,14 @@ class TestUploadToFtp:
         mock_settings.ftp_use_tls = True
 
         mock_ftp = Mock()
-        mock_ftp.cwd.side_effect = [ftplib.error_perm("No such directory"), None]  # noqa: S321
+        # First cwd fails (trying full path), then for each subfolder: fail then succeed after mkd
+        mock_ftp.cwd.side_effect = [
+            ftplib.error_perm("No such directory"),  # noqa: S321  # Initial try for full path
+            ftplib.error_perm("No such directory"),  # noqa: S321  # /uploads doesn't exist
+            None,  # /uploads now exists after mkd
+            ftplib.error_perm("No such directory"),  # noqa: S321  # /uploads/documents doesn't exist
+            None,  # /uploads/documents now exists after mkd
+        ]
         mock_ftp_tls.return_value = mock_ftp
 
         mock_self = Mock()
