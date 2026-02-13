@@ -38,6 +38,7 @@ class TestConfigValidatorReExports:
         assert callable(cv.validate_email_config)
         assert callable(cv.validate_storage_configs)
         assert callable(cv.validate_notification_config)
+        assert callable(cv.validate_auth_config)
         assert callable(cv.check_all_configs)
 
     @pytest.mark.unit
@@ -324,10 +325,10 @@ class TestSettingsDelete:
 
 
 class TestSettingsBulkUpdate:
-    """POST /api/settings/bulk-update - bulk update settings.
+    """Tests for bulk_update_settings handler.
 
-    Note: The /bulk-update route is defined after /{key}, so FastAPI matches
-    /{key} first.  We test the handler function directly via asyncio.
+    The /bulk-update route is defined after /{key} in the router, so FastAPI
+    matches /{key} first. We test the async handler function directly.
     """
 
     def _make_mock_db(self):
