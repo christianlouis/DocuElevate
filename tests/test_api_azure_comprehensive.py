@@ -517,24 +517,23 @@ class TestAzureTestConnectionIntegration:
     @pytest.mark.asyncio
     async def test_azure_connection_logs_outer_exception(self, mock_logger, mock_settings):
         """Test that exceptions in outer try block are logged with exception()."""
+        from unittest.mock import PropertyMock
         from app.api.azure import test_azure_connection
 
         # Trigger an exception in the outer try block
-        mock_settings.azure_endpoint = "https://test.cognitiveservices.azure.com/"
-        mock_settings.azure_ai_key = "test-key"
-        
-        # Make settings raise an exception when accessed
-        type(mock_settings).azure_endpoint = property(lambda self: exec('raise RuntimeError("Outer error")'))
+        # Use PropertyMock to raise exception when azure_endpoint is accessed
+        type(mock_settings).azure_endpoint = PropertyMock(side_effect=RuntimeError("Outer error"))
+        type(mock_settings).azure_ai_key = PropertyMock(return_value="test-key")
 
         mock_request = Mock()
-        
-        try:
-            await test_azure_connection(mock_request)
-        except Exception:
-            pass  # We expect this to be handled
+        result = await test_azure_connection(mock_request)
 
+        # Should catch the exception and return error
+        assert result["status"] == "error"
+        assert "unexpected error" in result["message"].lower()
+        
         # Verify exception was logged with logger.exception
-        # Note: This might not work perfectly due to property access, but tests the concept
+        mock_logger.exception.assert_called_once()
 
     @patch("app.api.azure.DocumentIntelligenceAdministrationClient")
     @patch("app.api.azure.AzureKeyCredential")
@@ -545,6 +544,7 @@ class TestAzureTestConnectionIntegration:
         self, mock_logger, mock_settings, mock_credential, mock_admin_client_class
     ):
         """Test that warning is logged when operations parsing fails."""
+        from unittest.mock import PropertyMock
         from app.api.azure import test_azure_connection
 
         mock_settings.azure_endpoint = "https://test.cognitiveservices.azure.com/"
@@ -554,8 +554,8 @@ class TestAzureTestConnectionIntegration:
         # Create an operation that will raise exception during attribute access
         mock_op = MagicMock()
         mock_op.operation_id = "valid-id"
-        # Make status property raise an exception
-        type(mock_op).status = property(lambda self: (_ for _ in ()).throw(RuntimeError("Status error")))
+        # Make status property raise an exception using PropertyMock
+        type(mock_op).status = PropertyMock(side_effect=RuntimeError("Status error"))
         mock_client.list_operations.return_value = iter([mock_op])
         mock_admin_client_class.return_value = mock_client
 
@@ -574,10 +574,12 @@ class TestAzureTestConnectionIntegration:
     @pytest.mark.asyncio
     async def test_azure_connection_outer_exception_handler(self, mock_settings):
         """Test the outer exception handler catches unexpected errors."""
+        from unittest.mock import PropertyMock
         from app.api.azure import test_azure_connection
 
-        # Create a mock that raises exception when azure_endpoint is accessed
-        mock_settings.azure_endpoint = property(lambda self: (_ for _ in ()).throw(RuntimeError("Outer error")))
+        # Create a mock that raises exception when azure_endpoint is accessed using PropertyMock
+        type(mock_settings).azure_endpoint = PropertyMock(side_effect=RuntimeError("Outer error"))
+        type(mock_settings).azure_ai_key = PropertyMock(return_value="test-key")
         
         mock_request = Mock()
         result = await test_azure_connection(mock_request)
