@@ -163,9 +163,7 @@ document.addEventListener('DOMContentLoaded', function() {
           // Show the success message and environment variables
           showSuccess(data.refresh_token, appKey, appSecret, folderPath);
           // In 10 seconds, redirect to status page (giving time to copy)
-          setTimeout(() => {
-            window.location.href = '/status';
-          }, 10000);
+          scheduleRedirect('/status', 10000);
           
           // Clean up session storage
           sessionStorage.removeItem('dropbox_app_key');
@@ -181,6 +179,20 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
+  function scheduleRedirect(url, delay) {
+    setTimeout(function() { window.location.href = url; }, delay);
+  }
+
+  function onCopySuccess(btn) {
+    const originalText = btn.textContent;
+    btn.textContent = 'Copied!';
+    btn.classList.add('bg-green-700');
+    setTimeout(function() {
+      btn.textContent = originalText;
+      btn.classList.remove('bg-green-700');
+    }, 2000);
+  }
+
   function showError(message) {
     document.getElementById('processing-message').classList.add('hidden');
     document.getElementById('error-container').classList.remove('hidden');
@@ -212,16 +224,8 @@ DROPBOX_FOLDER=${folderPath || '/Documents/Uploads'}`;
       copyEnvVarsBtn.addEventListener('click', function() {
         const envVarsText = document.getElementById('env-vars').textContent;
         navigator.clipboard.writeText(envVarsText)
-          .then(() => {
-            const originalText = copyEnvVarsBtn.textContent;
-            copyEnvVarsBtn.textContent = 'Copied!';
-            copyEnvVarsBtn.classList.add('bg-green-700');
-            setTimeout(() => {
-              copyEnvVarsBtn.textContent = originalText;
-              copyEnvVarsBtn.classList.remove('bg-green-700');
-            }, 2000);
-          })
-          .catch(err => {
+          .then(function() { onCopySuccess(copyEnvVarsBtn); })
+          .catch(function(err) {
             console.error('Failed to copy: ', err);
             alert('Failed to copy text to clipboard');
           });

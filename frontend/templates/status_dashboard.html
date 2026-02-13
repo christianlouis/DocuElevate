@@ -504,6 +504,45 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
   
+  function getTestEndpoint(provider) {
+    const endpoints = {
+      'dropbox': '/api/dropbox/test-token',
+      'onedrive': '/api/onedrive/test-token',
+      'google_drive': '/api/google-drive/test-token',
+      'openai': '/api/openai/test',
+      'azure': '/api/azure/test'
+    };
+    return endpoints[provider] || '';
+  }
+
+  function handleTestSuccess(data, provider) {
+    if (data.token_info && data.token_info.expires_in_human) {
+      const message = (data.message || 'Connection successful') +
+        `<br><br><div class="bg-blue-50 p-3 rounded mt-2">` +
+        `<span class="font-medium">Token valid for:</span> ${data.token_info.expires_in_human}</div>`;
+      modalTitle.textContent = 'Connection Test Successful';
+      modalMessage.innerHTML = message;
+      modalIcon.innerHTML = '<i class="fa-solid fa-check text-green-600 fa-2x"></i>';
+      modalIcon.className = 'mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4';
+      resultModal.classList.remove('hidden');
+    } else {
+      const suffix = data.account ? ' as ' + data.account : '';
+      showModal('success', 'Connection Test Successful', (data.message || 'Connection successful') + suffix);
+    }
+  }
+
+  function handleTestFailure(data, provider) {
+    if (data.needs_reauth) {
+      showModal('error', 'Authentication Required', 'Your token has expired or is invalid. Please reconfigure this connection.');
+      modalClose.textContent = "Configure Now";
+      modalClose.addEventListener('click', function() {
+        window.location.href = '/' + provider.replace('_', '-') + '-setup';
+      }, { once: true });
+    } else {
+      showModal('error', 'Connection Test Failed', data.message);
+    }
+  }
+
   // Test provider connections
   const testButtons = document.querySelectorAll('.test-provider-btn');
   testButtons.forEach(button => {
@@ -514,54 +553,13 @@ document.addEventListener('DOMContentLoaded', function() {
       this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Testing...';
       this.disabled = true;
       
-      let endpoint = '';
-      if (provider === 'dropbox') {
-        endpoint = '/api/dropbox/test-token';
-      } else if (provider === 'onedrive') {
-        endpoint = '/api/onedrive/test-token';
-      } else if (provider === 'google_drive') {
-        endpoint = '/api/google-drive/test-token';
-      } else if (provider === 'openai') {
-        endpoint = '/api/openai/test';
-      } else if (provider === 'azure') {
-        endpoint = '/api/azure/test';
-      }
-      
-      fetch(endpoint)
+      fetch(getTestEndpoint(provider))
         .then(response => response.json())
         .then(data => {
           if (data.status === 'success') {
-            // Create successful message
-            let message = data.message || 'Connection successful';
-            
-            // Add token expiration info if available (especially for Google Drive)
-            if (data.token_info && data.token_info.expires_in_human) {
-              message += `<br><br><div class="bg-blue-50 p-3 rounded mt-2">
-                <span class="font-medium">Token valid for:</span> ${data.token_info.expires_in_human}
-                </div>`;
-              
-              // Show the message with HTML
-              modalTitle.textContent = 'Connection Test Successful';
-              modalMessage.innerHTML = message;
-              modalIcon.innerHTML = '<i class="fa-solid fa-check text-green-600 fa-2x"></i>';
-              modalIcon.className = 'mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4';
-              resultModal.classList.remove('hidden');
-            } else {
-              // Use the regular modal without HTML
-              showModal('success', 'Connection Test Successful', `${data.message} ${data.account ? 'as ' + data.account : ''}`);
-            }
+            handleTestSuccess(data, provider);
           } else {
-            if (data.needs_reauth) {
-              showModal('error', 'Authentication Required', 'Your token has expired or is invalid. Please reconfigure this connection.');
-              // Add option to go to config page
-              modalClose.textContent = "Configure Now";
-              modalClose.addEventListener('click', function redirectToConfig() {
-                window.location.href = `/${provider.replace('_', '-')}-setup`;
-                modalClose.removeEventListener('click', redirectToConfig);
-              }, { once: true });
-            } else {
-              showModal('error', 'Connection Test Failed', data.message);
-            }
+            handleTestFailure(data, provider);
           }
         })
         .catch(error => {
