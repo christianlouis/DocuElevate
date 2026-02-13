@@ -546,8 +546,7 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
 
         if not file_path:
             raise HTTPException(
-                status_code=400,
-                detail="File not found in tmp or processed directory. Cannot retry metadata embedding."
+                status_code=400, detail="File not found in tmp or processed directory. Cannot retry metadata embedding."
             )
 
         extracted_text = _extract_text_from_pdf(file_path)

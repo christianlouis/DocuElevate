@@ -14,6 +14,7 @@ from app.main import app as fastapi_app
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _override_admin():
     """Dependency override that simulates an admin user."""
     return {"is_admin": True, "name": "admin"}
@@ -22,6 +23,7 @@ def _override_admin():
 # ---------------------------------------------------------------------------
 # 1. app/utils/config_validator.py (backward-compatible re-export wrapper)
 # ---------------------------------------------------------------------------
+
 
 class TestConfigValidatorReExports:
     """Verify the backward-compatible wrapper re-exports all expected symbols."""
@@ -89,6 +91,7 @@ class TestConfigValidatorReExports:
 # ---------------------------------------------------------------------------
 # 2. app/api/settings.py  (admin-only settings CRUD)
 # ---------------------------------------------------------------------------
+
 
 class TestRequireAdminDependency:
     """Tests for the require_admin dependency itself."""
@@ -205,8 +208,10 @@ class TestSettingsUpdate:
         """Successfully update a setting."""
         fastapi_app.dependency_overrides[require_admin] = _override_admin
         try:
-            with patch("app.api.settings.save_setting_to_db", return_value=True), \
-                 patch("app.api.settings.validate_setting_value", return_value=(True, None)):
+            with (
+                patch("app.api.settings.save_setting_to_db", return_value=True),
+                patch("app.api.settings.validate_setting_value", return_value=(True, None)),
+            ):
                 response = client.post(
                     "/api/settings/workdir",
                     json={"key": "workdir", "value": "/new/path"},
@@ -239,8 +244,10 @@ class TestSettingsUpdate:
         """500 error when save_setting_to_db returns False."""
         fastapi_app.dependency_overrides[require_admin] = _override_admin
         try:
-            with patch("app.api.settings.validate_setting_value", return_value=(True, None)), \
-                 patch("app.api.settings.save_setting_to_db", return_value=False):
+            with (
+                patch("app.api.settings.validate_setting_value", return_value=(True, None)),
+                patch("app.api.settings.save_setting_to_db", return_value=False),
+            ):
                 response = client.post(
                     "/api/settings/workdir",
                     json={"key": "workdir", "value": "/tmp"},
@@ -270,8 +277,10 @@ class TestSettingsUpdate:
         """500 error when an unexpected exception is raised."""
         fastapi_app.dependency_overrides[require_admin] = _override_admin
         try:
-            with patch("app.api.settings.validate_setting_value", return_value=(True, None)), \
-                 patch("app.api.settings.save_setting_to_db", side_effect=RuntimeError("unexpected")):
+            with (
+                patch("app.api.settings.validate_setting_value", return_value=(True, None)),
+                patch("app.api.settings.save_setting_to_db", side_effect=RuntimeError("unexpected")),
+            ):
                 response = client.post(
                     "/api/settings/workdir",
                     json={"key": "workdir", "value": "/tmp"},
@@ -348,8 +357,10 @@ class TestSettingsBulkUpdate:
             SettingUpdate(key="external_hostname", value="example.com"),
         ]
 
-        with patch("app.api.settings.validate_setting_value", return_value=(True, None)), \
-             patch("app.api.settings.save_setting_to_db", return_value=True):
+        with (
+            patch("app.api.settings.validate_setting_value", return_value=(True, None)),
+            patch("app.api.settings.save_setting_to_db", return_value=True),
+        ):
             result = await bulk_update_settings(updates, mock_request, mock_db, mock_admin)
             assert result["success"] is True
             assert len(result["updated"]) == 2
@@ -373,8 +384,10 @@ class TestSettingsBulkUpdate:
             SettingUpdate(key="bad_key", value="invalid"),
         ]
 
-        with patch("app.api.settings.validate_setting_value", side_effect=mock_validate), \
-             patch("app.api.settings.save_setting_to_db", return_value=True):
+        with (
+            patch("app.api.settings.validate_setting_value", side_effect=mock_validate),
+            patch("app.api.settings.save_setting_to_db", return_value=True),
+        ):
             result = await bulk_update_settings(updates, mock_request, mock_db, {"is_admin": True})
             assert result["success"] is False
             assert len(result["updated"]) == 1
@@ -391,8 +404,10 @@ class TestSettingsBulkUpdate:
         mock_db = self._make_mock_db()
         updates = [SettingUpdate(key="workdir", value="/tmp")]
 
-        with patch("app.api.settings.validate_setting_value", return_value=(True, None)), \
-             patch("app.api.settings.save_setting_to_db", return_value=False):
+        with (
+            patch("app.api.settings.validate_setting_value", return_value=(True, None)),
+            patch("app.api.settings.save_setting_to_db", return_value=False),
+        ):
             result = await bulk_update_settings(updates, mock_request, mock_db, {"is_admin": True})
             assert result["success"] is False
             assert len(result["errors"]) == 1
@@ -408,8 +423,10 @@ class TestSettingsBulkUpdate:
         mock_db = self._make_mock_db()
         updates = [SettingUpdate(key="workdir", value="/tmp")]
 
-        with patch("app.api.settings.validate_setting_value", return_value=(True, None)), \
-             patch("app.api.settings.save_setting_to_db", side_effect=RuntimeError("boom")):
+        with (
+            patch("app.api.settings.validate_setting_value", return_value=(True, None)),
+            patch("app.api.settings.save_setting_to_db", side_effect=RuntimeError("boom")),
+        ):
             result = await bulk_update_settings(updates, mock_request, mock_db, {"is_admin": True})
             assert result["success"] is False
             assert len(result["errors"]) == 1
@@ -434,6 +451,7 @@ class TestSettingsBulkUpdate:
 # ---------------------------------------------------------------------------
 # 3. app/views/license_routes.py
 # ---------------------------------------------------------------------------
+
 
 class TestLicenseRoutes:
     """Tests for license and attribution view routes."""
@@ -471,6 +489,7 @@ class TestLicenseRoutes:
 # 4. app/api/diagnostic.py
 # ---------------------------------------------------------------------------
 
+
 class TestDiagnosticSettings:
     """GET /api/diagnostic/settings - dump settings."""
 
@@ -502,8 +521,10 @@ class TestDiagnosticTestNotification:
     @pytest.mark.unit
     def test_notification_send_success(self, client):
         """Returns success when notification is sent."""
-        with patch("app.config.settings.notification_urls", new=["http://ntfy.example.com/test"], create=True), \
-             patch("app.utils.notification.send_notification", return_value=True) as mock_send:
+        with (
+            patch("app.config.settings.notification_urls", new=["http://ntfy.example.com/test"], create=True),
+            patch("app.utils.notification.send_notification", return_value=True) as mock_send,
+        ):
             response = client.post("/api/diagnostic/test-notification")
             assert response.status_code == 200
             data = response.json()
@@ -514,8 +535,10 @@ class TestDiagnosticTestNotification:
     @pytest.mark.unit
     def test_notification_send_failure(self, client):
         """Returns error when send_notification returns False."""
-        with patch("app.config.settings.notification_urls", new=["http://ntfy.example.com/test"], create=True), \
-             patch("app.utils.notification.send_notification", return_value=False):
+        with (
+            patch("app.config.settings.notification_urls", new=["http://ntfy.example.com/test"], create=True),
+            patch("app.utils.notification.send_notification", return_value=False),
+        ):
             response = client.post("/api/diagnostic/test-notification")
             assert response.status_code == 200
             data = response.json()
@@ -525,8 +548,10 @@ class TestDiagnosticTestNotification:
     @pytest.mark.unit
     def test_notification_send_exception(self, client):
         """Returns error when send_notification raises an exception."""
-        with patch("app.config.settings.notification_urls", new=["http://ntfy.example.com/test"], create=True), \
-             patch("app.utils.notification.send_notification", side_effect=RuntimeError("connection refused")):
+        with (
+            patch("app.config.settings.notification_urls", new=["http://ntfy.example.com/test"], create=True),
+            patch("app.utils.notification.send_notification", side_effect=RuntimeError("connection refused")),
+        ):
             response = client.post("/api/diagnostic/test-notification")
             assert response.status_code == 200
             data = response.json()
@@ -537,6 +562,7 @@ class TestDiagnosticTestNotification:
 # ---------------------------------------------------------------------------
 # 5. app/api/openai.py
 # ---------------------------------------------------------------------------
+
 
 class TestOpenAITestEndpoint:
     """GET /api/openai/test - test OpenAI API key."""
@@ -560,8 +586,10 @@ class TestOpenAITestEndpoint:
         mock_client_instance = MagicMock()
         mock_client_instance.models.list.return_value = mock_models
 
-        with patch("app.config.settings.openai_api_key", new="sk-valid-key"), \
-             patch("openai.OpenAI", return_value=mock_client_instance):
+        with (
+            patch("app.config.settings.openai_api_key", new="sk-valid-key"),
+            patch("openai.OpenAI", return_value=mock_client_instance),
+        ):
             response = client.get("/api/openai/test")
             assert response.status_code == 200
             data = response.json()
@@ -574,8 +602,10 @@ class TestOpenAITestEndpoint:
         mock_client_instance = MagicMock()
         mock_client_instance.models.list.side_effect = Exception("Incorrect API key provided")
 
-        with patch("app.config.settings.openai_api_key", new="sk-bad-key"), \
-             patch("openai.OpenAI", return_value=mock_client_instance):
+        with (
+            patch("app.config.settings.openai_api_key", new="sk-bad-key"),
+            patch("openai.OpenAI", return_value=mock_client_instance),
+        ):
             response = client.get("/api/openai/test")
             assert response.status_code == 200
             data = response.json()
@@ -588,8 +618,10 @@ class TestOpenAITestEndpoint:
         mock_client_instance = MagicMock()
         mock_client_instance.models.list.side_effect = Exception("Connection timeout")
 
-        with patch("app.config.settings.openai_api_key", new="sk-valid-key"), \
-             patch("openai.OpenAI", return_value=mock_client_instance):
+        with (
+            patch("app.config.settings.openai_api_key", new="sk-valid-key"),
+            patch("openai.OpenAI", return_value=mock_client_instance),
+        ):
             response = client.get("/api/openai/test")
             assert response.status_code == 200
             data = response.json()
@@ -609,8 +641,10 @@ class TestOpenAITestEndpoint:
                 raise ImportError("No module named 'openai'")
             return original_import(name, *args, **kwargs)
 
-        with patch("app.config.settings.openai_api_key", new="sk-key"), \
-             patch("builtins.__import__", side_effect=mock_import):
+        with (
+            patch("app.config.settings.openai_api_key", new="sk-key"),
+            patch("builtins.__import__", side_effect=mock_import),
+        ):
             response = client.get("/api/openai/test")
             assert response.status_code == 200
             data = response.json()
@@ -620,8 +654,10 @@ class TestOpenAITestEndpoint:
     @pytest.mark.unit
     def test_openai_unexpected_error(self, client):
         """Returns error for unexpected exceptions outside the inner try."""
-        with patch("app.config.settings.openai_api_key", new="sk-key"), \
-             patch("openai.OpenAI", side_effect=RuntimeError("unexpected crash")):
+        with (
+            patch("app.config.settings.openai_api_key", new="sk-key"),
+            patch("openai.OpenAI", side_effect=RuntimeError("unexpected crash")),
+        ):
             response = client.get("/api/openai/test")
             assert response.status_code == 200
             data = response.json()

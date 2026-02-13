@@ -300,7 +300,6 @@ class TestSubtaskRetry:
         assert str(processed_file) in str(call_args[0][0])
 
 
-
 @pytest.mark.integration
 class TestFilePreview:
     """Tests for file preview endpoint."""
