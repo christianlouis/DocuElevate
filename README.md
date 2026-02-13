@@ -8,8 +8,7 @@
 <div align="center">
 
 [![codecov](https://codecov.io/github/christianlouis/DocuElevate/graph/badge.svg?token=1699E7OHZG)](https://codecov.io/github/christianlouis/DocuElevate)
-[![Tests](https://github.com/christianlouis/DocuElevate/actions/workflows/tests.yaml/badge.svg)](https://github.com/christianlouis/DocuElevate/actions/workflows/tests.yaml)
-[![Docker CI](https://github.com/christianlouis/DocuElevate/actions/workflows/docker-ci.yml/badge.svg)](https://github.com/christianlouis/DocuElevate/actions/workflows/docker-ci.yml)
+[![CI Pipeline](https://github.com/christianlouis/DocuElevate/actions/workflows/ci.yml/badge.svg)](https://github.com/christianlouis/DocuElevate/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/christianlouis/DocuElevate/actions/workflows/codeql.yml/badge.svg)](https://github.com/christianlouis/DocuElevate/actions/workflows/codeql.yml)
 
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/christianlouis/DocuElevate)](https://github.com/christianlouis/DocuElevate/releases)
@@ -237,4 +236,5 @@ For a comprehensive list of all dependencies and their licenses, run:
 ```
 pip install pip-licenses
 pip-licenses
+
 ```
