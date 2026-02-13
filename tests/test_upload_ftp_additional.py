@@ -24,9 +24,7 @@ class TestUploadToFtp:
     @patch("app.tasks.upload_to_ftp.os.path.exists")
     @patch("app.tasks.upload_to_ftp.settings")
     @patch("builtins.open", create=True)
-    def test_uploads_file_with_ftps(
-        self, mock_open, mock_settings, mock_exists, mock_log, mock_ftp_tls, mock_basename
-    ):
+    def test_uploads_file_with_ftps(self, mock_open, mock_settings, mock_exists, mock_log, mock_ftp_tls, mock_basename):
         """Test uploads file using FTPS (FTP with TLS)."""
         mock_exists.return_value = True
         mock_basename.return_value = "test.pdf"

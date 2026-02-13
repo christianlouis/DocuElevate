@@ -110,7 +110,9 @@ class TestAzureTestConnectionEndpoint:
     @patch("app.api.azure.AzureKeyCredential")
     @patch("app.api.azure.settings")
     @pytest.mark.asyncio
-    async def test_azure_connection_service_request_error(self, mock_settings, mock_credential, mock_admin_client_class):
+    async def test_azure_connection_service_request_error(
+        self, mock_settings, mock_credential, mock_admin_client_class
+    ):
         """Test connection with service request error."""
         from app.api.azure import test_azure_connection
 
@@ -196,7 +198,9 @@ class TestAzureTestConnectionEndpoint:
     @patch("app.api.azure.AzureKeyCredential")
     @patch("app.api.azure.settings")
     @pytest.mark.asyncio
-    async def test_azure_connection_with_empty_operations(self, mock_settings, mock_credential, mock_admin_client_class):
+    async def test_azure_connection_with_empty_operations(
+        self, mock_settings, mock_credential, mock_admin_client_class
+    ):
         """Test connection returning empty operations list."""
         from app.api.azure import test_azure_connection
 
@@ -325,7 +329,9 @@ class TestAzureTestConnectionEndpoint:
     @patch("app.api.azure.AzureKeyCredential")
     @patch("app.api.azure.settings")
     @pytest.mark.asyncio
-    async def test_azure_connection_uses_credential(self, mock_settings, mock_credential_class, mock_admin_client_class):
+    async def test_azure_connection_uses_credential(
+        self, mock_settings, mock_credential_class, mock_admin_client_class
+    ):
         """Test that AzureKeyCredential is used correctly."""
         from app.api.azure import test_azure_connection
 
