@@ -47,7 +47,7 @@ jobs:
         run: ruff check app/ tests/
 
       - name: Run Ruff Format
-        run: ruff format --check app/ tests/
+        run: ruff format --fix --check app/ tests/
 
   # ══════════════════════════════════════════════════════════════════════════
   # Stage 2: Tests & Type Checking (run in parallel after lint passes)
