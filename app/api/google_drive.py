@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Google OAuth2 token endpoint
+_GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+
 
 @router.post("/google-drive/exchange-token")
 @require_login
@@ -34,7 +37,7 @@ async def exchange_google_drive_token(
     This is done on the server to avoid exposing client secret in the browser.
     """
     # Prepare the token request
-    token_url = "https://oauth2.googleapis.com/token"
+    token_url = _GOOGLE_TOKEN_URL
 
     payload = {
         "client_id": client_id,
@@ -138,7 +141,7 @@ async def test_google_drive_token(request: Request):
                 credentials = google.oauth2.credentials.Credentials(
                     token=None,
                     refresh_token=settings.google_drive_refresh_token,
-                    token_uri="https://oauth2.googleapis.com/token",
+                    token_uri=_GOOGLE_TOKEN_URL,
                     client_id=settings.google_drive_client_id,
                     client_secret=settings.google_drive_client_secret,
                 )
@@ -256,7 +259,7 @@ async def get_google_drive_token_info(request: Request):
             credentials = google.oauth2.credentials.Credentials(
                 token=None,
                 refresh_token=settings.google_drive_refresh_token,
-                token_uri="https://oauth2.googleapis.com/token",
+                token_uri=_GOOGLE_TOKEN_URL,
                 client_id=settings.google_drive_client_id,
                 client_secret=settings.google_drive_client_secret,
             )

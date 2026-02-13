@@ -342,7 +342,7 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId || 'YOUR_FOLDER_ID'}`;
       
       // Insert warning after the success message but before the environment vars section
       const envVarsSection = document.querySelector('#success-container .mt-6');
-      successContainer.insertBefore(warningDiv, envVarsSection);
+      envVarsSection.before(warningDiv);
     }
     
     // Add copy functionality

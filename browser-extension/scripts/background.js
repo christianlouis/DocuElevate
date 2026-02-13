@@ -1,3 +1,4 @@
+/* global chrome */
 // Background service worker for DocuElevate browser extension
 
 // Listen for installation

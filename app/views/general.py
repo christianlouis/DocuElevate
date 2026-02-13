@@ -127,9 +127,8 @@ async def serve_license(request: Request):
     # Try to read from any of the possible locations
     for path in possible_locations:
         try:
-            with open(path, "r") as f:
-                license_text = f.read()
-                break  # File found and read, exit loop
+            license_text = path.read_text(encoding="utf-8")
+            break  # File found and read, exit loop
         except (FileNotFoundError, PermissionError):
             continue  # Try next location
 

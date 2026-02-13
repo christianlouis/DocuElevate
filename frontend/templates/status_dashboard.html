@@ -406,11 +406,11 @@ document.addEventListener('DOMContentLoaded', function() {
   const detailsButtons = document.querySelectorAll('.view-details-btn');
   detailsButtons.forEach(button => {
     button.addEventListener('click', function() {
-      const providerName = this.getAttribute('data-provider');
+      const providerName = this.dataset.provider;
       let detailsData = {};
       
       try {
-        detailsData = JSON.parse(this.getAttribute('data-details'));
+        detailsData = JSON.parse(this.dataset.details);
       } catch (e) {
         console.error('Error parsing details data:', e);
       }
@@ -457,8 +457,8 @@ document.addEventListener('DOMContentLoaded', function() {
   testGenericBtns.forEach(button => {
     button.addEventListener('click', function() {
       const originalText = this.innerHTML;
-      const endpoint = this.getAttribute('data-endpoint');
-      const method = this.getAttribute('data-method') || 'GET';
+      const endpoint = this.dataset.endpoint;
+      const method = this.dataset.method || 'GET';
       
       this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Testing...';
       this.disabled = true;
@@ -508,7 +508,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const testButtons = document.querySelectorAll('.test-provider-btn');
   testButtons.forEach(button => {
     button.addEventListener('click', function() {
-      const provider = this.getAttribute('data-provider');
+      const provider = this.dataset.provider;
       const originalText = this.textContent;
       
       this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Testing...';

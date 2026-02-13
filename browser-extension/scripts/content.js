@@ -1,3 +1,4 @@
+/* global chrome */
 // Content script for DocuElevate browser extension
 
 // This script runs on all web pages to enable communication

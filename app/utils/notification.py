@@ -45,6 +45,24 @@ def _mask_sensitive_url(url: str) -> str:
     return masked
 
 
+_NOTIFY_TYPE_MAP = {
+    "success": "SUCCESS",
+    "warning": "WARNING",
+    "warn": "WARNING",
+    "failure": "FAILURE",
+    "error": "FAILURE",
+    "failed": "FAILURE",
+}
+
+
+def _resolve_notify_type(notification_type: str):
+    """Map a human-friendly notification type string to an apprise NotifyType."""
+    mapped = _NOTIFY_TYPE_MAP.get(notification_type)
+    if mapped:
+        return getattr(apprise.NotifyType, mapped)
+    return apprise.NotifyType.INFO
+
+
 def send_notification(
     title: str,
     message: str,
@@ -74,14 +92,7 @@ def send_notification(
     try:
         apprise_obj = init_apprise()
 
-        # Set notification type
-        notify_type = apprise.NotifyType.INFO
-        if notification_type == "success":
-            notify_type = apprise.NotifyType.SUCCESS
-        elif notification_type in ("warning", "warn"):
-            notify_type = apprise.NotifyType.WARNING
-        elif notification_type in ("failure", "error", "failed"):
-            notify_type = apprise.NotifyType.FAILURE
+        notify_type = _resolve_notify_type(notification_type)
 
         # Send the notification to each service individually for better error reporting
         if not apprise_obj.servers:  # Access servers as an attribute, not a method

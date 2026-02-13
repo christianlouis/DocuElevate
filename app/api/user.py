@@ -38,11 +38,13 @@ async def whoami_handler(request: Request):
 
 
 # Register the same handler under two different paths
-@router.get("/whoami")
+@router.get("/whoami", responses={401: {"description": "Not logged in"}, 400: {"description": "User has no email"}})
 async def whoami(request: Request):
     return await whoami_handler(request)
 
 
-@router.get("/auth/whoami")
+@router.get(
+    "/auth/whoami", responses={401: {"description": "Not logged in"}, 400: {"description": "User has no email"}}
+)
 async def auth_whoami(request: Request):
     return await whoami_handler(request)

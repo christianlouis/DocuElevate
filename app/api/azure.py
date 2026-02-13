@@ -20,6 +20,37 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _check_azure_config() -> dict | None:
+    """Return an error response dict if Azure config is incomplete, else None."""
+    if settings.azure_endpoint and settings.azure_ai_key:
+        return None
+    missing = []
+    if not settings.azure_endpoint:
+        missing.append("endpoint")
+    if not settings.azure_ai_key:
+        missing.append("API key")
+    return {
+        "status": "error",
+        "message": f"Azure Document Intelligence configuration is incomplete. Missing: {', '.join(missing)}",
+    }
+
+
+def _parse_operations(operations) -> list[dict]:
+    """Extract operation info dicts from Azure operation objects."""
+    operations_info = []
+    for op in operations:
+        if hasattr(op, "operation_id") and op.operation_id:
+            operations_info.append(
+                {
+                    "id": op.operation_id,
+                    "status": op.status if hasattr(op, "status") else "Unknown",
+                    "created": str(op.created_on) if hasattr(op, "created_on") else "Unknown",
+                    "kind": op.kind if hasattr(op, "kind") else "Unknown",
+                }
+            )
+    return operations_info
+
+
 @router.get("/azure/test")
 @require_login
 async def test_azure_connection(request: Request):
@@ -30,56 +61,29 @@ async def test_azure_connection(request: Request):
     try:
         logger.info("Testing Azure Document Intelligence connection")
 
-        # Check if Azure configuration is present
-        if not settings.azure_endpoint or not settings.azure_ai_key:
+        config_error = _check_azure_config()
+        if config_error:
             logger.warning("Azure Document Intelligence configuration is incomplete")
-            missing = []
-            if not settings.azure_endpoint:
-                missing.append("endpoint")
-            if not settings.azure_ai_key:
-                missing.append("API key")
+            return config_error
 
-            return {
-                "status": "error",
-                "message": f"Azure Document Intelligence configuration is incomplete. Missing: {', '.join(missing)}",
-            }
-
-        # Try to initialize the admin client and make a request to list operations
         try:
-            # Initialize the admin client with credentials
             admin_client = DocumentIntelligenceAdministrationClient(
                 endpoint=settings.azure_endpoint, credential=AzureKeyCredential(settings.azure_ai_key)
             )
-
-            # Test the connection by listing operations - this is a documented method in the admin client
             operations = list(admin_client.list_operations())
-
-            # Successfully initialized client and made a request
             logger.info("Azure Document Intelligence Admin connection successfully tested")
 
-            # Return success with available operations info
-            operations_info = []
             try:
-                for op in operations:
-                    if hasattr(op, "operation_id") and op.operation_id:
-                        op_info = {
-                            "id": op.operation_id,
-                            "status": op.status if hasattr(op, "status") else "Unknown",
-                            "created": str(op.created_on) if hasattr(op, "created_on") else "Unknown",
-                            "kind": op.kind if hasattr(op, "kind") else "Unknown",
-                        }
-                        operations_info.append(op_info)
-
-                operation_count = len(operations_info)
+                operations_info = _parse_operations(operations)
+                op_count = len(operations_info)
                 return {
                     "status": "success",
-                    "message": f"Azure Document Intelligence connection is valid. Found {operation_count} operations.",
+                    "message": f"Azure Document Intelligence connection is valid. Found {op_count} operations.",
                     "endpoint": settings.azure_endpoint,
-                    "operations_count": operation_count,
+                    "operations_count": op_count,
                     "recent_operations": operations_info[:3] if operations_info else [],
                 }
             except Exception as e:
-                # If error occurs while processing operations info, still return success
                 logger.warning(f"Connected to Azure but couldn't parse operations: {e}")
                 return {
                     "status": "success",

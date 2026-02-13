@@ -24,7 +24,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/process/")
+_FILE_NOT_FOUND_RESPONSE = {400: {"description": "File not found"}}
+
+
+@router.post("/process/", responses=_FILE_NOT_FOUND_RESPONSE)
 @require_login
 def process(file_path: str):
     """API Endpoint to start document processing."""
@@ -37,7 +40,7 @@ def process(file_path: str):
     return {"task_id": task.id, "status": "queued"}
 
 
-@router.post("/send_to_dropbox/")
+@router.post("/send_to_dropbox/", responses=_FILE_NOT_FOUND_RESPONSE)
 @require_login
 def send_to_dropbox_endpoint(file_path: str):
     """Send a document to Dropbox."""
@@ -48,7 +51,7 @@ def send_to_dropbox_endpoint(file_path: str):
     return {"task_id": task.id, "status": "queued"}
 
 
-@router.post("/send_to_paperless/")
+@router.post("/send_to_paperless/", responses=_FILE_NOT_FOUND_RESPONSE)
 @require_login
 def send_to_paperless_endpoint(file_path: str):
     """Send a document to Paperless-ngx."""
@@ -59,7 +62,7 @@ def send_to_paperless_endpoint(file_path: str):
     return {"task_id": task.id, "status": "queued"}
 
 
-@router.post("/send_to_nextcloud/")
+@router.post("/send_to_nextcloud/", responses=_FILE_NOT_FOUND_RESPONSE)
 @require_login
 def send_to_nextcloud_endpoint(file_path: str):
     """Send a document to NextCloud."""
@@ -70,7 +73,7 @@ def send_to_nextcloud_endpoint(file_path: str):
     return {"task_id": task.id, "status": "queued"}
 
 
-@router.post("/send_to_google_drive/")
+@router.post("/send_to_google_drive/", responses=_FILE_NOT_FOUND_RESPONSE)
 @require_login
 def send_to_google_drive_endpoint(file_path: str):
     """Send a document to Google Drive."""
@@ -81,7 +84,7 @@ def send_to_google_drive_endpoint(file_path: str):
     return {"task_id": task.id, "status": "queued"}
 
 
-@router.post("/send_to_onedrive/")
+@router.post("/send_to_onedrive/", responses=_FILE_NOT_FOUND_RESPONSE)
 @require_login
 def send_to_onedrive_endpoint(file_path: str):
     """Send a document to OneDrive."""
@@ -92,7 +95,7 @@ def send_to_onedrive_endpoint(file_path: str):
     return {"task_id": task.id, "status": "queued"}
 
 
-@router.post("/send_to_all_destinations/")
+@router.post("/send_to_all_destinations/", responses=_FILE_NOT_FOUND_RESPONSE)
 @require_login
 def send_to_all_destinations_endpoint(file_path: str):
     """Call the aggregator task that sends this file to all configured destinations."""

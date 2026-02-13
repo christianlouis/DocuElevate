@@ -1,3 +1,4 @@
+/* global chrome */
 // Popup script for DocuElevate browser extension
 
 // DOM elements

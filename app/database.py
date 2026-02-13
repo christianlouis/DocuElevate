@@ -60,61 +60,56 @@ def _run_schema_migrations(engine):
     Apply lightweight schema migrations for columns added after the initial release.
     Each migration is idempotent and safe to run multiple times.
     """
-    from sqlalchemy import inspect, text
+    from sqlalchemy import inspect
 
     inspector = inspect(engine)
 
     # Migration: Add 'detail' column to processing_logs (added for verbose worker log output)
-    if "processing_logs" in inspector.get_table_names():
-        columns = [col["name"] for col in inspector.get_columns("processing_logs")]
-        if "detail" not in columns:
-            logger.info("Migrating processing_logs: adding 'detail' column")
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE processing_logs ADD COLUMN detail TEXT"))
-            logger.info("Migration complete: 'detail' column added to processing_logs")
+    _add_column_if_missing(engine, inspector, "processing_logs", "detail", "TEXT")
 
-    # Migration: Add file path columns to files table
+    # Migration: Add file path / deduplication columns to files table
     if "files" in inspector.get_table_names():
         columns = [col["name"] for col in inspector.get_columns("files")]
-        if "original_file_path" not in columns:
-            logger.info("Migrating files: adding 'original_file_path' column")
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE files ADD COLUMN original_file_path VARCHAR"))
-            logger.info("Migration complete: 'original_file_path' column added to files")
+        _add_column_if_missing(engine, inspector, "files", "original_file_path", "VARCHAR", columns)
+        _add_column_if_missing(engine, inspector, "files", "processed_file_path", "VARCHAR", columns)
+        _add_column_if_missing(engine, inspector, "files", "is_duplicate", "BOOLEAN DEFAULT FALSE NOT NULL", columns)
+        _add_column_if_missing(engine, inspector, "files", "duplicate_of_id", "INTEGER", columns)
+        _drop_unique_filehash_index(engine, inspector)
 
-        if "processed_file_path" not in columns:
-            logger.info("Migrating files: adding 'processed_file_path' column")
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE files ADD COLUMN processed_file_path VARCHAR"))
-            logger.info("Migration complete: 'processed_file_path' column added to files")
 
-        # Migration: Add deduplication columns to files table
-        if "is_duplicate" not in columns:
-            logger.info("Migrating files: adding 'is_duplicate' column")
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE files ADD COLUMN is_duplicate BOOLEAN DEFAULT FALSE NOT NULL"))
-            logger.info("Migration complete: 'is_duplicate' column added to files")
+def _add_column_if_missing(engine, inspector, table, column, col_type, columns=None):
+    """Add a column to a table if it doesn't already exist."""
+    from sqlalchemy import text
 
-        if "duplicate_of_id" not in columns:
-            logger.info("Migrating files: adding 'duplicate_of_id' column")
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE files ADD COLUMN duplicate_of_id INTEGER"))
-            logger.info("Migration complete: 'duplicate_of_id' column added to files")
+    if table not in inspector.get_table_names():
+        return
+    if columns is None:
+        columns = [col["name"] for col in inspector.get_columns(table)]
+    if column in columns:
+        return
+    logger.info(f"Migrating {table}: adding '{column}' column")
+    with engine.begin() as conn:
+        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+    logger.info(f"Migration complete: '{column}' column added to {table}")
 
-        # Migration: Drop unique index on filehash to allow duplicate records
-        try:
-            indexes = inspector.get_indexes("files")
-            unique_filehash_indexes = [
-                index for index in indexes if index.get("unique") and "filehash" in index.get("column_names", [])
-            ]
-            if unique_filehash_indexes:
-                logger.info("Migrating files: dropping unique index on 'filehash'")
-                with engine.begin() as conn:
-                    for index in unique_filehash_indexes:
-                        conn.execute(text(f"DROP INDEX IF EXISTS {index['name']}"))
-                logger.info("Migration complete: unique index on 'filehash' removed")
-        except Exception as exc:
-            logger.warning(f"Skipping filehash unique index drop: {exc}")
+
+def _drop_unique_filehash_index(engine, inspector):
+    """Drop unique index on filehash to allow duplicate records."""
+    from sqlalchemy import text
+
+    try:
+        indexes = inspector.get_indexes("files")
+        unique_filehash_indexes = [
+            index for index in indexes if index.get("unique") and "filehash" in index.get("column_names", [])
+        ]
+        if unique_filehash_indexes:
+            logger.info("Migrating files: dropping unique index on 'filehash'")
+            with engine.begin() as conn:
+                for index in unique_filehash_indexes:
+                    conn.execute(text(f"DROP INDEX IF EXISTS {index['name']}"))
+            logger.info("Migration complete: unique index on 'filehash' removed")
+    except Exception as exc:
+        logger.warning(f"Skipping filehash unique index drop: {exc}")
 
 
 def get_db():
