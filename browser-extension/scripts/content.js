@@ -113,12 +113,13 @@ function captureSelection() {
 // Message handler
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'GET_PAGE_INFO') {
-        // Return information about the current page
+        // Return information about the current page (synchronous)
         const pageInfo = {
             url: window.location.href,
             title: document.title
         };
         sendResponse(pageInfo);
+        return false; // Synchronous response, no need to keep channel open
     }
     
     if (message.type === 'CAPTURE_FULL_PAGE') {
@@ -128,7 +129,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } catch (error) {
             sendResponse({ success: false, error: error.message });
         }
-        return true;
+        return true; // Keep channel open for async response
     }
     
     if (message.type === 'CAPTURE_SELECTION') {
@@ -138,7 +139,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } catch (error) {
             sendResponse({ success: false, error: error.message });
         }
-        return true;
+        return true; // Keep channel open for async response
     }
 });
 

@@ -6,9 +6,6 @@
  * @returns {Object} Page data with HTML, title, and URL
  */
 function captureFullPage() {
-    // Clone the document to avoid modifying the original
-    const clonedDoc = document.cloneNode(true);
-    
     // Get all stylesheets and inline them
     const styles = Array.from(document.styleSheets)
         .map(sheet => {
@@ -23,9 +20,6 @@ function captureFullPage() {
             }
         })
         .join('\n');
-    
-    // Get page HTML
-    const html = document.documentElement.outerHTML;
     
     // Create a complete HTML document with inlined styles
     const styledHtml = `
@@ -65,28 +59,6 @@ function captureSelection() {
     const container = document.createElement('div');
     container.appendChild(range.cloneContents());
     
-    // Get computed styles for the selection
-    const styles = [];
-    const elements = container.querySelectorAll('*');
-    elements.forEach(el => {
-        const computed = window.getComputedStyle(el);
-        // Only preserve essential styles
-        const essentialStyles = [
-            'font-family', 'font-size', 'font-weight', 'color',
-            'background-color', 'text-align', 'margin', 'padding'
-        ];
-        let styleStr = '';
-        essentialStyles.forEach(prop => {
-            const value = computed.getPropertyValue(prop);
-            if (value) {
-                styleStr += `${prop}: ${value}; `;
-            }
-        });
-        if (styleStr) {
-            el.setAttribute('style', styleStr);
-        }
-    });
-    
     const html = `
 <!DOCTYPE html>
 <html>
@@ -121,51 +93,7 @@ function captureSelection() {
     };
 }
 
-/**
- * Take a screenshot of the visible viewport
- * @returns {Promise<string>} Data URL of the screenshot
- */
-async function captureScreenshot() {
-    // This will be called from the background script
-    // since content scripts can't use chrome.tabs.captureVisibleTab
-    return new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage(
-            { type: 'CAPTURE_SCREENSHOT' },
-            response => {
-                if (response.success) {
-                    resolve(response.dataUrl);
-                } else {
-                    reject(new Error(response.error));
-                }
-            }
-        );
-    });
-}
-
-// Listen for capture requests from popup or background
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'CAPTURE_FULL_PAGE') {
-        try {
-            const pageData = captureFullPage();
-            sendResponse({ success: true, data: pageData });
-        } catch (error) {
-            sendResponse({ success: false, error: error.message });
-        }
-        return true;
-    }
-    
-    if (message.type === 'CAPTURE_SELECTION') {
-        try {
-            const selectionData = captureSelection();
-            sendResponse({ success: true, data: selectionData });
-        } catch (error) {
-            sendResponse({ success: false, error: error.message });
-        }
-        return true;
-    }
-});
-
-// Export functions for use in tests or other scripts
+// Export functions for use in other scripts
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         captureFullPage,

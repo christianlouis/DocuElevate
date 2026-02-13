@@ -152,7 +152,9 @@ async function convertHtmlToPdf(html) {
             chrome.tabs.onUpdated.addListener(listener);
         });
         
-        // Give it a bit more time to render
+        // Wait for page to fully render before PDF conversion
+        // This delay ensures JavaScript execution, dynamic content rendering,
+        // and CSS transitions have completed. May need adjustment for complex pages.
         await new Promise(resolve => setTimeout(resolve, 500));
         
         // Use Chrome's print to PDF API
