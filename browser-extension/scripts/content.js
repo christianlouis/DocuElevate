@@ -45,6 +45,8 @@ function captureFullPage() {
 
 /**
  * Capture selected content from the page
+ * Note: For performance, uses basic HTML structure without per-element computed styles.
+ * The resulting PDF will use browser default styles.
  */
 function captureSelection() {
     const selection = window.getSelection();
@@ -56,27 +58,6 @@ function captureSelection() {
     const range = selection.getRangeAt(0);
     const container = document.createElement('div');
     container.appendChild(range.cloneContents());
-    
-    // Get computed styles for the selection
-    const elements = container.querySelectorAll('*');
-    elements.forEach(el => {
-        const computed = window.getComputedStyle(el);
-        // Only preserve essential styles
-        const essentialStyles = [
-            'font-family', 'font-size', 'font-weight', 'color',
-            'background-color', 'text-align', 'margin', 'padding'
-        ];
-        let styleStr = '';
-        essentialStyles.forEach(prop => {
-            const value = computed.getPropertyValue(prop);
-            if (value) {
-                styleStr += `${prop}: ${value}; `;
-            }
-        });
-        if (styleStr) {
-            el.setAttribute('style', styleStr);
-        }
-    });
     
     const html = `<!DOCTYPE html>
 <html>
@@ -98,6 +79,8 @@ function captureSelection() {
     <p><small>Source: ${window.location.href}</small></p>
     <hr>
     ${container.innerHTML}
+</body>
+</html>`;
 </body>
 </html>`;
     

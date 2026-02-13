@@ -46,6 +46,8 @@ function captureFullPage() {
 
 /**
  * Capture selected content from the page
+ * Note: For performance, selection clipping uses basic HTML structure without
+ * per-element computed styles. The resulting PDF will use browser default styles.
  * @returns {Object} Selection data with HTML, text, and metadata
  */
 function captureSelection() {
@@ -90,13 +92,5 @@ function captureSelection() {
         title: document.title + ' - Selection',
         url: window.location.href,
         timestamp: new Date().toISOString()
-    };
-}
-
-// Export functions for use in other scripts
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        captureFullPage,
-        captureSelection
     };
 }
