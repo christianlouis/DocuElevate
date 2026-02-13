@@ -38,12 +38,14 @@ class TestMockRequest:
         assert isinstance(req.query_params, dict)
 
     @pytest.mark.asyncio
+    @pytest.mark.asyncio
     async def test_mock_request_json(self):
         """Test MockRequest.json() returns empty dict."""
         req = MockRequest()
         result = await req.json()
         assert result == {}
 
+    @pytest.mark.asyncio
     @pytest.mark.asyncio
     async def test_mock_request_form(self):
         """Test MockRequest.form() returns empty dict."""

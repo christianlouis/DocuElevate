@@ -28,6 +28,7 @@ class TestStatusDashboard:
     @patch("app.views.status.templates")
     @patch("app.views.status.settings")
     @patch("app.views.status.os.path.exists")
+    @pytest.mark.asyncio
     async def test_status_dashboard_returns_template(self, mock_exists, mock_settings, mock_templates, mock_providers):
         """Test status dashboard returns template response."""
         from app.views.status import status_dashboard
@@ -57,6 +58,7 @@ class TestStatusDashboard:
     @patch("app.views.status.settings")
     @patch("app.views.status.os.path.exists")
     @patch("builtins.open", new_callable=mock_open, read_data="12:docker:/container_id")
+    @pytest.mark.asyncio
     async def test_detects_docker_environment(self, mock_file, mock_exists, mock_settings, mock_templates, mock_providers):
         """Test detects Docker environment."""
         from app.views.status import status_dashboard
@@ -80,6 +82,7 @@ class TestStatusDashboard:
     @patch("app.views.status.templates")
     @patch("app.views.status.settings")
     @patch("app.views.status.os.path.exists")
+    @pytest.mark.asyncio
     async def test_handles_non_docker_environment(self, mock_exists, mock_settings, mock_templates, mock_providers):
         """Test handles non-Docker environment."""
         from app.views.status import status_dashboard
@@ -102,6 +105,7 @@ class TestStatusDashboard:
     @patch("app.views.status.get_provider_status")
     @patch("app.views.status.templates")
     @patch("app.views.status.settings")
+    @pytest.mark.asyncio
     async def test_includes_git_sha_in_context(self, mock_settings, mock_templates, mock_providers):
         """Test includes git SHA in context."""
         from app.views.status import status_dashboard
@@ -123,6 +127,7 @@ class TestStatusDashboard:
     @patch("app.views.status.get_provider_status")
     @patch("app.views.status.templates")
     @patch("app.views.status.settings")
+    @pytest.mark.asyncio
     async def test_includes_notification_urls(self, mock_settings, mock_templates, mock_providers):
         """Test includes notification URLs in context."""
         from app.views.status import status_dashboard
@@ -149,6 +154,7 @@ class TestEnvDebug:
     @patch("app.views.status.get_settings_for_display")
     @patch("app.views.status.templates")
     @patch("app.views.status.settings")
+    @pytest.mark.asyncio
     async def test_env_debug_returns_template(self, mock_settings, mock_templates, mock_get_settings):
         """Test env debug returns template response."""
         from app.views.status import env_debug
@@ -168,6 +174,7 @@ class TestEnvDebug:
     @patch("app.views.status.get_settings_for_display")
     @patch("app.views.status.templates")
     @patch("app.views.status.settings")
+    @pytest.mark.asyncio
     async def test_env_debug_respects_debug_setting(self, mock_settings, mock_templates, mock_get_settings):
         """Test env debug respects debug setting."""
         from app.views.status import env_debug
@@ -186,6 +193,7 @@ class TestEnvDebug:
     @patch("app.views.status.get_settings_for_display")
     @patch("app.views.status.templates")
     @patch("app.views.status.settings")
+    @pytest.mark.asyncio
     async def test_env_debug_hides_values_when_debug_disabled(self, mock_settings, mock_templates, mock_get_settings):
         """Test env debug hides values when debug is disabled."""
         from app.views.status import env_debug
@@ -204,6 +212,7 @@ class TestEnvDebug:
     @patch("app.views.status.get_settings_for_display")
     @patch("app.views.status.templates")
     @patch("app.views.status.settings")
+    @pytest.mark.asyncio
     async def test_env_debug_includes_app_version(self, mock_settings, mock_templates, mock_get_settings):
         """Test env debug includes app version."""
         from app.views.status import env_debug

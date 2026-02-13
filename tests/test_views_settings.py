@@ -12,6 +12,7 @@ class TestRequireAdminAccess:
     """Tests for require_admin_access decorator."""
 
     @pytest.mark.asyncio
+    @pytest.mark.asyncio
     async def test_redirects_non_admin_user(self):
         """Test that non-admin users are redirected."""
 
@@ -25,6 +26,7 @@ class TestRequireAdminAccess:
         result = await dummy_route(mock_request)
         assert result.status_code == 302
 
+    @pytest.mark.asyncio
     @pytest.mark.asyncio
     async def test_redirects_when_no_user(self):
         """Test that unauthenticated users are redirected."""
@@ -40,6 +42,7 @@ class TestRequireAdminAccess:
         assert result.status_code == 302
 
     @pytest.mark.asyncio
+    @pytest.mark.asyncio
     async def test_allows_admin_user(self):
         """Test that admin users can access the route."""
 
@@ -53,6 +56,7 @@ class TestRequireAdminAccess:
         result = await dummy_route(mock_request)
         assert result == {"success": True}
 
+    @pytest.mark.asyncio
     @pytest.mark.asyncio
     async def test_redirects_to_home_page(self):
         """Test that non-admin users are redirected to home page."""
@@ -68,6 +72,7 @@ class TestRequireAdminAccess:
         assert result.status_code == 302
         assert result.headers["location"] == "/"
 
+    @pytest.mark.asyncio
     @pytest.mark.asyncio
     async def test_works_with_sync_functions(self):
         """Test decorator works with synchronous functions."""
@@ -117,6 +122,7 @@ class TestSettingsPageLogic:
     @patch("app.views.settings.templates")
     @patch("app.views.settings.settings")
     @patch("app.views.settings.os.environ", {"TEST_VAR": "test_value"})
+    @pytest.mark.asyncio
     async def test_determines_setting_source_database(
         self, mock_settings, mock_templates, mock_mask, mock_metadata, mock_categories, mock_db_settings
     ):
@@ -182,6 +188,7 @@ class TestSettingsPageLogic:
         assert masked != value
 
     @patch("app.views.settings.get_all_settings_from_db")
+    @pytest.mark.asyncio
     async def test_handles_database_errors(self, mock_db_settings):
         """Test handles database errors gracefully."""
         from app.views.settings import settings_page
