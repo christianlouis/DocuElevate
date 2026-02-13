@@ -3,9 +3,8 @@ Extended tests for app/views/files.py to achieve 90%+ coverage.
 """
 
 import json
-import os
 from datetime import datetime
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
 from fastapi.testclient import TestClient
