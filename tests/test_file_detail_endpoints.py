@@ -2,6 +2,7 @@
 Tests for file detail view improvements including reprocessing and preview endpoints.
 """
 
+import shutil
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -266,11 +267,10 @@ class TestSubtaskRetry:
         processed_dir = tmp_path / "processed"
         processed_dir.mkdir(exist_ok=True)
         processed_file = processed_dir / "processed_doc.pdf"
-        
+
         # Copy the sample PDF to processed directory
-        import shutil
         shutil.copy(sample_pdf_path, processed_file)
-        
+
         # Create file record with non-existent local_filename but existing processed_file_path
         file_record = FileRecord(
             filehash="pipeline_retry6",
@@ -287,7 +287,7 @@ class TestSubtaskRetry:
         with patch("app.tasks.extract_metadata_with_gpt.extract_metadata_with_gpt") as mock_extract:
             mock_extract.delay.return_value = mock_task
             response = client.post(f"/api/files/{file_record.id}/retry-subtask?subtask_name=embed_metadata_into_pdf")
-        
+
         # Should succeed because file exists in processed directory
         assert response.status_code == 200
         data = response.json()
