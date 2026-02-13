@@ -171,7 +171,7 @@ def rotate_pdf_pages(self, filename: str, extracted_text: str, rotation_data=Non
             "success",
             f"Rotation complete for {filename}",
             file_id=file_id,
-            detail={"applied_rotations": applied_rotations},
+            detail=json.dumps({"applied_rotations": applied_rotations}),
         )
 
         return {
@@ -189,7 +189,7 @@ def rotate_pdf_pages(self, filename: str, extracted_text: str, rotation_data=Non
             "failure",
             f"Rotation failed: {str(e)}",
             file_id=file_id,
-            detail={"error": str(e), "filename": filename},
+            detail=json.dumps({"error": str(e), "filename": filename}),
         )
         # Continue with metadata extraction despite rotation failure
         extract_metadata_with_gpt.delay(filename, extracted_text, file_id)
