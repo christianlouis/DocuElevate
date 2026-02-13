@@ -1,0 +1,94 @@
+name: Ruff Auto-Fix
+
+# This workflow automatically fixes ruff formatting and linting issues
+# and commits them back to the PR branch when issues are detected.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - '**.py'
+  workflow_dispatch:  # Allow manual triggering
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  ruff-auto-fix:
+    name: Auto-fix Ruff Issues
+    runs-on: ubuntu-latest
+    # Only run on PRs from the same repository (not forks) for security
+    if: github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Ruff
+        run: pip install ruff
+
+      - name: Run Ruff Check with Auto-fix
+        run: |
+          echo "Running ruff check with auto-fix..."
+          ruff check app/ tests/ --fix || true
+
+      - name: Run Ruff Format
+        run: |
+          echo "Running ruff format..."
+          ruff format app/ tests/
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected after running ruff auto-fix"
+          else
+            echo "changes=false" >> $GITHUB_OUTPUT
+            echo "No changes needed - code is already properly formatted"
+          fi
+
+      - name: Commit and push changes
+        if: steps.check_changes.outputs.changes == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add app/ tests/
+          git commit -m "style: apply ruff auto-fix
+
+          - Auto-formatted code with ruff format
+          - Applied ruff linting fixes with --fix
+
+          Co-authored-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+          git push
+
+      - name: Comment on PR
+        if: steps.check_changes.outputs.changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✨ Ruff auto-fix applied! The code has been automatically formatted and linting issues have been fixed.\n\nPlease pull the latest changes:\n```bash\ngit pull\n```'
+            })
+
+      - name: Summary
+        run: |
+          if [[ "${{ steps.check_changes.outputs.changes }}" == "true" ]]; then
+            echo "✅ Ruff auto-fix completed and changes committed"
+          else
+            echo "✅ No changes needed - code is already properly formatted"
+          fi

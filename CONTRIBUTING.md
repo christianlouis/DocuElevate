@@ -151,13 +151,13 @@ DocuElevate uses [semantic-release](https://github.com/semantic-release/semantic
 
 Before submitting a pull request:
 
-- [ ] Code follows the project style guide (Black, isort, flake8)
+- [ ] Code follows the project style guide (Ruff)
 - [ ] Commit messages follow conventional commit format
+- [ ] Pre-commit hooks installed and passing (see below)
 - [ ] Tests added/updated for new functionality
 - [ ] Documentation updated if user-facing changes
 - [ ] No manual edits to `VERSION` or `CHANGELOG.md`
 - [ ] All tests pass locally
-- [ ] Pre-commit hooks pass
 - [ ] Security scan passes (if applicable)
 
 ## Development Environment
@@ -176,7 +176,32 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 pip install -r requirements-dev.txt
+
+# Install pre-commit hooks (recommended)
+pre-commit install
 ```
+
+### Pre-commit Hooks
+
+Pre-commit hooks automatically check your code before each commit, catching issues early:
+
+```bash
+# Install the hooks (one-time setup)
+pre-commit install
+
+# Run hooks manually on all files
+pre-commit run --all-files
+
+# Run hooks on staged files (happens automatically on commit)
+pre-commit run
+```
+
+The pre-commit hooks include:
+- **Ruff** - Linting and formatting (with auto-fix)
+- **Mypy** - Type checking
+- **detect-secrets** - Secret detection
+- **Conventional commits** - Commit message validation
+- File checks (trailing whitespace, large files, etc.)
 
 ### Running Tests
 
@@ -264,36 +289,55 @@ Tests are organized using pytest markers:
 
 #### Running Tests in CI
 
-Tests run automatically in GitHub Actions for all pull requests. The CI workflow splits every check into an **independent parallel job** so that a failure in one tool never blocks the others:
+Tests run automatically in GitHub Actions for all pull requests. The CI workflow is organized in stages:
+
+**Stage 1: Ruff Lint & Format** (runs first)
+- Checks code style, formatting, and basic security issues
+- Must pass before tests run
+
+**Stage 2: Tests & Type Checking** (runs after lint passes)
 
 | Job | Tool | What it checks |
 |--------|--------|--------------------------------------|
 | `test` | pytest | Unit/integration tests + coverage |
-| `flake8`| flake8 | PEP 8 style |
-| `black` | black | Code formatting |
 | `mypy` | mypy | Static type checking |
-| `pylint`| pylint | Code quality |
-| `bandit`| bandit | Security vulnerabilities |
 
-All jobs are enforced — failures in any linter will block the PR. For full details see [docs/CIWorkflow.md](docs/CIWorkflow.md).
+**Stage 3: Docker Build** (runs after all checks pass)
+- Builds and pushes Docker images
+
+**Stage 4: Deploy** (only on main branch)
+- Deploys to production
+
+**Auto-fix Workflow:**
+- A separate `ruff-auto-fix` workflow automatically fixes formatting issues on PRs
+- Commits fixes back to the PR branch
+- Only runs on PRs from the same repository (not forks)
+
+For full details see [docs/CIWorkflow.md](docs/CIWorkflow.md) and [docs/CIToolsGuide.md](docs/CIToolsGuide.md).
 
 ### Code Style
 
-We use:
-- Black for Python code formatting (line length: 120)
-- Flake8 for linting
-- isort for import sorting (Black-compatible profile)
+DocuElevate uses **Ruff** for all Python code quality checks:
+
+- **Linting** - PEP 8 style, code quality, and security checks
+- **Formatting** - Consistent code formatting (120 character line length)
+- **Import sorting** - Organized imports
 
 ```bash
-# Format code
-black .
+# Check for linting issues
+ruff check app/ tests/
 
-# Check linting
-flake8
+# Auto-fix linting issues
+ruff check app/ tests/ --fix
 
-# Sort imports
-isort .
+# Check formatting
+ruff format --check app/ tests/
+
+# Auto-format code
+ruff format app/ tests/
 ```
+
+**Note:** The pre-commit hooks and CI pipeline will automatically check (and optionally fix) these for you.
 
 ## Project Structure
 
