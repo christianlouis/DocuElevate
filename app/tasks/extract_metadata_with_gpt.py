@@ -49,7 +49,7 @@ def extract_json_from_text(text):
 def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: int = None):
     """
     Uses OpenAI to classify document metadata.
-    
+
     Args:
         filename: Can be either a basename (e.g., "file.pdf") or a full path (e.g., "/workdir/processed/file.pdf")
         cleaned_text: The extracted text from the document
