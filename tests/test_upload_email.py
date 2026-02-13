@@ -283,11 +283,10 @@ class TestUploadToEmailTask:
         mock_send_email.return_value = None
 
         # Create a mock task with request context
-        task = upload_to_email
-        task.request = Mock()
-        task.request.id = "test-task-id"
+        mock_self = Mock()
+        mock_self.request.id = "test-task-id"
 
-        result = task("/tmp/test.pdf", recipients=["recipient@example.com"])
+        result = upload_to_email(mock_self, "/tmp/test.pdf", recipients=["recipient@example.com"])
 
         assert result["status"] == "Completed"
         assert result["file"] == "/tmp/test.pdf"
@@ -299,12 +298,11 @@ class TestUploadToEmailTask:
         """Test raises error when file not found."""
         mock_exists.return_value = False
 
-        task = upload_to_email
-        task.request = Mock()
-        task.request.id = "test-task-id"
+        mock_self = Mock()
+        mock_self.request.id = "test-task-id"
 
         with pytest.raises(FileNotFoundError):
-            task("/nonexistent/file.pdf")
+            upload_to_email(mock_self, "/nonexistent/file.pdf")
 
     @patch("app.tasks.upload_to_email.log_task_progress")
     @patch("app.tasks.upload_to_email.os.path.exists")
@@ -314,11 +312,10 @@ class TestUploadToEmailTask:
         mock_exists.return_value = True
         mock_settings.email_host = None
 
-        task = upload_to_email
-        task.request = Mock()
-        task.request.id = "test-task-id"
+        mock_self = Mock()
+        mock_self.request.id = "test-task-id"
 
-        result = task("/tmp/test.pdf")
+        result = upload_to_email(mock_self, "/tmp/test.pdf")
 
         assert result["status"] == "Skipped"
         assert "Email host is not configured" in result["reason"]
@@ -333,11 +330,10 @@ class TestUploadToEmailTask:
         mock_settings.email_host = "smtp.example.com"
         mock_prepare.return_value = (None, "No recipients specified")
 
-        task = upload_to_email
-        task.request = Mock()
-        task.request.id = "test-task-id"
+        mock_self = Mock()
+        mock_self.request.id = "test-task-id"
 
-        result = task("/tmp/test.pdf")
+        result = upload_to_email(mock_self, "/tmp/test.pdf")
 
         assert result["status"] == "Skipped"
 
@@ -364,10 +360,9 @@ class TestUploadToEmailTask:
         mock_attach_logo.return_value = False
         mock_send_email.return_value = {"status": "Failed", "reason": "SMTP error"}
 
-        task = upload_to_email
-        task.request = Mock()
-        task.request.id = "test-task-id"
+        mock_self = Mock()
+        mock_self.request.id = "test-task-id"
 
-        result = task("/tmp/test.pdf", recipients=["recipient@example.com"])
+        result = upload_to_email(mock_self, "/tmp/test.pdf", recipients=["recipient@example.com"])
 
         assert result["status"] == "Failed"

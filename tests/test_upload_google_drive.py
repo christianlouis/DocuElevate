@@ -250,11 +250,10 @@ class TestUploadToGoogleDriveTask:
         mock_drive_service.files.return_value = mock_files
         mock_service.return_value = mock_drive_service
 
-        task = upload_to_google_drive
-        task.request = Mock()
-        task.request.id = "test-task-id"
+        mock_self = Mock()
+        mock_self.request.id = "test-task-id"
 
-        result = task("/tmp/test.pdf")
+        result = upload_to_google_drive(mock_self, "/tmp/test.pdf")
 
         assert result["status"] == "Completed"
         assert result["google_drive_file_id"] == "file_123"
@@ -266,12 +265,11 @@ class TestUploadToGoogleDriveTask:
         """Test raises error when file not found."""
         mock_exists.return_value = False
 
-        task = upload_to_google_drive
-        task.request = Mock()
-        task.request.id = "test-task-id"
+        mock_self = Mock()
+        mock_self.request.id = "test-task-id"
 
         with pytest.raises(FileNotFoundError):
-            task("/nonexistent/file.pdf")
+            upload_to_google_drive(mock_self, "/nonexistent/file.pdf")
 
     @patch("app.tasks.upload_to_google_drive.get_google_drive_service")
     @patch("app.tasks.upload_to_google_drive.log_task_progress")
@@ -281,12 +279,11 @@ class TestUploadToGoogleDriveTask:
         mock_exists.return_value = True
         mock_service.return_value = None
 
-        task = upload_to_google_drive
-        task.request = Mock()
-        task.request.id = "test-task-id"
+        mock_self = Mock()
+        mock_self.request.id = "test-task-id"
 
         with pytest.raises(Exception, match="Failed to initialize Google Drive service"):
-            task("/tmp/test.pdf")
+            upload_to_google_drive(mock_self, "/tmp/test.pdf")
 
     @patch("app.tasks.upload_to_google_drive.get_google_drive_service")
     @patch("app.tasks.upload_to_google_drive.extract_metadata_from_file")
@@ -320,11 +317,10 @@ class TestUploadToGoogleDriveTask:
         mock_drive_service.files.return_value = mock_files
         mock_service.return_value = mock_drive_service
 
-        task = upload_to_google_drive
-        task.request = Mock()
-        task.request.id = "test-task-id"
+        mock_self = Mock()
+        mock_self.request.id = "test-task-id"
 
-        result = task("/tmp/test.pdf", include_metadata=True)
+        result = upload_to_google_drive(mock_self, "/tmp/test.pdf", include_metadata=True)
 
         assert result["metadata_included"] is True
 
@@ -359,11 +355,10 @@ class TestUploadToGoogleDriveTask:
         mock_drive_service.files.return_value = mock_files
         mock_service.return_value = mock_drive_service
 
-        task = upload_to_google_drive
-        task.request = Mock()
-        task.request.id = "test-task-id"
+        mock_self = Mock()
+        mock_self.request.id = "test-task-id"
 
-        result = task("/tmp/test.pdf", include_metadata=True)
+        result = upload_to_google_drive(mock_self, "/tmp/test.pdf", include_metadata=True)
 
         # Verify the create call was made
         mock_files.create.assert_called_once()
@@ -391,12 +386,11 @@ class TestUploadToGoogleDriveTask:
         mock_drive_service.files.return_value = mock_files
         mock_service.return_value = mock_drive_service
 
-        task = upload_to_google_drive
-        task.request = Mock()
-        task.request.id = "test-task-id"
+        mock_self = Mock()
+        mock_self.request.id = "test-task-id"
 
         with pytest.raises(Exception, match="Failed to upload"):
-            task("/tmp/test.pdf")
+            upload_to_google_drive(mock_self, "/tmp/test.pdf")
 
     @patch("app.tasks.upload_to_google_drive.get_google_drive_service")
     @patch("app.tasks.upload_to_google_drive.extract_metadata_from_file")
@@ -427,11 +421,10 @@ class TestUploadToGoogleDriveTask:
         mock_drive_service.files.return_value = mock_files
         mock_service.return_value = mock_drive_service
 
-        task = upload_to_google_drive
-        task.request = Mock()
-        task.request.id = "test-task-id"
+        mock_self = Mock()
+        mock_self.request.id = "test-task-id"
 
-        task("/tmp/test.pdf")
+        upload_to_google_drive(mock_self, "/tmp/test.pdf")
 
         # Verify parent folder was set
         call_args = mock_files.create.call_args
