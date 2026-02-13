@@ -298,7 +298,6 @@ class TestUploadToGoogleDriveTask:
             upload_to_google_drive(mock_self, "/tmp/test.pdf")
 
     @patch("app.tasks.upload_to_google_drive.os.path.splitext")
-    @patch("app.tasks.upload_to_google_drive.os.path.splitext")
     @patch("app.tasks.upload_to_google_drive.os.path.basename")
     @patch("app.tasks.upload_to_google_drive.get_google_drive_service")
     @patch("app.tasks.upload_to_google_drive.extract_metadata_from_file")
