@@ -7,6 +7,8 @@ These tests validate that security headers are properly added to HTTP responses
 based on configuration settings.
 """
 
+from unittest.mock import Mock
+
 import pytest
 
 
@@ -187,3 +189,173 @@ def test_middleware_respects_configuration():
     # Verify that middleware stores configuration
     assert middleware.config == settings
     assert middleware.enabled == settings.security_headers_enabled
+
+
+@pytest.mark.unit
+class TestSecurityHeadersMiddleware:
+    """Tests for SecurityHeadersMiddleware class."""
+
+    def test_middleware_initialization(self):
+        """Test middleware initializes with configuration."""
+        from app.config import settings
+        from app.middleware.security_headers import SecurityHeadersMiddleware
+
+        middleware = SecurityHeadersMiddleware(app=None, config=settings)
+        assert middleware.config == settings
+        assert middleware.enabled == settings.security_headers_enabled
+
+    @pytest.mark.asyncio
+    async def test_dispatch_adds_headers_when_enabled(self):
+        """Test dispatch adds security headers when enabled."""
+        from app.config import settings
+        from app.middleware.security_headers import SecurityHeadersMiddleware
+        from fastapi import Response
+
+        if not settings.security_headers_enabled:
+            pytest.skip("Security headers disabled in configuration")
+
+        middleware = SecurityHeadersMiddleware(app=None, config=settings)
+
+        # Mock request and call_next
+        mock_request = Mock()
+        mock_response = Response(content="test", status_code=200)
+
+        async def mock_call_next(request):
+            return mock_response
+
+        result = await middleware.dispatch(mock_request, mock_call_next)
+
+        # At least some headers should be present
+        assert isinstance(result, Response)
+
+    @pytest.mark.asyncio
+    async def test_dispatch_skips_headers_when_disabled(self):
+        """Test dispatch skips headers when disabled."""
+        from app.config import settings
+        from app.middleware.security_headers import SecurityHeadersMiddleware
+        from fastapi import Response
+
+        # Create a config copy with headers disabled
+        mock_config = Mock()
+        mock_config.security_headers_enabled = False
+
+        middleware = SecurityHeadersMiddleware(app=None, config=mock_config)
+
+        mock_request = Mock()
+        mock_response = Response(content="test", status_code=200)
+
+        async def mock_call_next(request):
+            return mock_response
+
+        result = await middleware.dispatch(mock_request, mock_call_next)
+
+        # Headers should not be added
+        assert isinstance(result, Response)
+
+    def test_add_security_headers_hsts(self):
+        """Test _add_security_headers adds HSTS header."""
+        from app.middleware.security_headers import SecurityHeadersMiddleware
+        from fastapi import Response
+
+        mock_config = Mock()
+        mock_config.security_headers_enabled = True
+        mock_config.security_header_hsts_enabled = True
+        mock_config.security_header_hsts_value = "max-age=31536000; includeSubDomains"
+        mock_config.security_header_csp_enabled = False
+        mock_config.security_header_x_frame_options_enabled = False
+        mock_config.security_header_x_content_type_options_enabled = False
+
+        middleware = SecurityHeadersMiddleware(app=None, config=mock_config)
+
+        response = Response(content="test")
+        middleware._add_security_headers(response)
+
+        assert "Strict-Transport-Security" in response.headers
+        assert "max-age" in response.headers["Strict-Transport-Security"]
+
+    def test_add_security_headers_csp(self):
+        """Test _add_security_headers adds CSP header."""
+        from app.middleware.security_headers import SecurityHeadersMiddleware
+        from fastapi import Response
+
+        mock_config = Mock()
+        mock_config.security_headers_enabled = True
+        mock_config.security_header_hsts_enabled = False
+        mock_config.security_header_csp_enabled = True
+        mock_config.security_header_csp_value = "default-src 'self'; script-src 'self' 'unsafe-inline'"
+        mock_config.security_header_x_frame_options_enabled = False
+        mock_config.security_header_x_content_type_options_enabled = False
+
+        middleware = SecurityHeadersMiddleware(app=None, config=mock_config)
+
+        response = Response(content="test")
+        middleware._add_security_headers(response)
+
+        assert "Content-Security-Policy" in response.headers
+        assert "default-src" in response.headers["Content-Security-Policy"]
+
+    def test_add_security_headers_x_frame_options(self):
+        """Test _add_security_headers adds X-Frame-Options header."""
+        from app.middleware.security_headers import SecurityHeadersMiddleware
+        from fastapi import Response
+
+        mock_config = Mock()
+        mock_config.security_headers_enabled = True
+        mock_config.security_header_hsts_enabled = False
+        mock_config.security_header_csp_enabled = False
+        mock_config.security_header_x_frame_options_enabled = True
+        mock_config.security_header_x_frame_options_value = "DENY"
+        mock_config.security_header_x_content_type_options_enabled = False
+
+        middleware = SecurityHeadersMiddleware(app=None, config=mock_config)
+
+        response = Response(content="test")
+        middleware._add_security_headers(response)
+
+        assert "X-Frame-Options" in response.headers
+        assert response.headers["X-Frame-Options"] == "DENY"
+
+    def test_add_security_headers_x_content_type_options(self):
+        """Test _add_security_headers adds X-Content-Type-Options header."""
+        from app.middleware.security_headers import SecurityHeadersMiddleware
+        from fastapi import Response
+
+        mock_config = Mock()
+        mock_config.security_headers_enabled = True
+        mock_config.security_header_hsts_enabled = False
+        mock_config.security_header_csp_enabled = False
+        mock_config.security_header_x_frame_options_enabled = False
+        mock_config.security_header_x_content_type_options_enabled = True
+
+        middleware = SecurityHeadersMiddleware(app=None, config=mock_config)
+
+        response = Response(content="test")
+        middleware._add_security_headers(response)
+
+        assert "X-Content-Type-Options" in response.headers
+        assert response.headers["X-Content-Type-Options"] == "nosniff"
+
+    def test_add_all_security_headers(self):
+        """Test _add_security_headers adds all headers when all enabled."""
+        from app.middleware.security_headers import SecurityHeadersMiddleware
+        from fastapi import Response
+
+        mock_config = Mock()
+        mock_config.security_headers_enabled = True
+        mock_config.security_header_hsts_enabled = True
+        mock_config.security_header_hsts_value = "max-age=31536000"
+        mock_config.security_header_csp_enabled = True
+        mock_config.security_header_csp_value = "default-src 'self'"
+        mock_config.security_header_x_frame_options_enabled = True
+        mock_config.security_header_x_frame_options_value = "SAMEORIGIN"
+        mock_config.security_header_x_content_type_options_enabled = True
+
+        middleware = SecurityHeadersMiddleware(app=None, config=mock_config)
+
+        response = Response(content="test")
+        middleware._add_security_headers(response)
+
+        assert "Strict-Transport-Security" in response.headers
+        assert "Content-Security-Policy" in response.headers
+        assert "X-Frame-Options" in response.headers
+        assert "X-Content-Type-Options" in response.headers

@@ -14,6 +14,9 @@ from app.views.base import APIRouter, get_db, logger, require_login, templates
 
 router = APIRouter()
 
+# Date format constant
+_DATE_DISPLAY_FORMAT = "%B %d, %Y"
+
 
 @router.get("/", include_in_schema=False)
 async def serve_index(request: Request, db: Session = Depends(get_db)):
@@ -82,7 +85,7 @@ async def serve_about(request: Request):
 async def serve_privacy(request: Request):
     """Serve the privacy policy page."""
     # Pass the current date for the "Last Updated" field
-    current_date = date.today().strftime("%B %d, %Y")
+    current_date = date.today().strftime(_DATE_DISPLAY_FORMAT)
     return templates.TemplateResponse("privacy.html", {"request": request, "current_date": current_date})
 
 
@@ -148,12 +151,12 @@ Please visit http://www.apache.org/licenses/LICENSE-2.0 for the complete license
 @router.get("/cookies", include_in_schema=False)
 async def serve_cookies(request: Request):
     """Serve the cookie policy page."""
-    current_date = date.today().strftime("%B %d, %Y")
+    current_date = date.today().strftime(_DATE_DISPLAY_FORMAT)
     return templates.TemplateResponse("cookies.html", {"request": request, "current_date": current_date})
 
 
 @router.get("/terms", include_in_schema=False)
 async def serve_terms(request: Request):
     """Serve the terms of service page."""
-    current_date = date.today().strftime("%B %d, %Y")
+    current_date = date.today().strftime(_DATE_DISPLAY_FORMAT)
     return templates.TemplateResponse("terms.html", {"request": request, "current_date": current_date})

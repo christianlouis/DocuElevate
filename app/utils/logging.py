@@ -1,7 +1,7 @@
 import logging
 import threading
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.database import SessionLocal
 from app.models import FileProcessingStep, ProcessingLog
@@ -106,7 +106,7 @@ def log_task_progress(task_id, step_name, status, message=None, file_id=None, de
                 .first()
             )
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             if not step_record:
                 # Create new step record

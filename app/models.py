@@ -4,6 +4,9 @@ from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, T
 
 from app.database import Base
 
+# Foreign key constants
+_FILES_ID_FK = "files.id"
+
 
 class DocumentMetadata(Base):
     __tablename__ = "documents"
@@ -50,7 +53,7 @@ class FileRecord(Base):
     is_duplicate = Column(Boolean, default=False, nullable=False, index=True)
 
     # If this is a duplicate, record the ID of the original file for reference
-    duplicate_of_id = Column(Integer, ForeignKey("files.id"), nullable=True)
+    duplicate_of_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=True)
 
     # Timestamp when we inserted this record
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -65,7 +68,7 @@ class FileProcessingStep(Base):
     __tablename__ = "file_processing_steps"
 
     id = Column(Integer, primary_key=True, index=True)
-    file_id = Column(Integer, ForeignKey("files.id"), nullable=False, index=True)
+    file_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=False, index=True)
     step_name = Column(String, nullable=False, index=True)  # e.g., "hash_file", "upload_to_dropbox"
     status = Column(String, nullable=False)  # "pending", "in_progress", "success", "failure", "skipped"
     started_at = Column(DateTime(timezone=True), nullable=True)  # When step started
@@ -80,7 +83,7 @@ class FileProcessingStep(Base):
 class ProcessingLog(Base):
     __tablename__ = "processing_logs"
     id = Column(Integer, primary_key=True, index=True)
-    file_id = Column(Integer, ForeignKey("files.id"), nullable=True)  # Optional file association
+    file_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=True)  # Optional file association
     task_id = Column(String, index=True)  # Celery task ID
     step_name = Column(String)  # e.g., "OCR", "convert_to_pdf", "upload_s3"
     status = Column(String)  # "pending", "in_progress", "success", "failure"

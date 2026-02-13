@@ -6,7 +6,7 @@ This prevents files from getting stuck in "pending" state when processing crashe
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -54,7 +54,7 @@ def mark_stalled_steps_as_failed(
     if timeout_seconds is None:
         timeout_seconds = get_step_timeout()
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     cutoff_time = now - timedelta(seconds=timeout_seconds)
 
     # Query for stalled steps

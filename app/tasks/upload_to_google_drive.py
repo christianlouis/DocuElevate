@@ -20,6 +20,9 @@ from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
 
+# Google OAuth constants
+_GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+
 
 def get_drive_service_oauth():
     """
@@ -40,7 +43,7 @@ def get_drive_service_oauth():
         credentials = OAuthCredentials(
             None,  # No access token initially, will be refreshed
             refresh_token=settings.google_drive_refresh_token,
-            token_uri="https://oauth2.googleapis.com/token",
+            token_uri=_GOOGLE_TOKEN_URL,
             client_id=settings.google_drive_client_id,
             client_secret=settings.google_drive_client_secret,
             # Use only drive.file scope
