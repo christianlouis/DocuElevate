@@ -496,9 +496,7 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
 
     if step_name == "process_document":
         # Full reprocessing with duplicate check bypass
-        logger.info(
-            f"Retrying process_document for file {file_id}: local_filename={file_record.local_filename!r}"
-        )
+        logger.info(f"Retrying process_document for file {file_id}: local_filename={file_record.local_filename!r}")
         if not file_record.local_filename:
             logger.error(f"process_document retry failed for file {file_id}: local_filename is None")
             raise HTTPException(status_code=400, detail="Local file path is None. Cannot retry.")
