@@ -8,6 +8,7 @@ from datetime import datetime
 
 from fastapi import Request
 
+from app.utils.config_validator import get_provider_status, get_settings_for_display
 from app.views.base import APIRouter, require_login, settings, templates
 
 logger = logging.getLogger(__name__)
@@ -20,8 +21,6 @@ async def status_dashboard(request: Request):
     """
     Status dashboard showing all configured integration targets
     """
-    from app.utils.config_validator import get_provider_status
-
     # Get provider status
     providers = get_provider_status()
 
@@ -100,8 +99,6 @@ async def env_debug(request: Request):
     debug_enabled = settings.debug
 
     # Get settings data
-    from app.utils.config_validator import get_settings_for_display
-
     settings_data = get_settings_for_display(show_values=debug_enabled)
 
     return templates.TemplateResponse(
