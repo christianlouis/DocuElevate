@@ -177,8 +177,8 @@ Example:
 ```markdown
 ### OPENAI_API_KEY
 
-**Type:** String  
-**Required:** Yes  
+**Type:** String
+**Required:** Yes
 **Default:** None
 
 Your OpenAI API key for metadata extraction.

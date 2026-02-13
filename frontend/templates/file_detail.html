@@ -27,7 +27,7 @@
     .back-button i {
       margin-right: 0.5rem;
     }
-    
+
     .detail-card {
       background-color: white;
       border-radius: 0.5rem;
@@ -41,7 +41,7 @@
       margin-bottom: 1rem;
       color: #2d3748;
     }
-    
+
     .detail-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -64,7 +64,7 @@
       font-size: 1rem;
       word-break: break-word;
     }
-    
+
     /* Status badges */
     .status-badge {
       display: inline-block;
@@ -94,7 +94,7 @@
       background-color: #E5E7EB;
       color: #374151;
     }
-    
+
     /* Step summary section */
     .step-summary {
       display: grid;
@@ -158,7 +158,7 @@
       background-color: #ecc94b;
       color: white;
     }
-    
+
     /* Processing logs - collapsible */
     .timeline {
       position: relative;
@@ -243,7 +243,7 @@
       font-size: 0.75rem;
       color: #a0aec0;
     }
-    
+
     .logs-toggle {
       cursor: pointer;
       user-select: none;
@@ -298,7 +298,7 @@
     .timeline-detail.visible {
       display: block;
     }
-    
+
     .no-logs {
       text-align: center;
       padding: 3rem;
@@ -309,7 +309,7 @@
       margin-bottom: 1rem;
       opacity: 0.5;
     }
-    
+
     .error-message {
       background-color: #FEE2E2;
       border: 1px solid #F87171;
@@ -318,7 +318,7 @@
       border-radius: 0.25rem;
       margin-bottom: 1rem;
     }
-    
+
     .file-status-indicator {
       display: inline-flex;
       align-items: center;
@@ -335,7 +335,7 @@
       background-color: #FEE2E2;
       color: #991B1B;
     }
-    
+
     /* Flow visualization with branches */
     .flow-stage {
       display: flex;
@@ -416,7 +416,7 @@
       margin-left: 19px;
       margin-bottom: 0.5rem;
     }
-    
+
     /* Branch visualization */
     .flow-branches {
       margin-left: 56px;
@@ -507,7 +507,7 @@
       background-color: #cbd5e0;
       cursor: not-allowed;
     }
-    
+
     /* Text Modal Styles */
     .text-modal {
       position: fixed;
@@ -528,7 +528,7 @@
       border-radius: 0.5rem;
       box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
     }
-    
+
     /* PDF Canvas Viewer Styles */
     .pdf-viewer-container {
       border: 2px solid #e2e8f0;
@@ -589,12 +589,12 @@
       const fileId = {{ file.id | tojson }};
       const button = document.getElementById('reprocess-btn');
       const statusDiv = document.getElementById('reprocess-status');
-      
+
       // Disable button and show loading
       button.disabled = true;
       button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
       statusDiv.innerHTML = '';
-      
+
       try {
         const response = await fetch(`/api/files/${fileId}/reprocess`, {
           method: 'POST',
@@ -602,9 +602,9 @@
             'Content-Type': 'application/json'
           }
         });
-        
+
         const data = await response.json();
-        
+
         if (response.ok) {
           statusDiv.innerHTML = `
             <div style="background-color: #D1FAE5; color: #065F46; padding: 1rem; border-radius: 0.25rem; margin-top: 1rem;">
@@ -633,20 +633,20 @@
         button.innerHTML = '<i class="fas fa-redo"></i> Retry Processing';
       }
     }
-    
+
     // JavaScript for handling per-subtask retry
     async function retrySubtask(subtaskName, buttonId) {
       const fileId = {{ file.id | tojson }};
       const button = document.getElementById(buttonId);
       const statusDiv = document.getElementById('subtask-status-' + subtaskName);
-      
+
       // Disable button and show loading
       button.disabled = true;
       button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Retrying...';
       if (statusDiv) {
         statusDiv.innerHTML = '';
       }
-      
+
       try {
         const response = await fetch(`/api/files/${fileId}/retry-subtask?subtask_name=${subtaskName}`, {
           method: 'POST',
@@ -654,9 +654,9 @@
             'Content-Type': 'application/json'
           }
         });
-        
+
         const data = await response.json();
-        
+
         if (response.ok) {
           if (statusDiv) {
             statusDiv.innerHTML = `
@@ -690,12 +690,12 @@
         button.innerHTML = '<i class="fas fa-redo"></i> Retry';
       }
     }
-    
+
     // Toggle logs visibility
     function toggleLogs() {
       const logsContent = document.getElementById('logs-content');
       const toggleIcon = document.getElementById('logs-toggle-icon');
-      
+
       if (logsContent.classList.contains('expanded')) {
         logsContent.classList.remove('expanded');
         toggleIcon.classList.remove('fa-chevron-up');
@@ -721,13 +721,13 @@
         icon.classList.add('fa-chevron-up');
       }
     }
-    
+
     // JavaScript for metadata JSON toggle
     function toggleMetadata() {
       const jsonView = document.getElementById('metadata-json-view');
       const icon = document.getElementById('metadata-toggle-icon');
       const btn = document.getElementById('metadata-toggle-btn');
-      
+
       if (jsonView.style.display === 'none') {
         jsonView.style.display = 'block';
         icon.classList.remove('fa-chevron-down');
@@ -740,18 +740,18 @@
         btn.innerHTML = '<i id="metadata-toggle-icon" class="fas fa-chevron-down"></i> Show JSON';
       }
     }
-    
+
     // JavaScript for text modal toggle with on-demand loading
     let textCache = { original: null, processed: null };
-    
+
     async function loadAndShowText(type, fileId) {
       const modalId = type + '-text-modal';
       const loadingId = type + '-text-loading';
       const contentId = type + '-text-content';
-      
+
       // Show modal immediately
       toggleTextModal(modalId);
-      
+
       // If already loaded, just show it
       if (textCache[type]) {
         document.getElementById(loadingId).style.display = 'none';
@@ -759,20 +759,20 @@
         document.getElementById(contentId).textContent = textCache[type];
         return;
       }
-      
+
       // Show loading state
       document.getElementById(loadingId).style.display = 'block';
       document.getElementById(contentId).style.display = 'none';
-      
+
       try {
         const response = await fetch(`/files/${fileId}/text/${type}`);
         if (!response.ok) {
           throw new Error('Failed to extract text');
         }
-        
+
         const data = await response.json();
         textCache[type] = data.text;
-        
+
         // Show the text
         document.getElementById(loadingId).style.display = 'none';
         document.getElementById(contentId).style.display = 'block';
@@ -788,7 +788,7 @@
         `;
       }
     }
-    
+
     function toggleTextModal(modalId) {
       const modal = document.getElementById(modalId);
       if (modal.style.display === 'none' || modal.style.display === '') {
@@ -799,7 +799,7 @@
         document.body.style.overflow = 'auto'; // Re-enable scrolling
       }
     }
-    
+
     // Close modal when clicking outside the content
     window.onclick = function(event) {
       const modals = document.querySelectorAll('.text-modal');
@@ -810,26 +810,26 @@
         }
       });
     }
-    
+
     // PDF.js viewer functionality
     const pdfViewers = {
       original: { currentPage: 1, totalPages: 0, pdfDoc: null },
       processed: { currentPage: 1, totalPages: 0, pdfDoc: null }
     };
-    
+
     async function loadPDF(type, fileId) {
       const url = `/files/${fileId}/preview/${type}`;
       const canvasWrapper = document.getElementById(`${type}-canvas-wrapper`);
-      
+
       try {
         // Load PDF document
         const loadingTask = pdfjsLib.getDocument(url);
         const pdf = await loadingTask.promise;
-        
+
         pdfViewers[type].pdfDoc = pdf;
         pdfViewers[type].totalPages = pdf.numPages;
         pdfViewers[type].currentPage = 1;
-        
+
         // Clear loading message and render first page
         canvasWrapper.innerHTML = '';
         await renderPage(type);
@@ -844,58 +844,58 @@
         `;
       }
     }
-    
+
     async function renderPage(type) {
       const viewer = pdfViewers[type];
       if (!viewer.pdfDoc) return;
-      
+
       const canvasWrapper = document.getElementById(`${type}-canvas-wrapper`);
       const page = await viewer.pdfDoc.getPage(viewer.currentPage);
-      
+
       // Calculate scale to fit container width (max 600px width)
       const viewport = page.getViewport({ scale: 1.0 });
       const scale = Math.min(600 / viewport.width, 2.0);
       const scaledViewport = page.getViewport({ scale });
-      
+
       // Create canvas for this page
       const canvas = document.createElement('canvas');
       canvas.className = 'pdf-canvas';
       canvas.height = scaledViewport.height;
       canvas.width = scaledViewport.width;
-      
+
       const context = canvas.getContext('2d');
       const renderContext = {
         canvasContext: context,
         viewport: scaledViewport
       };
-      
+
       // Clear previous canvas and render new one
       canvasWrapper.innerHTML = '';
       canvasWrapper.appendChild(canvas);
-      
+
       await page.render(renderContext).promise;
     }
-    
+
     function changePage(type, delta) {
       const viewer = pdfViewers[type];
       const newPage = viewer.currentPage + delta;
-      
+
       if (newPage >= 1 && newPage <= viewer.totalPages) {
         viewer.currentPage = newPage;
         renderPage(type);
         updatePageInfo(type);
       }
     }
-    
+
     function updatePageInfo(type) {
       const viewer = pdfViewers[type];
-      document.getElementById(`${type}-page-info`).textContent = 
+      document.getElementById(`${type}-page-info`).textContent =
         `Page ${viewer.currentPage} of ${viewer.totalPages}`;
-      
+
       document.getElementById(`${type}-prev-btn`).disabled = viewer.currentPage === 1;
       document.getElementById(`${type}-next-btn`).disabled = viewer.currentPage === viewer.totalPages;
     }
-    
+
     // Load PDFs when page loads
     document.addEventListener('DOMContentLoaded', function() {
       const fileId = {{ file.id | tojson }};
@@ -916,13 +916,13 @@
     <i class="fas fa-arrow-left"></i>
     Back to File List
   </a>
-  
+
   {% if error %}
   <div class="error-message">
     <p><strong>Error:</strong> {{ error }}</p>
   </div>
   {% else %}
-  
+
   <!-- Overall Processing Status Banner -->
   {% if step_summary %}
   <div style="margin-bottom: 1.5rem; padding: 1.5rem; background-color: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 0.5rem;">
@@ -980,7 +980,7 @@
     }
   </style>
   {% endif %}
-  
+
   <!-- File Information Card -->
   <div class="detail-card">
     <h3>File Information</h3>
@@ -1051,7 +1051,7 @@
       </div>
     </div>
   </div>
-  
+
   <!-- GPT Metadata Card -->
   {% if gpt_metadata %}
   <div class="detail-card">
@@ -1061,7 +1061,7 @@
         <i id="metadata-toggle-icon" class="fas fa-chevron-down"></i> Show JSON
       </button>
     </div>
-    
+
     <div class="detail-grid">
       {% if gpt_metadata.document_type %}
       <div class="detail-item">
@@ -1069,49 +1069,49 @@
         <span class="detail-value">{{ gpt_metadata.document_type }}</span>
       </div>
       {% endif %}
-      
+
       {% if gpt_metadata.filename %}
       <div class="detail-item">
         <span class="detail-label">Suggested Filename</span>
         <span class="detail-value" style="font-family: monospace; font-size: 0.875rem;">{{ gpt_metadata.filename }}</span>
       </div>
       {% endif %}
-      
+
       {% if gpt_metadata.date %}
       <div class="detail-item">
         <span class="detail-label">Document Date</span>
         <span class="detail-value">{{ gpt_metadata.date }}</span>
       </div>
       {% endif %}
-      
+
       {% if gpt_metadata.absender %}
       <div class="detail-item">
         <span class="detail-label">Sender (Absender)</span>
         <span class="detail-value">{{ gpt_metadata.absender }}</span>
       </div>
       {% endif %}
-      
+
       {% if gpt_metadata.empfaenger %}
       <div class="detail-item">
         <span class="detail-label">Recipient (Empfänger)</span>
         <span class="detail-value">{{ gpt_metadata.empfaenger }}</span>
       </div>
       {% endif %}
-      
+
       {% if gpt_metadata.betrag %}
       <div class="detail-item">
         <span class="detail-label">Amount (Betrag)</span>
         <span class="detail-value">{{ gpt_metadata.betrag }}</span>
       </div>
       {% endif %}
-      
+
       {% if gpt_metadata.kontonummer %}
       <div class="detail-item">
         <span class="detail-label">Account Number</span>
         <span class="detail-value" style="font-family: monospace;">{{ gpt_metadata.kontonummer }}</span>
       </div>
       {% endif %}
-      
+
       {% if gpt_metadata.tags %}
       <div class="detail-item">
         <span class="detail-label">Tags</span>
@@ -1125,18 +1125,18 @@
       </div>
       {% endif %}
     </div>
-    
+
     <!-- Collapsible JSON view -->
     <div id="metadata-json-view" style="display: none; margin-top: 1rem;">
       <pre style="background-color: #1a202c; color: #e2e8f0; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; font-size: 0.875rem; line-height: 1.5;">{{ gpt_metadata | tojson(indent=2) }}</pre>
     </div>
   </div>
   {% endif %}
-  
+
   <!-- PDF Preview Card -->
   <div class="detail-card">
     <h3>Document Previews</h3>
-    
+
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 1rem;">
       <!-- Original PDF Preview -->
       <div>
@@ -1155,8 +1155,8 @@
             </div>
           </div>
         </div>
-        <button 
-          onclick="loadAndShowText('original', {{ file.id }})" 
+        <button
+          onclick="loadAndShowText('original', {{ file.id }})"
           style="margin-top: 0.5rem; background-color: #4299e1; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600; width: 100%;"
         >
           <i class="fas fa-file-alt"></i> View Extracted Text
@@ -1168,7 +1168,7 @@
         </div>
         {% endif %}
       </div>
-      
+
       <!-- Processed PDF Preview -->
       <div>
         <h4 style="font-weight: 600; color: #2d3748; margin-bottom: 0.5rem;">Processed Document</h4>
@@ -1186,8 +1186,8 @@
             </div>
           </div>
         </div>
-        <button 
-          onclick="loadAndShowText('processed', {{ file.id }})" 
+        <button
+          onclick="loadAndShowText('processed', {{ file.id }})"
           style="margin-top: 0.5rem; background-color: #48bb78; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600; width: 100%;"
         >
           <i class="fas fa-file-alt"></i> View Extracted Text
@@ -1201,15 +1201,15 @@
       </div>
     </div>
   </div>
-  
+
   <!-- Text Modals (Hidden by default, loaded on-demand) -->
   <!-- Original Text Modal -->
   <div id="original-text-modal" class="text-modal" style="display: none;">
     <div class="text-modal-content">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 2px solid #e2e8f0;">
         <h3 style="margin: 0; color: #2d3748;">Extracted Text (Original)</h3>
-        <button 
-          onclick="toggleTextModal('original-text-modal')" 
+        <button
+          onclick="toggleTextModal('original-text-modal')"
           style="background-color: #f56565; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;"
         >
           <i class="fas fa-times"></i> Close
@@ -1222,14 +1222,14 @@
       <pre id="original-text-content" style="display: none; background-color: #1a202c; color: #e2e8f0; padding: 1.5rem; border-radius: 0.5rem; max-height: 600px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; font-size: 0.875rem; line-height: 1.6;"></pre>
     </div>
   </div>
-  
+
   <!-- Processed Text Modal -->
   <div id="processed-text-modal" class="text-modal" style="display: none;">
     <div class="text-modal-content">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 2px solid #e2e8f0;">
         <h3 style="margin: 0; color: #2d3748;">Extracted Text (Processed)</h3>
-        <button 
-          onclick="toggleTextModal('processed-text-modal')" 
+        <button
+          onclick="toggleTextModal('processed-text-modal')"
           style="background-color: #f56565; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;"
         >
           <i class="fas fa-times"></i> Close
@@ -1242,7 +1242,7 @@
       <pre id="processed-text-content" style="display: none; background-color: #1a202c; color: #e2e8f0; padding: 1.5rem; border-radius: 0.5rem; max-height: 600px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; font-size: 0.875rem; line-height: 1.6;"></pre>
     </div>
   </div>
-  
+
   <!-- Step Summary Card -->
   {% if step_summary %}
   <div class="detail-card">
@@ -1278,7 +1278,7 @@
           {% endif %}
         </div>
       </div>
-      
+
       {% if step_summary.total_upload_tasks > 0 %}
       <div class="summary-card upload-steps">
         <div class="summary-title">Upload Destinations</div>
@@ -1314,7 +1314,7 @@
     </div>
   </div>
   {% endif %}
-  
+
   <!-- Processing History Card (Collapsible) -->
   <div class="detail-card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
@@ -1369,7 +1369,7 @@
     </div>
     {% endif %}
   </div>
-  
+
   <!-- Process Flow Visualization Card -->
   {% if flow_data %}
   <div class="detail-card">
@@ -1385,7 +1385,7 @@
           {% elif stage.status in ['pending', 'queued'] %}<i class="fas fa-clock"></i>
           {% else %}<i class="fas fa-circle"></i>{% endif %}
         </div>
-        
+
         <!-- Stage content -->
         <div class="flow-content {{ stage.status.lower().replace(' ', '_') }}">
           <div class="flow-title">{{ stage.label }}</div>
@@ -1396,9 +1396,9 @@
           <div style="color: #718096; font-size: 0.875rem; font-style: italic;">Not executed</div>
           {% endif %}
           {% if stage.can_retry and stage.status == 'failure' %}
-          <button 
-            id="retry-btn-{{ stage.key }}" 
-            class="retry-btn" 
+          <button
+            id="retry-btn-{{ stage.key }}"
+            class="retry-btn"
             onclick="retrySubtask('{{ stage.key }}', 'retry-btn-{{ stage.key }}')"
             style="margin-top: 0.5rem;">
             <i class="fas fa-redo"></i> Retry from this step
@@ -1411,7 +1411,7 @@
           {% endif %}
         </div>
       </div>
-      
+
       <!-- Upload branches (if this stage has them) -->
       {% if stage.is_branch_parent and stage.branches %}
       <div class="flow-branches">
@@ -1427,9 +1427,9 @@
             <div class="branch-title">
               <span>{{ branch.label }}</span>
               {% if branch.can_retry and branch.status == 'failure' %}
-              <button 
-                id="retry-btn-{{ branch.key }}" 
-                class="retry-btn" 
+              <button
+                id="retry-btn-{{ branch.key }}"
+                class="retry-btn"
                 onclick="retrySubtask('{{ branch.key }}', 'retry-btn-{{ branch.key }}')">
                 <i class="fas fa-redo"></i> Retry
               </button>
@@ -1449,7 +1449,7 @@
         {% endfor %}
       </div>
       {% endif %}
-      
+
       <!-- Connector line (except for last item) -->
       {% if not loop.last %}
       <div class="flow-connector"></div>
@@ -1458,7 +1458,7 @@
     </div>
   </div>
   {% endif %}
-  
+
   <!-- File Preview Card -->
   {% if file_exists or processed_exists %}
   <div class="detail-card">
@@ -1489,7 +1489,7 @@
         </div>
       </div>
       {% endif %}
-      
+
       {% if processed_exists %}
       <div>
         <h4 style="font-weight: 600; color: #2d3748; margin-bottom: 1rem;">Processed File</h4>
@@ -1510,7 +1510,7 @@
     </div>
   </div>
   {% endif %}
-  
+
   {% endif %}
 </div>
 {% endblock %}

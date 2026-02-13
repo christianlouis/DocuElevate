@@ -8,30 +8,30 @@ const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 const ACCEPTED_TYPES = {
   // PDF files
   'application/pdf': true,
-  
+
   // Image formats
   'image/jpeg': true, 'image/jpg': true, 'image/png': true,
   'image/gif': true, 'image/bmp': true, 'image/tiff': true,
   'image/webp': true, 'image/svg+xml': true,
-  
+
   // Office document formats - Word
   'application/msword': true,
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': true,
   'application/vnd.openxmlformats-officedocument.wordprocessingml.template': true,
   'application/vnd.ms-word.document.macroEnabled.12': true,
-  
+
   // Excel
   'application/vnd.ms-excel': true,
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': true,
   'application/vnd.openxmlformats-officedocument.spreadsheetml.template': true,
   'application/vnd.ms-excel.sheet.macroEnabled.12': true,
-  
+
   // PowerPoint
   'application/vnd.ms-powerpoint': true,
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': true,
   'application/vnd.openxmlformats-officedocument.presentationml.template': true,
   'application/vnd.openxmlformats-officedocument.presentationml.slideshow': true,
-  
+
   // Other common formats
   'text/plain': true,
   'text/csv': true,
@@ -57,16 +57,16 @@ const ACCEPTED_EXTENSIONS = [
  */
 function processFiles(files, progressContainer, statusMessage) {
   if (files.length === 0) return;
-  
+
   if (statusMessage) {
     statusMessage.textContent = `Processing ${files.length} file(s)...`;
   }
-  
+
   // Clear previous upload progress
   if (progressContainer) {
     progressContainer.innerHTML = "";
   }
-  
+
   // Process each file
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
@@ -94,32 +94,32 @@ function validateAndUpload(file, progressContainer, statusMessage) {
     </div>
     <div class="file-status text-xs text-gray-600 mt-1">Validating...</div>
   `;
-  
+
   if (progressContainer) {
     progressContainer.appendChild(fileProgress);
   }
-  
+
   const progressBar = fileProgress.querySelector(".file-progress-bar");
   const statusEl = fileProgress.querySelector(".file-status");
-  
+
   // Validate file type by checking both MIME type and extension
   const isValidMimeType = ACCEPTED_TYPES[file.type] || false;
   const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
   const isValidExtension = ACCEPTED_EXTENSIONS.includes(fileExtension);
-  
+
   if (!isValidMimeType && !isValidExtension) {
     statusEl.textContent = `Error: ${file.name} - Unsupported file type`;
     statusEl.className = "text-xs text-red-500 mt-1";
     return;
   }
-  
+
   // Validate file size
   if (file.size > MAX_FILE_SIZE) {
     statusEl.textContent = `Error: ${file.name} - File size exceeds 500MB limit`;
     statusEl.className = "text-xs text-red-500 mt-1";
     return;
   }
-  
+
   // Upload the file
   uploadFile(file, progressBar, statusEl, statusMessage);
 }
@@ -136,10 +136,10 @@ async function uploadFile(file, progressBar, statusEl, statusMessage) {
   try {
     let formData = new FormData();
     formData.append("file", file);
-    
+
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/ui-upload", true);
-    
+
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) {
         const percentComplete = (e.loaded / e.total) * 100;
@@ -147,7 +147,7 @@ async function uploadFile(file, progressBar, statusEl, statusMessage) {
         statusEl.textContent = `Uploading: ${Math.round(percentComplete)}%`;
       }
     };
-    
+
     xhr.onload = function() {
       if (xhr.status === 200) {
         const result = JSON.parse(xhr.responseText);
@@ -160,13 +160,13 @@ async function uploadFile(file, progressBar, statusEl, statusMessage) {
         throw new Error(`Upload failed with status ${xhr.status}`);
       }
     };
-    
+
     xhr.onerror = function() {
       throw new Error("Network error occurred");
     };
-    
+
     xhr.send(formData);
-    
+
   } catch (err) {
     statusEl.textContent = `Error: ${err.message}`;
     statusEl.className = "text-xs text-red-500 mt-1";
@@ -181,21 +181,21 @@ async function uploadFile(file, progressBar, statusEl, statusMessage) {
  */
 function updateOverallStatus(statusMessage) {
   if (!statusMessage) return;
-  
+
   // Count success/failure
   const fileStatuses = document.querySelectorAll('.file-status');
   let completed = 0;
   let total = fileStatuses.length;
-  
+
   fileStatuses.forEach(status => {
     if (status.textContent.includes('Success') || status.textContent.includes('Error')) {
       completed++;
     }
   });
-  
+
   if (completed === total) {
     statusMessage.textContent = `All uploads completed (${completed}/${total})`;
-    
+
     // Trigger a custom event when all uploads are complete
     const allUploadsComplete = new CustomEvent('allUploadsComplete', {
       detail: { total: total, completed: completed }
@@ -231,38 +231,38 @@ function initDragAndDrop(element, progressContainer, statusMessage, options = {}
     console.error("Element not found for drag-and-drop initialization");
     return;
   }
-  
+
   // Add event listeners for drag-and-drop
   element.addEventListener("dragover", (e) => {
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = "copy";
-    
+
     // Add visual feedback
     if (options.dragOverClass) {
       element.classList.add(options.dragOverClass);
     }
   });
-  
+
   element.addEventListener("dragleave", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     // Remove visual feedback
     if (options.dragOverClass) {
       element.classList.remove(options.dragOverClass);
     }
   });
-  
+
   element.addEventListener("drop", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     // Remove visual feedback
     if (options.dragOverClass) {
       element.classList.remove(options.dragOverClass);
     }
-    
+
     if (e.dataTransfer.files.length) {
       processFiles(e.dataTransfer.files, progressContainer, statusMessage);
     }

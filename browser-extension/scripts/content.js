@@ -24,7 +24,7 @@ function isDirectFileUrl(url) {
         '.txt', '.csv', '.rtf', '.jpg', '.jpeg', '.png', '.gif',
         '.bmp', '.tiff', '.webp', '.svg'
     ];
-    
+
     const urlLower = url.toLowerCase();
     return fileExtensions.some(ext => urlLower.endsWith(ext));
 }

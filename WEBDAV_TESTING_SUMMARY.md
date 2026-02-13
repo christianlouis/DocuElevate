@@ -185,7 +185,7 @@ pytest tests/test_upload_webdav*.py -v
 - **Docker:** Must be installed and running
 - **Memory:** ~100MB per container, ~1GB total for full stack
 - **Disk:** ~2GB for all Docker images
-- **Time:** 
+- **Time:**
   - First run: ~5-10 minutes (image pulls)
   - Subsequent runs: ~10-60 seconds per test
 

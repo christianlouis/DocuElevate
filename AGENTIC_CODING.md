@@ -1,6 +1,6 @@
 # Agentic Coding Guide for DocuElevate
 
-**Version:** 1.0  
+**Version:** 1.0
 **Last Updated:** 2026-02-06
 
 This guide helps AI coding agents work effectively with the DocuElevate codebase. It provides context, conventions, and best practices for autonomous code contributions.
@@ -80,14 +80,14 @@ DocuElevate/
 def process_document(file_path: str, metadata: Dict[str, Any]) -> DocumentMetadata:
     """
     Process a document and extract metadata.
-    
+
     Args:
         file_path: Absolute path to the document file
         metadata: Additional metadata to include
-        
+
     Returns:
         DocumentMetadata object with extracted information
-        
+
     Raises:
         FileNotFoundError: If file doesn't exist
         ProcessingError: If processing fails
@@ -225,7 +225,7 @@ logger = logging.getLogger(__name__)
 def my_background_task(self, param: str):
     """
     Description of what this task does.
-    
+
     Args:
         param: Description of parameter
     """
@@ -247,7 +247,7 @@ def my_background_task(self, param: str):
 ```python
 class MyModel(Base):
     __tablename__ = "my_table"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -275,20 +275,20 @@ logger = logging.getLogger(__name__)
 def upload_to_my_provider(file_path: str, metadata: dict) -> str:
     """
     Upload file to My Provider.
-    
+
     Args:
         file_path: Local path to file
         metadata: Document metadata
-        
+
     Returns:
         URL or ID of uploaded file
-        
+
     Raises:
         ProviderError: If upload fails
     """
     if not settings.my_provider_api_key:
         raise ValueError("MY_PROVIDER_API_KEY not configured")
-    
+
     # Implementation
     pass
 ```
@@ -342,11 +342,11 @@ def validate_file_path(file_path: str, base_dir: str = "/workdir") -> Path:
     try:
         path = Path(file_path).resolve()
         base = Path(base_dir).resolve()
-        
+
         # Ensure path is within base directory
         if not path.is_relative_to(base):
             raise ValueError("Path outside allowed directory")
-        
+
         return path
     except Exception as e:
         raise HTTPException(
@@ -467,23 +467,23 @@ def process_large_batch(self, file_ids: List[int]):
 def complex_function(param1: str, param2: int = 10) -> Dict[str, Any]:
     """
     One-line summary of what the function does.
-    
+
     More detailed explanation if needed. Can span multiple
     lines and include examples.
-    
+
     Args:
         param1: Description of param1
         param2: Description of param2, defaults to 10
-        
+
     Returns:
         Dictionary containing:
             - key1: Description
             - key2: Description
-            
+
     Raises:
         ValueError: If param1 is empty
         FileNotFoundError: If file doesn't exist
-        
+
     Examples:
         >>> result = complex_function("test", 5)
         >>> print(result['key1'])
@@ -650,7 +650,7 @@ DocuElevate uses `python-semantic-release` for automated version management.
 
 #### How It Works
 1. **PR merges to main** with conventional commits
-2. **semantic-release analyzes** commit messages  
+2. **semantic-release analyzes** commit messages
 3. **Automatic updates**:
    - Bumps `VERSION` file
    - Updates `CHANGELOG.md`
@@ -669,7 +669,7 @@ DocuElevate uses `python-semantic-release` for automated version management.
 ### Pull Requests
 1. Create PR with descriptive title (conventional format if single change)
 2. Fill out PR template
-3. Link related issues  
+3. Link related issues
 4. Ensure CI passes
 5. Request reviews
 6. Address feedback

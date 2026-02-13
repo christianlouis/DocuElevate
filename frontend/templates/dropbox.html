@@ -8,10 +8,10 @@
     <p class="text-gray-600 mb-4">
       Configure the Dropbox integration for DocuElevate using our setup wizard.
     </p>
-    
+
     <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 my-4" role="alert">
       <p class="font-bold">Current Status:</p>
-      <p>Dropbox integration is 
+      <p>Dropbox integration is
         {% if is_configured %}
           <span class="text-green-700 font-semibold">configured</span>.
         {% else %}
@@ -22,7 +22,7 @@
       <p class="mt-2"><strong>Target folder:</strong> {{ folder_path }}</p>
       {% endif %}
     </div>
-    
+
     <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 my-4">
       <div class="flex">
         <div class="flex-shrink-0">
@@ -41,7 +41,7 @@
 
   <div class="bg-white shadow-md rounded-lg p-6 mb-8">
     <h2 class="text-2xl font-semibold mb-4">Quick Setup Guide</h2>
-    
+
     <div class="mb-6">
       <h3 class="text-xl font-medium mb-4">Step 1: Create a Dropbox App</h3>
       <ol class="list-decimal ml-6 space-y-3">
@@ -80,30 +80,30 @@
 
   <div class="bg-white shadow-md rounded-lg p-6 mb-8">
     <h2 class="text-2xl font-semibold mb-4">Complete Setup with Wizard</h2>
-    
+
     <div class="space-y-4">
       <div>
         <label for="app-key" class="block text-sm font-medium text-gray-700">App Key</label>
         <input type="text" id="app-key" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Dropbox app key" value="{{ app_key_value }}">
       </div>
-      
+
       <div>
         <label for="app-secret" class="block text-sm font-medium text-gray-700">App Secret</label>
         <input type="password" id="app-secret" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Dropbox app secret" value="{{ app_secret_value }}">
       </div>
-      
+
       <div>
         <label for="folder-path" class="block text-sm font-medium text-gray-700">Folder Path (Optional)</label>
         <input type="text" id="folder-path" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="/Documents/Uploads" value="{{ folder_path }}">
         <p class="text-xs text-gray-500 mt-1">Enter the folder path where files should be uploaded (e.g., /Documents/Uploads)</p>
       </div>
-      
+
       <div>
         <button id="start-auth-flow" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
           Start Authentication Flow
         </button>
       </div>
-      
+
       <!-- Token validation and status -->
       <div id="token-status" class="mt-6 {{ 'hidden' if not is_configured else '' }}">
         <div class="rounded-md {{ 'bg-green-50' if is_configured else 'bg-yellow-50' }} p-4">
@@ -130,7 +130,7 @@
             </div>
           </div>
         </div>
-        
+
         <div class="mt-4 flex space-x-3">
           <button id="test-token" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
             Test Token
@@ -139,25 +139,25 @@
             Refresh Token
           </button>
         </div>
-        
+
         <!-- Configuration for Worker Nodes section -->
         <div class="mt-6 p-4 bg-gray-100 rounded-md">
           <h3 class="font-medium text-lg mb-2">Configuration for Worker Nodes</h3>
           <p class="text-sm text-gray-600 mb-3">
             Copy these environment variables to configure all worker nodes:
           </p>
-          
+
           <div class="relative">
             <pre id="env-vars" class="bg-gray-800 text-green-400 text-sm p-3 rounded overflow-x-auto"><code>DROPBOX_APP_KEY={{ app_key_value }}
 DROPBOX_APP_SECRET={{ app_secret_value|default('YOUR_APP_SECRET', true) }}
 DROPBOX_REFRESH_TOKEN={{ refresh_token_value|default('YOUR_REFRESH_TOKEN', true) }}
 DROPBOX_FOLDER={{ folder_path|default('/Documents/Uploads', true) }}</code></pre>
-            
+
             <button id="copy-env-vars" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs py-1 px-2 rounded">
               Copy
             </button>
           </div>
-          
+
           <p class="text-xs text-gray-500 mt-2">
             Add these variables to your .env file or environment configuration.
           </p>
@@ -188,7 +188,7 @@ DROPBOX_FOLDER={{ folder_path|default('/Documents/Uploads', true) }}</code></pre
       Back to Status
     </a>
   </div>
-  
+
   <!-- Result Modal -->
   <div id="resultModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50" aria-modal="true" role="dialog">
     <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 lg:w-1/3 shadow-lg rounded-md bg-white">
@@ -222,19 +222,19 @@ document.addEventListener('DOMContentLoaded', function() {
   const refreshTokenBtn = document.getElementById('refresh-token-btn');
   const tokenStatus = document.getElementById('token-status');
   const appSecretInput = document.getElementById('app-secret');
-  
+
   // Modal elements
   const resultModal = document.getElementById('resultModal');
   const modalTitle = document.getElementById('modalTitle');
   const modalMessage = document.getElementById('modalMessage');
   const modalIcon = document.getElementById('modalIcon');
   const modalClose = document.getElementById('modalClose');
-  
+
   // Modal functions
   function showModal(status, title, message) {
     modalTitle.textContent = title;
     modalMessage.textContent = message;
-    
+
     // Set the appropriate icon
     if (status === 'success') {
       modalIcon.innerHTML = `
@@ -251,24 +251,24 @@ document.addEventListener('DOMContentLoaded', function() {
       `;
       modalIcon.className = 'mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4';
     }
-    
+
     resultModal.classList.remove('hidden');
   }
-  
+
   function hideModal() {
     resultModal.classList.add('hidden');
   }
-  
+
   // Close modal when clicking the close button
   modalClose.addEventListener('click', hideModal);
-  
+
   // Close modal when clicking outside of it
   resultModal.addEventListener('click', function(e) {
     if (e.target === resultModal) {
       hideModal();
     }
   });
-  
+
   // Start Authentication Flow button click
   startAuthFlowBtn.addEventListener('click', function() {
     const appKey = document.getElementById('app-key').value.trim();
@@ -280,7 +280,7 @@ document.addEventListener('DOMContentLoaded', function() {
       showModal('error', 'Validation Error', 'Please enter your App Key');
       return;
     }
-    
+
     if (!appSecret) {
       showModal('error', 'Validation Error', 'Please enter your App Secret');
       return;
@@ -295,7 +295,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Generate the authorization URL
     const authUrl = `https://www.dropbox.com/oauth2/authorize?client_id=${encodeURIComponent(appKey)}&response_type=code&token_access_type=offline&redirect_uri=${encodeURIComponent(redirectUri)}`;
-    
+
     // Redirect the user to the Dropbox login page
     window.location.href = authUrl;
   });
@@ -305,7 +305,7 @@ document.addEventListener('DOMContentLoaded', function() {
     testTokenBtn.addEventListener('click', function() {
       testTokenBtn.innerHTML = '<span class="animate-spin inline-block mr-2">⟳</span> Testing...';
       testTokenBtn.disabled = true;
-      
+
       fetch('/api/dropbox/test-token')
         .then(response => response.json())
         .then(data => {
@@ -336,13 +336,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
   }
-  
+
   // Refresh Token button click
   if (refreshTokenBtn) {
     refreshTokenBtn.addEventListener('click', function() {
       showModal('info', 'Confirm', 'This will start a new authentication flow to obtain a fresh token from Dropbox. Continue?');
       modalClose.textContent = "Cancel";
-      
+
       // Add a confirm button
       const confirmBtn = document.createElement('button');
       confirmBtn.className = 'ml-2 px-4 py-2 bg-green-500 text-white text-base font-medium rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-300';
@@ -351,10 +351,10 @@ document.addEventListener('DOMContentLoaded', function() {
         hideModal();
         startAuthFlowBtn.click();
       });
-      
+
       // Add to modal
       modalClose.parentNode.appendChild(confirmBtn);
-      
+
       // Make sure to remove the confirm button when modal is closed
       const removeConfirmBtn = function() {
         if (confirmBtn.parentNode) {
@@ -363,11 +363,11 @@ document.addEventListener('DOMContentLoaded', function() {
         modalClose.textContent = "Close";
         modalClose.removeEventListener('click', removeConfirmBtn);
       };
-      
+
       modalClose.addEventListener('click', removeConfirmBtn, { once: true });
     });
   }
-  
+
   // Copy Environment Variables Button
   const copyEnvVarsBtn = document.getElementById('copy-env-vars');
   if (copyEnvVarsBtn) {
@@ -389,14 +389,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
   }
-  
+
   // Try to retrieve app secret from session storage (if coming back from auth)
   if (appSecretInput && !appSecretInput.value && sessionStorage.getItem('dropbox_app_secret')) {
     appSecretInput.value = sessionStorage.getItem('dropbox_app_secret');
     // Clear it after use
     sessionStorage.removeItem('dropbox_app_secret');
   }
-  
+
   // If token is not configured but we have an app key, show the token status section
   if (document.getElementById('app-key').value && !tokenStatus.classList.contains('hidden')) {
     tokenStatus.classList.remove('hidden');

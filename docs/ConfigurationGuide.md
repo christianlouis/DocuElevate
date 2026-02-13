@@ -352,7 +352,7 @@ PAPERLESS_CUSTOM_FIELDS_MAPPING='{"absender": "Sender", "empfaenger": "Recipient
 
 ### Dropbox
 
-| **Variable**            | **Description**                                  | 
+| **Variable**            | **Description**                                  |
 |-------------------------|--------------------------------------------------|
 | `DROPBOX_APP_KEY`       | Dropbox API app key.                             |
 | `DROPBOX_APP_SECRET`    | Dropbox API app secret.                          |

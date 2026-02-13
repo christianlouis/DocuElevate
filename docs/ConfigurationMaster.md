@@ -1,4 +1,4 @@
-# DocuElevate Configuration 
+# DocuElevate Configuration
 
 This section contains detailed documentation about configuring DocuElevate for your environment.
 

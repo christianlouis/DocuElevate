@@ -215,9 +215,9 @@ for step in ["hash_file", "create_file_record", "check_text", ...]:
     # Start
     update_step_status(db, file.id, step, "in_progress", started_at=now())
     log_event(db, file.id, step, "in_progress", "Starting...")
-    
+
     # Do work...
-    
+
     # Complete
     update_step_status(db, file.id, step, "success", completed_at=now())
     log_event(db, file.id, step, "success", "Completed successfully")
@@ -349,6 +349,6 @@ For deploying to existing system:
 - [ ] Run migration utility: `migrate_all_files(db, dry_run=True)` to test
 - [ ] Run actual migration: `migrate_all_files(db, dry_run=False)`
 - [ ] Verify: Check a few files with `verify_migration()`
-- [ ] Update workers to call `update_step_status()` 
+- [ ] Update workers to call `update_step_status()`
 - [ ] Update file creation to call `initialize_file_steps()`
 - [ ] Monitor dashboard for correct status display

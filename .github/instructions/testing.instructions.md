@@ -68,9 +68,9 @@ def db_session():
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     session = Session()
-    
+
     yield session
-    
+
     session.close()
     Base.metadata.drop_all(engine)
 
@@ -99,7 +99,7 @@ def test_upload_document():
             "/api/documents/upload",
             files={"file": ("test.pdf", f, "application/pdf")}
         )
-    
+
     assert response.status_code == 201
     assert "id" in response.json()
 ```
@@ -131,12 +131,12 @@ def test_openai_metadata_extraction(mocker):
         "amount": 100.00,
         "date": "2024-01-01"
     }
-    
+
     mocker.patch(
         "app.utils.openai_client.extract_metadata",
         return_value=mock_response
     )
-    
+
     result = extract_document_metadata("test.pdf")
     assert result["document_type"] == "invoice"
 
@@ -144,12 +144,12 @@ def test_openai_metadata_extraction(mocker):
 def test_azure_ocr_processing(mocker):
     """Test OCR with mocked Azure service."""
     mock_text = "Sample extracted text"
-    
+
     mocker.patch(
         "app.utils.azure_client.extract_text",
         return_value=mock_text
     )
-    
+
     result = perform_ocr("test.pdf")
     assert result == mock_text
 ```
@@ -160,7 +160,7 @@ def test_azure_ocr_processing(mocker):
 def test_create_document(db_session):
     """Test document creation in database."""
     from app.models import Document
-    
+
     doc = Document(
         filename="test.pdf",
         user_id=1,
@@ -168,7 +168,7 @@ def test_create_document(db_session):
     )
     db_session.add(doc)
     db_session.commit()
-    
+
     assert doc.id is not None
     assert doc.filename == "test.pdf"
 ```
@@ -189,10 +189,10 @@ def test_document_validation():
         "filename": "",  # Empty filename
         "size": -1  # Invalid size
     }
-    
+
     # Act
     result = validate_document(invalid_document)
-    
+
     # Assert
     assert result.is_valid is False
     assert "filename" in result.errors

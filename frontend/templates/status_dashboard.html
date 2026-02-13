@@ -55,7 +55,7 @@
         <div class="border-t border-gray-200">
           <div class="px-4 py-5 sm:p-6">
             <p class="text-sm text-gray-500">{{ provider.description }}</p>
-            
+
             <!-- NextCloud or link to provider URL -->
             {% if provider.configured and name == "NextCloud" %}
               {% if provider.details and provider.details.url %}
@@ -73,7 +73,7 @@
                 </a>
               </div>
             {% endif %}
-            
+
             <div class="mt-4 flex items-center justify-between">
               <div>
                 {% if provider.configured %}
@@ -92,21 +92,21 @@
                   </span>
                 {% endif %}
               </div>
-              
+
               <!-- Action buttons -->
               <div class="flex space-x-2">
                 {% if provider.configured and provider.details %}
-                  <button 
+                  <button
                     class="view-details-btn inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     data-provider="{{ name }}"
                     data-details="{{ provider.details|tojson|forceescape }}">
                     View Details
                   </button>
                 {% endif %}
-                
+
                 <!-- Notification Test Button -->
                 {% if name == "Notifications" and provider.configured %}
-                  <button 
+                  <button
                     id="testNotificationBtn"
                     class="test-generic-btn inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     data-endpoint="{{ provider.test_endpoint }}"
@@ -114,21 +114,21 @@
                     Test Notifications
                   </button>
                 {% endif %}
-                
+
                 <!-- Generic Test Button for any provider with test_endpoint -->
                 {% if provider.testable and provider.configured and provider.test_endpoint and name != "Notifications" %}
-                  <button 
+                  <button
                     class="test-generic-btn inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     data-endpoint="{{ provider.test_endpoint }}"
                     data-method="{{ provider.test_method|default('GET') }}">
                     Test {{ name }}
                   </button>
                 {% endif %}
-                
+
                 <!-- Provider-specific buttons -->
                 {% if name == "Dropbox" %}
                   {% if provider.configured %}
-                    <button 
+                    <button
                       class="test-provider-btn inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                       data-provider="dropbox">
                       Test Connection
@@ -144,7 +144,7 @@
                   {% endif %}
                 {% elif name == "OneDrive" %}
                   {% if provider.configured %}
-                    <button 
+                    <button
                       class="test-provider-btn inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                       data-provider="onedrive">
                       Test Connection
@@ -160,7 +160,7 @@
                   {% endif %}
                 {% elif name == "Google Drive" %}
                   {% if provider.configured %}
-                    <button 
+                    <button
                       class="test-provider-btn inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                       data-provider="google_drive">
                       Test Connection
@@ -176,7 +176,7 @@
                   {% endif %}
                 {% elif name == "OpenAI" %}
                   {% if provider.configured %}
-                    <button 
+                    <button
                       class="test-provider-btn inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                       data-provider="openai">
                       Test Connection
@@ -184,7 +184,7 @@
                   {% endif %}
                 {% elif name == "Azure AI" %}
                   {% if provider.configured %}
-                    <button 
+                    <button
                       class="test-provider-btn inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                       data-provider="azure">
                       Test Connection
@@ -217,14 +217,14 @@
     <p class="text-sm text-gray-600 mt-1">
       For more detailed configuration settings and environment variables, check the environment debug page.
     </p>
-    
+
     <div class="mt-4">
       <a href="/env" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
         View Detailed Configuration
       </a>
     </div>
   </div>
-  
+
   <!-- Result Modal -->
   <div id="resultModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50" aria-modal="true" role="dialog">
     <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 lg:w-1/3 shadow-lg rounded-md bg-white">
@@ -246,7 +246,7 @@
       </div>
     </div>
   </div>
-  
+
   <!-- Details Modal -->
   <div id="detailsModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50" aria-modal="true" role="dialog">
     <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-2/3 lg:w-1/2 shadow-lg rounded-md bg-white">
@@ -285,19 +285,19 @@ document.addEventListener('DOMContentLoaded', function() {
   const modalMessage = document.getElementById('modalMessage');
   const modalIcon = document.getElementById('modalIcon');
   const modalClose = document.getElementById('modalClose');
-  
+
   // Details Modal elements
   const detailsModal = document.getElementById('detailsModal');
   const detailsModalTitle = document.getElementById('detailsModalTitle');
   const detailsContent = document.getElementById('detailsContent');
   const closeDetailsModal = document.getElementById('closeDetailsModal');
   const closeDetailsBtn = document.getElementById('closeDetailsBtn');
-  
+
   // Modal functions
   function showModal(status, title, message) {
     modalTitle.textContent = title;
     modalMessage.textContent = message;
-    
+
     // Set the appropriate icon using Font Awesome
     if (status === 'success') {
       modalIcon.innerHTML = '<i class="fa-solid fa-check text-green-600 fa-2x"></i>';
@@ -306,25 +306,25 @@ document.addEventListener('DOMContentLoaded', function() {
       modalIcon.innerHTML = '<i class="fa-solid fa-xmark text-red-600 fa-2x"></i>';
       modalIcon.className = 'mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4';
     }
-    
+
     resultModal.classList.remove('hidden');
   }
-  
+
   function hideModal() {
     resultModal.classList.add('hidden');
   }
-  
+
   function showDetailsModal(providerName, details) {
     detailsModalTitle.textContent = providerName + ' Configuration Details';
-    
+
     // Clear previous content
     detailsContent.innerHTML = '';
-    
+
     // Create and populate the details list
     if (details && Object.keys(details).length > 0) {
       const table = document.createElement('table');
       table.className = 'min-w-full divide-y divide-gray-200';
-      
+
       const thead = document.createElement('thead');
       thead.className = 'bg-gray-50';
       thead.innerHTML = `
@@ -333,101 +333,101 @@ document.addEventListener('DOMContentLoaded', function() {
           <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
         </tr>
       `;
-      
+
       const tbody = document.createElement('tbody');
       tbody.className = 'bg-white divide-y divide-gray-200';
-      
+
       let count = 0;
       for (const [key, value] of Object.entries(details)) {
         const row = document.createElement('tr');
         row.className = count % 2 === 0 ? 'bg-white' : 'bg-gray-50';
-        
+
         const keyCell = document.createElement('td');
         keyCell.className = 'px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900';
         keyCell.textContent = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
-        
+
         const valueCell = document.createElement('td');
         valueCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
-        
+
         // Check if value contains sensitive information that should be masked
         const sensitiveKeys = ['token', 'password', 'secret', 'key', 'credentials'];
         const isSensitive = sensitiveKeys.some(sKey => key.toLowerCase().includes(sKey));
-        
+
         if (isSensitive && value !== 'Not set' && value !== '') {
           valueCell.textContent = value.slice(4) + '********' + value.slice(-4);
           // For better readability, we can also use HTML to mask the middle part of the string
-          valueCell.innerHTML = value.slice(0, 4) + '<span class="text-gray-400">********</span>' + value.slice(-4); 
+          valueCell.innerHTML = value.slice(0, 4) + '<span class="text-gray-400">********</span>' + value.slice(-4);
         } else {
           valueCell.textContent = value;
         }
-        
+
         row.appendChild(keyCell);
         row.appendChild(valueCell);
         tbody.appendChild(row);
         count++;
       }
-      
+
       table.appendChild(thead);
       table.appendChild(tbody);
       detailsContent.appendChild(table);
     } else {
       detailsContent.innerHTML = '<p class="text-sm text-gray-500">No details available</p>';
     }
-    
+
     detailsModal.classList.remove('hidden');
   }
-  
+
   function hideDetailsModal() {
     detailsModal.classList.add('hidden');
   }
-  
+
   // Close modal when clicking the close button
   modalClose.addEventListener('click', hideModal);
-  
+
   // Close modal when clicking outside of it
   resultModal.addEventListener('click', function(e) {
     if (e.target === resultModal) {
       hideModal();
     }
   });
-  
+
   // Close details modal
   closeDetailsModal.addEventListener('click', hideDetailsModal);
   closeDetailsBtn.addEventListener('click', hideDetailsModal);
-  
+
   // Close details modal when clicking outside
   detailsModal.addEventListener('click', function(e) {
     if (e.target === detailsModal) {
       hideDetailsModal();
     }
   });
-  
+
   // View Details button handlers
   const detailsButtons = document.querySelectorAll('.view-details-btn');
   detailsButtons.forEach(button => {
     button.addEventListener('click', function() {
       const providerName = this.getAttribute('data-provider');
       let detailsData = {};
-      
+
       try {
         detailsData = JSON.parse(this.getAttribute('data-details'));
       } catch (e) {
         console.error('Error parsing details data:', e);
       }
-      
+
       showDetailsModal(providerName, detailsData);
     });
   });
-  
+
   // Test notifications
   const testNotificationBtn = document.getElementById('testNotificationBtn');
   if (testNotificationBtn) {
     testNotificationBtn.addEventListener('click', function() {
       const originalText = this.innerHTML;
-      
+
       this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Sending...';
       this.disabled = true;
-      
+
       fetch('/api/diagnostic/test-notification', {
         method: 'POST',
       })
@@ -451,7 +451,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
   }
-  
+
   // Generic test button functionality
   const testGenericBtns = document.querySelectorAll('.test-generic-btn:not(#testNotificationBtn)');
   testGenericBtns.forEach(button => {
@@ -459,10 +459,10 @@ document.addEventListener('DOMContentLoaded', function() {
       const originalText = this.innerHTML;
       const endpoint = this.getAttribute('data-endpoint');
       const method = this.getAttribute('data-method') || 'GET';
-      
+
       this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Testing...';
       this.disabled = true;
-      
+
       fetch(endpoint, {
         method: method,
       })
@@ -475,7 +475,7 @@ document.addEventListener('DOMContentLoaded', function() {
               message += `<br><br><div class="bg-blue-50 p-3 rounded mt-2">
                 <span class="font-medium">Token valid for:</span> ${data.token_info.expires_in_human}
                 </div>`;
-              
+
               modalTitle.textContent = 'Test Successful';
               modalMessage.innerHTML = message;
               modalIcon.innerHTML = '<i class="fa-solid fa-check text-green-600 fa-2x"></i>';
@@ -503,17 +503,17 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
   });
-  
+
   // Test provider connections
   const testButtons = document.querySelectorAll('.test-provider-btn');
   testButtons.forEach(button => {
     button.addEventListener('click', function() {
       const provider = this.getAttribute('data-provider');
       const originalText = this.textContent;
-      
+
       this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Testing...';
       this.disabled = true;
-      
+
       let endpoint = '';
       if (provider === 'dropbox') {
         endpoint = '/api/dropbox/test-token';
@@ -526,20 +526,20 @@ document.addEventListener('DOMContentLoaded', function() {
       } else if (provider === 'azure') {
         endpoint = '/api/azure/test';
       }
-      
+
       fetch(endpoint)
         .then(response => response.json())
         .then(data => {
           if (data.status === 'success') {
             // Create successful message
             let message = data.message || 'Connection successful';
-            
+
             // Add token expiration info if available (especially for Google Drive)
             if (data.token_info && data.token_info.expires_in_human) {
               message += `<br><br><div class="bg-blue-50 p-3 rounded mt-2">
                 <span class="font-medium">Token valid for:</span> ${data.token_info.expires_in_human}
                 </div>`;
-              
+
               // Show the message with HTML
               modalTitle.textContent = 'Connection Test Successful';
               modalMessage.innerHTML = message;

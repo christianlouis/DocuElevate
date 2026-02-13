@@ -10,7 +10,7 @@
       console.log('Before Alpine init on /files page');
     document.addEventListener('alpine:init', () => {
       console.log('Alpine.js initialized in files view');
-      
+
     });
     console.log('After Alpine init listener registration');
   </script>
@@ -57,7 +57,7 @@
   <h2 class="text-3xl font-bold mb-6">File Records</h2>
   <!-- Grid.js will render the table in this container -->
   <div id="gridjs-wrapper"></div>
-  
+
   <!-- Confirmation Modal (temporarily disabled) -->
   <div id="confirmDeleteModal" class="confirm-delete-modal hidden">
     <div class="confirm-delete-content">
@@ -104,7 +104,7 @@
         const response = await fetch(`/api/files/${fileId}`, {
           method: 'DELETE'
         });
-        
+
         if (response.ok) {
           // Success - reload the grid
           grid.forceRender();
@@ -132,7 +132,7 @@
     // Handle delete confirmation
     confirmDelete.addEventListener('click', async function() {
       if (!fileToDelete) return;
-      
+
       deleteFile(fileToDelete.id);
       closeDeleteModal();
     });
@@ -151,7 +151,7 @@
         { id: 'file_size', name: 'File Size', formatter: (size) => `${(size / 1024).toFixed(2)} KB` },
         { id: 'mime_type', name: 'Mime Type' },
         { id: 'created_at', name: 'Created At' },
-        { 
+        {
           id: 'actions',
           name: 'Actions',
           formatter: (_, row) => {

@@ -50,7 +50,7 @@ pytest tests/test_oauth_integration_flows.py -v
 ```bash
 # Auto-detects and uses real OAuth credentials
 export AUTHENTIK_CLIENT_ID="your-client-id"
-export AUTHENTIK_CLIENT_SECRET="your-client-secret"  
+export AUTHENTIK_CLIENT_SECRET="your-client-secret"
 export AUTHENTIK_CONFIG_URL="https://auth.example.com/.well-known/openid-configuration"
 pytest tests/test_oauth_integration_flows.py -v -m requires_external
 ```
@@ -128,7 +128,7 @@ async def test_oauth_callback(mock_authorize, oauth_enabled_app, test_user_info)
         "access_token": "test-token",
         "userinfo": test_user_info,
     }
-    
+
     response = oauth_enabled_app.get("/oauth-callback?code=test-code")
     assert response.status_code == 302
 ```
@@ -185,11 +185,11 @@ jobs:
 
 ## Technical Details
 
-**Container**: `ghcr.io/navikt/mock-oauth2-server:2.1.1`  
-**Framework**: Testcontainers Python 4.14.1+  
-**Test Framework**: pytest with async support  
-**Languages**: Python 3.12+  
-**Dependencies**: testcontainers, requests, docker  
+**Container**: `ghcr.io/navikt/mock-oauth2-server:2.1.1`
+**Framework**: Testcontainers Python 4.14.1+
+**Test Framework**: pytest with async support
+**Languages**: Python 3.12+
+**Dependencies**: testcontainers, requests, docker
 
 ## Files Created/Modified
 

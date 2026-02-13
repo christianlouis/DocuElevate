@@ -4,7 +4,7 @@ This guide explains how to set up the Dropbox integration for DocuElevate.
 
 ## Required Configuration Parameters
 
-| **Variable**            | **Description**                                  | 
+| **Variable**            | **Description**                                  |
 |-------------------------|--------------------------------------------------|
 | `DROPBOX_APP_KEY`       | Dropbox API app key                              |
 | `DROPBOX_APP_SECRET`    | Dropbox API app secret                           |
@@ -64,11 +64,11 @@ The wizard handles all the token exchange steps and provides you with the exact 
 1. Go to the "OAuth 2" tab in your app settings
 2. Add a redirect URI: `http://localhost` (this is for the authorization flow)
 3. Generate an authorization URL with these instructions:
-   
+
    ```
    https://www.dropbox.com/oauth2/authorize?client_id=YOUR_APP_KEY&response_type=code&token_access_type=offline
    ```
-   
+
 4. Replace `YOUR_APP_KEY` with your app key
 5. Open this URL in your browser
 6. Authorize the app when prompted
@@ -78,7 +78,7 @@ The wizard handles all the token exchange steps and provides you with the exact 
 ### 5. Exchange the Code for a Refresh Token
 
 1. Use this curl command to exchange the code for tokens:
-   
+
    ```bash
    curl -X POST https://api.dropboxapi.com/oauth2/token \
      -d code=YOUR_AUTH_CODE \
@@ -87,7 +87,7 @@ The wizard handles all the token exchange steps and provides you with the exact 
      -d client_secret=YOUR_APP_SECRET \
      -d redirect_uri=http://localhost
    ```
-   
+
 2. From the response, copy the `refresh_token` value
 
 ### 6. Configure DocuElevate

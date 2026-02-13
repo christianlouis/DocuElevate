@@ -10,7 +10,7 @@ Unlike unit tests that mock external dependencies, these integration tests use *
 - **Redis** - Real message broker for Celery tasks
 - **Gotenberg** - Real PDF conversion service
 - **WebDAV Server** - Real upload target
-- **SFTP Server** - Real SSH/SFTP server  
+- **SFTP Server** - Real SSH/SFTP server
 - **MinIO** - Real S3-compatible object storage
 - **FTP Server** - Real FTP server
 
@@ -202,15 +202,15 @@ def test_celery_tasks(celery_app, celery_worker):
 def test_upload_to_webdav(webdav_container, sample_text_file):
     """Upload file to real WebDAV server and verify."""
     from app.tasks.upload_to_webdav import upload_to_webdav
-    
+
     with patch("app.tasks.upload_to_webdav.settings") as mock_settings:
         mock_settings.webdav_url = webdav_container["url"] + "/"
         mock_settings.webdav_username = webdav_container["username"]
         mock_settings.webdav_password = webdav_container["password"]
-        
+
         # Execute upload
         result = upload_to_webdav.apply(args=[sample_text_file]).get()
-        
+
         # Verify on server
         response = requests.get(
             f"{webdav_container['url']}/test.txt",
@@ -226,14 +226,14 @@ def test_upload_to_webdav(webdav_container, sample_text_file):
 def test_async_upload(redis_container, webdav_container, celery_worker, sample_text_file):
     """Queue task in Redis, worker executes, uploads to WebDAV."""
     from app.tasks.upload_to_webdav import upload_to_webdav
-    
+
     # Queue task (goes to Redis)
     result = upload_to_webdav.delay(sample_text_file, file_id=1)
-    
+
     # Wait for worker to process
     while not result.ready():
         time.sleep(0.5)
-    
+
     # Verify result
     assert result.get()["status"] == "Completed"
 ```
@@ -299,9 +299,9 @@ Set a breakpoint after test to inspect:
 ```python
 def test_inspect(webdav_container):
     result = upload_file()
-    
+
     import pdb; pdb.set_trace()  # Container still running here
-    
+
     # Manually inspect: docker ps, docker logs, etc.
 ```
 
@@ -391,24 +391,24 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     services:
       docker:
         image: docker:latest
         options: --privileged
-    
+
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      
+
       - name: Install dependencies
         run: |
           pip install -r requirements-dev.txt
-      
+
       - name: Run integration tests
         run: |
           pytest -m "integration or e2e" -v --tb=short

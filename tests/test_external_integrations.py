@@ -244,9 +244,9 @@ class TestAzureDocumentIntelligenceIntegration:
             assert len(result.content) > 10, f"OCR text too short: {result.content[:50]}"
 
             # Verify the generated text is recognizable
-            assert "Acme" in result.content or "Invoice" in result.content, (
-                f"OCR text does not contain expected keywords: {result.content[:200]}"
-            )
+            assert (
+                "Acme" in result.content or "Invoice" in result.content
+            ), f"OCR text does not contain expected keywords: {result.content[:200]}"
 
             # Retrieve the searchable PDF output
             operation_id = poller.details["operation_id"]
@@ -602,9 +602,9 @@ class TestFullOCRMetadataPipeline:
 
             # The generated invoice should be classified reasonably
             doc_type = metadata["document_type"].lower()
-            assert any(kw in doc_type for kw in ("invoice", "rechnung", "bill")), (
-                f"Unexpected document_type: {metadata['document_type']}"
-            )
+            assert any(
+                kw in doc_type for kw in ("invoice", "rechnung", "bill")
+            ), f"Unexpected document_type: {metadata['document_type']}"
         finally:
             os.unlink(pdf_path)
 

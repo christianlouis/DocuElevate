@@ -124,10 +124,12 @@ ignore = [
     "PLR0911",  # Too many return statements
     "PLR2004",  # Magic value comparison
     "PLW0603",  # Global statement
+    "B008",     # Function call in default argument (FastAPI Depends pattern)
+    "B904",     # Raise without from (overly strict for error handlers)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "S110", "B017"]  # Allow assert, try-except-pass, assert-raises-exception in tests
+"tests/*" = ["S101", "S110", "B017", "F841", "B007", "E402"]  # Allow assert, try-except-pass, assert-raises-exception, unused vars, unused loop vars, module imports not at top in tests
 
 # pytest configuration
 [tool.pytest.ini_options]

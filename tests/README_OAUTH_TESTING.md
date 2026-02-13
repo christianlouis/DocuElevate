@@ -98,7 +98,7 @@ async def test_oauth_callback(mock_authorize, oauth_enabled_app, test_user_info)
         "access_token": "test-token",
         "userinfo": test_user_info,
     }
-    
+
     response = oauth_enabled_app.get("/oauth-callback?code=test-code")
     assert response.status_code == 302  # Redirects after login
 ```

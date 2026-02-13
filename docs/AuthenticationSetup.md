@@ -79,7 +79,7 @@ For larger deployments or when you need more advanced authentication features, O
 ### 1. Create an Application in Authentik
 
 1. Log in to your Authentik admin interface
-2. Navigate to "Applications" > "Applications" 
+2. Navigate to "Applications" > "Applications"
 3. Click "Create"
 4. Fill in the following details:
    - **Name**: DocuElevate

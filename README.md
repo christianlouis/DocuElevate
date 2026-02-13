@@ -32,12 +32,12 @@
 
 DocuElevate automates the handling, extraction, and processing of documents using a variety of services, including:
 
-- **OpenAI** for metadata extraction and text refinement.  
-- **Dropbox**, **Nextcloud**, and **Google Drive** for file storage and uploads.  
-- **Paperless NGX** for document indexing and management.  
-- **Azure Document Intelligence** for OCR on PDFs.  
-- **Gotenberg** for file-to-PDF conversions.  
-- **Authentik** for authentication and user management.  
+- **OpenAI** for metadata extraction and text refinement.
+- **Dropbox**, **Nextcloud**, and **Google Drive** for file storage and uploads.
+- **Paperless NGX** for document indexing and management.
+- **Azure Document Intelligence** for OCR on PDFs.
+- **Gotenberg** for file-to-PDF conversions.
+- **Authentik** for authentication and user management.
 
 It is designed for flexibility and configurability through environment variables, making it easily customizable for different workflows. The system can fetch documents from multiple IMAP mailboxes, process them (OCR, metadata extraction, PDF conversion), and store them in the desired destinations.
 
@@ -59,7 +59,7 @@ The project includes a **UI** for uploading and managing files, and an API docum
 <div align="center">
   <img src="docs/upload-view.png" alt="DocuElevate Upload Interface" width="80%" />
   <p><em>Upload interface for adding new documents</em></p>
-  
+
   <img src="docs/files-view.png" alt="DocuElevate Files View" width="80%" />
   <p><em>Files view with processed documents and metadata</em></p>
 </div>
@@ -100,28 +100,28 @@ Users can choose to send documents to any combination of these destinations thro
 
 ## Features
 
-- **Intuitive File Upload**:  
+- **Intuitive File Upload**:
   - Drag-and-drop file upload on both Upload and Files pages—upload anywhere on the Files page
   - Real-time upload progress with validation
   - Support for PDF, Office documents, images, and more (up to 500MB per file)
-- **Browser Extension**:  
+- **Browser Extension**:
   - Send files directly from your browser to DocuElevate with one click
   - Compatible with Chrome, Firefox, Edge, and other Chromium-based browsers
   - Context menu integration for quick access
   - See [Browser Extension Guide](docs/BrowserExtension.md) for installation and usage
-- **Document Upload & Storage**:  
+- **Document Upload & Storage**:
   - Manual uploads (via API or UI) to Dropbox, Nextcloud, Google Drive, or Paperless
-- **OCR Processing (Azure)**:  
-  - Extract text from scanned PDFs using Azure Document Intelligence  
-- **Metadata Extraction (OpenAI)**:  
-  - Use GPT to classify, label, or otherwise enrich the text with structured metadata  
-- **PDF Conversion (Gotenberg)**:  
-  - Convert non-PDF attachments (e.g., Word docs, images) into PDFs  
-- **Document Management (Paperless NGX)**:  
-  - Store processed documents and metadata in a Paperless NGX instance  
-- **IMAP Integration**:  
-  - Fetch documents from multiple mailboxes (including Gmail) and automatically enqueue them for processing  
-- **Authentication**:  
+- **OCR Processing (Azure)**:
+  - Extract text from scanned PDFs using Azure Document Intelligence
+- **Metadata Extraction (OpenAI)**:
+  - Use GPT to classify, label, or otherwise enrich the text with structured metadata
+- **PDF Conversion (Gotenberg)**:
+  - Convert non-PDF attachments (e.g., Word docs, images) into PDFs
+- **Document Management (Paperless NGX)**:
+  - Store processed documents and metadata in a Paperless NGX instance
+- **IMAP Integration**:
+  - Fetch documents from multiple mailboxes (including Gmail) and automatically enqueue them for processing
+- **Authentication**:
   - Secure access to the system using **Authentik** for OAuth2-based login
 
 ## Frameworks Used

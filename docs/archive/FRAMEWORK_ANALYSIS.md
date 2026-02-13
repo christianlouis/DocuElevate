@@ -170,7 +170,7 @@ Phase 1 (Current - MVP):
   Settings: DB + ENV + DEFAULT
   Encryption: Fernet (app-level)
   UI: Custom settings page
-  
+
 Phase 2 (Production - Optional):
   Settings: DB + ENV + DEFAULT (keep)
   Secrets: HashiCorp Vault (add)

@@ -7,15 +7,15 @@
     const response = await fetch('/api/auth/whoami');
     const data = await response.json();
 
-    
+
     const authSection = document.getElementById("authSection");
     const mobileAuthSection = document.getElementById("mobileAuthSection");
-    
+
     // If we have an email, user is authenticated (the whoami endpoint would have thrown 401 otherwise)
     if (data.email) {
       // Get the display name (prefer name, fall back to preferred_username, then email)
       const displayName = data.name || data.preferred_username || data.email;
-      
+
       // User is logged in
       let authHTML = `
         <div class="flex items-center">
@@ -26,11 +26,11 @@
           </a>
         </div>
       `;
-      
+
       if (authSection) {
         authSection.innerHTML = authHTML;
       }
-      
+
       if (mobileAuthSection) {
         mobileAuthSection.innerHTML = `
           <div class="flex items-center justify-between">
@@ -49,7 +49,7 @@
       if (authSection) {
         authSection.innerHTML = `<a href="/login" class="text-blue-600">Login</a>`;
       }
-      
+
       if (mobileAuthSection) {
         mobileAuthSection.innerHTML = `<a href="/login" class="text-blue-600">Login</a>`;
       }
@@ -59,11 +59,11 @@
     // Fallback if whoami endpoint fails
     const authSection = document.getElementById("authSection");
     const mobileAuthSection = document.getElementById("mobileAuthSection");
-    
+
     if (authSection) {
       authSection.innerHTML = `<a href="/login" class="text-blue-600">Login</a>`;
     }
-    
+
     if (mobileAuthSection) {
       mobileAuthSection.innerHTML = `<a href="/login" class="text-blue-600">Login</a>`;
     }

@@ -10,11 +10,11 @@ A comprehensive security audit was conducted on all file path operations in Docu
 
 ### 1. Critical: Path Traversal via GPT Metadata Filename
 
-**Severity:** CRITICAL  
-**Location:** `app/tasks/embed_metadata_into_pdf.py` (line 144)  
+**Severity:** CRITICAL
+**Location:** `app/tasks/embed_metadata_into_pdf.py` (line 144)
 **Status:** ✅ FIXED
 
-**Description:**  
+**Description:**
 The `metadata["filename"]` field extracted by GPT was used directly in file path construction without sanitization. A malicious document could be crafted to make GPT return metadata containing path traversal sequences (e.g., `../../etc/passwd`), allowing file writes outside the intended directory.
 
 **Attack Scenario:**
@@ -39,11 +39,11 @@ final_path = os.path.join(processed_dir, suggested_filename)  # Safe
 
 ### 2. Medium: Insecure String-Based Path Validation
 
-**Severity:** MEDIUM  
-**Location:** `app/tasks/embed_metadata_into_pdf.py` (line 188)  
+**Severity:** MEDIUM
+**Location:** `app/tasks/embed_metadata_into_pdf.py` (line 188)
 **Status:** ✅ FIXED
 
-**Description:**  
+**Description:**
 Used insecure string-based `startswith()` check to validate file paths before deletion. This approach is vulnerable to:
 - Partial directory name matches
 - Symlink attacks (symlinks not resolved)
@@ -78,11 +78,11 @@ if original_file_path.is_relative_to(workdir_tmp_resolved):
 
 ### 3. Medium: Insufficient GPT Filename Validation
 
-**Severity:** MEDIUM  
-**Location:** `app/tasks/extract_metadata_with_gpt.py`  
+**Severity:** MEDIUM
+**Location:** `app/tasks/extract_metadata_with_gpt.py`
 **Status:** ✅ FIXED
 
-**Description:**  
+**Description:**
 While the GPT prompt requested specific filename format, there was no enforcement. GPT could return filenames with path separators or traversal patterns.
 
 **Fix Applied:**
@@ -221,7 +221,7 @@ All identified path traversal vulnerabilities have been successfully remediated 
 
 ---
 
-**Audit Date:** February 10, 2026  
-**Auditor:** GitHub Copilot Agent  
-**Scope:** All Python file path operations  
+**Audit Date:** February 10, 2026
+**Auditor:** GitHub Copilot Agent
+**Scope:** All Python file path operations
 **Next Review:** Recommended within 6 months or after significant file handling changes

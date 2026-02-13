@@ -121,7 +121,7 @@ Created comprehensive `docs/SettingsManagement.md` covering:
 # Non-admin users
 /settings → @require_login → @require_admin_access → Redirect to /
 
-# Admin users  
+# Admin users
 /settings → @require_login → @require_admin_access → Settings page renders
 ```
 

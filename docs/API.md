@@ -71,16 +71,16 @@ def make_api_request(url, max_retries=3):
     """Make API request with rate limit handling."""
     for attempt in range(max_retries):
         response = requests.get(url)
-        
+
         if response.status_code == 429:
             # Rate limit exceeded
             retry_after = int(response.headers.get('Retry-After', 60))
             print(f"Rate limit exceeded. Retrying after {retry_after} seconds...")
             time.sleep(retry_after)
             continue
-        
+
         return response
-    
+
     raise Exception("Max retries exceeded")
 ```
 
@@ -203,7 +203,7 @@ The DocuElevate browser extension uses this endpoint to send files directly from
 
 Upload one or more files from your computer for processing.
 
-**Request**: 
+**Request**:
 - Multipart form data with file(s)
 
 **Response**:

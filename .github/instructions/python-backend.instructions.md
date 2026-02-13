@@ -39,15 +39,15 @@ def process_document(
 ) -> DocumentMetadata:
     """
     Process a document and extract metadata.
-    
+
     Args:
         file_path: Path to the document file
         user_id: ID of the user uploading the document
         metadata: Optional additional metadata
-        
+
     Returns:
         DocumentMetadata object with extracted information
-        
+
     Raises:
         FileNotFoundError: If file doesn't exist
         ProcessingError: If processing fails
@@ -150,7 +150,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     openai_api_key: str
     max_file_size: int = 10485760  # 10MB default
-    
+
     class Config:
         env_file = ".env"
 ```

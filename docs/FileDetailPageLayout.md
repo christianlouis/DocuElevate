@@ -108,4 +108,3 @@ Text extraction logs to check for `extracted_text`:
 - `process_with_azure_document_intelligence` - Azure OCR processing
 
 Both may contain extracted text in the `detail` field when `status = 'success'`.
-

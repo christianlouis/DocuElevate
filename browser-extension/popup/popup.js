@@ -19,20 +19,20 @@ const showConfigBtn = document.getElementById('show-config');
 document.addEventListener('DOMContentLoaded', async () => {
     // Load saved configuration
     const config = await loadConfig();
-    
+
     if (config.serverUrl) {
         serverUrlInput.value = config.serverUrl;
     }
-    
+
     if (config.sessionCookie) {
         sessionCookieInput.value = config.sessionCookie;
     }
-    
+
     // Get current tab URL
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     const currentUrl = tabs[0]?.url || '';
     currentUrlDisplay.textContent = currentUrl;
-    
+
     // Show appropriate section
     if (config.serverUrl) {
         showSendSection();
@@ -44,12 +44,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Save configuration
 saveConfigBtn.addEventListener('click', async () => {
     const serverUrl = serverUrlInput.value.trim();
-    
+
     if (!serverUrl) {
         showStatus('Please enter a server URL', 'error');
         return;
     }
-    
+
     // Validate URL format
     try {
         new URL(serverUrl);
@@ -57,15 +57,15 @@ saveConfigBtn.addEventListener('click', async () => {
         showStatus('Invalid server URL format', 'error');
         return;
     }
-    
+
     const config = {
         serverUrl: serverUrl,
         sessionCookie: sessionCookieInput.value.trim()
     };
-    
+
     await saveConfig(config);
     showStatus('Configuration saved successfully!', 'success');
-    
+
     setTimeout(() => {
         showSendSection();
     }, 1000);
@@ -76,39 +76,39 @@ sendFileBtn.addEventListener('click', async () => {
     const config = await loadConfig();
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     const currentUrl = tabs[0]?.url || '';
-    
+
     if (!currentUrl) {
         showStatus('No URL found in current tab', 'error');
         return;
     }
-    
+
     // Disable button and show loading
     sendFileBtn.disabled = true;
     sendFileBtn.classList.add('loading');
     showStatus('Sending file to DocuElevate...', 'info');
-    
+
     try {
         const payload = {
             url: currentUrl,
             filename: filenameInput.value.trim() || null
         };
-        
+
         const headers = {
             'Content-Type': 'application/json'
         };
-        
+
         // Add session cookie if provided
         if (config.sessionCookie) {
             headers['Cookie'] = config.sessionCookie;
         }
-        
+
         const response = await fetch(`${config.serverUrl}/api/process-url`, {
             method: 'POST',
             headers: headers,
             body: JSON.stringify(payload),
             credentials: 'include'
         });
-        
+
         if (response.ok) {
             const result = await response.json();
             showStatus(

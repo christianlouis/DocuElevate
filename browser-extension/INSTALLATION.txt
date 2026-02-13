@@ -12,13 +12,13 @@ For Chrome / Edge / Chromium-based browsers:
   2. Navigate to extensions page:
      • Chrome: chrome://extensions/
      • Edge: edge://extensions/
-     
+
   3. Enable "Developer mode" (toggle in top right)
-  
+
   4. Click "Load unpacked"
-  
+
   5. Select the browser-extension folder
-  
+
   6. Extension is now installed! 🎉
 
 For Firefox:
@@ -34,10 +34,10 @@ For Firefox:
   1. Click the DocuElevate icon in toolbar
   2. Enter your server URL:
      https://your-docuelevate-server.com
-     
+
   3. (Optional) Add session cookie if auth enabled:
      session=your_session_value
-     
+
   4. Click "Save Configuration"
   5. Ready to use! 🚀
 
@@ -95,7 +95,7 @@ Complete guides available:
 Problem: Extension not appearing
   → Check developer mode is enabled
   → Reload the extension
-  
+
 Problem: Can't connect to server
   → Verify server URL is correct
   → Check server is running

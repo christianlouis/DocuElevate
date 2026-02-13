@@ -9,7 +9,7 @@ chrome.runtime.onInstalled.addListener((details) => {
     } else if (details.reason === 'update') {
         console.log('DocuElevate extension updated');
     }
-    
+
     // Create context menu item
     chrome.contextMenus.create({
         id: 'send-to-docuelevate',
@@ -31,36 +31,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Handle sending URL to DocuElevate
 async function handleSendUrl(data) {
     const { url, filename, serverUrl, sessionCookie } = data;
-    
+
     if (!url || !serverUrl) {
         throw new Error('URL and server URL are required');
     }
-    
+
     const headers = {
         'Content-Type': 'application/json'
     };
-    
+
     if (sessionCookie) {
         headers['Cookie'] = sessionCookie;
     }
-    
+
     const payload = {
         url: url,
         filename: filename || null
     };
-    
+
     const response = await fetch(`${serverUrl}/api/process-url`, {
         method: 'POST',
         headers: headers,
         body: JSON.stringify(payload),
         credentials: 'include'
     });
-    
+
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
         throw new Error(errorData.detail || `HTTP ${response.status}`);
     }
-    
+
     return await response.json();
 }
 
@@ -69,18 +69,18 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (info.menuItemId === 'send-to-docuelevate') {
         // Get the URL to send (link URL or page URL)
         const targetUrl = info.linkUrl || info.pageUrl;
-        
+
         // Load configuration
         const config = await new Promise((resolve) => {
             chrome.storage.sync.get(['serverUrl', 'sessionCookie'], resolve);
         });
-        
+
         if (!config.serverUrl) {
             // Open popup to configure
             chrome.action.openPopup();
             return;
         }
-        
+
         // Send the URL
         try {
             const result = await handleSendUrl({
@@ -88,7 +88,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
                 serverUrl: config.serverUrl,
                 sessionCookie: config.sessionCookie
             });
-            
+
             // Show success notification
             chrome.notifications.create({
                 type: 'basic',
