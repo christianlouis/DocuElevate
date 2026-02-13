@@ -47,17 +47,28 @@ def extract_json_from_text(text):
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
 def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: int = None):
-    """Uses OpenAI to classify document metadata."""
+    """
+    Uses OpenAI to classify document metadata.
+    
+    Args:
+        filename: Can be either a basename (e.g., "file.pdf") or a full path (e.g., "/workdir/processed/file.pdf")
+        cleaned_text: The extracted text from the document
+        file_id: Optional file ID for tracking
+    """
     task_id = self.request.id
     logger.info(f"[{task_id}] Starting metadata extraction for: {filename}")
     log_task_progress(
-        task_id, "extract_metadata_with_gpt", "in_progress", f"Extracting metadata for {filename}", file_id=file_id
+        task_id, "extract_metadata_with_gpt", "in_progress", f"Extracting metadata for {os.path.basename(filename)}", file_id=file_id
     )
 
     # Get file_id from database if not provided
     if file_id is None:
         tmp_dir = os.path.join(settings.workdir, "tmp")
-        file_path = os.path.join(tmp_dir, filename)
+        # Handle both basename and full path
+        if os.path.isabs(filename):
+            file_path = filename
+        else:
+            file_path = os.path.join(tmp_dir, filename)
         if os.path.exists(file_path):
             with SessionLocal() as db:
                 file_record = db.query(FileRecord).filter_by(local_filename=file_path).first()
@@ -162,14 +173,14 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
         )
 
         # Trigger the next step: embedding metadata into the PDF
-        # Pass the original filename (UUID-based) so embed_metadata_into_pdf can find the file on disk
+        # Pass the filename (can be basename or full path) so embed_metadata_into_pdf can find the file on disk
         logger.info(f"[{task_id}] Queueing metadata embedding task")
         log_task_progress(
             task_id, "extract_metadata_with_gpt", "success", "Metadata extracted, queuing embed task", file_id=file_id
         )
         embed_metadata_into_pdf.delay(filename, cleaned_text, metadata, file_id)
 
-        return {"s3_file": filename, "metadata": metadata}
+        return {"s3_file": os.path.basename(filename), "metadata": metadata}
 
     except Exception as e:
         logger.exception(f"[{task_id}] OpenAI classification failed for {filename}: {e}")

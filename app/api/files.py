@@ -525,13 +525,35 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
         # Retrying embed requires re-running metadata extraction first, because
         # embed_metadata_into_pdf needs the actual metadata dict (not empty).
         # Re-trigger extract_metadata_with_gpt which will chain into embed_metadata_into_pdf.
-        if not file_record.local_filename or not os.path.exists(file_record.local_filename):
+        
+        # Check for file in multiple locations:
+        # 1. Original location in tmp (file_record.local_filename)
+        # 2. Processed location (file_record.processed_file_path)
+        # 3. Fallback to workdir/tmp/<basename>
+        file_path = None
+        if file_record.local_filename and os.path.exists(file_record.local_filename):
+            file_path = file_record.local_filename
+        elif file_record.processed_file_path and os.path.exists(file_record.processed_file_path):
+            # File has been processed and moved to processed directory
+            file_path = file_record.processed_file_path
+        else:
+            # Try fallback path in workdir/tmp
+            if file_record.local_filename:
+                workdir = settings.workdir
+                tmp_dir = os.path.join(workdir, "tmp")
+                fallback_path = os.path.join(tmp_dir, os.path.basename(file_record.local_filename))
+                if os.path.exists(fallback_path):
+                    file_path = fallback_path
+        
+        if not file_path:
             raise HTTPException(
-                status_code=400, detail="Local file not found on disk. Cannot retry metadata embedding."
+                status_code=400, 
+                detail="File not found in tmp or processed directory. Cannot retry metadata embedding."
             )
-        extracted_text = _extract_text_from_pdf(file_record.local_filename)
-        filename = os.path.basename(file_record.local_filename)
-        task = extract_metadata_task.delay(filename, extracted_text, file_id)
+        
+        extracted_text = _extract_text_from_pdf(file_path)
+        # Pass the full path to the task so it can locate the file
+        task = extract_metadata_task.delay(file_path, extracted_text, file_id)
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported pipeline step: {step_name}")
 

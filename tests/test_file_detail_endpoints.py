@@ -257,6 +257,49 @@ class TestSubtaskRetry:
         assert response.status_code == 400
         assert "not found on disk" in response.json()["detail"].lower()
 
+    def test_retry_embed_metadata_with_processed_file(self, client: TestClient, db_session, sample_pdf_path, tmp_path):
+        """Test retrying embed_metadata_into_pdf when file is in processed directory."""
+        mock_task = MagicMock()
+        mock_task.id = "embed-processed-retry-task"
+
+        # Create processed directory and copy file there
+        processed_dir = tmp_path / "processed"
+        processed_dir.mkdir(exist_ok=True)
+        processed_file = processed_dir / "processed_doc.pdf"
+        
+        # Copy the sample PDF to processed directory
+        import shutil
+        shutil.copy(sample_pdf_path, processed_file)
+        
+        # Create file record with non-existent local_filename but existing processed_file_path
+        file_record = FileRecord(
+            filehash="pipeline_retry6",
+            original_filename="processed_doc.pdf",
+            local_filename="/nonexistent/tmp/doc.pdf",  # File no longer in tmp
+            processed_file_path=str(processed_file),  # But exists in processed
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+        db_session.refresh(file_record)
+
+        with patch("app.tasks.extract_metadata_with_gpt.extract_metadata_with_gpt") as mock_extract:
+            mock_extract.delay.return_value = mock_task
+            response = client.post(f"/api/files/{file_record.id}/retry-subtask?subtask_name=embed_metadata_into_pdf")
+        
+        # Should succeed because file exists in processed directory
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert data["subtask_name"] == "embed_metadata_into_pdf"
+        # Verify extract_metadata_with_gpt.delay was called with full path
+        mock_extract.delay.assert_called_once()
+        call_args = mock_extract.delay.call_args
+        # First argument should be the full path to the processed file
+        assert str(processed_file) in str(call_args[0][0])
+
+
 
 @pytest.mark.integration
 class TestFilePreview:
