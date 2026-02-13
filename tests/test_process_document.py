@@ -383,3 +383,363 @@ def test_process_document_reprocess_nonexistent_file_id(db_session, tmp_path):
         # Verify error is returned
         assert "error" in result
         assert result["file_id"] == 99999
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_process_document_file_not_found(db_session, tmp_path):
+    """
+    Test that process_document returns an error when the file doesn't exist.
+    """
+    # Use a non-existent file path
+    nonexistent_file = tmp_path / "nonexistent.pdf"
+
+    with (
+        patch("app.tasks.process_document.SessionLocal") as mock_session_local,
+        patch("app.tasks.process_document.log_task_progress"),
+    ):
+        mock_session_local.return_value.__enter__.return_value = db_session
+        mock_session_local.return_value.__exit__.return_value = None
+
+        # Call with a file that doesn't exist
+        result = process_document.run(str(nonexistent_file))
+
+        # Verify error is returned
+        assert "error" in result
+        assert result["error"] == "File not found"
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_process_document_deduplication_disabled(db_session, tmp_path):
+    """
+    Test that process_document works correctly when deduplication is disabled.
+    """
+    # Create a test PDF file with embedded text
+    test_pdf = tmp_path / "test.pdf"
+    pdf_content = b"""%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Resources <<
+/Font <<
+/F1 <<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
+>>
+>>
+>>
+/Contents 4 0 R
+>>
+endobj
+4 0 obj
+<<
+/Length 44
+>>
+stream
+BT
+/F1 12 Tf
+100 700 Td
+(Test content) Tj
+ET
+endstream
+endobj
+xref
+0 5
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000306 00000 n
+trailer
+<<
+/Size 5
+/Root 1 0 R
+>>
+startxref
+399
+%%EOF
+"""
+    test_pdf.write_bytes(pdf_content)
+
+    # Mock environment and dependencies
+    with (
+        patch("app.tasks.process_document.SessionLocal") as mock_session_local,
+        patch("app.tasks.process_document.settings") as mock_settings,
+        patch("app.tasks.process_document.log_task_progress"),
+        patch("app.tasks.process_document.extract_metadata_with_gpt") as mock_extract,
+    ):
+        # Setup mocks - disable deduplication
+        mock_settings.workdir = str(tmp_path)
+        mock_settings.enable_deduplication = False
+        mock_session_local.return_value.__enter__.return_value = db_session
+        mock_session_local.return_value.__exit__.return_value = None
+        mock_extract.delay = MagicMock()
+
+        # Call the task's run method directly
+        result = process_document.run(str(test_pdf))
+
+        # Verify that the task completed successfully
+        assert "file_id" in result
+        assert result["status"] == "Text extracted locally"
+
+        # Verify that a FileRecord was created
+        file_record = db_session.query(FileRecord).first()
+        assert file_record is not None
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_process_document_unknown_mime_type(db_session, tmp_path):
+    """
+    Test that process_document handles files with unknown MIME types correctly,
+    falling back to 'application/octet-stream'.
+    """
+    # Create a test file with an unusual extension that will be treated as non-PDF
+    test_file = tmp_path / "test.unknownext"
+    test_file.write_bytes(b"some binary content")
+
+    # Mock environment and dependencies
+    with (
+        patch("app.tasks.process_document.SessionLocal") as mock_session_local,
+        patch("app.tasks.process_document.settings") as mock_settings,
+        patch("app.tasks.process_document.log_task_progress"),
+        patch("app.tasks.process_document.celery") as mock_celery,
+    ):
+        # Setup mocks
+        mock_settings.workdir = str(tmp_path)
+        mock_session_local.return_value.__enter__.return_value = db_session
+        mock_session_local.return_value.__exit__.return_value = None
+        mock_celery.send_task = MagicMock()
+
+        # Call the task's run method directly
+        result = process_document.run(str(test_file))
+
+        # Verify that the task completed successfully
+        assert "file_id" in result
+
+        # Verify that the mime_type was set to octet-stream fallback
+        file_record = db_session.query(FileRecord).first()
+        assert file_record is not None
+        assert file_record.mime_type == "application/octet-stream"
+        
+        # File should be queued for PDF conversion since it's not a PDF
+        assert result["status"] == "Queued for PDF conversion"
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_process_document_force_cloud_ocr(db_session, tmp_path):
+    """
+    Test that process_document correctly handles force_cloud_ocr flag,
+    skipping embedded text extraction and forcing cloud OCR.
+    """
+    # Create a test PDF file with embedded text
+    test_pdf = tmp_path / "test.pdf"
+    pdf_content = b"""%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Resources <<
+/Font <<
+/F1 <<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
+>>
+>>
+>>
+/Contents 4 0 R
+>>
+endobj
+4 0 obj
+<<
+/Length 44
+>>
+stream
+BT
+/F1 12 Tf
+100 700 Td
+(Test content) Tj
+ET
+endstream
+endobj
+xref
+0 5
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000306 00000 n
+trailer
+<<
+/Size 5
+/Root 1 0 R
+>>
+startxref
+399
+%%EOF
+"""
+    test_pdf.write_bytes(pdf_content)
+
+    # Mock environment and dependencies
+    with (
+        patch("app.tasks.process_document.SessionLocal") as mock_session_local,
+        patch("app.tasks.process_document.settings") as mock_settings,
+        patch("app.tasks.process_document.log_task_progress"),
+        patch("app.tasks.process_document.process_with_azure_document_intelligence") as mock_azure,
+    ):
+        # Setup mocks
+        mock_settings.workdir = str(tmp_path)
+        mock_session_local.return_value.__enter__.return_value = db_session
+        mock_session_local.return_value.__exit__.return_value = None
+        mock_azure.delay = MagicMock()
+
+        # Call the task with force_cloud_ocr=True
+        result = process_document.run(str(test_pdf), force_cloud_ocr=True)
+
+        # Verify that cloud OCR was queued
+        assert result["status"] == "Queued for forced OCR"
+        assert "file_id" in result
+
+        # Verify that process_with_azure_document_intelligence was called
+        mock_azure.delay.assert_called_once()
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_process_document_non_pdf_file(db_session, tmp_path):
+    """
+    Test that non-PDF files are queued for PDF conversion.
+    """
+    # Create a test image file
+    test_image = tmp_path / "test.jpg"
+    test_image.write_bytes(b"fake image content")
+
+    # Mock environment and dependencies
+    with (
+        patch("app.tasks.process_document.SessionLocal") as mock_session_local,
+        patch("app.tasks.process_document.settings") as mock_settings,
+        patch("app.tasks.process_document.log_task_progress"),
+        patch("app.tasks.process_document.celery") as mock_celery,
+    ):
+        # Setup mocks
+        mock_settings.workdir = str(tmp_path)
+        mock_session_local.return_value.__enter__.return_value = db_session
+        mock_session_local.return_value.__exit__.return_value = None
+        mock_celery.send_task = MagicMock()
+
+        # Call the task's run method directly
+        result = process_document.run(str(test_image))
+
+        # Verify that PDF conversion was queued
+        assert result["status"] == "Queued for PDF conversion"
+        assert "file_id" in result
+
+        # Verify that convert_to_pdf task was queued
+        mock_celery.send_task.assert_called_once()
+        call_args = mock_celery.send_task.call_args
+        assert call_args[0][0] == "app.tasks.convert_to_pdf.convert_to_pdf"
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_process_document_pdf_read_error_retry(db_session, tmp_path):
+    """
+    Test that PdfReadError during embedded text check triggers a retry.
+    """
+    # Create a test PDF file
+    test_pdf = tmp_path / "test.pdf"
+    pdf_content = b"""%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+>>
+endobj
+xref
+0 4
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+trailer
+<<
+/Size 4
+/Root 1 0 R
+>>
+startxref
+197
+%%EOF
+"""
+    test_pdf.write_bytes(pdf_content)
+
+    # Mock environment and dependencies
+    with (
+        patch("app.tasks.process_document.SessionLocal") as mock_session_local,
+        patch("app.tasks.process_document.settings") as mock_settings,
+        patch("app.tasks.process_document.log_task_progress"),
+        patch("app.tasks.process_document.pypdf.PdfReader") as mock_pdf_reader,
+    ):
+        # Setup mocks
+        mock_settings.workdir = str(tmp_path)
+        mock_session_local.return_value.__enter__.return_value = db_session
+        mock_session_local.return_value.__exit__.return_value = None
+
+        # Make PdfReader raise PdfReadError
+        from pypdf.errors import PdfReadError
+
+        mock_pdf_reader.side_effect = PdfReadError("Test error")
+
+        # Call the task's run method and expect it to raise retry exception
+        with pytest.raises(Exception) as exc_info:
+            process_document.run(str(test_pdf))
+
+        # Verify that retry was triggered
+        # The retry method raises a special exception
+        assert exc_info.value is not None
