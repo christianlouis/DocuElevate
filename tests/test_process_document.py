@@ -538,7 +538,7 @@ def test_process_document_unknown_mime_type(db_session, tmp_path):
         file_record = db_session.query(FileRecord).first()
         assert file_record is not None
         assert file_record.mime_type == "application/octet-stream"
-        
+
         # File should be queued for PDF conversion since it's not a PDF
         assert result["status"] == "Queued for PDF conversion"
 
