@@ -62,9 +62,9 @@ async def diagnostic_settings(request: Request, current_user: CurrentUser):
 @require_login
 async def test_notification(request: Request):
     # Add request_time to request.state
-    import datetime
+    from datetime import datetime, timezone
 
-    request.state.request_time = datetime.datetime.utcnow().isoformat()
+    request.state.request_time = datetime.now(timezone.utc).isoformat()
     """
     Send a test notification through all configured notification channels
     """

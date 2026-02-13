@@ -1,7 +1,8 @@
 """Comprehensive unit tests for app/api/dropbox.py module."""
 
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, Mock
 from fastapi import HTTPException
 
 

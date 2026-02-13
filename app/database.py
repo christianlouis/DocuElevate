@@ -5,8 +5,7 @@ import os
 
 from sqlalchemy import create_engine, exc
 from sqlalchemy.engine.url import make_url
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.config import settings
 

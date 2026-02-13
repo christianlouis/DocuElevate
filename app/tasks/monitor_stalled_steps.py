@@ -6,7 +6,7 @@ that have been stuck in "in_progress" state for too long and mark them as failed
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.celery_app import celery
 from app.database import SessionLocal
@@ -37,12 +37,12 @@ def monitor_stalled_steps():
 
             if stalled_count > 0:
                 logger.warning(
-                    f"[{datetime.utcnow().isoformat()}] "
+                    f"[{datetime.now(timezone.utc).isoformat()}] "
                     f"Recovered {stalled_count} stalled step(s). "
                     f"Marked as failed due to timeout."
                 )
             else:
-                logger.debug(f"[{datetime.utcnow().isoformat()}] " f"No stalled steps found.")
+                logger.debug(f"[{datetime.now(timezone.utc).isoformat()}] " f"No stalled steps found.")
 
             return {"recovered": stalled_count}
 

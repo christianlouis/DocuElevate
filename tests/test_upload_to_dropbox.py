@@ -255,9 +255,7 @@ class TestUploadToDropbox:
     @patch("app.tasks.upload_to_dropbox.get_dropbox_client")
     @patch("app.tasks.upload_to_dropbox.log_task_progress")
     @patch("app.tasks.upload_to_dropbox.settings")
-    def test_large_file_chunked_upload(
-        self, mock_settings, mock_log, mock_client, mock_extract, mock_unique, tmp_path
-    ):
+    def test_large_file_chunked_upload(self, mock_settings, mock_log, mock_client, mock_extract, mock_unique, tmp_path):
         """Test chunked upload for large files (>10MB)."""
         from app.tasks.upload_to_dropbox import upload_to_dropbox
 

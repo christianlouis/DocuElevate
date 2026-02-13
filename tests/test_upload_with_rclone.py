@@ -117,9 +117,7 @@ class TestUploadWithRcloneExtended:
         rclone_config = tmp_path / "rclone.conf"
         rclone_config.write_text("[gdrive]\ntype = drive\n")
 
-        mock_run.side_effect = subprocess.CalledProcessError(
-            1, "rclone", stderr=b"mkdir failed"
-        )
+        mock_run.side_effect = subprocess.CalledProcessError(1, "rclone", stderr=b"mkdir failed")
 
         with pytest.raises(RuntimeError, match="Rclone error"):
             upload_with_rclone(str(test_file), "gdrive:uploads")

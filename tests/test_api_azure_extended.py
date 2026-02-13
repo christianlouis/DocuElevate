@@ -1,7 +1,8 @@
 """Comprehensive unit tests for app/api/azure.py module."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -65,8 +66,9 @@ class TestAzureTestConnection:
     @patch("app.api.azure.azure.core.exceptions.ClientAuthenticationError")
     def test_azure_connection_authentication_error(self, mock_auth_error, mock_admin_client_class):
         """Test connection with authentication error."""
-        from app.config import settings
         import azure.core.exceptions
+
+        from app.config import settings
 
         mock_admin_client_class.side_effect = azure.core.exceptions.ClientAuthenticationError("Invalid key")
 
@@ -79,8 +81,9 @@ class TestAzureTestConnection:
     @patch("app.api.azure.DocumentIntelligenceAdministrationClient")
     def test_azure_connection_service_request_error(self, mock_admin_client_class):
         """Test connection with service request error."""
-        from app.config import settings
         import azure.core.exceptions
+
+        from app.config import settings
 
         mock_admin_client_class.side_effect = azure.core.exceptions.ServiceRequestError("Cannot reach endpoint")
 

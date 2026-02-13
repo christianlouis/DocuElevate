@@ -72,21 +72,23 @@ class TestExtractMetadataWithGpt:
         """Test successful metadata extraction with valid GPT response."""
         # Mock the OpenAI client response
         mock_completion = MagicMock()
-        mock_completion.choices[0].message.content = json.dumps({
-            "filename": "2024-01-15_Invoice_Amazon",
-            "empfaenger": "John Doe",
-            "absender": "Amazon",
-            "correspondent": "Amazon",
-            "kommunikationsart": "Rechnung",
-            "kommunikationskategorie": "Finanz_und_Vertragsdokumente",
-            "document_type": "Invoice",
-            "tags": ["invoice", "amazon", "online-shopping"],
-            "language": "de",
-            "title": "Amazon Purchase Invoice",
-            "confidence_score": 95,
-            "reference_number": "INV-2024-001",
-            "monetary_amounts": ["99.99 EUR"]
-        })
+        mock_completion.choices[0].message.content = json.dumps(
+            {
+                "filename": "2024-01-15_Invoice_Amazon",
+                "empfaenger": "John Doe",
+                "absender": "Amazon",
+                "correspondent": "Amazon",
+                "kommunikationsart": "Rechnung",
+                "kommunikationskategorie": "Finanz_und_Vertragsdokumente",
+                "document_type": "Invoice",
+                "tags": ["invoice", "amazon", "online-shopping"],
+                "language": "de",
+                "title": "Amazon Purchase Invoice",
+                "confidence_score": 95,
+                "reference_number": "INV-2024-001",
+                "monetary_amounts": ["99.99 EUR"],
+            }
+        )
         mock_client.chat.completions.create.return_value = mock_completion
 
         # Set task request context directly on the Celery task
@@ -119,7 +121,9 @@ class TestExtractMetadataWithGpt:
     def test_handles_json_in_backticks(self, mock_client, mock_log_progress, mock_embed_task):
         """Test extraction handles JSON wrapped in markdown code blocks."""
         mock_completion = MagicMock()
-        mock_completion.choices[0].message.content = '```json\n{"filename": "test.pdf", "document_type": "Unknown"}\n```'
+        mock_completion.choices[0].message.content = (
+            '```json\n{"filename": "test.pdf", "document_type": "Unknown"}\n```'
+        )
         mock_client.chat.completions.create.return_value = mock_completion
 
         extract_metadata_with_gpt.request.id = "test-task-id"
@@ -191,9 +195,7 @@ class TestExtractMetadataWithGpt:
                 extract_metadata_with_gpt.request.id = "test-task-id"
 
                 result = extract_metadata_with_gpt.__wrapped__(
-                    filename="test.pdf",
-                    cleaned_text="Sample text",
-                    file_id=None  # Not provided
+                    filename="test.pdf", cleaned_text="Sample text", file_id=None  # Not provided
                 )
 
                 assert result["metadata"]["filename"] == "test.pdf"
@@ -207,10 +209,9 @@ class TestExtractMetadataWithGpt:
         """Test filename validation to prevent path traversal."""
         mock_completion = MagicMock()
         # Try to inject a malicious filename
-        mock_completion.choices[0].message.content = json.dumps({
-            "filename": "../../../etc/passwd",
-            "document_type": "Invoice"
-        })
+        mock_completion.choices[0].message.content = json.dumps(
+            {"filename": "../../../etc/passwd", "document_type": "Invoice"}
+        )
         mock_client.chat.completions.create.return_value = mock_completion
 
         extract_metadata_with_gpt.request.id = "test-task-id"
@@ -227,10 +228,9 @@ class TestExtractMetadataWithGpt:
     def test_validates_filename_with_dots(self, mock_client, mock_log_progress, mock_embed_task):
         """Test filename validation rejects '..' in filenames."""
         mock_completion = MagicMock()
-        mock_completion.choices[0].message.content = json.dumps({
-            "filename": "test..invoice.pdf",
-            "document_type": "Invoice"
-        })
+        mock_completion.choices[0].message.content = json.dumps(
+            {"filename": "test..invoice.pdf", "document_type": "Invoice"}
+        )
         mock_client.chat.completions.create.return_value = mock_completion
 
         extract_metadata_with_gpt.request.id = "test-task-id"
@@ -246,10 +246,9 @@ class TestExtractMetadataWithGpt:
     def test_accepts_valid_filename(self, mock_client, mock_log_progress, mock_embed_task):
         """Test that valid filenames are accepted."""
         mock_completion = MagicMock()
-        mock_completion.choices[0].message.content = json.dumps({
-            "filename": "2024-01-15_Invoice_Amazon.pdf",
-            "document_type": "Invoice"
-        })
+        mock_completion.choices[0].message.content = json.dumps(
+            {"filename": "2024-01-15_Invoice_Amazon.pdf", "document_type": "Invoice"}
+        )
         mock_client.chat.completions.create.return_value = mock_completion
 
         extract_metadata_with_gpt.request.id = "test-task-id"

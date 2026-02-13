@@ -3,7 +3,7 @@
 import json
 import os
 import time
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
@@ -281,7 +281,9 @@ class TestCheckCredentialsTask:
     @patch("app.tasks.check_credentials.get_provider_status")
     @patch("app.tasks.check_credentials.sync_test_openai_connection")
     @patch("app.tasks.check_credentials.notify_credential_failure")
-    def test_service_invalid_first_failure(self, mock_notify, mock_openai, mock_provider, mock_storage, mock_state, mock_save):
+    def test_service_invalid_first_failure(
+        self, mock_notify, mock_openai, mock_provider, mock_storage, mock_state, mock_save
+    ):
         """Test when a configured service fails for the first time."""
         from app.tasks.check_credentials import check_credentials
 

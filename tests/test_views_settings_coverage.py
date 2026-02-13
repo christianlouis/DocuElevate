@@ -1,8 +1,8 @@
 """Comprehensive tests for app/views/settings.py to improve coverage."""
 
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi import HTTPException
 from fastapi.responses import RedirectResponse
 
@@ -113,7 +113,9 @@ class TestSettingsPage:
     @patch("app.views.settings.get_setting_metadata")
     @patch("app.views.settings.mask_sensitive_value")
     @patch("app.views.settings.settings")
-    async def test_settings_page_renders(self, mock_settings, mock_mask, mock_metadata, mock_categories, mock_templates):
+    async def test_settings_page_renders(
+        self, mock_settings, mock_mask, mock_metadata, mock_categories, mock_templates
+    ):
         """Test settings page renders with settings data."""
         from app.views.settings import settings_page
 

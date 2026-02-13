@@ -1,9 +1,9 @@
 """Comprehensive tests for app/api/azure.py to improve coverage."""
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 import azure.core.exceptions
+import pytest
 
 
 @pytest.mark.unit
@@ -196,9 +196,7 @@ class TestAzureTestConnectionEndpoint:
 
         mock_client = MagicMock()
         # list_operations works, but iterating over operations raises
-        mock_client.list_operations.return_value = MagicMock(
-            __iter__=MagicMock(side_effect=Exception("Parse error"))
-        )
+        mock_client.list_operations.return_value = MagicMock(__iter__=MagicMock(side_effect=Exception("Parse error")))
         # Make list() work but then the for loop fails
         mock_client_cls.return_value = mock_client
         mock_request = MagicMock()

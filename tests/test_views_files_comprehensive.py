@@ -7,7 +7,7 @@ Target: Bring coverage from 8.77% to 70%+
 
 import json
 import os
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -32,14 +32,14 @@ class TestFilesPage:
             original_filename="test1.pdf",
             local_filename="/tmp/test1.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         file2 = FileRecord(
             filehash="hash2",
             original_filename="test2.pdf",
             local_filename="/tmp/test2.pdf",
             file_size=2048,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file1)
         db_session.add(file2)
@@ -57,7 +57,7 @@ class TestFilesPage:
                 original_filename=f"test{i}.pdf",
                 local_filename=f"/tmp/test{i}.pdf",
                 file_size=1024,
-                mime_type="application/pdf"
+                mime_type="application/pdf",
             )
             db_session.add(file)
         db_session.commit()
@@ -77,14 +77,14 @@ class TestFilesPage:
             original_filename="invoice.pdf",
             local_filename="/tmp/invoice.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         file2 = FileRecord(
             filehash="hash2",
             original_filename="receipt.pdf",
             local_filename="/tmp/receipt.pdf",
             file_size=2048,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file1)
         db_session.add(file2)
@@ -100,14 +100,14 @@ class TestFilesPage:
             original_filename="doc.pdf",
             local_filename="/tmp/doc.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         file2 = FileRecord(
             filehash="hash2",
             original_filename="image.jpg",
             local_filename="/tmp/image.jpg",
             file_size=2048,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
         db_session.add(file1)
         db_session.add(file2)
@@ -123,7 +123,7 @@ class TestFilesPage:
             original_filename="test.pdf",
             local_filename="/tmp/test.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -133,8 +133,20 @@ class TestFilesPage:
 
     def test_files_page_sorting_by_filename_asc(self, client: TestClient, db_session):
         """Test sorting by filename ascending."""
-        file1 = FileRecord(filehash="hash1", original_filename="aaa.pdf", local_filename="/tmp/aaa.pdf", file_size=1024, mime_type="application/pdf")
-        file2 = FileRecord(filehash="hash2", original_filename="zzz.pdf", local_filename="/tmp/zzz.pdf", file_size=2048, mime_type="application/pdf")
+        file1 = FileRecord(
+            filehash="hash1",
+            original_filename="aaa.pdf",
+            local_filename="/tmp/aaa.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        file2 = FileRecord(
+            filehash="hash2",
+            original_filename="zzz.pdf",
+            local_filename="/tmp/zzz.pdf",
+            file_size=2048,
+            mime_type="application/pdf",
+        )
         db_session.add(file1)
         db_session.add(file2)
         db_session.commit()
@@ -144,8 +156,20 @@ class TestFilesPage:
 
     def test_files_page_sorting_by_size_desc(self, client: TestClient, db_session):
         """Test sorting by file size descending."""
-        file1 = FileRecord(filehash="hash1", original_filename="small.pdf", local_filename="/tmp/small.pdf", file_size=100, mime_type="application/pdf")
-        file2 = FileRecord(filehash="hash2", original_filename="large.pdf", local_filename="/tmp/large.pdf", file_size=10000, mime_type="application/pdf")
+        file1 = FileRecord(
+            filehash="hash1",
+            original_filename="small.pdf",
+            local_filename="/tmp/small.pdf",
+            file_size=100,
+            mime_type="application/pdf",
+        )
+        file2 = FileRecord(
+            filehash="hash2",
+            original_filename="large.pdf",
+            local_filename="/tmp/large.pdf",
+            file_size=10000,
+            mime_type="application/pdf",
+        )
         db_session.add(file1)
         db_session.add(file2)
         db_session.commit()
@@ -170,14 +194,14 @@ class TestFileDetailPage:
         # Create file with paths that exist
         file_path = tmp_path / "test.pdf"
         file_path.write_bytes(b"%PDF-1.4")
-        
+
         file = FileRecord(
             filehash="hash1",
             original_filename="test.pdf",
             local_filename=str(file_path),
             original_file_path=str(file_path),
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -194,13 +218,13 @@ class TestFileDetailPage:
         """Test file detail page includes processing logs."""
         file_path = tmp_path / "test.pdf"
         file_path.write_bytes(b"%PDF-1.4")
-        
+
         file = FileRecord(
             filehash="hash1",
             original_filename="test.pdf",
             local_filename=str(file_path),
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -211,14 +235,10 @@ class TestFileDetailPage:
             task_id="task1",
             step_name="create_file_record",
             status="success",
-            message="File record created"
+            message="File record created",
         )
         log2 = ProcessingLog(
-            file_id=file.id,
-            task_id="task2",
-            step_name="extract_text",
-            status="success",
-            message="Text extracted"
+            file_id=file.id, task_id="task2", step_name="extract_text", status="success", message="Text extracted"
         )
         db_session.add(log1)
         db_session.add(log2)
@@ -231,23 +251,23 @@ class TestFileDetailPage:
         """Test file detail page loads GPT metadata from JSON file."""
         file_path = tmp_path / "test.pdf"
         file_path.write_bytes(b"%PDF-1.4")
-        
+
         # Create processed file path
         processed_path = tmp_path / "test_processed.pdf"
         processed_path.write_bytes(b"%PDF-1.4")
-        
+
         # Create metadata JSON file
         metadata_path = tmp_path / "test_processed.json"
         metadata = {"document_type": "invoice", "amount": 100.00}
         metadata_path.write_text(json.dumps(metadata))
-        
+
         file = FileRecord(
             filehash="hash1",
             original_filename="test.pdf",
             local_filename=str(file_path),
             processed_file_path=str(processed_path),
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -264,7 +284,7 @@ class TestFileDetailPage:
             local_filename="/nonexistent/local.pdf",  # Required field
             original_file_path="/nonexistent/test.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -287,24 +307,14 @@ class TestComputeProcessingFlow:
     def test_compute_processing_flow_basic(self, db_session):
         """Test basic processing flow computation."""
         from app.views.files import _compute_processing_flow
-        
+
         logs = [
             Mock(
-                step_name="create_file_record",
-                status="success",
-                message="Created",
-                timestamp=Mock(),
-                task_id="task1"
+                step_name="create_file_record", status="success", message="Created", timestamp=Mock(), task_id="task1"
             ),
-            Mock(
-                step_name="check_text",
-                status="success",
-                message="Checked",
-                timestamp=Mock(),
-                task_id="task2"
-            )
+            Mock(step_name="check_text", status="success", message="Checked", timestamp=Mock(), task_id="task2"),
         ]
-        
+
         flow = _compute_processing_flow(logs)
         assert isinstance(flow, list)
         assert len(flow) > 0
@@ -314,17 +324,17 @@ class TestComputeProcessingFlow:
     def test_compute_processing_flow_with_deduplication(self, db_session):
         """Test flow includes deduplication when enabled."""
         from app.views.files import _compute_processing_flow
-        
+
         logs = [
             Mock(
                 step_name="check_for_duplicates",
                 status="success",
                 message="No duplicates",
                 timestamp=Mock(),
-                task_id="task1"
+                task_id="task1",
             )
         ]
-        
+
         flow = _compute_processing_flow(logs)
         # Should include deduplication step
         step_keys = [step["key"] for step in flow]
@@ -333,31 +343,27 @@ class TestComputeProcessingFlow:
     def test_compute_processing_flow_with_upload_branches(self, db_session):
         """Test flow includes upload branches."""
         from app.views.files import _compute_processing_flow
-        
+
         logs = [
             Mock(
                 step_name="send_to_all_destinations",
                 status="success",
                 message="Sent",
                 timestamp=Mock(),
-                task_id="task1"
+                task_id="task1",
             ),
             Mock(
-                step_name="upload_to_dropbox",
-                status="success",
-                message="Uploaded",
-                timestamp=Mock(),
-                task_id="task2"
+                step_name="upload_to_dropbox", status="success", message="Uploaded", timestamp=Mock(), task_id="task2"
             ),
             Mock(
                 step_name="upload_to_google_drive",
                 status="failure",
                 message="Failed",
                 timestamp=Mock(),
-                task_id="task3"
-            )
+                task_id="task3",
+            ),
         ]
-        
+
         flow = _compute_processing_flow(logs)
         # Find the upload stage
         upload_stage = next((s for s in flow if s.get("is_branch_parent")), None)
@@ -368,17 +374,17 @@ class TestComputeProcessingFlow:
     def test_compute_processing_flow_handles_failure_status(self, db_session):
         """Test flow correctly identifies failed steps."""
         from app.views.files import _compute_processing_flow
-        
+
         logs = [
             Mock(
                 step_name="extract_metadata_with_gpt",
                 status="failure",
                 message="Failed to extract",
                 timestamp=Mock(),
-                task_id="task1"
+                task_id="task1",
             )
         ]
-        
+
         flow = _compute_processing_flow(logs)
         failed_steps = [s for s in flow if s["status"] == "failure"]
         # Should have at least the failed step we added
@@ -394,13 +400,13 @@ class TestComputeStepSummary:
     def test_compute_step_summary_basic(self):
         """Test basic step summary computation."""
         from app.views.files import _compute_step_summary
-        
+
         logs = [
             Mock(step_name="create_file_record", status="success", timestamp=Mock()),
             Mock(step_name="check_text", status="success", timestamp=Mock()),
-            Mock(step_name="extract_text", status="success", timestamp=Mock())
+            Mock(step_name="extract_text", status="success", timestamp=Mock()),
         ]
-        
+
         summary = _compute_step_summary(logs)
         assert "main" in summary
         assert "uploads" in summary
@@ -409,13 +415,13 @@ class TestComputeStepSummary:
     def test_compute_step_summary_with_uploads(self):
         """Test summary includes upload task counts."""
         from app.views.files import _compute_step_summary
-        
+
         logs = [
             Mock(step_name="create_file_record", status="success", timestamp=Mock()),
             Mock(step_name="upload_to_dropbox", status="success", timestamp=Mock()),
-            Mock(step_name="upload_to_google_drive", status="failure", timestamp=Mock())
+            Mock(step_name="upload_to_google_drive", status="failure", timestamp=Mock()),
         ]
-        
+
         summary = _compute_step_summary(logs)
         assert summary["uploads"]["success"] >= 1
         assert summary["uploads"]["failure"] >= 1
@@ -423,26 +429,25 @@ class TestComputeStepSummary:
     def test_compute_step_summary_normalizes_pending_status(self):
         """Test that 'pending' status is normalized to 'queued'."""
         from app.views.files import _compute_step_summary
-        
-        logs = [
-            Mock(step_name="create_file_record", status="pending", timestamp=Mock())
-        ]
-        
+
+        logs = [Mock(step_name="create_file_record", status="pending", timestamp=Mock())]
+
         summary = _compute_step_summary(logs)
         # Should count as queued, not pending
         assert summary["main"]["queued"] >= 1
 
     def test_compute_step_summary_order_independent(self):
         """Test that summary is order-independent (uses latest timestamp)."""
-        from app.views.files import _compute_step_summary
         from datetime import datetime, timedelta
-        
+
+        from app.views.files import _compute_step_summary
+
         now = datetime.now()
         logs = [
             Mock(step_name="create_file_record", status="queued", timestamp=now),
-            Mock(step_name="create_file_record", status="success", timestamp=now + timedelta(seconds=10))
+            Mock(step_name="create_file_record", status="success", timestamp=now + timedelta(seconds=10)),
         ]
-        
+
         summary = _compute_step_summary(logs)
         # Should count success (latest) not queued
         assert summary["main"]["success"] >= 1
@@ -457,14 +462,14 @@ class TestPreviewOriginalFile:
         """Test preview of original file."""
         file_path = tmp_path / "test.pdf"
         file_path.write_bytes(b"%PDF-1.4")
-        
+
         file = FileRecord(
             filehash="hash1",
             original_filename="test.pdf",
             local_filename=str(file_path),  # Required field
             original_file_path=str(file_path),
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -487,7 +492,7 @@ class TestPreviewOriginalFile:
             local_filename="/nonexistent/local.pdf",  # Required field
             original_file_path="/nonexistent/test.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -504,14 +509,14 @@ class TestPreviewProcessedFile:
         """Test preview of processed file."""
         processed_path = tmp_path / "test_processed.pdf"
         processed_path.write_bytes(b"%PDF-1.4")
-        
+
         file = FileRecord(
             filehash="hash1",
             original_filename="test.pdf",
             local_filename=str(processed_path),  # Required field
             processed_file_path=str(processed_path),
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -533,7 +538,7 @@ class TestPreviewProcessedFile:
             local_filename="/nonexistent/local.pdf",  # Required field
             processed_file_path="/nonexistent/test_processed.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -573,14 +578,14 @@ startxref
 %%EOF
 """
         pdf_path.write_bytes(pdf_content)
-        
+
         file = FileRecord(
             filehash="hash1",
             original_filename="test.pdf",
             local_filename=str(pdf_path),  # Required field
             original_file_path=str(pdf_path),
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -604,7 +609,7 @@ startxref
             local_filename="/nonexistent/local.pdf",  # Required field
             original_file_path="/nonexistent/test.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -643,14 +648,14 @@ startxref
 %%EOF
 """
         pdf_path.write_bytes(pdf_content)
-        
+
         file = FileRecord(
             filehash="hash1",
             original_filename="test.pdf",
             local_filename=str(pdf_path),  # local_filename is NOT NULL
             processed_file_path=str(pdf_path),
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -693,14 +698,14 @@ startxref
 %%EOF
 """
         pdf_path.write_bytes(pdf_content)
-        
+
         file = FileRecord(
             filehash="hash1",
             original_filename="empty.pdf",
             local_filename=str(pdf_path),  # local_filename is NOT NULL
             processed_file_path=str(pdf_path),
             file_size=100,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()

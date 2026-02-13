@@ -1,7 +1,8 @@
 """Comprehensive tests for app/views/status.py to improve coverage."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 @pytest.mark.unit
@@ -65,13 +66,7 @@ class TestStatusDashboard:
         ):
             mock_exists.return_value = True
             mock_file.return_value.__enter__ = MagicMock(
-                return_value=MagicMock(
-                    __iter__=MagicMock(
-                        return_value=iter(
-                            ["12:devices:/docker/abc123def456\n"]
-                        )
-                    )
-                )
+                return_value=MagicMock(__iter__=MagicMock(return_value=iter(["12:devices:/docker/abc123def456\n"])))
             )
             mock_file.return_value.__exit__ = MagicMock(return_value=False)
 

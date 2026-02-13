@@ -152,9 +152,7 @@ class TestPollTaskForDocumentId:
         mock_settings.http_request_timeout = 30
 
         mock_response = Mock()
-        mock_response.json.return_value = {
-            "results": [{"status": "SUCCESS", "related_document": "99"}]
-        }
+        mock_response.json.return_value = {"results": [{"status": "SUCCESS", "related_document": "99"}]}
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
 
@@ -188,9 +186,7 @@ class TestPollTaskForDocumentId:
         mock_settings.http_request_timeout = 30
 
         mock_response = Mock()
-        mock_response.json.return_value = [
-            {"status": "FAILURE", "result": "Not consuming duplicate document"}
-        ]
+        mock_response.json.return_value = [{"status": "FAILURE", "result": "Not consuming duplicate document"}]
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
 
@@ -262,9 +258,7 @@ class TestGetCustomFieldId:
         mock_settings.http_request_timeout = 30
 
         mock_response = Mock()
-        mock_response.json.return_value = {
-            "results": [{"name": "sender", "id": 5}, {"name": "date", "id": 6}]
-        }
+        mock_response.json.return_value = {"results": [{"name": "sender", "id": 5}, {"name": "date", "id": 6}]}
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
 

@@ -1,8 +1,8 @@
 """Comprehensive tests for app/api/settings.py to improve coverage."""
 
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi import HTTPException
 
 
