@@ -449,7 +449,7 @@ class TestFullInfrastructure:
 
         # Create SFTP client
         ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # noqa: S507
 
         # Connect to SFTP server
         ssh.connect(

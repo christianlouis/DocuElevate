@@ -57,8 +57,8 @@ async def status_dashboard(request: Request):
             # Try to get runtime information
             try:
                 container_info["runtime_info"] = settings.runtime_info
-            except Exception:
-                pass
+            except Exception:  # noqa: S110
+                pass  # Ignore if runtime_info not available
         else:
             container_info["is_docker"] = False
 

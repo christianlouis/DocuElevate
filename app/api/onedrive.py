@@ -242,18 +242,17 @@ async def save_onedrive_settings(
         updated = set()
         new_env_lines = []
         for line in env_lines:
-            line = line.rstrip()
+            stripped_line = line.rstrip()
             is_updated = False
             for key, value in onedrive_settings.items():
-                if line.startswith(f"{key}=") or line.startswith(f"# {key}="):
-                    if line.startswith("# "):  # Uncomment if commented out
-                        line = line[2:]
+                if stripped_line.startswith(f"{key}=") or stripped_line.startswith(f"# {key}="):
+                    # Uncomment if commented out - check the original stripped line
                     new_env_lines.append(f"{key}={value}")
                     updated.add(key)
                     is_updated = True
                     break
             if not is_updated:
-                new_env_lines.append(line)
+                new_env_lines.append(stripped_line)
 
         # Add any settings that weren't updated (they weren't in the file)
         for key, value in onedrive_settings.items():

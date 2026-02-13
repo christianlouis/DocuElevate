@@ -56,7 +56,7 @@ def upload_to_sftp(self, file_path: str, file_id: int = None):
             "This should only be used in development/testing. For production, remove "
             "SFTP_DISABLE_HOST_KEY_VERIFICATION or set it to False and configure known_hosts."
         )
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # nosec B507 - Configurable, warns user
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # nosec B507 - Configurable, warns user  # noqa: S507
     else:
         # Use system known_hosts for host key verification (more secure)
         ssh.load_system_host_keys()
@@ -149,8 +149,8 @@ def upload_to_sftp(self, file_path: str, file_id: int = None):
             if "sftp" in locals():
                 sftp.close()
             ssh.close()
-        except Exception:
-            pass
+        except Exception:  # noqa: S110
+            pass  # Ignore errors during cleanup
 
         error_msg = f"Failed to upload {filename} to SFTP server: {str(e)}"
         logger.error(f"[{task_id}] {error_msg}")

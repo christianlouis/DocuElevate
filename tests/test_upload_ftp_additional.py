@@ -1,7 +1,7 @@
 """Additional tests for upload_to_ftp task."""
 
 import ftplib
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -18,14 +18,18 @@ class TestUploadToFtp:
 
         assert callable(upload_to_ftp)
 
+    @patch("app.tasks.upload_to_ftp.os.path.basename")
     @patch("app.tasks.upload_to_ftp.ftplib.FTP_TLS")
     @patch("app.tasks.upload_to_ftp.log_task_progress")
     @patch("app.tasks.upload_to_ftp.os.path.exists")
     @patch("app.tasks.upload_to_ftp.settings")
     @patch("builtins.open", create=True)
-    def test_uploads_file_with_ftps(self, mock_open, mock_settings, mock_exists, mock_log, mock_ftp_tls):
+    def test_uploads_file_with_ftps(
+        self, mock_open, mock_settings, mock_exists, mock_log, mock_ftp_tls, mock_basename
+    ):
         """Test uploads file using FTPS (FTP with TLS)."""
         mock_exists.return_value = True
+        mock_basename.return_value = "test.pdf"
         mock_settings.ftp_host = "ftp.example.com"
         mock_settings.ftp_port = 21
         mock_settings.ftp_username = "user"
@@ -47,6 +51,7 @@ class TestUploadToFtp:
         mock_ftp.login.assert_called_once()
         mock_ftp.prot_p.assert_called_once()
 
+    @patch("app.tasks.upload_to_ftp.os.path.basename")
     @patch("app.tasks.upload_to_ftp.ftplib.FTP")
     @patch("app.tasks.upload_to_ftp.ftplib.FTP_TLS")
     @patch("app.tasks.upload_to_ftp.log_task_progress")
@@ -54,10 +59,11 @@ class TestUploadToFtp:
     @patch("app.tasks.upload_to_ftp.settings")
     @patch("builtins.open", create=True)
     def test_falls_back_to_plaintext_ftp(
-        self, mock_open, mock_settings, mock_exists, mock_log, mock_ftp_tls, mock_ftp
+        self, mock_open, mock_settings, mock_exists, mock_log, mock_ftp_tls, mock_ftp, mock_basename
     ):
         """Test falls back to plaintext FTP when FTPS fails."""
         mock_exists.return_value = True
+        mock_basename.return_value = "test.pdf"
         mock_settings.ftp_host = "ftp.example.com"
         mock_settings.ftp_port = 21
         mock_settings.ftp_username = "user"
@@ -83,15 +89,17 @@ class TestUploadToFtp:
         assert result["status"] == "Completed"
         assert result["used_tls"] is False
 
+    @patch("app.tasks.upload_to_ftp.os.path.basename")
     @patch("app.tasks.upload_to_ftp.ftplib.FTP_TLS")
     @patch("app.tasks.upload_to_ftp.log_task_progress")
     @patch("app.tasks.upload_to_ftp.os.path.exists")
     @patch("app.tasks.upload_to_ftp.settings")
     def test_raises_error_when_ftps_fails_and_plaintext_forbidden(
-        self, mock_settings, mock_exists, mock_log, mock_ftp_tls
+        self, mock_settings, mock_exists, mock_log, mock_ftp_tls, mock_basename
     ):
         """Test raises error when FTPS fails and plaintext is forbidden."""
         mock_exists.return_value = True
+        mock_basename.return_value = "test.pdf"
         mock_settings.ftp_host = "ftp.example.com"
         mock_settings.ftp_port = 21
         mock_settings.ftp_username = "user"
@@ -110,11 +118,13 @@ class TestUploadToFtp:
         with pytest.raises(Exception, match="FTPS connection failed and plaintext FTP is forbidden"):
             upload_to_ftp(mock_self, "/tmp/test.pdf")
 
+    @patch("app.tasks.upload_to_ftp.os.path.basename")
     @patch("app.tasks.upload_to_ftp.log_task_progress")
     @patch("app.tasks.upload_to_ftp.os.path.exists")
-    def test_raises_error_when_file_not_found(self, mock_exists, mock_log):
+    def test_raises_error_when_file_not_found(self, mock_exists, mock_log, mock_basename):
         """Test raises error when file not found."""
         mock_exists.return_value = False
+        mock_basename.return_value = "file.pdf"
 
         mock_self = Mock()
         mock_self.request.id = "test-task-id"
@@ -122,12 +132,14 @@ class TestUploadToFtp:
         with pytest.raises(FileNotFoundError):
             upload_to_ftp(mock_self, "/nonexistent/file.pdf")
 
+    @patch("app.tasks.upload_to_ftp.os.path.basename")
     @patch("app.tasks.upload_to_ftp.log_task_progress")
     @patch("app.tasks.upload_to_ftp.os.path.exists")
     @patch("app.tasks.upload_to_ftp.settings")
-    def test_raises_error_when_ftp_host_not_configured(self, mock_settings, mock_exists, mock_log):
+    def test_raises_error_when_ftp_host_not_configured(self, mock_settings, mock_exists, mock_log, mock_basename):
         """Test raises error when FTP host not configured."""
         mock_exists.return_value = True
+        mock_basename.return_value = "test.pdf"
         mock_settings.ftp_host = None
 
         mock_self = Mock()
@@ -136,14 +148,18 @@ class TestUploadToFtp:
         with pytest.raises(ValueError, match="FTP host is not configured"):
             upload_to_ftp(mock_self, "/tmp/test.pdf")
 
+    @patch("app.tasks.upload_to_ftp.os.path.basename")
     @patch("app.tasks.upload_to_ftp.ftplib.FTP_TLS")
     @patch("app.tasks.upload_to_ftp.log_task_progress")
     @patch("app.tasks.upload_to_ftp.os.path.exists")
     @patch("app.tasks.upload_to_ftp.settings")
     @patch("builtins.open", create=True)
-    def test_creates_directory_structure(self, mock_open, mock_settings, mock_exists, mock_log, mock_ftp_tls):
+    def test_creates_directory_structure(
+        self, mock_open, mock_settings, mock_exists, mock_log, mock_ftp_tls, mock_basename
+    ):
         """Test creates directory structure if it doesn't exist."""
         mock_exists.return_value = True
+        mock_basename.return_value = "test.pdf"
         mock_settings.ftp_host = "ftp.example.com"
         mock_settings.ftp_port = 21
         mock_settings.ftp_username = "user"
@@ -152,7 +168,14 @@ class TestUploadToFtp:
         mock_settings.ftp_use_tls = True
 
         mock_ftp = Mock()
-        mock_ftp.cwd.side_effect = [ftplib.error_perm("No such directory"), None]
+        # First cwd fails (trying full path), then for each subfolder: fail then succeed after mkd
+        mock_ftp.cwd.side_effect = [
+            ftplib.error_perm("No such directory"),  # noqa: S321  # Initial try for full path
+            ftplib.error_perm("No such directory"),  # noqa: S321  # /uploads doesn't exist
+            None,  # /uploads now exists after mkd
+            ftplib.error_perm("No such directory"),  # noqa: S321  # /uploads/documents doesn't exist
+            None,  # /uploads/documents now exists after mkd
+        ]
         mock_ftp_tls.return_value = mock_ftp
 
         mock_self = Mock()
@@ -163,14 +186,18 @@ class TestUploadToFtp:
         assert result["status"] == "Completed"
         mock_ftp.mkd.assert_called()
 
+    @patch("app.tasks.upload_to_ftp.os.path.basename")
     @patch("app.tasks.upload_to_ftp.ftplib.FTP")
     @patch("app.tasks.upload_to_ftp.log_task_progress")
     @patch("app.tasks.upload_to_ftp.os.path.exists")
     @patch("app.tasks.upload_to_ftp.settings")
     @patch("builtins.open", create=True)
-    def test_uses_plaintext_ftp_when_tls_disabled(self, mock_open, mock_settings, mock_exists, mock_log, mock_ftp):
+    def test_uses_plaintext_ftp_when_tls_disabled(
+        self, mock_open, mock_settings, mock_exists, mock_log, mock_ftp, mock_basename
+    ):
         """Test uses plaintext FTP when TLS is explicitly disabled."""
         mock_exists.return_value = True
+        mock_basename.return_value = "test.pdf"
         mock_settings.ftp_host = "ftp.example.com"
         mock_settings.ftp_port = 21
         mock_settings.ftp_username = "user"
@@ -190,12 +217,16 @@ class TestUploadToFtp:
         assert result["status"] == "Completed"
         assert result["used_tls"] is False
 
+    @patch("app.tasks.upload_to_ftp.os.path.basename")
     @patch("app.tasks.upload_to_ftp.log_task_progress")
     @patch("app.tasks.upload_to_ftp.os.path.exists")
     @patch("app.tasks.upload_to_ftp.settings")
-    def test_raises_error_when_plaintext_forbidden_and_tls_disabled(self, mock_settings, mock_exists, mock_log):
+    def test_raises_error_when_plaintext_forbidden_and_tls_disabled(
+        self, mock_settings, mock_exists, mock_log, mock_basename
+    ):
         """Test raises error when plaintext is forbidden and TLS is disabled."""
         mock_exists.return_value = True
+        mock_basename.return_value = "test.pdf"
         mock_settings.ftp_host = "ftp.example.com"
         mock_settings.ftp_port = 21
         mock_settings.ftp_use_tls = False
@@ -207,14 +238,18 @@ class TestUploadToFtp:
         with pytest.raises(Exception, match="Plaintext FTP is forbidden"):
             upload_to_ftp(mock_self, "/tmp/test.pdf")
 
+    @patch("app.tasks.upload_to_ftp.os.path.basename")
     @patch("app.tasks.upload_to_ftp.ftplib.FTP_TLS")
     @patch("app.tasks.upload_to_ftp.log_task_progress")
     @patch("app.tasks.upload_to_ftp.os.path.exists")
     @patch("app.tasks.upload_to_ftp.settings")
     @patch("builtins.open", create=True)
-    def test_removes_leading_slash_from_folder(self, mock_open, mock_settings, mock_exists, mock_log, mock_ftp_tls):
+    def test_removes_leading_slash_from_folder(
+        self, mock_open, mock_settings, mock_exists, mock_log, mock_ftp_tls, mock_basename
+    ):
         """Test removes leading slash from folder path."""
         mock_exists.return_value = True
+        mock_basename.return_value = "test.pdf"
         mock_settings.ftp_host = "ftp.example.com"
         mock_settings.ftp_port = 21
         mock_settings.ftp_username = "user"
@@ -233,13 +268,15 @@ class TestUploadToFtp:
         # Verify cwd was called with folder without leading slash
         mock_ftp.cwd.assert_called_with("uploads")
 
+    @patch("app.tasks.upload_to_ftp.os.path.basename")
     @patch("app.tasks.upload_to_ftp.ftplib.FTP_TLS")
     @patch("app.tasks.upload_to_ftp.log_task_progress")
     @patch("app.tasks.upload_to_ftp.os.path.exists")
     @patch("app.tasks.upload_to_ftp.settings")
-    def test_handles_directory_creation_error(self, mock_settings, mock_exists, mock_log, mock_ftp_tls):
+    def test_handles_directory_creation_error(self, mock_settings, mock_exists, mock_log, mock_ftp_tls, mock_basename):
         """Test handles directory creation error."""
         mock_exists.return_value = True
+        mock_basename.return_value = "test.pdf"
         mock_settings.ftp_host = "ftp.example.com"
         mock_settings.ftp_port = 21
         mock_settings.ftp_username = "user"
@@ -248,8 +285,8 @@ class TestUploadToFtp:
         mock_settings.ftp_use_tls = True
 
         mock_ftp = Mock()
-        mock_ftp.cwd.side_effect = ftplib.error_perm("Permission denied")
-        mock_ftp.mkd.side_effect = ftplib.error_perm("Cannot create directory")
+        mock_ftp.cwd.side_effect = ftplib.error_perm("Permission denied")  # noqa: S321
+        mock_ftp.mkd.side_effect = ftplib.error_perm("Cannot create directory")  # noqa: S321
         mock_ftp_tls.return_value = mock_ftp
 
         mock_self = Mock()
@@ -258,14 +295,18 @@ class TestUploadToFtp:
         with pytest.raises(Exception, match="Failed to change/create directory"):
             upload_to_ftp(mock_self, "/tmp/test.pdf")
 
+    @patch("app.tasks.upload_to_ftp.os.path.basename")
     @patch("app.tasks.upload_to_ftp.ftplib.FTP_TLS")
     @patch("app.tasks.upload_to_ftp.log_task_progress")
     @patch("app.tasks.upload_to_ftp.os.path.exists")
     @patch("app.tasks.upload_to_ftp.settings")
     @patch("builtins.open", create=True)
-    def test_returns_ftp_path_in_result(self, mock_open, mock_settings, mock_exists, mock_log, mock_ftp_tls):
+    def test_returns_ftp_path_in_result(
+        self, mock_open, mock_settings, mock_exists, mock_log, mock_ftp_tls, mock_basename
+    ):
         """Test returns FTP path in result."""
         mock_exists.return_value = True
+        mock_basename.return_value = "test.pdf"
         mock_settings.ftp_host = "ftp.example.com"
         mock_settings.ftp_port = 21
         mock_settings.ftp_username = "user"
