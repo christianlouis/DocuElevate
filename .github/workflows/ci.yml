@@ -25,12 +25,38 @@ env:
 
 jobs:
   # ══════════════════════════════════════════════════════════════════════════
-  # Stage 1: Quality Checks (run in parallel)
+  # Stage 1: Ruff Lint & Format (runs first to catch style issues early)
+  # ══════════════════════════════════════════════════════════════════════════
+
+  lint:
+    name: Ruff Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Ruff
+        run: pip install ruff
+
+      - name: Run Ruff Check
+        run: ruff check app/ tests/
+
+      - name: Run Ruff Format
+        run: ruff format --check app/ tests/
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # Stage 2: Tests & Type Checking (run in parallel after lint passes)
   # ══════════════════════════════════════════════════════════════════════════
 
   test:
     name: Tests
     runs-on: ubuntu-latest
+    needs: [lint]  # Wait for lint to pass before running tests
     services:
       redis:
         image: redis:7
@@ -91,30 +117,10 @@ jobs:
             junit.xml
             coverage.xml
 
-  lint:
-    name: Ruff Lint & Format
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install Ruff
-        run: pip install ruff
-
-      - name: Run Ruff Check
-        run: ruff check app/ tests/
-
-      - name: Run Ruff Format
-        run: ruff format --check app/ tests/
-
   mypy:
     name: Mypy
     runs-on: ubuntu-latest
+    needs: [lint]  # Wait for lint to pass before running type checks
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -133,7 +139,7 @@ jobs:
         run: mypy app/
 
   # ══════════════════════════════════════════════════════════════════════════
-  # Stage 2: Build & Push Docker Image (only after all Stage 1 jobs pass)
+  # Stage 3: Build & Push Docker Image (only after all Stage 2 jobs pass)
   # ══════════════════════════════════════════════════════════════════════════
 
   build:
@@ -196,7 +202,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ══════════════════════════════════════════════════════════════════════════
-  # Stage 3: Deploy (only after build succeeds, only on main branch)
+  # Stage 4: Deploy (only after build succeeds, only on main branch)
   # ══════════════════════════════════════════════════════════════════════════
 
   deploy:

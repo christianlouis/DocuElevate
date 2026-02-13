@@ -144,9 +144,9 @@ def test_x_frame_options_valid_value(client):
         x_frame_value = response.headers["X-Frame-Options"]
         valid_values = ["DENY", "SAMEORIGIN"]
         # Note: ALLOW-FROM is deprecated in modern browsers; use CSP frame-ancestors instead
-        assert x_frame_value in valid_values or x_frame_value.startswith(
-            "ALLOW-FROM"
-        ), f"Invalid X-Frame-Options value: {x_frame_value}"
+        assert x_frame_value in valid_values or x_frame_value.startswith("ALLOW-FROM"), (
+            f"Invalid X-Frame-Options value: {x_frame_value}"
+        )
 
 
 @pytest.mark.integration

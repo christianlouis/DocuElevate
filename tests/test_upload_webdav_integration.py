@@ -305,9 +305,9 @@ class TestWebDAVIntegration:
             response = requests.get(file_url, auth=(webdav_server["username"], webdav_server["password"]), timeout=10)
 
             assert response.status_code == 200
-            assert (
-                len(response.content) == 1024 * 1024
-            ), f"File size mismatch: expected 1MB, got {len(response.content)} bytes"
+            assert len(response.content) == 1024 * 1024, (
+                f"File size mismatch: expected 1MB, got {len(response.content)} bytes"
+            )
 
 
 @pytest.mark.integration
