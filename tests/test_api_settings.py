@@ -88,26 +88,31 @@ class TestSettingsEndpointsWithAuth:
     @patch("app.api.settings.get_setting_metadata")
     def test_get_all_settings_success(self, mock_metadata, mock_categories, mock_db_settings, client, db_session):
         """Test GET /settings returns all settings."""
-        # Mock admin session
-        with client as test_client:
-            with test_client.websocket_connect("/") as ws:
-                pass  # Just to establish session
-            test_client.cookies.set("session", "test_session")
+        from app.api.settings import require_admin
+        from app.main import app as fastapi_app
 
-            # Mock the settings data
-            mock_db_settings.return_value = {"test_key": "test_value"}
-            mock_categories.return_value = {"General": ["workdir", "debug"]}
-            mock_metadata.return_value = {"type": "str", "description": "Test setting"}
+        # Mock the settings data
+        mock_db_settings.return_value = {"test_key": "test_value"}
+        mock_categories.return_value = {"General": ["workdir", "debug"]}
+        mock_metadata.return_value = {"type": "str", "description": "Test setting"}
 
-            # Create mock request with admin user
-            mock_request = Mock()
-            mock_request.session = {"user": {"id": "admin", "is_admin": True}}
+        # Override the require_admin dependency to return a mock admin user
+        def override_require_admin():
+            return {"id": "admin", "is_admin": True}
 
-            # The endpoint requires admin auth, so this will fail without proper session setup
-            # We're testing the logic, not the full auth flow
-            response = test_client.get("/api/settings/")
-            # Should be 403 without proper admin session
-            assert response.status_code in [302, 401, 403]
+        fastapi_app.dependency_overrides[require_admin] = override_require_admin
+
+        try:
+            # Make the request with the mocked admin dependency
+            response = client.get("/api/settings/")
+            assert response.status_code == 200
+            data = response.json()
+            assert "settings" in data
+            assert "categories" in data
+            assert "db_settings" in data
+        finally:
+            # Clean up the override
+            fastapi_app.dependency_overrides.pop(require_admin, None)
 
     @patch("app.api.settings.get_setting_metadata")
     def test_get_single_setting_returns_metadata(self, mock_metadata, client):
