@@ -1,6 +1,5 @@
 """Additional tests for upload task modules."""
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest

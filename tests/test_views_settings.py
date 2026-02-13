@@ -1,6 +1,6 @@
 """Tests for app/views/settings.py module."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

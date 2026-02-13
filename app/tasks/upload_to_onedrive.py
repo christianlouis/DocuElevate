@@ -188,11 +188,11 @@ def upload_large_file(file_path, upload_url):
                         # 201 = Created (final chunk), 202 = Accepted (more chunks coming)
                         break
                     else:
-                        logger.warning(f"Chunk upload failed (attempt {attempt+1}): {response.status_code}")
+                        logger.warning(f"Chunk upload failed (attempt {attempt + 1}): {response.status_code}")
                         if attempt < max_retries - 1:
                             time.sleep(retry_delay * (attempt + 1))
                 except Exception as e:
-                    logger.warning(f"Chunk upload error (attempt {attempt+1}): {str(e)}")
+                    logger.warning(f"Chunk upload error (attempt {attempt + 1}): {str(e)}")
                     if attempt < max_retries - 1:
                         time.sleep(retry_delay * (attempt + 1))
 

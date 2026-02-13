@@ -1,9 +1,10 @@
 """Comprehensive unit tests for app/api/settings.py module."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from unittest.mock import MagicMock, patch
 
 
 @pytest.mark.unit
@@ -51,9 +52,7 @@ class TestGetSettings:
     @patch("app.api.settings.get_all_settings_from_db")
     @patch("app.api.settings.get_settings_by_category")
     @patch("app.api.settings.get_setting_metadata")
-    def test_get_settings_success(
-        self, mock_metadata, mock_category, mock_db_settings, client: TestClient, db_session
-    ):
+    def test_get_settings_success(self, mock_metadata, mock_category, mock_db_settings, client: TestClient, db_session):
         """Test successful retrieval of settings."""
         # Mock session to have admin user
         mock_metadata.return_value = {"description": "Test setting", "type": "string"}
@@ -63,13 +62,9 @@ class TestGetSettings:
         with patch.object(client, "get") as mock_get:
             with patch("app.api.settings.settings") as mock_settings:
                 mock_settings.setting1 = "test_value"
-                
+
                 # Create mock request with admin session
-                from starlette.testclient import TestClient as StarletteClient
-                response = client.get(
-                    "/api/settings/",
-                    cookies={"session": "admin_session"}
-                )
+                response = client.get("/api/settings/", cookies={"session": "admin_session"})
 
     @patch("app.api.settings.get_all_settings_from_db")
     def test_get_settings_database_error(self, mock_db_settings, client: TestClient, db_session):
@@ -87,7 +82,6 @@ class TestGetSetting:
     @patch("app.api.settings.get_setting_metadata")
     def test_get_setting_existing_key(self, mock_metadata):
         """Test retrieval of existing setting."""
-        from app.api.settings import get_setting
         from app.config import settings
 
         mock_metadata.return_value = {"description": "Test setting"}
@@ -263,9 +257,7 @@ class TestSettingModels:
         """Test SettingResponse model."""
         from app.api.settings import SettingResponse
 
-        response = SettingResponse(
-            key="test_key", value="test_value", metadata={"description": "test"}
-        )
+        response = SettingResponse(key="test_key", value="test_value", metadata={"description": "test"})
         assert response.key == "test_key"
         assert response.value == "test_value"
         assert response.metadata["description"] == "test"

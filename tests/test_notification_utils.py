@@ -1,12 +1,11 @@
 """Tests for app/utils/notification.py module."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from app.utils.notification import (
     _mask_sensitive_url,
-    init_apprise,
     notify_celery_failure,
     notify_credential_failure,
     notify_file_processed,

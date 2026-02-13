@@ -5,8 +5,7 @@ Covers _validate_dropbox_settings, get_dropbox_access_token, get_dropbox_client,
 and upload_to_dropbox Celery task.
 """
 
-import os
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 from dropbox.exceptions import ApiError, AuthError
@@ -255,9 +254,7 @@ class TestUploadToDropbox:
     @patch("app.tasks.upload_to_dropbox.get_dropbox_client")
     @patch("app.tasks.upload_to_dropbox.log_task_progress")
     @patch("app.tasks.upload_to_dropbox.settings")
-    def test_large_file_chunked_upload(
-        self, mock_settings, mock_log, mock_client, mock_extract, mock_unique, tmp_path
-    ):
+    def test_large_file_chunked_upload(self, mock_settings, mock_log, mock_client, mock_extract, mock_unique, tmp_path):
         """Test chunked upload for large files (>10MB)."""
         from app.tasks.upload_to_dropbox import upload_to_dropbox
 

@@ -1,7 +1,5 @@
 """Tests for app/api/logs.py module."""
 
-from datetime import datetime
-
 import pytest
 
 from app.models import FileRecord, ProcessingLog

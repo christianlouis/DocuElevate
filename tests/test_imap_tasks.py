@@ -1,6 +1,5 @@
 """Tests for app/tasks/imap_tasks.py module."""
 
-import json
 import os
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage

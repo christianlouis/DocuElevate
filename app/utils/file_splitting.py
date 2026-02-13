@@ -97,7 +97,6 @@ def split_pdf_by_size(pdf_path: str, max_size_bytes: int, output_dir: Optional[s
         # If adding this page exceeds the limit (and we have more than 1 page in current chunk)
         # save the previous chunk and start a new one
         if exceeds_limit and current_page_count > 1:
-
             # Create a new writer without the last page
             previous_writer = PdfWriter()
             for prev_page_num in range(page_num - current_page_count + 1, page_num):

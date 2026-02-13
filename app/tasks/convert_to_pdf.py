@@ -340,9 +340,7 @@ def convert_to_pdf(self, file_path: str, original_filename: Optional[str] = None
         else:
             error_msg = f"Status code: {response.status_code}"
             logger.error(
-                f"[{task_id}] Conversion failed for {file_path}. "
-                f"{error_msg}, "
-                f"Response: {response.text[:500]}..."
+                f"[{task_id}] Conversion failed for {file_path}. {error_msg}, Response: {response.text[:500]}..."
             )
             log_task_progress(task_id, "call_gotenberg", "failure", error_msg)
             log_task_progress(task_id, "convert_to_pdf", "failure", f"Conversion failed: {error_msg}")

@@ -1,7 +1,5 @@
 """Tests for app/tasks/upload_to_email.py module."""
 
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 

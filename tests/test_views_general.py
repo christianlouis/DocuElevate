@@ -1,8 +1,5 @@
 """Tests for app/views/general.py module."""
 
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 

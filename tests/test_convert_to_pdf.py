@@ -1,6 +1,5 @@
 """Tests for app/tasks/convert_to_pdf.py module."""
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest

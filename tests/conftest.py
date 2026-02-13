@@ -280,6 +280,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "requires_docker: Tests requiring Docker")
     config.addinivalue_line("markers", "e2e: End-to-end tests with full infrastructure")
 
+
 # Import OAuth fixtures (must be at end to avoid circular imports)
 try:
     from tests.conftest_oauth import (
@@ -290,11 +291,11 @@ try:
         test_user_info,
         use_real_oauth,
     )
-    
+
     # Make fixtures available
     __all__ = [
         "mock_oauth_server",
-        "oauth_config", 
+        "oauth_config",
         "oauth_enabled_app",
         "oauth_test_token",
         "test_user_info",

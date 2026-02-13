@@ -73,7 +73,7 @@ def mark_stalled_steps_as_failed(
         return 0
 
     logger.warning(
-        f"Found {len(stalled_steps)} stalled step(s) that exceeded " f"{timeout_seconds}s timeout. Marking as failed."
+        f"Found {len(stalled_steps)} stalled step(s) that exceeded {timeout_seconds}s timeout. Marking as failed."
     )
 
     count = 0

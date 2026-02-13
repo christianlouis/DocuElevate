@@ -83,9 +83,9 @@ class TestSplitPdfBySize:
             # that can cause files to exceed the target size by ~20-50%. We allow 1.5x (50%) margin.
             PDF_OVERHEAD_MULTIPLIER = 1.5
             for split_file in split_files:
-                assert (
-                    os.path.getsize(split_file) <= max_size * PDF_OVERHEAD_MULTIPLIER
-                ), f"Split file {split_file} should respect size limit (with PDF overhead allowance)"
+                assert os.path.getsize(split_file) <= max_size * PDF_OVERHEAD_MULTIPLIER, (
+                    f"Split file {split_file} should respect size limit (with PDF overhead allowance)"
+                )
 
         # Cleanup split files
         for split_file in split_files:

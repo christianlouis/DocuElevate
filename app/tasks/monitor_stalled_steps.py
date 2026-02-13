@@ -42,7 +42,7 @@ def monitor_stalled_steps():
                     f"Marked as failed due to timeout."
                 )
             else:
-                logger.debug(f"[{datetime.utcnow().isoformat()}] " f"No stalled steps found.")
+                logger.debug(f"[{datetime.utcnow().isoformat()}] No stalled steps found.")
 
             return {"recovered": stalled_count}
 

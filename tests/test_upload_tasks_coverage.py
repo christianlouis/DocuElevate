@@ -1,8 +1,5 @@
 """Tests to increase coverage for upload task modules."""
 
-import os
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 from app.tasks.upload_to_ftp import upload_to_ftp

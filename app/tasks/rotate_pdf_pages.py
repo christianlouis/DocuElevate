@@ -136,13 +136,13 @@ def rotate_pdf_pages(self, filename: str, extracted_text: str, rotation_data=Non
                         # pypdf uses clockwise rotation in 90-degree increments
                         page.rotate(rotation_angle)
                         logger.info(
-                            f"[{task_id}] Page {page_idx+1} rotated by {rotation_angle}° "
+                            f"[{task_id}] Page {page_idx + 1} rotated by {rotation_angle}° "
                             f"(from detected {detected_angle}°)"
                         )
                         applied_rotations[str(page_idx)] = rotation_angle
                     else:
                         logger.info(
-                            f"[{task_id}] Page {page_idx+1} had detected angle {detected_angle}° "
+                            f"[{task_id}] Page {page_idx + 1} had detected angle {detected_angle}° "
                             "but determined it doesn't need rotation"
                         )
 
@@ -154,7 +154,7 @@ def rotate_pdf_pages(self, filename: str, extracted_text: str, rotation_data=Non
 
         if applied_rotations:
             logger.info(
-                f"[{task_id}] Successfully rotated PDF: {filename} with rotations: " f"{json.dumps(applied_rotations)}"
+                f"[{task_id}] Successfully rotated PDF: {filename} with rotations: {json.dumps(applied_rotations)}"
             )
         else:
             logger.info(

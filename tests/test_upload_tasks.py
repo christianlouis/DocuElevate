@@ -3,7 +3,7 @@ Tests for upload tasks including OneDrive, S3, FTP, SFTP, WebDAV, Google Drive, 
 """
 
 import os
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -53,7 +53,6 @@ def test_upload_to_onedrive_accepts_file_id(sample_text_file, mock_settings):
         patch("app.tasks.upload_to_onedrive.upload_large_file") as mock_upload,
         patch("app.tasks.upload_to_onedrive.log_task_progress"),
     ):
-
         # Setup mocks
         mock_token.return_value = "test_access_token"
         mock_session.return_value = "https://upload.url"
@@ -77,7 +76,6 @@ def test_upload_to_onedrive_without_file_id(sample_text_file, mock_settings):
         patch("app.tasks.upload_to_onedrive.upload_large_file") as mock_upload,
         patch("app.tasks.upload_to_onedrive.log_task_progress"),
     ):
-
         # Setup mocks
         mock_token.return_value = "test_access_token"
         mock_session.return_value = "https://upload.url"
@@ -97,7 +95,6 @@ def test_upload_to_s3_accepts_file_id(sample_text_file, mock_settings):
         patch("app.tasks.upload_to_s3.boto3.client") as mock_boto_client,
         patch("app.tasks.upload_to_s3.log_task_progress"),
     ):
-
         # Setup mock S3 client
         mock_s3 = Mock()
         mock_boto_client.return_value = mock_s3
@@ -119,7 +116,6 @@ def test_upload_to_s3_without_file_id(sample_text_file, mock_settings):
         patch("app.tasks.upload_to_s3.boto3.client") as mock_boto_client,
         patch("app.tasks.upload_to_s3.log_task_progress"),
     ):
-
         # Setup mock S3 client
         mock_s3 = Mock()
         mock_boto_client.return_value = mock_s3
@@ -157,7 +153,6 @@ def test_upload_to_onedrive_logs_with_file_id(sample_text_file, mock_settings):
         patch("app.tasks.upload_to_onedrive.upload_large_file") as mock_upload,
         patch("app.tasks.upload_to_onedrive.log_task_progress") as mock_log,
     ):
-
         # Setup mocks
         mock_token.return_value = "test_access_token"
         mock_session.return_value = "https://upload.url"
@@ -182,7 +177,6 @@ def test_upload_to_s3_logs_with_file_id(sample_text_file, mock_settings):
         patch("app.tasks.upload_to_s3.boto3.client") as mock_boto_client,
         patch("app.tasks.upload_to_s3.log_task_progress") as mock_log,
     ):
-
         # Setup mock S3 client
         mock_s3 = Mock()
         mock_boto_client.return_value = mock_s3
@@ -211,7 +205,6 @@ def test_upload_to_ftp_accepts_file_id(sample_text_file):
         patch("app.tasks.upload_to_ftp.ftplib.FTP") as mock_ftp,
         patch("app.tasks.upload_to_ftp.log_task_progress"),
     ):
-
         # Setup settings
         mock_settings.ftp_host = "ftp.example.com"
         mock_settings.ftp_port = 21
@@ -241,7 +234,6 @@ def test_upload_to_ftp_without_file_id(sample_text_file):
         patch("app.tasks.upload_to_ftp.ftplib.FTP") as mock_ftp,
         patch("app.tasks.upload_to_ftp.log_task_progress"),
     ):
-
         # Setup settings
         mock_settings.ftp_host = "ftp.example.com"
         mock_settings.ftp_username = "test_user"
@@ -270,7 +262,6 @@ def test_upload_to_sftp_accepts_file_id(sample_text_file):
         patch("app.tasks.upload_to_sftp.extract_remote_path") as mock_extract,
         patch("app.tasks.upload_to_sftp.get_unique_filename") as mock_unique,
     ):
-
         # Setup settings
         mock_settings.sftp_host = "sftp.example.com"
         mock_settings.sftp_port = 22
@@ -303,7 +294,6 @@ def test_upload_to_webdav_accepts_file_id(sample_text_file):
         patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
         patch("app.tasks.upload_to_webdav.log_task_progress"),
     ):
-
         # Setup settings
         mock_settings.webdav_url = "https://webdav.example.com/"
         mock_settings.webdav_username = "test_user"
@@ -334,7 +324,6 @@ def test_upload_to_google_drive_accepts_file_id(sample_text_file):
         patch("app.tasks.upload_to_google_drive.settings") as mock_settings,
         patch("app.tasks.upload_to_google_drive.log_task_progress"),
     ):
-
         # Setup settings
         mock_settings.google_drive_folder_id = "test_folder_id"
 
@@ -374,7 +363,6 @@ def test_upload_to_email_accepts_file_id(sample_text_file):
         patch("app.tasks.upload_to_email._send_email_with_smtp") as mock_send,
         patch("app.tasks.upload_to_email.attach_logo") as mock_logo,
     ):
-
         # Setup settings
         mock_settings.email_host = "smtp.example.com"
         mock_settings.email_port = 587
@@ -406,7 +394,6 @@ def test_upload_to_email_accepts_file_id(sample_text_file):
 def test_upload_to_ftp_file_not_found():
     """Test that upload_to_ftp raises error for missing file."""
     with patch("app.tasks.upload_to_ftp.settings") as mock_settings, patch("app.tasks.upload_to_ftp.log_task_progress"):
-
         mock_settings.ftp_host = "ftp.example.com"
 
         with pytest.raises(FileNotFoundError):
@@ -420,7 +407,6 @@ def test_upload_to_sftp_file_not_found():
         patch("app.tasks.upload_to_sftp.settings") as mock_settings,
         patch("app.tasks.upload_to_sftp.log_task_progress"),
     ):
-
         mock_settings.sftp_host = "sftp.example.com"
         mock_settings.sftp_port = 22
         mock_settings.sftp_username = "test_user"
@@ -436,7 +422,6 @@ def test_upload_to_webdav_file_not_found():
         patch("app.tasks.upload_to_webdav.settings") as mock_settings,
         patch("app.tasks.upload_to_webdav.log_task_progress"),
     ):
-
         mock_settings.webdav_url = "https://webdav.example.com/"
 
         with pytest.raises(FileNotFoundError):
@@ -504,7 +489,6 @@ def test_send_to_all_calls_upload_tasks_with_keyword_argument():
             patch("app.tasks.send_to_all.SessionLocal"),
             patch("app.tasks.send_to_all.get_configured_services_from_validator") as mock_validator,
         ):
-
             # Configure validator to return S3 as configured
             mock_validator.return_value = {"s3": True}
 

@@ -8,11 +8,9 @@ and userinfo endpoints.
 This allows for realistic OAuth testing without requiring a real IdP.
 """
 
-import json
 import logging
 import time
 from typing import Dict, Optional
-from urllib.parse import urljoin
 
 import requests
 from testcontainers.core.container import DockerContainer
@@ -23,7 +21,7 @@ logger = logging.getLogger(__name__)
 class MockOAuth2ServerContainer(DockerContainer):
     """
     Testcontainer for mock-oauth2-server.
-    
+
     Provides a complete OIDC provider for testing OAuth2 flows.
     """
 
@@ -35,7 +33,7 @@ class MockOAuth2ServerContainer(DockerContainer):
     ):
         """
         Initialize the mock OAuth2 server container.
-        
+
         Args:
             image: Docker image to use
             port: Internal container port (default 8080)
@@ -79,7 +77,7 @@ class MockOAuth2ServerContainer(DockerContainer):
     def wait_for_ready(self, timeout: int = 30) -> None:
         """
         Wait for the OAuth server to be ready by checking the well-known endpoint.
-        
+
         Args:
             timeout: Maximum time to wait in seconds
         """
@@ -93,13 +91,13 @@ class MockOAuth2ServerContainer(DockerContainer):
             except requests.exceptions.RequestException:
                 pass
             time.sleep(0.5)
-        
+
         raise TimeoutError(f"Mock OAuth2 server did not become ready within {timeout}s")
 
     def get_config(self) -> Dict[str, str]:
         """
         Get the OAuth configuration for the mock server.
-        
+
         Returns:
             Dictionary with OAuth endpoints and configuration
         """
@@ -121,36 +119,36 @@ class MockOAuth2ServerContainer(DockerContainer):
     ) -> str:
         """
         Create a mock JWT token.
-        
+
         The mock-oauth2-server will generate a valid JWT that can be verified
         using its JWKS endpoint.
-        
+
         Args:
             subject: Subject (sub) claim for the token
             claims: Additional claims to include in the token
             audience: Audience (aud) claim
-            
+
         Returns:
             JWT token string
         """
         if claims is None:
             claims = {}
-        
+
         # Add standard claims
         token_claims = {
             "sub": subject,
             "aud": audience,
             **claims,
         }
-        
+
         # The debugger endpoint expects a different format
         # For simpler testing, we'll use the token endpoint directly
         # with a mock authorization code flow
-        
+
         # Note: For actual tests, we'll mock the token exchange in the tests
         # This method is mainly for documentation/example purposes
         logger.info(f"Creating token for subject: {subject}")
-        
+
         # Return a placeholder - in actual tests we'll mock the OAuth flow
         return f"mock-token-{subject}"
 
@@ -164,20 +162,20 @@ def create_test_userinfo(
 ) -> Dict:
     """
     Create a test userinfo response.
-    
+
     Args:
         sub: Subject identifier
         email: User email address
         name: Full name
         preferred_username: Username
         groups: List of group names
-        
+
     Returns:
         Dictionary with userinfo claims
     """
     if groups is None:
         groups = ["admin"]
-    
+
     return {
         "sub": sub,
         "email": email,
@@ -197,9 +195,9 @@ def configure_mock_oauth_response(
 ) -> None:
     """
     Configure the mock OAuth server to return specific responses for a code.
-    
+
     This is useful for testing the OAuth callback flow.
-    
+
     Args:
         container: The mock OAuth server container
         code: Authorization code to configure
@@ -208,7 +206,7 @@ def configure_mock_oauth_response(
     """
     if userinfo is None:
         userinfo = create_test_userinfo()
-    
+
     # The mock-oauth2-server automatically handles code exchange
     # and returns the configured userinfo
     # This is a placeholder for any additional configuration needed

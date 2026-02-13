@@ -1,9 +1,6 @@
 """Comprehensive unit tests for app/tasks/embed_metadata_into_pdf.py module."""
 
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, mock_open, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
@@ -257,7 +254,9 @@ class TestEmbedMetadataIntoPdf:
 
                             assert "error" in result
                             # Verify failure was logged
-                            failure_calls = [call for call in mock_log_progress.call_args_list if "failure" in str(call)]
+                            failure_calls = [
+                                call for call in mock_log_progress.call_args_list if "failure" in str(call)
+                            ]
                             assert len(failure_calls) > 0
 
     @patch("app.tasks.embed_metadata_into_pdf.finalize_document_storage")

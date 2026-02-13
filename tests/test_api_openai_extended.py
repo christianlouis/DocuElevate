@@ -1,8 +1,8 @@
 """Comprehensive unit tests for app/api/openai.py module."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from fastapi.testclient import TestClient
-from unittest.mock import MagicMock, patch, Mock
 
 
 @pytest.mark.unit
@@ -11,7 +11,6 @@ class TestOpenAITestConnection:
 
     def test_openai_connection_success(self):
         """Test successful OpenAI API connection."""
-        import openai
         from app.config import settings
 
         with patch("openai.OpenAI") as mock_openai_class:

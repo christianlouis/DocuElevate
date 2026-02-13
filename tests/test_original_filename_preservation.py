@@ -93,7 +93,6 @@ startxref
         patch("app.tasks.process_document.log_task_progress"),
         patch("app.tasks.process_document.extract_metadata_with_gpt") as mock_extract,
     ):
-
         # Setup mocks
         mock_settings.workdir = str(tmp_path)
         mock_session_local.return_value.__enter__.return_value = db_session
@@ -194,7 +193,6 @@ startxref
         patch("app.tasks.process_document.log_task_progress"),
         patch("app.tasks.process_document.extract_metadata_with_gpt") as mock_extract,
     ):
-
         # Setup mocks
         mock_settings.workdir = str(tmp_path)
         mock_session_local.return_value.__enter__.return_value = db_session

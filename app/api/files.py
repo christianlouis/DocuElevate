@@ -374,7 +374,7 @@ def reprocess_single_file(request: Request, file_id: int, db: DbSession):
         )
 
         logger.info(
-            f"Reprocessing file: ID={file_record.id}, " f"Filename={file_record.original_filename}, TaskID={task.id}"
+            f"Reprocessing file: ID={file_record.id}, Filename={file_record.original_filename}, TaskID={task.id}"
         )
 
         return {
@@ -645,7 +645,7 @@ def retry_subtask(
         upload_task = task_map[subtask_name]
         task = upload_task.delay(file_path, file_id)
 
-        logger.info(f"Retrying upload subtask: FileID={file_record.id}, " f"Subtask={subtask_name}, TaskID={task.id}")
+        logger.info(f"Retrying upload subtask: FileID={file_record.id}, Subtask={subtask_name}, TaskID={task.id}")
 
         return {
             "status": "success",

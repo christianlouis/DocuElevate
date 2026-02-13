@@ -4,7 +4,7 @@ Tests for app/tasks/uptime_kuma_tasks.py
 Tests Uptime Kuma health check ping functionality.
 """
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 import requests

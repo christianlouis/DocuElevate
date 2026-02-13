@@ -7,7 +7,6 @@ actual file uploads against it, then verify the files were uploaded successfully
 
 import os
 import time
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -87,7 +86,6 @@ class TestWebDAVIntegration:
             patch("app.tasks.upload_to_webdav.settings") as mock_settings,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             # Configure settings to point to real WebDAV server
             mock_settings.webdav_url = webdav_server["url"] + "/"
             mock_settings.webdav_username = webdav_server["username"]
@@ -124,7 +122,6 @@ class TestWebDAVIntegration:
             patch("app.tasks.upload_to_webdav.settings") as mock_settings,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             # Create a test folder first
             folder_name = "test-uploads"
             folder_url = f"{webdav_server['url']}/{folder_name}"
@@ -162,7 +159,6 @@ class TestWebDAVIntegration:
             patch("app.tasks.upload_to_webdav.settings") as mock_settings,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = webdav_server["url"] + "/"
             mock_settings.webdav_username = webdav_server["username"]
             mock_settings.webdav_password = webdav_server["password"]
@@ -193,7 +189,6 @@ class TestWebDAVIntegration:
             patch("app.tasks.upload_to_webdav.settings") as mock_settings,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = webdav_server["url"] + "/"
             mock_settings.webdav_username = "wronguser"
             mock_settings.webdav_password = _TEST_WRONG_CREDENTIAL
@@ -211,7 +206,6 @@ class TestWebDAVIntegration:
             patch("app.tasks.upload_to_webdav.settings") as mock_settings,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = webdav_server["url"] + "/"
             mock_settings.webdav_username = webdav_server["username"]
             mock_settings.webdav_password = webdav_server["password"]
@@ -253,7 +247,6 @@ class TestWebDAVIntegration:
             patch("app.tasks.upload_to_webdav.settings") as mock_settings,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = webdav_server["url"] + "/"
             mock_settings.webdav_username = webdav_server["username"]
             mock_settings.webdav_password = webdav_server["password"]
@@ -291,7 +284,6 @@ class TestWebDAVIntegration:
             patch("app.tasks.upload_to_webdav.settings") as mock_settings,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = webdav_server["url"] + "/"
             mock_settings.webdav_username = webdav_server["username"]
             mock_settings.webdav_password = webdav_server["password"]
@@ -313,9 +305,9 @@ class TestWebDAVIntegration:
             response = requests.get(file_url, auth=(webdav_server["username"], webdav_server["password"]), timeout=10)
 
             assert response.status_code == 200
-            assert (
-                len(response.content) == 1024 * 1024
-            ), f"File size mismatch: expected 1MB, got {len(response.content)} bytes"
+            assert len(response.content) == 1024 * 1024, (
+                f"File size mismatch: expected 1MB, got {len(response.content)} bytes"
+            )
 
 
 @pytest.mark.integration

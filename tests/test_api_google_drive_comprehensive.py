@@ -5,9 +5,8 @@ Tests all API endpoints with success and error cases, proper mocking, and edge c
 Target: Bring coverage from 9.45% to 70%+
 """
 
-import os
 from datetime import datetime, timedelta
-from unittest.mock import Mock, MagicMock, patch, mock_open
+from unittest.mock import MagicMock, Mock, mock_open, patch
 
 import pytest
 from fastapi import HTTPException
@@ -24,7 +23,7 @@ class TestExchangeGoogleDriveToken:
         mock_exchange.return_value = {
             "refresh_token": "test_refresh_token",
             "access_token": "test_access_token",
-            "expires_in": 3600
+            "expires_in": 3600,
         }
 
         response = client.post(
@@ -34,8 +33,8 @@ class TestExchangeGoogleDriveToken:
                 "client_secret": "test_client_secret",
                 "redirect_uri": "http://localhost/callback",
                 "code": "test_auth_code",
-                "folder_id": "test_folder"
-            }
+                "folder_id": "test_folder",
+            },
         )
 
         assert response.status_code == 200
@@ -52,7 +51,7 @@ class TestExchangeGoogleDriveToken:
         mock_exchange.return_value = {
             "refresh_token": "test_refresh_token",
             "access_token": "test_access_token",
-            "expires_in": 3600
+            "expires_in": 3600,
         }
 
         response = client.post(
@@ -61,8 +60,8 @@ class TestExchangeGoogleDriveToken:
                 "client_id": "test_client_id",
                 "client_secret": "test_client_secret",
                 "redirect_uri": "http://localhost/callback",
-                "code": "test_auth_code"
-            }
+                "code": "test_auth_code",
+            },
         )
 
         assert response.status_code == 200
@@ -78,8 +77,8 @@ class TestExchangeGoogleDriveToken:
                 "client_id": "test_client_id",
                 "client_secret": "test_client_secret",
                 "redirect_uri": "http://localhost/callback",
-                "code": "invalid_code"
-            }
+                "code": "invalid_code",
+            },
         )
 
         assert response.status_code == 400
@@ -99,8 +98,8 @@ class TestUpdateGoogleDriveSettings:
                 "client_id": "new_client_id",
                 "client_secret": "new_client_secret",
                 "folder_id": "new_folder_id",
-                "use_oauth": "true"
-            }
+                "use_oauth": "true",
+            },
         )
 
         assert response.status_code == 200
@@ -112,11 +111,7 @@ class TestUpdateGoogleDriveSettings:
     def test_update_settings_with_use_oauth_false(self, mock_settings, client: TestClient):
         """Test updating with OAuth disabled."""
         response = client.post(
-            "/api/google-drive/update-settings",
-            data={
-                "refresh_token": "new_refresh_token",
-                "use_oauth": "false"
-            }
+            "/api/google-drive/update-settings", data={"refresh_token": "new_refresh_token", "use_oauth": "false"}
         )
 
         assert response.status_code == 200
@@ -124,21 +119,13 @@ class TestUpdateGoogleDriveSettings:
     @patch("app.config.settings")
     def test_update_settings_minimal(self, mock_settings, client: TestClient):
         """Test update with only required fields."""
-        response = client.post(
-            "/api/google-drive/update-settings",
-            data={
-                "refresh_token": "new_refresh_token"
-            }
-        )
+        response = client.post("/api/google-drive/update-settings", data={"refresh_token": "new_refresh_token"})
 
         assert response.status_code == 200
 
     def test_update_settings_missing_required_field(self, client: TestClient):
         """Test update without required refresh_token."""
-        response = client.post(
-            "/api/google-drive/update-settings",
-            data={}
-        )
+        response = client.post("/api/google-drive/update-settings", data={})
 
         assert response.status_code == 422  # Validation error
 
@@ -160,9 +147,7 @@ class TestTestGoogleDriveToken:
         # Mock the Google Drive service
         mock_service = MagicMock()
         mock_about = MagicMock()
-        mock_about.get.return_value.execute.return_value = {
-            "user": {"emailAddress": "test@example.com"}
-        }
+        mock_about.get.return_value.execute.return_value = {"user": {"emailAddress": "test@example.com"}}
         mock_service.about.return_value = mock_about
         mock_get_service.return_value = mock_service
 
@@ -208,7 +193,7 @@ class TestTestGoogleDriveToken:
 
         with patch("google.oauth2.credentials.Credentials"):
             response = client.get("/api/google-drive/test-token")
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "error"
@@ -251,12 +236,13 @@ class TestGetGoogleDriveTokenInfo:
             mock_creds.valid = False
             mock_creds.token = "test_access_token"
             mock_creds.expiry = datetime.now() + timedelta(hours=1)
-            
+
             # Mock refresh
             def mock_refresh(request):
                 mock_creds.valid = True
+
             mock_creds.refresh = mock_refresh
-            
+
             mock_creds_class.return_value = mock_creds
 
             response = client.get("/api/google-drive/get-token-info")
@@ -315,18 +301,20 @@ class TestFormatTimeRemaining:
 
     def test_format_expired_time(self):
         """Test formatting of expired time."""
-        from app.api.google_drive import format_time_remaining
         from datetime import timedelta
-        
+
+        from app.api.google_drive import format_time_remaining
+
         expired = timedelta(seconds=-100)
         result = format_time_remaining(expired)
         assert result == "Expired"
 
     def test_format_days_and_hours(self):
         """Test formatting with days and hours."""
-        from app.api.google_drive import format_time_remaining
         from datetime import timedelta
-        
+
+        from app.api.google_drive import format_time_remaining
+
         time_left = timedelta(days=2, hours=5, minutes=30)
         result = format_time_remaining(time_left)
         assert "2 days" in result
@@ -335,9 +323,10 @@ class TestFormatTimeRemaining:
 
     def test_format_hours_and_minutes(self):
         """Test formatting with hours and minutes."""
-        from app.api.google_drive import format_time_remaining
         from datetime import timedelta
-        
+
+        from app.api.google_drive import format_time_remaining
+
         time_left = timedelta(hours=3, minutes=45)
         result = format_time_remaining(time_left)
         assert "3 hours" in result
@@ -345,18 +334,20 @@ class TestFormatTimeRemaining:
 
     def test_format_minutes_only(self):
         """Test formatting with only minutes."""
-        from app.api.google_drive import format_time_remaining
         from datetime import timedelta
-        
+
+        from app.api.google_drive import format_time_remaining
+
         time_left = timedelta(minutes=30)
         result = format_time_remaining(time_left)
         assert "30 minutes" in result
 
     def test_format_single_unit(self):
         """Test singular form (1 day, not 1 days)."""
-        from app.api.google_drive import format_time_remaining
         from datetime import timedelta
-        
+
+        from app.api.google_drive import format_time_remaining
+
         time_left = timedelta(days=1, hours=0)
         result = format_time_remaining(time_left)
         # Should use singular "day" not plural "days"
@@ -385,8 +376,8 @@ class TestSaveGoogleDriveSettings:
                 "client_id": "new_client_id",
                 "client_secret": "new_client_secret",
                 "folder_id": "new_folder_id",
-                "use_oauth": "true"
-            }
+                "use_oauth": "true",
+            },
         )
 
         assert response.status_code == 200
@@ -402,11 +393,7 @@ class TestSaveGoogleDriveSettings:
         mock_dirname.return_value = "/app"
 
         response = client.post(
-            "/api/google-drive/save-settings",
-            data={
-                "refresh_token": "new_refresh_token",
-                "use_oauth": "true"
-            }
+            "/api/google-drive/save-settings", data={"refresh_token": "new_refresh_token", "use_oauth": "true"}
         )
 
         assert response.status_code == 200
@@ -418,17 +405,15 @@ class TestSaveGoogleDriveSettings:
     @patch("os.path.exists")
     @patch("os.path.dirname")
     @patch("app.config.settings")
-    def test_save_settings_updates_existing_lines(self, mock_settings, mock_dirname, mock_exists, mock_file, client: TestClient):
+    def test_save_settings_updates_existing_lines(
+        self, mock_settings, mock_dirname, mock_exists, mock_file, client: TestClient
+    ):
         """Test that existing settings are updated, not duplicated."""
         mock_exists.return_value = True
         mock_dirname.return_value = "/app"
 
         response = client.post(
-            "/api/google-drive/save-settings",
-            data={
-                "refresh_token": "updated_token",
-                "use_oauth": "true"
-            }
+            "/api/google-drive/save-settings", data={"refresh_token": "updated_token", "use_oauth": "true"}
         )
 
         assert response.status_code == 200
@@ -437,18 +422,16 @@ class TestSaveGoogleDriveSettings:
     @patch("os.path.exists")
     @patch("os.path.dirname")
     @patch("app.config.settings")
-    def test_save_settings_uncomments_lines(self, mock_settings, mock_dirname, mock_exists, mock_file, client: TestClient):
+    def test_save_settings_uncomments_lines(
+        self, mock_settings, mock_dirname, mock_exists, mock_file, client: TestClient
+    ):
         """Test that commented settings are uncommented when updated."""
         mock_exists.return_value = True
         mock_dirname.return_value = "/app"
 
         response = client.post(
             "/api/google-drive/save-settings",
-            data={
-                "refresh_token": "new_token",
-                "client_id": "new_client_id",
-                "use_oauth": "true"
-            }
+            data={"refresh_token": "new_token", "client_id": "new_client_id", "use_oauth": "true"},
         )
 
         assert response.status_code == 200
@@ -458,11 +441,7 @@ class TestSaveGoogleDriveSettings:
         """Test saving with OAuth disabled."""
         with patch("os.path.exists", return_value=False):
             response = client.post(
-                "/api/google-drive/save-settings",
-                data={
-                    "refresh_token": "token",
-                    "use_oauth": "false"
-                }
+                "/api/google-drive/save-settings", data={"refresh_token": "token", "use_oauth": "false"}
             )
 
         assert response.status_code == 200
@@ -471,17 +450,15 @@ class TestSaveGoogleDriveSettings:
     @patch("os.path.exists")
     @patch("os.path.dirname")
     @patch("app.config.settings")
-    def test_save_settings_file_write_error_continues(self, mock_settings, mock_dirname, mock_exists, mock_file, client: TestClient):
+    def test_save_settings_file_write_error_continues(
+        self, mock_settings, mock_dirname, mock_exists, mock_file, client: TestClient
+    ):
         """Test that file write errors don't prevent in-memory update."""
         mock_exists.return_value = True
         mock_dirname.return_value = "/app"
 
         response = client.post(
-            "/api/google-drive/save-settings",
-            data={
-                "refresh_token": "new_token",
-                "use_oauth": "true"
-            }
+            "/api/google-drive/save-settings", data={"refresh_token": "new_token", "use_oauth": "true"}
         )
 
         # Should still succeed with in-memory update
@@ -489,12 +466,7 @@ class TestSaveGoogleDriveSettings:
 
     def test_save_settings_missing_required_field(self, client: TestClient):
         """Test save without required refresh_token."""
-        response = client.post(
-            "/api/google-drive/save-settings",
-            data={
-                "use_oauth": "true"
-            }
-        )
+        response = client.post("/api/google-drive/save-settings", data={"use_oauth": "true"})
 
         assert response.status_code == 422  # Validation error
 
@@ -504,10 +476,7 @@ class TestSaveGoogleDriveSettings:
         with patch("os.path.exists", return_value=False):
             response = client.post(
                 "/api/google-drive/save-settings",
-                data={
-                    "refresh_token": "existing_token",
-                    "folder_id": "new_folder_id"
-                }
+                data={"refresh_token": "existing_token", "folder_id": "new_folder_id"},
             )
 
         assert response.status_code == 200
@@ -519,13 +488,7 @@ class TestSaveGoogleDriveSettings:
         """Test exception handling in save settings."""
         mock_exists.side_effect = Exception("Unexpected error")
 
-        response = client.post(
-            "/api/google-drive/save-settings",
-            data={
-                "refresh_token": "token",
-                "use_oauth": "true"
-            }
-        )
+        response = client.post("/api/google-drive/save-settings", data={"refresh_token": "token", "use_oauth": "true"})
 
         assert response.status_code == 500
         data = response.json()
@@ -549,7 +512,7 @@ class TestGoogleDriveIntegration:
             mock_exchange.return_value = {
                 "refresh_token": "new_refresh_token",
                 "access_token": "new_access_token",
-                "expires_in": 3600
+                "expires_in": 3600,
             }
 
             response = client.post(
@@ -558,8 +521,8 @@ class TestGoogleDriveIntegration:
                     "client_id": "test_client_id",
                     "client_secret": "test_client_secret",
                     "redirect_uri": "http://localhost/callback",
-                    "code": "auth_code"
-                }
+                    "code": "auth_code",
+                },
             )
 
             assert response.status_code == 200
@@ -570,10 +533,7 @@ class TestGoogleDriveIntegration:
         with patch("os.path.exists", return_value=False):
             response = client.post(
                 "/api/google-drive/update-settings",
-                data={
-                    "refresh_token": token_data["refresh_token"],
-                    "use_oauth": "true"
-                }
+                data={"refresh_token": token_data["refresh_token"], "use_oauth": "true"},
             )
 
             assert response.status_code == 200

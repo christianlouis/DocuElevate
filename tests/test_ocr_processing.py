@@ -5,7 +5,6 @@ These tests verify OCR processing logic with mocked external AI/ML services
 (OpenAI, Azure Document Intelligence). Tests cover typical and edge cases.
 """
 
-import os
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -95,7 +94,6 @@ startxref
             patch("app.tasks.process_with_azure_document_intelligence.settings") as mock_settings,
             patch("app.tasks.process_with_azure_document_intelligence.rotate_pdf_pages") as mock_rotate,
         ):
-
             mock_settings.workdir = str(tmp_path)
             mock_rotate.delay = MagicMock()
 
@@ -144,7 +142,6 @@ startxref
             patch("app.tasks.process_with_azure_document_intelligence.settings") as mock_settings,
             patch("app.tasks.process_with_azure_document_intelligence.os.path.getsize") as mock_getsize,
         ):
-
             mock_settings.workdir = str(tmp_path)
             # Mock file size to be larger than 500 MB
             mock_getsize.return_value = AZURE_DOC_INTELLIGENCE_LIMITS["max_file_size_bytes"] + 1024
@@ -169,7 +166,6 @@ startxref
             patch("app.tasks.process_with_azure_document_intelligence.settings") as mock_settings,
             patch("app.tasks.process_with_azure_document_intelligence.get_pdf_page_count") as mock_page_count,
         ):
-
             mock_settings.workdir = str(tmp_path)
             # Mock page count to exceed limit
             mock_page_count.return_value = AZURE_DOC_INTELLIGENCE_LIMITS["max_pages"] + 1
@@ -215,7 +211,6 @@ startxref
             patch("app.tasks.process_with_azure_document_intelligence.get_pdf_page_count") as mock_page_count,
             patch("app.tasks.process_with_azure_document_intelligence.rotate_pdf_pages"),
         ):
-
             mock_settings.workdir = str(tmp_path)
             # Return None to simulate page count determination failure
             mock_page_count.return_value = None
@@ -267,7 +262,6 @@ startxref
             patch("app.tasks.process_with_azure_document_intelligence.settings") as mock_settings,
             patch("app.tasks.process_with_azure_document_intelligence.rotate_pdf_pages") as mock_rotate,
         ):
-
             mock_settings.workdir = str(tmp_path)
             mock_rotate.delay = MagicMock()
 
@@ -302,7 +296,6 @@ startxref
             ),
             patch("app.tasks.process_with_azure_document_intelligence.settings") as mock_settings,
         ):
-
             mock_settings.workdir = str(tmp_path)
 
             # Should raise the exception
@@ -440,7 +433,6 @@ class TestRefineTextWithGPT:
             patch.object(metadata_module, "extract_metadata_with_gpt") as mock_extract,
             patch("app.tasks.refine_text_with_gpt.settings") as mock_settings,
         ):
-
             mock_settings.openai_model = "gpt-4"
             mock_extract.delay = MagicMock()
 
@@ -473,7 +465,6 @@ class TestRefineTextWithGPT:
             patch("app.tasks.refine_text_with_gpt.client", mock_client),
             patch("app.tasks.refine_text_with_gpt.settings") as mock_settings,
         ):
-
             mock_settings.openai_model = "gpt-4"
 
             # Should raise the exception
@@ -582,7 +573,6 @@ startxref
             patch("app.tasks.rotate_pdf_pages.settings") as mock_settings,
             patch("app.tasks.rotate_pdf_pages.extract_metadata_with_gpt") as mock_extract,
         ):
-
             mock_settings.workdir = str(tmp_path)
             mock_extract.delay = MagicMock()
 
@@ -617,7 +607,6 @@ startxref
             patch("app.tasks.rotate_pdf_pages.settings") as mock_settings,
             patch("app.tasks.rotate_pdf_pages.extract_metadata_with_gpt") as mock_extract,
         ):
-
             mock_settings.workdir = str(tmp_path)
             mock_extract.delay = MagicMock()
 
@@ -651,7 +640,6 @@ startxref
             patch("app.tasks.rotate_pdf_pages.settings") as mock_settings,
             patch("app.tasks.rotate_pdf_pages.extract_metadata_with_gpt") as mock_extract,
         ):
-
             mock_settings.workdir = str(tmp_path)
             mock_extract.delay = MagicMock()
 
@@ -676,7 +664,6 @@ startxref
             patch("app.tasks.rotate_pdf_pages.settings") as mock_settings,
             patch("app.tasks.rotate_pdf_pages.extract_metadata_with_gpt") as mock_extract,
         ):
-
             mock_settings.workdir = str(tmp_path)
             mock_extract.delay = MagicMock()
 
@@ -712,7 +699,6 @@ startxref
             patch("app.tasks.rotate_pdf_pages.settings") as mock_settings,
             patch("app.tasks.rotate_pdf_pages.extract_metadata_with_gpt") as mock_extract,
         ):
-
             mock_settings.workdir = str(tmp_path)
             mock_extract.delay = MagicMock()
 
@@ -783,7 +769,6 @@ startxref
             patch("app.tasks.rotate_pdf_pages.settings") as mock_settings,
             patch("app.tasks.rotate_pdf_pages.extract_metadata_with_gpt") as mock_extract,
         ):
-
             mock_settings.workdir = str(tmp_path)
             mock_extract.delay = MagicMock()
 

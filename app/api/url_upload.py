@@ -146,7 +146,7 @@ def validate_file_type(content_type: str, filename: str) -> bool:
     # Check content type from header
     if content_type:
         # Handle content-type with charset (e.g., "application/pdf; charset=utf-8")
-        base_content_type = content_type.split(";")[0].strip().lower()
+        base_content_type = content_type.split(";", maxsplit=1)[0].strip().lower()
         if base_content_type in ALLOWED_MIME_TYPES or base_content_type in IMAGE_MIME_TYPES:
             return True
 

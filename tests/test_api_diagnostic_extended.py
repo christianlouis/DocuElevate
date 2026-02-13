@@ -1,8 +1,9 @@
 """Comprehensive unit tests for app/api/diagnostic.py module."""
 
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import MagicMock, patch
 
 
 @pytest.mark.unit
@@ -231,9 +232,7 @@ class TestTestNotification:
 
         mock_send.return_value = True
 
-        with patch.object(
-            settings, "notification_urls", ["https://ntfy.sh/test1", "https://ntfy.sh/test2"]
-        ):
+        with patch.object(settings, "notification_urls", ["https://ntfy.sh/test1", "https://ntfy.sh/test2"]):
             # Response should indicate 2 services
             pass
 

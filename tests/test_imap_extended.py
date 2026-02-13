@@ -2,7 +2,6 @@
 
 import json
 import os
-from datetime import datetime, timezone
 from email.message import EmailMessage
 from unittest.mock import MagicMock, patch
 
@@ -11,7 +10,6 @@ import pytest
 from app.tasks.imap_tasks import (
     fetch_attachments_and_enqueue,
     find_all_mail_xlist,
-    load_processed_emails,
     save_processed_emails,
 )
 

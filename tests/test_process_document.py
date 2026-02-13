@@ -5,11 +5,9 @@ These tests verify that the process_document task correctly handles file process
 and doesn't cause DetachedInstanceError when accessing database objects.
 """
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
-from sqlalchemy.orm import Session
 
 from app.models import FileRecord
 from app.tasks.process_document import process_document
@@ -92,7 +90,6 @@ startxref
         patch("app.tasks.process_document.log_task_progress"),
         patch("app.tasks.process_document.extract_metadata_with_gpt") as mock_extract,
     ):
-
         # Setup mocks
         mock_settings.workdir = str(tmp_path)
         mock_session_local.return_value.__enter__.return_value = db_session
@@ -153,7 +150,6 @@ def test_process_document_duplicate_file(db_session, tmp_path):
         patch("app.tasks.process_document.SessionLocal") as mock_session_local,
         patch("app.tasks.process_document.log_task_progress"),
     ):
-
         # Setup mocks
         mock_session_local.return_value.__enter__.return_value = db_session
         mock_session_local.return_value.__exit__.return_value = None
@@ -226,7 +222,6 @@ startxref
         patch("app.tasks.process_document.log_task_progress"),
         patch("app.tasks.process_document.process_with_azure_document_intelligence") as mock_azure,
     ):
-
         # Setup mocks
         mock_settings.workdir = str(tmp_path)
         mock_session_local.return_value.__enter__.return_value = db_session
@@ -345,7 +340,6 @@ startxref
         patch("app.tasks.process_document.log_task_progress"),
         patch("app.tasks.process_document.extract_metadata_with_gpt") as mock_extract,
     ):
-
         # Setup mocks
         mock_settings.workdir = str(tmp_path)
         mock_session_local.return_value.__enter__.return_value = db_session

@@ -1,6 +1,6 @@
 """Tests to boost coverage for various small modules."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

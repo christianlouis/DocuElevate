@@ -70,13 +70,13 @@ def check_page_rotation(result, filename, task_id=None):
         if hasattr(page, "angle"):
             rotation_angle = page.angle
             if rotation_angle != 0:
-                logger.info(f"{prefix}Page {i+1} is rotated by {rotation_angle} degrees")
+                logger.info(f"{prefix}Page {i + 1} is rotated by {rotation_angle} degrees")
                 # Store page index as integer, not string
                 rotation_data[i] = rotation_angle
             else:
-                logger.info(f"{prefix}Page {i+1} has no rotation (0 degrees)")
+                logger.info(f"{prefix}Page {i + 1} has no rotation (0 degrees)")
         else:
-            logger.info(f"{prefix}Page {i+1} rotation information not available")
+            logger.info(f"{prefix}Page {i + 1} rotation information not available")
 
     return rotation_data
 

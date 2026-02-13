@@ -102,7 +102,9 @@ class TestFinalizeDocumentStorage:
         with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=True):
             with patch("app.tasks.finalize_document_storage.os.path.getsize", return_value=50000):
                 with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="doc.pdf"):
-                    with patch("app.tasks.finalize_document_storage.os.path.join", return_value="/tmp/tmp/original.pdf"):
+                    with patch(
+                        "app.tasks.finalize_document_storage.os.path.join", return_value="/tmp/tmp/original.pdf"
+                    ):
                         with patch("app.tasks.finalize_document_storage.settings") as mock_settings:
                             mock_settings.workdir = "/tmp"
 

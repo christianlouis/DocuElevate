@@ -5,9 +5,8 @@ Tests all API endpoints with success and error cases, proper mocking, and edge c
 Target: Bring coverage from 10.51% to 70%+
 """
 
-import os
-from datetime import datetime, timedelta
-from unittest.mock import Mock, MagicMock, patch, mock_open
+from datetime import timedelta
+from unittest.mock import Mock, mock_open, patch
 
 import pytest
 from fastapi import HTTPException
@@ -24,7 +23,7 @@ class TestExchangeOneDriveToken:
         mock_exchange.return_value = {
             "refresh_token": "test_refresh_token",
             "access_token": "test_access_token",
-            "expires_in": 3600
+            "expires_in": 3600,
         }
 
         response = client.post(
@@ -34,8 +33,8 @@ class TestExchangeOneDriveToken:
                 "client_secret": "test_client_secret",
                 "redirect_uri": "http://localhost/callback",
                 "code": "test_auth_code",
-                "tenant_id": "common"
-            }
+                "tenant_id": "common",
+            },
         )
 
         assert response.status_code == 200
@@ -51,7 +50,7 @@ class TestExchangeOneDriveToken:
         mock_exchange.return_value = {
             "refresh_token": "test_refresh_token",
             "access_token": "test_access_token",
-            "expires_in": 3600
+            "expires_in": 3600,
         }
 
         response = client.post(
@@ -61,8 +60,8 @@ class TestExchangeOneDriveToken:
                 "client_secret": "test_client_secret",
                 "redirect_uri": "http://localhost/callback",
                 "code": "test_auth_code",
-                "tenant_id": "specific-tenant-id"
-            }
+                "tenant_id": "specific-tenant-id",
+            },
         )
 
         assert response.status_code == 200
@@ -82,8 +81,8 @@ class TestExchangeOneDriveToken:
                 "client_secret": "test_client_secret",
                 "redirect_uri": "http://localhost/callback",
                 "code": "invalid_code",
-                "tenant_id": "common"
-            }
+                "tenant_id": "common",
+            },
         )
 
         assert response.status_code == 400
@@ -95,7 +94,7 @@ class TestExchangeOneDriveToken:
             data={
                 "client_id": "test_client_id"
                 # Missing other required fields
-            }
+            },
         )
 
         assert response.status_code == 422  # Validation error
@@ -120,19 +119,13 @@ class TestTestOneDriveToken:
         # Mock token refresh response
         mock_post_response = Mock()
         mock_post_response.status_code = 200
-        mock_post_response.json.return_value = {
-            "access_token": "test_access_token",
-            "expires_in": 3600
-        }
+        mock_post_response.json.return_value = {"access_token": "test_access_token", "expires_in": 3600}
         mock_post.return_value = mock_post_response
 
         # Mock user info response
         mock_get_response = Mock()
         mock_get_response.status_code = 200
-        mock_get_response.json.return_value = {
-            "displayName": "Test User",
-            "userPrincipalName": "test@example.com"
-        }
+        mock_get_response.json.return_value = {"displayName": "Test User", "userPrincipalName": "test@example.com"}
         mock_get.return_value = mock_get_response
 
         response = client.get("/api/onedrive/test-token")
@@ -198,17 +191,14 @@ class TestTestOneDriveToken:
         mock_post_response.json.return_value = {
             "access_token": "test_access_token",
             "refresh_token": "new_refresh_token",  # New token
-            "expires_in": 3600
+            "expires_in": 3600,
         }
         mock_post.return_value = mock_post_response
 
         # Mock user info
         mock_get_response = Mock()
         mock_get_response.status_code = 200
-        mock_get_response.json.return_value = {
-            "displayName": "Test User",
-            "userPrincipalName": "test@example.com"
-        }
+        mock_get_response.json.return_value = {"displayName": "Test User", "userPrincipalName": "test@example.com"}
         mock_get.return_value = mock_get_response
 
         with patch("os.path.exists", return_value=False):
@@ -223,7 +213,9 @@ class TestTestOneDriveToken:
     @patch("os.path.exists")
     @patch("os.path.dirname")
     @patch("app.config.settings")
-    def test_test_token_updates_env_file(self, mock_settings, mock_dirname, mock_exists, mock_file, mock_get, mock_post, client: TestClient):
+    def test_test_token_updates_env_file(
+        self, mock_settings, mock_dirname, mock_exists, mock_file, mock_get, mock_post, client: TestClient
+    ):
         """Test that new refresh token is saved to .env file."""
         mock_settings.onedrive_refresh_token = "old_token"
         mock_settings.onedrive_client_id = "test_client_id"
@@ -239,17 +231,14 @@ class TestTestOneDriveToken:
         mock_post_response.json.return_value = {
             "access_token": "test_access_token",
             "refresh_token": "new_token",
-            "expires_in": 3600
+            "expires_in": 3600,
         }
         mock_post.return_value = mock_post_response
 
         # Mock user info
         mock_get_response = Mock()
         mock_get_response.status_code = 200
-        mock_get_response.json.return_value = {
-            "displayName": "Test User",
-            "userPrincipalName": "test@example.com"
-        }
+        mock_get_response.json.return_value = {"displayName": "Test User", "userPrincipalName": "test@example.com"}
         mock_get.return_value = mock_get_response
 
         response = client.get("/api/onedrive/test-token")
@@ -269,10 +258,7 @@ class TestTestOneDriveToken:
         # Mock successful refresh
         mock_post_response = Mock()
         mock_post_response.status_code = 200
-        mock_post_response.json.return_value = {
-            "access_token": "test_access_token",
-            "expires_in": 3600
-        }
+        mock_post_response.json.return_value = {"access_token": "test_access_token", "expires_in": 3600}
         mock_post.return_value = mock_post_response
 
         # Mock failed user info
@@ -295,8 +281,7 @@ class TestFormatTimeRemaining:
     def test_format_expired_time(self):
         """Test formatting of expired time."""
         from app.api.onedrive import format_time_remaining
-        from datetime import timedelta
-        
+
         expired = timedelta(seconds=-100)
         result = format_time_remaining(expired)
         assert result == "Expired"
@@ -304,8 +289,7 @@ class TestFormatTimeRemaining:
     def test_format_days_and_hours(self):
         """Test formatting with days and hours."""
         from app.api.onedrive import format_time_remaining
-        from datetime import timedelta
-        
+
         time_left = timedelta(days=2, hours=5, minutes=30)
         result = format_time_remaining(time_left)
         assert "2 days" in result
@@ -314,8 +298,7 @@ class TestFormatTimeRemaining:
     def test_format_hours_only(self):
         """Test formatting with hours only."""
         from app.api.onedrive import format_time_remaining
-        from datetime import timedelta
-        
+
         time_left = timedelta(hours=5)
         result = format_time_remaining(time_left)
         assert "5 hours" in result
@@ -323,8 +306,7 @@ class TestFormatTimeRemaining:
     def test_format_minutes_only(self):
         """Test formatting with minutes only."""
         from app.api.onedrive import format_time_remaining
-        from datetime import timedelta
-        
+
         time_left = timedelta(minutes=45)
         result = format_time_remaining(time_left)
         assert "45 minutes" in result
@@ -350,8 +332,8 @@ class TestSaveOneDriveSettings:
                 "client_id": "new_client_id",
                 "client_secret": "new_client_secret",
                 "tenant_id": "common",
-                "folder_path": "/Documents"
-            }
+                "folder_path": "/Documents",
+            },
         )
 
         assert response.status_code == 200
@@ -365,13 +347,7 @@ class TestSaveOneDriveSettings:
         mock_exists.return_value = False
         mock_dirname.return_value = "/app"
 
-        response = client.post(
-            "/api/onedrive/save-settings",
-            data={
-                "refresh_token": "token",
-                "tenant_id": "common"
-            }
-        )
+        response = client.post("/api/onedrive/save-settings", data={"refresh_token": "token", "tenant_id": "common"})
 
         assert response.status_code == 500
         data = response.json()
@@ -381,17 +357,15 @@ class TestSaveOneDriveSettings:
     @patch("os.path.exists")
     @patch("os.path.dirname")
     @patch("app.config.settings")
-    def test_save_settings_updates_existing_lines(self, mock_settings, mock_dirname, mock_exists, mock_file, client: TestClient):
+    def test_save_settings_updates_existing_lines(
+        self, mock_settings, mock_dirname, mock_exists, mock_file, client: TestClient
+    ):
         """Test that existing settings are updated."""
         mock_exists.return_value = True
         mock_dirname.return_value = "/app"
 
         response = client.post(
-            "/api/onedrive/save-settings",
-            data={
-                "refresh_token": "updated_token",
-                "tenant_id": "common"
-            }
+            "/api/onedrive/save-settings", data={"refresh_token": "updated_token", "tenant_id": "common"}
         )
 
         assert response.status_code == 200
@@ -400,18 +374,16 @@ class TestSaveOneDriveSettings:
     @patch("os.path.exists")
     @patch("os.path.dirname")
     @patch("app.config.settings")
-    def test_save_settings_uncomments_lines(self, mock_settings, mock_dirname, mock_exists, mock_file, client: TestClient):
+    def test_save_settings_uncomments_lines(
+        self, mock_settings, mock_dirname, mock_exists, mock_file, client: TestClient
+    ):
         """Test that commented settings are uncommented."""
         mock_exists.return_value = True
         mock_dirname.return_value = "/app"
 
         response = client.post(
             "/api/onedrive/save-settings",
-            data={
-                "refresh_token": "token",
-                "client_id": "new_client_id",
-                "tenant_id": "common"
-            }
+            data={"refresh_token": "token", "client_id": "new_client_id", "tenant_id": "common"},
         )
 
         assert response.status_code == 200
@@ -420,30 +392,23 @@ class TestSaveOneDriveSettings:
     @patch("os.path.exists")
     @patch("os.path.dirname")
     @patch("app.config.settings")
-    def test_save_settings_adds_new_lines(self, mock_settings, mock_dirname, mock_exists, mock_file, client: TestClient):
+    def test_save_settings_adds_new_lines(
+        self, mock_settings, mock_dirname, mock_exists, mock_file, client: TestClient
+    ):
         """Test that new settings are added if not present."""
         mock_exists.return_value = True
         mock_dirname.return_value = "/app"
 
         response = client.post(
             "/api/onedrive/save-settings",
-            data={
-                "refresh_token": "new_token",
-                "folder_path": "/New/Path",
-                "tenant_id": "common"
-            }
+            data={"refresh_token": "new_token", "folder_path": "/New/Path", "tenant_id": "common"},
         )
 
         assert response.status_code == 200
 
     def test_save_settings_missing_required_field(self, client: TestClient):
         """Test save without required refresh_token."""
-        response = client.post(
-            "/api/onedrive/save-settings",
-            data={
-                "tenant_id": "common"
-            }
-        )
+        response = client.post("/api/onedrive/save-settings", data={"tenant_id": "common"})
 
         assert response.status_code == 422  # Validation error
 
@@ -453,13 +418,7 @@ class TestSaveOneDriveSettings:
         """Test exception handling in save settings."""
         mock_exists.side_effect = Exception("Unexpected error")
 
-        response = client.post(
-            "/api/onedrive/save-settings",
-            data={
-                "refresh_token": "token",
-                "tenant_id": "common"
-            }
-        )
+        response = client.post("/api/onedrive/save-settings", data={"refresh_token": "token", "tenant_id": "common"})
 
         assert response.status_code == 500
 
@@ -481,8 +440,8 @@ class TestUpdateOneDriveSettings:
                 "client_id": "new_client_id",
                 "client_secret": "new_client_secret",
                 "tenant_id": "common",
-                "folder_path": "/Documents"
-            }
+                "folder_path": "/Documents",
+            },
         )
 
         assert response.status_code == 200
@@ -496,11 +455,7 @@ class TestUpdateOneDriveSettings:
         mock_get_token.return_value = "test_token"
 
         response = client.post(
-            "/api/onedrive/update-settings",
-            data={
-                "refresh_token": "new_token",
-                "tenant_id": "common"
-            }
+            "/api/onedrive/update-settings", data={"refresh_token": "new_token", "tenant_id": "common"}
         )
 
         assert response.status_code == 200
@@ -512,11 +467,7 @@ class TestUpdateOneDriveSettings:
         mock_get_token.side_effect = Exception("Token invalid")
 
         response = client.post(
-            "/api/onedrive/update-settings",
-            data={
-                "refresh_token": "bad_token",
-                "tenant_id": "common"
-            }
+            "/api/onedrive/update-settings", data={"refresh_token": "bad_token", "tenant_id": "common"}
         )
 
         assert response.status_code == 200
@@ -526,12 +477,7 @@ class TestUpdateOneDriveSettings:
 
     def test_update_settings_missing_required_field(self, client: TestClient):
         """Test update without required refresh_token."""
-        response = client.post(
-            "/api/onedrive/update-settings",
-            data={
-                "tenant_id": "common"
-            }
-        )
+        response = client.post("/api/onedrive/update-settings", data={"tenant_id": "common"})
 
         assert response.status_code == 422
 
@@ -539,14 +485,10 @@ class TestUpdateOneDriveSettings:
     def test_update_settings_exception_handling(self, mock_settings, client: TestClient):
         """Test exception handling in update settings."""
         mock_settings.onedrive_refresh_token = None
-        
+
         with patch("app.tasks.upload_to_onedrive.get_onedrive_token", side_effect=Exception("Fatal error")):
             response = client.post(
-                "/api/onedrive/update-settings",
-                data={
-                    "refresh_token": "token",
-                    "tenant_id": "common"
-                }
+                "/api/onedrive/update-settings", data={"refresh_token": "token", "tenant_id": "common"}
             )
 
         # Should still update settings even if test fails
@@ -615,7 +557,7 @@ class TestOneDriveIntegration:
             mock_exchange.return_value = {
                 "refresh_token": "new_refresh_token",
                 "access_token": "new_access_token",
-                "expires_in": 3600
+                "expires_in": 3600,
             }
 
             response = client.post(
@@ -625,8 +567,8 @@ class TestOneDriveIntegration:
                     "client_secret": "test_client_secret",
                     "redirect_uri": "http://localhost/callback",
                     "code": "auth_code",
-                    "tenant_id": "common"
-                }
+                    "tenant_id": "common",
+                },
             )
 
             assert response.status_code == 200
@@ -636,10 +578,7 @@ class TestOneDriveIntegration:
         with patch("app.tasks.upload_to_onedrive.get_onedrive_token"):
             response = client.post(
                 "/api/onedrive/update-settings",
-                data={
-                    "refresh_token": token_data["refresh_token"],
-                    "tenant_id": "common"
-                }
+                data={"refresh_token": token_data["refresh_token"], "tenant_id": "common"},
             )
 
             assert response.status_code == 200
@@ -661,16 +600,13 @@ class TestOneDriveIntegration:
         mock_post_response.json.return_value = {
             "access_token": "access1",
             "refresh_token": "new_token",
-            "expires_in": 3600
+            "expires_in": 3600,
         }
         mock_post.return_value = mock_post_response
 
         mock_get_response = Mock()
         mock_get_response.status_code = 200
-        mock_get_response.json.return_value = {
-            "displayName": "Test User",
-            "userPrincipalName": "test@example.com"
-        }
+        mock_get_response.json.return_value = {"displayName": "Test User", "userPrincipalName": "test@example.com"}
         mock_get.return_value = mock_get_response
 
         with patch("os.path.exists", return_value=False):

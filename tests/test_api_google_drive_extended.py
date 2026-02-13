@@ -1,8 +1,9 @@
 """Comprehensive unit tests for app/api/google_drive.py module."""
 
-import pytest
-from unittest.mock import MagicMock, patch
 from datetime import datetime, timedelta
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 @pytest.mark.unit
@@ -39,14 +40,12 @@ class TestUpdateGoogleDriveSettings:
 
     def test_update_settings_oauth_enabled(self):
         """Test updating settings with OAuth enabled."""
-        from app.config import settings
 
         # Should update OAuth credentials
         pass
 
     def test_update_settings_oauth_disabled(self):
         """Test updating settings with OAuth disabled."""
-        from app.config import settings
 
         # Should set use_oauth to False
         pass
