@@ -13,6 +13,9 @@ from app.views.base import APIRouter, get_db, logger, require_login, templates
 
 router = APIRouter()
 
+# Error message constants
+_FILE_NOT_FOUND = "File not found"
+
 
 @router.get("/files")
 @require_login
@@ -433,7 +436,7 @@ def preview_original_file(request: Request, file_id: int, db: Session = Depends(
 
     file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
     if not file_record:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_FILE_NOT_FOUND)
 
     if not file_record.original_file_path or not os.path.exists(file_record.original_file_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Original file not found on disk")
@@ -460,7 +463,7 @@ def preview_processed_file(request: Request, file_id: int, db: Session = Depends
 
     file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
     if not file_record:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_FILE_NOT_FOUND)
 
     if not file_record.processed_file_path or not os.path.exists(file_record.processed_file_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Processed file not found on disk")
@@ -487,7 +490,7 @@ def get_original_text(request: Request, file_id: int, db: Session = Depends(get_
 
     file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
     if not file_record:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_FILE_NOT_FOUND)
 
     if not file_record.original_file_path or not os.path.exists(file_record.original_file_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Original file not found on disk")
@@ -527,7 +530,7 @@ def get_processed_text(request: Request, file_id: int, db: Session = Depends(get
 
     file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
     if not file_record:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_FILE_NOT_FOUND)
 
     if not file_record.processed_file_path or not os.path.exists(file_record.processed_file_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Processed file not found on disk")

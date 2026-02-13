@@ -64,7 +64,7 @@ async def test_notification(request: Request):
     # Add request_time to request.state
     import datetime
 
-    request.state.request_time = datetime.datetime.utcnow().isoformat()
+    request.state.request_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
     """
     Send a test notification through all configured notification channels
     """

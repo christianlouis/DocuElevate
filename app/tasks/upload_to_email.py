@@ -20,6 +20,9 @@ from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
 
+# Constants
+_LOGO_FILENAME = "logo.png"
+
 
 def get_email_template(template_name="default.html"):
     """
@@ -87,16 +90,16 @@ def attach_logo(msg):
     """Attach the DocuElevate logo to the email with proper Content-ID."""
     try:
         # Try to find logo in workdir first (for customization)
-        custom_logo_path = os.path.join(settings.workdir, "templates", "email", "logo.png")
+        custom_logo_path = os.path.join(settings.workdir, "templates", "email", _LOGO_FILENAME)
         if os.path.exists(custom_logo_path):
             logo_path = custom_logo_path
         else:
             # Use built-in logo
             app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            logo_path = os.path.join(app_dir, "static", "logo.png")
+            logo_path = os.path.join(app_dir, "static", _LOGO_FILENAME)
             # Fallback to logo in frontend/static if app/static doesn't exist
             if not os.path.exists(logo_path):
-                logo_path = os.path.join(app_dir, "..", "frontend", "static", "logo.png")
+                logo_path = os.path.join(app_dir, "..", "frontend", "static", _LOGO_FILENAME)
 
         if os.path.exists(logo_path):
             with open(logo_path, "rb") as img:
@@ -106,7 +109,7 @@ def attach_logo(msg):
             mimetype = "image/svg+xml" if logo_path.endswith(".svg") else "image/png"
             logo_attach = MIMEImage(logo_data, mimetype)
             logo_attach.add_header("Content-ID", "<logo>")
-            logo_attach.add_header("Content-Disposition", "inline", filename="logo.png")
+            logo_attach.add_header("Content-Disposition", "inline", filename=_LOGO_FILENAME)
             msg.attach(logo_attach)
             logger.info(f"Logo attached from {logo_path}")
             return True
