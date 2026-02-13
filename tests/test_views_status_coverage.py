@@ -23,21 +23,23 @@ class TestStatusDashboard:
         mock_request = MagicMock()
         mock_templates.TemplateResponse.return_value = MagicMock()
 
-        with patch("app.utils.config_validator.get_provider_status") as mock_provider:
+        with (
+            patch("app.utils.config_validator.get_provider_status") as mock_provider,
+            patch("app.views.status.os.path.exists", return_value=False),
+        ):
             mock_provider.return_value = {
                 "OpenAI": {"configured": True, "status": "ok"},
                 "Dropbox": {"configured": False},
             }
-            with patch("app.views.status.os.path.exists", return_value=False):
-                result = await status_dashboard(mock_request)
-                mock_templates.TemplateResponse.assert_called_once()
+            result = await status_dashboard(mock_request)
+            mock_templates.TemplateResponse.assert_called_once()
 
-                call_args = mock_templates.TemplateResponse.call_args
-                context = call_args[0][1]
-                assert context["app_version"] == "1.0.0"
-                assert context["build_date"] == "2024-01-01"
-                assert context["debug_enabled"] is False
-                assert context["container_info"]["is_docker"] is False
+            call_args = mock_templates.TemplateResponse.call_args
+            context = call_args[0][1]
+            assert context["app_version"] == "1.0.0"
+            assert context["build_date"] == "2024-01-01"
+            assert context["debug_enabled"] is False
+            assert context["container_info"]["is_docker"] is False
 
     @pytest.mark.asyncio
     @patch("app.views.status.templates")
@@ -56,26 +58,28 @@ class TestStatusDashboard:
         mock_request = MagicMock()
         mock_templates.TemplateResponse.return_value = MagicMock()
 
-        with patch("app.utils.config_validator.get_provider_status", return_value={}):
-            with patch("app.views.status.os.path.exists") as mock_exists:
-                mock_exists.return_value = True
-                with patch("builtins.open", create=True) as mock_file:
-                    mock_file.return_value.__enter__ = MagicMock(
-                        return_value=MagicMock(
-                            __iter__=MagicMock(
-                                return_value=iter(
-                                    ["12:devices:/docker/abc123def456\n"]
-                                )
-                            )
+        with (
+            patch("app.utils.config_validator.get_provider_status", return_value={}),
+            patch("app.views.status.os.path.exists") as mock_exists,
+            patch("builtins.open", create=True) as mock_file,
+        ):
+            mock_exists.return_value = True
+            mock_file.return_value.__enter__ = MagicMock(
+                return_value=MagicMock(
+                    __iter__=MagicMock(
+                        return_value=iter(
+                            ["12:devices:/docker/abc123def456\n"]
                         )
                     )
-                    mock_file.return_value.__exit__ = MagicMock(return_value=False)
+                )
+            )
+            mock_file.return_value.__exit__ = MagicMock(return_value=False)
 
-                    result = await status_dashboard(mock_request)
-                    call_args = mock_templates.TemplateResponse.call_args
-                    context = call_args[0][1]
-                    assert context["container_info"]["is_docker"] is True
-                    assert context["debug_enabled"] is True
+            result = await status_dashboard(mock_request)
+            call_args = mock_templates.TemplateResponse.call_args
+            context = call_args[0][1]
+            assert context["container_info"]["is_docker"] is True
+            assert context["debug_enabled"] is True
 
     @pytest.mark.asyncio
     @patch("app.views.status.templates")
@@ -93,12 +97,14 @@ class TestStatusDashboard:
         mock_request = MagicMock()
         mock_templates.TemplateResponse.return_value = MagicMock()
 
-        with patch("app.utils.config_validator.get_provider_status", return_value={}):
-            with patch("app.views.status.os.path.exists", return_value=False):
-                result = await status_dashboard(mock_request)
-                call_args = mock_templates.TemplateResponse.call_args
-                context = call_args[0][1]
-                assert context["container_info"]["git_sha"] == "Unknown"
+        with (
+            patch("app.utils.config_validator.get_provider_status", return_value={}),
+            patch("app.views.status.os.path.exists", return_value=False),
+        ):
+            result = await status_dashboard(mock_request)
+            call_args = mock_templates.TemplateResponse.call_args
+            context = call_args[0][1]
+            assert context["container_info"]["git_sha"] == "Unknown"
 
     @pytest.mark.asyncio
     @patch("app.views.status.templates")
@@ -116,12 +122,14 @@ class TestStatusDashboard:
         mock_request = MagicMock()
         mock_templates.TemplateResponse.return_value = MagicMock()
 
-        with patch("app.utils.config_validator.get_provider_status", return_value={}):
-            with patch("app.views.status.os.path.exists", return_value=False):
-                result = await status_dashboard(mock_request)
-                call_args = mock_templates.TemplateResponse.call_args
-                context = call_args[0][1]
-                assert context["container_info"]["git_sha"] == "abc123d"
+        with (
+            patch("app.utils.config_validator.get_provider_status", return_value={}),
+            patch("app.views.status.os.path.exists", return_value=False),
+        ):
+            result = await status_dashboard(mock_request)
+            call_args = mock_templates.TemplateResponse.call_args
+            context = call_args[0][1]
+            assert context["container_info"]["git_sha"] == "abc123d"
 
     @pytest.mark.asyncio
     @patch("app.views.status.templates")
@@ -138,12 +146,14 @@ class TestStatusDashboard:
         mock_request = MagicMock()
         mock_templates.TemplateResponse.return_value = MagicMock()
 
-        with patch("app.utils.config_validator.get_provider_status", return_value={}):
-            with patch("app.views.status.os.path.exists", side_effect=Exception("Unexpected")):
-                result = await status_dashboard(mock_request)
-                call_args = mock_templates.TemplateResponse.call_args
-                context = call_args[0][1]
-                assert context["container_info"]["is_docker"] is False
+        with (
+            patch("app.utils.config_validator.get_provider_status", return_value={}),
+            patch("app.views.status.os.path.exists", side_effect=Exception("Unexpected")),
+        ):
+            result = await status_dashboard(mock_request)
+            call_args = mock_templates.TemplateResponse.call_args
+            context = call_args[0][1]
+            assert context["container_info"]["is_docker"] is False
 
     @pytest.mark.asyncio
     @patch("app.views.status.templates")
@@ -161,12 +171,14 @@ class TestStatusDashboard:
         mock_request = MagicMock()
         mock_templates.TemplateResponse.return_value = MagicMock()
 
-        with patch("app.utils.config_validator.get_provider_status", return_value={}):
-            with patch("app.views.status.os.path.exists", return_value=False):
-                result = await status_dashboard(mock_request)
-                call_args = mock_templates.TemplateResponse.call_args
-                context = call_args[0][1]
-                assert len(context["settings"]["notification_urls"]) == 2
+        with (
+            patch("app.utils.config_validator.get_provider_status", return_value={}),
+            patch("app.views.status.os.path.exists", return_value=False),
+        ):
+            result = await status_dashboard(mock_request)
+            call_args = mock_templates.TemplateResponse.call_args
+            context = call_args[0][1]
+            assert len(context["settings"]["notification_urls"]) == 2
 
 
 @pytest.mark.unit
@@ -220,12 +232,14 @@ class TestEnvDebug:
 class TestStatusViewsIntegration:
     """Integration tests for status views via TestClient."""
 
-    def test_status_dashboard_accessible(self, client):
+    @staticmethod
+    def test_status_dashboard_accessible(client):
         """Test status dashboard returns 200."""
         response = client.get("/status")
         assert response.status_code == 200
 
-    def test_env_debug_accessible(self, client):
+    @staticmethod
+    def test_env_debug_accessible(client):
         """Test env debug page returns 200."""
         response = client.get("/env")
         assert response.status_code == 200

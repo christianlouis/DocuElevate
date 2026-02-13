@@ -278,7 +278,8 @@ class TestSettingsPage:
 class TestSettingsViewIntegration:
     """Integration tests for settings page endpoint."""
 
-    def test_settings_page_redirects_unauthenticated(self, client):
+    @staticmethod
+    def test_settings_page_redirects_unauthenticated(client):
         """Test settings page redirects when not authenticated."""
         response = client.get("/settings", follow_redirects=False)
         assert response.status_code in (200, 302, 303)
