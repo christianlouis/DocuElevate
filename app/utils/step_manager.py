@@ -200,21 +200,7 @@ def get_file_overall_status(db: Session, file_id: int) -> Dict:
         }
 
     # Define which steps are "real" status-determining steps
-    # Only high-level logical steps, not implementation sub-steps
-    REAL_MAIN_STEPS = {
-        "create_file_record",
-        "check_text",
-        "extract_text",
-        "process_with_azure_document_intelligence",
-        "extract_metadata_with_gpt",
-        "embed_metadata_into_pdf",
-        "finalize_document_storage",
-        "send_to_all_destinations",
-    }
-
-    # Add check_for_duplicates if deduplication is enabled
-    if settings.enable_deduplication:
-        REAL_MAIN_STEPS.add("check_for_duplicates")
+    REAL_MAIN_STEPS = _get_real_main_steps()
 
     all_steps = db.query(FileProcessingStep).filter(FileProcessingStep.file_id == file_id).all()
 
@@ -264,6 +250,23 @@ def get_file_overall_status(db: Session, file_id: int) -> Dict:
     }
 
 
+def _get_real_main_steps():
+    """Return the set of step names that represent real user-facing processing steps."""
+    real_steps = {
+        "create_file_record",
+        "check_text",
+        "extract_text",
+        "process_with_azure_document_intelligence",
+        "extract_metadata_with_gpt",
+        "embed_metadata_into_pdf",
+        "finalize_document_storage",
+        "send_to_all_destinations",
+    }
+    if settings.enable_deduplication:
+        real_steps.add("check_for_duplicates")
+    return real_steps
+
+
 def get_step_summary(db: Session, file_id: int) -> Dict:
     """
     Get a summary of main steps vs upload steps with status counts.
@@ -285,21 +288,7 @@ def get_step_summary(db: Session, file_id: int) -> Dict:
         }
     """
     # Define which steps are "real" status-determining steps
-    # Only high-level logical steps, not implementation sub-steps
-    REAL_MAIN_STEPS = {
-        "create_file_record",
-        "check_text",
-        "extract_text",
-        "process_with_azure_document_intelligence",
-        "extract_metadata_with_gpt",
-        "embed_metadata_into_pdf",
-        "finalize_document_storage",
-        "send_to_all_destinations",
-    }
-
-    # Add check_for_duplicates if deduplication is enabled
-    if settings.enable_deduplication:
-        REAL_MAIN_STEPS.add("check_for_duplicates")
+    REAL_MAIN_STEPS = _get_real_main_steps()
 
     steps = db.query(FileProcessingStep).filter(FileProcessingStep.file_id == file_id).all()
 
@@ -310,28 +299,22 @@ def get_step_summary(db: Session, file_id: int) -> Dict:
     upload_steps_count = 0
 
     for step in steps:
-        # Normalize status
         status = step.status.lower()
         if status == "pending":
             status = "queued"
 
-        # Check if it's an upload task (only count actual upload_to_* steps, not queue_* steps)
         is_upload = step.step_name.startswith("upload_to_")
+        is_main = step.step_name in REAL_MAIN_STEPS
+        is_queue = step.step_name.startswith("queue_")
 
-        # Only count "real" steps
-        is_real_step = step.step_name in REAL_MAIN_STEPS or is_upload or step.step_name.startswith("queue_")
-
-        if not is_real_step:
-            # Skip diagnostic/internal steps like poll_task, upload_file, set_custom_fields, etc.
+        if not (is_upload or is_main or is_queue):
             continue
 
-        if is_upload:
-            if status in upload_counts:
-                upload_counts[status] += 1
+        if is_upload and status in upload_counts:
+            upload_counts[status] += 1
             upload_steps_count += 1
-        elif step.step_name in REAL_MAIN_STEPS:
-            if status in main_counts:
-                main_counts[status] += 1
+        elif is_main and status in main_counts:
+            main_counts[status] += 1
             main_steps_count += 1
 
     return {

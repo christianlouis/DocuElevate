@@ -199,6 +199,42 @@ def set_document_custom_fields(doc_id: int, custom_fields: dict, task_id: str) -
         logger.error(f"[{task_id}] Response: {getattr(exc.response, 'text', '<no response>')}")
 
 
+def _build_custom_fields(metadata: dict, task_id: str) -> dict:
+    """Build the custom fields dict from metadata using configured mappings."""
+    custom_fields_to_set = {}
+
+    if settings.paperless_custom_fields_mapping:
+        custom_fields_to_set = _apply_field_mapping(metadata, task_id)
+
+    # Fallback to legacy single-field configuration for backward compatibility
+    if settings.paperless_custom_field_absender and metadata.get("absender"):
+        if settings.paperless_custom_field_absender not in custom_fields_to_set:
+            custom_fields_to_set[settings.paperless_custom_field_absender] = metadata.get("absender")
+            logger.debug(f"[{task_id}] Using legacy absender field configuration")
+
+    return custom_fields_to_set
+
+
+def _apply_field_mapping(metadata: dict, task_id: str) -> dict:
+    """Parse and apply the PAPERLESS_CUSTOM_FIELDS_MAPPING to metadata."""
+    result = {}
+    try:
+        field_mapping = json.loads(settings.paperless_custom_fields_mapping)
+        logger.info(f"[{task_id}] Using custom fields mapping: {field_mapping}")
+
+        for metadata_field, paperless_field in field_mapping.items():
+            if metadata_field in metadata and metadata[metadata_field]:
+                value = str(metadata[metadata_field]) if metadata[metadata_field] is not None else ""
+                if value and value != METADATA_UNKNOWN_PLACEHOLDER:
+                    result[paperless_field] = value
+                    logger.debug(f"[{task_id}] Mapping {metadata_field}='{value}' to field '{paperless_field}'")
+    except json.JSONDecodeError as e:
+        logger.error(f"[{task_id}] Failed to parse PAPERLESS_CUSTOM_FIELDS_MAPPING: {e}")
+    except Exception as e:
+        logger.error(f"[{task_id}] Error processing custom fields mapping: {e}")
+    return result
+
+
 @celery.task(base=BaseTaskWithRetry, bind=True)
 def upload_to_paperless(self, file_path: str, file_id: int = None):
     """
@@ -317,34 +353,7 @@ def upload_to_paperless(self, file_path: str, file_id: int = None):
     )
 
     # Set custom fields if configured and metadata available
-    custom_fields_to_set = {}
-
-    # First, check for the new flexible mapping configuration
-    if settings.paperless_custom_fields_mapping:
-        try:
-            # Parse JSON mapping: {"metadata_field": "PaperlessFieldName", ...}
-            field_mapping = json.loads(settings.paperless_custom_fields_mapping)
-            logger.info(f"[{task_id}] Using custom fields mapping: {field_mapping}")
-
-            # Map each metadata field to its corresponding Paperless custom field
-            for metadata_field, paperless_field in field_mapping.items():
-                if metadata_field in metadata and metadata[metadata_field]:
-                    # Convert to string to ensure consistent comparison
-                    value = str(metadata[metadata_field]) if metadata[metadata_field] is not None else ""
-                    if value and value != METADATA_UNKNOWN_PLACEHOLDER:
-                        custom_fields_to_set[paperless_field] = value
-                        logger.debug(f"[{task_id}] Mapping {metadata_field}='{value}' to field '{paperless_field}'")
-        except json.JSONDecodeError as e:
-            logger.error(f"[{task_id}] Failed to parse PAPERLESS_CUSTOM_FIELDS_MAPPING: {e}")
-        except Exception as e:
-            logger.error(f"[{task_id}] Error processing custom fields mapping: {e}")
-
-    # Fallback to legacy single-field configuration for backward compatibility
-    if settings.paperless_custom_field_absender and metadata.get("absender"):
-        # Only add if not already set by the mapping
-        if settings.paperless_custom_field_absender not in custom_fields_to_set:
-            custom_fields_to_set[settings.paperless_custom_field_absender] = metadata.get("absender")
-            logger.debug(f"[{task_id}] Using legacy absender field configuration")
+    custom_fields_to_set = _build_custom_fields(metadata, task_id)
 
     # Set custom fields if we have any to set
     if custom_fields_to_set:

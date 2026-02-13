@@ -143,6 +143,31 @@ def create_upload_session(filename, folder_path, access_token):
         raise Exception(error_msg)
 
 
+def _upload_chunk_with_retry(upload_url, chunk, content_range, max_retries=3, retry_delay=2):
+    """Upload a single chunk with retry logic. Returns the response."""
+    response = None
+    for attempt in range(max_retries):
+        try:
+            headers = {"Content-Length": str(len(chunk)), "Content-Range": content_range}
+            response = requests.put(upload_url, headers=headers, data=chunk, timeout=settings.http_request_timeout)
+
+            if response.status_code in (201, 202):
+                return response
+
+            logger.warning(f"Chunk upload failed (attempt {attempt + 1}): {response.status_code}")
+        except Exception as e:
+            logger.warning(f"Chunk upload error (attempt {attempt + 1}): {str(e)}")
+
+        if attempt < max_retries - 1:
+            time.sleep(retry_delay * (attempt + 1))
+
+    if response is None or response.status_code not in (201, 202):
+        status_info = f"{response.status_code} - {response.text}" if response else "no response"
+        raise Exception(f"Failed to upload chunk after {max_retries} attempts: {status_info}")
+
+    return response
+
+
 def upload_large_file(file_path, upload_url):
     """
     Upload a large file to OneDrive using the upload session URL.
@@ -170,36 +195,7 @@ def upload_large_file(file_path, upload_url):
             # Prepare content range header
             content_range = f"bytes {chunk_start}-{chunk_end}/{file_size}"
 
-            # Upload chunk
-            headers = {"Content-Length": str(len(chunk)), "Content-Range": content_range}
-
-            # Try to upload chunk with retries
-            max_retries = 3
-            retry_delay = 2  # seconds
-
-            for attempt in range(max_retries):
-                try:
-                    response = requests.put(
-                        upload_url, headers=headers, data=chunk, timeout=settings.http_request_timeout
-                    )
-
-                    # Check if successful
-                    if response.status_code in (201, 202):
-                        # 201 = Created (final chunk), 202 = Accepted (more chunks coming)
-                        break
-                    else:
-                        logger.warning(f"Chunk upload failed (attempt {attempt+1}): {response.status_code}")
-                        if attempt < max_retries - 1:
-                            time.sleep(retry_delay * (attempt + 1))
-                except Exception as e:
-                    logger.warning(f"Chunk upload error (attempt {attempt+1}): {str(e)}")
-                    if attempt < max_retries - 1:
-                        time.sleep(retry_delay * (attempt + 1))
-
-            if response.status_code not in (201, 202):
-                raise Exception(
-                    f"Failed to upload chunk after {max_retries} attempts: {response.status_code} - {response.text}"
-                )
+            response = _upload_chunk_with_retry(upload_url, chunk, content_range)
 
             # Move to next chunk
             chunk_number += 1

@@ -99,34 +99,37 @@ def log_task_progress(task_id, step_name, status, message=None, file_id=None, de
 
         # Update FileProcessingStep table (for status tracking) if file_id is provided
         if file_id and step_name:
-            # Find or create the step record
-            step_record = (
-                db.query(FileProcessingStep)
-                .filter(FileProcessingStep.file_id == file_id, FileProcessingStep.step_name == step_name)
-                .first()
-            )
-
-            now = datetime.now(timezone.utc)
-
-            if not step_record:
-                # Create new step record
-                step_record = FileProcessingStep(
-                    file_id=file_id,
-                    step_name=step_name,
-                    status=status,
-                    started_at=now if status == "in_progress" else None,
-                    completed_at=now if status in ("success", "failure", "skipped") else None,
-                    error_message=message if status == "failure" else None,
-                )
-                db.add(step_record)
-            else:
-                # Update existing step record
-                step_record.status = status
-                if status == "in_progress" and not step_record.started_at:
-                    step_record.started_at = now
-                if status in ("success", "failure", "skipped"):
-                    step_record.completed_at = now
-                if status == "failure":
-                    step_record.error_message = message or detail
+            _update_step_record(db, file_id, step_name, status, message, detail)
 
         db.commit()
+
+
+def _update_step_record(db, file_id, step_name, status, message, detail):
+    """Find or create a FileProcessingStep record and update its status."""
+    step_record = (
+        db.query(FileProcessingStep)
+        .filter(FileProcessingStep.file_id == file_id, FileProcessingStep.step_name == step_name)
+        .first()
+    )
+
+    now = datetime.now(timezone.utc)
+
+    if not step_record:
+        step_record = FileProcessingStep(
+            file_id=file_id,
+            step_name=step_name,
+            status=status,
+            started_at=now if status == "in_progress" else None,
+            completed_at=now if status in ("success", "failure", "skipped") else None,
+            error_message=message if status == "failure" else None,
+        )
+        db.add(step_record)
+        return
+
+    step_record.status = status
+    if status == "in_progress" and not step_record.started_at:
+        step_record.started_at = now
+    if status in ("success", "failure", "skipped"):
+        step_record.completed_at = now
+    if status == "failure":
+        step_record.error_message = message or detail

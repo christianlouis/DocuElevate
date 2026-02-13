@@ -11,18 +11,34 @@ def get_provider_status():
     Returns status information for all configured providers
     """
     providers = {}
+    providers["Authentication"] = _get_auth_provider()
+    providers["Notifications"] = _get_notifications_provider()
+    providers["OpenAI"] = _get_openai_provider()
+    providers["Azure AI"] = _get_azure_ai_provider()
+    providers["Dropbox"] = _get_dropbox_provider()
+    providers["Email"] = _get_email_provider()
+    providers["FTP Storage"] = _get_ftp_provider()
+    providers["Google Drive"] = _get_google_drive_provider()
+    providers["NextCloud"] = _get_nextcloud_provider()
+    providers["OneDrive"] = _get_onedrive_provider()
+    providers["Paperless-ngx"] = _get_paperless_provider()
+    providers["S3 Storage"] = _get_s3_provider()
+    providers["SFTP Storage"] = _get_sftp_provider()
+    providers["Uptime Kuma"] = _get_uptime_kuma_provider()
+    providers["WebDAV"] = _get_webdav_provider()
+    return providers
 
-    # Add Authentication configuration
+
+def _get_auth_provider():
+    """Returns Authentication provider status."""
     auth_enabled = getattr(settings, "auth_enabled", False)
     using_oidc = bool(
         getattr(settings, "authentik_client_id", None)
         and getattr(settings, "authentik_client_secret", None)
         and getattr(settings, "authentik_config_url", None)
     )
-
     auth_method = "OIDC" if using_oidc else "Basic Auth" if auth_enabled else "None"
-
-    providers["Authentication"] = {
+    return {
         "name": "Authentication",
         "icon": "fa-solid fa-lock",
         "configured": bool(auth_enabled and (getattr(settings, "admin_username", None) or using_oidc)),
@@ -35,8 +51,10 @@ def get_provider_status():
         },
     }
 
-    # Add Notification configuration - Make sure this provider is near the top of the list
-    providers["Notifications"] = {
+
+def _get_notifications_provider():
+    """Returns Notifications provider status."""
+    return {
         "name": "Notifications",
         "icon": "fa-solid fa-bell",
         "configured": bool(getattr(settings, "notification_urls", None)),
@@ -57,8 +75,10 @@ def get_provider_status():
         "test_endpoint": "/api/diagnostic/test-notification",
     }
 
-    # Add AI services first
-    providers["OpenAI"] = {
+
+def _get_openai_provider():
+    """Returns OpenAI provider status."""
+    return {
         "name": "OpenAI",
         "icon": "fa-brands fa-openai",
         "configured": bool(
@@ -73,7 +93,10 @@ def get_provider_status():
         },
     }
 
-    providers["Azure AI"] = {
+
+def _get_azure_ai_provider():
+    """Returns Azure AI provider status."""
+    return {
         "name": "Azure AI",
         "icon": "fa-solid fa-robot",
         "configured": bool(getattr(settings, "azure_ai_key", None) and getattr(settings, "azure_endpoint", None)),
@@ -86,8 +109,10 @@ def get_provider_status():
         },
     }
 
-    # Add Dropbox configuration - alphabetically ordered providers
-    providers["Dropbox"] = {
+
+def _get_dropbox_provider():
+    """Returns Dropbox provider status."""
+    return {
         "name": "Dropbox",
         "icon": "fa-brands fa-dropbox",
         "configured": bool(
@@ -105,8 +130,10 @@ def get_provider_status():
         },
     }
 
-    # Add Email configuration
-    providers["Email"] = {
+
+def _get_email_provider():
+    """Returns Email provider status."""
+    return {
         "name": "Email",
         "icon": "fa-solid fa-envelope",
         "configured": bool(
@@ -125,8 +152,10 @@ def get_provider_status():
         },
     }
 
-    # Add FTP configuration to providers
-    providers["FTP Storage"] = {
+
+def _get_ftp_provider():
+    """Returns FTP Storage provider status."""
+    return {
         "name": "FTP Storage",
         "icon": "fa-solid fa-server",
         "configured": bool(
@@ -147,21 +176,19 @@ def get_provider_status():
         },
     }
 
-    # Check Google Drive configuration
+
+def _get_google_drive_provider():
+    """Returns Google Drive provider status."""
     gdrive_oauth_configured = bool(
         getattr(settings, "google_drive_client_id", None)
         and getattr(settings, "google_drive_client_secret", None)
         and getattr(settings, "google_drive_refresh_token", None)
     )
-
     gdrive_sa_configured = bool(getattr(settings, "google_drive_credentials_json", None))
-
-    # Determine if using OAuth or service account
     use_oauth = getattr(settings, "google_drive_use_oauth", False)
-
     is_configured = (use_oauth and gdrive_oauth_configured) or (not use_oauth and gdrive_sa_configured)
 
-    providers["Google Drive"] = {
+    return {
         "name": "Google Drive",
         "icon": "fa-brands fa-google-drive",
         "configured": is_configured and bool(getattr(settings, "google_drive_folder_id", None)),
@@ -186,14 +213,15 @@ def get_provider_status():
         },
     }
 
-    # Check NextCloud configuration
+
+def _get_nextcloud_provider():
+    """Returns NextCloud provider status."""
     nextcloud_url = getattr(settings, "nextcloud_upload_url", "Not set")
-    # Extract base URL from WebDAV URL (remove the /remote.php part and everything after it)
     nextcloud_base_url = nextcloud_url
     if nextcloud_url != "Not set" and nextcloud_url is not None and "/remote.php" in nextcloud_url:
         nextcloud_base_url = nextcloud_url.split("/remote.php")[0]
 
-    providers["NextCloud"] = {
+    return {
         "name": "NextCloud",
         "icon": "fa-solid fa-cloud",
         "configured": bool(
@@ -212,8 +240,10 @@ def get_provider_status():
         },
     }
 
-    # Check OneDrive configuration
-    providers["OneDrive"] = {
+
+def _get_onedrive_provider():
+    """Returns OneDrive provider status."""
+    return {
         "name": "OneDrive",
         "icon": "fa-brands fa-microsoft",
         "configured": bool(
@@ -232,8 +262,10 @@ def get_provider_status():
         },
     }
 
-    # Check Paperless configuration
-    providers["Paperless-ngx"] = {
+
+def _get_paperless_provider():
+    """Returns Paperless-ngx provider status."""
+    return {
         "name": "Paperless-ngx",
         "icon": "fa-solid fa-file-lines",
         "configured": bool(
@@ -247,8 +279,10 @@ def get_provider_status():
         },
     }
 
-    # Check S3 configuration
-    providers["S3 Storage"] = {
+
+def _get_s3_provider():
+    """Returns S3 Storage provider status."""
+    return {
         "name": "S3 Storage",
         "icon": "fa-brands fa-aws",
         "configured": bool(
@@ -269,8 +303,10 @@ def get_provider_status():
         },
     }
 
-    # Check SFTP configuration
-    providers["SFTP Storage"] = {
+
+def _get_sftp_provider():
+    """Returns SFTP Storage provider status."""
+    return {
         "name": "SFTP Storage",
         "icon": "fa-solid fa-lock",
         "configured": bool(
@@ -291,8 +327,10 @@ def get_provider_status():
         },
     }
 
-    # Add Uptime Kuma configuration
-    providers["Uptime Kuma"] = {
+
+def _get_uptime_kuma_provider():
+    """Returns Uptime Kuma provider status."""
+    return {
         "name": "Uptime Kuma",
         "icon": "fa-solid fa-heart-pulse",
         "configured": bool(getattr(settings, "uptime_kuma_url", None)),
@@ -304,8 +342,10 @@ def get_provider_status():
         },
     }
 
-    # Check WebDAV configuration
-    providers["WebDAV"] = {
+
+def _get_webdav_provider():
+    """Returns WebDAV provider status."""
+    return {
         "name": "WebDAV",
         "icon": "fa-solid fa-globe",
         "configured": bool(
@@ -323,5 +363,3 @@ def get_provider_status():
             "verify_ssl": getattr(settings, "webdav_verify_ssl", "Not set"),
         },
     }
-
-    return providers
