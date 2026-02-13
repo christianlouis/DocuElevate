@@ -411,3 +411,179 @@ class TestURLUploadEndpoint:
 
         # Should not process document
         mock_process_document.delay.assert_not_called()
+
+    @patch("app.api.url_upload.requests.get")
+    def test_process_url_request_exception(self, mock_requests_get, client):
+        """Test handling of generic RequestException"""
+        mock_requests_get.side_effect = requests.exceptions.RequestException("Generic request error")
+
+        response = client.post("/api/process-url", json={"url": "https://example.com/file.pdf"})
+
+        assert response.status_code == 500
+        data = response.json()
+        assert "Failed to download file" in data["detail"]
+
+    @patch("app.api.url_upload.requests.get")
+    def test_process_url_oserror_during_save(self, mock_requests_get, client, tmp_path, monkeypatch):
+        """Test handling of OSError when saving file"""
+        # Mock successful download
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "100"}
+        mock_response.iter_content = Mock(return_value=[b"PDF"])
+        mock_response.raise_for_status = Mock()
+        mock_requests_get.return_value = mock_response
+
+        # Mock workdir to a non-existent path to trigger OSError
+        from app.config import settings
+
+        original_workdir = settings.workdir
+        monkeypatch.setattr(settings, "workdir", "/nonexistent/path/that/does/not/exist")
+
+        try:
+            response = client.post("/api/process-url", json={"url": "https://example.com/file.pdf"})
+
+            assert response.status_code == 500
+            data = response.json()
+            assert "Failed to save file" in data["detail"]
+        finally:
+            # Restore original workdir
+            monkeypatch.setattr(settings, "workdir", original_workdir)
+
+    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.process_document")
+    def test_process_url_unexpected_exception(self, mock_process_document, mock_requests_get, client):
+        """Test handling of unexpected exceptions"""
+        # Mock successful download but process_document.delay raises unexpected error
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "100"}
+        mock_response.iter_content = Mock(return_value=[b"PDF"])
+        mock_response.raise_for_status = Mock()
+        mock_requests_get.return_value = mock_response
+
+        # Mock process_document.delay to raise an unexpected exception
+        mock_process_document.delay.side_effect = RuntimeError("Unexpected processing error")
+
+        response = client.post("/api/process-url", json={"url": "https://example.com/file.pdf"})
+
+        assert response.status_code == 500
+        data = response.json()
+        assert "Unexpected error" in data["detail"]
+
+    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.process_document")
+    def test_process_url_filename_without_extension(self, mock_process_document, mock_requests_get, client):
+        """Test that files without extensions are handled correctly"""
+        # Mock successful download
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "100"}
+        mock_response.iter_content = Mock(return_value=[b"PDF"])
+        mock_response.raise_for_status = Mock()
+        mock_requests_get.return_value = mock_response
+
+        # Mock Celery task
+        mock_task = Mock()
+        mock_task.id = "test-task-id"
+        mock_process_document.delay.return_value = mock_task
+
+        # URL with no extension in path
+        response = client.post("/api/process-url", json={"url": "https://example.com/document", "filename": "noext"})
+
+        assert response.status_code == 200
+        data = response.json()
+        # Should still work, just without extension
+        assert data["task_id"] == "test-task-id"
+
+    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.process_document")
+    def test_process_url_empty_path_uses_download(self, mock_process_document, mock_requests_get, client):
+        """Test that empty URL path defaults to 'download' filename"""
+        # Mock successful download
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "100"}
+        mock_response.iter_content = Mock(return_value=[b"PDF"])
+        mock_response.raise_for_status = Mock()
+        mock_requests_get.return_value = mock_response
+
+        # Mock Celery task
+        mock_task = Mock()
+        mock_task.id = "test-task-id"
+        mock_process_document.delay.return_value = mock_task
+
+        # URL with no path (will default to "download")
+        response = client.post("/api/process-url", json={"url": "https://example.com"})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["task_id"] == "test-task-id"
+        # Filename should start with "document" when no path is provided (sanitize_filename adds timestamp)
+        assert "document" in data["filename"]
+
+    def test_validate_url_no_hostname(self):
+        """Test that URLs without hostname are rejected"""
+        from fastapi import HTTPException
+
+        from app.api.url_upload import validate_url_safety
+
+        with pytest.raises(HTTPException) as exc_info:
+            validate_url_safety("http://")
+        assert exc_info.value.status_code == 400
+        assert "no hostname" in exc_info.value.detail
+
+    def test_validate_file_type_by_extension_fallback(self):
+        """Test that file type validation falls back to extension when content-type is empty"""
+        from app.api.url_upload import validate_file_type
+
+        # Empty content-type but valid extension
+        assert validate_file_type("", "document.pdf") is True
+        assert validate_file_type("", "image.jpg") is True
+        assert validate_file_type("", "spreadsheet.xlsx") is True
+
+        # Empty content-type and invalid extension
+        assert validate_file_type("", "malware.exe") is False
+        assert validate_file_type("", "script.sh") is False
+
+    def test_is_private_ip_ipv6_loopback(self):
+        """Test that IPv6 loopback is detected as private"""
+        from app.api.url_upload import is_private_ip
+
+        # IPv6 loopback (::1)
+        assert is_private_ip("::1") is True
+
+    def test_is_private_ip_link_local(self):
+        """Test that link-local addresses are detected as private"""
+        from app.api.url_upload import is_private_ip
+
+        # Link-local address
+        assert is_private_ip("169.254.1.1") is True
+
+    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.process_document")
+    def test_process_url_sanitizes_dangerous_filename(self, mock_process_document, mock_requests_get, client):
+        """Test that dangerous filenames are sanitized"""
+        # Mock successful download
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "100"}
+        mock_response.iter_content = Mock(return_value=[b"PDF"])
+        mock_response.raise_for_status = Mock()
+        mock_requests_get.return_value = mock_response
+
+        # Mock Celery task
+        mock_task = Mock()
+        mock_task.id = "test-task-id"
+        mock_process_document.delay.return_value = mock_task
+
+        # Dangerous filename with path traversal
+        response = client.post(
+            "/api/process-url", json={"url": "https://example.com/file.pdf", "filename": "../../../etc/passwd"}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        # Filename should be sanitized (no path traversal)
+        assert ".." not in data["filename"]
+        assert "/" not in data["filename"]
