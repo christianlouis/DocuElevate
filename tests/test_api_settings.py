@@ -1,6 +1,6 @@
 """Tests for app/api/settings.py module."""
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
