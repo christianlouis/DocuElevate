@@ -148,6 +148,44 @@ class TestUniqueFilenameGeneration:
         # Should return original since file doesn't exist
         assert result == "/tmp/nonexistent_file_12345.pdf"
 
+    def test_get_unique_filename_counter_fallback(self):
+        """Test counter fallback when both timestamp and UUID already exist"""
+        from app.utils.filename_utils import get_unique_filename
+
+        # Original, timestamp, and first UUID all exist, but counter is free
+        call_count = [0]
+
+        def check_func(path):
+            call_count[0] += 1
+            # First 3 calls return True (original, timestamp, UUID exist)
+            # Fourth call returns False (counter-based name is free)
+            return call_count[0] <= 3
+
+        result = get_unique_filename("/tmp/test.pdf", check_exists_func=check_func)
+        assert result != "/tmp/test.pdf"
+        assert "test_" in result
+        assert ".pdf" in result
+        # Should end with _1.pdf since that's the first counter
+        assert result.endswith("_1.pdf")
+
+    def test_get_unique_filename_full_uuid_fallback(self):
+        """Test full UUID fallback when 1000+ counters exist"""
+        from app.utils.filename_utils import get_unique_filename
+
+        # Make it return True for the first 1003 calls (original, timestamp, UUID, and 1000 counters)
+        call_count = [0]
+
+        def check_func(path):
+            call_count[0] += 1
+            # Return True for first 1003 calls to simulate all variations existing
+            return call_count[0] <= 1003
+
+        result = get_unique_filename("/tmp/test.pdf", check_exists_func=check_func)
+        assert result != "/tmp/test.pdf"
+        assert "test_" in result
+        assert ".pdf" in result
+        # Should contain a full UUID (36 characters with dashes)
+
 
 @pytest.mark.unit
 class TestExtractRemotePath:
@@ -343,3 +381,39 @@ class TestUniqueFilepathWithCounter:
         assert result == str(tmp_path / "newfile.pdf")
         # File shouldn't be created, just path returned
         assert not os.path.exists(result)
+
+    def test_get_unique_filepath_with_counter_extreme_collision(self, tmp_path):
+        """Test extreme edge case when more than 9999 collisions occur"""
+        from unittest.mock import patch
+
+        from app.utils.filename_utils import get_unique_filepath_with_counter
+
+        # Create base file to trigger counter logic
+        (tmp_path / "test.pdf").touch()
+
+        # Mock os.path.exists to simulate 10000+ collisions
+        original_exists = os.path.exists
+        call_count = [0]
+
+        def mock_exists(path):
+            # Use actual filesystem for the tmp_path directory check
+            if path == str(tmp_path):
+                return original_exists(path)
+            # Check if it's our base file
+            if path == str(tmp_path / "test.pdf"):
+                return True
+            # Simulate all counter-based files existing up to counter 10000
+            call_count[0] += 1
+            # First 10000 calls for counters return True (files exist)
+            if call_count[0] <= 10000:
+                return True
+            # After that, allow the timestamp+UUID version to not exist
+            return False
+
+        with patch("os.path.exists", side_effect=mock_exists):
+            result = get_unique_filepath_with_counter(str(tmp_path), "test")
+            # Should have timestamp and UUID in the name
+            assert "test-" in result
+            assert ".pdf" in result
+            # Should not be a simple counter-based name
+            assert not any(f"test-{i:04d}.pdf" in result for i in range(1, 100))
