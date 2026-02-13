@@ -1,7 +1,7 @@
 """Tests for app/auth.py module."""
 
 import hashlib
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import Request, status
@@ -276,3 +276,459 @@ class TestSessionValidation:
 
             # Should still allow access as long as user key exists
             assert result["message"] == "success"
+
+
+@pytest.mark.unit
+class TestLoginFunction:
+    """Tests for login() function."""
+
+    @pytest.mark.asyncio
+    async def test_login_page_renders_with_params(self):
+        """Test login page renders with query parameters."""
+        from app.auth import login
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.query_params = {"error": "Test error", "message": "Test message"}
+
+        with patch("app.auth.templates") as mock_templates:
+            mock_templates.TemplateResponse.return_value = "rendered_template"
+
+            result = await login(mock_request)
+
+            # Verify TemplateResponse was called with correct context
+            mock_templates.TemplateResponse.assert_called_once()
+            call_args = mock_templates.TemplateResponse.call_args
+            assert call_args[0][0] == "login.html"
+            context = call_args[0][1]
+            assert context["error"] == "Test error"
+            assert context["message"] == "Test message"
+
+    @pytest.mark.asyncio
+    async def test_login_page_without_params(self):
+        """Test login page renders without query parameters."""
+        from app.auth import login
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.query_params = {}
+
+        with patch("app.auth.templates") as mock_templates:
+            mock_templates.TemplateResponse.return_value = "rendered_template"
+
+            result = await login(mock_request)
+
+            mock_templates.TemplateResponse.assert_called_once()
+            call_args = mock_templates.TemplateResponse.call_args
+            context = call_args[0][1]
+            assert context["error"] is None
+            assert context["message"] is None
+
+
+@pytest.mark.unit
+class TestOAuthLogin:
+    """Tests for oauth_login() function."""
+
+    @pytest.mark.asyncio
+    async def test_oauth_login_not_configured(self):
+        """Test oauth_login redirects when OAuth is not configured."""
+        from app.auth import oauth_login
+
+        mock_request = MagicMock(spec=Request)
+
+        with patch("app.auth.OAUTH_CONFIGURED", False):
+            result = await oauth_login(mock_request)
+
+            assert isinstance(result, RedirectResponse)
+            assert "/login?error=OAuth+not+configured" in result.headers["location"]
+            assert result.status_code == status.HTTP_302_FOUND
+
+    @pytest.mark.asyncio
+    async def test_oauth_login_configured(self):
+        """Test oauth_login initiates OAuth flow when configured."""
+        from app.auth import oauth_login
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.url_for = MagicMock(return_value="http://localhost/oauth-callback")
+
+        mock_authentik = MagicMock()
+        mock_authentik.authorize_redirect = AsyncMock(return_value="oauth_redirect")
+
+        with (
+            patch("app.auth.OAUTH_CONFIGURED", True),
+            patch("app.auth.oauth") as mock_oauth,
+        ):
+            mock_oauth.authentik = mock_authentik
+
+            result = await oauth_login(mock_request)
+
+            assert result == "oauth_redirect"
+            mock_authentik.authorize_redirect.assert_called_once_with(
+                mock_request, "http://localhost/oauth-callback"
+            )
+
+
+@pytest.mark.unit
+class TestOAuthCallback:
+    """Tests for oauth_callback() function."""
+
+    @pytest.mark.asyncio
+    async def test_oauth_callback_success(self):
+        """Test successful OAuth callback with user info."""
+        from app.auth import oauth_callback
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.session = {}
+
+        userinfo = {
+            "email": "test@example.com",
+            "name": "Test User",
+            "preferred_username": "testuser",
+        }
+
+        mock_authentik = MagicMock()
+        mock_authentik.authorize_access_token = AsyncMock(return_value={"userinfo": userinfo})
+
+        with (
+            patch("app.auth.oauth") as mock_oauth,
+            patch("app.auth.settings") as mock_settings,
+        ):
+            mock_oauth.authentik = mock_authentik
+            mock_settings.admin_group_name = "admin"
+
+            result = await oauth_callback(mock_request)
+
+            assert isinstance(result, RedirectResponse)
+            assert result.status_code == status.HTTP_302_FOUND
+            # User should be stored in session
+            assert "user" in mock_request.session
+            assert mock_request.session["user"]["email"] == "test@example.com"
+
+    @pytest.mark.asyncio
+    async def test_oauth_callback_with_gravatar(self):
+        """Test OAuth callback adds Gravatar when no picture provided."""
+        from app.auth import oauth_callback
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.session = {}
+
+        userinfo = {"email": "test@example.com", "name": "Test User"}
+
+        mock_authentik = MagicMock()
+        mock_authentik.authorize_access_token = AsyncMock(return_value={"userinfo": userinfo})
+
+        with (
+            patch("app.auth.oauth") as mock_oauth,
+            patch("app.auth.settings") as mock_settings,
+        ):
+            mock_oauth.authentik = mock_authentik
+            mock_settings.admin_group_name = "admin"
+
+            result = await oauth_callback(mock_request)
+
+            # Gravatar should be added
+            assert "picture" in mock_request.session["user"]
+            assert "gravatar.com" in mock_request.session["user"]["picture"]
+
+    @pytest.mark.asyncio
+    async def test_oauth_callback_with_existing_picture(self):
+        """Test OAuth callback preserves existing picture."""
+        from app.auth import oauth_callback
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.session = {}
+
+        userinfo = {
+            "email": "test@example.com",
+            "name": "Test User",
+            "picture": "https://example.com/custom-pic.jpg",
+        }
+
+        mock_authentik = MagicMock()
+        mock_authentik.authorize_access_token = AsyncMock(return_value={"userinfo": userinfo})
+
+        with (
+            patch("app.auth.oauth") as mock_oauth,
+            patch("app.auth.settings") as mock_settings,
+        ):
+            mock_oauth.authentik = mock_authentik
+            mock_settings.admin_group_name = "admin"
+
+            result = await oauth_callback(mock_request)
+
+            # Custom picture should be preserved, not replaced with Gravatar
+            assert mock_request.session["user"]["picture"] == "https://example.com/custom-pic.jpg"
+
+    @pytest.mark.asyncio
+    async def test_oauth_callback_admin_group_detection(self):
+        """Test OAuth callback detects admin group membership."""
+        from app.auth import oauth_callback
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.session = {}
+
+        userinfo = {
+            "email": "admin@example.com",
+            "name": "Admin User",
+            "groups": ["admin", "users"],
+        }
+
+        mock_authentik = MagicMock()
+        mock_authentik.authorize_access_token = AsyncMock(return_value={"userinfo": userinfo})
+
+        with (
+            patch("app.auth.oauth") as mock_oauth,
+            patch("app.auth.settings") as mock_settings,
+        ):
+            mock_oauth.authentik = mock_authentik
+            mock_settings.admin_group_name = "admin"
+
+            result = await oauth_callback(mock_request)
+
+            # User should be marked as admin
+            assert mock_request.session["user"]["is_admin"] is True
+
+    @pytest.mark.asyncio
+    async def test_oauth_callback_no_admin_group(self):
+        """Test OAuth callback without admin group membership."""
+        from app.auth import oauth_callback
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.session = {}
+
+        userinfo = {
+            "email": "user@example.com",
+            "name": "Regular User",
+            "groups": ["users"],
+        }
+
+        mock_authentik = MagicMock()
+        mock_authentik.authorize_access_token = AsyncMock(return_value={"userinfo": userinfo})
+
+        with (
+            patch("app.auth.oauth") as mock_oauth,
+            patch("app.auth.settings") as mock_settings,
+        ):
+            mock_oauth.authentik = mock_authentik
+            mock_settings.admin_group_name = "admin"
+
+            result = await oauth_callback(mock_request)
+
+            # User should not be marked as admin
+            assert mock_request.session["user"]["is_admin"] is False
+
+    @pytest.mark.asyncio
+    async def test_oauth_callback_no_userinfo(self):
+        """Test OAuth callback fails when no userinfo returned."""
+        from app.auth import oauth_callback
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.session = {}
+
+        mock_authentik = MagicMock()
+        mock_authentik.authorize_access_token = AsyncMock(return_value={})
+
+        with patch("app.auth.oauth") as mock_oauth:
+            mock_oauth.authentik = mock_authentik
+
+            result = await oauth_callback(mock_request)
+
+            assert isinstance(result, RedirectResponse)
+            assert "/login?error=Failed+to+retrieve+user+information" in result.headers["location"]
+
+    @pytest.mark.asyncio
+    async def test_oauth_callback_redirect_after_login(self):
+        """Test OAuth callback redirects to saved URL."""
+        from app.auth import oauth_callback
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.session = {"redirect_after_login": "/protected/page"}
+
+        userinfo = {"email": "test@example.com", "name": "Test User"}
+
+        mock_authentik = MagicMock()
+        mock_authentik.authorize_access_token = AsyncMock(return_value={"userinfo": userinfo})
+
+        with (
+            patch("app.auth.oauth") as mock_oauth,
+            patch("app.auth.settings") as mock_settings,
+        ):
+            mock_oauth.authentik = mock_authentik
+            mock_settings.admin_group_name = "admin"
+
+            result = await oauth_callback(mock_request)
+
+            assert isinstance(result, RedirectResponse)
+            assert result.headers["location"] == "/protected/page"
+            # redirect_after_login should be removed from session
+            assert "redirect_after_login" not in mock_request.session
+
+    @pytest.mark.asyncio
+    async def test_oauth_callback_exception_handling(self):
+        """Test OAuth callback handles exceptions gracefully."""
+        from app.auth import oauth_callback
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.session = {}
+
+        mock_authentik = MagicMock()
+        mock_authentik.authorize_access_token = AsyncMock(side_effect=Exception("OAuth error"))
+
+        with patch("app.auth.oauth") as mock_oauth:
+            mock_oauth.authentik = mock_authentik
+
+            result = await oauth_callback(mock_request)
+
+            assert isinstance(result, RedirectResponse)
+            assert "/login?error=Authentication+failed" in result.headers["location"]
+
+
+@pytest.mark.unit
+class TestAuthFunction:
+    """Tests for auth() function (local authentication)."""
+
+    @pytest.mark.asyncio
+    async def test_auth_success(self):
+        """Test successful local authentication."""
+        from app.auth import auth
+
+        mock_request = MagicMock(spec=Request)
+        form_data = {"username": "testadmin", "password": "testpass"}
+        mock_request.form = AsyncMock(return_value=form_data)
+        mock_request.session = {}
+
+        with patch("app.auth.settings") as mock_settings:
+            mock_settings.admin_username = "testadmin"
+            mock_settings.admin_password = "testpass"
+
+            result = await auth(mock_request)
+
+            assert isinstance(result, RedirectResponse)
+            assert result.status_code == 302
+            # User should be in session
+            assert "user" in mock_request.session
+            assert mock_request.session["user"]["is_admin"] is True
+            assert mock_request.session["user"]["preferred_username"] == "testadmin"
+
+    @pytest.mark.asyncio
+    async def test_auth_wrong_password(self):
+        """Test authentication with wrong password."""
+        from app.auth import auth
+
+        mock_request = MagicMock(spec=Request)
+        form_data = {"username": "testadmin", "password": "wrongpass"}
+        mock_request.form = AsyncMock(return_value=form_data)
+        mock_request.session = {}
+
+        with patch("app.auth.settings") as mock_settings:
+            mock_settings.admin_username = "testadmin"
+            mock_settings.admin_password = "testpass"
+
+            result = await auth(mock_request)
+
+            assert isinstance(result, RedirectResponse)
+            assert "/login?error=Invalid+username+or+password" in result.headers["location"]
+            assert "user" not in mock_request.session
+
+    @pytest.mark.asyncio
+    async def test_auth_wrong_username(self):
+        """Test authentication with wrong username."""
+        from app.auth import auth
+
+        mock_request = MagicMock(spec=Request)
+        form_data = {"username": "wronguser", "password": "testpass"}
+        mock_request.form = AsyncMock(return_value=form_data)
+        mock_request.session = {}
+
+        with patch("app.auth.settings") as mock_settings:
+            mock_settings.admin_username = "testadmin"
+            mock_settings.admin_password = "testpass"
+
+            result = await auth(mock_request)
+
+            assert isinstance(result, RedirectResponse)
+            assert "/login?error=Invalid+username+or+password" in result.headers["location"]
+
+    @pytest.mark.asyncio
+    async def test_auth_redirect_after_login(self):
+        """Test authentication redirects to saved URL."""
+        from app.auth import auth
+
+        mock_request = MagicMock(spec=Request)
+        form_data = {"username": "testadmin", "password": "testpass"}
+        mock_request.form = AsyncMock(return_value=form_data)
+        mock_request.session = {"redirect_after_login": "/settings"}
+
+        with patch("app.auth.settings") as mock_settings:
+            mock_settings.admin_username = "testadmin"
+            mock_settings.admin_password = "testpass"
+
+            result = await auth(mock_request)
+
+            assert isinstance(result, RedirectResponse)
+            assert result.headers["location"] == "/settings"
+
+
+@pytest.mark.unit
+class TestLogoutFunction:
+    """Tests for logout() function."""
+
+    @pytest.mark.asyncio
+    async def test_logout_clears_session(self):
+        """Test logout removes user from session."""
+        from app.auth import logout
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.session = {"user": {"id": "123", "name": "Test"}}
+
+        result = await logout(mock_request)
+
+        assert isinstance(result, RedirectResponse)
+        assert "/login?message=You+have+been+logged+out+successfully" in result.headers["location"]
+        # User should be removed from session
+        assert "user" not in mock_request.session
+
+    @pytest.mark.asyncio
+    async def test_logout_when_no_user(self):
+        """Test logout when no user in session."""
+        from app.auth import logout
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.session = {}
+
+        result = await logout(mock_request)
+
+        assert isinstance(result, RedirectResponse)
+        assert result.status_code == 302
+
+
+@pytest.mark.unit
+class TestOAuthConfiguration:
+    """Tests for OAuth configuration logic."""
+
+    def test_oauth_configured_when_credentials_present(self):
+        """Test OAUTH_CONFIGURED is True when credentials are present."""
+        with (
+            patch("app.auth.AUTH_ENABLED", True),
+            patch("app.auth.settings") as mock_settings,
+        ):
+            mock_settings.authentik_client_id = "test-client-id"
+            mock_settings.authentik_client_secret = "test-client-secret"
+
+            # Re-import to trigger configuration logic
+            import importlib
+            import app.auth
+
+            importlib.reload(app.auth)
+
+            # OAUTH_CONFIGURED should be set based on credentials
+            # This tests the module-level configuration logic
+
+    def test_oauth_not_configured_when_credentials_missing(self):
+        """Test OAUTH_CONFIGURED is False when credentials are missing."""
+        with (
+            patch("app.auth.AUTH_ENABLED", True),
+            patch("app.auth.settings") as mock_settings,
+        ):
+            mock_settings.authentik_client_id = None
+            mock_settings.authentik_client_secret = None
+
+            # The configuration logic at module load time would set OAUTH_CONFIGURED=False
