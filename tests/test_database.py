@@ -168,15 +168,23 @@ class TestSchemaMigrations:
         # Run migrations
         _run_schema_migrations(engine)
 
-        # Verify columns were added
+        # Verify columns were added with correct types
         from sqlalchemy import inspect
 
         inspector = inspect(engine)
-        columns = [col["name"] for col in inspector.get_columns("files")]
+        columns = {col["name"]: col for col in inspector.get_columns("files")}
+        
         assert "original_file_path" in columns
+        assert columns["original_file_path"]["type"].__class__.__name__ in ("VARCHAR", "String", "TEXT")
+        
         assert "processed_file_path" in columns
+        assert columns["processed_file_path"]["type"].__class__.__name__ in ("VARCHAR", "String", "TEXT")
+        
         assert "is_duplicate" in columns
+        assert columns["is_duplicate"]["type"].__class__.__name__ in ("BOOLEAN", "Integer")
+        
         assert "duplicate_of_id" in columns
+        assert columns["duplicate_of_id"]["type"].__class__.__name__ in ("INTEGER", "Integer")
 
         engine.dispose()
 
