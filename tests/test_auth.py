@@ -715,6 +715,7 @@ class TestOAuthConfiguration:
 
             # Re-import to trigger configuration logic
             import importlib
+
             import app.auth
 
             importlib.reload(app.auth)
