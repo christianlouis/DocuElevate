@@ -1,12 +1,14 @@
-// Content script for DocuElevate browser extension
-
-// This script runs on all web pages to enable communication
-// between page content and the extension
+// Web page capture script for DocuElevate browser extension
+// This script handles capturing web page content for PDF conversion
 
 /**
  * Capture the full page HTML with inline styles
+ * @returns {Object} Page data with HTML, title, and URL
  */
 function captureFullPage() {
+    // Clone the document to avoid modifying the original
+    const clonedDoc = document.cloneNode(true);
+    
     // Get all stylesheets and inline them
     const styles = Array.from(document.styleSheets)
         .map(sheet => {
@@ -22,8 +24,12 @@ function captureFullPage() {
         })
         .join('\n');
     
+    // Get page HTML
+    const html = document.documentElement.outerHTML;
+    
     // Create a complete HTML document with inlined styles
-    const styledHtml = `<!DOCTYPE html>
+    const styledHtml = `
+<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -33,7 +39,8 @@ function captureFullPage() {
 <body>
     ${document.body.innerHTML}
 </body>
-</html>`;
+</html>
+    `;
     
     return {
         html: styledHtml,
@@ -45,6 +52,7 @@ function captureFullPage() {
 
 /**
  * Capture selected content from the page
+ * @returns {Object} Selection data with HTML, text, and metadata
  */
 function captureSelection() {
     const selection = window.getSelection();
@@ -58,6 +66,7 @@ function captureSelection() {
     container.appendChild(range.cloneContents());
     
     // Get computed styles for the selection
+    const styles = [];
     const elements = container.querySelectorAll('*');
     elements.forEach(el => {
         const computed = window.getComputedStyle(el);
@@ -78,7 +87,8 @@ function captureSelection() {
         }
     });
     
-    const html = `<!DOCTYPE html>
+    const html = `
+<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -99,7 +109,8 @@ function captureSelection() {
     <hr>
     ${container.innerHTML}
 </body>
-</html>`;
+</html>
+    `;
     
     return {
         html: html,
@@ -110,17 +121,29 @@ function captureSelection() {
     };
 }
 
-// Message handler
+/**
+ * Take a screenshot of the visible viewport
+ * @returns {Promise<string>} Data URL of the screenshot
+ */
+async function captureScreenshot() {
+    // This will be called from the background script
+    // since content scripts can't use chrome.tabs.captureVisibleTab
+    return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+            { type: 'CAPTURE_SCREENSHOT' },
+            response => {
+                if (response.success) {
+                    resolve(response.dataUrl);
+                } else {
+                    reject(new Error(response.error));
+                }
+            }
+        );
+    });
+}
+
+// Listen for capture requests from popup or background
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'GET_PAGE_INFO') {
-        // Return information about the current page
-        const pageInfo = {
-            url: window.location.href,
-            title: document.title
-        };
-        sendResponse(pageInfo);
-    }
-    
     if (message.type === 'CAPTURE_FULL_PAGE') {
         try {
             const pageData = captureFullPage();
@@ -142,19 +165,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 });
 
-// Detect if current page is a direct file link
-function isDirectFileUrl(url) {
-    const fileExtensions = [
-        '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-        '.txt', '.csv', '.rtf', '.jpg', '.jpeg', '.png', '.gif',
-        '.bmp', '.tiff', '.webp', '.svg'
-    ];
-
-    const urlLower = url.toLowerCase();
-    return fileExtensions.some(ext => urlLower.endsWith(ext));
-}
-
-// Add visual indicator for file pages (optional enhancement)
-if (isDirectFileUrl(window.location.href)) {
-    console.log('DocuElevate: Direct file URL detected');
+// Export functions for use in tests or other scripts
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        captureFullPage,
+        captureSelection
+    };
 }

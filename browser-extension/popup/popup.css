@@ -127,6 +127,35 @@ small {
     background-color: #5a6268;
 }
 
+.mode-buttons {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.btn-mode {
+    flex: 1;
+    background-color: #e9ecef;
+    color: #495057;
+    margin-bottom: 0;
+}
+
+.btn-mode:hover {
+    background-color: #dee2e6;
+}
+
+.btn-mode.active {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.clip-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
 .info-box {
     background-color: #e7f3ff;
     border: 1px solid #b3d9ff;
