@@ -11,13 +11,12 @@ The CI workflow (`.github/workflows/tests.yaml`) runs automatically on every pus
 | Job | Tool | Purpose | Enforced |
 |--------|--------|---------------------------------------------|----------|
 | `test` | pytest | Unit/integration tests with coverage | ✅ |
-| `flake8`| flake8 | PEP 8 style linting | ✅ |
-| `black` | black | Code formatting check | ✅ |
+| `lint` | Ruff | Fast Python linter (replaces Flake8, Black, isort, Bandit) | ✅ |
 | `mypy` | mypy | Static type checking | ✅ |
-| `pylint`| pylint | Code quality analysis | ✅ |
-| `bandit`| bandit | Security vulnerability scanning | ✅ |
 
-All six jobs start **in parallel** as soon as the workflow is triggered. No job depends on or waits for any other job.
+All three jobs start **in parallel** as soon as the workflow is triggered. No job depends on or waits for any other job.
+
+> **Note:** DocuElevate uses Ruff, a modern all-in-one Python linter that consolidates the functionality of Flake8, Black, isort, and Bandit. This streamlined approach reduces CI complexity while maintaining code quality and security standards.
 
 ### Tests
 
@@ -27,32 +26,21 @@ All six jobs start **in parallel** as soon as the workflow is triggered. No job 
 - Uploads coverage and JUnit XML results to Codecov.
 - Uploads `junit.xml` and `coverage.xml` as workflow artifacts (always, even on failure).
 
-### Flake8
+### Ruff Lint & Format
 
-- Checks `app/` against PEP 8 with `max-line-length=120`.
-- Ignores `E203` (whitespace before `:`) and `W503` (line break before binary operator), matching the Black formatter.
-
-### Black
-
-- Verifies that all files in `app/` are formatted with `black --line-length=120`.
-- Runs in `--check` mode (no files are modified).
+- **Linting**: Checks `app/` and `tests/` for code quality issues
+  - Enforces PEP 8 style with `line-length=120`
+  - Includes security checks (replaces Bandit)
+  - Checks import order (replaces isort)
+  - Catches common bugs (replaces Flake8 + Pylint patterns)
+- **Formatting**: Verifies code is formatted consistently (replaces Black)
+  - Runs in check mode (no files are modified)
+  - Automatically fixable with `ruff format`
 
 ### Mypy
 
-- Type checks `app/` with `--ignore-missing-imports`.
+- Type checks `app/` with appropriate configuration from `pyproject.toml`.
 - Requires full project dependencies (installs `requirements-dev.txt`).
-
-### Pylint
-
-- Analyzes `app/` with `max-line-length=120`.
-- Disables `C0111` (missing docstrings), `C0103` (naming conventions), and `R0903` (too few public methods).
-- Requires full project dependencies (installs `requirements-dev.txt`).
-
-### Bandit
-
-- Produces a full JSON report (`bandit-report.json`) uploaded as a workflow artifact.
-- **Fails the job** if any high- or medium-severity issues are found (`-ll` flag).
-- The JSON report is always uploaded, even if the severity check fails.
 
 ## Artifacts
 
@@ -61,7 +49,6 @@ The following artifacts are uploaded after every run:
 | Artifact | Contents | Condition |
 |------------------|--------------------------------------|----------------------|
 | `test-results` | `junit.xml`, `coverage.xml` | Always (unless cancelled) |
-| `bandit-report` | `bandit-report.json` | Always (unless cancelled) |
 
 ## Running Linters Locally
 
@@ -71,18 +58,20 @@ You can run the same checks locally before pushing:
 # Install dev dependencies
 pip install -r requirements-dev.txt
 
-# Run each linter
-flake8 app/ --max-line-length=120 --extend-ignore=E203,W503
-black --check app/ --line-length=120
-mypy app/ --ignore-missing-imports
-pylint app/ --max-line-length=120 --disable=C0111,C0103,R0903
-bandit -r app/ -ll
+# Run Ruff linting
+ruff check app/ tests/
+
+# Run Ruff formatting check
+ruff format --check app/ tests/
+
+# Run type checking
+mypy app/
 
 # Run tests
 pytest tests/ -v --cov=app --cov-report=term -m "not e2e"
 ```
 
-Or use pre-commit hooks to run checks automatically on each commit:
+Or use pre-commit hooks to run checks automatically on each commit (recommended):
 
 ```bash
 pip install pre-commit
@@ -90,13 +79,33 @@ pre-commit install
 pre-commit run --all-files
 ```
 
+Pre-commit hooks include Ruff linting/formatting, Mypy type checking, secret detection, and conventional commit validation.
+
+## Additional Security Scanning
+
+Beyond the linting and testing workflows, DocuElevate uses additional security tools:
+
+### CodeQL (`.github/workflows/codeql.yml`)
+
+- **Purpose**: Advanced security scanning for code vulnerabilities
+- **Frequency**: Runs on push to main, pull requests, and weekly schedule
+- **Languages**: Python, JavaScript, GitHub Actions
+- **Coverage**: Detects security vulnerabilities, bugs, and code quality issues
+- **Native GitHub integration**: Results appear in the Security tab
+
+### Codecov
+
+- **Purpose**: Test coverage tracking and visualization
+- **Integration**: Automatically receives coverage reports from test workflow
+- **Features**: Coverage trends, PR comments, coverage diffs
+
 ## Design Decisions
 
 ### Why Separate Jobs Instead of Steps?
 
 Previously, all linters ran as sequential steps in a single job. This meant:
 
-- A failure in flake8 would prevent black, mypy, pylint, and bandit from running.
+- A failure in one tool would prevent others from running.
 - Contributors only saw feedback from the **first** tool that failed, not all of them.
 
 By splitting into independent jobs:
@@ -105,15 +114,46 @@ By splitting into independent jobs:
 - Contributors see **all** feedback in a single CI run.
 - Jobs run **in parallel**, reducing total wall-clock time.
 
-### Why Are All Linters Enforced?
+### Why Ruff Instead of Multiple Tools?
 
-All linters are set to fail the CI (no `continue-on-error`). This ensures:
+DocuElevate uses Ruff as an all-in-one linting solution, replacing:
+- **Flake8** (PEP 8 style checking)
+- **Black** (code formatting)
+- **isort** (import sorting)
+- **Bandit** (security linting)
+- **Pylint** (some code quality checks)
 
-- The codebase stays consistently formatted (Black).
-- Style issues are caught early (Flake8).
+**Benefits:**
+- 10-100x faster than traditional tools
+- Single configuration in `pyproject.toml`
+- Consistent behavior across all checks
+- Auto-fix capability for most issues
+- Active development and modern Python support
+
+### Why Are All Checks Enforced?
+
+All checks are set to fail the CI (no `continue-on-error`). This ensures:
+
+- The codebase stays consistently formatted (Ruff format).
+- Style and quality issues are caught early (Ruff check).
 - Type errors surface before merge (Mypy).
-- Code quality standards are maintained (Pylint).
-- Security issues are flagged immediately (Bandit).
+- Security issues are flagged immediately (Ruff security rules + CodeQL).
+
+## Tool Comparison & Rationale
+
+This project previously used multiple overlapping tools. Here's why the current setup was chosen:
+
+| Tool Category | Current Tool | Replaced Tools | Rationale |
+|---------------|--------------|----------------|-----------|
+| Linting & Formatting | **Ruff** | Flake8, Black, isort, Bandit, Pylint | Modern, fast, comprehensive, single tool |
+| Type Checking | **Mypy** | - | Industry standard, unique value |
+| Security Scanning | **CodeQL** | - | GitHub native, free, enterprise-grade |
+| Coverage Tracking | **Codecov** | - | Excellent visualization and PR integration |
+
+**Rejected/Removed:**
+- **DeepSource**: Redundant with Ruff + CodeQL (removed in this update)
+- **SonarQube**: Not configured, enterprise-focused, redundant with current tools
+- **Snyk**: Not configured, CodeQL provides adequate security scanning
 
 ## Copilot Code Compliance
 
