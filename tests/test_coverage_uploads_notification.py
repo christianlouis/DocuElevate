@@ -28,7 +28,7 @@ class TestUploadToS3Coverage:
 
     @pytest.mark.unit
     def test_no_bucket_name_raises(self, tmp_path):
-        """Lines 42-46: ValueError when s3_bucket_name is empty."""
+        """Lines 43-46: ValueError when s3_bucket_name is empty."""
         f = tmp_path / "test.pdf"
         f.write_text("data")
 
@@ -45,7 +45,7 @@ class TestUploadToS3Coverage:
 
     @pytest.mark.unit
     def test_no_aws_credentials_raises(self, tmp_path):
-        """Lines 48-52: ValueError when AWS credentials missing."""
+        """Lines 49-52: ValueError when AWS credentials missing."""
         f = tmp_path / "test.pdf"
         f.write_text("data")
 
@@ -62,7 +62,7 @@ class TestUploadToS3Coverage:
 
     @pytest.mark.unit
     def test_folder_prefix_appends_slash(self, tmp_path):
-        """Lines 66-69: folder prefix without trailing slash gets one added."""
+        """Lines 67-71: folder prefix without trailing slash gets one added."""
         f = tmp_path / "test.pdf"
         f.write_text("data")
 
@@ -141,7 +141,7 @@ class TestUploadToS3Coverage:
 
     @pytest.mark.unit
     def test_client_error_handler(self, tmp_path):
-        """Lines 99-103: ClientError is caught and re-raised."""
+        """Lines 99-109: ClientError is caught and re-raised."""
         from botocore.exceptions import ClientError
 
         f = tmp_path / "test.pdf"
@@ -370,7 +370,7 @@ class TestUploadToSftpCoverage:
 
     @pytest.mark.unit
     def test_remote_dir_creation(self, tmp_path):
-        """Lines 107-111, 118-130: creates remote directories when they don't exist."""
+        """Lines 107-111, 128-132: creates remote directories when they don't exist."""
         f = tmp_path / "test.pdf"
         f.write_text("data")
 
@@ -405,7 +405,7 @@ class TestUploadToSftpCoverage:
 
     @pytest.mark.unit
     def test_mkdir_exception_logged(self, tmp_path):
-        """Lines 131-132: exception during mkdir is caught as warning."""
+        """Lines 128-132: exception during mkdir is caught as warning."""
         f = tmp_path / "test.pdf"
         f.write_text("data")
 
