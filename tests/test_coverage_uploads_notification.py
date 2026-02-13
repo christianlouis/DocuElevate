@@ -11,9 +11,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.tasks.send_to_all import send_to_all_destinations
 from app.tasks.upload_to_s3 import upload_to_s3
 from app.tasks.upload_to_sftp import upload_to_sftp
-from app.tasks.send_to_all import send_to_all_destinations
 
 _TEST_CRED = "test_secret"  # noqa: S105
 
@@ -203,7 +203,7 @@ class TestUploadToS3Coverage:
 class TestUploadToSftpCoverage:
     """Tests for upload_to_sftp covering uncovered lines."""
 
-    def _sftp_settings(self, ms, password="pass", key=None, passphrase=None, disable_verify=True):
+    def _sftp_settings(self, ms, password="pass", key=None, passphrase=None, disable_verify=True):  # noqa: S107
         """Helper to configure common SFTP mock settings."""
         ms.sftp_host = "host"
         ms.sftp_port = 22
