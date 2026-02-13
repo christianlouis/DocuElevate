@@ -1,7 +1,8 @@
 """Tests for app/utils/config_validator/validators.py module."""
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import Mock, patch
 
 from app.utils.config_validator.validators import (
     check_all_configs,

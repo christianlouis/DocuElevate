@@ -384,8 +384,9 @@ class TestUniqueFilepathWithCounter:
 
     def test_get_unique_filepath_with_counter_extreme_collision(self, tmp_path):
         """Test extreme edge case when more than 9999 collisions occur"""
-        from app.utils.filename_utils import get_unique_filepath_with_counter
         from unittest.mock import patch
+
+        from app.utils.filename_utils import get_unique_filepath_with_counter
 
         # Create base file to trigger counter logic
         (tmp_path / "test.pdf").touch()
