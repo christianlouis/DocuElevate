@@ -58,7 +58,11 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
     task_id = self.request.id
     logger.info(f"[{task_id}] Starting metadata extraction for: {filename}")
     log_task_progress(
-        task_id, "extract_metadata_with_gpt", "in_progress", f"Extracting metadata for {os.path.basename(filename)}", file_id=file_id
+        task_id,
+        "extract_metadata_with_gpt",
+        "in_progress",
+        f"Extracting metadata for {os.path.basename(filename)}",
+        file_id=file_id,
     )
 
     # Get file_id from database if not provided

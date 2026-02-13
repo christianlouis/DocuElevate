@@ -151,9 +151,7 @@ class TestRetrySubtaskEnhancedLogging:
         db_session.commit()
         db_session.refresh(file_record)
 
-        response = client.post(
-            f"/api/files/{file_record.id}/retry-subtask?subtask_name=extract_metadata_with_gpt"
-        )
+        response = client.post(f"/api/files/{file_record.id}/retry-subtask?subtask_name=extract_metadata_with_gpt")
 
         assert response.status_code == 400
         error_detail = response.json()["detail"]

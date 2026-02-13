@@ -655,13 +655,18 @@ class TestNotificationCoverage:
 def _all_should_upload_false():
     """Return a list of patch context managers that set all _should_upload_* to False."""
     services = [
-        "dropbox", "nextcloud", "paperless", "google_drive",
-        "webdav", "ftp", "sftp", "email", "onedrive", "s3",
+        "dropbox",
+        "nextcloud",
+        "paperless",
+        "google_drive",
+        "webdav",
+        "ftp",
+        "sftp",
+        "email",
+        "onedrive",
+        "s3",
     ]
-    return [
-        patch(f"app.tasks.send_to_all._should_upload_to_{s}", return_value=False)
-        for s in services
-    ]
+    return [patch(f"app.tasks.send_to_all._should_upload_to_{s}", return_value=False) for s in services]
 
 
 class TestSendToAllCoverage:
@@ -696,9 +701,7 @@ class TestSendToAllCoverage:
             mock_session_cls.return_value.__enter__ = MagicMock(return_value=mock_db)
             mock_session_cls.return_value.__exit__ = MagicMock(return_value=False)
 
-            result = send_to_all_destinations.apply(
-                args=[str(f)], kwargs={"use_validator": True, "file_id": 1}
-            ).get()
+            result = send_to_all_destinations.apply(args=[str(f)], kwargs={"use_validator": True, "file_id": 1}).get()
 
         assert result["status"] == "Queued"
         assert result["tasks"] == {}
@@ -805,9 +808,7 @@ class TestSendToAllCoverage:
         ):
             ms.workdir = str(tmp_path)
 
-            result = send_to_all_destinations.apply(
-                args=[str(f)], kwargs={"use_validator": True, "file_id": 1}
-            ).get()
+            result = send_to_all_destinations.apply(args=[str(f)], kwargs={"use_validator": True, "file_id": 1}).get()
 
         assert result["status"] == "Queued"
 
@@ -836,9 +837,7 @@ class TestSendToAllCoverage:
                 stack.enter_context(p)
             ms.workdir = str(tmp_path)
 
-            result = send_to_all_destinations.apply(
-                args=[str(f)], kwargs={"use_validator": True, "file_id": 1}
-            ).get()
+            result = send_to_all_destinations.apply(args=[str(f)], kwargs={"use_validator": True, "file_id": 1}).get()
 
         assert "dropbox_error" in result["tasks"]
         assert "broker down" in result["tasks"]["dropbox_error"]
@@ -868,9 +867,7 @@ class TestSendToAllCoverage:
         ):
             ms.workdir = str(tmp_path)
 
-            result = send_to_all_destinations.apply(
-                args=[str(f)], kwargs={"use_validator": True, "file_id": 1}
-            ).get()
+            result = send_to_all_destinations.apply(args=[str(f)], kwargs={"use_validator": True, "file_id": 1}).get()
 
         assert "dropbox_task_id" not in result["tasks"]
         assert result["status"] == "Queued"
