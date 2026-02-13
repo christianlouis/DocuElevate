@@ -37,13 +37,13 @@ if git rev-parse --git-dir > /dev/null 2>&1; then
     GIT_SHA=$(git rev-parse --short=7 HEAD)
     echo "${GIT_SHA}" > GIT_SHA
     echo "✓ GIT_SHA: ${GIT_SHA}"
-    
+
     # Get full commit SHA for reference
     GIT_FULL_SHA=$(git rev-parse HEAD)
-    
+
     # Get commit date
     GIT_COMMIT_DATE=$(git log -1 --format=%cd --date=iso-strict)
-    
+
     # Get branch name (if available)
     GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 else

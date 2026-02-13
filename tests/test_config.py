@@ -2,8 +2,6 @@
 Unit tests for configuration and security validation.
 """
 
-import os
-
 import pytest
 from pydantic import ValidationError
 

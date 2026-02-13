@@ -5,8 +5,7 @@ Covers the upload_to_nextcloud Celery task including configuration validation,
 WebDAV upload, directory creation, and error handling.
 """
 
-import os
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import Mock, patch
 
 import pytest
 

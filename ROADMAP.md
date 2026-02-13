@@ -1,6 +1,6 @@
 # DocuElevate Roadmap
 
-**Last Updated:** 2026-02-08  
+**Last Updated:** 2026-02-08
 **Version:** 1.0
 
 ## Vision

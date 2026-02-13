@@ -72,7 +72,7 @@ def upload_with_rclone(self, file_path: str, destination: str):
             # Try to get a public link if possible
             try:
                 link_cmd = ["rclone", "link", "--config", rclone_config_path, f"{destination}/{filename}"]
-                link_result = subprocess.run(link_cmd, capture_output=True, text=True)
+                link_result = subprocess.run(link_cmd, capture_output=True, text=True, check=False)
                 public_url = link_result.stdout.strip() if link_result.returncode == 0 else None
             except (subprocess.SubprocessError, OSError) as e:
                 logger.warning(f"[{task_id}] Failed to get public link for {filename}: {str(e)}")

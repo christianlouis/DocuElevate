@@ -310,7 +310,7 @@ def verify_migration(db: Session, file_id: int) -> Dict:
 
         if expected["status"] != actual.status:
             result["discrepancies"].append(
-                f"Step '{step_name}' status mismatch: " f"expected '{expected['status']}', got '{actual.status}'"
+                f"Step '{step_name}' status mismatch: expected '{expected['status']}', got '{actual.status}'"
             )
             result["is_valid"] = False
 

@@ -61,7 +61,7 @@ Created comprehensive unit tests to verify:
 1. **Test 1**: Original filename is preserved when parameter is provided
    - Uploads a file with UUID-based path but provides original filename "Apostille Sverige.pdf"
    - Verifies the database stores the original filename, not the UUID-based path
-   
+
 2. **Test 2**: Backward compatibility is maintained
    - Calls `process_document` without the optional parameter
    - Verifies it falls back to extracting filename from path

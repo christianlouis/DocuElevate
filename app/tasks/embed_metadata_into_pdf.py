@@ -256,8 +256,7 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
             f"Exception: {str(e)}",
             file_id=file_id,
             detail=(
-                f"Failed to embed metadata into {processed_file}.\n"
-                f"Original file: {original_file}\nException: {str(e)}"
+                f"Failed to embed metadata into {processed_file}.\nOriginal file: {original_file}\nException: {str(e)}"
             ),
         )
         # Clean up temporary file in case of error

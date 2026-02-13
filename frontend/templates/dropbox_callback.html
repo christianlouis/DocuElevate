@@ -11,15 +11,15 @@
       <h2 class="text-2xl font-bold mt-4">Processing Authorization</h2>
       <p class="text-gray-600 mt-2">Please wait while we complete the Dropbox authorization process...</p>
     </div>
-    
+
     <div class="flex justify-center my-6">
       <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
     </div>
-    
+
     <div id="processing-message" class="text-center text-gray-700">
       <p>Exchanging authorization code for refresh token...</p>
     </div>
-    
+
     <div id="error-container" class="hidden mt-6">
       <div class="bg-red-50 border-l-4 border-red-400 p-4">
         <div class="flex">
@@ -42,7 +42,7 @@
         </a>
       </div>
     </div>
-    
+
     <div id="success-container" class="hidden mt-6">
       <div class="rounded-md bg-green-50 p-4">
         <div class="flex">
@@ -58,26 +58,26 @@
           </div>
         </div>
       </div>
-      
+
       <div class="mt-6 p-4 bg-gray-100 rounded-md">
         <h3 class="font-medium text-lg mb-2">Configuration for Worker Nodes</h3>
         <p class="text-sm text-gray-600 mb-3">
           Copy these environment variables to configure all worker nodes:
         </p>
-        
+
         <div class="relative">
           <pre id="env-vars" class="bg-gray-800 text-green-400 text-sm p-3 rounded overflow-x-auto"><code></code></pre>
-          
+
           <button id="copy-env-vars" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs py-1 px-2 rounded">
             Copy
           </button>
         </div>
-        
+
         <p class="text-xs text-gray-500 mt-2">
           Add these variables to your .env file or environment configuration.
         </p>
       </div>
-      
+
       <div class="mt-4 text-center">
         <a href="/status" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
           Go to Status Page
@@ -92,26 +92,26 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const code = "{{ code }}";
-  
+
   // Get credentials from session storage (these take precedence over server-provided values)
   const appKey = sessionStorage.getItem('dropbox_app_key') || "{{ app_key_value }}";
   const appSecret = sessionStorage.getItem('dropbox_app_secret') || "{{ app_secret_value }}";
   const folderPath = sessionStorage.getItem('dropbox_folder_path') || "{{ folder_path }}" || '/Documents/Uploads';
-  
+
   const redirectUri = window.location.origin + "/dropbox-callback";
-  
+
   // Automatically exchange the code for a refresh token
   if (code) {
     if (!appKey || !appSecret) {
       showError("Missing App Key or App Secret. Please go back to the setup page and try again.");
       return;
     }
-    
+
     exchangeCode(code, appKey, appSecret, redirectUri);
   } else {
     showError("No authorization code was found in the URL");
   }
-  
+
   function exchangeCode(code, appKey, appSecret, redirectUri) {
     const formData = new FormData();
     formData.append('client_id', appKey);
@@ -119,10 +119,10 @@ document.addEventListener('DOMContentLoaded', function() {
     formData.append('redirect_uri', redirectUri);
     formData.append('code', code);
     formData.append('folder_path', folderPath);
-    
-    document.getElementById('processing-message').innerHTML = 
+
+    document.getElementById('processing-message').innerHTML =
       '<p>Exchanging authorization code for refresh token...</p>';
-    
+
     fetch('/api/dropbox/exchange-token', {
       method: 'POST',
       body: formData
@@ -140,15 +140,15 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update settings in memory
         const updateFormData = new FormData();
         updateFormData.append('refresh_token', data.refresh_token);
-        
+
         // Use the app key and app secret from session storage
         if (appKey) updateFormData.append('app_key', appKey);
         if (appSecret) updateFormData.append('app_secret', appSecret);
         if (folderPath) updateFormData.append('folder_path', folderPath);
-        
-        document.getElementById('processing-message').innerHTML = 
+
+        document.getElementById('processing-message').innerHTML =
           '<p>Updating system settings with new token...</p>';
-        
+
         return fetch('/api/dropbox/update-settings', {
           method: 'POST',
           body: updateFormData
@@ -166,7 +166,7 @@ document.addEventListener('DOMContentLoaded', function() {
           setTimeout(() => {
             window.location.href = '/status';
           }, 10000);
-          
+
           // Clean up session storage
           sessionStorage.removeItem('dropbox_app_key');
           sessionStorage.removeItem('dropbox_app_secret');
@@ -180,23 +180,23 @@ document.addEventListener('DOMContentLoaded', function() {
       showError(error.message);
     });
   }
-  
+
   function showError(message) {
     document.getElementById('processing-message').classList.add('hidden');
     document.getElementById('error-container').classList.remove('hidden');
     document.getElementById('error-message').innerText = message;
-    
+
     // Hide the spinner when showing error
     document.querySelector('.animate-spin').parentNode.classList.add('hidden');
   }
-  
+
   function showSuccess(refreshToken, appKey, appSecret, folderPath) {
     document.getElementById('processing-message').classList.add('hidden');
     document.getElementById('success-container').classList.remove('hidden');
-    
+
     // Hide the spinner when showing success
     document.querySelector('.animate-spin').parentNode.classList.add('hidden');
-    
+
     // Update the environment variables pre block with the new token
     const envVarsCode = document.querySelector('#env-vars code');
     if (envVarsCode) {
@@ -205,7 +205,7 @@ DROPBOX_APP_SECRET=${appSecret}
 DROPBOX_REFRESH_TOKEN=${refreshToken}
 DROPBOX_FOLDER=${folderPath || '/Documents/Uploads'}`;
     }
-    
+
     // Add copy functionality
     const copyEnvVarsBtn = document.getElementById('copy-env-vars');
     if (copyEnvVarsBtn) {

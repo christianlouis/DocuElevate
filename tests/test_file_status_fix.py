@@ -7,14 +7,12 @@ This test module verifies that:
 3. Files with completed steps show "completed" not "processing"
 """
 
-from datetime import datetime, timedelta
-
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import FileProcessingStep, FileRecord
+from app.models import FileRecord
 from app.utils.step_manager import get_file_overall_status, get_step_summary, initialize_file_steps, update_step_status
 
 

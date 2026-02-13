@@ -22,18 +22,6 @@ try:
 except ModuleNotFoundError:
     _has_psycopg2 = False
 
-from tests.fixtures_integration import (
-    celery_app,
-    celery_worker,
-    db_session_real,
-    full_infrastructure,
-    gotenberg_container,
-    minio_container,
-    postgres_container,
-    redis_container,
-    sftp_container,
-    webdav_container,
-)
 
 _TEST_CREDENTIAL = "pass"  # noqa: S105
 
@@ -67,7 +55,6 @@ class TestEndToEndWithRedis:
             patch("app.tasks.upload_to_webdav.settings") as mock_settings,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             # Configure to use real WebDAV server
             mock_settings.webdav_url = webdav_container["url"] + "/"
             mock_settings.webdav_username = webdav_container["username"]
@@ -169,7 +156,6 @@ class TestEndToEndWithRedis:
             patch("app.tasks.upload_to_webdav.settings") as mock_settings,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = webdav_container["url"] + "/"
             mock_settings.webdav_username = webdav_container["username"]
             mock_settings.webdav_password = webdav_container["password"]
@@ -233,7 +219,6 @@ class TestEndToEndWithRedis:
             patch("app.tasks.upload_to_webdav.log_task_progress"),
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
         ):
-
             mock_settings.webdav_url = "http://test.com/"
             mock_settings.webdav_username = "user"
             mock_settings.webdav_password = _TEST_CREDENTIAL
@@ -357,7 +342,6 @@ class TestFullInfrastructure:
             patch("app.tasks.upload_to_webdav.settings") as mock_settings,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = infra["webdav"]["url"] + "/"
             mock_settings.webdav_username = infra["webdav"]["username"]
             mock_settings.webdav_password = infra["webdav"]["password"]
@@ -556,7 +540,6 @@ class TestProductionLikeScenarios:
             patch("app.tasks.upload_to_webdav.settings") as mock_settings,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = infra["webdav"]["url"] + "/"
             mock_settings.webdav_username = infra["webdav"]["username"]
             mock_settings.webdav_password = infra["webdav"]["password"]

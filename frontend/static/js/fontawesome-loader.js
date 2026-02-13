@@ -7,6 +7,6 @@
   link.rel = 'stylesheet';
   link.href = '/static/fontawesome/css/all.min.css';
   document.head.appendChild(link);
-  
+
   console.log('Font Awesome loaded locally');
 })();

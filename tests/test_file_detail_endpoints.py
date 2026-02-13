@@ -2,7 +2,6 @@
 Tests for file detail view improvements including reprocessing and preview endpoints.
 """
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest

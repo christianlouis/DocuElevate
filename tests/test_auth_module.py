@@ -1,6 +1,6 @@
 """Comprehensive unit tests for app/auth.py module."""
 
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import Request, status
@@ -344,7 +344,7 @@ class TestOAuthCallback:
         """Test OAuth callback returns error when OAuth not configured."""
         with patch("app.auth.AUTH_ENABLED", True):
             with patch("app.auth.OAUTH_CONFIGURED", False):
-                from app.auth import oauth_callback, oauth_login
+                from app.auth import oauth_login
 
                 mock_request = MagicMock()
 

@@ -1,11 +1,10 @@
 """Integration tests for auth.py with AUTH_ENABLED=True scenarios."""
 
-import hashlib
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.auth import get_current_user, get_gravatar_url, require_login
+from app.auth import get_gravatar_url
 
 
 @pytest.mark.unit

@@ -16,19 +16,19 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
-    
+
     - name: Install dependencies
       run: |
         pip install -r requirements-dev.txt
-    
+
     - name: Run OAuth tests (mock)
       run: |
         pytest tests/test_oauth_integration_flows.py -v
@@ -48,19 +48,19 @@ jobs:
     runs-on: ubuntu-latest
     # Only run if secrets are available (not on external PRs)
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
-    
+
     - name: Install dependencies
       run: |
         pip install -r requirements-dev.txt
-    
+
     - name: Run OAuth tests (real)
       env:
         AUTHENTIK_CLIENT_ID: ${{ secrets.AUTHENTIK_CLIENT_ID }}
@@ -84,43 +84,43 @@ jobs:
   test-mock-oauth:
     name: OAuth Tests (Mock)
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
-    
+
     - name: Install dependencies
       run: |
         pip install -r requirements-dev.txt
-    
+
     - name: Run mock OAuth tests
       run: |
         pytest tests/test_oauth_integration_flows.py \
           -v \
           -m "not requires_external"
-  
+
   test-real-oauth:
     name: OAuth Tests (Real - Internal Only)
     runs-on: ubuntu-latest
     # Only run on internal commits where secrets are available
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
-    
+
     - name: Install dependencies
       run: |
         pip install -r requirements-dev.txt
-    
+
     - name: Run real OAuth tests
       env:
         AUTHENTIK_CLIENT_ID: ${{ secrets.AUTHENTIK_CLIENT_ID }}
@@ -157,7 +157,7 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     services:
       mock-oauth:
         image: ghcr.io/navikt/mock-oauth2-server:2.1.1
@@ -168,24 +168,24 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
-    
+
     - name: Install dependencies
       run: |
         pip install -r requirements-dev.txt
-    
+
     - name: Configure OAuth to use service
       run: |
         export OAUTH_MOCK_URL=http://localhost:8080
         export USE_MOCK_OAUTH=true
-    
+
     - name: Run tests
       run: |
         pytest tests/test_oauth_integration_flows.py -v
@@ -255,7 +255,7 @@ Add this step to debug mock OAuth server issues:
 
 **Cause**: Real OAuth credentials not configured or not accessible.
 
-**Solution**: 
+**Solution**:
 - For local dev: Use mock mode (default)
 - For CI: Add secrets to GitHub repository settings
 - Check secret availability: `if github.event_name == 'push'`
@@ -291,20 +291,20 @@ on: [push, pull_request]
 jobs:
   # Fast mock OAuth tests (always run)
   mock-oauth-tests:
-    name: OAuth Tests (Mock) 
+    name: OAuth Tests (Mock)
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
-    
+
     - name: Install dependencies
       run: pip install -r requirements-dev.txt
-    
+
     - name: Run mock OAuth tests
       run: |
         pytest tests/test_oauth_integration_flows.py \
@@ -312,7 +312,7 @@ jobs:
           -m "not requires_external" \
           --cov=app.auth \
           --cov-report=term-missing
-    
+
     - name: Upload coverage
       uses: codecov/codecov-action@v3
       with:
@@ -324,18 +324,18 @@ jobs:
     name: OAuth Tests (Real - Internal)
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
-    
+
     - name: Install dependencies
       run: pip install -r requirements-dev.txt
-    
+
     - name: Run real OAuth tests
       env:
         AUTHENTIK_CLIENT_ID: ${{ secrets.AUTHENTIK_CLIENT_ID }}
@@ -345,7 +345,7 @@ jobs:
         pytest tests/test_oauth_integration_flows.py \
           -v \
           -m requires_external
-    
+
     - name: Upload coverage
       uses: codecov/codecov-action@v3
       with:

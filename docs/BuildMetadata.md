@@ -243,7 +243,7 @@ docker build -t docuelevate .
 
 **Cause:** Building outside of a Git repository
 
-**Solution:** 
+**Solution:**
 - Clone the repository properly with `.git` directory
 - Or set `GIT_COMMIT_SHA` environment variable
 
@@ -261,7 +261,7 @@ docker build --no-cache -t docuelevate .
 
 **Cause:** Files listed in `.dockerignore`
 
-**Solution:** 
+**Solution:**
 - Check `.dockerignore` doesn't block `BUILD_DATE`, `GIT_SHA`, or `RUNTIME_INFO`
 - The `VERSION` file should always be committed to git
 

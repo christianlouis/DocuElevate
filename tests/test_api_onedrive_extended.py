@@ -1,8 +1,9 @@
 """Comprehensive unit tests for app/api/onedrive.py module."""
 
-import pytest
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timedelta
+
+import pytest
 
 
 @pytest.mark.unit
@@ -285,7 +286,6 @@ class TestSaveOneDriveSettings:
     @patch("os.path.exists")
     def test_save_settings_updates_memory(self, mock_exists, mock_open):
         """Test that in-memory settings are updated."""
-        from app.config import settings
 
         mock_exists.return_value = True
         mock_file = MagicMock()
@@ -303,7 +303,6 @@ class TestUpdateOneDriveSettings:
     @patch("app.tasks.upload_to_onedrive.get_onedrive_token")
     def test_update_settings_success(self, mock_get_token):
         """Test successful settings update."""
-        from app.config import settings
 
         mock_get_token.return_value = "access_token"
 
@@ -313,7 +312,6 @@ class TestUpdateOneDriveSettings:
     @patch("app.tasks.upload_to_onedrive.get_onedrive_token")
     def test_update_settings_token_test_failed(self, mock_get_token):
         """Test when token test fails after update."""
-        from app.config import settings
 
         mock_get_token.side_effect = Exception("Token test failed")
 
@@ -343,7 +341,6 @@ class TestGetOneDriveFullConfig:
 
     def test_get_full_config_env_format(self):
         """Test that env_format is generated correctly."""
-        from app.config import settings
 
         # env_format should contain all settings as KEY=value
         pass

@@ -5,9 +5,8 @@ Extends existing tests with comprehensive coverage for upload_with_rclone
 and send_to_all_rclone_destinations Celery tasks.
 """
 
-import os
 import subprocess
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -117,9 +116,7 @@ class TestUploadWithRcloneExtended:
         rclone_config = tmp_path / "rclone.conf"
         rclone_config.write_text("[gdrive]\ntype = drive\n")
 
-        mock_run.side_effect = subprocess.CalledProcessError(
-            1, "rclone", stderr=b"mkdir failed"
-        )
+        mock_run.side_effect = subprocess.CalledProcessError(1, "rclone", stderr=b"mkdir failed")
 
         with pytest.raises(RuntimeError, match="Rclone error"):
             upload_with_rclone(str(test_file), "gdrive:uploads")

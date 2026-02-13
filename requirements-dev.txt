@@ -14,19 +14,14 @@ redis>=4.5.0  # For Redis integration tests
 boto3>=1.26.0  # For S3 integration tests
 
 # Code quality
-flake8>=7.0.0
-black>=24.0.0
+ruff>=0.3.0
 mypy>=1.8.0
-pylint>=3.0.0
-isort>=5.13.0
 
 # Type stubs for mypy
 types-requests>=2.31.0
 types-paramiko>=3.0.0
 
-# Security scanning
-bandit>=1.7.6
-safety>=3.0.0
+# Security scanning (Ruff includes most security checks from bandit)
 
 # Pre-commit hooks
 pre-commit>=3.6.0

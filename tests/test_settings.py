@@ -6,7 +6,6 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.config import Settings
 from app.models import ApplicationSettings
 from app.utils.config_loader import convert_setting_value, load_settings_from_db
 from app.utils.settings_service import (
@@ -224,7 +223,6 @@ class TestSettingsPrecedence:
     def test_db_overrides_default(self, db_session: Session):
         """Test that database settings override default values"""
         # Create a minimal test settings object
-        from typing import Optional
 
         from pydantic_settings import BaseSettings
 

@@ -7,13 +7,11 @@ applyTo: "app/**/*.py"
 These instructions apply to all Python code in the `app/` directory.
 
 ## Code Style
-- Use **Black** formatter with 120 character line length
-- Use **isort** with Black profile for import organization
-- Follow **flake8** rules (ignore E203, W503 as per `.pre-commit-config.yaml`)
+- Use **Ruff** for linting and formatting with 120 character line length
 - All functions must have type hints for parameters and return values
 - Use `from typing import Optional, Dict, List, Any, Union` as needed
 
-## Import Order (isort with Black profile)
+## Import Order (Ruff enforces isort-compatible ordering)
 ```python
 # Standard library imports
 import os
@@ -39,15 +37,15 @@ def process_document(
 ) -> DocumentMetadata:
     """
     Process a document and extract metadata.
-    
+
     Args:
         file_path: Path to the document file
         user_id: ID of the user uploading the document
         metadata: Optional additional metadata
-        
+
     Returns:
         DocumentMetadata object with extracted information
-        
+
     Raises:
         FileNotFoundError: If file doesn't exist
         ProcessingError: If processing fails
@@ -150,7 +148,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     openai_api_key: str
     max_file_size: int = 10485760  # 10MB default
-    
+
     class Config:
         env_file = ".env"
 ```

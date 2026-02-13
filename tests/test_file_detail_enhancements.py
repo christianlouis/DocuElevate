@@ -9,14 +9,10 @@ Tests the new features:
 """
 
 import json
-import os
-import tempfile
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
 from app.models import FileRecord
 
 
@@ -38,7 +34,6 @@ def sample_metadata():
 @pytest.mark.integration
 def test_file_detail_page_with_metadata(client: TestClient, db_session, sample_pdf_file):
     """Test file detail page displays GPT metadata correctly"""
-    from app.models import FileRecord
 
     # Create a file record with paths
     file_record = FileRecord(
@@ -68,7 +63,6 @@ def test_file_detail_page_with_metadata(client: TestClient, db_session, sample_p
 @pytest.mark.integration
 def test_file_detail_with_gpt_metadata(client: TestClient, db_session, sample_pdf_file, sample_metadata, tmp_path):
     """Test file detail page with GPT metadata JSON"""
-    from app.models import FileRecord
 
     # Create processed file path and metadata JSON
     processed_file = tmp_path / "2024-01-15_Company_Invoice.pdf"
@@ -106,7 +100,6 @@ def test_file_detail_with_gpt_metadata(client: TestClient, db_session, sample_pd
 @pytest.mark.integration
 def test_preview_original_file_endpoint(client: TestClient, db_session, sample_pdf_file):
     """Test original file preview endpoint"""
-    from app.models import FileRecord
 
     file_record = FileRecord(
         filehash="test789ghi",
@@ -130,7 +123,6 @@ def test_preview_original_file_endpoint(client: TestClient, db_session, sample_p
 @pytest.mark.integration
 def test_preview_processed_file_endpoint(client: TestClient, db_session, sample_pdf_file, tmp_path):
     """Test processed file preview endpoint"""
-    from app.models import FileRecord
 
     # Create processed file
     processed_file = tmp_path / "processed.pdf"
@@ -158,7 +150,6 @@ def test_preview_processed_file_endpoint(client: TestClient, db_session, sample_
 @pytest.mark.integration
 def test_preview_missing_file_returns_404(client: TestClient, db_session, sample_pdf_file):
     """Test preview endpoint returns 404 when file doesn't exist"""
-    from app.models import FileRecord
 
     file_record = FileRecord(
         filehash="test202mno",
@@ -185,7 +176,6 @@ def test_preview_missing_file_returns_404(client: TestClient, db_session, sample
 @pytest.mark.integration
 def test_file_detail_shows_file_status_indicators(client: TestClient, db_session, sample_pdf_file):
     """Test file detail page shows correct status indicators for original and processed files"""
-    from app.models import FileRecord
 
     file_record = FileRecord(
         filehash="test303pqr",

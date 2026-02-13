@@ -9,15 +9,15 @@ This software includes third-party components with their own licenses:
 
 SPECIAL NOTICE REGARDING LGPL SOFTWARE:
 --------------------------------------------------------------------------------
-DocuElevate incorporates Paramiko, which is licensed under the GNU Lesser General 
+DocuElevate incorporates Paramiko, which is licensed under the GNU Lesser General
 Public License (LGPL) version 2.1. In accordance with the LGPL:
 
 1. The complete source code for Paramiko can be obtained from:
    https://github.com/paramiko/paramiko
 
-2. This software is distributed in the hope that it will be useful, but WITHOUT 
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
-   FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License 
+2. This software is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+   FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License
    for more details.
 
 3. A copy of the GNU Lesser General Public License version 2.1 can be found at:

@@ -54,7 +54,7 @@
       font-weight: 400;
       margin-top: 0.5rem;
     }
-    
+
     /* Upload progress modal */
     .upload-modal {
       display: none;
@@ -95,14 +95,14 @@
     .close-modal-btn:hover {
       opacity: 0.8;
     }
-    
+
     <style>
     .file-table {
       width: 100%;
       border-collapse: collapse;
       margin-bottom: 1rem;
     }
-    .file-table th, 
+    .file-table th,
     .file-table td {
       padding: 0.75rem;
       text-align: left;
@@ -133,7 +133,7 @@
       opacity: 1;
       font-weight: bold;
     }
-    
+
     /* Status badges */
     .status-badge {
       display: inline-block;
@@ -163,7 +163,7 @@
       background-color: #E5E7EB;
       color: #374151;
     }
-    
+
     /* Action buttons */
     .action-btn {
       color: #3182ce;
@@ -185,7 +185,7 @@
     .action-btn.delete:hover {
       background-color: #fed7d7;
     }
-    
+
     /* Filters section */
     .filters-section {
       background-color: #f7fafc;
@@ -234,7 +234,7 @@
     .filter-item button.clear:hover {
       background-color: #4a5568;
     }
-    
+
     /* Pagination */
     .pagination {
       display: flex;
@@ -271,7 +271,7 @@
       color: white;
       border-color: #3182ce;
     }
-    
+
     /* Modal styles */
     .modal {
       display: none;
@@ -325,7 +325,7 @@
     .modal-btn-delete:hover {
       background-color: #c53030;
     }
-    
+
     .error-message {
       background-color: #FEE2E2;
       border: 1px solid #F87171;
@@ -363,7 +363,7 @@
 
 <div class="container mx-auto px-4 py-8">
   <h2 class="text-3xl font-bold mb-6">File Records</h2>
-  
+
   {% if error %}
   <div class="error-message">
     <p><strong>Error:</strong> {{ error }}</p>
@@ -378,7 +378,7 @@
         <label for="search">Search Filename</label>
         <input type="text" id="search" name="search" value="{{ search }}" placeholder="Enter filename...">
       </div>
-      
+
       <div class="filter-item">
         <label for="mime_type">MIME Type</label>
         <select id="mime_type" name="mime_type">
@@ -388,7 +388,7 @@
           {% endfor %}
         </select>
       </div>
-      
+
       <div class="filter-item">
         <label for="status">Status</label>
         <select id="status" name="status">
@@ -400,24 +400,24 @@
           <option value="duplicate" {% if status == "duplicate" %}selected{% endif %}>Duplicate</option>
         </select>
       </div>
-      
+
       <div class="filter-item">
         <label>&nbsp;</label>
         <button type="submit">Apply Filters</button>
       </div>
-      
+
       <div class="filter-item">
         <label>&nbsp;</label>
         <button type="button" class="clear" onclick="clearFilters()">Clear</button>
       </div>
-      
+
       <!-- Hidden fields to preserve sort order -->
       <input type="hidden" name="sort_by" value="{{ sort_by }}">
       <input type="hidden" name="sort_order" value="{{ sort_order }}">
       <input type="hidden" name="per_page" value="{{ pagination.per_page }}">
     </form>
   </div>
-  
+
   <!-- Bulk Actions Section -->
   <div id="bulkActionsBar" class="filters-section" style="display: none; background-color: #e6f3ff;">
     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -437,7 +437,7 @@
       </div>
     </div>
   </div>
-  
+
   <!-- File table -->
   <div class="overflow-x-auto">
     <table class="file-table" id="fileTable">
@@ -535,13 +535,13 @@
       </tbody>
     </table>
   </div>
-  
+
   <!-- Pagination -->
   {% if pagination.total_pages > 1 %}
   <div class="pagination">
     <div class="pagination-info">
-      Showing {{ ((pagination.page - 1) * pagination.per_page + 1) }} - 
-      {{ min(pagination.page * pagination.per_page, pagination.total_items) }} 
+      Showing {{ ((pagination.page - 1) * pagination.per_page + 1) }} -
+      {{ min(pagination.page * pagination.per_page, pagination.total_items) }}
       of {{ pagination.total_items }} files
     </div>
     <div class="pagination-buttons">
@@ -549,13 +549,13 @@
       <button class="pagination-button" onclick="goToPage(1)">First</button>
       <button class="pagination-button" onclick="goToPage({{ pagination.page - 1 }})">Previous</button>
       {% endif %}
-      
+
       {% for p in range(max(1, pagination.page - 2), min(pagination.total_pages + 1, pagination.page + 3)) %}
       <button class="pagination-button {% if p == pagination.page %}active{% endif %}" onclick="goToPage({{ p }})">
         {{ p }}
       </button>
       {% endfor %}
-      
+
       {% if pagination.page < pagination.total_pages %}
       <button class="pagination-button" onclick="goToPage({{ pagination.page + 1 }})">Next</button>
       <button class="pagination-button" onclick="goToPage({{ pagination.total_pages }})">Last</button>
@@ -563,7 +563,7 @@
     </div>
   </div>
   {% endif %}
-  
+
   <!-- Delete confirmation modal -->
   <div id="deleteModal" class="modal">
     <div class="modal-content">
@@ -575,41 +575,41 @@
       </div>
     </div>
   </div>
-  
+
   <script>
     // Modal functionality
     const deleteModal = document.getElementById('deleteModal');
     const cancelDelete = document.getElementById('cancelDelete');
     const confirmDelete = document.getElementById('confirmDelete');
     let currentFileId = null;
-    
+
     function showDeleteModal(fileId, event) {
       if (event) event.stopPropagation();
       currentFileId = fileId;
       deleteModal.style.display = 'flex';
     }
-    
+
     function viewFileDetail(fileId, event) {
       if (event) event.stopPropagation();
       window.location.href = `/files/${fileId}/detail`;
     }
-    
+
     cancelDelete.addEventListener('click', () => {
       deleteModal.style.display = 'none';
     });
-    
+
     confirmDelete.addEventListener('click', () => {
       deleteFile(currentFileId);
       deleteModal.style.display = 'none';
     });
-    
+
     // Close modal if clicking outside of it
     window.addEventListener('click', (event) => {
       if (event.target === deleteModal) {
         deleteModal.style.display = 'none';
       }
     });
-    
+
     function deleteFile(fileId) {
       fetch(`/api/files/${fileId}`, {
         method: 'DELETE',
@@ -645,35 +645,35 @@
         alert(`Error deleting file: ${error.message}`);
       });
     }
-    
+
     function sortTable(column) {
       const urlParams = new URLSearchParams(window.location.search);
       const currentSortBy = urlParams.get('sort_by') || 'created_at';
       const currentSortOrder = urlParams.get('sort_order') || 'desc';
-      
+
       // Toggle sort order if clicking the same column
       let newSortOrder = 'asc';
       if (column === currentSortBy) {
         newSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
       }
-      
+
       urlParams.set('sort_by', column);
       urlParams.set('sort_order', newSortOrder);
       urlParams.set('page', '1'); // Reset to first page on sort
-      
+
       window.location.search = urlParams.toString();
     }
-    
+
     function goToPage(page) {
       const urlParams = new URLSearchParams(window.location.search);
       urlParams.set('page', page);
       window.location.search = urlParams.toString();
     }
-    
+
     function clearFilters() {
       window.location.href = '/files';
     }
-    
+
     // Bulk selection functionality
     function toggleSelectAll() {
       const selectAll = document.getElementById('selectAll');
@@ -683,48 +683,48 @@
       });
       updateBulkActionsBar();
     }
-    
+
     function updateBulkActionsBar() {
       const checkboxes = document.querySelectorAll('.file-checkbox:checked');
       const selectedCount = checkboxes.length;
       const bulkActionsBar = document.getElementById('bulkActionsBar');
       const selectedCountEl = document.getElementById('selectedCount');
-      
+
       if (selectedCount > 0) {
         bulkActionsBar.style.display = 'block';
         selectedCountEl.textContent = selectedCount;
       } else {
         bulkActionsBar.style.display = 'none';
       }
-      
+
       // Update "select all" checkbox state
       const allCheckboxes = document.querySelectorAll('.file-checkbox');
       const selectAll = document.getElementById('selectAll');
       selectAll.checked = allCheckboxes.length > 0 && selectedCount === allCheckboxes.length;
     }
-    
+
     function clearSelection() {
       document.querySelectorAll('.file-checkbox').forEach(cb => cb.checked = false);
       document.getElementById('selectAll').checked = false;
       updateBulkActionsBar();
     }
-    
+
     function getSelectedFileIds() {
       const checkboxes = document.querySelectorAll('.file-checkbox:checked');
       return Array.from(checkboxes).map(cb => parseInt(cb.value));
     }
-    
+
     function bulkDelete() {
       const fileIds = getSelectedFileIds();
       if (fileIds.length === 0) {
         alert('Please select files to delete');
         return;
       }
-      
+
       if (!confirm(`Are you sure you want to delete ${fileIds.length} file(s)?`)) {
         return;
       }
-      
+
       fetch('/api/files/bulk-delete', {
         method: 'POST',
         headers: {
@@ -749,18 +749,18 @@
         alert(`Error deleting files: ${error.message}`);
       });
     }
-    
+
     function bulkReprocess() {
       const fileIds = getSelectedFileIds();
       if (fileIds.length === 0) {
         alert('Please select files to reprocess');
         return;
       }
-      
+
       if (!confirm(`Are you sure you want to reprocess ${fileIds.length} file(s)?`)) {
         return;
       }
-      
+
       fetch('/api/files/bulk-reprocess', {
         method: 'POST',
         headers: {
@@ -791,55 +791,55 @@
         alert(`Error reprocessing files: ${error.message}`);
       });
     }
-    
+
     // ===== Drag-and-Drop Upload Functionality =====
     const dropOverlay = document.getElementById('dropOverlay');
     const uploadModal = document.getElementById('uploadModal');
     const uploadStatusMessage = document.getElementById('uploadStatusMessage');
     const uploadProgressContainer = document.getElementById('uploadProgressContainer');
-    
+
     let dragCounter = 0; // Track nested drag events
-    
+
     // Show overlay when dragging files over the window
     window.addEventListener('dragenter', (e) => {
       e.preventDefault();
       dragCounter++;
-      
+
       // Only show overlay if dragging files
       if (e.dataTransfer.types.includes('Files')) {
         dropOverlay.classList.add('active');
       }
     });
-    
+
     window.addEventListener('dragleave', (e) => {
       e.preventDefault();
       dragCounter--;
-      
+
       if (dragCounter === 0) {
         dropOverlay.classList.remove('active');
       }
     });
-    
+
     window.addEventListener('dragover', (e) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
     });
-    
+
     window.addEventListener('drop', (e) => {
       e.preventDefault();
       dragCounter = 0;
       dropOverlay.classList.remove('active');
-      
+
       if (e.dataTransfer.files.length > 0) {
         // Show upload modal
         uploadModal.classList.add('active');
         uploadProgressContainer.innerHTML = '';
-        
+
         // Process the dropped files
         processFiles(e.dataTransfer.files, uploadProgressContainer, uploadStatusMessage);
       }
     });
-    
+
     // Listen for upload completion event and reload the page to show new files
     window.addEventListener('allUploadsComplete', (e) => {
       // Wait 2 seconds to let users see the success message
@@ -847,7 +847,7 @@
         window.location.reload();
       }, 2000);
     });
-    
+
     function closeUploadModal() {
       uploadModal.classList.remove('active');
     }

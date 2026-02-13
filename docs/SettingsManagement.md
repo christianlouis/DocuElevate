@@ -93,7 +93,7 @@ The current value displayed is **always** the effective value after applying pre
 6. Successfully saved settings will show a 🟢 DB badge
 7. If any changed setting requires a restart, you'll be notified
 
-**Important**: 
+**Important**:
 - You don't need to fill all fields - only change what you want to override
 - Saving a setting to the database makes it override environment variables
 - Empty fields are ignored (won't clear existing values)
@@ -196,7 +196,7 @@ Settings are stored in the `application_settings` table with:
 ### Can't Access Settings Page
 
 - **Check authentication**: Make sure you're logged in
-- **Check admin status**: 
+- **Check admin status**:
   - Local auth: Verify `ADMIN_USERNAME` and `ADMIN_PASSWORD` are correct
   - OAuth: Verify your user is in the admin group (configurable via `ADMIN_GROUP_NAME`)
 - **Check logs**: Look for "Non-admin user attempted to access settings page" messages
@@ -243,5 +243,5 @@ python3 test_integration.py
 ## Related Documentation
 
 - [Configuration Guide](./ConfigurationGuide.md) - Environment variable reference
-- [Deployment Guide](./DeploymentGuide.md) - Production deployment  
+- [Deployment Guide](./DeploymentGuide.md) - Production deployment
 - [API Documentation](./API.md) - Full API reference

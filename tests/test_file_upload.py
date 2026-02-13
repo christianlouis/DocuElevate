@@ -26,7 +26,6 @@ def mock_celery_tasks():
         patch("app.api.files.process_document") as mock_process_task,
         patch("app.api.files.convert_to_pdf") as mock_convert_task,
     ):
-
         # Setup default return values for .delay()
         mock_task = MagicMock()
         mock_task.id = "test-task-id-123"

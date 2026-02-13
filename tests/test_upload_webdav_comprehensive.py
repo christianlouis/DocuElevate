@@ -1,10 +1,10 @@
 """Comprehensive tests for upload_to_webdav task."""
 
 import os
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
-from requests.exceptions import ConnectionError, RequestException, Timeout
+from requests.exceptions import ConnectionError, Timeout
 
 from app.tasks.upload_to_webdav import upload_to_webdav
 
@@ -23,7 +23,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress") as mock_log,
         ):
-
             # Setup settings
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
@@ -65,7 +64,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
             mock_settings.webdav_password = _TEST_CREDENTIAL
@@ -89,7 +87,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
             mock_settings.webdav_password = _TEST_CREDENTIAL
@@ -111,7 +108,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.settings") as mock_settings,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = None
             mock_settings.webdav_username = "test_user"
             mock_settings.webdav_password = _TEST_CREDENTIAL
@@ -125,7 +121,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.settings") as mock_settings,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com/"
 
             with pytest.raises(FileNotFoundError, match="File not found"):
@@ -138,7 +133,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
             mock_settings.webdav_password = _TEST_CREDENTIAL
@@ -162,7 +156,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
             mock_settings.webdav_password = _TEST_CREDENTIAL
@@ -185,7 +178,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
             mock_settings.webdav_password = _TEST_CREDENTIAL
@@ -208,7 +200,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
             mock_settings.webdav_password = _TEST_CREDENTIAL
@@ -229,7 +220,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
             mock_settings.webdav_password = _TEST_CREDENTIAL
@@ -250,7 +240,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
             mock_settings.webdav_password = _TEST_CREDENTIAL
@@ -277,7 +266,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com"
             mock_settings.webdav_username = "test_user"
             mock_settings.webdav_password = _TEST_CREDENTIAL
@@ -303,7 +291,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
             mock_settings.webdav_password = _TEST_CREDENTIAL
@@ -329,7 +316,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
             mock_settings.webdav_password = _TEST_CREDENTIAL
@@ -352,7 +338,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
             mock_settings.webdav_password = _TEST_CREDENTIAL
@@ -377,7 +362,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
             mock_settings.webdav_password = _TEST_CREDENTIAL
@@ -402,7 +386,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "custom_user"
             mock_settings.webdav_password = _TEST_CUSTOM_CREDENTIAL
@@ -427,7 +410,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress") as mock_log,
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
             mock_settings.webdav_password = _TEST_CREDENTIAL
@@ -455,7 +437,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress") as mock_log,
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
             mock_settings.webdav_password = _TEST_CREDENTIAL
@@ -482,7 +463,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
             mock_settings.webdav_password = _TEST_CREDENTIAL
@@ -509,7 +489,6 @@ class TestUploadToWebDAV:
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
         ):
-
             mock_settings.webdav_url = "https://webdav.example.com/"
             mock_settings.webdav_username = "test_user"
             mock_settings.webdav_password = _TEST_CREDENTIAL

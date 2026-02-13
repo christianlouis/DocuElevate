@@ -1,6 +1,5 @@
 """Tests for app/database.py module."""
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -113,8 +112,7 @@ class TestSchemaMigrations:
 
     def test_migration_adds_detail_column(self, tmp_path):
         """Test that _run_schema_migrations adds detail column to existing tables."""
-        from sqlalchemy import Column, Integer, String, create_engine, text
-        from sqlalchemy.orm import sessionmaker
+        from sqlalchemy import create_engine, text
 
         from app.database import _run_schema_migrations
 

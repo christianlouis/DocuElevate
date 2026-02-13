@@ -41,9 +41,9 @@ class TestEndpointRegistration:
         # We may get other errors (401, 400, 500, etc.) due to validation or missing mocks,
         # but 404 specifically means the endpoint is not registered
         assert response.status_code != 404, (
-            f"Endpoint /api/process-url returned 404 (not found). "
-            f"This indicates the router is not properly registered in the application. "
-            f"Verify that url_upload_router is included in app/api/__init__.py"
+            "Endpoint /api/process-url returned 404 (not found). "
+            "This indicates the router is not properly registered in the application. "
+            "Verify that url_upload_router is included in app/api/__init__.py"
         )
 
     @patch("app.api.url_upload.requests.get")
@@ -68,8 +68,8 @@ class TestEndpointRegistration:
 
         # Should not return 405 (Method Not Allowed)
         assert response.status_code != 405, (
-            f"Endpoint /api/process-url returned 405 (Method Not Allowed) for POST. "
-            f"Verify the endpoint is decorated with @router.post()"
+            "Endpoint /api/process-url returned 405 (Method Not Allowed) for POST. "
+            "Verify the endpoint is decorated with @router.post()"
         )
 
     @patch("app.api.url_upload.requests.get")

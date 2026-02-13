@@ -1,6 +1,6 @@
 """Final tests to push coverage over 60%."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -86,7 +86,6 @@ class TestCheckCredentialsFunctions:
     def test_sync_test_s3_credentials(self):
         """Test save_failure_state accepts dict."""
         import os
-        from unittest.mock import patch
 
         from app.tasks.check_credentials import save_failure_state
 

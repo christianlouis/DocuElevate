@@ -1,7 +1,5 @@
 """Additional tests for upload_to_ftp task."""
 
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 

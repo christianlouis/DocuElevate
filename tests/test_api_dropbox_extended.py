@@ -1,8 +1,8 @@
 """Comprehensive unit tests for app/api/dropbox.py module."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, Mock
-from fastapi import HTTPException
 
 
 @pytest.mark.unit
@@ -53,21 +53,18 @@ class TestUpdateDropboxSettings:
 
     def test_update_settings_refresh_token(self):
         """Test updating only refresh token."""
-        from app.config import settings
 
         # Should update settings.dropbox_refresh_token
         pass
 
     def test_update_settings_all_fields(self):
         """Test updating all Dropbox settings."""
-        from app.config import settings
 
         # Should update all fields: refresh_token, app_key, app_secret, folder_path
         pass
 
     def test_update_settings_partial_fields(self):
         """Test updating some fields (not all)."""
-        from app.config import settings
 
         # Should only update provided fields
         pass
@@ -275,7 +272,6 @@ class TestSaveDropboxSettings:
     @patch("os.path.exists")
     def test_save_settings_updates_memory(self, mock_exists, mock_open):
         """Test that in-memory settings are updated."""
-        from app.config import settings
 
         mock_exists.return_value = True
         mock_file = MagicMock()

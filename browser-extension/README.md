@@ -127,7 +127,7 @@ The extension can send any URL, but DocuElevate will only process supported file
 
 **Cause**: The URL doesn't point to a supported file type.
 
-**Solution**: 
+**Solution**:
 - Verify the URL ends with a supported file extension
 - Check that the Content-Type header is set correctly by the server
 

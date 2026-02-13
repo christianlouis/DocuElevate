@@ -1,6 +1,6 @@
 # DocuElevate TODO List
 
-**Last Updated:** 2026-02-08  
+**Last Updated:** 2026-02-08
 **Current Version:** v0.5.0
 
 This document tracks actionable tasks for the current development cycle. For long-term planning, see [ROADMAP.md](ROADMAP.md) and [MILESTONES.md](MILESTONES.md).
@@ -10,7 +10,7 @@ This document tracks actionable tasks for the current development cycle. For lon
 ## ⚠️ Important Note on Versioning
 
 As of this update, DocuElevate uses **automated semantic versioning** via `python-semantic-release`:
-- **DO NOT** manually edit `VERSION` or `CHANGELOG.md` 
+- **DO NOT** manually edit `VERSION` or `CHANGELOG.md`
 - Version bumps are automated based on conventional commit messages
 - See [CONTRIBUTING.md](CONTRIBUTING.md) for commit message format
 

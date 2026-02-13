@@ -11,15 +11,15 @@
       <h2 class="text-2xl font-bold mt-4">Processing Authorization</h2>
       <p class="text-gray-600 mt-2">Please wait while we complete the Google Drive authorization process...</p>
     </div>
-    
+
     <div class="flex justify-center my-6">
       <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
     </div>
-    
+
     <div id="processing-message" class="text-center text-gray-700">
       <p>Exchanging authorization code for refresh token...</p>
     </div>
-    
+
     <div id="error-container" class="hidden mt-6">
       <div class="bg-red-50 border-l-4 border-red-400 p-4">
         <div class="flex">
@@ -42,7 +42,7 @@
         </a>
       </div>
     </div>
-    
+
     <div id="folder-selection-container" class="hidden mt-6">
       <div class="rounded-md bg-blue-50 p-4 mb-6">
         <div class="flex">
@@ -58,7 +58,7 @@
           </div>
         </div>
       </div>
-      
+
       <div class="space-y-4 mb-6">
         <div>
           <label for="folder-id-input" class="block text-sm font-medium text-gray-700">Google Drive Folder ID</label>
@@ -75,7 +75,7 @@
             You can paste a folder ID directly or use the selector to pick a folder. Root folder is "root".
           </p>
         </div>
-        
+
         <div>
           <button id="save-folder-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
             Save Settings
@@ -83,7 +83,7 @@
         </div>
       </div>
     </div>
-    
+
     <div id="success-container" class="hidden mt-6">
       <div class="rounded-md bg-green-50 p-4">
         <div class="flex">
@@ -99,26 +99,26 @@
           </div>
         </div>
       </div>
-      
+
       <div class="mt-6 p-4 bg-gray-100 rounded-md">
         <h3 class="font-medium text-lg mb-2">Configuration for Worker Nodes</h3>
         <p class="text-sm text-gray-600 mb-3">
           Copy these environment variables to configure all worker nodes:
         </p>
-        
+
         <div class="relative">
           <pre id="env-vars" class="bg-gray-800 text-green-400 text-sm p-3 rounded overflow-x-auto"><code></code></pre>
-          
+
           <button id="copy-env-vars" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs py-1 px-2 rounded">
             Copy
           </button>
         </div>
-        
+
         <p class="text-xs text-gray-500 mt-2">
           Add these variables to your .env file or environment configuration.
         </p>
       </div>
-      
+
       <div class="mt-4 text-center">
         <a href="/status" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
           Go to Status Page
@@ -133,34 +133,34 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const code = "{{ code }}";
-  
+
   // Get credentials from session storage
   const clientId = sessionStorage.getItem('google_drive_client_id');
   const clientSecret = sessionStorage.getItem('google_drive_client_secret');
   const folderId = sessionStorage.getItem('google_drive_folder_id');
-  
+
   const redirectUri = window.location.origin + "/google-drive-callback";
-  
+
   let accessToken = null;
   let refreshToken = null;
-  
+
   // Define folderIdInput at the top level so it's accessible throughout the script
   const folderIdInput = document.getElementById('folder-id-input');
   const folderSelectBtn = document.getElementById('folder-select-picker-btn');
   const saveFolderBtn = document.getElementById('save-folder-btn');
-  
+
   // Automatically exchange the code for a refresh token
   if (code) {
     if (!clientId || !clientSecret) {
       showError("Missing Client ID or Client Secret. Please go back to the setup page and try again.");
       return;
     }
-    
+
     exchangeCode(code, clientId, clientSecret, redirectUri, folderId);
   } else {
     showError("No authorization code was found in the URL");
   }
-  
+
   function exchangeCode(code, clientId, clientSecret, redirectUri, folderId) {
     const formData = new FormData();
     formData.append('client_id', clientId);
@@ -170,10 +170,10 @@ document.addEventListener('DOMContentLoaded', function() {
     if (folderId) {
       formData.append('folder_id', folderId);
     }
-    
-    document.getElementById('processing-message').innerHTML = 
+
+    document.getElementById('processing-message').innerHTML =
       '<p>Exchanging authorization code for refresh token...</p>';
-    
+
     fetch('/api/google-drive/exchange-token', {
       method: 'POST',
       body: formData
@@ -191,11 +191,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Store tokens
         refreshToken = data.refresh_token;
         accessToken = data.access_token;
-        
+
         // Update settings in memory first
         const updateFormData = new FormData();
         updateFormData.append('refresh_token', data.refresh_token);
-        
+
         // Use the client ID and client secret from session storage
         updateFormData.append('client_id', clientId);
         updateFormData.append('client_secret', clientSecret);
@@ -203,10 +203,10 @@ document.addEventListener('DOMContentLoaded', function() {
           updateFormData.append('folder_id', folderId);
         }
         updateFormData.append('use_oauth', 'true');
-        
-        document.getElementById('processing-message').innerHTML = 
+
+        document.getElementById('processing-message').innerHTML =
           '<p>Updating system settings with new token...</p>';
-        
+
         return fetch('/api/google-drive/update-settings', {
           method: 'POST',
           body: updateFormData
@@ -225,10 +225,10 @@ document.addEventListener('DOMContentLoaded', function() {
             // Show folder selection UI
             document.getElementById('processing-message').classList.add('hidden');
             document.getElementById('folder-selection-container').classList.remove('hidden');
-            
+
             // Initialize Google Picker for folder selection
             loadGooglePicker(accessToken, clientId);
-            
+
             return null;  // Return null to avoid further .then() processing
           }
         });
@@ -246,17 +246,17 @@ document.addEventListener('DOMContentLoaded', function() {
       showError(error.message);
     });
   }
-  
+
   function showError(message) {
     document.getElementById('processing-message').classList.add('hidden');
     document.getElementById('folder-selection-container').classList.add('hidden');
     document.getElementById('error-container').classList.remove('hidden');
     document.getElementById('error-message').innerText = message;
-    
+
     // Hide the spinner when showing error
     document.querySelector('.animate-spin').parentNode.classList.add('hidden');
   }
-  
+
   function saveSettings(refreshToken, clientId, clientSecret, folderId) {
     const saveFormData = new FormData();
     saveFormData.append('refresh_token', refreshToken);
@@ -266,10 +266,10 @@ document.addEventListener('DOMContentLoaded', function() {
       saveFormData.append('folder_id', folderId);
     }
     saveFormData.append('use_oauth', 'true');
-    
-    document.getElementById('processing-message').innerHTML = 
+
+    document.getElementById('processing-message').innerHTML =
       '<p>Saving settings to configuration...</p>';
-    
+
     return fetch('/api/google-drive/save-settings', {
       method: 'POST',
       body: saveFormData
@@ -300,15 +300,15 @@ document.addEventListener('DOMContentLoaded', function() {
       };
     });
   }
-  
+
   function showSuccess(refreshToken, clientId, clientSecret, folderId, inMemoryOnly) {
     document.getElementById('processing-message').classList.add('hidden');
     document.getElementById('folder-selection-container').classList.add('hidden');
     document.getElementById('success-container').classList.remove('hidden');
-    
+
     // Hide the spinner when showing success
     document.querySelector('.animate-spin').parentNode.classList.add('hidden');
-    
+
     // Update the environment variables pre block with the new token
     const envVarsCode = document.querySelector('#env-vars code');
     if (envVarsCode) {
@@ -318,7 +318,7 @@ GOOGLE_DRIVE_CLIENT_SECRET=${clientSecret}
 GOOGLE_DRIVE_REFRESH_TOKEN=${refreshToken}
 GOOGLE_DRIVE_FOLDER_ID=${folderId || 'YOUR_FOLDER_ID'}`;
     }
-    
+
     // If settings were only saved in memory, add a warning
     if (inMemoryOnly) {
       const successContainer = document.getElementById('success-container');
@@ -333,18 +333,18 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId || 'YOUR_FOLDER_ID'}`;
           </div>
           <div class="ml-3">
             <p class="text-sm font-medium text-yellow-800">
-              Note: Settings were saved in memory only. The .env file could not be updated. 
+              Note: Settings were saved in memory only. The .env file could not be updated.
               Make sure to add these environment variables to your configuration files manually.
             </p>
           </div>
         </div>
       `;
-      
+
       // Insert warning after the success message but before the environment vars section
       const envVarsSection = document.querySelector('#success-container .mt-6');
       successContainer.insertBefore(warningDiv, envVarsSection);
     }
-    
+
     // Add copy functionality
     const copyEnvVarsBtn = document.getElementById('copy-env-vars');
     if (copyEnvVarsBtn) {
@@ -366,18 +366,18 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId || 'YOUR_FOLDER_ID'}`;
           });
       });
     }
-    
+
     // Clear session storage
     sessionStorage.removeItem('google_drive_client_id');
     sessionStorage.removeItem('google_drive_client_secret');
     sessionStorage.removeItem('google_drive_folder_id');
-    
+
     // In 10 seconds, redirect to status page
     setTimeout(() => {
       window.location.href = '/status';
     }, 10000);
   }
-  
+
   // Handle folder selection UI
   if (saveFolderBtn) {
     saveFolderBtn.addEventListener('click', function() {
@@ -385,11 +385,11 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId || 'YOUR_FOLDER_ID'}`;
         alert('Error: Folder input element not found');
         return;
       }
-      
+
       const folderId = folderIdInput.value.trim() || 'root';
       saveFolderBtn.disabled = true;
       saveFolderBtn.innerHTML = '<span class="animate-spin inline-block mr-2">⟳</span> Saving...';
-      
+
       saveSettings(refreshToken, clientId, clientSecret, folderId)
         .then(result => {
           showSuccess(result.refresh_token, result.client_id, result.client_secret, result.folderId);
@@ -401,7 +401,7 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId || 'YOUR_FOLDER_ID'}`;
         });
     });
   }
-  
+
   // Function to load and initialize the Google Picker
   function loadGooglePicker(accessToken, clientId) {
     // Load the Google API Loader script
@@ -414,13 +414,13 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId || 'YOUR_FOLDER_ID'}`;
     };
     document.body.appendChild(script);
   }
-  
+
   // Initialize and setup the Google Picker
   function initGooglePicker(accessToken, clientId) {
     if (!accessToken || !clientId || !folderSelectBtn) {
       return;
     }
-    
+
     // Setup the click handler for the folder select button
     folderSelectBtn.addEventListener('click', function() {
       // Create the folder picker view
@@ -428,7 +428,7 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId || 'YOUR_FOLDER_ID'}`;
         .setIncludeFolders(true)
         .setSelectFolderEnabled(true)
         .setMode(google.picker.DocsViewMode.LIST); // Use LIST mode to work with the drive.file scope
-        
+
       // Create and render the picker
       const picker = new google.picker.PickerBuilder()
         .addView(folderView)
@@ -437,35 +437,35 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId || 'YOUR_FOLDER_ID'}`;
         .setTitle('Select a folder for DocuElevate')
         .setCallback(pickerCallback)
         .build();
-        
+
       picker.setVisible(true);
     });
   }
-  
+
   // Callback function for picker
   function pickerCallback(data) {
     if (data[google.picker.Response.ACTION] == google.picker.Action.PICKED) {
       const folder = data[google.picker.Response.DOCUMENTS][0];
       const folderId = folder[google.picker.Document.ID];
       const folderName = folder[google.picker.Document.NAME];
-      
+
       // Update the folder ID input
       if (folderIdInput) {
         folderIdInput.value = folderId;
-        
+
         // Add visual confirmation instead of alert
         const confirmationMsg = document.createElement('div');
         confirmationMsg.className = 'mt-2 text-sm text-green-600';
         confirmationMsg.innerHTML = `<svg class="inline-block h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
         </svg> Selected folder: "${folderName}"`;
-        
+
         // Remove previous confirmation if it exists
         const existingConfirmation = folderIdInput.parentNode.querySelector('.text-green-600');
         if (existingConfirmation) {
           existingConfirmation.remove();
         }
-        
+
         // Insert the confirmation message after the input field
         folderIdInput.parentNode.appendChild(confirmationMsg);
       }

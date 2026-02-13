@@ -14,7 +14,6 @@ These tests exercise the full application stack end-to-end.
 
 import os
 import time
-from pathlib import Path
 from typing import Generator
 
 import pytest

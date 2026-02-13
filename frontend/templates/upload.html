@@ -115,12 +115,12 @@
     if (e.dataTransfer.files.length) {
       // Clear previous upload progress
       uploadProgress.innerHTML = "";
-      
+
       // Create progress container
       const progressContainer = document.createElement("div");
       progressContainer.className = "space-y-2";
       uploadProgress.appendChild(progressContainer);
-      
+
       // Use the shared processFiles function
       processFiles(e.dataTransfer.files, progressContainer, statusMessage);
     }
@@ -130,12 +130,12 @@
     if (e.target.files.length) {
       // Clear previous upload progress
       uploadProgress.innerHTML = "";
-      
+
       // Create progress container
       const progressContainer = document.createElement("div");
       progressContainer.className = "space-y-2";
       uploadProgress.appendChild(progressContainer);
-      
+
       // Use the shared processFiles function
       processFiles(e.target.files, progressContainer, statusMessage);
     }
@@ -168,7 +168,7 @@
 
     // Show loading state
     showUrlStatus("Downloading file from URL...", "info");
-    
+
     const submitButton = urlUploadForm.querySelector('button[type="submit"]');
     const originalButtonText = submitButton.textContent;
     submitButton.textContent = "Processing...";
@@ -198,7 +198,7 @@
         // Clear form
         urlInput.value = "";
         urlFilename.value = "";
-        
+
         // Optionally redirect to files page after short delay
         setTimeout(() => {
           window.location.href = "/files";

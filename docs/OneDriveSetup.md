@@ -138,7 +138,7 @@ If you're using a work/school account provided by your organization:
 ### 2. Configuration based on use case
 
 **Option A: Access your own OneDrive (Interactive Login)**
-   
+
 This option requires a refresh token:
 1. Use the auth wizard with your tenant ID, or
 2. Follow the same manual steps as for personal accounts, but use your work email to sign in
@@ -146,7 +146,7 @@ This option requires a refresh token:
 4. Set the refresh token you receive as `ONEDRIVE_REFRESH_TOKEN`
 
 **Option B: Access OneDrive as a system service (App-only access)**
-   
+
 This option is for service accounts or automated systems with no user interaction:
 1. In API permissions, add "Application permissions" instead of "Delegated permissions"
 2. Add `Files.ReadWrite.All` permission under "Application permissions"
@@ -158,15 +158,15 @@ This option is for service accounts or automated systems with no user interactio
 
 If you encounter errors during authentication:
 
-1. **Check account permissions**: 
+1. **Check account permissions**:
    - Ensure your Microsoft account has the necessary permissions to grant access
    - For corporate accounts, check if your admin has restricted third-party app access
 
-2. **Permission errors**: 
+2. **Permission errors**:
    - Verify the app registration has the correct API permissions
    - For corporate accounts, ensure an admin has consented to the permissions
 
-3. **Refresh token expired**: 
+3. **Refresh token expired**:
    - If uploads stop working, you can generate a new refresh token using the auth wizard
    - Click on "Refresh Token" in the OneDrive setup page
 

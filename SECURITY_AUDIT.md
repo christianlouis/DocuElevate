@@ -1,6 +1,6 @@
 # Security Audit Report
 
-**Date:** 2026-02-12  
+**Date:** 2026-02-12
 **Status:** Bandit Security Scan Completed - All Critical/High/Medium Issues Resolved
 
 ## Executive Summary
@@ -11,8 +11,8 @@ This document tracks security vulnerabilities found in DocuElevate and their rem
 
 ### CVE-2023-36464: PyPDF2/pypdf Infinite Loop Vulnerability ✅ FIXED (2026-02-12)
 
-**Severity:** Moderate (CVSS: 5.5)  
-**CVE:** [CVE-2023-36464](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2023-36464)  
+**Severity:** Moderate (CVSS: 5.5)
+**CVE:** [CVE-2023-36464](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2023-36464)
 **Advisory:** [GHSA-4vvm-4w3v-6mr8](https://github.com/advisories/GHSA-4vvm-4w3v-6mr8)
 
 **Issue:** Certain versions of PyPDF2 (>=2.2.0, <=3.0.1) and pypdf (prior to 3.9.0) contain a vulnerability where specially crafted PDF files can trigger an infinite loop in `__parse_content_stream`, causing 100% CPU usage and potential denial of service.
@@ -57,8 +57,8 @@ This document tracks security vulnerabilities found in DocuElevate and their rem
 ### Fixed Issues from Bandit Scan
 
 #### 1. B324: Weak MD5 Hash Usage (HIGH SEVERITY) ✅ FIXED
-**Occurrences:** 2  
-**Locations:** 
+**Occurrences:** 2
+**Locations:**
 - `app/api/user.py:26` - Gravatar URL generation
 - `app/auth.py:65` - Gravatar URL generation
 
@@ -72,7 +72,7 @@ This document tracks security vulnerabilities found in DocuElevate and their rem
 ```
 
 #### 2. B402/B321: Insecure FTP Protocol (HIGH SEVERITY) ✅ DOCUMENTED
-**Occurrences:** 3  
+**Occurrences:** 3
 **Location:** `app/tasks/upload_to_ftp.py`
 
 **Issue:** FTP is an insecure protocol vulnerable to eavesdropping and MITM attacks.
@@ -88,7 +88,7 @@ This document tracks security vulnerabilities found in DocuElevate and their rem
 **Security Note:** For production environments, set `ftp_allow_plaintext=False` to prevent fallback to unencrypted FTP.
 
 #### 3. B507: SSH Host Key Verification Disabled (HIGH SEVERITY) ✅ FIXED
-**Occurrences:** 1  
+**Occurrences:** 1
 **Location:** `app/tasks/upload_to_sftp.py:47`
 
 **Issue:** Using `paramiko.AutoAddPolicy()` automatically trusts unknown SSH host keys, making connections vulnerable to MITM attacks.
@@ -103,7 +103,7 @@ This document tracks security vulnerabilities found in DocuElevate and their rem
 **Security Note:** The default value is now `False` (secure). For development/testing environments where host keys cannot be pre-configured, set `SFTP_DISABLE_HOST_KEY_VERIFICATION=True` (not recommended for production).
 
 #### 4. B113: Missing Timeout on HTTP Requests (MEDIUM SEVERITY) ✅ FIXED
-**Occurrences:** 15  
+**Occurrences:** 15
 **Locations:**
 - `app/api/dropbox.py` (4 requests calls)
 - `app/api/google_drive.py` (1 request call)
@@ -142,8 +142,8 @@ This document tracks security vulnerabilities found in DocuElevate and their rem
 ## Critical Vulnerabilities (Fixed) ✅
 
 ### 1. Outdated Authlib with Known Vulnerabilities
-**Status:** ✅ FIXED  
-**Severity:** HIGH  
+**Status:** ✅ FIXED
+**Severity:** HIGH
 **Description:** Authlib version 1.3.2 had two critical vulnerabilities:
 - CVE: Denial of Service via Oversized JOSE Segments
 - CVE: JWS/JWT accepts unknown crit headers (RFC violation → possible authz bypass)
@@ -151,18 +151,18 @@ This document tracks security vulnerabilities found in DocuElevate and their rem
 **Fix:** Updated `requirements.txt` to require `authlib>=1.6.5`
 
 ### 2. Starlette DoS Vulnerability
-**Status:** ✅ FIXED  
-**Severity:** MEDIUM  
+**Status:** ✅ FIXED
+**Severity:** MEDIUM
 **Description:** Starlette 0.41.3 vulnerable to O(n^2) DoS via Range header merging in `FileResponse`
 
 **Fix:** Updated `requirements.txt` to require `starlette>=0.49.1`
 
 ### 3. Weak SESSION_SECRET Default
-**Status:** ✅ FIXED  
-**Severity:** HIGH  
+**Status:** ✅ FIXED
+**Severity:** HIGH
 **Description:** Default SESSION_SECRET value in `app/main.py` was a predictable string that could be exploited if not overridden
 
-**Fix:** 
+**Fix:**
 - Enhanced validation in `app/main.py` to raise error if auth is enabled without proper secret
 - Updated default to be clearly marked as insecure for development only
 - Added generation instructions in error message
@@ -170,8 +170,8 @@ This document tracks security vulnerabilities found in DocuElevate and their rem
 ## Medium Risk Issues (Fixed) ✅
 
 ### 4. Insufficient .gitignore Protection
-**Status:** ✅ FIXED  
-**Severity:** MEDIUM  
+**Status:** ✅ FIXED
+**Severity:** MEDIUM
 **Description:** .gitignore didn't adequately protect against accidentally committing sensitive files (credentials, private keys, secrets)
 
 **Fix:** Enhanced `.gitignore` with comprehensive patterns for:
@@ -182,8 +182,8 @@ This document tracks security vulnerabilities found in DocuElevate and their rem
 - Explicit exclusion of patterns where needed
 
 ### 5. File Upload Size Limits
-**Status:** ✅ FIXED  
-**Severity:** MEDIUM  
+**Status:** ✅ FIXED
+**Severity:** MEDIUM
 **Description:** No configurable limits on file upload sizes could lead to resource exhaustion attacks and DoS.
 
 **Fix:** Implemented configurable file upload size limits with the following features:
@@ -329,7 +329,7 @@ For security issues, please follow the guidelines in [SECURITY.md](SECURITY.md).
 
 ## Path Traversal Vulnerability Audit (2026-02-10)
 
-**Status:** ✅ ALL ISSUES FIXED  
+**Status:** ✅ ALL ISSUES FIXED
 **Scope:** Comprehensive review of all file path operations for path traversal vulnerabilities
 
 ### Executive Summary
@@ -338,11 +338,11 @@ A thorough security audit was conducted on all file path operations in DocuEleva
 
 ### Critical Vulnerability: Path Traversal via GPT Metadata Filename
 
-**Status:** ✅ FIXED  
-**Severity:** CRITICAL  
+**Status:** ✅ FIXED
+**Severity:** CRITICAL
 **Location:** `app/tasks/embed_metadata_into_pdf.py` (line 144)
 
-**Description:**  
+**Description:**
 The `metadata["filename"]` extracted by GPT was used directly in file path operations without sanitization. A malicious document could be crafted to make GPT return metadata containing path traversal sequences (e.g., `../../etc/passwd`, `..\\windows\\system32`), allowing file writes outside the intended `processed/` directory.
 
 **Attack Vector:**
@@ -376,11 +376,11 @@ suggested_filename = os.path.splitext(suggested_filename)[0]
 
 ### Medium Vulnerability: Insecure Path Validation Using String Prefix Check
 
-**Status:** ✅ FIXED  
-**Severity:** MEDIUM  
+**Status:** ✅ FIXED
+**Severity:** MEDIUM
 **Location:** `app/tasks/embed_metadata_into_pdf.py` (line 188-193)
 
-**Description:**  
+**Description:**
 The code used string-based `startswith()` check to validate if a file was within the workdir/tmp directory before deletion. This is vulnerable to:
 - Partial directory name matches (e.g., `/workdir/tmp2/` would pass if workdir is `/workdir/tmp`)
 - Symlink attacks (symlinks are not resolved before checking)
@@ -403,7 +403,7 @@ workdir_tmp_path = Path(settings.workdir) / TMP_SUBDIR
 try:
     original_file_path = Path(original_file).resolve()
     workdir_tmp_resolved = workdir_tmp_path.resolve()
-    
+
     # Check if file is within workdir/tmp and exists
     if original_file_path.is_relative_to(workdir_tmp_resolved) and original_file_path.exists():
         original_file_path.unlink()
@@ -420,11 +420,11 @@ except (ValueError, OSError) as e:
 
 ### Medium Issue: Insufficient Validation of GPT-Extracted Filenames
 
-**Status:** ✅ FIXED  
-**Severity:** MEDIUM  
+**Status:** ✅ FIXED
+**Severity:** MEDIUM
 **Location:** `app/tasks/extract_metadata_with_gpt.py` (after line 124)
 
-**Description:**  
+**Description:**
 While the GPT prompt requested filenames in a specific format (YYYY-MM-DD_DescriptiveTitle with only letters, numbers, periods, underscores), there was no validation to enforce this constraint. GPT may not always comply with the format specification, potentially returning:
 - Filenames with path separators
 - Filenames with path traversal patterns
@@ -449,7 +449,7 @@ if filename:
         metadata["filename"] = ""
 ```
 
-**Defense in Depth:**  
+**Defense in Depth:**
 This validation provides an additional layer of security before the filename reaches `embed_metadata_into_pdf.py`, where it is also sanitized.
 
 ### Security-Positive Findings
@@ -502,11 +502,11 @@ def resolve_file_path(base_dir, file_path):
     """Safely resolve file path within base directory."""
     base = Path(base_dir).resolve()
     target = (base / file_path).resolve()
-    
+
     # Ensure target is within base directory
     if not target.is_relative_to(base):
         raise ValueError("Path traversal attempt detected")
-    
+
     return target
 ```
 
@@ -610,7 +610,7 @@ All identified path traversal vulnerabilities have been remediated with defense-
 
 ## Security Headers Implementation (2026-02-10)
 
-**Status:** ✅ COMPLETED  
+**Status:** ✅ COMPLETED
 **Scope:** HTTP security headers middleware for browser-side security
 
 ### Executive Summary
@@ -654,7 +654,7 @@ SECURITY_HEADER_CSP_VALUE="default-src 'self'; script-src 'self' 'unsafe-inline'
 - Mitigates XSS attack vectors
 - Customizable per deployment needs
 
-**Trade-offs:** 
+**Trade-offs:**
 - Default policy includes `'unsafe-inline'` for compatibility with Tailwind CSS and inline JavaScript
 - Stricter policies can be configured using nonces or hashes
 

@@ -7,10 +7,7 @@ These tests validate that rate limiting is properly applied to API endpoints
 to prevent abuse and DoS attacks.
 """
 
-import time
-
 import pytest
-from fastapi import status
 
 
 @pytest.mark.unit
@@ -101,7 +98,6 @@ def test_rate_limit_exceeded_returns_429(client):
 @pytest.mark.security
 def test_rate_limiting_uses_correct_identifier():
     """Test that rate limiting uses IP or user ID as identifier."""
-    from fastapi import Request
 
     from app.middleware.rate_limit import get_identifier
 

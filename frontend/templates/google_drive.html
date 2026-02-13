@@ -8,10 +8,10 @@
     <p class="text-gray-600 mb-4">
       Configure the Google Drive integration for DocuElevate using our setup wizard.
     </p>
-    
+
     <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 my-4" role="alert">
       <p class="font-bold">Current Status:</p>
-      <p>Google Drive integration is 
+      <p>Google Drive integration is
         {% if is_configured %}
           <span class="text-green-700 font-semibold">configured</span>.
         {% else %}
@@ -27,7 +27,7 @@
       <p class="mt-2"><strong>Target folder ID:</strong> {{ folder_id }}</p>
       {% endif %}
     </div>
-    
+
     <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 my-4">
       <div class="flex">
         <div class="flex-shrink-0">
@@ -47,7 +47,7 @@
   <div class="bg-white shadow-md rounded-lg p-6 mb-8">
     <div class="flex justify-between items-start mb-4">
       <h2 class="text-2xl font-semibold">Authentication Method</h2>
-      
+
       {% if is_configured %}
       <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
         Configured
@@ -58,7 +58,7 @@
       </span>
       {% endif %}
     </div>
-    
+
     <div class="flex space-x-4 mb-6">
       <button id="oauth-tab-btn" class="px-4 py-2 rounded-md {{ 'text-white bg-blue-600' if use_oauth else 'text-gray-700 bg-gray-200' }}">
         OAuth User Account
@@ -67,7 +67,7 @@
         Service Account
       </button>
     </div>
-    
+
     <!-- OAuth Tab Content -->
     <div id="oauth-tab" class="{{ 'block' if use_oauth else 'hidden' }}">
       <div class="mb-6">
@@ -132,24 +132,24 @@
       <div class="mb-6">
         <h3 class="text-xl font-medium mb-4">Step 5: Complete OAuth Setup</h3>
         <p class="mb-4">Now enter your Client ID and Client Secret below, and we'll help you complete the OAuth flow. You can set the folder ID after authentication is complete.</p>
-        
+
         <div class="space-y-4">
           <div>
             <label for="client-id" class="block text-sm font-medium text-gray-700">Client ID</label>
             <input type="text" id="client-id" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your OAuth Client ID" value="{{ client_id_value }}">
           </div>
-          
+
           <div>
             <label for="client-secret" class="block text-sm font-medium text-gray-700">Client Secret</label>
             <input type="password" id="client-secret" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your OAuth Client Secret" value="{{ client_secret_value }}">
           </div>
-          
+
           <div>
             <label for="folder-id" class="block text-sm font-medium text-gray-700">Folder ID (Optional)</label>
             <input type="text" id="folder-id" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Google Drive folder ID" value="{{ folder_id }}">
             <p class="text-xs text-gray-500 mt-1">Optional: You can set this after authentication if you prefer</p>
           </div>
-          
+
           <div>
             <button id="select-folder-btn" class="mb-2 inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
               <svg class="h-5 w-5 mr-2 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -159,7 +159,7 @@
               Select Folder with Picker
             </button>
           </div>
-          
+
           <div>
             <button id="start-oauth-flow" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
               Start Authentication Flow
@@ -168,14 +168,14 @@
         </div>
       </div>
     </div>
-    
+
     <!-- Service Account Tab Content -->
     <div id="sa-tab" class="{{ 'block' if not use_oauth else 'hidden' }}">
       <div class="mb-6">
         <h3 class="text-xl font-medium mb-4">Service Account Configuration</h3>
-        
+
         <p class="mb-4">Service accounts allow for server-to-server authentication without user involvement. This method is useful for background tasks.</p>
-        
+
         <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
           <div class="flex">
             <div class="flex-shrink-0">
@@ -190,14 +190,14 @@
             </div>
           </div>
         </div>
-        
+
         <div class="space-y-4">
           <div>
             <label for="sa-folder-id" class="block text-sm font-medium text-gray-700">Folder ID</label>
             <input type="text" id="sa-folder-id" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Google Drive folder ID" value="{{ folder_id }}">
             <p class="text-xs text-gray-500 mt-1">This is the ID from the Google Drive folder URL where files will be saved</p>
           </div>
-          
+
           <div>
             <label for="sa-credentials" class="block text-sm font-medium text-gray-700">Service Account Credentials</label>
             <div class="mt-1">
@@ -213,7 +213,7 @@
               </a>
             </div>
           </div>
-          
+
           <div>
             <button id="save-sa-settings" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
               Save Service Account Settings
@@ -223,11 +223,11 @@
       </div>
     </div>
   </div>
-  
+
   <!-- Token validation and status -->
   <div id="token-status" class="mt-6 bg-white shadow-md rounded-lg p-6 {{ 'hidden' if not is_configured else '' }}">
     <h2 class="text-xl font-semibold mb-4">Connection Status</h2>
-    
+
     <div class="rounded-md {{ 'bg-green-50' if is_configured else 'bg-yellow-50' }} p-4">
       <div class="flex">
         <div class="flex-shrink-0">
@@ -252,7 +252,7 @@
         </div>
       </div>
     </div>
-    
+
     <div class="mt-4 flex space-x-3">
       <button id="test-connection" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
         Test Connection
@@ -261,47 +261,47 @@
         Refresh Token
       </button>
     </div>
-    
+
     <!-- Configuration for Worker Nodes section -->
     <div id="oauth-env-section" class="mt-6 p-4 bg-gray-100 rounded-md {{ 'hidden' if not use_oauth else '' }}">
       <h3 class="font-medium text-lg mb-2">OAuth Configuration for Worker Nodes</h3>
       <p class="text-sm text-gray-600 mb-3">
         Copy these environment variables to configure all worker nodes:
       </p>
-      
+
       <div class="relative">
         <pre id="oauth-env-vars" class="bg-gray-800 text-green-400 text-sm p-3 rounded overflow-x-auto"><code>GOOGLE_DRIVE_USE_OAUTH=true
 GOOGLE_DRIVE_CLIENT_ID={{ client_id_value }}
 GOOGLE_DRIVE_CLIENT_SECRET={{ client_secret_value|default('YOUR_CLIENT_SECRET', true) }}
 GOOGLE_DRIVE_REFRESH_TOKEN={{ refresh_token_value|default('YOUR_REFRESH_TOKEN', true) }}
 GOOGLE_DRIVE_FOLDER_ID={{ folder_id|default('YOUR_FOLDER_ID', true) }}</code></pre>
-        
+
         <button id="copy-oauth-env-vars" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs py-1 px-2 rounded">
           Copy
         </button>
       </div>
-      
+
       <p class="text-xs text-gray-500 mt-2">
         Add these variables to your .env file or environment configuration.
       </p>
     </div>
-    
+
     <div id="sa-env-section" class="mt-6 p-4 bg-gray-100 rounded-md {{ 'hidden' if use_oauth else '' }}">
       <h3 class="font-medium text-lg mb-2">Service Account Configuration for Worker Nodes</h3>
       <p class="text-sm text-gray-600 mb-3">
         Copy these environment variables to configure all worker nodes:
       </p>
-      
+
       <div class="relative">
         <pre id="sa-env-vars" class="bg-gray-800 text-green-400 text-sm p-3 rounded overflow-x-auto"><code>GOOGLE_DRIVE_USE_OAUTH=false
 GOOGLE_DRIVE_FOLDER_ID={{ folder_id|default('YOUR_FOLDER_ID', true) }}
 # Make sure to add your GOOGLE_DRIVE_CREDENTIALS_JSON to your .env file</code></pre>
-        
+
         <button id="copy-sa-env-vars" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs py-1 px-2 rounded">
           Copy
         </button>
       </div>
-      
+
       <p class="text-xs text-gray-500 mt-2">
         Add these variables to your .env file along with your service account credentials JSON.
       </p>
@@ -330,7 +330,7 @@ GOOGLE_DRIVE_FOLDER_ID={{ folder_id|default('YOUR_FOLDER_ID', true) }}
       Back to Status
     </a>
   </div>
-  
+
   <!-- Result Modal -->
   <div id="resultModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50" aria-modal="true" role="dialog">
     <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 lg:w-1/3 shadow-lg rounded-md bg-white">
@@ -363,7 +363,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const saTabBtn = document.getElementById('sa-tab-btn');
   const oauthTab = document.getElementById('oauth-tab');
   const saTab = document.getElementById('sa-tab');
-  
+
   // Form elements
   const clientIdInput = document.getElementById('client-id');
   const clientSecretInput = document.getElementById('client-secret');
@@ -372,27 +372,27 @@ document.addEventListener('DOMContentLoaded', function() {
   const startOauthFlowBtn = document.getElementById('start-oauth-flow');
   const saveSaSettingsBtn = document.getElementById('save-sa-settings');
   const selectFolderBtn = document.getElementById('select-folder-btn');
-  
+
   // Status and test elements
   const tokenStatus = document.getElementById('token-status');
   const testConnectionBtn = document.getElementById('test-connection');
   const refreshTokenBtn = document.getElementById('refresh-token-btn');
-  
+
   // Environment sections
   const oauthEnvSection = document.getElementById('oauth-env-section');
   const saEnvSection = document.getElementById('sa-env-section');
-  
+
   // Modal elements
   const resultModal = document.getElementById('resultModal');
   const modalTitle = document.getElementById('modalTitle');
   const modalMessage = document.getElementById('modalMessage');
   const modalIcon = document.getElementById('modalIcon');
   const modalClose = document.getElementById('modalClose');
-  
+
   // Google Picker variables
   let pickerApiLoaded = false;
   let pickerOAuthToken = null;
-  
+
   // Google Picker API functions
   function loadPickerApi() {
     gapi.load('picker', {
@@ -401,7 +401,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
-  
+
   // Load the Google API Loader script if select folder button exists
   if (selectFolderBtn) {
     const script = document.createElement('script');
@@ -410,7 +410,7 @@ document.addEventListener('DOMContentLoaded', function() {
       loadPickerApi();
     };
     document.body.appendChild(script);
-    
+
     // Load the GSI Client for OAuth
     const gsiScript = document.createElement('script');
     gsiScript.src = 'https://accounts.google.com/gsi/client';
@@ -434,14 +434,14 @@ document.addEventListener('DOMContentLoaded', function() {
           showPicker(clientId, data.access_token);
         } else {
           // If no valid token exists, inform the user they need to authenticate first
-          showModal('error', 'Authentication Required', 
+          showModal('error', 'Authentication Required',
             'You need to complete OAuth authentication before selecting a folder. ' +
             'Please click "Start Authentication Flow" first and then select a folder after authentication.');
         }
       })
       .catch(error => {
         console.error('Error checking token:', error);
-        showModal('error', 'Authentication Required', 
+        showModal('error', 'Authentication Required',
           'Unable to verify authentication status. Please complete the OAuth flow first.');
       });
   }
@@ -451,13 +451,13 @@ document.addEventListener('DOMContentLoaded', function() {
       showModal('error', 'Authentication Required', 'No access token available. Please authenticate first.');
       return;
     }
-    
+
     // Use the folders view specifically
     const folderView = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
       .setIncludeFolders(true)
       .setSelectFolderEnabled(true)
       .setMode(google.picker.DocsViewMode.LIST); // Use LIST mode which doesn't require broader permissions
-    
+
     const picker = new google.picker.PickerBuilder()
       .addView(folderView)
       .setOAuthToken(oauthToken)
@@ -468,25 +468,25 @@ document.addEventListener('DOMContentLoaded', function() {
       .setSelectableMimeTypes('application/vnd.google-apps.folder') // Allow only folder selection
       .setCallback(pickerCallback)
       .build();
-      
+
     picker.setVisible(true);
   }
-  
+
   function pickerCallback(data) {
     if (data[google.picker.Response.ACTION] == google.picker.Action.PICKED) {
       const folder = data[google.picker.Response.DOCUMENTS][0];
       const folderId = folder[google.picker.Document.ID];
       const folderName = folder[google.picker.Document.NAME];
-      
+
       // Update the folder ID input
       folderIdInput.value = folderId;
       if (saFolderIdInput) {
         saFolderIdInput.value = folderId;
       }
-      
+
       // Automatically save the folder ID to ensure it's stored
       saveFolderId(folderId);
-      
+
       // Show success message
       showModal('success', 'Folder Selected', `You selected folder: "${folderName}" (ID: ${folderId}) and saved it to your configuration.`);
     }
@@ -496,21 +496,21 @@ document.addEventListener('DOMContentLoaded', function() {
   function saveFolderId(folderId) {
     // Check which tab is active to determine if we're using OAuth or Service Account
     const isOauthActive = !oauthTab.classList.contains('hidden');
-    
+
     // Prepare form data
     const formData = new FormData();
     formData.append('folder_id', folderId);
     formData.append('use_oauth', isOauthActive ? 'true' : 'false');
-    
+
     // If using OAuth, also include client credentials if available
     if (isOauthActive) {
       const clientId = clientIdInput.value.trim();
       const clientSecret = clientSecretInput.value.trim();
-      
+
       if (clientId) formData.append('client_id', clientId);
       if (clientSecret) formData.append('client_secret', clientSecret);
     }
-    
+
     // Send the folder ID to be saved server-side
     fetch('/api/google-drive/save-settings', {
       method: 'POST',
@@ -531,7 +531,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Folder ID saved successfully');
         // Make the token status visible if it was hidden
         tokenStatus.classList.remove('hidden');
-        
+
         // Update environment variables display if they exist
         updateEnvVarsDisplay();
       }
@@ -540,24 +540,24 @@ document.addEventListener('DOMContentLoaded', function() {
       console.error('Error saving folder ID:', error);
     });
   }
-  
+
   // Function to update environment variables display
   function updateEnvVarsDisplay() {
     const folderId = folderIdInput.value || saFolderIdInput.value || 'YOUR_FOLDER_ID';
-    
+
     // Update OAuth env vars if the element exists
     const oauthEnvVarsCode = document.querySelector('#oauth-env-vars code');
     if (oauthEnvVarsCode) {
       const clientId = clientIdInput.value || 'YOUR_CLIENT_ID';
       const clientSecret = clientSecretInput.value ? 'YOUR_CLIENT_SECRET' : 'YOUR_CLIENT_SECRET';
-      
+
       oauthEnvVarsCode.textContent = `GOOGLE_DRIVE_USE_OAUTH=true
 GOOGLE_DRIVE_CLIENT_ID=${clientId}
 GOOGLE_DRIVE_CLIENT_SECRET=${clientSecret}
 GOOGLE_DRIVE_REFRESH_TOKEN=YOUR_REFRESH_TOKEN
 GOOGLE_DRIVE_FOLDER_ID=${folderId}`;
     }
-    
+
     // Update Service Account env vars if the element exists
     const saEnvVarsCode = document.querySelector('#sa-env-vars code');
     if (saEnvVarsCode) {
@@ -571,7 +571,7 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId}
   function showModal(status, title, message) {
     modalTitle.textContent = title;
     modalMessage.textContent = message;
-    
+
     // Set the appropriate icon
     if (status === 'success') {
       modalIcon.innerHTML = `
@@ -588,14 +588,14 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId}
       `;
       modalIcon.className = 'mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4';
     }
-    
+
     resultModal.classList.remove('hidden');
   }
-  
+
   function hideModal() {
     resultModal.classList.add('hidden');
   }
-  
+
   // Close modal when clicking the close button or outside
   modalClose.addEventListener('click', hideModal);
   resultModal.addEventListener('click', function(e) {
@@ -603,12 +603,12 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId}
       hideModal();
     }
   });
-  
+
   // Attach Google Picker button event listener
   if (selectFolderBtn) {
     selectFolderBtn.addEventListener('click', createPicker);
   }
-  
+
   // Tab switching
   oauthTabBtn.addEventListener('click', function() {
     oauthTabBtn.className = 'px-4 py-2 rounded-md text-white bg-blue-600';
@@ -618,7 +618,7 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId}
     oauthEnvSection.classList.remove('hidden');
     saEnvSection.classList.add('hidden');
   });
-  
+
   saTabBtn.addEventListener('click', function() {
     saTabBtn.className = 'px-4 py-2 rounded-md text-white bg-blue-600';
     oauthTabBtn.className = 'px-4 py-2 rounded-md text-gray-700 bg-gray-200';
@@ -627,39 +627,39 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId}
     saEnvSection.classList.remove('hidden');
     oauthEnvSection.classList.add('hidden');
   });
-  
+
   // Sync folder IDs between tabs
   folderIdInput.addEventListener('input', function() {
     if (saFolderIdInput) {
       saFolderIdInput.value = folderIdInput.value;
     }
   });
-  
+
   if (saFolderIdInput) {
     saFolderIdInput.addEventListener('input', function() {
       folderIdInput.value = saFolderIdInput.value;
     });
   }
-  
+
   // Start OAuth flow button
   if (startOauthFlowBtn) {
     startOauthFlowBtn.addEventListener('click', function() {
       const clientId = clientIdInput.value.trim();
       const clientSecret = clientSecretInput.value.trim();
       const folderId = folderIdInput.value.trim();
-      
+
       if (!clientId) {
         showModal('error', 'Validation Error', 'Please enter your Client ID');
         return;
       }
-      
+
       if (!clientSecret) {
         showModal('error', 'Validation Error', 'Please enter your Client Secret');
         return;
       }
-      
+
       // Don't require folder ID, make it optional
-      
+
       // Save values to session storage for use after redirect
       sessionStorage.setItem('google_drive_client_id', clientId);
       sessionStorage.setItem('google_drive_client_secret', clientSecret);
@@ -667,35 +667,35 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId}
         sessionStorage.setItem('google_drive_folder_id', folderId);
       }
       sessionStorage.setItem('google_drive_use_oauth', 'true');
-      
+
       // Create redirect URI
       const redirectUri = `${window.location.origin}/google-drive-callback`;
-      
+
       // Redirect to auth start endpoint
       window.location.href = `/google-drive-auth-start?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
     });
   }
-  
+
   // Save service account settings button
   if (saveSaSettingsBtn) {
     saveSaSettingsBtn.addEventListener('click', function() {
       const folderId = saFolderIdInput.value.trim();
-      
+
       if (!folderId) {
         showModal('error', 'Validation Error', 'Please enter your Google Drive Folder ID');
         return;
       }
-      
+
       // Prepare form data
       const formData = new FormData();
       formData.append('folder_id', folderId);
       formData.append('use_oauth', 'false');
-      
+
       // Send update request
       const originalText = saveSaSettingsBtn.textContent;
       saveSaSettingsBtn.innerHTML = '<span class="animate-spin inline-block mr-2">⟳</span> Saving...';
       saveSaSettingsBtn.disabled = true;
-      
+
       fetch('/api/google-drive/save-settings', {
         method: 'POST',
         body: formData
@@ -712,7 +712,7 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId}
         if (data.status === 'success') {
           showModal('success', 'Settings Saved', 'Google Drive service account settings have been saved');
           tokenStatus.classList.remove('hidden');
-          
+
           // Update environment variables display
           const saEnvVarsCode = document.querySelector('#sa-env-vars code');
           if (saEnvVarsCode) {
@@ -733,14 +733,14 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId}
       });
     });
   }
-  
+
   // Test connection button
   if (testConnectionBtn) {
     testConnectionBtn.addEventListener('click', function() {
       const originalText = testConnectionBtn.textContent;
       testConnectionBtn.innerHTML = '<span class="animate-spin inline-block mr-2">⟳</span> Testing...';
       testConnectionBtn.disabled = true;
-      
+
       fetch('/api/google-drive/test-token')
         .then(response => response.json())
         .then(data => {
@@ -763,32 +763,32 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId}
         });
     });
   }
-  
+
   // Refresh token button
   if (refreshTokenBtn) {
     refreshTokenBtn.addEventListener('click', function() {
       showModal('info', 'Confirm', 'This will start a new OAuth flow to obtain a fresh token. Continue?');
       modalClose.textContent = "Cancel";
-      
+
       // Add a confirm button
       const confirmBtn = document.createElement('button');
       confirmBtn.className = 'ml-2 px-4 py-2 bg-green-500 text-white text-base font-medium rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-300';
       confirmBtn.textContent = 'Continue';
       confirmBtn.addEventListener('click', function() {
         hideModal();
-        
+
         // Check if we have necessary info before starting flow
         if (!clientIdInput.value.trim() || !clientSecretInput.value.trim()) {
           showModal('error', 'Missing Information', 'Please enter your Client ID and Client Secret first');
           return;
         }
-        
+
         startOauthFlowBtn.click();
       });
-      
+
       // Add to modal
       modalClose.parentNode.appendChild(confirmBtn);
-      
+
       // Clean up modal when closed
       const onModalClose = function() {
         if (confirmBtn.parentNode) {
@@ -797,15 +797,15 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId}
         modalClose.textContent = "Close";
         resultModal.removeEventListener('hidden', onModalClose);
       };
-      
+
       resultModal.addEventListener('hidden', onModalClose);
     });
   }
-  
+
   // Copy environment variables buttons
   const copyOAuthEnvVarsBtn = document.getElementById('copy-oauth-env-vars');
   const copySAEnvVarsBtn = document.getElementById('copy-sa-env-vars');
-  
+
   if (copyOAuthEnvVarsBtn) {
     copyOAuthEnvVarsBtn.addEventListener('click', function() {
       const envVarsText = document.getElementById('oauth-env-vars').textContent;
@@ -823,7 +823,7 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId}
         });
     });
   }
-  
+
   if (copySAEnvVarsBtn) {
     copySAEnvVarsBtn.addEventListener('click', function() {
       const envVarsText = document.getElementById('sa-env-vars').textContent;

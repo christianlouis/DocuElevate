@@ -223,7 +223,7 @@ curl -X POST "http://localhost:8000/api/files/123/reprocess-with-cloud-ocr" \
 ```python
 class FileRecord(Base):
     __tablename__ = "files"
-    
+
     id = Column(Integer, primary_key=True)
     filehash = Column(String, unique=True, nullable=False)
     original_filename = Column(String)           # User's original name

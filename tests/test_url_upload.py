@@ -2,7 +2,6 @@
 Tests for URL-based file upload functionality
 """
 
-import os
 from unittest.mock import Mock, patch
 
 import pytest

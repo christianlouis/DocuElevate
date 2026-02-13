@@ -41,7 +41,7 @@ When you first install the extension, you'll see the configuration screen:
 └─────────────────────────────────────────┘
 ```
 
-**Dimensions**: 400px wide, ~300px height  
+**Dimensions**: 400px wide, ~300px height
 **Colors**: Green buttons (#4CAF50), clean white background
 
 ### Send File View (Main Interface)
@@ -180,7 +180,7 @@ After sending a file via context menu, a system notification appears:
 └─────────────────────────────────────────┘
 ```
 
-**Notification Type**: Browser native notification  
+**Notification Type**: Browser native notification
 **Duration**: Auto-dismiss after 5-10 seconds
 
 ## Chrome Extensions Page

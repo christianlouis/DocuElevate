@@ -4,8 +4,7 @@ Tests for app/api/dropbox.py module.
 Covers Dropbox OAuth endpoints, settings management, and token testing.
 """
 
-import os
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 import requests

@@ -106,17 +106,17 @@ Add security headers to your Nginx configuration:
 server {
     listen 443 ssl http2;
     server_name docuelevate.example.com;
-    
+
     # SSL configuration
     ssl_certificate /etc/nginx/ssl/cert.pem;
     ssl_certificate_key /etc/nginx/ssl/key.pem;
-    
+
     # Security headers
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;" always;
     add_header X-Frame-Options "DENY" always;
     add_header X-Content-Type-Options "nosniff" always;
-    
+
     location / {
         proxy_pass http://localhost:8000;
         proxy_set_header Host $host;
@@ -185,7 +185,7 @@ For production use, we recommend setting up a reverse proxy (like Nginx or Traef
 server {
     listen 80;
     server_name docuelevate.example.com;
-    
+
     location / {
         proxy_pass http://localhost:8000;
         proxy_set_header Host $host;

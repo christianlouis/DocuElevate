@@ -5,9 +5,8 @@ Tests all API endpoints with success and error cases, proper mocking, and edge c
 Target: Bring coverage from 11.75% to 70%+
 """
 
-import os
 from io import BytesIO
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -38,14 +37,14 @@ class TestListFilesAPI:
             original_filename="test1.pdf",
             local_filename="/tmp/test1.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         file2 = FileRecord(
             filehash="hash2",
             original_filename="test2.pdf",
             local_filename="/tmp/test2.pdf",
             file_size=2048,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file1)
         db_session.add(file2)
@@ -66,7 +65,7 @@ class TestListFilesAPI:
                 original_filename=f"test{i}.pdf",
                 local_filename=f"/tmp/test{i}.pdf",
                 file_size=1024,
-                mime_type="application/pdf"
+                mime_type="application/pdf",
             )
             db_session.add(file)
         db_session.commit()
@@ -93,14 +92,14 @@ class TestListFilesAPI:
             original_filename="invoice.pdf",
             local_filename="/tmp/invoice.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         file2 = FileRecord(
             filehash="hash2",
             original_filename="receipt.pdf",
             local_filename="/tmp/receipt.pdf",
             file_size=2048,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file1)
         db_session.add(file2)
@@ -119,14 +118,14 @@ class TestListFilesAPI:
             original_filename="doc.pdf",
             local_filename="/tmp/doc.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         file2 = FileRecord(
             filehash="hash2",
             original_filename="image.jpg",
             local_filename="/tmp/image.jpg",
             file_size=2048,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
         db_session.add(file1)
         db_session.add(file2)
@@ -140,8 +139,20 @@ class TestListFilesAPI:
 
     def test_list_files_sorting_asc(self, client: TestClient, db_session):
         """Test ascending sort order."""
-        file1 = FileRecord(filehash="hash1", original_filename="aaa.pdf", local_filename="/tmp/aaa.pdf", file_size=1024, mime_type="application/pdf")
-        file2 = FileRecord(filehash="hash2", original_filename="zzz.pdf", local_filename="/tmp/zzz.pdf", file_size=2048, mime_type="application/pdf")
+        file1 = FileRecord(
+            filehash="hash1",
+            original_filename="aaa.pdf",
+            local_filename="/tmp/aaa.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        file2 = FileRecord(
+            filehash="hash2",
+            original_filename="zzz.pdf",
+            local_filename="/tmp/zzz.pdf",
+            file_size=2048,
+            mime_type="application/pdf",
+        )
         db_session.add(file1)
         db_session.add(file2)
         db_session.commit()
@@ -154,8 +165,20 @@ class TestListFilesAPI:
 
     def test_list_files_sorting_desc(self, client: TestClient, db_session):
         """Test descending sort order."""
-        file1 = FileRecord(filehash="hash1", original_filename="aaa.pdf", local_filename="/tmp/aaa.pdf", file_size=1024, mime_type="application/pdf")
-        file2 = FileRecord(filehash="hash2", original_filename="zzz.pdf", local_filename="/tmp/zzz.pdf", file_size=2048, mime_type="application/pdf")
+        file1 = FileRecord(
+            filehash="hash1",
+            original_filename="aaa.pdf",
+            local_filename="/tmp/aaa.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        file2 = FileRecord(
+            filehash="hash2",
+            original_filename="zzz.pdf",
+            local_filename="/tmp/zzz.pdf",
+            file_size=2048,
+            mime_type="application/pdf",
+        )
         db_session.add(file1)
         db_session.add(file2)
         db_session.commit()
@@ -178,7 +201,7 @@ class TestGetFileDetails:
             original_filename="test.pdf",
             local_filename="/tmp/test.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -205,7 +228,7 @@ class TestGetFileDetails:
             original_filename="test.pdf",
             local_filename="/tmp/test.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -216,7 +239,7 @@ class TestGetFileDetails:
             task_id="task123",
             step_name="process_document",
             status="success",
-            message="Processing completed"
+            message="Processing completed",
         )
         db_session.add(log)
         db_session.commit()
@@ -241,7 +264,7 @@ class TestDeleteFileRecord:
             original_filename="test.pdf",
             local_filename="/tmp/test.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -263,7 +286,7 @@ class TestDeleteFileRecord:
             original_filename="test.pdf",
             local_filename="/tmp/test.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -286,8 +309,20 @@ class TestBulkDeleteFiles:
     @patch("app.config.settings.allow_file_delete", True)
     def test_bulk_delete_success(self, client: TestClient, db_session):
         """Test bulk deletion of multiple files."""
-        file1 = FileRecord(filehash="hash1", original_filename="test1.pdf", local_filename="/tmp/test1.pdf", file_size=1024, mime_type="application/pdf")
-        file2 = FileRecord(filehash="hash2", original_filename="test2.pdf", local_filename="/tmp/test2.pdf", file_size=2048, mime_type="application/pdf")
+        file1 = FileRecord(
+            filehash="hash1",
+            original_filename="test1.pdf",
+            local_filename="/tmp/test1.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        file2 = FileRecord(
+            filehash="hash2",
+            original_filename="test2.pdf",
+            local_filename="/tmp/test2.pdf",
+            file_size=2048,
+            mime_type="application/pdf",
+        )
         db_session.add(file1)
         db_session.add(file2)
         db_session.commit()
@@ -326,13 +361,13 @@ class TestBulkReprocessFiles:
         # Create files with existing local files
         file1_path = tmp_path / "test1.pdf"
         file1_path.write_bytes(b"%PDF-1.4")
-        
+
         file1 = FileRecord(
             filehash="hash1",
             original_filename="test1.pdf",
             local_filename=str(file1_path),
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file1)
         db_session.commit()
@@ -357,7 +392,7 @@ class TestBulkReprocessFiles:
             original_filename="test.pdf",
             local_filename="/nonexistent/test.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -385,13 +420,13 @@ class TestReprocessSingleFile:
         # Create file with existing local file
         file_path = tmp_path / "test.pdf"
         file_path.write_bytes(b"%PDF-1.4")
-        
+
         file = FileRecord(
             filehash="hash1",
             original_filename="test.pdf",
             local_filename=str(file_path),
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -420,7 +455,7 @@ class TestReprocessSingleFile:
             original_filename="test.pdf",
             local_filename="/nonexistent/test.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -439,14 +474,14 @@ class TestReprocessWithCloudOCR:
         """Test reprocessing with forced cloud OCR."""
         file_path = tmp_path / "test.pdf"
         file_path.write_bytes(b"%PDF-1.4")
-        
+
         file = FileRecord(
             filehash="hash1",
             original_filename="test.pdf",
             local_filename=str(file_path),
             original_file_path=str(file_path),
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -474,7 +509,7 @@ class TestReprocessWithCloudOCR:
             original_filename="test.pdf",
             local_filename="/nonexistent/test.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -502,7 +537,7 @@ class TestRetrySubtask:
             original_filename="test.pdf",
             local_filename="/tmp/test.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -525,7 +560,7 @@ class TestRetrySubtask:
             original_filename="test.pdf",
             local_filename="/tmp/test.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -548,13 +583,13 @@ class TestFilePreview:
         """Test previewing original file."""
         file_path = tmp_path / "test.pdf"
         file_path.write_bytes(b"%PDF-1.4")
-        
+
         file = FileRecord(
             filehash="hash1",
             original_filename="test.pdf",
             local_filename=str(file_path),
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -575,7 +610,7 @@ class TestFilePreview:
             original_filename="test.pdf",
             local_filename="/nonexistent/test.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -591,7 +626,7 @@ class TestFilePreview:
             original_filename="test.pdf",
             local_filename="/tmp/test.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -608,13 +643,13 @@ class TestFileDownload:
         """Test downloading original file."""
         file_path = tmp_path / "test.pdf"
         file_path.write_bytes(b"%PDF-1.4")
-        
+
         file = FileRecord(
             filehash="hash1",
             original_filename="test.pdf",
             local_filename=str(file_path),
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -643,14 +678,13 @@ class TestUIUpload:
         mock_delay.return_value = mock_task
 
         # Create PDF content
-        pdf_content = b"%PDF-1.4\n%\xE2\xE3\xCF\xD3\n"
+        pdf_content = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n"
 
         with patch("app.config.settings.workdir", str(tmp_path)):
             response = client.post(
-                "/api/ui-upload",
-                files={"file": ("test.pdf", BytesIO(pdf_content), "application/pdf")}
+                "/api/ui-upload", files={"file": ("test.pdf", BytesIO(pdf_content), "application/pdf")}
             )
-            
+
             assert response.status_code == 200
             data = response.json()
             assert "task_id" in data
@@ -671,11 +705,8 @@ class TestUIUpload:
         image_content = b"\x89PNG\r\n\x1a\n"
 
         with patch("app.config.settings.workdir", str(tmp_path)):
-            response = client.post(
-                "/api/ui-upload",
-                files={"file": ("image.png", BytesIO(image_content), "image/png")}
-            )
-            
+            response = client.post("/api/ui-upload", files={"file": ("image.png", BytesIO(image_content), "image/png")})
+
             assert response.status_code == 200
             data = response.json()
             assert "task_id" in data
@@ -690,10 +721,9 @@ class TestUIUpload:
 
         with patch("app.config.settings.workdir", str(tmp_path)):
             response = client.post(
-                "/api/ui-upload",
-                files={"file": ("large.pdf", BytesIO(large_content), "application/pdf")}
+                "/api/ui-upload", files={"file": ("large.pdf", BytesIO(large_content), "application/pdf")}
             )
-            
+
             assert response.status_code == 413
             assert "too large" in response.json()["detail"].lower()
 
@@ -712,9 +742,9 @@ class TestUIUpload:
                 # Upload with unsafe filename
                 response = client.post(
                     "/api/ui-upload",
-                    files={"file": ("../../../etc/passwd.pdf", BytesIO(pdf_content), "application/pdf")}
+                    files={"file": ("../../../etc/passwd.pdf", BytesIO(pdf_content), "application/pdf")},
                 )
-                
+
                 assert response.status_code == 200
                 data = response.json()
                 # Filename should be sanitized (no path traversal)
@@ -729,12 +759,12 @@ class TestExtractTextFromPDF:
     def test_extract_text_from_pdf(self, tmp_path):
         """Test text extraction from PDF."""
         from app.api.files import _extract_text_from_pdf
-        
+
         # Create a simple PDF with text
         pdf_path = tmp_path / "test.pdf"
         # This is a minimal PDF - in reality would have text
         pdf_path.write_bytes(b"%PDF-1.4\n%%EOF")
-        
+
         # Should not raise exception
         try:
             text = _extract_text_from_pdf(str(pdf_path))
@@ -752,16 +782,16 @@ class TestRetryPipelineStep:
     def test_retry_process_document_step(self, mock_delay, db_session, tmp_path):
         """Test retrying process_document step."""
         from app.api.files import _retry_pipeline_step
-        
+
         file_path = tmp_path / "test.pdf"
         file_path.write_bytes(b"%PDF-1.4")
-        
+
         file = FileRecord(
             filehash="hash1",
             original_filename="test.pdf",
             local_filename=str(file_path),
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()
@@ -778,13 +808,13 @@ class TestRetryPipelineStep:
     def test_retry_unsupported_step_raises_error(self, db_session):
         """Test that unsupported step name raises error."""
         from app.api.files import _retry_pipeline_step
-        
+
         file = FileRecord(
             filehash="hash1",
             original_filename="test.pdf",
             local_filename="/tmp/test.pdf",
             file_size=1024,
-            mime_type="application/pdf"
+            mime_type="application/pdf",
         )
         db_session.add(file)
         db_session.commit()

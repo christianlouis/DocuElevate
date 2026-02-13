@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.models import FileProcessingStep, FileRecord, ProcessingLog
+from app.models import FileProcessingStep, FileRecord
 
 
 @pytest.mark.integration

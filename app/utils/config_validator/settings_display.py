@@ -192,9 +192,7 @@ def get_settings_for_display(show_values=False):
         [
             key
             for key in dir(settings)
-            if not key.startswith("_")
-            and key not in _PYDANTIC_INTERNALS
-            and not callable(getattr(settings, key))
+            if not key.startswith("_") and key not in _PYDANTIC_INTERNALS and not callable(getattr(settings, key))
         ]
     )
 

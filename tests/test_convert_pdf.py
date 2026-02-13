@@ -1,6 +1,6 @@
 """Comprehensive unit tests for app/tasks/convert_to_pdf.py module."""
 
-from unittest.mock import MagicMock, Mock, mock_open, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
