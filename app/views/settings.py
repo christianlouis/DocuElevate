@@ -12,7 +12,11 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.utils.config_validator.masking import mask_sensitive_value
-from app.utils.settings_service import get_setting_metadata, get_settings_by_category
+from app.utils.settings_service import (
+    get_all_settings_from_db,
+    get_setting_metadata,
+    get_settings_by_category,
+)
 from app.views.base import APIRouter, get_db, require_login, settings, templates
 
 logger = logging.getLogger(__name__)
@@ -57,8 +61,6 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
 
     try:
         # Get settings from database
-        from app.utils.settings_service import get_all_settings_from_db
-
         db_settings = get_all_settings_from_db(db)
 
         # Get settings organized by category
