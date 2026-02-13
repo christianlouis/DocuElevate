@@ -22,7 +22,7 @@ As of this update, DocuElevate uses **automated semantic versioning** via `pytho
 - [x] Fix authlib vulnerability (upgrade to 1.6.5+)
 - [x] Fix starlette DoS vulnerability (upgrade to 0.49.1+)
 - [x] Improve SESSION_SECRET validation
-- [ ] Run security audit with Bandit
+- [x] Run security audit with Ruff (replaces Bandit)
 - [ ] Review all direct file path operations for path traversal vulnerabilities
 - [ ] Add rate limiting middleware to API endpoints
 - [ ] Implement CSRF token for state-changing operations
@@ -44,8 +44,8 @@ As of this update, DocuElevate uses **automated semantic versioning** via `pytho
 ## 🟠 High Priority (This Sprint - 2 Weeks)
 
 ### Code Quality
-- [ ] Fix all critical Flake8 violations
-- [ ] Run Black formatter on entire codebase
+- [ ] Fix all critical Ruff violations
+- [ ] Run Ruff formatter on entire codebase
 - [ ] Add type hints to core modules (config.py, database.py, models.py)
 - [ ] Refactor large functions in tasks/ directory
 - [ ] Add docstrings to all public functions and classes
