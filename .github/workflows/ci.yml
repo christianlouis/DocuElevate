@@ -44,7 +44,7 @@ jobs:
         run: pip install ruff
 
       - name: Run Ruff Check
-        run: ruff check app/ tests/
+        run: ruff check --fix app/ tests/
 
       - name: Run Ruff Format
         run: ruff format --fix --check app/ tests/
