@@ -12,7 +12,6 @@ class TestRequireAdminAccess:
     """Tests for require_admin_access decorator."""
 
     @pytest.mark.asyncio
-
     async def test_redirects_non_admin_user(self):
         """Test that non-admin users are redirected."""
 
@@ -27,7 +26,6 @@ class TestRequireAdminAccess:
         assert result.status_code == 302
 
     @pytest.mark.asyncio
-
     async def test_redirects_when_no_user(self):
         """Test that unauthenticated users are redirected."""
 
@@ -42,7 +40,6 @@ class TestRequireAdminAccess:
         assert result.status_code == 302
 
     @pytest.mark.asyncio
-
     async def test_allows_admin_user(self):
         """Test that admin users can access the route."""
 
@@ -57,7 +54,6 @@ class TestRequireAdminAccess:
         assert result == {"success": True}
 
     @pytest.mark.asyncio
-
     async def test_redirects_to_home_page(self):
         """Test that non-admin users are redirected to home page."""
 
@@ -73,7 +69,6 @@ class TestRequireAdminAccess:
         assert result.headers["location"] == "/"
 
     @pytest.mark.asyncio
-
     async def test_works_with_sync_functions(self):
         """Test decorator works with synchronous functions."""
 
@@ -151,9 +146,7 @@ class TestSettingsPageLogic:
     @patch("app.views.settings.get_setting_metadata")
     @patch("app.views.settings.mask_sensitive_value")
     @patch("app.views.settings.os.environ", {"WORKDIR": "/tmp"})
-    def test_determines_setting_source_environment(
-        self, mock_mask, mock_metadata, mock_categories, mock_db_settings
-    ):
+    def test_determines_setting_source_environment(self, mock_mask, mock_metadata, mock_categories, mock_db_settings):
         """Test determines setting source as environment variable."""
         mock_db_settings.return_value = {}
         mock_categories.return_value = {"General": ["workdir"]}

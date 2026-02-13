@@ -59,7 +59,9 @@ class TestStatusDashboard:
     @patch("app.views.status.os.path.exists")
     @patch("builtins.open", new_callable=mock_open, read_data="12:docker:/container_id")
     @pytest.mark.asyncio
-    async def test_detects_docker_environment(self, mock_file, mock_exists, mock_settings, mock_templates, mock_providers):
+    async def test_detects_docker_environment(
+        self, mock_file, mock_exists, mock_settings, mock_templates, mock_providers
+    ):
         """Test detects Docker environment."""
         from app.views.status import status_dashboard
 

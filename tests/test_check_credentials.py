@@ -38,7 +38,6 @@ class TestMockRequest:
         assert isinstance(req.query_params, dict)
 
     @pytest.mark.asyncio
-
     async def test_mock_request_json(self):
         """Test MockRequest.json() returns empty dict."""
         req = MockRequest()
@@ -46,7 +45,6 @@ class TestMockRequest:
         assert result == {}
 
     @pytest.mark.asyncio
-
     async def test_mock_request_form(self):
         """Test MockRequest.form() returns empty dict."""
         req = MockRequest()
@@ -255,7 +253,9 @@ class TestCheckCredentialsTask:
     @patch("app.tasks.check_credentials.get_provider_status")
     @patch("app.tasks.check_credentials.validate_storage_configs")
     @patch("app.tasks.check_credentials.sync_test_openai_connection")
-    def test_tracks_failures(self, mock_openai, mock_storage_configs, mock_provider_status, mock_get_state, mock_save_state):
+    def test_tracks_failures(
+        self, mock_openai, mock_storage_configs, mock_provider_status, mock_get_state, mock_save_state
+    ):
         """Test tracks credential failures."""
         mock_get_state.return_value = {}
         mock_provider_status.return_value = {
@@ -278,7 +278,9 @@ class TestCheckCredentialsTask:
     @patch("app.tasks.check_credentials.get_failure_state")
     @patch("app.tasks.check_credentials.get_provider_status")
     @patch("app.tasks.check_credentials.validate_storage_configs")
-    def test_skips_unconfigured_services(self, mock_storage_configs, mock_provider_status, mock_get_state, mock_save_state):
+    def test_skips_unconfigured_services(
+        self, mock_storage_configs, mock_provider_status, mock_get_state, mock_save_state
+    ):
         """Test skips unconfigured services."""
         mock_get_state.return_value = {}
         mock_provider_status.return_value = {
@@ -354,7 +356,9 @@ class TestCheckCredentialsTask:
     @patch("app.tasks.check_credentials.get_provider_status")
     @patch("app.tasks.check_credentials.validate_storage_configs")
     @patch("app.tasks.check_credentials.sync_test_openai_connection")
-    def test_tracks_recovery(self, mock_openai, mock_storage_configs, mock_provider_status, mock_get_state, mock_save_state):
+    def test_tracks_recovery(
+        self, mock_openai, mock_storage_configs, mock_provider_status, mock_get_state, mock_save_state
+    ):
         """Test tracks service recovery."""
         # Existing state with failures
         mock_get_state.return_value = {"OpenAI": {"count": 2, "last_notified": 12345}}
