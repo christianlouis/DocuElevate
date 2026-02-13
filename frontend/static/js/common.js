@@ -16,56 +16,106 @@
       // Get the display name (prefer name, fall back to preferred_username, then email)
       const displayName = data.name || data.preferred_username || data.email;
 
-      // User is logged in
-      let authHTML = `
-        <div class="flex items-center">
-          <img src="${data.picture}" alt="Avatar" class="w-8 h-8 rounded-full mr-2" />
-          <span>${displayName}</span>
-          <a href="/logout" class="ml-3 text-red-600 hover:text-red-800">
-            <i class="fas fa-sign-out-alt"></i>
-          </a>
-        </div>
-      `;
-
+      // User is logged in - use DOM API to prevent XSS
       if (authSection) {
-        authSection.innerHTML = authHTML;
+        authSection.textContent = ''; // Clear existing content
+        const container = document.createElement('div');
+        container.className = 'flex items-center';
+        
+        const img = document.createElement('img');
+        img.src = data.picture;
+        img.alt = 'Avatar';
+        img.className = 'w-8 h-8 rounded-full mr-2';
+        
+        const span = document.createElement('span');
+        span.textContent = displayName;
+        
+        const logoutLink = document.createElement('a');
+        logoutLink.href = '/logout';
+        logoutLink.className = 'ml-3 text-red-600 hover:text-red-800';
+        const icon = document.createElement('i');
+        icon.className = 'fas fa-sign-out-alt';
+        logoutLink.appendChild(icon);
+        
+        container.appendChild(img);
+        container.appendChild(span);
+        container.appendChild(logoutLink);
+        authSection.appendChild(container);
       }
 
       if (mobileAuthSection) {
-        mobileAuthSection.innerHTML = `
-          <div class="flex items-center justify-between">
-            <div class="flex items-center">
-              <img src="${data.picture}" alt="Avatar" class="w-6 h-6 rounded-full mr-2" />
-              <span>${displayName}</span>
-            </div>
-            <a href="/logout" class="text-red-600 hover:text-red-800">
-              <i class="fas fa-sign-out-alt"></i> Logout
-            </a>
-          </div>
-        `;
+        mobileAuthSection.textContent = ''; // Clear existing content
+        const outerContainer = document.createElement('div');
+        outerContainer.className = 'flex items-center justify-between';
+        
+        const innerContainer = document.createElement('div');
+        innerContainer.className = 'flex items-center';
+        
+        const img = document.createElement('img');
+        img.src = data.picture;
+        img.alt = 'Avatar';
+        img.className = 'w-6 h-6 rounded-full mr-2';
+        
+        const span = document.createElement('span');
+        span.textContent = displayName;
+        
+        innerContainer.appendChild(img);
+        innerContainer.appendChild(span);
+        
+        const logoutLink = document.createElement('a');
+        logoutLink.href = '/logout';
+        logoutLink.className = 'text-red-600 hover:text-red-800';
+        const icon = document.createElement('i');
+        icon.className = 'fas fa-sign-out-alt';
+        logoutLink.appendChild(icon);
+        logoutLink.appendChild(document.createTextNode(' Logout'));
+        
+        outerContainer.appendChild(innerContainer);
+        outerContainer.appendChild(logoutLink);
+        mobileAuthSection.appendChild(outerContainer);
       }
     } else {
-      // User is not logged in (this shouldn't happen with current setup, but keeping as fallback)
+      // User is not logged in - use DOM API
       if (authSection) {
-        authSection.innerHTML = `<a href="/login" class="text-blue-600">Login</a>`;
+        authSection.textContent = '';
+        const loginLink = document.createElement('a');
+        loginLink.href = '/login';
+        loginLink.className = 'text-blue-600';
+        loginLink.textContent = 'Login';
+        authSection.appendChild(loginLink);
       }
 
       if (mobileAuthSection) {
-        mobileAuthSection.innerHTML = `<a href="/login" class="text-blue-600">Login</a>`;
+        mobileAuthSection.textContent = '';
+        const loginLink = document.createElement('a');
+        loginLink.href = '/login';
+        loginLink.className = 'text-blue-600';
+        loginLink.textContent = 'Login';
+        mobileAuthSection.appendChild(loginLink);
       }
     }
   } catch (error) {
     console.error('Authentication check failed:', error);
-    // Fallback if whoami endpoint fails
+    // Fallback if whoami endpoint fails - use DOM API
     const authSection = document.getElementById("authSection");
     const mobileAuthSection = document.getElementById("mobileAuthSection");
 
     if (authSection) {
-      authSection.innerHTML = `<a href="/login" class="text-blue-600">Login</a>`;
+      authSection.textContent = '';
+      const loginLink = document.createElement('a');
+      loginLink.href = '/login';
+      loginLink.className = 'text-blue-600';
+      loginLink.textContent = 'Login';
+      authSection.appendChild(loginLink);
     }
 
     if (mobileAuthSection) {
-      mobileAuthSection.innerHTML = `<a href="/login" class="text-blue-600">Login</a>`;
+      mobileAuthSection.textContent = '';
+      const loginLink = document.createElement('a');
+      loginLink.href = '/login';
+      loginLink.className = 'text-blue-600';
+      loginLink.textContent = 'Login';
+      mobileAuthSection.appendChild(loginLink);
     }
   }
 })();
