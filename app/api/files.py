@@ -496,8 +496,21 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
 
     if step_name == "process_document":
         # Full reprocessing with duplicate check bypass
-        if not file_record.local_filename or not os.path.exists(file_record.local_filename):
-            raise HTTPException(status_code=400, detail="Local file not found on disk. Cannot retry.")
+        logger.info(
+            f"Retrying process_document for file {file_id}: local_filename={file_record.local_filename!r}"
+        )
+        if not file_record.local_filename:
+            logger.error(f"process_document retry failed for file {file_id}: local_filename is None")
+            raise HTTPException(status_code=400, detail="Local file path is None. Cannot retry.")
+
+        exists = os.path.exists(file_record.local_filename)
+        logger.info(f"Checking local_filename: {file_record.local_filename!r}, exists={exists}")
+        if not exists:
+            error_message = f"Local file not found on disk. Cannot retry. Path checked: local_filename={file_record.local_filename!r} (exists=False)"
+            logger.error(f"process_document retry failed for file {file_id}: {error_message}")
+            raise HTTPException(status_code=400, detail=error_message)
+
+        logger.info(f"Found file for process_document retry at: {file_record.local_filename!r}")
         task = process_document.delay(
             file_record.local_filename, original_filename=file_record.original_filename, file_id=file_id
         )
@@ -505,17 +518,42 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
         from app.tasks.process_with_azure_document_intelligence import process_with_azure_document_intelligence
 
         # OCR needs the file in workdir/tmp
-        if not file_record.local_filename or not os.path.exists(file_record.local_filename):
-            raise HTTPException(status_code=400, detail="Local file not found on disk. Cannot retry OCR.")
+        logger.info(
+            f"Retrying process_with_azure_document_intelligence for file {file_id}: "
+            f"local_filename={file_record.local_filename!r}"
+        )
+        if not file_record.local_filename:
+            logger.error(f"OCR retry failed for file {file_id}: local_filename is None")
+            raise HTTPException(status_code=400, detail="Local file path is None. Cannot retry OCR.")
+
+        exists = os.path.exists(file_record.local_filename)
+        logger.info(f"Checking local_filename: {file_record.local_filename!r}, exists={exists}")
+        if not exists:
+            error_message = f"Local file not found on disk. Cannot retry OCR. Path checked: local_filename={file_record.local_filename!r} (exists=False)"
+            logger.error(f"OCR retry failed for file {file_id}: {error_message}")
+            raise HTTPException(status_code=400, detail=error_message)
+
+        logger.info(f"Found file for OCR retry at: {file_record.local_filename!r}")
         filename = os.path.basename(file_record.local_filename)
         task = process_with_azure_document_intelligence.delay(filename, file_id)
     elif step_name == "extract_metadata_with_gpt":
         from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 
-        if not file_record.local_filename or not os.path.exists(file_record.local_filename):
-            raise HTTPException(
-                status_code=400, detail="Local file not found on disk. Cannot retry metadata extraction."
-            )
+        logger.info(
+            f"Retrying extract_metadata_with_gpt for file {file_id}: local_filename={file_record.local_filename!r}"
+        )
+        if not file_record.local_filename:
+            logger.error(f"Metadata extraction retry failed for file {file_id}: local_filename is None")
+            raise HTTPException(status_code=400, detail="Local file path is None. Cannot retry metadata extraction.")
+
+        exists = os.path.exists(file_record.local_filename)
+        logger.info(f"Checking local_filename: {file_record.local_filename!r}, exists={exists}")
+        if not exists:
+            error_message = f"Local file not found on disk. Cannot retry metadata extraction. Path checked: local_filename={file_record.local_filename!r} (exists=False)"
+            logger.error(f"Metadata extraction retry failed for file {file_id}: {error_message}")
+            raise HTTPException(status_code=400, detail=error_message)
+
+        logger.info(f"Found file for metadata extraction retry at: {file_record.local_filename!r}")
         extracted_text = _extract_text_from_pdf(file_record.local_filename)
         filename = os.path.basename(file_record.local_filename)
         task = extract_metadata_with_gpt.delay(filename, extracted_text, file_id)
@@ -526,30 +564,64 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
         # embed_metadata_into_pdf needs the actual metadata dict (not empty).
         # Re-trigger extract_metadata_with_gpt which will chain into embed_metadata_into_pdf.
 
+        # Log all database path values at the start
+        logger.info(
+            f"Retrying embed_metadata_into_pdf for file {file_id}: "
+            f"local_filename={file_record.local_filename!r}, "
+            f"processed_file_path={file_record.processed_file_path!r}, "
+            f"original_file_path={file_record.original_file_path!r}"
+        )
+
         # Check for file in multiple locations:
         # 1. Original location in tmp (file_record.local_filename)
         # 2. Processed location (file_record.processed_file_path)
-        # 3. Fallback to workdir/tmp/<basename>
+        # 3. Original immutable copy (file_record.original_file_path)
+        # 4. Fallback to workdir/tmp/<basename>
         file_path = None
-        if file_record.local_filename and os.path.exists(file_record.local_filename):
-            file_path = file_record.local_filename
-        elif file_record.processed_file_path and os.path.exists(file_record.processed_file_path):
-            # File has been processed and moved to processed directory
-            file_path = file_record.processed_file_path
-        # Try fallback path in workdir/tmp
-        elif file_record.local_filename:
+        checked_paths = []
+
+        # Check 1: local_filename (original tmp location)
+        if file_record.local_filename:
+            exists = os.path.exists(file_record.local_filename)
+            checked_paths.append(f"local_filename={file_record.local_filename!r} (exists={exists})")
+            logger.info(f"Checking local_filename: {file_record.local_filename!r}, exists={exists}")
+            if exists:
+                file_path = file_record.local_filename
+
+        # Check 2: processed_file_path
+        if not file_path and file_record.processed_file_path:
+            exists = os.path.exists(file_record.processed_file_path)
+            checked_paths.append(f"processed_file_path={file_record.processed_file_path!r} (exists={exists})")
+            logger.info(f"Checking processed_file_path: {file_record.processed_file_path!r}, exists={exists}")
+            if exists:
+                file_path = file_record.processed_file_path
+
+        # Check 3: original_file_path (immutable copy in workdir/original/)
+        if not file_path and file_record.original_file_path:
+            exists = os.path.exists(file_record.original_file_path)
+            checked_paths.append(f"original_file_path={file_record.original_file_path!r} (exists={exists})")
+            logger.info(f"Checking original_file_path: {file_record.original_file_path!r}, exists={exists}")
+            if exists:
+                file_path = file_record.original_file_path
+
+        # Check 4: Fallback to workdir/tmp/<basename>
+        if not file_path and file_record.local_filename:
             workdir = settings.workdir
             tmp_dir = os.path.join(workdir, "tmp")
             fallback_path = os.path.join(tmp_dir, os.path.basename(file_record.local_filename))
-            if os.path.exists(fallback_path):
+            exists = os.path.exists(fallback_path)
+            checked_paths.append(f"workdir_tmp_fallback={fallback_path!r} (exists={exists})")
+            logger.info(f"Checking workdir/tmp fallback: {fallback_path!r}, exists={exists}")
+            if exists:
                 file_path = fallback_path
 
         if not file_path:
-            raise HTTPException(
-                status_code=400,
-                detail="File not found in tmp or processed directory. Cannot retry metadata embedding."
-            )
+            paths_detail = "; ".join(checked_paths)
+            error_message = f"File not found on disk. Cannot retry metadata embedding. Paths checked: {paths_detail}"
+            logger.error(f"embed_metadata_into_pdf retry failed for file {file_id}: {error_message}")
+            raise HTTPException(status_code=400, detail=error_message)
 
+        logger.info(f"Found file for embed_metadata_into_pdf retry at: {file_path!r}")
         extracted_text = _extract_text_from_pdf(file_path)
         # Pass the full path to the task so it can locate the file
         task = extract_metadata_task.delay(file_path, extracted_text, file_id)
@@ -642,6 +714,11 @@ def retry_subtask(
             )
 
         # Check for processed file (upload tasks work with processed files)
+        logger.info(
+            f"Retrying upload task {subtask_name} for file {file_id}: "
+            f"original_filename={file_record.original_filename!r}, "
+            f"filehash={file_record.filehash!r}"
+        )
         workdir = settings.workdir
         processed_dir = os.path.join(workdir, "processed")
 
@@ -654,14 +731,22 @@ def retry_subtask(
         ]
 
         file_path = None
+        checked_paths = []
         for path in potential_paths:
-            if os.path.exists(path):
+            exists = os.path.exists(path)
+            checked_paths.append(f"{path!r} (exists={exists})")
+            logger.info(f"Checking processed file path: {path!r}, exists={exists}")
+            if exists:
                 file_path = path
                 break
 
         if not file_path:
-            raise HTTPException(status_code=400, detail="Processed file not found. Cannot retry upload.")
+            paths_detail = "; ".join(checked_paths)
+            error_message = f"Processed file not found. Cannot retry upload. Paths checked: {paths_detail}"
+            logger.error(f"Upload retry failed for file {file_id}: {error_message}")
+            raise HTTPException(status_code=400, detail=error_message)
 
+        logger.info(f"Found processed file for upload retry at: {file_path!r}")
         # Queue the specific upload task
         upload_task = task_map[subtask_name]
         task = upload_task.delay(file_path, file_id)
