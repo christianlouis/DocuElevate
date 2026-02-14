@@ -1,10 +1,9 @@
 """Tests for app/tasks/imap_tasks.py module."""
 
-import json
 import os
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -310,11 +309,11 @@ class TestFindAllMailXlist:
         """Test finding All Mail folder via XLIST."""
         mock_mail = MagicMock()
         mock_mail._new_tag.return_value = b"A001"
-        
+
         # Mock the readline responses
         responses = [
             b'* XLIST (\\HasNoChildren \\AllMail) "/" "[Gmail]/All Mail"\r\n',
-            b'A001 OK XLIST completed\r\n',
+            b"A001 OK XLIST completed\r\n",
         ]
         mock_mail.readline.side_effect = responses
 
@@ -325,11 +324,11 @@ class TestFindAllMailXlist:
         """Test returns None when XLIST doesn't have AllMail flag."""
         mock_mail = MagicMock()
         mock_mail._new_tag.return_value = b"A001"
-        
+
         # Mock responses without AllMail flag
         responses = [
             b'* XLIST (\\HasNoChildren) "/" "INBOX"\r\n',
-            b'A001 OK XLIST completed\r\n',
+            b"A001 OK XLIST completed\r\n",
         ]
         mock_mail.readline.side_effect = responses
 
@@ -384,7 +383,7 @@ class TestPullAllInboxes:
         mock_settings.imap1_password = _TEST_CREDENTIAL
         mock_settings.imap1_ssl = True
         mock_settings.imap1_delete_after_process = False
-        
+
         mock_settings.imap2_host = "imap.gmail.com"
         mock_settings.imap2_port = 993
         mock_settings.imap2_username = "user2@gmail.com"
@@ -432,12 +431,12 @@ class TestPullInbox:
         mock_load.return_value = {}
         mock_mail = MagicMock()
         mock_imap_class.return_value = mock_mail
-        
+
         # Mock successful login and folder selection
         mock_mail.login.return_value = ("OK", [])
         mock_mail.select.return_value = ("OK", [])
         mock_mail.search.return_value = ("OK", [b""])  # No messages
-        
+
         pull_inbox(
             mailbox_key="imap1",
             host="imap.example.com",
@@ -460,7 +459,7 @@ class TestPullInbox:
         mock_load.return_value = {}
         mock_mail = MagicMock()
         mock_imap_class.return_value = mock_mail
-        
+
         mock_mail.login.return_value = ("OK", [])
         mock_mail.select.return_value = ("OK", [])
         mock_mail.search.return_value = ("OK", [b""])
@@ -486,7 +485,7 @@ class TestPullInbox:
         mock_mail = MagicMock()
         mock_imap_class.return_value = mock_mail
         mock_find_all.return_value = "[Gmail]/All Mail"
-        
+
         mock_mail.login.return_value = ("OK", [])
         mock_mail.select.return_value = ("OK", [])
         mock_mail.search.return_value = ("OK", [b""])
@@ -513,7 +512,7 @@ class TestPullInbox:
         mock_mail = MagicMock()
         mock_imap_class.return_value = mock_mail
         mock_find_all.return_value = None  # All Mail not found
-        
+
         mock_mail.login.return_value = ("OK", [])
         mock_mail.select.return_value = ("OK", [])
         mock_mail.search.return_value = ("OK", [b""])
@@ -529,10 +528,7 @@ class TestPullInbox:
         )
 
         # Should select INBOX as fallback
-        assert any(
-            call_args[0][0] == "INBOX"
-            for call_args in mock_mail.select.call_args_list
-        )
+        assert any(call_args[0][0] == "INBOX" for call_args in mock_mail.select.call_args_list)
 
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
@@ -541,7 +537,7 @@ class TestPullInbox:
         mock_load.return_value = {}
         mock_mail = MagicMock()
         mock_imap_class.return_value = mock_mail
-        
+
         mock_mail.login.return_value = ("OK", [])
         mock_mail.select.return_value = ("OK", [])
         mock_mail.search.return_value = ("NO", [])  # Search failed
@@ -573,14 +569,15 @@ class TestPullInbox:
         mock_load.return_value = {}
         mock_mail = MagicMock()
         mock_imap_class.return_value = mock_mail
-        
+
         # Create a simple email message
         import email
+
         msg = email.message.EmailMessage()
         msg["Message-ID"] = "<test@example.com>"
         msg["Subject"] = "Test"
         raw_email = msg.as_bytes()
-        
+
         mock_mail.login.return_value = ("OK", [])
         mock_mail.select.return_value = ("OK", [])
         mock_mail.search.return_value = ("OK", [b"1"])
@@ -605,20 +602,19 @@ class TestPullInbox:
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.save_processed_emails")
     @patch("app.tasks.imap_tasks.settings")
-    def test_delete_after_process(
-        self, mock_settings, mock_save, mock_load, mock_imap_class, mock_fetch
-    ):
+    def test_delete_after_process(self, mock_settings, mock_save, mock_load, mock_imap_class, mock_fetch):
         """Test deleting messages after processing."""
         mock_settings.workdir = "/tmp"
         mock_load.return_value = {}
         mock_mail = MagicMock()
         mock_imap_class.return_value = mock_mail
-        
+
         import email
+
         msg = email.message.EmailMessage()
         msg["Message-ID"] = "<test@example.com>"
         raw_email = msg.as_bytes()
-        
+
         mock_mail.login.return_value = ("OK", [])
         mock_mail.select.return_value = ("OK", [])
         mock_mail.search.return_value = ("OK", [b"1"])
@@ -663,12 +659,13 @@ class TestPullInbox:
         mock_has_label.return_value = False
         mock_mail = MagicMock()
         mock_imap_class.return_value = mock_mail
-        
+
         import email
+
         msg = email.message.EmailMessage()
         msg["Message-ID"] = "<test@gmail.com>"
         raw_email = msg.as_bytes()
-        
+
         mock_mail.login.return_value = ("OK", [])
         mock_mail.select.return_value = ("OK", [])
         mock_mail.search.return_value = ("OK", [b"1"])
@@ -691,21 +688,20 @@ class TestPullInbox:
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.settings")
-    def test_skips_already_labeled_gmail_messages(
-        self, mock_settings, mock_load, mock_imap_class, mock_has_label
-    ):
+    def test_skips_already_labeled_gmail_messages(self, mock_settings, mock_load, mock_imap_class, mock_has_label):
         """Test that already labeled Gmail messages are skipped."""
         mock_settings.workdir = "/tmp"
         mock_load.return_value = {}
         mock_has_label.return_value = True  # Already labeled
         mock_mail = MagicMock()
         mock_imap_class.return_value = mock_mail
-        
+
         import email
+
         msg = email.message.EmailMessage()
         msg["Message-ID"] = "<test@gmail.com>"
         raw_email = msg.as_bytes()
-        
+
         mock_mail.login.return_value = ("OK", [])
         mock_mail.select.return_value = ("OK", [])
         mock_mail.search.return_value = ("OK", [b"1"])
@@ -731,13 +727,14 @@ class TestPullInbox:
         mock_load.return_value = {}
         mock_mail = MagicMock()
         mock_imap_class.return_value = mock_mail
-        
+
         import email
+
         msg = email.message.EmailMessage()
         # No Message-ID
         msg["Subject"] = "Test"
         raw_email = msg.as_bytes()
-        
+
         mock_mail.login.return_value = ("OK", [])
         mock_mail.select.return_value = ("OK", [])
         mock_mail.search.return_value = ("OK", [b"1"])
@@ -763,12 +760,13 @@ class TestPullInbox:
         mock_load.return_value = {"<test@example.com>": "2024-01-01T00:00:00"}
         mock_mail = MagicMock()
         mock_imap_class.return_value = mock_mail
-        
+
         import email
+
         msg = email.message.EmailMessage()
         msg["Message-ID"] = "<test@example.com>"
         raw_email = msg.as_bytes()
-        
+
         mock_mail.login.return_value = ("OK", [])
         mock_mail.select.return_value = ("OK", [])
         mock_mail.search.return_value = ("OK", [b"1"])
@@ -794,7 +792,7 @@ class TestPullInbox:
         mock_load.return_value = {}
         mock_mail = MagicMock()
         mock_imap_class.return_value = mock_mail
-        
+
         mock_mail.login.return_value = ("OK", [])
         mock_mail.select.return_value = ("OK", [])
         mock_mail.search.return_value = ("OK", [b"1"])
@@ -844,9 +842,9 @@ class TestFetchAttachmentsExtended:
         msg = EmailMessage()
         msg["Subject"] = "Test"
         msg.set_content("Body text")
-        
+
         result = fetch_attachments_and_enqueue(msg)
-        
+
         # No attachments, should return False
         assert result is False
 
@@ -986,7 +984,7 @@ class TestFetchAttachmentsExtended:
                 part.del_param("filename", header="content-disposition")
 
         result = fetch_attachments_and_enqueue(msg)
-        
+
         assert result is False
         mock_process.delay.assert_not_called()
         mock_convert.delay.assert_not_called()
@@ -1021,7 +1019,7 @@ class TestEmailAlreadyHasLabelExtended:
         mock_mail.fetch.return_value = ("OK", [(None, b'"Ingested"')])
 
         result = email_already_has_label(mock_mail, 123, "Ingested")
-        
+
         # Should convert int to bytes
         mock_mail.fetch.assert_called_once()
         assert result is True

@@ -16,7 +16,6 @@ class TestConfigValidatorModuleCoverage:
         """Import every symbol from config_validator to ensure line coverage."""
         # Import the module itself to exercise lines 7-17 (import statements)
         # This is the key difference - we need to import the module, not just its exports
-        import app.utils.config_validator
 
         # Then access the symbols to ensure they are present
         # These imports exercise lines 7-17 (import statements)
