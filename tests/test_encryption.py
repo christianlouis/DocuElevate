@@ -198,6 +198,65 @@ class TestGetCipherSuite:
         # Both calls should return the same object (cached)
         assert result1 is result2
 
+    def test_get_cipher_suite_import_error(self):
+        """Test _get_cipher_suite when cryptography is not installed"""
+        import sys
+
+        import app.utils.encryption
+
+        # Reset the cached cipher suite
+        original_cipher = app.utils.encryption._cipher_suite
+        app.utils.encryption._cipher_suite = None
+
+        # Mock the cryptography.fernet module to not exist
+        original_modules = sys.modules.copy()
+
+        # Remove cryptography from sys.modules to simulate it not being installed
+        if "cryptography.fernet" in sys.modules:
+            del sys.modules["cryptography.fernet"]
+        if "cryptography" in sys.modules:
+            del sys.modules["cryptography"]
+
+        # Mock the import to raise ImportError
+        import builtins
+
+        real_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if "cryptography" in name:
+                raise ImportError("No module named 'cryptography'")
+            return real_import(name, *args, **kwargs)
+
+        try:
+            with patch("builtins.__import__", side_effect=mock_import):
+                result = app.utils.encryption._get_cipher_suite()
+                # Should return None when cryptography is not available
+                assert result is None
+        finally:
+            # Restore the original state
+            app.utils.encryption._cipher_suite = original_cipher
+            sys.modules.update(original_modules)
+
+    def test_get_cipher_suite_general_exception(self):
+        """Test _get_cipher_suite when initialization fails with general exception"""
+        import app.utils.encryption
+
+        # Reset the cached cipher suite
+        original_cipher = app.utils.encryption._cipher_suite
+        app.utils.encryption._cipher_suite = None
+
+        try:
+            # Mock Fernet class to raise an exception during initialization
+
+            with patch("app.utils.encryption.hashlib.sha256", side_effect=RuntimeError("Hash error")):
+                result = app.utils.encryption._get_cipher_suite()
+
+                # Should return None when initialization fails
+                assert result is None
+        finally:
+            # Restore the original cipher suite
+            app.utils.encryption._cipher_suite = original_cipher
+
 
 @pytest.mark.unit
 class TestEncryptionIntegration:
