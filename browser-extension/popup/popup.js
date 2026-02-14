@@ -2,18 +2,29 @@
 
 // DOM elements
 const configSection = document.getElementById('config-section');
+const modeSection = document.getElementById('mode-section');
 const sendSection = document.getElementById('send-section');
+const clipSection = document.getElementById('clip-section');
 const statusSection = document.getElementById('status-section');
 const statusMessage = document.getElementById('status-message');
 
 const serverUrlInput = document.getElementById('server-url');
 const sessionCookieInput = document.getElementById('session-cookie');
 const filenameInput = document.getElementById('filename');
+const clipFilenameInput = document.getElementById('clip-filename');
 const currentUrlDisplay = document.getElementById('current-url');
+const pageTitleDisplay = document.getElementById('page-title');
 
 const saveConfigBtn = document.getElementById('save-config');
 const sendFileBtn = document.getElementById('send-file');
 const showConfigBtn = document.getElementById('show-config');
+const showConfigFromClipBtn = document.getElementById('show-config-from-clip');
+const modeUrlBtn = document.getElementById('mode-url');
+const modeClipBtn = document.getElementById('mode-clip');
+const clipFullPageBtn = document.getElementById('clip-full-page');
+const clipSelectionBtn = document.getElementById('clip-selection');
+
+let currentMode = 'url'; // 'url' or 'clip'
 
 // Load configuration and current tab URL on popup open
 document.addEventListener('DOMContentLoaded', async () => {
@@ -28,14 +39,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         sessionCookieInput.value = config.sessionCookie;
     }
 
-    // Get current tab URL
+    // Get current tab info
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     const currentUrl = tabs[0]?.url || '';
+    const pageTitle = tabs[0]?.title || '';
     currentUrlDisplay.textContent = currentUrl;
+    pageTitleDisplay.textContent = pageTitle;
 
     // Show appropriate section
     if (config.serverUrl) {
-        showSendSection();
+        showModeSection();
+        showUrlMode();
     } else {
         showConfigSection();
     }
@@ -67,11 +81,21 @@ saveConfigBtn.addEventListener('click', async () => {
     showStatus('Configuration saved successfully!', 'success');
 
     setTimeout(() => {
-        showSendSection();
+        showModeSection();
+        showUrlMode();
     }, 1000);
 });
 
-// Send file to DocuElevate
+// Mode selection
+modeUrlBtn.addEventListener('click', () => {
+    showUrlMode();
+});
+
+modeClipBtn.addEventListener('click', () => {
+    showClipMode();
+});
+
+// Send file URL to DocuElevate
 sendFileBtn.addEventListener('click', async () => {
     const config = await loadConfig();
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -85,7 +109,7 @@ sendFileBtn.addEventListener('click', async () => {
     // Disable button and show loading
     sendFileBtn.disabled = true;
     sendFileBtn.classList.add('loading');
-    showStatus('Sending file to DocuElevate...', 'info');
+    showStatus('Sending URL to DocuElevate...', 'info');
 
     try {
         const payload = {
@@ -112,12 +136,12 @@ sendFileBtn.addEventListener('click', async () => {
         if (response.ok) {
             const result = await response.json();
             showStatus(
-                `✓ File sent successfully! Task ID: ${result.task_id}\nFilename: ${result.filename}`,
+                `✓ URL sent successfully! Task ID: ${result.task_id}\nFilename: ${result.filename}`,
                 'success'
             );
         } else {
             // Try to parse JSON error, fall back to status text
-            let errorMessage = 'Failed to send file';
+            let errorMessage = 'Failed to send URL';
             try {
                 const result = await response.json();
                 errorMessage = result.detail || errorMessage;
@@ -138,21 +162,188 @@ sendFileBtn.addEventListener('click', async () => {
     }
 });
 
+// Clip full page
+clipFullPageBtn.addEventListener('click', async () => {
+    await handleClipPage('full');
+});
+
+// Clip selection
+clipSelectionBtn.addEventListener('click', async () => {
+    await handleClipPage('selection');
+});
+
+// Handle clipping page
+async function handleClipPage(mode) {
+    const config = await loadConfig();
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+
+    if (!tab) {
+        showStatus('No active tab found', 'error');
+        return;
+    }
+
+    // Disable buttons and show loading
+    const button = mode === 'full' ? clipFullPageBtn : clipSelectionBtn;
+    button.disabled = true;
+    button.classList.add('loading');
+    showStatus(`Clipping ${mode === 'full' ? 'full page' : 'selection'}...`, 'info');
+
+    try {
+        // Capture page content using content script
+        let captureFunc;
+        if (mode === 'full') {
+            captureFunc = () => {
+                const styles = Array.from(document.styleSheets)
+                    .map(sheet => {
+                        try {
+                            return Array.from(sheet.cssRules)
+                                .map(rule => rule.cssText)
+                                .join('\n');
+                        } catch (e) {
+                            return '';
+                        }
+                    })
+                    .join('\n');
+                
+                return {
+                    html: `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>${document.title}</title>
+    <style>${styles}</style>
+</head>
+<body>
+    ${document.body.innerHTML}
+</body>
+</html>`,
+                    title: document.title,
+                    url: window.location.href
+                };
+            };
+        } else {
+            captureFunc = () => {
+                const selection = window.getSelection();
+                
+                if (!selection || selection.rangeCount === 0) {
+                    throw new Error('No content selected');
+                }
+                
+                const range = selection.getRangeAt(0);
+                const container = document.createElement('div');
+                container.appendChild(range.cloneContents());
+                
+                return {
+                    html: `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>${document.title} - Selection</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>${document.title}</h1>
+    <p><small>Source: ${window.location.href}</small></p>
+    <hr>
+    ${container.innerHTML}
+</body>
+</html>`,
+                    title: document.title + ' - Selection',
+                    url: window.location.href
+                };
+            };
+        }
+
+        const [result] = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: captureFunc
+        });
+
+        if (!result || !result.result) {
+            throw new Error('Failed to capture page content');
+        }
+
+        const pageData = result.result;
+
+        // Send message to background script to convert and upload
+        const response = await chrome.runtime.sendMessage({
+            type: 'CLIP_PAGE',
+            data: {
+                html: pageData.html,
+                title: pageData.title,
+                filename: clipFilenameInput.value.trim() || pageData.title,
+                serverUrl: config.serverUrl,
+                sessionCookie: config.sessionCookie
+            }
+        });
+
+        if (response.success) {
+            showStatus(
+                `✓ Page clipped successfully! Task ID: ${response.data.task_id}`,
+                'success'
+            );
+        } else {
+            throw new Error(response.error || 'Failed to clip page');
+        }
+    } catch (error) {
+        showStatus(
+            `Error: ${error.message || 'Failed to clip page'}`,
+            'error'
+        );
+    } finally {
+        button.disabled = false;
+        button.classList.remove('loading');
+    }
+}
+
 // Show configuration section
 showConfigBtn.addEventListener('click', () => {
+    showConfigSection();
+});
+
+showConfigFromClipBtn.addEventListener('click', () => {
     showConfigSection();
 });
 
 // Utility functions
 function showConfigSection() {
     configSection.classList.remove('hidden');
+    modeSection.classList.add('hidden');
     sendSection.classList.add('hidden');
+    clipSection.classList.add('hidden');
     statusSection.classList.add('hidden');
 }
 
-function showSendSection() {
+function showModeSection() {
     configSection.classList.add('hidden');
+    modeSection.classList.remove('hidden');
+    statusSection.classList.add('hidden');
+}
+
+function showUrlMode() {
+    currentMode = 'url';
+    modeUrlBtn.classList.add('active');
+    modeClipBtn.classList.remove('active');
     sendSection.classList.remove('hidden');
+    clipSection.classList.add('hidden');
+    statusSection.classList.add('hidden');
+}
+
+function showClipMode() {
+    currentMode = 'clip';
+    modeClipBtn.classList.add('active');
+    modeUrlBtn.classList.remove('active');
+    clipSection.classList.remove('hidden');
+    sendSection.classList.add('hidden');
     statusSection.classList.add('hidden');
 }
 

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Browser Extension Test Page</title>
+    <title>Browser Extension Test Page - Web Clipping</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -48,23 +48,37 @@
             border-radius: 3px;
             font-family: 'Courier New', monospace;
         }
+        .selectable-content {
+            background: #e7f3ff;
+            border: 2px dashed #0066cc;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+        .highlight {
+            background-color: #ffeb3b;
+            padding: 2px 5px;
+        }
     </style>
 </head>
 <body>
     <h1>🧪 DocuElevate Browser Extension Test Page</h1>
 
     <div class="instructions">
-        <h2>How to Test</h2>
+        <h2>How to Test (v1.1.0 - Web Clipping)</h2>
         <ol>
             <li>Make sure the DocuElevate browser extension is installed and configured</li>
-            <li>Test Method 1: Click the extension icon and send the current page URL</li>
-            <li>Test Method 2: Right-click on any link below and select "Send to DocuElevate"</li>
-            <li>Test Method 3: Navigate to a link below and then use the extension popup</li>
+            <li><strong>URL Mode:</strong> Click extension icon, select "Send URL" mode, click "Send to DocuElevate"</li>
+            <li><strong>Clip Full Page:</strong> Click extension icon, select "Clip Page" mode, click "Clip Full Page"</li>
+            <li><strong>Clip Selection:</strong> Select text below, click extension icon, click "Clip Selection"</li>
+            <li><strong>Context Menu - URL:</strong> Right-click page and select "Send URL to DocuElevate"</li>
+            <li><strong>Context Menu - Full:</strong> Right-click page and select "Clip Full Page to DocuElevate"</li>
+            <li><strong>Context Menu - Selection:</strong> Select text, right-click, select "Clip Selection to DocuElevate"</li>
         </ol>
     </div>
 
     <div class="test-section">
-        <h2>📄 Sample Document Links</h2>
+        <h2>📄 Sample Document Links (URL Mode)</h2>
         <p>These links point to sample documents that can be processed by DocuElevate:</p>
 
         <a href="https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
@@ -84,7 +98,7 @@
     </div>
 
     <div class="test-section">
-        <h2>🖼️ Sample Image Links</h2>
+        <h2>🖼️ Sample Image Links (URL Mode)</h2>
         <p>These links point to sample images that can be processed:</p>
 
         <a href="https://via.placeholder.com/800x600.png"
@@ -99,27 +113,78 @@
     </div>
 
     <div class="test-section">
-        <h2>✅ Expected Behavior</h2>
+        <h2>📝 Selectable Content for Clip Testing</h2>
+        <p>Use this content to test the selection clipping feature:</p>
+        
+        <div class="selectable-content">
+            <h3>Important Document</h3>
+            <p>This is a <span class="highlight">sample paragraph</span> that you can select and clip to DocuElevate. 
+            Select this text with your mouse, then right-click and choose "Clip Selection to DocuElevate" from the context menu.</p>
+            
+            <p><strong>Key Points:</strong></p>
+            <ul>
+                <li>Web clipping allows you to save any web content as PDF</li>
+                <li>You can clip full pages or just selected portions</li>
+                <li>Pages are converted to PDF in your browser before upload</li>
+                <li>All styling and formatting is preserved</li>
+            </ul>
+            
+            <p>This content will be captured with its styling and converted to a PDF document that's sent to DocuElevate for processing!</p>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>✅ Expected Behavior (v1.1.0)</h2>
+        <h3>URL Mode:</h3>
         <ul>
-            <li><strong>Extension Popup:</strong> Should show the current page URL and allow sending it</li>
-            <li><strong>Context Menu:</strong> Right-click should show "Send to DocuElevate" option</li>
-            <li><strong>Success Notification:</strong> Browser notification with task ID should appear</li>
-            <li><strong>Error Handling:</strong> Clear error messages if something goes wrong</li>
+            <li><strong>Extension Popup:</strong> Shows "Send URL" mode with current page URL</li>
+            <li><strong>Context Menu:</strong> "Send URL to DocuElevate" option appears</li>
+            <li><strong>Success:</strong> Notification with task ID appears</li>
+        </ul>
+        
+        <h3>Clip Mode:</h3>
+        <ul>
+            <li><strong>Extension Popup:</strong> Shows "Clip Page" mode with two buttons</li>
+            <li><strong>Full Page:</strong> Captures entire page as PDF and uploads</li>
+            <li><strong>Selection:</strong> Captures only selected content as PDF</li>
+            <li><strong>Context Menu:</strong> "Clip Full Page" and "Clip Selection" options</li>
+            <li><strong>Success:</strong> Notification confirms clip was uploaded</li>
         </ul>
     </div>
 
     <div class="test-section">
-        <h2>🔍 Testing Checklist</h2>
+        <h2>🔍 Testing Checklist (v1.1.0)</h2>
+        <h3>Installation & Configuration:</h3>
         <ul>
-            <li>✓ Extension icon appears in browser toolbar</li>
-            <li>✓ Popup opens when clicking extension icon</li>
-            <li>✓ Configuration can be saved (server URL)</li>
-            <li>✓ Current URL is displayed in popup</li>
-            <li>✓ "Send to DocuElevate" appears in context menu</li>
-            <li>✓ Files are successfully sent to DocuElevate</li>
-            <li>✓ Success notification appears</li>
-            <li>✓ Task ID is displayed in notification</li>
-            <li>✓ Error messages are clear and helpful</li>
+            <li>☐ Extension icon appears in browser toolbar</li>
+            <li>☐ Popup opens when clicking extension icon</li>
+            <li>☐ Configuration can be saved (server URL)</li>
+            <li>☐ Mode toggle buttons work (URL/Clip)</li>
+        </ul>
+        
+        <h3>URL Mode:</h3>
+        <ul>
+            <li>☐ Current URL is displayed in popup</li>
+            <li>☐ "Send to DocuElevate" button works</li>
+            <li>☐ Context menu "Send URL to DocuElevate" works</li>
+            <li>☐ Success notification appears with task ID</li>
+        </ul>
+        
+        <h3>Clip Mode:</h3>
+        <ul>
+            <li>☐ "Clip Full Page" button works</li>
+            <li>☐ "Clip Selection" button works (after selecting text)</li>
+            <li>☐ Context menu "Clip Full Page to DocuElevate" works</li>
+            <li>☐ Context menu "Clip Selection to DocuElevate" works</li>
+            <li>☐ PDF is generated correctly with styles</li>
+            <li>☐ Upload succeeds and task ID is shown</li>
+        </ul>
+        
+        <h3>Error Handling:</h3>
+        <ul>
+            <li>☐ Clear error message if server unreachable</li>
+            <li>☐ Error message if no text selected (Clip Selection)</li>
+            <li>☐ Authentication errors handled properly</li>
         </ul>
     </div>
 
@@ -132,11 +197,13 @@
             <li>Open DevTools (F12) and check the Console for errors</li>
             <li>Make sure your DocuElevate server is running and accessible</li>
             <li>If using authentication, verify your session cookie is valid</li>
+            <li>For clipping: Ensure browser supports <code>chrome.tabs.printToPDF</code> API</li>
+            <li>Check that <code>/api/files/upload</code> endpoint is accessible</li>
         </ol>
     </div>
 
     <footer style="margin-top: 50px; padding-top: 20px; border-top: 2px solid #dee2e6; color: #6c757d;">
-        <p>DocuElevate Browser Extension Test Page</p>
+        <p>DocuElevate Browser Extension Test Page (v1.1.0)</p>
         <p>For more information, see the <a href="../README.md">Browser Extension README</a></p>
     </footer>
 </body>

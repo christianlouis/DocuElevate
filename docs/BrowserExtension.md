@@ -1,18 +1,21 @@
 # Browser Extension Guide
 
-The DocuElevate Browser Extension enables users to send files from their web browser directly to DocuElevate for processing.
+The DocuElevate Browser Extension enables users to clip web pages and send files from their web browser directly to DocuElevate for processing.
 
 ## Overview
 
-The browser extension provides a seamless way to process files without manually downloading them first. Users can send file URLs with a single click, and DocuElevate will download and process the files automatically.
+The browser extension provides a seamless way to process files and capture web content without manually downloading or copying them first. Users can send file URLs or clip entire web pages with a single click, and DocuElevate will process them automatically.
 
 ## Features
 
 ### Core Functionality
 
+- **Web Page Clipping**: Capture full pages or selected content as PDF documents
 - **One-Click File Sending**: Send file URLs from the browser to DocuElevate
-- **Context Menu Integration**: Right-click on links or pages to send them
-- **Popup Interface**: Simple configuration and file submission UI
+- **Dual Mode Interface**: Toggle between "Send URL" and "Clip Page" modes
+- **Context Menu Integration**: Right-click on links, pages, or selections for quick actions
+- **PDF Conversion**: Automatic conversion of clipped pages to PDF format
+- **Popup Interface**: Simple configuration and file/page submission UI
 - **Status Notifications**: Immediate feedback on submission success or failure
 
 ### Security Features
@@ -21,6 +24,7 @@ The browser extension provides a seamless way to process files without manually 
 - **Secure Storage**: Configuration stored locally in browser extension storage
 - **Direct Communication**: All requests go directly to your DocuElevate server
 - **Session-Based Auth**: Supports DocuElevate authentication via session cookies
+- **Local PDF Generation**: Pages converted to PDF in your browser before upload
 
 ### Cross-Browser Support
 
@@ -28,7 +32,7 @@ The extension is compatible with:
 - Google Chrome
 - Microsoft Edge
 - Chromium-based browsers (Brave, Opera, etc.)
-- Mozilla Firefox (with minor adjustments)
+- Mozilla Firefox (full support including PDF conversion)
 
 ## Installation
 
@@ -40,13 +44,14 @@ Quick steps:
 1. Load the extension from the `browser-extension` folder
 2. Configure your DocuElevate server URL
 3. Optionally add authentication (session cookie)
-4. Start sending files!
+4. Start sending files or clipping pages!
 
 ### For Administrators
 
 #### Prerequisites
 
 - DocuElevate server running with URL upload API enabled
+- File upload API accessible at `/api/files/upload`
 - Server accessible from users' browsers (not blocked by firewall/CORS)
 - Optional: Authentication configured if required
 
@@ -82,36 +87,65 @@ Users need to configure two settings:
 
 ### Server Configuration
 
-No server-side configuration is required. The extension uses the existing URL upload API endpoint:
+No server-side configuration is required. The extension uses existing API endpoints:
 
 ```
-POST /api/process-url
+POST /api/process-url      # For URL mode
+POST /api/files/upload     # For clip mode
 ```
 
-Ensure this endpoint is:
+Ensure these endpoints are:
 - Accessible from users' browsers
 - Not blocked by CORS policies (if different domain)
 - Properly secured with authentication if needed
 
 ## Usage
 
-### Sending Files via Popup
+### Mode Selection
+
+The extension has two modes accessible via the popup:
+
+1. **Send URL Mode** (default): Send file URLs to DocuElevate
+2. **Clip Page Mode**: Capture and convert web pages to PDF
+
+Toggle between modes by clicking the mode buttons in the popup.
+
+### Sending Files via Popup (URL Mode)
 
 1. Click the DocuElevate extension icon
-2. The current page URL is displayed
-3. Optionally enter a custom filename
-4. Click "Send to DocuElevate"
-5. Status message shows success or error
+2. Select "Send URL" mode
+3. The current page URL is displayed
+4. Optionally enter a custom filename
+5. Click "Send to DocuElevate"
+6. Status message shows success or error
 
-### Sending Files via Context Menu
+### Clipping Pages via Popup (Clip Mode)
+
+1. Click the DocuElevate extension icon
+2. Select "Clip Page" mode
+3. The current page title is displayed
+4. Choose one of:
+   - **Clip Full Page**: Captures entire page content
+   - **Clip Selection**: Captures only selected text (select first)
+5. Optionally enter a custom filename
+6. Page is converted to PDF and uploaded
+7. Status message shows success or error
+
+### Sending URLs via Context Menu
 
 1. Right-click on any link or the current page
-2. Select "Send to DocuElevate"
+2. Select "Send URL to DocuElevate"
 3. A notification appears with the result
 
-### Supported URLs
+### Clipping via Context Menu
 
-The extension can send any URL, but DocuElevate will only process:
+1. **Full Page**: Right-click on any page and select "Clip Full Page to DocuElevate"
+2. **Selection**: Select text, right-click, and select "Clip Selection to DocuElevate"
+3. A notification appears with the result
+
+### Supported Content
+
+**URL Mode** - DocuElevate will process these file types:
 
 **Document URLs**:
 - PDFs: `https://example.com/document.pdf`
@@ -124,18 +158,39 @@ The extension can send any URL, but DocuElevate will only process:
 - `https://example.com/scan.png`
 - `https://example.com/diagram.svg`
 
+**Clip Mode** - Any web page can be clipped:
+- Articles, blogs, documentation
+- Forms, receipts, confirmations
+- Social media posts, comments
+- Any HTML content with styling
+
 ## How It Works
 
 ### Architecture
 
 ```
+                                    URL Mode
 ┌─────────────┐         ┌──────────────────┐         ┌──────────────┐
 │   Browser   │         │  Browser Ext.    │         │ DocuElevate  │
 │     Tab     │────────▶│  (popup.js)      │────────▶│   Server     │
-│             │  URL    │                  │  API    │              │
-└─────────────┘         └──────────────────┘ Request └──────────────┘
-                               │
-                               │ Stores config in
+│             │  URL    │                  │  API    │ /process-url │
+└─────────────┘         └──────────────────┘         └──────────────┘
+
+                                   Clip Mode
+┌─────────────┐         ┌──────────────────┐         ┌──────────────┐
+│   Browser   │ Capture │  Browser Ext.    │ Convert │    Browser   │
+│     Tab     │────────▶│  (content.js)    │────────▶│ printToPDF() │
+│   (HTML)    │         │                  │         │              │
+└─────────────┘         └──────────────────┘         └──────────────┘
+                               │                            │
+                               │                            │ PDF
+                               ▼                            ▼
+                        ┌──────────────────┐         ┌──────────────┐
+                        │ background.js    │────────▶│ DocuElevate  │
+                        │                  │  Upload │   Server     │
+                        └──────────────────┘         │ /files/upload│
+                               │                     └──────────────┘
+                               │ Stores config
                                ▼
                         ┌──────────────────┐
                         │ Browser Storage  │
@@ -143,7 +198,7 @@ The extension can send any URL, but DocuElevate will only process:
                         └──────────────────┘
 ```
 
-### Data Flow
+### Data Flow - URL Mode
 
 1. **User initiates send**: Via popup or context menu
 2. **Extension gets current URL**: From active tab
@@ -156,15 +211,39 @@ The extension can send any URL, but DocuElevate will only process:
 6. **Response returned**: Task ID and status
 7. **User notified**: Success or error message displayed
 
+### Data Flow - Clip Mode
+
+1. **User initiates clip**: Via popup or context menu
+2. **Extension captures page**: 
+   - Content script extracts HTML with styles
+   - For selection: captures only selected range
+   - For full page: captures entire document body
+3. **HTML to PDF conversion**:
+   - Background script creates temporary tab with HTML
+   - Browser's printToPDF API converts to PDF
+   - Temporary tab is closed
+4. **PDF upload**:
+   - Extension loads config from storage
+   - FormData created with PDF blob
+   - POST to `/api/files/upload` with authentication
+5. **DocuElevate processes**:
+   - Receives PDF file
+   - Validates and stores
+   - Enqueues for OCR and metadata extraction
+6. **Response returned**: Task ID and status
+7. **User notified**: Success or error notification
+
 ### Security Flow
 
 The extension implements several security measures:
 
-1. **No direct file access**: Extension only sends URLs, not file contents
-2. **User-controlled config**: Server URL and auth stored per-user
-3. **HTTPS recommended**: Encourages secure communication
-4. **Minimal permissions**: Only requests necessary browser APIs
-5. **Server-side validation**: DocuElevate validates all URLs (SSRF protection)
+1. **No direct file access**: Extension only sends URLs or generated PDFs
+2. **Local PDF generation**: Pages converted to PDF in user's browser, not server-side
+3. **User-controlled config**: Server URL and auth stored per-user
+4. **HTTPS recommended**: Encourages secure communication
+5. **Minimal permissions**: Only requests necessary browser APIs
+6. **Server-side validation**: DocuElevate validates all uploads
+7. **Content isolation**: Captured HTML processed in isolated context
 
 ## Technical Details
 
@@ -174,9 +253,10 @@ The extension implements several security measures:
 - Manifest v3 format (latest standard)
 - Minimal permissions requested
 - Compatible with Chrome, Edge, and Firefox
+- Version 1.1.0 with web clipping support
 
 **popup/**: User interface files
-- `popup.html`: Extension popup interface
+- `popup.html`: Extension popup interface with mode toggle
 - `popup.css`: Styling with modern UI design
 - `popup.js`: Configuration and file sending logic
 
@@ -188,9 +268,9 @@ The extension implements several security measures:
 
 ### API Integration
 
-The extension communicates with DocuElevate via the URL upload API:
+The extension communicates with DocuElevate via two API endpoints:
 
-**Request Format**:
+**URL Mode - Request Format**:
 ```javascript
 POST /api/process-url
 Content-Type: application/json
@@ -202,7 +282,7 @@ Cookie: session=<session_value>  // if auth enabled
 }
 ```
 
-**Response Format**:
+**URL Mode - Response Format**:
 ```javascript
 {
   "task_id": "abc-123-def",
@@ -213,7 +293,27 @@ Cookie: session=<session_value>  // if auth enabled
 }
 ```
 
-**Error Response**:
+**Clip Mode - Request Format**:
+```javascript
+POST /api/files/upload
+Content-Type: multipart/form-data
+Cookie: session=<session_value>  // if auth enabled
+
+FormData:
+  file: <PDF Blob> (page-title.pdf)
+```
+
+**Clip Mode - Response Format**:
+```javascript
+{
+  "task_id": "def-456-ghi",
+  "status": "processing",
+  "message": "File uploaded and queued for processing",
+  "filename": "page-title.pdf"
+}
+```
+
+**Error Response** (both modes):
 ```javascript
 {
   "detail": "Error message explaining what went wrong"
@@ -224,10 +324,12 @@ Cookie: session=<session_value>  // if auth enabled
 
 The extension requests these permissions:
 
-- **activeTab**: Get URL of current tab
+- **activeTab**: Get URL and content of current tab
 - **storage**: Save configuration (server URL, session cookie)
-- **contextMenus**: Add "Send to DocuElevate" to right-click menu
+- **contextMenus**: Add context menu options for sending/clipping
 - **notifications**: Show success/error notifications
+- **scripting**: Inject content capture code into web pages
+- **host_permissions**: Access page content for clipping (restricted to active tab)
 
 All permissions are used only for stated purposes. No data is collected or transmitted to third parties.
 
