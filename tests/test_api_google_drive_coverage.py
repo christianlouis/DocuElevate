@@ -6,11 +6,10 @@ Focuses on:
 - Token retrieval error paths
 """
 
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, Mock, patch
+from datetime import timedelta
+from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 
@@ -209,7 +208,7 @@ class TestSaveGoogleDriveSettings:
                 "client_id": "new_id",
                 "client_secret": "new_secret",
                 "folder_id": "folder123",
-            }
+            },
         )
 
         assert response.status_code == 200
@@ -223,10 +222,7 @@ class TestSaveGoogleDriveSettings:
         """Test saving with only refresh_token (minimal required field)."""
         mock_exists.return_value = False
 
-        response = client.post(
-            "/api/google-drive/save-settings",
-            data={"refresh_token": "new_token"}
-        )
+        response = client.post("/api/google-drive/save-settings", data={"refresh_token": "new_token"})
 
         assert response.status_code == 200
         data = response.json()
@@ -239,10 +235,7 @@ class TestSaveGoogleDriveSettings:
         """Test saving when .env file write fails but continues with in-memory update."""
         mock_exists.return_value = True
 
-        response = client.post(
-            "/api/google-drive/save-settings",
-            data={"refresh_token": "new_token"}
-        )
+        response = client.post("/api/google-drive/save-settings", data={"refresh_token": "new_token"})
 
         # Should succeed (in-memory update) even if file write fails
         assert response.status_code == 200
@@ -250,47 +243,43 @@ class TestSaveGoogleDriveSettings:
         assert data["status"] == "success"
 
 
-@pytest.mark.unit  
+@pytest.mark.unit
 class TestHelperFunctions:
     """Test helper functions in google_drive module."""
-    
+
     def test_format_time_remaining_expired(self):
         """Test format_time_remaining with negative timedelta."""
         from app.api.google_drive import format_time_remaining
-        from datetime import timedelta
-        
+
         # Expired time
         delta = timedelta(seconds=-1)
         result = format_time_remaining(delta)
         assert result == "Expired"
-    
+
     def test_format_time_remaining_days(self):
         """Test format_time_remaining with days."""
         from app.api.google_drive import format_time_remaining
-        from datetime import timedelta
-        
+
         # 2 days, 3 hours
         delta = timedelta(days=2, hours=3)
         result = format_time_remaining(delta)
         assert "2 days" in result
         assert "3 hours" in result
-        
+
     def test_format_time_remaining_hours_only(self):
         """Test format_time_remaining with hours but no days."""
         from app.api.google_drive import format_time_remaining
-        from datetime import timedelta
-        
+
         # 5 hours, 30 minutes
         delta = timedelta(hours=5, minutes=30)
         result = format_time_remaining(delta)
         assert "5 hours" in result
         assert "30 minutes" in result
-        
+
     def test_format_time_remaining_singular_units(self):
         """Test format_time_remaining with singular units."""
         from app.api.google_drive import format_time_remaining
-        from datetime import timedelta
-        
+
         # 1 day, 1 hour
         delta = timedelta(days=1, hours=1)
         result = format_time_remaining(delta)

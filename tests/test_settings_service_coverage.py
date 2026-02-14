@@ -8,10 +8,11 @@ Focuses on:
 - Mixed encryption states
 """
 
+from unittest.mock import patch
+
 import pytest
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
-from unittest.mock import Mock, patch, MagicMock
 
 from app.models import ApplicationSettings
 from app.utils.settings_service import (
@@ -321,7 +322,7 @@ class TestSettingsValidationEdgeCases:
         # However, session_secret is marked required in metadata, so empty string should fail
         # Let's check if session_secret is actually required
         from app.utils.settings_service import get_setting_metadata
-        
+
         metadata = get_setting_metadata("session_secret")
         if metadata.get("required", False):
             # If required, empty string should fail
