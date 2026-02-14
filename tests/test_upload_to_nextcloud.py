@@ -266,3 +266,130 @@ class TestUploadToNextcloud:
         result = upload_to_nextcloud.apply(args=[str(test_file)], kwargs={"file_id": 1}).get()
 
         assert result["status"] == "Completed"
+
+    @patch("app.tasks.upload_to_nextcloud.get_unique_filename")
+    @patch("app.tasks.upload_to_nextcloud.extract_remote_path")
+    @patch("app.tasks.upload_to_nextcloud.requests")
+    @patch("app.tasks.upload_to_nextcloud.log_task_progress")
+    @patch("app.tasks.upload_to_nextcloud.settings")
+    def test_file_exists_check_returns_true(
+        self, mock_settings, mock_log, mock_requests, mock_extract, mock_unique, tmp_path
+    ):
+        """Test that check_exists_in_nextcloud correctly identifies existing files."""
+        from app.tasks.upload_to_nextcloud import upload_to_nextcloud
+
+        mock_settings.nextcloud_upload_url = "https://nextcloud.example.com/remote.php/dav/"
+        mock_settings.nextcloud_username = "user"
+        mock_settings.nextcloud_password = "pass"  # noqa: S105
+        mock_settings.nextcloud_folder = ""
+        mock_settings.workdir = str(tmp_path)
+        mock_settings.http_request_timeout = 30
+
+        test_file = tmp_path / "test.pdf"
+        test_file.write_bytes(b"test content")
+
+        mock_extract.return_value = "test.pdf"
+
+        # Mock PROPFIND to return file exists (path in response text)
+        mock_propfind_response = Mock()
+        mock_propfind_response.text = "test.pdf"
+        mock_requests.request.return_value = mock_propfind_response
+
+        # get_unique_filename should be called and will use check_exists_in_nextcloud
+        def mock_get_unique(path, check_fn):
+            # Call check_fn to exercise the inner function
+            exists = check_fn(path)
+            return "test_1.pdf" if exists else path
+
+        mock_unique.side_effect = mock_get_unique
+
+        mock_put_response = Mock()
+        mock_put_response.status_code = 201
+        mock_requests.put.return_value = mock_put_response
+
+        result = upload_to_nextcloud.apply(args=[str(test_file)], kwargs={"file_id": 1}).get()
+
+        assert result["status"] == "Completed"
+
+    @patch("app.tasks.upload_to_nextcloud.get_unique_filename")
+    @patch("app.tasks.upload_to_nextcloud.extract_remote_path")
+    @patch("app.tasks.upload_to_nextcloud.requests")
+    @patch("app.tasks.upload_to_nextcloud.log_task_progress")
+    @patch("app.tasks.upload_to_nextcloud.settings")
+    def test_file_exists_check_exception_handling(
+        self, mock_settings, mock_log, mock_requests, mock_extract, mock_unique, tmp_path
+    ):
+        """Test that check_exists_in_nextcloud handles exceptions gracefully."""
+        from app.tasks.upload_to_nextcloud import upload_to_nextcloud
+
+        mock_settings.nextcloud_upload_url = "https://nextcloud.example.com/remote.php/dav/"
+        mock_settings.nextcloud_username = "user"
+        mock_settings.nextcloud_password = "pass"  # noqa: S105
+        mock_settings.nextcloud_folder = ""
+        mock_settings.workdir = str(tmp_path)
+        mock_settings.http_request_timeout = 30
+
+        test_file = tmp_path / "test.pdf"
+        test_file.write_bytes(b"test content")
+
+        mock_extract.return_value = "test.pdf"
+
+        # Mock get_unique_filename to call check function with exception
+        def mock_get_unique(path, check_fn):
+            # Mock PROPFIND to raise exception
+            mock_requests.request.side_effect = Exception("Network error")
+            # Call check_fn to exercise exception handling
+            exists = check_fn(path)
+            # Should return False when exception occurs
+            assert exists is False
+            return path
+
+        mock_unique.side_effect = mock_get_unique
+
+        mock_put_response = Mock()
+        mock_put_response.status_code = 201
+        mock_requests.put.return_value = mock_put_response
+
+        result = upload_to_nextcloud.apply(args=[str(test_file)], kwargs={"file_id": 1}).get()
+
+        assert result["status"] == "Completed"
+
+    @patch("app.tasks.upload_to_nextcloud.get_unique_filename")
+    @patch("app.tasks.upload_to_nextcloud.extract_remote_path")
+    @patch("app.tasks.upload_to_nextcloud.requests")
+    @patch("app.tasks.upload_to_nextcloud.log_task_progress")
+    @patch("app.tasks.upload_to_nextcloud.settings")
+    def test_empty_parent_dirs_handling(
+        self, mock_settings, mock_log, mock_requests, mock_extract, mock_unique, tmp_path
+    ):
+        """Test handling of empty parent directory paths."""
+        from app.tasks.upload_to_nextcloud import upload_to_nextcloud
+
+        mock_settings.nextcloud_upload_url = "https://nextcloud.example.com/remote.php/dav/"
+        mock_settings.nextcloud_username = "user"
+        mock_settings.nextcloud_password = "pass"  # noqa: S105
+        mock_settings.nextcloud_folder = ""
+        mock_settings.workdir = str(tmp_path)
+        mock_settings.http_request_timeout = 30
+
+        test_file = tmp_path / "test.pdf"
+        test_file.write_bytes(b"test content")
+
+        # Return a path with no parent directory (file in root)
+        mock_extract.return_value = "test.pdf"
+        mock_unique.return_value = "test.pdf"
+
+        mock_put_response = Mock()
+        mock_put_response.status_code = 201
+        mock_requests.put.return_value = mock_put_response
+
+        mock_propfind_response = Mock()
+        mock_propfind_response.text = ""
+        mock_requests.request.return_value = mock_propfind_response
+
+        result = upload_to_nextcloud.apply(args=[str(test_file)], kwargs={"file_id": 1}).get()
+
+        assert result["status"] == "Completed"
+        # No MKCOL calls should be made for root-level files
+        mkcol_calls = [c for c in mock_requests.request.call_args_list if c[0][0] == "MKCOL"]
+        assert len(mkcol_calls) == 0
