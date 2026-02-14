@@ -1031,3 +1031,187 @@ class TestEmailAlreadyHasLabelExtended:
 
         result = email_already_has_label(mock_mail, b"1", "Ingested")
         assert result is False
+
+
+@pytest.mark.unit
+class TestGetCapabilitiesEdgeCases:
+    """Test edge cases for get_capabilities function."""
+
+    def test_get_capabilities_with_failed_response(self):
+        """Test get_capabilities when server returns error."""
+        mock_mail = MagicMock()
+        mock_mail.capability.return_value = ("NO", None)
+
+        result = get_capabilities(mock_mail)
+        assert result == []
+
+    def test_get_capabilities_with_empty_data(self):
+        """Test get_capabilities with empty capability data."""
+        mock_mail = MagicMock()
+        mock_mail.capability.return_value = ("OK", [b""])
+
+        result = get_capabilities(mock_mail)
+        assert isinstance(result, list)
+
+
+@pytest.mark.unit
+class TestFindAllMailXlistEdgeCases:
+    """Test edge cases for find_all_mail_xlist function."""
+
+    def test_find_all_mail_xlist_no_allmail_flag(self):
+        """Test XLIST when no folder has ALLMAIL flag."""
+        mock_mail = MagicMock()
+        mock_mail._new_tag.return_value = b"A001"
+        # Simulate responses without ALLMAIL flag
+        mock_mail.readline.side_effect = [
+            b'* XLIST (\\HasNoChildren) "/" "INBOX"\r\n',
+            b"A001 OK XLIST completed\r\n",
+        ]
+
+        result = find_all_mail_xlist(mock_mail)
+        assert result is None
+
+    def test_find_all_mail_xlist_with_valid_allmail(self):
+        """Test XLIST when folder has ALLMAIL flag."""
+        mock_mail = MagicMock()
+        mock_mail._new_tag.return_value = b"A001"
+        # Simulate response with ALLMAIL flag
+        mock_mail.readline.side_effect = [
+            b'* XLIST (\\AllMail \\HasNoChildren) "/" "[Gmail]/All Mail"\r\n',
+            b"A001 OK XLIST completed\r\n",
+        ]
+
+        result = find_all_mail_xlist(mock_mail)
+        assert result == "[Gmail]/All Mail"
+
+
+@pytest.mark.unit
+class TestAcquireReleaseLockEdgeCases:
+    """Test edge cases for lock acquisition and release."""
+
+    @patch("app.tasks.imap_tasks.redis_client")
+    def test_acquire_lock_when_already_held(self, mock_redis):
+        """Test lock acquisition when lock is already held."""
+        mock_redis.setnx.return_value = False
+
+        result = acquire_lock()
+        assert result is False
+        # Should not call expire if lock not acquired
+        mock_redis.expire.assert_not_called()
+
+    @patch("app.tasks.imap_tasks.redis_client")
+    def test_release_lock_always_attempts_delete(self, mock_redis):
+        """Test that release_lock always attempts to delete the key."""
+        release_lock()
+        mock_redis.delete.assert_called_once()
+
+
+@pytest.mark.unit
+class TestPullInboxEdgeCases:
+    """Test edge cases for pull_inbox function."""
+
+    @patch("app.tasks.imap_tasks.load_processed_emails")
+    @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
+    @patch("app.tasks.imap_tasks.settings")
+    def test_pull_inbox_search_failed_status(self, mock_settings, mock_imap_class, mock_load):
+        """Test pull_inbox when search returns non-OK status."""
+        mock_settings.workdir = "/tmp"
+        mock_load.return_value = {}
+
+        mock_mail = MagicMock()
+        mock_mail.login.return_value = ("OK", [])
+        mock_mail.select.return_value = ("OK", [])
+        mock_mail.search.return_value = ("NO", [])  # Search failed
+        mock_imap_class.return_value = mock_mail
+
+        # Should handle gracefully and not raise
+        pull_inbox("test", "imap.example.com", 993, "user", "pass", True, False)
+
+        mock_mail.close.assert_called_once()
+        mock_mail.logout.assert_called_once()
+
+    @patch("app.tasks.imap_tasks.load_processed_emails")
+    @patch("app.tasks.imap_tasks.save_processed_emails")
+    @patch("app.tasks.imap_tasks.fetch_attachments_and_enqueue")
+    @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
+    @patch("app.tasks.imap_tasks.settings")
+    def test_pull_inbox_email_without_message_id(
+        self, mock_settings, mock_imap_class, mock_fetch, mock_save, mock_load
+    ):
+        """Test that emails without Message-ID are skipped."""
+        mock_settings.workdir = "/tmp"
+        mock_load.return_value = {}
+
+        mock_mail = MagicMock()
+        mock_mail.login.return_value = ("OK", [])
+        mock_mail.select.return_value = ("OK", [])
+        mock_mail.search.return_value = ("OK", [b"1"])
+
+        # Create email without Message-ID header
+        email_without_id = EmailMessage()
+        email_without_id["Subject"] = "Test"
+        raw_email = email_without_id.as_bytes()
+
+        mock_mail.fetch.return_value = ("OK", [(None, raw_email)])
+        mock_imap_class.return_value = mock_mail
+
+        pull_inbox("test", "imap.example.com", 993, "user", "pass", True, False)
+
+        # Should skip processing since no Message-ID
+        mock_fetch.assert_not_called()
+
+    @patch("app.tasks.imap_tasks.load_processed_emails")
+    @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
+    @patch("app.tasks.imap_tasks.settings")
+    def test_pull_inbox_fetch_failed_status(self, mock_settings, mock_imap_class, mock_load):
+        """Test pull_inbox when fetch returns non-OK status."""
+        mock_settings.workdir = "/tmp"
+        mock_load.return_value = {}
+
+        mock_mail = MagicMock()
+        mock_mail.login.return_value = ("OK", [])
+        mock_mail.select.return_value = ("OK", [])
+        mock_mail.search.return_value = ("OK", [b"1"])
+        mock_mail.fetch.return_value = ("NO", [])  # Fetch failed
+        mock_imap_class.return_value = mock_mail
+
+        # Should handle gracefully
+        pull_inbox("test", "imap.example.com", 993, "user", "pass", True, False)
+
+        mock_mail.close.assert_called_once()
+
+
+@pytest.mark.unit
+class TestMarkAsProcessedFunctions:
+    """Test mark_as_processed_with_star and mark_as_processed_with_label functions."""
+
+    def test_mark_as_processed_with_star_handles_exception(self):
+        """Test that star marking handles exceptions gracefully."""
+        mock_mail = MagicMock()
+        mock_mail.store.side_effect = Exception("Connection error")
+
+        # Should not raise, just log error
+        mark_as_processed_with_star(mock_mail, b"1")
+
+    def test_mark_as_processed_with_label_handles_exception(self):
+        """Test that label marking handles exceptions gracefully."""
+        mock_mail = MagicMock()
+        mock_mail.store.side_effect = Exception("Connection error")
+
+        # Should not raise, just log error
+        mark_as_processed_with_label(mock_mail, b"1", "Ingested")
+
+
+@pytest.mark.unit
+class TestEmailAlreadyHasLabelExceptions:
+    """Test exception handling in email_already_has_label."""
+
+    def test_email_already_has_label_fetch_exception(self):
+        """Test that fetch exceptions are handled gracefully."""
+        mock_mail = MagicMock()
+        mock_mail.fetch.side_effect = Exception("Fetch failed")
+
+        result = email_already_has_label(mock_mail, b"1", "Ingested")
+
+        # Should return False on error
+        assert result is False
