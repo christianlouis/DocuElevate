@@ -329,7 +329,7 @@ class TestSplitPdfEdgeCases:
 
     def test_split_pdf_forces_multiple_chunks(self):
         """Test splitting with very small limit to force multiple chunks with page distribution.
-        
+
         This specifically targets lines 101-117 where we save the previous chunk
         when adding a page would exceed the limit.
         """
@@ -375,18 +375,18 @@ class TestSplitPdfEdgeCases:
 
     def test_split_pdf_previous_chunk_logic(self):
         """Test the specific logic for saving previous chunk when limit exceeded (lines 101-117).
-        
+
         This test creates a scenario where:
         1. We have multiple pages in the current writer
         2. Adding the next page would exceed the limit
         3. We need to save the previous chunk without the last page
         4. Start a new chunk with the current page
-        
+
         With blank 200x200 pages: ~431 bytes base + ~120 bytes per additional page
         - 1 page: ~431 bytes
         - 2 pages: ~551 bytes
         - 3 pages: ~671 bytes
-        
+
         Setting max_size to 600 bytes should allow 2 pages (551 bytes) but not 3 pages (671 bytes).
         This will trigger the exceeds_limit && current_page_count > 1 path.
         """
