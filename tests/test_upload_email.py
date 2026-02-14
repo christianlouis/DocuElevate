@@ -68,7 +68,7 @@ class TestGetEmailTemplate:
         # Workdir exists, but template loading fails; falls back to built-in
         mock_exists.return_value = True
         mock_template = Mock()
-        
+
         # First environment (workdir) raises exception, second (app) returns template
         mock_env_workdir = Mock()
         mock_env_workdir.globals = {}
@@ -163,6 +163,7 @@ class TestAttachLogo:
     @patch("builtins.open", new_callable=mock_open, read_data=b"fake_svg_data")
     def test_attaches_svg_logo_with_correct_mime_type(self, mock_file, mock_exists):
         """Test attaches SVG logo with correct MIME type (image/svg+xml)."""
+
         # Create a custom side effect that returns True only for SVG path
         def custom_exists(path):
             return "logo.svg" in path
@@ -178,9 +179,9 @@ class TestAttachLogo:
 
         assert result is True
         assert len(msg.get_payload()) > 0
-        
+
         # Verify SVG MIME type is used (the function detects .svg extension)
-        # Note: MIMEImage may default to a different subtype, but the key is that 
+        # Note: MIMEImage may default to a different subtype, but the key is that
         # the function passes 'image/svg+xml' as mimetype parameter
         # Since we're using mock_open, we can't verify the exact MIME in the attachment,
         # but we verified the code path is exercised
