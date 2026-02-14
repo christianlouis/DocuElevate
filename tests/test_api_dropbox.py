@@ -306,3 +306,107 @@ class TestSaveDropboxSettings:
         # Verify the .env file was updated
         content = env_file.read_text()
         assert "new-token" in content
+
+    @patch("app.api.dropbox.settings")
+    def test_save_settings_with_all_optional_fields(self, mock_settings, client, tmp_path):
+        """Test saving all Dropbox settings including optional fields."""
+        mock_settings.dropbox_refresh_token = ""
+        mock_settings.dropbox_app_key = ""
+        mock_settings.dropbox_app_secret = ""
+        mock_settings.dropbox_folder = ""
+
+        # Create a temporary .env file with commented lines
+        env_file = tmp_path / ".env"
+        env_file.write_text(
+            "# DROPBOX_REFRESH_TOKEN=old_token\n"
+            "# DROPBOX_APP_KEY=old_key\n"
+            "# DROPBOX_APP_SECRET=old_secret\n"
+            "OTHER_VAR=value\n"
+        )
+
+        with (
+            patch("app.api.dropbox.os.path.join", return_value=str(env_file)),
+            patch("app.api.dropbox.os.path.exists", return_value=True),
+            patch("app.api.dropbox.os.path.dirname", return_value=str(tmp_path)),
+        ):
+            response = client.post(
+                "/api/dropbox/save-settings",
+                data={
+                    "refresh_token": "new-token",
+                    "app_key": "new-key",
+                    "app_secret": "new-secret",
+                    "folder_path": "/Documents",
+                },
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+
+        # Verify all settings were updated in the file
+        content = env_file.read_text()
+        assert "DROPBOX_REFRESH_TOKEN=new-token" in content
+        assert "DROPBOX_APP_KEY=new-key" in content
+        assert "DROPBOX_APP_SECRET=new-secret" in content
+        assert "DROPBOX_FOLDER=/Documents" in content
+
+    @patch("app.api.dropbox.settings")
+    def test_save_settings_adds_missing_keys(self, mock_settings, client, tmp_path):
+        """Test that missing keys are added to .env file."""
+        mock_settings.dropbox_refresh_token = ""
+        mock_settings.dropbox_app_key = ""
+        mock_settings.dropbox_app_secret = ""
+        mock_settings.dropbox_folder = ""
+
+        # Create a temporary .env file without Dropbox settings
+        env_file = tmp_path / ".env"
+        env_file.write_text("OTHER_VAR=value\nANOTHER_VAR=test\n")
+
+        with (
+            patch("app.api.dropbox.os.path.join", return_value=str(env_file)),
+            patch("app.api.dropbox.os.path.exists", return_value=True),
+            patch("app.api.dropbox.os.path.dirname", return_value=str(tmp_path)),
+        ):
+            response = client.post(
+                "/api/dropbox/save-settings",
+                data={
+                    "refresh_token": "new-token",
+                    "app_key": "new-key",
+                    "folder_path": "/Shared",
+                },
+            )
+
+        assert response.status_code == 200
+
+        # Verify new keys were added
+        content = env_file.read_text()
+        assert "DROPBOX_REFRESH_TOKEN=new-token" in content
+        assert "DROPBOX_APP_KEY=new-key" in content
+        assert "DROPBOX_FOLDER=/Shared" in content
+        # Original lines should be preserved
+        assert "OTHER_VAR=value" in content
+        assert "ANOTHER_VAR=test" in content
+
+    @patch("app.api.dropbox.settings")
+    def test_save_settings_io_error(self, mock_settings, client, tmp_path):
+        """Test handling of I/O errors when saving settings."""
+        mock_settings.dropbox_refresh_token = ""
+
+        # Create a temporary .env file
+        env_file = tmp_path / ".env"
+        env_file.write_text("DROPBOX_REFRESH_TOKEN=old_token\n")
+
+        with (
+            patch("app.api.dropbox.os.path.join", return_value=str(env_file)),
+            patch("app.api.dropbox.os.path.exists", return_value=True),
+            patch("app.api.dropbox.os.path.dirname", return_value=str(tmp_path)),
+            patch("builtins.open", side_effect=IOError("Permission denied")),
+        ):
+            response = client.post(
+                "/api/dropbox/save-settings",
+                data={"refresh_token": "new-token"},
+            )
+
+        assert response.status_code == 500
+        data = response.json()
+        assert "Failed to save Dropbox settings" in data["detail"]
