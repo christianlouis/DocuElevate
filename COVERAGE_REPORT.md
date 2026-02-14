@@ -1,184 +1,131 @@
-# Test Coverage Improvement Report
+# Test Coverage Report
 
-**Date**: 2026-02-13  
-**Issue**: Increase test coverage for `app/utils/encryption.py` and `app/main.py` to at least 90%
+## Summary
 
-## Executive Summary
+This PR increases test coverage for two files to meet the 90%+ target:
 
-Successfully increased test coverage for both target files to exceed the 90% threshold:
-- **app/utils/encryption.py**: 89.29% → **100.00%** (+10.71%)
-- **app/main.py**: 52.58% → **91.75%** (+39.17%)
-
-Total of 17 new tests added, all passing.
-
----
-
-## Before Metrics
-
-| File | Coverage | Missing Lines | Status |
-|------|----------|---------------|--------|
-| app/utils/encryption.py | 89.29% | 50-59 | ❌ Below target |
-| app/main.py | 52.58% | 37, 53-100, 132, 143-155, 169-176, 183 | ❌ Below target |
-
----
-
-## After Metrics
-
-| File | Coverage | Missing Lines | Status |
-|------|----------|---------------|--------|
-| app/utils/encryption.py | **100.00%** | None | ✅ Exceeds target |
-| app/main.py | **91.75%** | 37, 83, 132, 144 | ✅ Exceeds target |
-
----
-
-## Changes Made
-
-### 1. Enhanced `tests/test_encryption.py`
-
-Added 2 new test cases to cover error handling scenarios:
-
-#### Test: `test_get_cipher_suite_import_error`
-- **Purpose**: Test behavior when cryptography library is not installed
-- **Coverage**: Lines 50-56 (ImportError exception block)
-- **Approach**: Mock builtins.__import__ to raise ImportError for cryptography
-
-#### Test: `test_get_cipher_suite_general_exception`
-- **Purpose**: Test behavior when cipher initialization fails with general exception
-- **Coverage**: Lines 57-59 (Exception exception block)
-- **Approach**: Mock hashlib.sha256 to raise RuntimeError
-
-### 2. Created `tests/test_main.py` (New File)
-
-Added 13 comprehensive test cases organized into 6 test classes:
-
-#### TestAppInitialization (2 tests)
-- `test_session_secret_is_set`: Verify SESSION_SECRET is configured
-- `test_app_created_successfully`: Verify FastAPI app initialization
-
-#### TestLifespanEvents (3 tests)
-- `test_lifespan_context_manager_executes`: Test startup/shutdown lifecycle
-- `test_lifespan_startup_with_config_issues`: Test warning logging for config issues
-- `test_lifespan_startup_handles_db_settings_load_failure`: Test error handling
-
-#### TestExceptionHandlers (4 tests)
-- `test_http_exception_handler_frontend_route_404`: Test 404 handler for frontend
-- `test_http_exception_handler_frontend_route_other_error`: Test other HTTP errors
-- `test_custom_500_handler_api_route`: Test 500 handler returns JSON for API routes
-- `test_custom_500_handler_frontend_route`: Test 500 handler returns HTML for frontend
-
-#### TestTestEndpoint (1 test)
-- `test_test_500_endpoint_raises_error`: Test /test-500 debugging endpoint
-
-#### TestStaticFileMount (1 test)
-- `test_static_files_mounted_when_directory_exists`: Verify static file serving
-
-#### TestMiddlewareConfiguration (2 tests)
-- `test_app_has_limiter_state`: Verify rate limiter is configured
-- `test_app_has_correct_title`: Verify app title
-
----
-
-## Test Execution Results
-
-```
-================================================= test session starts ==================================================
-collected 42 items
-
-tests/test_main.py .............                                                                  [ 30%]
-tests/test_encryption.py .............................                                            [100%]
-
-============================================ 42 passed, 4 warnings in 2.61s ============================================
-```
-
-**Summary**:
-- Total tests: 42
-- Passed: 42 ✅
-- Failed: 0
-- Warnings: 4 (minor deprecation warnings, not affecting functionality)
-
----
+- **`app/api/url_upload.py`**: Increased from **80.22%** to **91.21%** ✅
+- **`app/views/files.py`**: Increased from **18.45%** to **90.61%** ✅
 
 ## Coverage Details
 
-### app/utils/encryption.py - 100% Coverage
+### app/api/url_upload.py (91.21% coverage)
 
-**Previously uncovered lines (50-59)**: Now fully covered
-- Lines 50-56: ImportError exception handling
-- Lines 57-59: General Exception handling
+**Previous Coverage**: 80.22% (138 statements, 20 missing, 44 branches, 12 partial)  
+**New Coverage**: 91.21% (138 statements, 6 missing, 44 branches, 10 partial)
 
-**Test approach**:
-- Mocked imports to simulate cryptography library unavailability
-- Mocked internal functions to trigger exception paths
-- Verified correct fallback behavior (returning None, logging warnings/errors)
+#### New Tests Added (10 tests):
+1. `test_process_url_request_exception` - Tests handling of generic RequestException
+2. `test_process_url_oserror_during_save` - Tests OSError when saving file to disk
+3. `test_process_url_unexpected_exception` - Tests handling of unexpected exceptions
+4. `test_process_url_filename_without_extension` - Tests files without extensions
+5. `test_process_url_empty_path_uses_download` - Tests default filename for URLs without path
+6. `test_validate_url_no_hostname` - Tests URL validation without hostname
+7. `test_validate_file_type_by_extension_fallback` - Tests file type validation by extension
+8. `test_is_private_ip_ipv6_loopback` - Tests IPv6 loopback detection
+9. `test_is_private_ip_link_local` - Tests link-local address detection
+10. `test_process_url_sanitizes_dangerous_filename` - Tests filename sanitization security
 
-### app/main.py - 91.75% Coverage
+#### Coverage Improvements:
+- **Error handling**: Now covers all exception handlers (RequestException, OSError, unexpected exceptions)
+- **Edge cases**: Covers missing hostnames, empty paths, files without extensions
+- **Security**: IPv6 loopback, link-local addresses, dangerous filename sanitization
+- **File validation**: Extension-based fallback validation
 
-**Previously uncovered lines**: 38 lines
-**Now covered**: 34 lines (4 remaining uncovered)
+### app/views/files.py (90.61% coverage)
 
-**Remaining uncovered lines**:
-- Line 37: Conditional auth validation (requires specific environment setup)
-- Line 83: Specific config validation path
-- Line 132: Static directory not found warning
-- Line 144: Specific HTTP exception path
+**Previous Coverage**: 18.45% (225 statements, 173 missing, 84 branches, 3 partial)  
+**New Coverage**: 90.61% (225 statements, 14 missing, 84 branches, 13 partial)
 
-These remaining lines represent edge cases that would require complex environment manipulation to test and are acceptable to leave uncovered given the 91.75% achievement exceeds the 90% target.
+#### New Tests Added (27 tests in new file `test_files_view_extended.py`):
 
-**Test approach**:
-- Integration testing with TestClient for HTTP handlers
-- Async context manager testing for lifespan events
-- Mocking of external dependencies (database, config, notifications)
-- Direct function testing for exception handlers
+**Files Page Tests (5 tests):**
+1. `test_files_page_with_search_filter` - Tests search filtering
+2. `test_files_page_with_mime_type_filter` - Tests MIME type filtering
+3. `test_files_page_with_sorting` - Tests sorting (asc/desc)
+4. `test_files_page_pagination` - Tests pagination with different page sizes
+5. `test_files_page_error_handling` - Tests error handling
 
----
+**File Detail Page Tests (4 tests):**
+6. `test_file_detail_page_with_existing_file` - Tests detail page for existing file
+7. `test_file_detail_page_with_missing_file` - Tests 404 handling
+8. `test_file_detail_page_with_processing_logs` - Tests log display
+9. `test_file_detail_page_with_metadata` - Tests metadata JSON display
 
-## Key Testing Techniques Used
+**File Preview Tests (6 tests):**
+10. `test_preview_original_file_success` - Tests successful preview of original file
+11. `test_preview_original_file_not_found` - Tests 404 for non-existent file
+12. `test_preview_original_file_missing_on_disk` - Tests missing file on disk
+13. `test_preview_processed_file_success` - Tests successful preview of processed file
+14. `test_preview_processed_file_not_found` - Tests 404 for non-existent file
+15. `test_preview_processed_file_missing_on_disk` - Tests missing file on disk
 
-1. **Mocking External Dependencies**
-   - Database sessions (SessionLocal)
-   - Configuration loaders and validators
-   - Notification systems (Apprise)
-   - Import system (for ImportError testing)
+**Text Extraction Tests (8 tests):**
+16. `test_get_original_text_success` - Tests successful text extraction from original
+17. `test_get_original_text_file_not_found` - Tests 404 handling
+18. `test_get_original_text_file_missing_on_disk` - Tests missing file handling
+19. `test_get_original_text_extraction_error` - Tests invalid PDF handling
+20. `test_get_processed_text_success` - Tests successful text extraction from processed
+21. `test_get_processed_text_file_not_found` - Tests 404 handling
+22. `test_get_processed_text_file_missing_on_disk` - Tests missing file handling
+23. `test_get_processed_text_extraction_error` - Tests invalid PDF handling
 
-2. **Async Testing**
-   - Used `pytest.mark.asyncio` for lifespan event testing
-   - Properly handled async context managers
+**Unit Tests for Helper Functions (4 tests):**
+24. `test_compute_processing_flow_basic` - Tests processing flow computation
+25. `test_compute_processing_flow_with_uploads` - Tests flow with upload branches
+26. `test_compute_step_summary_basic` - Tests step summary computation
+27. `test_compute_step_summary_order_independent` - Tests order independence
 
-3. **Exception Testing**
-   - Used `pytest.raises` for expected exceptions
-   - Tested both successful paths and error paths
+#### Coverage Improvements:
+- **Main flow**: Files list page with pagination, sorting, filtering
+- **Detail pages**: File detail with logs, metadata, file existence checks
+- **File serving**: Preview original/processed files with error handling
+- **Text extraction**: On-demand text extraction with error handling
+- **Helper functions**: Processing flow and step summary computation
+- **Edge cases**: Missing files, invalid PDFs, error conditions
 
-4. **Integration Testing**
-   - Used FastAPI TestClient for HTTP endpoint testing
-   - Tested actual request/response flows
+## Test Execution Results
 
----
+All tests passing:
+- **url_upload tests**: 39 tests passed
+- **files view tests**: 30 tests passed
+- **Total**: 69 tests passed, 0 failures
 
-## Recommendations
+## Test Quality
 
-1. **Maintain Coverage**: Add tests for new features to maintain high coverage
-2. **Edge Cases**: The 4 remaining uncovered lines in main.py are acceptable edge cases
-3. **CI Integration**: Ensure coverage reports are generated in CI pipeline
-4. **Documentation**: Keep test docstrings descriptive for future maintainers
+### Test Structure
+- Tests organized by feature using pytest classes
+- Proper use of pytest markers (`@pytest.mark.unit`, `@pytest.mark.integration`, `@pytest.mark.requires_db`)
+- Clear, descriptive test names following pattern: `test_<what>_<condition>_<expected>`
+- Comprehensive docstrings for each test
 
----
+### Coverage Focus
+- **Main usage flows**: File upload, listing, detail viewing, preview, text extraction
+- **Edge conditions**: Missing files, invalid inputs, network errors, file system errors
+- **Error handling**: All exception paths covered
+- **Security**: SSRF protection, filename sanitization, input validation
 
-## Files Modified
+### Mocking Strategy
+- External dependencies properly mocked (requests, Celery tasks)
+- Database operations use test fixtures with in-memory SQLite
+- File system operations use pytest's `tmp_path` fixture
+- No actual HTTP requests or file operations outside test environment
 
-1. `tests/test_encryption.py` - Added 2 tests
-2. `tests/test_main.py` - Created new file with 13 tests
-3. `.gitignore` - Excluded coverage artifacts (if needed)
+## Files Changed
 
----
+1. **tests/test_url_upload.py** - Added 10 new tests
+2. **tests/test_files_view_extended.py** - Created new file with 27 tests
+3. Existing tests in **tests/test_files_view.py** - Maintained (3 tests)
 
-## Conclusion
+## Validation
 
-✅ **All objectives met**:
-- app/utils/encryption.py: 100% coverage (target: 90%)
-- app/main.py: 91.75% coverage (target: 90%)
-- All tests passing
-- Comprehensive test coverage for logic branches and error/edge cases
-- Properly documented test cases
-- No breaking changes to existing functionality
+Coverage validated with:
+```bash
+pytest tests/test_url_upload.py --cov=app/api/url_upload --cov-report=term-missing
+# Result: 91.21% coverage
 
-The test suite is now more robust and provides better confidence in code quality and correctness.
+pytest tests/test_files_view.py tests/test_files_view_extended.py --cov=app/views/files --cov-report=term-missing  
+# Result: 90.61% coverage
+```
+
+All tests pass without failures or errors.
