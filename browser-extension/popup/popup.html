@@ -27,8 +27,16 @@
             <button id="save-config" class="btn btn-primary">Save Configuration</button>
         </div>
 
+        <div id="mode-section" class="section hidden">
+            <h2>Select Mode</h2>
+            <div class="mode-buttons">
+                <button id="mode-url" class="btn btn-mode active">Send URL</button>
+                <button id="mode-clip" class="btn btn-mode">Clip Page</button>
+            </div>
+        </div>
+
         <div id="send-section" class="section hidden">
-            <h2>Send File to DocuElevate</h2>
+            <h2>Send URL to DocuElevate</h2>
             <div class="info-box">
                 <p><strong>Current URL:</strong></p>
                 <p id="current-url" class="url-display"></p>
@@ -39,6 +47,24 @@
             </div>
             <button id="send-file" class="btn btn-primary">Send to DocuElevate</button>
             <button id="show-config" class="btn btn-secondary">Change Settings</button>
+        </div>
+
+        <div id="clip-section" class="section hidden">
+            <h2>Clip Web Page</h2>
+            <div class="info-box">
+                <p><strong>Page Title:</strong></p>
+                <p id="page-title" class="url-display"></p>
+            </div>
+            <div class="form-group">
+                <label for="clip-filename">Filename (optional):</label>
+                <input type="text" id="clip-filename" placeholder="Leave blank to use page title">
+                <small>Will be saved as PDF</small>
+            </div>
+            <div class="clip-buttons">
+                <button id="clip-full-page" class="btn btn-primary">Clip Full Page</button>
+                <button id="clip-selection" class="btn btn-primary">Clip Selection</button>
+            </div>
+            <button id="show-config-from-clip" class="btn btn-secondary">Change Settings</button>
         </div>
 
         <div id="status-section" class="section hidden">

@@ -14,6 +14,10 @@ class TestConfigValidatorModuleCoverage:
 
     def test_all_imports_and_exports_exercised(self):
         """Import every symbol from config_validator to ensure line coverage."""
+        # Import the module itself to exercise lines 7-17 (import statements)
+        # This is the key difference - we need to import the module, not just its exports
+
+        # Then access the symbols to ensure they are present
         # These imports exercise lines 7-17 (import statements)
         from app.utils.config_validator import (
             check_all_configs,
@@ -21,6 +25,7 @@ class TestConfigValidatorModuleCoverage:
             get_provider_status,
             get_settings_for_display,
             mask_sensitive_value,
+            validate_auth_config,
             validate_email_config,
             validate_notification_config,
             validate_storage_configs,
@@ -31,6 +36,7 @@ class TestConfigValidatorModuleCoverage:
             validate_email_config,
             validate_storage_configs,
             validate_notification_config,
+            validate_auth_config,
             mask_sensitive_value,
             get_provider_status,
             get_settings_for_display,
@@ -43,6 +49,7 @@ class TestConfigValidatorModuleCoverage:
         """Verify __all__ is correctly defined and complete."""
         import app.utils.config_validator as mod
 
+        # This is the correct expected set based on the actual file
         expected = {
             "validate_email_config",
             "validate_storage_configs",
@@ -97,3 +104,10 @@ class TestConfigValidatorModuleCoverage:
 
         result = check_all_configs()
         assert isinstance(result, dict)
+
+    def test_validate_auth_config_returns_list(self):
+        """Test validate_auth_config returns a list."""
+        from app.utils.config_validator import validate_auth_config
+
+        result = validate_auth_config()
+        assert isinstance(result, list)

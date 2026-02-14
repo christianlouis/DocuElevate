@@ -696,11 +696,12 @@ Before submitting code:
 Run full check:
 ```bash
 pytest --cov=app
-black app/ tests/
-flake8 app/ --max-line-length=120
+ruff check app/ tests/
+ruff format --check app/ tests/
 mypy app/
-bandit -r app/
 ```
+
+**Note:** This project uses Ruff, which replaces Black, Flake8, isort, and Bandit with a single, faster tool.
 
 ---
 

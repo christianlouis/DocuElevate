@@ -1,11 +1,14 @@
 # DocuElevate Browser Extension
 
-Send files from your browser directly to DocuElevate for processing with a single click.
+Clip web pages and send files from your browser directly to DocuElevate for processing with a single click.
 
 ## Features
 
+- **Web Page Clipping**: Clip full pages or selected content as PDF documents
 - **One-Click File Sending**: Send file URLs from your browser to DocuElevate
-- **Context Menu Integration**: Right-click on links or pages to send them to DocuElevate
+- **Context Menu Integration**: Right-click on links or pages to send or clip them
+- **Dual Mode Interface**: Toggle between "Send URL" and "Clip Page" modes
+- **PDF Conversion**: Automatically converts clipped pages to PDF format
 - **Secure Configuration**: Store your DocuElevate server URL and authentication in the extension
 - **Cross-Browser Support**: Compatible with Chrome, Firefox, Edge, and other Chromium-based browsers
 - **Minimal Permissions**: Only requests necessary permissions for functionality
@@ -50,23 +53,48 @@ Send files from your browser directly to DocuElevate for processing with a singl
    - If authentication is enabled, enter your session cookie (optional)
    - Click "Save Configuration"
 
-**Note**: For permanent installation in Firefox, you'll need to sign the extension through Mozilla's add-on portal.
+**Note**: For permanent installation in Firefox, you'll need to sign the extension through Mozilla's add-on portal. Firefox supports the same Chrome API for PDF conversion (tabs.printToPDF).
 
 ## Usage
 
-### Method 1: Extension Popup
+### Method 1: Extension Popup (Send URL Mode)
 
 1. Navigate to a page with a file URL (e.g., a PDF, DOCX, image)
 2. Click the DocuElevate extension icon
-3. Optionally, enter a custom filename
-4. Click "Send to DocuElevate"
-5. Wait for confirmation that the file was sent
+3. Select "Send URL" mode (default)
+4. Optionally, enter a custom filename
+5. Click "Send to DocuElevate"
+6. Wait for confirmation that the file was sent
 
-### Method 2: Context Menu
+### Method 2: Extension Popup (Clip Page Mode)
+
+1. Navigate to any web page you want to clip
+2. Click the DocuElevate extension icon
+3. Select "Clip Page" mode
+4. Choose either:
+   - **Clip Full Page**: Captures the entire page content
+   - **Clip Selection**: Captures only the selected text/content (select text first)
+5. Optionally, enter a custom filename
+6. The page will be converted to PDF and sent to DocuElevate
+
+### Method 3: Context Menu - Send URL
 
 1. Right-click on a link or the current page
-2. Select "Send to DocuElevate" from the context menu
+2. Select "Send URL to DocuElevate" from the context menu
 3. A notification will confirm the file was sent or show an error
+
+### Method 4: Context Menu - Clip Page
+
+1. Right-click on any page
+2. Select "Clip Full Page to DocuElevate" from the context menu
+3. The entire page will be clipped as PDF and sent
+
+### Method 5: Context Menu - Clip Selection
+
+1. Select text or content on the page
+2. Right-click on the selection
+3. Select "Clip Selection to DocuElevate" from the context menu
+4. Only the selected content will be clipped as PDF and sent
 
 ## Configuration
 
@@ -75,7 +103,8 @@ Send files from your browser directly to DocuElevate for processing with a singl
 The DocuElevate server URL should point to your DocuElevate instance:
 - Format: `https://your-domain.com` or `http://localhost:8000`
 - Do not include trailing slashes or API paths
-- The extension will automatically append `/api/process-url`
+- For URL mode: Extension appends `/api/process-url`
+- For clip mode: Extension appends `/api/files/upload`
 
 ### Session Cookie (Optional)
 
@@ -95,12 +124,18 @@ If your DocuElevate instance has authentication enabled, you need to provide a s
 
 **Security Note**: Your session cookie is stored securely in the browser's extension storage. Never share your session cookie with others.
 
-## Supported File Types
+## Supported Content
 
+### URL Mode
 The extension can send any URL, but DocuElevate will only process supported file types:
-
 - **Documents**: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV, RTF
 - **Images**: JPG, PNG, GIF, BMP, TIFF, WebP, SVG
+
+### Clip Mode
+Any web page can be clipped. The extension will:
+- Capture HTML content with styles
+- Convert to PDF format using browser's print API
+- Upload to DocuElevate for processing
 
 ## Troubleshooting
 
@@ -123,21 +158,40 @@ The extension can send any URL, but DocuElevate will only process supported file
 - Enter the session cookie in the extension settings
 - Ensure your session hasn't expired (log in again if needed)
 
-### "Unsupported file type"
+### "No content selected" (Clip Selection)
+
+**Cause**: No text or content is selected on the page.
+
+**Solution**:
+- Select text or content on the page before clicking "Clip Selection"
+- Use "Clip Full Page" to capture the entire page without selection
+
+### "Failed to convert to PDF"
+
+**Cause**: The browser's PDF conversion API failed.
+
+**Solutions**:
+- Ensure you're using a modern version of Chrome/Edge/Firefox
+- Check browser console for detailed error messages
+- Try clipping a simpler page to test
+- Ensure the page has finished loading
+
+### "Unsupported file type" (URL Mode)
 
 **Cause**: The URL doesn't point to a supported file type.
 
 **Solution**:
 - Verify the URL ends with a supported file extension
 - Check that the Content-Type header is set correctly by the server
+- Use "Clip Page" mode instead to capture web content
 
 ### "File too large"
 
-**Cause**: The file exceeds the maximum upload size configured in DocuElevate.
+**Cause**: The file/PDF exceeds the maximum upload size configured in DocuElevate.
 
 **Solutions**:
 - Check your DocuElevate `MAX_UPLOAD_SIZE` configuration
-- Try a smaller file
+- Try a smaller file or clip a smaller selection
 - Contact your DocuElevate administrator to increase the limit
 
 ## Privacy & Security
@@ -146,10 +200,12 @@ The extension can send any URL, but DocuElevate will only process supported file
 
 The extension requests minimal permissions:
 
-- **activeTab**: To get the URL of the current tab
+- **activeTab**: To get the URL and content of the current tab
 - **storage**: To save your server URL and session cookie configuration
-- **contextMenus**: To add the "Send to DocuElevate" option to right-click menus
+- **contextMenus**: To add context menu options for sending/clipping
 - **notifications**: To show success/error notifications
+- **scripting**: To inject content capture code into web pages
+- **host_permissions**: To access page content for clipping (restricted to active tab)
 
 ### Data Handling
 
@@ -157,6 +213,7 @@ The extension requests minimal permissions:
 - **Local Configuration**: Your server URL and session cookie are stored locally in your browser
 - **Direct Communication**: All API requests go directly from your browser to your DocuElevate server
 - **No Third Parties**: No data is sent to third-party services
+- **Page Content**: When clipping, page HTML is captured temporarily in memory and converted to PDF locally in your browser before upload
 
 ## Development
 
@@ -175,12 +232,13 @@ browser-extension/
 │   ├── icon48.png
 │   └── icon128.png
 ├── popup/                  # Extension popup UI
-│   ├── popup.html
-│   ├── popup.css
-│   └── popup.js
+│   ├── popup.html          # Popup interface with mode toggle
+│   ├── popup.css           # Styling for popup
+│   └── popup.js            # Popup logic for URL and clip modes
 └── scripts/                # Background and content scripts
-    ├── background.js       # Service worker for background tasks
-    └── content.js          # Content script for page interaction
+    ├── background.js       # Service worker with PDF conversion
+    ├── content.js          # Content script for page capture
+    └── capture.js          # Utility functions for web clipping
 ```
 
 ### Testing
@@ -230,7 +288,15 @@ For issues, questions, or feature requests:
 
 ## Version History
 
-### 1.0.0 (Current)
+### 1.1.0 (Current)
+- **Web Page Clipping**: Clip full pages or selected content as PDF
+- **Dual Mode Interface**: Toggle between "Send URL" and "Clip Page" modes
+- **PDF Conversion**: Browser-based PDF generation using printToPDF API
+- **Enhanced Context Menus**: Separate options for URL sending and page clipping
+- **Selection Clipping**: Clip only selected text/content from pages
+- Cross-browser compatibility (Chrome, Firefox, Edge)
+
+### 1.0.0
 - Initial release
 - Basic URL sending functionality
 - Configuration management
