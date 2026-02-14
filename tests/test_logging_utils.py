@@ -280,7 +280,7 @@ class TestTaskLogCollector:
 
         collector = TaskLogCollector()
         # Don't set a formatter to trigger an edge case
-        
+
         logger = logging.getLogger("test_exception")
         logger.addHandler(collector)
         logger.setLevel(logging.DEBUG)
@@ -292,7 +292,7 @@ class TestTaskLogCollector:
             # Should handle gracefully
         except Exception:
             pytest.fail("Collector should handle exceptions gracefully")
-        
+
         logger.removeHandler(collector)
 
 
@@ -313,16 +313,18 @@ class TestLogTaskProgressWithFileProcessingStep:
         # Setup mocks
         mock_db = MagicMock()
         mock_session_local.return_value.__enter__.return_value = mock_db
-        
+
         # No existing step record
         mock_db.query.return_value.filter.return_value.first.return_value = None
-        
+
         # Mock datetime
-        from datetime import datetime as dt, timezone
+        from datetime import datetime as dt
+        from datetime import timezone
+
         mock_now = dt(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         mock_datetime.now.return_value = mock_now
         mock_datetime.timezone = timezone
-        
+
         # Mock FileProcessingStep creation
         mock_step = Mock()
         mock_file_step.return_value = mock_step
@@ -356,14 +358,16 @@ class TestLogTaskProgressWithFileProcessingStep:
 
         mock_db = MagicMock()
         mock_session_local.return_value.__enter__.return_value = mock_db
-        
+
         mock_db.query.return_value.filter.return_value.first.return_value = None
-        
-        from datetime import datetime as dt, timezone
+
+        from datetime import datetime as dt
+        from datetime import timezone
+
         mock_now = dt(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         mock_datetime.now.return_value = mock_now
         mock_datetime.timezone = timezone
-        
+
         mock_step = Mock()
         mock_file_step.return_value = mock_step
 
@@ -393,14 +397,16 @@ class TestLogTaskProgressWithFileProcessingStep:
 
         mock_db = MagicMock()
         mock_session_local.return_value.__enter__.return_value = mock_db
-        
+
         mock_db.query.return_value.filter.return_value.first.return_value = None
-        
-        from datetime import datetime as dt, timezone
+
+        from datetime import datetime as dt
+        from datetime import timezone
+
         mock_now = dt(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         mock_datetime.now.return_value = mock_now
         mock_datetime.timezone = timezone
-        
+
         mock_step = Mock()
         mock_file_step.return_value = mock_step
 
@@ -428,13 +434,15 @@ class TestLogTaskProgressWithFileProcessingStep:
 
         mock_db = MagicMock()
         mock_session_local.return_value.__enter__.return_value = mock_db
-        
+
         # Existing step without started_at
         mock_existing_step = Mock()
         mock_existing_step.started_at = None
         mock_db.query.return_value.filter.return_value.first.return_value = mock_existing_step
-        
-        from datetime import datetime as dt, timezone
+
+        from datetime import datetime as dt
+        from datetime import timezone
+
         mock_now = dt(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         mock_datetime.now.return_value = mock_now
         mock_datetime.timezone = timezone
@@ -462,12 +470,14 @@ class TestLogTaskProgressWithFileProcessingStep:
 
         mock_db = MagicMock()
         mock_session_local.return_value.__enter__.return_value = mock_db
-        
+
         mock_existing_step = Mock()
         mock_existing_step.started_at = None
         mock_db.query.return_value.filter.return_value.first.return_value = mock_existing_step
-        
-        from datetime import datetime as dt, timezone
+
+        from datetime import datetime as dt
+        from datetime import timezone
+
         mock_now = dt(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         mock_datetime.now.return_value = mock_now
         mock_datetime.timezone = timezone
@@ -511,7 +521,7 @@ class TestLogTaskProgressWithFileProcessingStep:
         # Verify collector was used
         mock_ensure.assert_called_once()
         mock_collector.drain.assert_called_once_with("task-with-logs")
-        
+
         # Verify detail was set from collected logs
         call_kwargs = mock_processing_log.call_args[1]
         assert call_kwargs["detail"] == "Buffered log line 1\nBuffered log line 2"
