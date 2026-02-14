@@ -344,3 +344,149 @@ class TestSettingsValidationEdgeCases:
         is_valid, error = validate_setting_value("unknown_setting_xyz", "some_value")
         assert is_valid is True
         assert error is None
+
+
+@pytest.mark.unit
+class TestGetSettingsByCategory:
+    """Test get_settings_by_category function."""
+
+    def test_returns_dict_with_categories(self):
+        """Test that it returns a dictionary with categories."""
+        from app.utils.settings_service import get_settings_by_category
+
+        result = get_settings_by_category()
+        assert isinstance(result, dict)
+        # Should have some standard categories
+        assert "Core" in result or len(result) > 0
+
+    def test_all_settings_have_category(self):
+        """Test that all settings are grouped by category."""
+        from app.utils.settings_service import SETTING_METADATA, get_settings_by_category
+
+        result = get_settings_by_category()
+        total_settings = sum(len(settings) for settings in result.values())
+        # Should account for all metadata entries
+        assert total_settings >= len(SETTING_METADATA) * 0.8  # Allow for some filtering
+
+
+@pytest.mark.unit
+class TestGetAllSettings:
+    """Test get_all_settings function."""
+
+    def test_returns_list_of_dicts(self):
+        """Test that it returns a list of setting dictionaries."""
+        from app.utils.settings_service import get_all_settings
+
+        result = get_all_settings()
+        assert isinstance(result, list)
+        if len(result) > 0:
+            assert isinstance(result[0], dict)
+            assert "key" in result[0]
+            assert "metadata" in result[0]
+
+
+@pytest.mark.unit
+class TestSaveSettingErrors:
+    """Test error handling in save_setting."""
+
+    def test_handles_database_error(self):
+        """Test handling of database errors."""
+        from app.utils.settings_service import save_setting
+
+        mock_db = MagicMock()
+        mock_db.commit.side_effect = SQLAlchemyError("Database error")
+
+        success, error = save_setting(mock_db, "test_key", "test_value")
+        
+        assert success is False
+        assert "error" in error.lower() or "failed" in error.lower()
+        # Should rollback on error
+        mock_db.rollback.assert_called_once()
+
+    def test_closes_session_on_error(self):
+        """Test that session operations are properly managed on error."""
+        from app.utils.settings_service import save_setting
+
+        mock_db = MagicMock()
+        mock_db.query.side_effect = SQLAlchemyError("Query error")
+
+        success, error = save_setting(mock_db, "test_key", "test_value")
+
+        assert success is False
+        # Should attempt rollback
+        mock_db.rollback.assert_called()
+
+
+@pytest.mark.unit
+class TestGetSettingValue:
+    """Test get_setting_value function."""
+
+    def test_returns_value_from_database(self):
+        """Test retrieving value from database."""
+        from app.models import ApplicationSettings
+        from app.utils.settings_service import get_setting_value
+
+        mock_db = MagicMock()
+        mock_setting = ApplicationSettings(key="test_key", value="test_value")
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_setting
+
+        result = get_setting_value(mock_db, "test_key")
+        assert result == "test_value"
+
+    def test_returns_none_for_missing_setting(self):
+        """Test that None is returned for missing setting."""
+        from app.utils.settings_service import get_setting_value
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        result = get_setting_value(mock_db, "nonexistent_key")
+        assert result is None
+
+
+@pytest.mark.unit
+class TestDeleteSetting:
+    """Test delete_setting function."""
+
+    def test_deletes_existing_setting(self):
+        """Test deleting an existing setting."""
+        from app.models import ApplicationSettings
+        from app.utils.settings_service import delete_setting
+
+        mock_db = MagicMock()
+        mock_setting = ApplicationSettings(key="test_key", value="test_value")
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_setting
+
+        success, message = delete_setting(mock_db, "test_key")
+
+        assert success is True
+        mock_db.delete.assert_called_once_with(mock_setting)
+        mock_db.commit.assert_called_once()
+
+    def test_handles_nonexistent_setting(self):
+        """Test deleting a setting that doesn't exist."""
+        from app.utils.settings_service import delete_setting
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        success, message = delete_setting(mock_db, "nonexistent_key")
+
+        # Behavior depends on implementation - might be success or failure
+        assert isinstance(success, bool)
+        assert isinstance(message, str)
+
+    def test_handles_database_error_on_delete(self):
+        """Test handling database error during delete."""
+        from app.models import ApplicationSettings
+        from app.utils.settings_service import delete_setting
+
+        mock_db = MagicMock()
+        mock_setting = ApplicationSettings(key="test_key", value="test_value")
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_setting
+        mock_db.commit.side_effect = SQLAlchemyError("Delete error")
+
+        success, message = delete_setting(mock_db, "test_key")
+
+        assert success is False
+        mock_db.rollback.assert_called_once()

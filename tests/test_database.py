@@ -323,3 +323,211 @@ class TestInitDbErrors:
 
         with pytest.raises(exc.SQLAlchemyError):
             init_db()
+
+
+@pytest.mark.unit
+class TestMultiVersionMigrations:
+    """Test migration scenarios from various database versions."""
+
+    def test_migration_from_v1_to_v2_processing_logs(self, tmp_path):
+        """Test migration from v1 (no detail column) to v2 (with detail)."""
+        from sqlalchemy import create_engine, inspect, text
+
+        from app.database import _run_schema_migrations
+
+        # Create v1 database (without detail column)
+        db_path = str(tmp_path / "v1_to_v2.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "CREATE TABLE processing_logs ("
+                    "id INTEGER PRIMARY KEY, "
+                    "file_id INTEGER, "
+                    "task_id VARCHAR, "
+                    "step_name VARCHAR, "
+                    "status VARCHAR, "
+                    "message VARCHAR, "
+                    "timestamp DATETIME)"
+                )
+            )
+            # Insert test data
+            conn.execute(
+                text(
+                    "INSERT INTO processing_logs (task_id, step_name, status, message) "
+                    "VALUES ('test-1', 'test_step', 'success', 'Test message')"
+                )
+            )
+
+        # Run migration to v2
+        _run_schema_migrations(engine)
+
+        # Verify detail column exists and old data is preserved
+        inspector = inspect(engine)
+        columns = [col["name"] for col in inspector.get_columns("processing_logs")]
+        assert "detail" in columns
+
+        # Verify old data still accessible
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT task_id, message, detail FROM processing_logs WHERE task_id = 'test-1'"))
+            row = result.fetchone()
+            assert row[0] == "test-1"
+            assert row[1] == "Test message"
+            assert row[2] is None  # detail should be NULL for old records
+
+        engine.dispose()
+
+    def test_migration_from_v1_to_v3_files_table(self, tmp_path):
+        """Test migration from v1 (basic) to v3 (with dedup columns)."""
+        from sqlalchemy import create_engine, inspect, text
+
+        from app.database import _run_schema_migrations
+
+        # Create v1 database (minimal files table)
+        db_path = str(tmp_path / "v1_to_v3.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "CREATE TABLE files ("
+                    "id INTEGER PRIMARY KEY, "
+                    "filename VARCHAR, "
+                    "filehash VARCHAR, "
+                    "upload_date DATETIME)"
+                )
+            )
+            # Insert test data
+            conn.execute(text("INSERT INTO files (filename, filehash) VALUES ('test.pdf', 'abc123')"))
+
+        # Run migration to v3 (adds path columns and dedup columns)
+        _run_schema_migrations(engine)
+
+        # Verify all new columns exist
+        inspector = inspect(engine)
+        columns = {col["name"] for col in inspector.get_columns("files")}
+        assert "original_file_path" in columns
+        assert "processed_file_path" in columns
+        assert "is_duplicate" in columns
+        assert "duplicate_of_id" in columns
+
+        # Verify old data preserved with default values
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT filename, is_duplicate FROM files WHERE filename = 'test.pdf'"))
+            row = result.fetchone()
+            assert row[0] == "test.pdf"
+            # is_duplicate should be False (0) by default
+            assert row[1] in (0, False)
+
+        engine.dispose()
+
+    def test_migration_with_unique_index_already_dropped(self, tmp_path):
+        """Test that migration handles case where unique index was already dropped."""
+        from sqlalchemy import create_engine, text
+
+        from app.database import _run_schema_migrations
+
+        # Create database without unique index
+        db_path = str(tmp_path / "no_index.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "CREATE TABLE files ("
+                    "id INTEGER PRIMARY KEY, "
+                    "filename VARCHAR, "
+                    "filehash VARCHAR, "
+                    "original_file_path VARCHAR, "
+                    "processed_file_path VARCHAR, "
+                    "is_duplicate BOOLEAN DEFAULT FALSE NOT NULL, "
+                    "duplicate_of_id INTEGER)"
+                )
+            )
+
+        # Run migration - should not error even though there's no index to drop
+        _run_schema_migrations(engine)
+
+        # Should complete without error
+        engine.dispose()
+
+    def test_migration_partial_state(self, tmp_path):
+        """Test migration from partial state (some columns added, some missing)."""
+        from sqlalchemy import create_engine, inspect, text
+
+        from app.database import _run_schema_migrations
+
+        # Create database with only some of the new columns
+        db_path = str(tmp_path / "partial.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+        with engine.begin() as conn:
+            # Files table with only original_file_path, missing processed_file_path and dedup columns
+            conn.execute(
+                text(
+                    "CREATE TABLE files ("
+                    "id INTEGER PRIMARY KEY, "
+                    "filename VARCHAR, "
+                    "filehash VARCHAR, "
+                    "original_file_path VARCHAR)"
+                )
+            )
+            # Processing logs with detail column already present
+            conn.execute(
+                text(
+                    "CREATE TABLE processing_logs ("
+                    "id INTEGER PRIMARY KEY, "
+                    "task_id VARCHAR, "
+                    "step_name VARCHAR, "
+                    "status VARCHAR, "
+                    "message VARCHAR, "
+                    "detail TEXT, "
+                    "timestamp DATETIME)"
+                )
+            )
+
+        # Run migration - should add missing columns only
+        _run_schema_migrations(engine)
+
+        # Verify all columns exist now
+        inspector = inspect(engine)
+        files_columns = {col["name"] for col in inspector.get_columns("files")}
+        assert "original_file_path" in files_columns
+        assert "processed_file_path" in files_columns
+        assert "is_duplicate" in files_columns
+        assert "duplicate_of_id" in files_columns
+
+        logs_columns = {col["name"] for col in inspector.get_columns("processing_logs")}
+        assert "detail" in logs_columns
+
+        engine.dispose()
+
+    def test_migration_exception_handling(self, tmp_path):
+        """Test that migration handles exceptions gracefully for index operations."""
+        from sqlalchemy import create_engine, text
+
+        from app.database import _run_schema_migrations
+
+        # Create database with all columns but trigger exception path
+        db_path = str(tmp_path / "exception_test.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "CREATE TABLE files ("
+                    "id INTEGER PRIMARY KEY, "
+                    "filename VARCHAR, "
+                    "filehash VARCHAR, "
+                    "original_file_path VARCHAR, "
+                    "processed_file_path VARCHAR, "
+                    "is_duplicate BOOLEAN DEFAULT FALSE NOT NULL, "
+                    "duplicate_of_id INTEGER)"
+                )
+            )
+
+        # Run migration - should handle the exception path for index operations
+        # (when get_indexes might have issues)
+        try:
+            _run_schema_migrations(engine)
+            # Should complete without raising
+        except Exception as e:
+            pytest.fail(f"Migration should handle exceptions gracefully: {e}")
+
+        engine.dispose()

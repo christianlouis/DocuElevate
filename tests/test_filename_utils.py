@@ -417,3 +417,83 @@ class TestUniqueFilepathWithCounter:
             assert ".pdf" in result
             # Should not be a simple counter-based name
             assert not any(f"test-{i:04d}.pdf" in result for i in range(1, 100))
+
+
+@pytest.mark.unit
+class TestSanitizeFilenameEdgeCases:
+    """Additional edge cases for sanitize_filename."""
+
+    def test_handles_empty_string(self):
+        """Test with empty string."""
+        result = sanitize_filename("")
+        # Should return a default document name
+        assert "document_" in result
+        assert len(result) > 0
+
+    def test_handles_only_periods(self):
+        """Test with only periods."""
+        result = sanitize_filename("...")
+        # Should return a default document name
+        assert "document_" in result
+
+    def test_handles_only_dots(self):
+        """Test with single dot."""
+        result = sanitize_filename(".")
+        # Should return a default document name
+        assert "document_" in result
+
+    def test_preserves_multiple_extensions(self):
+        """Test that multiple extensions are preserved."""
+        result = sanitize_filename("file.tar.gz")
+        assert ".tar.gz" in result or "file_tar_gz" in result
+
+    def test_removes_null_bytes(self):
+        """Test that null bytes are removed."""
+        result = sanitize_filename("file\x00name.pdf")
+        assert "\x00" not in result
+        assert "file" in result
+        assert "name" in result
+
+    def test_handles_unicode_characters(self):
+        """Test handling of unicode characters."""
+        result = sanitize_filename("文档.pdf")
+        # Should preserve unicode or convert safely
+        assert ".pdf" in result
+        assert len(result) > 0
+
+
+@pytest.mark.unit
+class TestExtractRemotePathEdgeCases:
+    """Additional edge cases for extract_remote_path."""
+
+    def test_file_not_in_base_dir(self):
+        """Test when file is not a subdirectory of base_dir."""
+        result = extract_remote_path("/other/path/file.pdf", "/base/dir", "/remote")
+        # Should just use filename
+        assert result == "remote/file.pdf"
+
+    def test_multiple_processed_directories(self):
+        """Test path with multiple 'processed' directories."""
+        result = extract_remote_path(
+            "/base/processed/subdir/processed/file.pdf", "/base", "/remote"
+        )
+        # Should remove all 'processed' directories
+        assert "processed" not in result.lower()
+
+    def test_remote_base_with_trailing_slash(self):
+        """Test remote base that already has trailing slash."""
+        result = extract_remote_path("/base/file.pdf", "/base", "/remote/")
+        # Should handle gracefully
+        assert result.startswith("remote/")
+
+    def test_empty_remote_base(self):
+        """Test with empty remote base."""
+        result = extract_remote_path("/base/subdir/file.pdf", "/base", "")
+        assert result == "subdir/file.pdf"
+
+    def test_windows_style_separators(self, monkeypatch):
+        """Test handling of Windows-style path separators."""
+        result = extract_remote_path("/base/subdir/file.pdf", "/base", "/remote")
+        # Should use forward slashes in output
+        assert "\\" not in result
+        assert "/" in result

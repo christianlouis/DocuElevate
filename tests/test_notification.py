@@ -232,3 +232,249 @@ class TestAppriseInitialization:
 
         # Should still return instance
         assert result == mock_apprise_instance
+
+
+@pytest.mark.unit
+class TestSendNotification:
+    """Test send_notification function"""
+
+    @patch("app.utils.notification.init_apprise")
+    @patch("app.utils.notification.settings")
+    def test_send_notification_no_urls_configured(self, mock_settings, mock_init_apprise):
+        """Test sending notification when no URLs are configured."""
+        from app.utils.notification import send_notification
+
+        mock_settings.notification_urls = []
+
+        result = send_notification("Test", "Test message")
+
+        assert result is False
+        mock_init_apprise.assert_not_called()
+
+    @patch("app.utils.notification.init_apprise")
+    @patch("app.utils.notification.settings")
+    def test_send_notification_success_type(self, mock_settings, mock_init_apprise):
+        """Test notification with success type."""
+        from app.utils.notification import send_notification
+
+        mock_settings.notification_urls = ["https://example.com/notify"]
+        mock_apprise = MagicMock()
+        mock_server = MagicMock()
+        mock_server.notify.return_value = True
+        mock_apprise.servers = [mock_server]
+        mock_init_apprise.return_value = mock_apprise
+
+        result = send_notification("Test", "Message", notification_type="success")
+
+        assert result is True
+        mock_server.notify.assert_called_once()
+        # Check that SUCCESS type was used
+        call_kwargs = mock_server.notify.call_args[1]
+        assert "notify_type" in call_kwargs
+
+    @patch("app.utils.notification.init_apprise")
+    @patch("app.utils.notification.settings")
+    def test_send_notification_warning_type(self, mock_settings, mock_init_apprise):
+        """Test notification with warning type."""
+        from app.utils.notification import send_notification
+
+        mock_settings.notification_urls = ["https://example.com/notify"]
+        mock_apprise = MagicMock()
+        mock_server = MagicMock()
+        mock_server.notify.return_value = True
+        mock_apprise.servers = [mock_server]
+        mock_init_apprise.return_value = mock_apprise
+
+        result = send_notification("Test", "Message", notification_type="warn")
+
+        assert result is True
+
+    @patch("app.utils.notification.init_apprise")
+    @patch("app.utils.notification.settings")
+    def test_send_notification_failure_type(self, mock_settings, mock_init_apprise):
+        """Test notification with failure type."""
+        from app.utils.notification import send_notification
+
+        mock_settings.notification_urls = ["https://example.com/notify"]
+        mock_apprise = MagicMock()
+        mock_server = MagicMock()
+        mock_server.notify.return_value = True
+        mock_apprise.servers = [mock_server]
+        mock_init_apprise.return_value = mock_apprise
+
+        result = send_notification("Test", "Message", notification_type="failed")
+
+        assert result is True
+
+    @patch("app.utils.notification.init_apprise")
+    @patch("app.utils.notification.settings")
+    def test_send_notification_no_servers(self, mock_settings, mock_init_apprise):
+        """Test notification when no servers are available."""
+        from app.utils.notification import send_notification
+
+        mock_settings.notification_urls = ["https://example.com/notify"]
+        mock_apprise = MagicMock()
+        mock_apprise.servers = []
+        mock_init_apprise.return_value = mock_apprise
+
+        result = send_notification("Test", "Message")
+
+        assert result is False
+
+    @patch("app.utils.notification.init_apprise")
+    @patch("app.utils.notification.settings")
+    def test_send_notification_partial_success(self, mock_settings, mock_init_apprise):
+        """Test notification with multiple servers, some failing."""
+        from app.utils.notification import send_notification
+
+        mock_settings.notification_urls = ["https://example.com/notify"]
+        mock_apprise = MagicMock()
+        mock_server1 = MagicMock()
+        mock_server1.notify.return_value = True
+        mock_server2 = MagicMock()
+        mock_server2.notify.return_value = False
+        mock_apprise.servers = [mock_server1, mock_server2]
+        mock_init_apprise.return_value = mock_apprise
+
+        result = send_notification("Test", "Message")
+
+        assert result is True  # At least one succeeded
+
+    @patch("app.utils.notification.init_apprise")
+    @patch("app.utils.notification.settings")
+    def test_send_notification_with_attachments(self, mock_settings, mock_init_apprise):
+        """Test notification with file attachments."""
+        from app.utils.notification import send_notification
+
+        mock_settings.notification_urls = ["https://example.com/notify"]
+        mock_apprise = MagicMock()
+        mock_server = MagicMock()
+        mock_server.notify.return_value = True
+        mock_apprise.servers = [mock_server]
+        mock_init_apprise.return_value = mock_apprise
+
+        result = send_notification("Test", "Message", attachments=["/path/to/file.pdf"])
+
+        assert result is True
+        call_kwargs = mock_server.notify.call_args[1]
+        assert call_kwargs["attach"] == ["/path/to/file.pdf"]
+
+    @patch("app.utils.notification.init_apprise")
+    @patch("app.utils.notification.settings")
+    def test_send_notification_exception_handling(self, mock_settings, mock_init_apprise):
+        """Test that exceptions are caught and logged."""
+        from app.utils.notification import send_notification
+
+        mock_settings.notification_urls = ["https://example.com/notify"]
+        mock_init_apprise.side_effect = Exception("Connection error")
+
+        result = send_notification("Test", "Message")
+
+        assert result is False
+
+
+@pytest.mark.unit
+class TestNotificationHelpers:
+    """Test notification helper functions."""
+
+    @patch("app.utils.notification.send_notification")
+    @patch("app.utils.notification.settings")
+    def test_notify_celery_failure_disabled(self, mock_settings, mock_send):
+        """Test Celery failure notification when disabled."""
+        from app.utils.notification import notify_celery_failure
+
+        mock_settings.notify_on_task_failure = False
+
+        result = notify_celery_failure("test_task", "task-123", Exception("Error"), [], {})
+
+        assert result is False
+        mock_send.assert_not_called()
+
+    @patch("app.utils.notification.send_notification")
+    @patch("app.utils.notification.settings")
+    def test_notify_celery_failure_enabled(self, mock_settings, mock_send):
+        """Test Celery failure notification when enabled."""
+        from app.utils.notification import notify_celery_failure
+
+        mock_settings.notify_on_task_failure = True
+        mock_send.return_value = True
+
+        result = notify_celery_failure("test_task", "task-123", Exception("Error"), [], {})
+
+        assert result is True
+        mock_send.assert_called_once()
+        call_args = mock_send.call_args[1]
+        assert call_args["notification_type"] == "failure"
+
+    @patch("app.utils.notification.send_notification")
+    @patch("app.utils.notification.settings")
+    def test_notify_credential_failure_disabled(self, mock_settings, mock_send):
+        """Test credential failure notification when disabled."""
+        from app.utils.notification import notify_credential_failure
+
+        mock_settings.notify_on_credential_failure = False
+
+        result = notify_credential_failure("Dropbox", "Invalid token")
+
+        assert result is False
+        mock_send.assert_not_called()
+
+    @patch("app.utils.notification.send_notification")
+    @patch("app.utils.notification.settings")
+    def test_notify_startup_disabled(self, mock_settings, mock_send):
+        """Test startup notification when disabled."""
+        from app.utils.notification import notify_startup
+
+        mock_settings.notify_on_startup = False
+
+        result = notify_startup()
+
+        assert result is False
+        mock_send.assert_not_called()
+
+    @patch("app.utils.notification.send_notification")
+    @patch("app.utils.notification.settings")
+    def test_notify_shutdown_disabled(self, mock_settings, mock_send):
+        """Test shutdown notification when disabled."""
+        from app.utils.notification import notify_shutdown
+
+        mock_settings.notify_on_shutdown = False
+
+        result = notify_shutdown()
+
+        assert result is False
+        mock_send.assert_not_called()
+
+    @patch("app.utils.notification.send_notification")
+    @patch("app.utils.notification.settings")
+    def test_notify_file_processed_disabled(self, mock_settings, mock_send):
+        """Test file processed notification when disabled."""
+        from app.utils.notification import notify_file_processed
+
+        mock_settings.notify_on_file_processed = False
+
+        result = notify_file_processed("test.pdf", 1024000, {}, [])
+
+        assert result is False
+        mock_send.assert_not_called()
+
+    @patch("app.utils.notification.send_notification")
+    @patch("app.utils.notification.settings")
+    def test_notify_file_processed_with_metadata(self, mock_settings, mock_send):
+        """Test file processed notification with metadata."""
+        from app.utils.notification import notify_file_processed
+
+        mock_settings.notify_on_file_processed = True
+        mock_send.return_value = True
+
+        metadata = {"document_type": "invoice", "tags": ["important", "finance"]}
+        result = notify_file_processed("test.pdf", 2048000, metadata, ["dropbox", "s3"])
+
+        assert result is True
+        mock_send.assert_called_once()
+        # Check message contains expected info
+        message = mock_send.call_args[0][1]
+        assert "2.00 MB" in message
+        assert "invoice" in message
+        assert "important, finance" in message
+        assert "dropbox, s3" in message

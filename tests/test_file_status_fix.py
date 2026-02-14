@@ -185,3 +185,86 @@ class TestMetricsCounting:
         assert summary["uploads"]["success"] == 6
         assert summary["uploads"]["failure"] == 0
         assert summary["uploads"]["in_progress"] == 0
+
+
+@pytest.mark.unit
+class TestGetFilesProcessingStatusEdgeCases:
+    """Test edge cases for get_files_processing_status."""
+
+    def test_handles_empty_file_list(self, db_session):
+        """Test with empty file list."""
+        from app.utils.file_status import get_files_processing_status
+
+        result = get_files_processing_status(db_session, [])
+        assert result == {}
+
+    def test_handles_nonexistent_file_ids(self, db_session):
+        """Test with file IDs that don't exist."""
+        from app.utils.file_status import get_files_processing_status
+
+        result = get_files_processing_status(db_session, [99999, 99998])
+        # Should return status for these IDs even if they don't exist
+        assert 99999 in result
+        assert result[99999]["status"] == "pending"
+
+    def test_handles_mixed_file_states(self, db_session):
+        """Test with files in different states."""
+        from app.models import FileRecord
+        from app.utils.file_status import get_files_processing_status
+        from app.utils.step_manager import initialize_file_steps, update_step_status
+
+        # Create multiple files with different states
+        file1 = FileRecord(filename="file1.pdf", is_duplicate=False)
+        file2 = FileRecord(filename="file2.pdf", is_duplicate=True)
+        file3 = FileRecord(filename="file3.pdf", is_duplicate=False)
+
+        db_session.add_all([file1, file2, file3])
+        db_session.commit()
+
+        # Initialize steps for file1 and file3
+        initialize_file_steps(db_session, file1.id)
+        initialize_file_steps(db_session, file3.id)
+
+        # Mark file1 as failed
+        update_step_status(db_session, file1.id, "extract_text", "failure")
+
+        # Mark file3 as in progress
+        update_step_status(db_session, file3.id, "extract_text", "in_progress")
+
+        result = get_files_processing_status(db_session, [file1.id, file2.id, file3.id])
+
+        assert result[file1.id]["status"] == "failed"
+        assert result[file2.id]["status"] == "duplicate"
+        assert result[file3.id]["status"] == "processing"
+
+
+@pytest.mark.unit
+class TestComputeStatusFromLogsDeprecated:
+    """Test the deprecated _compute_status_from_logs function."""
+
+    def test_empty_logs_list(self):
+        """Test with empty logs list."""
+        from app.utils.file_status import _compute_status_from_logs
+
+        result = _compute_status_from_logs([])
+        assert result["status"] == "pending"
+        assert result["last_step"] is None
+        assert result["has_errors"] is False
+
+    def test_logs_with_multiple_steps(self, db_session):
+        """Test logs from multiple steps."""
+        from app.models import ProcessingLog
+        from app.utils.file_status import _compute_status_from_logs
+
+        logs = [
+            ProcessingLog(
+                file_id=1, task_id="task1", step_name="step1", status="success", message="Done", timestamp=None
+            ),
+            ProcessingLog(
+                file_id=1, task_id="task2", step_name="step2", status="in_progress", message="Running", timestamp=None
+            ),
+        ]
+
+        result = _compute_status_from_logs(logs)
+        assert result["status"] == "processing"
+        assert result["last_step"] == "step1"  # First log in list
