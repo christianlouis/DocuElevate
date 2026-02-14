@@ -211,16 +211,16 @@ class TestTaskFailureHandler:
         mock_settings.notify_on_task_failure = True
 
         # Import to ensure signal is connected
-        from app.celery_app import task_failure_handler
-
         # Import the signal
         from celery.signals import task_failure
+
+        from app.celery_app import task_failure_handler
 
         # The handler should be connected to the signal
         # We can test this by verifying the signal has receivers
         receivers = task_failure.receivers
         assert len(receivers) > 0
-        
+
         # Simply verify that importing the handler doesn't cause errors
         # The actual signal connection is tested implicitly by the other tests
         assert callable(task_failure_handler)

@@ -1,8 +1,9 @@
 """Tests for app/views/google_drive.py module."""
 
-import pytest
-from unittest.mock import patch
 import urllib.parse
+from unittest.mock import patch
+
+import pytest
 
 
 @pytest.mark.integration
@@ -39,12 +40,11 @@ class TestGoogleDriveViews:
         client_id = "test_client_id_123"
         redirect_uri = "https://example.com/callback"
         response = client.get(
-            f"/google-drive-auth-start?client_id={client_id}&redirect_uri={redirect_uri}",
-            follow_redirects=False
+            f"/google-drive-auth-start?client_id={client_id}&redirect_uri={redirect_uri}", follow_redirects=False
         )
-        
+
         assert response.status_code in [302, 307]  # Redirect status codes
-        
+
         # Verify redirect location
         location = response.headers.get("location")
         assert location is not None
@@ -60,13 +60,10 @@ class TestGoogleDriveViews:
     def test_google_drive_auth_start_without_redirect_uri(self, client):
         """Test starting Google Drive OAuth flow without explicit redirect_uri."""
         client_id = "test_client_id_456"
-        response = client.get(
-            f"/google-drive-auth-start?client_id={client_id}",
-            follow_redirects=False
-        )
-        
+        response = client.get(f"/google-drive-auth-start?client_id={client_id}", follow_redirects=False)
+
         assert response.status_code in [302, 307]  # Redirect status codes
-        
+
         # Verify redirect location
         location = response.headers.get("location")
         assert location is not None
@@ -78,14 +75,11 @@ class TestGoogleDriveViews:
     def test_google_drive_auth_start_scope_configuration(self, client):
         """Test that Google Drive auth start uses correct OAuth scope."""
         client_id = "test_client_id_789"
-        response = client.get(
-            f"/google-drive-auth-start?client_id={client_id}",
-            follow_redirects=False
-        )
-        
+        response = client.get(f"/google-drive-auth-start?client_id={client_id}", follow_redirects=False)
+
         location = response.headers.get("location")
         assert location is not None
-        
+
         # The scope should be URL encoded, so check for the encoded version
         # drive.file scope: https://www.googleapis.com/auth/drive.file
         expected_scope = urllib.parse.quote("https://www.googleapis.com/auth/drive.file")
@@ -100,7 +94,7 @@ class TestGoogleDriveViews:
         mock_settings.google_drive_refresh_token = "test_token"
         mock_settings.google_drive_credentials_json = '{"test": "creds"}'
         mock_settings.google_drive_folder_id = None  # Empty folder ID
-        
+
         response = client.get("/google-drive-setup")
         assert response.status_code == 200
         # Verify the response context indicates configuration is incomplete
@@ -116,7 +110,7 @@ class TestGoogleDriveViews:
         mock_settings.google_drive_refresh_token = "test_token"
         mock_settings.google_drive_credentials_json = '{"test": "creds"}'
         mock_settings.google_drive_folder_id = ""  # Empty string folder ID
-        
+
         response = client.get("/google-drive-setup")
         assert response.status_code == 200
         # Should handle empty string folder_id similar to None
@@ -130,7 +124,7 @@ class TestGoogleDriveViews:
         mock_settings.google_drive_refresh_token = "oauth_token"
         mock_settings.google_drive_folder_id = "test_folder_id"
         mock_settings.google_drive_credentials_json = None
-        
+
         response = client.get("/google-drive-setup")
         assert response.status_code == 200
 
@@ -143,6 +137,6 @@ class TestGoogleDriveViews:
         mock_settings.google_drive_client_id = None
         mock_settings.google_drive_client_secret = None
         mock_settings.google_drive_refresh_token = None
-        
+
         response = client.get("/google-drive-setup")
         assert response.status_code == 200

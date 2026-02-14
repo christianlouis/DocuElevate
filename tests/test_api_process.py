@@ -1,7 +1,5 @@
 """Tests for app/api/process.py module."""
 
-import os
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
@@ -169,9 +167,7 @@ class TestProcessEndpoints:
         test_file = tmp_path / "test1.pdf"
         test_file.write_text("test content")
 
-        with patch("app.api.process.settings") as mock_settings, patch(
-            "app.api.process.process_document"
-        ) as mock_task:
+        with patch("app.api.process.settings") as mock_settings, patch("app.api.process.process_document") as mock_task:
             mock_settings.workdir = str(tmp_path)
             mock_settings.processall_throttle_threshold = 10
             mock_task.delay.return_value = Mock(id="task-1")
@@ -192,9 +188,7 @@ class TestProcessEndpoints:
         for i in range(3):
             (tmp_path / f"test{i}.pdf").write_text(f"test content {i}")
 
-        with patch("app.api.process.settings") as mock_settings, patch(
-            "app.api.process.process_document"
-        ) as mock_task:
+        with patch("app.api.process.settings") as mock_settings, patch("app.api.process.process_document") as mock_task:
             mock_settings.workdir = str(tmp_path)
             mock_settings.processall_throttle_threshold = 10
             mock_task.delay.return_value = Mock(id="task-id")
@@ -214,9 +208,7 @@ class TestProcessEndpoints:
         for i in range(12):
             (tmp_path / f"test{i}.pdf").write_text(f"test content {i}")
 
-        with patch("app.api.process.settings") as mock_settings, patch(
-            "app.api.process.process_document"
-        ) as mock_task:
+        with patch("app.api.process.settings") as mock_settings, patch("app.api.process.process_document") as mock_task:
             mock_settings.workdir = str(tmp_path)
             mock_settings.processall_throttle_threshold = 10
             mock_settings.processall_throttle_delay = 5
@@ -246,9 +238,7 @@ class TestProcessEndpoints:
         (tmp_path / "test.docx").write_text("word content")
         (tmp_path / "test.jpg").write_text("image content")
 
-        with patch("app.api.process.settings") as mock_settings, patch(
-            "app.api.process.process_document"
-        ) as mock_task:
+        with patch("app.api.process.settings") as mock_settings, patch("app.api.process.process_document") as mock_task:
             mock_settings.workdir = str(tmp_path)
             mock_settings.processall_throttle_threshold = 10
             mock_task.delay.return_value = Mock(id="task-id")
@@ -270,9 +260,7 @@ class TestProcessEndpoints:
         for i in range(threshold):
             (tmp_path / f"at_threshold_{i}.pdf").write_text(f"content {i}")
 
-        with patch("app.api.process.settings") as mock_settings, patch(
-            "app.api.process.process_document"
-        ) as mock_task:
+        with patch("app.api.process.settings") as mock_settings, patch("app.api.process.process_document") as mock_task:
             mock_settings.workdir = str(tmp_path)
             mock_settings.processall_throttle_threshold = threshold
             mock_settings.processall_throttle_delay = 2
@@ -291,9 +279,7 @@ class TestProcessEndpoints:
         for i in range(threshold + 1):
             (tmp_path / f"above_threshold_{i}.pdf").write_text(f"content {i}")
 
-        with patch("app.api.process.settings") as mock_settings, patch(
-            "app.api.process.process_document"
-        ) as mock_task:
+        with patch("app.api.process.settings") as mock_settings, patch("app.api.process.process_document") as mock_task:
             mock_settings.workdir = str(tmp_path)
             mock_settings.processall_throttle_threshold = threshold
             mock_settings.processall_throttle_delay = 2

@@ -842,8 +842,9 @@ class TestDeleteFileExceptions:
         db_session.commit()
         file_id = file.id
 
-        with patch("app.config.settings") as mock_settings, patch.object(
-            db_session, "delete", side_effect=Exception("Database error")
+        with (
+            patch("app.config.settings") as mock_settings,
+            patch.object(db_session, "delete", side_effect=Exception("Database error")),
         ):
             mock_settings.allow_file_delete = True
             response = client.delete(f"/api/files/{file_id}")
@@ -869,8 +870,9 @@ class TestDeleteFileExceptions:
         def failing_commit():
             raise Exception("Database commit error")
 
-        with patch("app.config.settings") as mock_settings, patch.object(
-            db_session, "commit", side_effect=failing_commit
+        with (
+            patch("app.config.settings") as mock_settings,
+            patch.object(db_session, "commit", side_effect=failing_commit),
         ):
             mock_settings.allow_file_delete = True
             response = client.post("/api/files/bulk-delete", json=[file_id])
@@ -948,7 +950,9 @@ class TestRetryPipelineSteps:
         db_session.add(file)
         db_session.commit()
 
-        with patch("app.tasks.process_with_azure_document_intelligence.process_with_azure_document_intelligence") as mock_task:
+        with patch(
+            "app.tasks.process_with_azure_document_intelligence.process_with_azure_document_intelligence"
+        ) as mock_task:
             mock_task.delay.return_value = Mock(id="task-azure")
             result = _retry_pipeline_step(file, "process_with_azure_document_intelligence", db_session)
             assert result["task_id"] == "task-azure"
@@ -991,8 +995,9 @@ class TestRetryPipelineSteps:
         db_session.add(file)
         db_session.commit()
 
-        with patch("app.tasks.extract_metadata_with_gpt.extract_metadata_with_gpt") as mock_task, patch(
-            "app.api.files._extract_text_from_pdf", return_value="Sample text"
+        with (
+            patch("app.tasks.extract_metadata_with_gpt.extract_metadata_with_gpt") as mock_task,
+            patch("app.api.files._extract_text_from_pdf", return_value="Sample text"),
         ):
             mock_task.delay.return_value = Mock(id="task-gpt")
             result = _retry_pipeline_step(file, "extract_metadata_with_gpt", db_session)
@@ -1035,8 +1040,9 @@ class TestRetryPipelineSteps:
         db_session.add(file)
         db_session.commit()
 
-        with patch("app.tasks.extract_metadata_with_gpt.extract_metadata_with_gpt") as mock_task, patch(
-            "app.api.files._extract_text_from_pdf", return_value="Sample text"
+        with (
+            patch("app.tasks.extract_metadata_with_gpt.extract_metadata_with_gpt") as mock_task,
+            patch("app.api.files._extract_text_from_pdf", return_value="Sample text"),
         ):
             mock_task.delay.return_value = Mock(id="task-embed")
             result = _retry_pipeline_step(file, "embed_metadata_into_pdf", db_session)
@@ -1065,9 +1071,10 @@ class TestRetryUploadTasks:
         db_session.add(file)
         db_session.commit()
 
-        with patch("app.api.files.settings") as mock_settings, patch(
-            "app.tasks.upload_to_dropbox.upload_to_dropbox"
-        ) as mock_task:
+        with (
+            patch("app.api.files.settings") as mock_settings,
+            patch("app.tasks.upload_to_dropbox.upload_to_dropbox") as mock_task,
+        ):
             mock_settings.workdir = str(tmp_path)
             mock_task.delay.return_value = Mock(id="task-dropbox")
             response = client.post(f"/api/files/{file.id}/retry-subtask?subtask_name=upload_to_dropbox")
