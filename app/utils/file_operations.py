@@ -1,7 +1,8 @@
 import hashlib
+from pathlib import Path
 
 
-def hash_file(filepath, chunk_size=65536):
+def hash_file(filepath: str | Path, chunk_size: int = 65536) -> str:
     """
     Returns the SHA-256 hash of the file at 'filepath'.
     Reads the file in chunks to handle large files efficiently.

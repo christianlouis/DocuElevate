@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 _PYDANTIC_INTERNALS = {"model_computed_fields", "model_config", "model_extra", "model_fields", "model_fields_set"}
 
 
-def dump_all_settings():
+def dump_all_settings() -> None:
     """Log all settings values for diagnostic purposes"""
     logger.info("--- DUMPING ALL SETTINGS FOR DIAGNOSTIC PURPOSES ---")
     for key in dir(settings):
@@ -60,7 +60,7 @@ def dump_all_settings():
     logger.info("--- END OF SETTINGS DUMP ---")
 
 
-def get_settings_for_display(show_values=False):
+def get_settings_for_display(show_values: bool = False) -> dict[str, list[dict[str, object]]]:
     """
     Group settings into logical categories and check if they are configured.
     Returns a dictionary with categories as keys and lists of setting items as values.

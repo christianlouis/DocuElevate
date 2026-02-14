@@ -17,7 +17,7 @@ from app.models import ApplicationSettings
 logger = logging.getLogger(__name__)
 
 
-def load_settings_from_db(settings_obj, db_session: Session) -> None:
+def load_settings_from_db(settings_obj: object, db_session: Session) -> None:
     """
     Load settings from database and apply them to the settings object.
 
@@ -111,7 +111,7 @@ def convert_setting_value(value: Optional[str], field_type: Any) -> Any:
         return str(value)
 
 
-def reload_settings_from_db(settings_obj) -> bool:
+def reload_settings_from_db(settings_obj: object) -> bool:
     """
     Reload settings from database.
 

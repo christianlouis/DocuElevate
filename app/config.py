@@ -269,7 +269,7 @@ class Settings(BaseSettings):
 
     @field_validator("notification_urls", mode="before")
     @classmethod
-    def parse_notification_urls(cls, v):
+    def parse_notification_urls(cls, v: str | list[str]) -> list[str]:
         """Parse notification URLs from string or list"""
         if isinstance(v, str):
             if "," in v:
@@ -281,7 +281,7 @@ class Settings(BaseSettings):
 
     @field_validator("session_secret")
     @classmethod
-    def validate_session_secret(cls, v, info):
+    def validate_session_secret(cls, v: str | None, info: object) -> str | None:
         """Validate that session_secret is set and has sufficient length when auth is enabled"""
         if info.data.get("auth_enabled") and not v:
             raise ValueError("SESSION_SECRET must be set when AUTH_ENABLED=True")

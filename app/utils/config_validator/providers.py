@@ -6,7 +6,7 @@ from app.config import settings
 from app.utils.config_validator.masking import mask_sensitive_value
 
 
-def get_provider_status():
+def get_provider_status() -> dict[str, dict[str, object]]:
     """
     Returns status information for all configured providers
     """

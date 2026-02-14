@@ -2,13 +2,14 @@ import logging
 import os
 import re
 import uuid
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 
-def get_unique_filename(original_path, check_exists_func=None):
+def get_unique_filename(original_path: str, check_exists_func: Callable[[str], bool] | None = None) -> str:
     """
     Generates a unique filename by appending a timestamp or counter when a collision occurs.
 
@@ -69,7 +70,7 @@ def get_unique_filename(original_path, check_exists_func=None):
     return new_path
 
 
-def get_unique_filepath_with_counter(directory, base_filename, extension=".pdf"):
+def get_unique_filepath_with_counter(directory: str, base_filename: str, extension: str = ".pdf") -> str:
     """
     Returns a unique filepath in the specified directory using a numeric counter suffix.
     If 'base_filename.pdf' exists, it will append '-0001', '-0002', etc.
@@ -120,7 +121,7 @@ def get_unique_filepath_with_counter(directory, base_filename, extension=".pdf")
             return candidate
 
 
-def sanitize_filename(filename):
+def sanitize_filename(filename: str) -> str:
     r"""
     Sanitize a filename to ensure it's valid across different file systems
     and prevent path traversal attacks.
@@ -162,7 +163,7 @@ def sanitize_filename(filename):
     return sanitized
 
 
-def extract_remote_path(file_path, base_dir, remote_base=""):
+def extract_remote_path(file_path: str, base_dir: str, remote_base: str = "") -> str:
     """
     Extract a remote path for a file by preserving its directory structure
     relative to the base directory, but with a new remote base path.

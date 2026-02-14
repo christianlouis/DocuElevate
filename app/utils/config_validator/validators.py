@@ -9,7 +9,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
-def validate_email_config():
+def validate_email_config() -> list[str]:
     """Validates email configuration settings"""
     issues = []
 
@@ -36,7 +36,7 @@ def validate_email_config():
     return issues
 
 
-def validate_auth_config():
+def validate_auth_config() -> list[str]:
     """Validates authentication configuration settings"""
     issues = []
 
@@ -69,7 +69,7 @@ def validate_auth_config():
     return issues
 
 
-def validate_storage_configs():
+def validate_storage_configs() -> dict[str, list[str]]:
     """Validates configuration for all storage providers"""
     issues = {}
 
@@ -178,7 +178,7 @@ def validate_storage_configs():
     return issues
 
 
-def validate_notification_config():
+def validate_notification_config() -> list[str]:
     """Check notification configuration"""
     issues = []
 
@@ -210,7 +210,7 @@ def validate_notification_config():
     return issues
 
 
-def check_all_configs():
+def check_all_configs() -> dict[str, list[str] | dict[str, list[str]]]:
     """Run all configuration validations and log results"""
     from app.utils.config_validator.settings_display import dump_all_settings
 

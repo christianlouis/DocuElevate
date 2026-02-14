@@ -3,7 +3,7 @@ Module for masking sensitive information in configuration values
 """
 
 
-def mask_sensitive_value(value):
+def mask_sensitive_value(value: str | None) -> str | None:
     """
     Masks sensitive values like API keys in logs and output
     """

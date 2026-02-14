@@ -194,6 +194,12 @@ disable_error_code = [
     "call-arg",         # Dynamic call signatures in framework code
 ]
 
+# Stricter type-checking for utility modules
+[[tool.mypy.overrides]]
+module = "app.utils.*"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
 # Coverage configuration
 [tool.coverage.run]
 source = ["app"]
