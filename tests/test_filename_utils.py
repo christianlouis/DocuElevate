@@ -493,9 +493,6 @@ class TestExtractRemotePathEdgeCases:
 
     def test_windows_style_separators(self, monkeypatch):
         """Test handling of Windows-style path separators."""
-        # Temporarily change os.sep to backslash
-        import os
-
         result = extract_remote_path("/base/subdir/file.pdf", "/base", "/remote")
         # Should use forward slashes in output
         assert "\\" not in result

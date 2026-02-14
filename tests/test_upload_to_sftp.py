@@ -3,6 +3,7 @@
 import os
 from unittest.mock import MagicMock, Mock, patch
 
+import paramiko
 import pytest
 
 from app.tasks.upload_to_sftp import upload_to_sftp
@@ -89,8 +90,6 @@ class TestUploadToSFTP:
     @patch("app.tasks.upload_to_sftp.settings")
     def test_upload_with_disabled_host_key_verification(self, mock_settings, mock_ssh_class, tmp_path):
         """Test SFTP upload with host key verification disabled."""
-        import paramiko
-
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test content")
         
