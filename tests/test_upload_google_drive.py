@@ -65,6 +65,22 @@ class TestGetDriveServiceOAuth:
         with pytest.raises(RefreshError):
             get_drive_service_oauth()
 
+    @patch("app.tasks.upload_to_google_drive.OAuthCredentials")
+    @patch("app.tasks.upload_to_google_drive.settings")
+    def test_handles_generic_exception(self, mock_settings, mock_creds):
+        """Test handles generic exception during OAuth setup."""
+        mock_settings.google_drive_client_id = "client_id"
+        mock_settings.google_drive_client_secret = "client_secret"
+        mock_settings.google_drive_refresh_token = "refresh_token"
+
+        mock_credentials = Mock()
+        mock_credentials.refresh.side_effect = Exception("Network error")
+        mock_creds.return_value = mock_credentials
+
+        result = get_drive_service_oauth()
+
+        assert result is None
+
 
 @pytest.mark.unit
 class TestGetGoogleDriveService:
@@ -460,3 +476,98 @@ class TestUploadToGoogleDriveTask:
         call_args = mock_files.create.call_args
         file_metadata = call_args.kwargs["body"]
         assert file_metadata["parents"] == ["parent_folder_123"]
+
+    @patch("app.tasks.upload_to_google_drive.os.path.splitext")
+    @patch("app.tasks.upload_to_google_drive.os.path.basename")
+    @patch("app.tasks.upload_to_google_drive.get_google_drive_service")
+    @patch("app.tasks.upload_to_google_drive.log_task_progress")
+    @patch("app.tasks.upload_to_google_drive.os.path.exists")
+    @patch("app.tasks.upload_to_google_drive.MediaFileUpload")
+    @patch("app.tasks.upload_to_google_drive.settings")
+    def test_skips_metadata_when_disabled(
+        self, mock_settings, mock_media, mock_exists, mock_log, mock_service, mock_basename, mock_splitext
+    ):
+        """Test skips metadata extraction when include_metadata is False."""
+        mock_basename.return_value = "test.pdf"
+        mock_splitext.return_value = ("/tmp/test", ".pdf")
+        mock_exists.return_value = True
+        mock_settings.google_drive_folder_id = None
+
+        mock_drive_service = Mock()
+        mock_files = Mock()
+        mock_create = Mock()
+        mock_execute = Mock(
+            return_value={
+                "id": "file_123",
+                "name": "test.pdf",
+                "webViewLink": "https://drive.google.com/file/d/file_123",
+            }
+        )
+        mock_create.execute = mock_execute
+        mock_files.create.return_value = mock_create
+        mock_drive_service.files.return_value = mock_files
+        mock_service.return_value = mock_drive_service
+
+        mock_self = Mock()
+        mock_self.request.id = "test-task-id"
+
+        result = upload_to_google_drive(mock_self, "/tmp/test.pdf", False)
+
+        assert result["status"] == "Completed"
+        assert "metadata_included" not in result
+
+    @patch("app.tasks.upload_to_google_drive.truncate_property_value")
+    @patch("app.tasks.upload_to_google_drive.os.path.splitext")
+    @patch("app.tasks.upload_to_google_drive.os.path.basename")
+    @patch("app.tasks.upload_to_google_drive.get_google_drive_service")
+    @patch("app.tasks.upload_to_google_drive.extract_metadata_from_file")
+    @patch("app.tasks.upload_to_google_drive.log_task_progress")
+    @patch("app.tasks.upload_to_google_drive.os.path.exists")
+    @patch("app.tasks.upload_to_google_drive.MediaFileUpload")
+    @patch("app.tasks.upload_to_google_drive.settings")
+    def test_handles_truncation_error_gracefully(
+        self,
+        mock_settings,
+        mock_media,
+        mock_exists,
+        mock_log,
+        mock_extract,
+        mock_service,
+        mock_basename,
+        mock_splitext,
+        mock_truncate,
+    ):
+        """Test handles truncation error gracefully and logs warning."""
+        mock_basename.return_value = "test.pdf"
+        mock_splitext.return_value = ("/tmp/test", ".pdf")
+        mock_exists.return_value = True
+        mock_settings.google_drive_folder_id = None
+
+        metadata = {"problematic_key": "value"}
+        mock_extract.return_value = metadata
+        mock_truncate.side_effect = Exception("Encoding error")
+
+        mock_drive_service = Mock()
+        mock_files = Mock()
+        mock_create = Mock()
+        mock_execute = Mock(
+            return_value={
+                "id": "file_123",
+                "name": "test.pdf",
+                "webViewLink": "https://drive.google.com/file/d/file_123",
+            }
+        )
+        mock_create.execute = mock_execute
+        mock_files.create.return_value = mock_create
+        mock_drive_service.files.return_value = mock_files
+        mock_service.return_value = mock_drive_service
+
+        mock_self = Mock()
+        mock_self.request.id = "test-task-id"
+
+        result = upload_to_google_drive(mock_self, "/tmp/test.pdf", True)
+
+        # Should complete successfully despite truncation error
+        assert result["status"] == "Completed"
+        # Should still include metadata flag
+        assert result["metadata_included"] is True

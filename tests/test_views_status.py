@@ -236,31 +236,141 @@ class TestEnvDebug:
 class TestContainerInfoDetection:
     """Tests for container information detection logic."""
 
+    @patch("app.views.status.get_provider_status")
+    @patch("app.views.status.templates")
+    @patch("app.views.status.settings")
+    @patch("app.views.status.os.path.exists")
+    @patch("builtins.open", side_effect=IOError("Permission denied"))
+    @pytest.mark.asyncio
+    async def test_handles_cgroup_read_error(self, mock_file, mock_exists, mock_settings, mock_templates, mock_providers):
+        """Test handles cgroup file read errors."""
+        from app.views.status import status_dashboard
+
+        mock_exists.return_value = True  # Docker env exists
+        mock_providers.return_value = {}
+        mock_settings.version = "1.0.0"
+        mock_settings.build_date = "2024-01-01"
+        mock_settings.git_sha = "abc123"
+        mock_settings.notification_urls = []
+
+        mock_request = Mock()
+
+        await status_dashboard(mock_request)
+
+        call_args = mock_templates.TemplateResponse.call_args
+        context = call_args[0][1]
+        # Should handle error gracefully and set id to Unknown
+        assert context["container_info"]["is_docker"] is True
+        assert context["container_info"]["id"] == "Unknown"
+
+    @patch("app.views.status.get_provider_status")
+    @patch("app.views.status.templates")
+    @patch("app.views.status.settings")
+    @patch("app.views.status.os.path.exists")
+    @patch("builtins.open", new_callable=mock_open, read_data="12:cpuset:/system.slice\n13:memory:/user.slice")
+    @pytest.mark.asyncio
+    async def test_handles_cgroup_without_docker(self, mock_file, mock_exists, mock_settings, mock_templates, mock_providers):
+        """Test handles cgroup without docker in path."""
+        from app.views.status import status_dashboard
+
+        mock_exists.return_value = True  # Docker env exists
+        mock_providers.return_value = {}
+        mock_settings.version = "1.0.0"
+        mock_settings.build_date = "2024-01-01"
+        mock_settings.git_sha = "abc123"
+        mock_settings.notification_urls = []
+
+        mock_request = Mock()
+
+        await status_dashboard(mock_request)
+
+        call_args = mock_templates.TemplateResponse.call_args
+        context = call_args[0][1]
+        # When docker not found in cgroup, id is not set in the code
+        # The loop completes without setting id, so it won't be in container_info
+        assert context["container_info"]["is_docker"] is True
+
+    @patch("app.views.status.get_provider_status")
+    @patch("app.views.status.templates")
+    @patch("app.views.status.settings")
     @patch("app.views.status.os.path.exists")
     @patch("builtins.open", new_callable=mock_open, read_data="12:docker:/abc123456789")
-    def test_extracts_container_id(self, mock_file, mock_exists):
-        """Test extracts container ID from cgroup."""
+    @pytest.mark.asyncio
+    async def test_handles_unknown_git_sha_string(
+        self, mock_file, mock_exists, mock_settings, mock_templates, mock_providers
+    ):
+        """Test handles 'unknown' git_sha string value."""
+        from app.views.status import status_dashboard
 
         mock_exists.return_value = True
+        mock_providers.return_value = {}
+        mock_settings.version = "1.0.0"
+        mock_settings.build_date = "2024-01-01"
+        mock_settings.git_sha = "unknown"
+        mock_settings.notification_urls = []
 
-        # The container ID extraction logic is part of status_dashboard
-        # We test it indirectly through the function
+        mock_request = Mock()
 
-    @patch("app.views.status.os.path.exists")
-    def test_handles_missing_cgroup_file(self, mock_exists):
-        """Test handles missing cgroup file gracefully."""
+        await status_dashboard(mock_request)
 
-        mock_exists.side_effect = [True, False]  # Docker env exists, but cgroup doesn't
+        call_args = mock_templates.TemplateResponse.call_args
+        context = call_args[0][1]
+        # Should handle "unknown" string and set to Unknown
+        assert context["container_info"]["git_sha"] == "Unknown"
 
-        # Should not raise exception
-
+    @patch("app.views.status.get_provider_status")
+    @patch("app.views.status.templates")
     @patch("app.views.status.settings")
-    def test_includes_runtime_info_when_available(self, mock_settings):
-        """Test includes runtime info when available."""
+    @patch("app.views.status.os.path.exists")
+    @pytest.mark.asyncio
+    async def test_handles_complete_exception_in_container_info(
+        self, mock_exists, mock_settings, mock_templates, mock_providers
+    ):
+        """Test handles complete exception in container info extraction."""
+        from app.views.status import status_dashboard
 
-        mock_settings.runtime_info = "Python 3.11.5 on Linux"
+        # Simulate exception when checking Docker env
+        mock_exists.side_effect = Exception("Unexpected error")
+        mock_providers.return_value = {}
+        mock_settings.version = "1.0.0"
+        mock_settings.build_date = "2024-01-01"
+        mock_settings.notification_urls = []
 
-        # Runtime info should be included in container_info
+        mock_request = Mock()
+
+        await status_dashboard(mock_request)
+
+        call_args = mock_templates.TemplateResponse.call_args
+        context = call_args[0][1]
+        # Should have fallback container_info
+        assert context["container_info"]["is_docker"] is False
+        assert context["container_info"]["id"] == "Unknown"
+        assert context["container_info"]["git_sha"] == "Unknown"
+
+    @patch("app.views.status.get_provider_status")
+    @patch("app.views.status.templates")
+    @patch("app.views.status.settings")
+    @patch("app.views.status.os.path.exists")
+    @pytest.mark.asyncio
+    async def test_handles_null_git_sha(self, mock_exists, mock_settings, mock_templates, mock_providers):
+        """Test handles None/null git_sha value."""
+        from app.views.status import status_dashboard
+
+        mock_exists.return_value = False  # Not in Docker
+        mock_providers.return_value = {}
+        mock_settings.version = "1.0.0"
+        mock_settings.build_date = "2024-01-01"
+        mock_settings.git_sha = None  # None value
+        mock_settings.notification_urls = []
+
+        mock_request = Mock()
+
+        await status_dashboard(mock_request)
+
+        call_args = mock_templates.TemplateResponse.call_args
+        context = call_args[0][1]
+        # Should handle None and set to Unknown
+        assert context["container_info"]["git_sha"] == "Unknown"
 
 
 @pytest.mark.integration
