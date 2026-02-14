@@ -321,3 +321,152 @@ class TestCheckAllConfigs:
             mock_settings.notification_urls = ["mailto://test@example.com"]
             check_all_configs()
             mock_dump.assert_not_called()
+
+
+@pytest.mark.unit
+class TestValidateAuthConfigEdgeCases:
+    """Test edge cases in auth configuration validation."""
+
+    def test_session_secret_exactly_32_chars(self):
+        """Test validation with session secret exactly 32 characters."""
+        with patch("app.utils.config_validator.validators.settings") as mock_settings:
+            mock_settings.auth_enabled = True
+            mock_settings.session_secret = "a" * 32  # Exactly 32 characters
+            mock_settings.admin_username = "admin"
+            mock_settings.admin_password = "pass"
+
+            issues = validate_auth_config()
+            # Should not have issue about length
+            assert not any("32 characters" in issue for issue in issues)
+
+    def test_auth_disabled_no_validation(self):
+        """Test that auth validation is skipped when auth is disabled."""
+        with patch("app.utils.config_validator.validators.settings") as mock_settings:
+            mock_settings.auth_enabled = False
+
+            issues = validate_auth_config()
+            # Should have no issues when auth is disabled
+            assert len(issues) == 0
+
+
+@pytest.mark.unit
+class TestValidateEmailConfigEdgeCases:
+    """Test edge cases in email configuration validation."""
+
+    @patch("app.utils.config_validator.validators.socket.gethostbyname")
+    def test_email_host_resolution_success(self, mock_gethostbyname):
+        """Test email host resolution success."""
+        with patch("app.utils.config_validator.validators.settings") as mock_settings:
+            mock_settings.email_host = "smtp.example.com"
+            mock_settings.email_port = 587
+            mock_settings.email_username = "user"
+            mock_settings.email_password = "pass"
+
+            mock_gethostbyname.return_value = "192.0.2.1"
+
+            issues = validate_email_config()
+            # Should not have DNS resolution issue
+            assert not any("Cannot resolve" in issue for issue in issues)
+
+    @patch("app.utils.config_validator.validators.socket.gethostbyname")
+    def test_email_host_resolution_failure(self, mock_gethostbyname):
+        """Test email host resolution failure."""
+        import socket
+
+        with patch("app.utils.config_validator.validators.settings") as mock_settings:
+            mock_settings.email_host = "nonexistent.example.com"
+            mock_settings.email_port = 587
+            mock_settings.email_username = "user"
+            mock_settings.email_password = "pass"
+
+            mock_gethostbyname.side_effect = socket.gaierror()
+
+            issues = validate_email_config()
+            # Should have DNS resolution issue
+            assert any("Cannot resolve" in issue for issue in issues)
+
+
+@pytest.mark.unit
+class TestValidateNotificationConfigEdgeCases:
+    """Test edge cases in notification configuration validation."""
+
+    @patch("app.utils.config_validator.validators.apprise")
+    def test_apprise_not_installed(self, mock_apprise):
+        """Test handling when apprise module is not available."""
+        with patch("app.utils.config_validator.validators.settings") as mock_settings:
+            mock_settings.notification_urls = ["https://example.com/notify"]
+
+            # Simulate ImportError
+            mock_apprise.Apprise.side_effect = AttributeError()
+
+            # Should handle gracefully
+            issues = validate_notification_config()
+            assert isinstance(issues, list)
+
+    def test_invalid_apprise_url_format(self):
+        """Test validation with invalid notification URL format."""
+        with patch("app.utils.config_validator.validators.settings") as mock_settings:
+            with patch("app.utils.config_validator.validators.apprise") as mock_apprise_module:
+                mock_settings.notification_urls = ["invalid-url-format"]
+
+                mock_apprise = mock_apprise_module.Apprise.return_value
+                mock_apprise.add.return_value = False  # Invalid URL
+
+                issues = validate_notification_config()
+                assert any("Invalid notification URL format" in issue for issue in issues)
+
+
+@pytest.mark.unit
+class TestValidateStorageConfigsEdgeCases:
+    """Test edge cases for storage configuration validation."""
+
+    def test_sftp_with_valid_key_path(self, tmp_path):
+        """Test SFTP validation with valid key file path."""
+        key_file = tmp_path / "key.pem"
+        key_file.write_text("fake key")
+
+        with patch("app.utils.config_validator.validators.settings") as mock_settings:
+            mock_settings.sftp_host = "sftp.example.com"
+            mock_settings.sftp_private_key = str(key_file)
+            mock_settings.sftp_password = None
+
+            result = validate_storage_configs()
+            # Should not have key file not found issue
+            assert not any("file not found" in issue.lower() for issue in result["sftp"])
+
+    def test_all_services_fully_configured(self):
+        """Test validation when all services are fully configured."""
+        with patch("app.utils.config_validator.validators.settings") as mock_settings:
+            # Configure all services
+            mock_settings.sftp_host = "sftp.example.com"
+            mock_settings.sftp_password = "pass"
+            mock_settings.email_host = "smtp.example.com"
+            mock_settings.email_default_recipient = "test@example.com"
+            mock_settings.s3_bucket_name = "my-bucket"
+            mock_settings.aws_access_key_id = "key"
+            mock_settings.aws_secret_access_key = "secret"
+            mock_settings.ftp_host = "ftp.example.com"
+            mock_settings.ftp_username = "user"
+            mock_settings.ftp_password = "pass"
+            mock_settings.webdav_url = "https://webdav.example.com"
+            mock_settings.webdav_username = "user"
+            mock_settings.webdav_password = "pass"
+            mock_settings.google_drive_credentials_json = "{}"
+            mock_settings.google_drive_folder_id = "folder_id"
+            mock_settings.paperless_host = "https://paperless.example.com"
+            mock_settings.paperless_ngx_api_token = "token"
+            mock_settings.onedrive_client_id = "id"
+            mock_settings.onedrive_client_secret = "secret"
+            mock_settings.onedrive_refresh_token = "token"
+            mock_settings.dropbox_app_key = "key"
+            mock_settings.dropbox_app_secret = "secret"
+            mock_settings.dropbox_refresh_token = "token"
+            mock_settings.nextcloud_upload_url = "https://nextcloud.example.com"
+            mock_settings.nextcloud_username = "user"
+            mock_settings.nextcloud_password = "pass"
+            mock_settings.uptime_kuma_url = "https://kuma.example.com"
+
+            result = validate_storage_configs()
+            # Check that all providers have empty issue lists
+            for provider, issues in result.items():
+                assert len(issues) == 0, f"{provider} should have no issues"

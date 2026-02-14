@@ -450,3 +450,100 @@ class TestSplitPdfEdgeCases:
         for split_file in split_files:
             if os.path.exists(split_file):
                 os.remove(split_file)
+
+
+@pytest.mark.unit
+class TestShouldSplitFileEdgeCases:
+    """Additional edge cases for should_split_file function."""
+
+    def test_returns_false_when_max_size_is_none(self, tmp_path):
+        """Test that splitting is disabled when max_size is None."""
+        from app.utils.file_splitting import should_split_file
+
+        test_file = tmp_path / "test.pdf"
+        test_file.write_bytes(b"a" * 10000)  # 10KB file
+
+        result = should_split_file(str(test_file), None)
+        assert result is False
+
+    def test_returns_false_for_nonexistent_file(self):
+        """Test handling of nonexistent file."""
+        from app.utils.file_splitting import should_split_file
+
+        result = should_split_file("/nonexistent/file.pdf", 1000)
+        assert result is False
+
+    def test_returns_true_when_file_exceeds_limit(self, tmp_path):
+        """Test that splitting is enabled when file exceeds limit."""
+        from app.utils.file_splitting import should_split_file
+
+        test_file = tmp_path / "large.pdf"
+        test_file.write_bytes(b"a" * 10000)  # 10KB file
+
+        result = should_split_file(str(test_file), 5000)  # 5KB limit
+        assert result is True
+
+    def test_returns_false_when_file_within_limit(self, tmp_path):
+        """Test that splitting is disabled when file is within limit."""
+        from app.utils.file_splitting import should_split_file
+
+        test_file = tmp_path / "small.pdf"
+        test_file.write_bytes(b"a" * 1000)  # 1KB file
+
+        result = should_split_file(str(test_file), 5000)  # 5KB limit
+        assert result is False
+
+
+@pytest.mark.unit
+class TestSplitPdfBySizeEdgeCases:
+    """Additional edge cases for split_pdf_by_size function."""
+
+    def test_raises_error_for_nonexistent_file(self):
+        """Test that FileNotFoundError is raised for nonexistent file."""
+        from app.utils.file_splitting import split_pdf_by_size
+
+        with pytest.raises(FileNotFoundError):
+            split_pdf_by_size("/nonexistent/file.pdf", 1000000)
+
+    def test_raises_error_for_invalid_pdf(self, tmp_path):
+        """Test that ValueError is raised for invalid PDF."""
+        from app.utils.file_splitting import split_pdf_by_size
+
+        invalid_file = tmp_path / "invalid.pdf"
+        invalid_file.write_text("not a valid PDF")
+
+        with pytest.raises(ValueError, match="Invalid or corrupted PDF"):
+            split_pdf_by_size(str(invalid_file), 1000000)
+
+    def test_returns_empty_list_for_zero_page_pdf(self, tmp_path):
+        """Test handling of PDF with zero pages."""
+        from app.utils.file_splitting import split_pdf_by_size
+        from pypdf import PdfWriter
+
+        # Create a technically valid but empty PDF
+        empty_pdf = tmp_path / "empty.pdf"
+        writer = PdfWriter()
+        with open(empty_pdf, "wb") as f:
+            writer.write(f)
+
+        result = split_pdf_by_size(str(empty_pdf), 1000000)
+        assert result == []
+
+    def test_custom_output_directory(self, tmp_path, sample_pdf_path):
+        """Test splitting with custom output directory."""
+        from app.utils.file_splitting import split_pdf_by_size
+
+        output_dir = tmp_path / "custom_output"
+        output_dir.mkdir()
+
+        split_files = split_pdf_by_size(sample_pdf_path, 500, str(output_dir))
+
+        # All files should be in custom directory
+        for file_path in split_files:
+            assert str(output_dir) in file_path
+            assert os.path.exists(file_path)
+
+        # Cleanup
+        for file_path in split_files:
+            if os.path.exists(file_path):
+                os.remove(file_path)
