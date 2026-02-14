@@ -200,8 +200,9 @@ class TestGetCipherSuite:
 
     def test_get_cipher_suite_import_error(self):
         """Test _get_cipher_suite when cryptography is not installed"""
-        import app.utils.encryption
         import sys
+
+        import app.utils.encryption
 
         # Reset the cached cipher suite
         original_cipher = app.utils.encryption._cipher_suite
@@ -209,15 +210,16 @@ class TestGetCipherSuite:
 
         # Mock the cryptography.fernet module to not exist
         original_modules = sys.modules.copy()
-        
+
         # Remove cryptography from sys.modules to simulate it not being installed
         if "cryptography.fernet" in sys.modules:
             del sys.modules["cryptography.fernet"]
         if "cryptography" in sys.modules:
             del sys.modules["cryptography"]
-        
+
         # Mock the import to raise ImportError
         import builtins
+
         real_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
@@ -245,8 +247,7 @@ class TestGetCipherSuite:
 
         try:
             # Mock Fernet class to raise an exception during initialization
-            from unittest.mock import MagicMock
-            
+
             with patch("app.utils.encryption.hashlib.sha256", side_effect=RuntimeError("Hash error")):
                 result = app.utils.encryption._get_cipher_suite()
 
