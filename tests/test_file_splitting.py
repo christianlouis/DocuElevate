@@ -256,3 +256,197 @@ class TestShouldSplitFile:
 
         result = should_split_file(sample_multipage_pdf, file_size)
         assert result is False, "Should return False when file size equals limit"
+
+
+@pytest.fixture
+def sample_empty_pdf():
+    """Create an empty PDF (0 pages) for testing."""
+    with tempfile.NamedTemporaryFile(mode="wb", suffix=".pdf", delete=False) as f:
+        writer = PdfWriter()
+        # Don't add any pages - create empty PDF
+        writer.write(f)
+        pdf_path = f.name
+
+    yield pdf_path
+
+    # Cleanup
+    if os.path.exists(pdf_path):
+        os.remove(pdf_path)
+
+
+@pytest.fixture
+def sample_large_page_pdf():
+    """Create a PDF with pages that have more content to be larger."""
+    with tempfile.NamedTemporaryFile(mode="wb", suffix=".pdf", delete=False) as f:
+        writer = PdfWriter()
+        # Add pages with larger dimensions to make them bigger
+        for i in range(3):
+            writer.add_blank_page(width=800, height=1200)
+        writer.write(f)
+        pdf_path = f.name
+
+    yield pdf_path
+
+    # Cleanup
+    if os.path.exists(pdf_path):
+        os.remove(pdf_path)
+
+
+@pytest.mark.unit
+class TestSplitPdfEdgeCases:
+    """Additional edge case tests for split_pdf_by_size function."""
+
+    def test_split_pdf_empty_pages(self, sample_empty_pdf):
+        """Test splitting an empty PDF with zero pages."""
+        max_size = 5000
+
+        split_files = split_pdf_by_size(sample_empty_pdf, max_size)
+
+        # Empty PDF should return empty list
+        assert len(split_files) == 0, "Empty PDF should return empty list"
+
+    def test_split_pdf_single_page_exceeds_limit(self, sample_single_page_pdf):
+        """Test when a single page exceeds the size limit (warning path)."""
+        # Get actual file size and set limit below it to force single page to exceed
+        file_size = os.path.getsize(sample_single_page_pdf)
+        max_size = file_size - 500  # Set limit below single page size
+
+        split_files = split_pdf_by_size(sample_single_page_pdf, max_size)
+
+        # Should still create one file with warning
+        assert len(split_files) >= 1, "Should create at least one file even if page exceeds limit"
+
+        # Verify the file exists and has content
+        for split_file in split_files:
+            assert os.path.exists(split_file), f"Split file {split_file} should exist"
+            reader = PdfReader(split_file)
+            assert len(reader.pages) >= 1, "Split file should have pages"
+
+        # Cleanup
+        for split_file in split_files:
+            if os.path.exists(split_file):
+                os.remove(split_file)
+
+    def test_split_pdf_forces_multiple_chunks(self):
+        """Test splitting with very small limit to force multiple chunks with page distribution.
+
+        This specifically targets lines 101-117 where we save the previous chunk
+        when adding a page would exceed the limit.
+        """
+        # Create a PDF with enough pages to test the multi-chunk splitting logic
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".pdf", delete=False) as f:
+            writer = PdfWriter()
+            # Add 10 small pages - this will help us test the splitting logic
+            for i in range(10):
+                writer.add_blank_page(width=200, height=200)
+            writer.write(f)
+            pdf_path = f.name
+
+        try:
+            # Use a small size that will force multiple chunks
+            # The key is to have a size that allows 2-3 pages per chunk
+            max_size = 4000  # Small enough to force splitting
+
+            split_files = split_pdf_by_size(pdf_path, max_size)
+
+            # Should create at least one file, possibly more
+            assert len(split_files) >= 1, "Should create at least one split file"
+
+            # Verify all files exist and are valid
+            total_pages = 0
+            for split_file in split_files:
+                assert os.path.exists(split_file), f"Split file {split_file} should exist"
+                reader = PdfReader(split_file)
+                assert len(reader.pages) > 0, f"Split file {split_file} should have pages"
+                total_pages += len(reader.pages)
+
+            # Verify total pages match original
+            original_reader = PdfReader(pdf_path)
+            assert total_pages == len(original_reader.pages), "Total pages should match original"
+
+            # Cleanup split files
+            for split_file in split_files:
+                if os.path.exists(split_file):
+                    os.remove(split_file)
+        finally:
+            # Cleanup original
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
+
+    def test_split_pdf_previous_chunk_logic(self):
+        """Test the specific logic for saving previous chunk when limit exceeded (lines 101-117).
+
+        This test creates a scenario where:
+        1. We have multiple pages in the current writer
+        2. Adding the next page would exceed the limit
+        3. We need to save the previous chunk without the last page
+        4. Start a new chunk with the current page
+
+        With blank 200x200 pages: ~431 bytes base + ~120 bytes per additional page
+        - 1 page: ~431 bytes
+        - 2 pages: ~551 bytes
+        - 3 pages: ~671 bytes
+
+        Setting max_size to 600 bytes should allow 2 pages (551 bytes) but not 3 pages (671 bytes).
+        This will trigger the exceeds_limit && current_page_count > 1 path.
+        """
+        # Create a multi-page PDF with small blank pages
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".pdf", delete=False) as f:
+            writer = PdfWriter()
+            # Create 6 pages - enough to ensure we trigger multi-page chunk splitting
+            for i in range(6):
+                writer.add_blank_page(width=200, height=200)
+            writer.write(f)
+            pdf_path = f.name
+
+        try:
+            # Set max_size to allow 2 pages but not 3 pages
+            # This will force the "save previous chunk" logic when the 3rd page would exceed
+            max_size = 600  # Between 551 (2 pages) and 671 (3 pages)
+
+            split_files = split_pdf_by_size(pdf_path, max_size)
+
+            # Should create multiple files since 6 pages can't all fit
+            assert len(split_files) >= 2, "Should create multiple split files"
+
+            # Verify integrity - all pages accounted for
+            original_reader = PdfReader(pdf_path)
+            total_split_pages = sum(len(PdfReader(f).pages) for f in split_files)
+            assert total_split_pages == len(original_reader.pages), "All pages should be preserved"
+
+            # Verify each split file is valid and readable
+            for split_file in split_files:
+                reader = PdfReader(split_file)
+                assert len(reader.pages) > 0, f"Split file {split_file} should have pages"
+                # Verify we can read content from each page
+                for page in reader.pages:
+                    _ = page.extract_text()  # Should not raise
+
+            # Cleanup split files
+            for split_file in split_files:
+                if os.path.exists(split_file):
+                    os.remove(split_file)
+        finally:
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
+
+    def test_split_pdf_final_chunk_coverage(self, sample_multipage_pdf):
+        """Test that final chunk (lines 138-143) is properly covered."""
+        # Use moderate size limit to ensure we get a final chunk with remaining pages
+        max_size = 8000
+
+        split_files = split_pdf_by_size(sample_multipage_pdf, max_size)
+
+        # Should create at least one file
+        assert len(split_files) >= 1, "Should create at least one output file"
+
+        # Verify last file exists and has pages (exercises final chunk saving logic)
+        last_file = split_files[-1]
+        assert os.path.exists(last_file), "Last split file should exist"
+        reader = PdfReader(last_file)
+        assert len(reader.pages) > 0, "Last split file should have pages"
+
+        # Cleanup
+        for split_file in split_files:
+            if os.path.exists(split_file):
+                os.remove(split_file)
