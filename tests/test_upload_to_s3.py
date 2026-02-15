@@ -1,6 +1,5 @@
 """Tests for app/tasks/upload_to_s3.py module."""
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -20,7 +19,7 @@ class TestUploadToS3:
         # Setup
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test content")
-        
+
         mock_settings.s3_bucket_name = "my-bucket"
         mock_settings.aws_access_key_id = "AKIAIOSFODNN7EXAMPLE"
         mock_settings.aws_secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
@@ -39,7 +38,7 @@ class TestUploadToS3:
         assert result.result["status"] == "Completed"
         assert result.result["s3_bucket"] == "my-bucket"
         assert result.result["s3_key"] == "documents/test.pdf"
-        
+
         mock_s3.upload_file.assert_called_once()
         call_args = mock_s3.upload_file.call_args
         assert call_args[0][0] == str(test_file)
@@ -54,7 +53,7 @@ class TestUploadToS3:
         """Test S3 upload without folder prefix."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test content")
-        
+
         mock_settings.s3_bucket_name = "my-bucket"
         mock_settings.aws_access_key_id = "key"
         mock_settings.aws_secret_access_key = "secret"
@@ -79,7 +78,7 @@ class TestUploadToS3:
         """Test that folder prefix gets trailing slash added."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test content")
-        
+
         mock_settings.s3_bucket_name = "my-bucket"
         mock_settings.aws_access_key_id = "key"
         mock_settings.aws_secret_access_key = "secret"
@@ -102,7 +101,7 @@ class TestUploadToS3:
         mock_settings.s3_bucket_name = "my-bucket"
         mock_settings.aws_access_key_id = "key"
         mock_settings.aws_secret_access_key = "secret"
-        
+
         with pytest.raises(FileNotFoundError):
             upload_to_s3.apply(args=["/nonexistent/file.pdf"])
 
@@ -111,7 +110,7 @@ class TestUploadToS3:
         """Test S3 upload with missing bucket name."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test content")
-        
+
         mock_settings.s3_bucket_name = None
         mock_settings.aws_access_key_id = "key"
         mock_settings.aws_secret_access_key = "secret"
@@ -124,7 +123,7 @@ class TestUploadToS3:
         """Test S3 upload with missing AWS credentials."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test content")
-        
+
         mock_settings.s3_bucket_name = "my-bucket"
         mock_settings.aws_access_key_id = None
         mock_settings.aws_secret_access_key = None
@@ -138,7 +137,7 @@ class TestUploadToS3:
         """Test S3 upload with boto3 ClientError."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test content")
-        
+
         mock_settings.s3_bucket_name = "my-bucket"
         mock_settings.aws_access_key_id = "key"
         mock_settings.aws_secret_access_key = "secret"
@@ -161,7 +160,7 @@ class TestUploadToS3:
         """Test S3 upload with generic exception."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test content")
-        
+
         mock_settings.s3_bucket_name = "my-bucket"
         mock_settings.aws_access_key_id = "key"
         mock_settings.aws_secret_access_key = "secret"
@@ -183,7 +182,7 @@ class TestUploadToS3:
         """Test S3 upload with different storage classes."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test content")
-        
+
         mock_settings.s3_bucket_name = "my-bucket"
         mock_settings.aws_access_key_id = "key"
         mock_settings.aws_secret_access_key = "secret"
@@ -206,7 +205,7 @@ class TestUploadToS3:
         """Test that the S3 URL is properly generated."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test content")
-        
+
         mock_settings.s3_bucket_name = "my-bucket"
         mock_settings.aws_access_key_id = "key"
         mock_settings.aws_secret_access_key = "secret"

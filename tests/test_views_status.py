@@ -242,7 +242,9 @@ class TestContainerInfoDetection:
     @patch("app.views.status.os.path.exists")
     @patch("builtins.open", side_effect=IOError("Permission denied"))
     @pytest.mark.asyncio
-    async def test_handles_cgroup_read_error(self, mock_file, mock_exists, mock_settings, mock_templates, mock_providers):
+    async def test_handles_cgroup_read_error(
+        self, mock_file, mock_exists, mock_settings, mock_templates, mock_providers
+    ):
         """Test handles cgroup file read errors."""
         from app.views.status import status_dashboard
 
@@ -269,7 +271,9 @@ class TestContainerInfoDetection:
     @patch("app.views.status.os.path.exists")
     @patch("builtins.open", new_callable=mock_open, read_data="12:cpuset:/system.slice\n13:memory:/user.slice")
     @pytest.mark.asyncio
-    async def test_handles_cgroup_without_docker(self, mock_file, mock_exists, mock_settings, mock_templates, mock_providers):
+    async def test_handles_cgroup_without_docker(
+        self, mock_file, mock_exists, mock_settings, mock_templates, mock_providers
+    ):
         """Test handles cgroup without docker in path."""
         from app.views.status import status_dashboard
 
