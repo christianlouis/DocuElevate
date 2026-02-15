@@ -487,7 +487,12 @@ class TestExtractRemotePathEdgeCases:
         assert result == "remote/file.pdf"
 
     def test_multiple_processed_directories(self):
-        """Test path with multiple 'processed' directories."""
+        """Test path with multiple 'processed' directories.
+
+        The function uses list.remove() which only removes the FIRST occurrence
+        of 'processed' in the path. This is the current implementation behavior.
+        If all occurrences should be removed, the function would need to be updated.
+        """
         from app.utils.filename_utils import extract_remote_path
 
         result = extract_remote_path("/base/processed/subdir/processed/file.pdf", "/base", "/remote")
