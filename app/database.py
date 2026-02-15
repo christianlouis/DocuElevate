@@ -2,10 +2,12 @@
 
 import logging
 import os
+from collections.abc import Generator
+from typing import Any
 
 from sqlalchemy import create_engine, exc
 from sqlalchemy.engine.url import make_url
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 from app.config import settings
 
@@ -19,7 +21,7 @@ engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-def init_db():
+def init_db() -> None:
     """
     Ensures the SQLite database file and its parent directory exist (if using sqlite).
     Then runs Base.metadata.create_all(bind=engine) to initialize tables.
@@ -55,7 +57,7 @@ def init_db():
         raise
 
 
-def _run_schema_migrations(engine):
+def _run_schema_migrations(engine: Any) -> None:
     """
     Apply lightweight schema migrations for columns added after the initial release.
     Each migration is idempotent and safe to run multiple times.
@@ -117,7 +119,7 @@ def _run_schema_migrations(engine):
             logger.warning(f"Skipping filehash unique index drop: {exc}")
 
 
-def get_db():
+def get_db() -> Generator[Session, None, None]:
     """
     Dependency for FastAPI routes or general DB usage.
     Yields a SQLAlchemy session, and closes it upon exit.

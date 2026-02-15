@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 _cipher_suite = None
 
 
-def _get_cipher_suite():
+def _get_cipher_suite() -> object | None:
     """
     Get or create the Fernet cipher suite for encryption/decryption.
 

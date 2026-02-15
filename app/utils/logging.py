@@ -16,9 +16,9 @@ class TaskLogCollector(logging.Handler):
     This captures all logger.info/error/warning output automatically.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self._buffers = defaultdict(list)
+        self._buffers: defaultdict[str, list[str]] = defaultdict(list)
         self._lock = threading.Lock()
 
     def emit(self, record: logging.LogRecord) -> None:
@@ -60,7 +60,14 @@ def _ensure_collector_installed() -> None:
         _collector_installed = True
 
 
-def log_task_progress(task_id, step_name, status, message=None, file_id=None, detail=None):
+def log_task_progress(
+    task_id: str,
+    step_name: str,
+    status: str,
+    message: str | None = None,
+    file_id: int | None = None,
+    detail: str | None = None,
+) -> None:
     """
     Logs the progress of a Celery task to the database.
 
