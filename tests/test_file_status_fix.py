@@ -214,9 +214,27 @@ class TestGetFilesProcessingStatusEdgeCases:
         from app.utils.step_manager import initialize_file_steps, update_step_status
 
         # Create multiple files with different states
-        file1 = FileRecord(filename="file1.pdf", is_duplicate=False)
-        file2 = FileRecord(filename="file2.pdf", is_duplicate=True)
-        file3 = FileRecord(filename="file3.pdf", is_duplicate=False)
+        file1 = FileRecord(
+            filehash="hash1",
+            local_filename="/tmp/file1.pdf",
+            original_filename="file1.pdf",
+            file_size=1000,
+            is_duplicate=False,
+        )
+        file2 = FileRecord(
+            filehash="hash2",
+            local_filename="/tmp/file2.pdf",
+            original_filename="file2.pdf",
+            file_size=2000,
+            is_duplicate=True,
+        )
+        file3 = FileRecord(
+            filehash="hash3",
+            local_filename="/tmp/file3.pdf",
+            original_filename="file3.pdf",
+            file_size=3000,
+            is_duplicate=False,
+        )
 
         db_session.add_all([file1, file2, file3])
         db_session.commit()
