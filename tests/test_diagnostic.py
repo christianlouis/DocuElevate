@@ -68,9 +68,9 @@ class TestTestNotification:
         data = response.json()
 
         assert data["status"] == "warning"
-        assert "not configured" in data["message"].lower()
+        assert "notification" in data["message"].lower() and "configured" in data["message"].lower()
 
-    @patch("app.api.diagnostic.send_notification")
+    @patch("app.utils.notification.send_notification")
     @patch("app.api.diagnostic.settings")
     def test_test_notification_success(self, mock_settings, mock_send, client):
         """Test successful notification test."""
@@ -85,7 +85,7 @@ class TestTestNotification:
         assert "services_count" in data
         mock_send.assert_called_once()
 
-    @patch("app.api.diagnostic.send_notification")
+    @patch("app.utils.notification.send_notification")
     @patch("app.api.diagnostic.settings")
     def test_test_notification_failure(self, mock_settings, mock_send, client):
         """Test notification test when sending fails."""
@@ -99,7 +99,7 @@ class TestTestNotification:
         assert data["status"] == "error"
         assert "failed" in data["message"].lower()
 
-    @patch("app.api.diagnostic.send_notification")
+    @patch("app.utils.notification.send_notification")
     @patch("app.api.diagnostic.settings")
     def test_test_notification_exception(self, mock_settings, mock_send, client):
         """Test notification test with exception."""
@@ -126,7 +126,7 @@ class TestTestNotification:
 class TestDiagnosticHelpers:
     """Test helper functions in diagnostic module."""
 
-    @patch("app.api.diagnostic.dump_all_settings")
+    @patch("app.utils.config_validator.dump_all_settings")
     @patch("app.api.diagnostic.settings")
     def test_dump_all_settings_called(self, mock_settings, mock_dump, client):
         """Test that dump_all_settings is called."""

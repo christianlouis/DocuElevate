@@ -390,26 +390,24 @@ class TestValidateEmailConfigEdgeCases:
 class TestValidateNotificationConfigEdgeCases:
     """Test edge cases in notification configuration validation."""
 
-    @patch("app.utils.config_validator.validators.apprise")
-    def test_apprise_not_installed(self, mock_apprise):
+    @patch("builtins.__import__", side_effect=ImportError("No module named 'apprise'"))
+    def test_apprise_not_installed(self, mock_import):
         """Test handling when apprise module is not available."""
         with patch("app.utils.config_validator.validators.settings") as mock_settings:
             mock_settings.notification_urls = ["https://example.com/notify"]
 
-            # Simulate ImportError
-            mock_apprise.Apprise.side_effect = AttributeError()
-
             # Should handle gracefully
             issues = validate_notification_config()
             assert isinstance(issues, list)
+            assert any("Apprise module not installed" in issue for issue in issues)
 
     def test_invalid_apprise_url_format(self):
         """Test validation with invalid notification URL format."""
         with patch("app.utils.config_validator.validators.settings") as mock_settings:
-            with patch("app.utils.config_validator.validators.apprise") as mock_apprise_module:
+            with patch("apprise.Apprise") as mock_apprise_class:
                 mock_settings.notification_urls = ["invalid-url-format"]
 
-                mock_apprise = mock_apprise_module.Apprise.return_value
+                mock_apprise = mock_apprise_class.return_value
                 mock_apprise.add.return_value = False  # Invalid URL
 
                 issues = validate_notification_config()
