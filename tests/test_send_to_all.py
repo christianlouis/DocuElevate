@@ -186,35 +186,66 @@ class TestSendToAllDestinations:
     def test_file_not_found_error(self, mock_log):
         """Test that FileNotFoundError is raised when file doesn't exist."""
         result = send_to_all_destinations.apply(args=["/nonexistent/file.pdf"])
-        
+
         # When task raises an exception, result.failed() returns True
         assert result.failed()
         # The exception should be FileNotFoundError
         assert isinstance(result.result, FileNotFoundError)
 
+    @patch("app.tasks.send_to_all.SessionLocal")
+    @patch("app.tasks.send_to_all.log_task_progress")
     @patch("app.tasks.send_to_all.settings")
     @patch("app.tasks.send_to_all._should_upload_to_dropbox")
+    @patch("app.tasks.send_to_all._should_upload_to_nextcloud")
+    @patch("app.tasks.send_to_all._should_upload_to_paperless")
+    @patch("app.tasks.send_to_all._should_upload_to_google_drive")
+    @patch("app.tasks.send_to_all._should_upload_to_webdav")
+    @patch("app.tasks.send_to_all._should_upload_to_ftp")
+    @patch("app.tasks.send_to_all._should_upload_to_sftp")
+    @patch("app.tasks.send_to_all._should_upload_to_email")
+    @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
-    def test_queues_single_configured_service(self, mock_upload, mock_should, mock_settings, tmp_path):
+    def test_queues_single_configured_service(self, mock_upload, mock_s3, mock_onedrive, mock_email, mock_sftp, mock_ftp, mock_webdav, mock_google, mock_paperless, mock_nextcloud, mock_should, mock_settings, mock_log, mock_session_local, tmp_path):
         """Test queueing upload to a single configured service."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test")
 
         mock_should.return_value = True
+        # Mock all other services to return False
+        mock_nextcloud.return_value = False
+        mock_paperless.return_value = False
+        mock_google.return_value = False
+        mock_webdav.return_value = False
+        mock_ftp.return_value = False
+        mock_sftp.return_value = False
+        mock_email.return_value = False
+        mock_onedrive.return_value = False
+        mock_s3.return_value = False
         mock_upload.delay.return_value = MagicMock(id="task-123")
 
-        result = send_to_all_destinations.apply(args=[str(test_file), False])
+        result = send_to_all_destinations.apply(args=[str(test_file), False, 1])
 
         assert result.result["status"] == "Queued"
         mock_upload.delay.assert_called_once()
 
+    @patch("app.tasks.send_to_all.SessionLocal")
+    @patch("app.tasks.send_to_all.log_task_progress")
     @patch("app.tasks.send_to_all.settings")
     @patch("app.tasks.send_to_all._should_upload_to_dropbox")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
+    @patch("app.tasks.send_to_all._should_upload_to_nextcloud")
+    @patch("app.tasks.send_to_all._should_upload_to_paperless")
+    @patch("app.tasks.send_to_all._should_upload_to_google_drive")
+    @patch("app.tasks.send_to_all._should_upload_to_webdav")
+    @patch("app.tasks.send_to_all._should_upload_to_ftp")
+    @patch("app.tasks.send_to_all._should_upload_to_sftp")
+    @patch("app.tasks.send_to_all._should_upload_to_email")
+    @patch("app.tasks.send_to_all._should_upload_to_onedrive")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
     @patch("app.tasks.send_to_all.upload_to_s3")
     def test_queues_multiple_services(
-        self, mock_s3_upload, mock_dropbox_upload, mock_should_s3, mock_should_dropbox, mock_settings, tmp_path
+        self, mock_s3_upload, mock_dropbox_upload, mock_onedrive, mock_email, mock_sftp, mock_ftp, mock_webdav, mock_google, mock_paperless, mock_nextcloud, mock_should_s3, mock_should_dropbox, mock_settings, mock_log, mock_session_local, tmp_path
     ):
         """Test queueing uploads to multiple services."""
         test_file = tmp_path / "test.pdf"
@@ -222,41 +253,91 @@ class TestSendToAllDestinations:
 
         mock_should_dropbox.return_value = True
         mock_should_s3.return_value = True
+        # Mock all other services to return False
+        mock_nextcloud.return_value = False
+        mock_paperless.return_value = False
+        mock_google.return_value = False
+        mock_webdav.return_value = False
+        mock_ftp.return_value = False
+        mock_sftp.return_value = False
+        mock_email.return_value = False
+        mock_onedrive.return_value = False
         mock_dropbox_upload.delay.return_value = MagicMock(id="dropbox-task")
         mock_s3_upload.delay.return_value = MagicMock(id="s3-task")
 
-        result = send_to_all_destinations.apply(args=[str(test_file), False])
+        result = send_to_all_destinations.apply(args=[str(test_file), False, 1])
 
         assert result.result["status"] == "Queued"
         mock_dropbox_upload.delay.assert_called_once()
         mock_s3_upload.delay.assert_called_once()
 
+    @patch("app.tasks.send_to_all.SessionLocal")
+    @patch("app.tasks.send_to_all.log_task_progress")
     @patch("app.tasks.send_to_all.settings")
     @patch("app.tasks.send_to_all._should_upload_to_dropbox")
-    def test_skips_unconfigured_services(self, mock_should, mock_settings, tmp_path):
+    @patch("app.tasks.send_to_all._should_upload_to_nextcloud")
+    @patch("app.tasks.send_to_all._should_upload_to_paperless")
+    @patch("app.tasks.send_to_all._should_upload_to_google_drive")
+    @patch("app.tasks.send_to_all._should_upload_to_webdav")
+    @patch("app.tasks.send_to_all._should_upload_to_ftp")
+    @patch("app.tasks.send_to_all._should_upload_to_sftp")
+    @patch("app.tasks.send_to_all._should_upload_to_email")
+    @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_s3")
+    def test_skips_unconfigured_services(self, mock_s3, mock_onedrive, mock_email, mock_sftp, mock_ftp, mock_webdav, mock_google, mock_paperless, mock_nextcloud, mock_should, mock_settings, mock_log, mock_session_local, tmp_path):
         """Test that unconfigured services are skipped."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test")
 
+        # Set all _should_upload_* functions to return False
         mock_should.return_value = False
+        mock_nextcloud.return_value = False
+        mock_paperless.return_value = False
+        mock_google.return_value = False
+        mock_webdav.return_value = False
+        mock_ftp.return_value = False
+        mock_sftp.return_value = False
+        mock_email.return_value = False
+        mock_onedrive.return_value = False
+        mock_s3.return_value = False
 
-        result = send_to_all_destinations.apply(args=[str(test_file), False])
+        result = send_to_all_destinations.apply(args=[str(test_file), False, 1])
 
         # No uploads should be queued
         assert result.result["status"] == "Queued"
         # Check that message indicates 0 uploads
         assert "0 upload" in result.result["tasks"] or len(result.result["tasks"]) == 0
 
+    @patch("app.tasks.send_to_all.log_task_progress")
     @patch("app.tasks.send_to_all.SessionLocal")
     @patch("app.tasks.send_to_all.settings")
     @patch("app.tasks.send_to_all._should_upload_to_dropbox")
+    @patch("app.tasks.send_to_all._should_upload_to_nextcloud")
+    @patch("app.tasks.send_to_all._should_upload_to_paperless")
+    @patch("app.tasks.send_to_all._should_upload_to_google_drive")
+    @patch("app.tasks.send_to_all._should_upload_to_webdav")
+    @patch("app.tasks.send_to_all._should_upload_to_ftp")
+    @patch("app.tasks.send_to_all._should_upload_to_sftp")
+    @patch("app.tasks.send_to_all._should_upload_to_email")
+    @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
-    def test_with_file_id_parameter(self, mock_upload, mock_should, mock_settings, mock_session_local, tmp_path):
+    def test_with_file_id_parameter(self, mock_upload, mock_s3, mock_onedrive, mock_email, mock_sftp, mock_ftp, mock_webdav, mock_google, mock_paperless, mock_nextcloud, mock_should, mock_settings, mock_session_local, mock_log, tmp_path):
         """Test send_to_all with explicit file_id parameter."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test")
 
         mock_should.return_value = True
+        # Mock all other services to return False
+        mock_nextcloud.return_value = False
+        mock_paperless.return_value = False
+        mock_google.return_value = False
+        mock_webdav.return_value = False
+        mock_ftp.return_value = False
+        mock_sftp.return_value = False
+        mock_email.return_value = False
+        mock_onedrive.return_value = False
+        mock_s3.return_value = False
         mock_upload.delay.return_value = MagicMock(id="task-123")
 
         result = send_to_all_destinations.apply(args=[str(test_file), False, 42])
@@ -266,57 +347,125 @@ class TestSendToAllDestinations:
         call_kwargs = mock_upload.delay.call_args[1]
         assert call_kwargs.get("file_id") == 42
 
+    @patch("app.tasks.send_to_all.SessionLocal")
+    @patch("app.tasks.send_to_all.log_task_progress")
     @patch("app.tasks.send_to_all.settings")
+    @patch("app.tasks.send_to_all._should_upload_to_dropbox")
+    @patch("app.tasks.send_to_all._should_upload_to_nextcloud")
+    @patch("app.tasks.send_to_all._should_upload_to_paperless")
+    @patch("app.tasks.send_to_all._should_upload_to_google_drive")
+    @patch("app.tasks.send_to_all._should_upload_to_webdav")
+    @patch("app.tasks.send_to_all._should_upload_to_ftp")
+    @patch("app.tasks.send_to_all._should_upload_to_sftp")
+    @patch("app.tasks.send_to_all._should_upload_to_email")
+    @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.get_configured_services_from_validator")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
-    def test_uses_validator_when_enabled(self, mock_upload, mock_validator, mock_settings, tmp_path):
+    def test_uses_validator_when_enabled(self, mock_upload, mock_validator, mock_s3, mock_onedrive, mock_email, mock_sftp, mock_ftp, mock_webdav, mock_google, mock_paperless, mock_nextcloud, mock_should_dropbox, mock_settings, mock_log, mock_session_local, tmp_path):
         """Test that validator is used when use_validator=True."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test")
 
         mock_validator.return_value = {"dropbox": True}
+        # Mock all should_upload functions to return False (they won't be called when validator is used, but just in case)
+        mock_should_dropbox.return_value = False
+        mock_nextcloud.return_value = False
+        mock_paperless.return_value = False
+        mock_google.return_value = False
+        mock_webdav.return_value = False
+        mock_ftp.return_value = False
+        mock_sftp.return_value = False
+        mock_email.return_value = False
+        mock_onedrive.return_value = False
+        mock_s3.return_value = False
         mock_upload.delay.return_value = MagicMock(id="task-123")
 
-        result = send_to_all_destinations.apply(args=[str(test_file), True])
+        result = send_to_all_destinations.apply(args=[str(test_file), True, 1])
 
         mock_validator.assert_called_once()
         mock_upload.delay.assert_called_once()
 
+    @patch("app.tasks.send_to_all.SessionLocal")
+    @patch("app.tasks.send_to_all.log_task_progress")
     @patch("app.tasks.send_to_all.settings")
+    @patch("app.tasks.send_to_all._should_upload_to_dropbox")
+    @patch("app.tasks.send_to_all._should_upload_to_nextcloud")
+    @patch("app.tasks.send_to_all._should_upload_to_paperless")
+    @patch("app.tasks.send_to_all._should_upload_to_google_drive")
+    @patch("app.tasks.send_to_all._should_upload_to_webdav")
+    @patch("app.tasks.send_to_all._should_upload_to_ftp")
+    @patch("app.tasks.send_to_all._should_upload_to_sftp")
+    @patch("app.tasks.send_to_all._should_upload_to_email")
+    @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.get_configured_services_from_validator")
-    def test_validator_exception_fallback(self, mock_validator, mock_settings, tmp_path):
+    def test_validator_exception_fallback(self, mock_validator, mock_s3, mock_onedrive, mock_email, mock_sftp, mock_ftp, mock_webdav, mock_google, mock_paperless, mock_nextcloud, mock_should_dropbox, mock_settings, mock_log, mock_session_local, tmp_path):
         """Test fallback to individual checks when validator fails."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test")
 
         mock_validator.side_effect = Exception("Validator error")
+        # Set all _should_upload_* functions to return False
+        mock_should_dropbox.return_value = False
+        mock_nextcloud.return_value = False
+        mock_paperless.return_value = False
+        mock_google.return_value = False
+        mock_webdav.return_value = False
+        mock_ftp.return_value = False
+        mock_sftp.return_value = False
+        mock_email.return_value = False
+        mock_onedrive.return_value = False
+        mock_s3.return_value = False
 
         # Should not raise, should fall back to individual checks
-        result = send_to_all_destinations.apply(args=[str(test_file), True])
+        result = send_to_all_destinations.apply(args=[str(test_file), True, 1])
 
         assert result.result["status"] == "Queued"
 
+    @patch("app.tasks.send_to_all.SessionLocal")
+    @patch("app.tasks.send_to_all.log_task_progress")
     @patch("app.tasks.send_to_all.settings")
     @patch("app.tasks.send_to_all._should_upload_to_dropbox")
+    @patch("app.tasks.send_to_all._should_upload_to_nextcloud")
+    @patch("app.tasks.send_to_all._should_upload_to_paperless")
+    @patch("app.tasks.send_to_all._should_upload_to_google_drive")
+    @patch("app.tasks.send_to_all._should_upload_to_webdav")
+    @patch("app.tasks.send_to_all._should_upload_to_ftp")
+    @patch("app.tasks.send_to_all._should_upload_to_sftp")
+    @patch("app.tasks.send_to_all._should_upload_to_email")
+    @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
-    def test_handles_upload_task_queue_error(self, mock_upload, mock_should, mock_settings, tmp_path):
+    def test_handles_upload_task_queue_error(self, mock_upload, mock_s3, mock_onedrive, mock_email, mock_sftp, mock_ftp, mock_webdav, mock_google, mock_paperless, mock_nextcloud, mock_should, mock_settings, mock_log, mock_session_local, tmp_path):
         """Test handling when queueing upload task fails."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test")
 
         mock_should.return_value = True
+        # Mock all other services to return False
+        mock_nextcloud.return_value = False
+        mock_paperless.return_value = False
+        mock_google.return_value = False
+        mock_webdav.return_value = False
+        mock_ftp.return_value = False
+        mock_sftp.return_value = False
+        mock_email.return_value = False
+        mock_onedrive.return_value = False
+        mock_s3.return_value = False
         mock_upload.delay.side_effect = Exception("Queue error")
 
         # Should not raise, should log error
-        result = send_to_all_destinations.apply(args=[str(test_file), False])
+        result = send_to_all_destinations.apply(args=[str(test_file), False, 1])
 
         assert result.result["status"] == "Queued"
         # Error should be recorded in results
         assert "dropbox_error" in result.result["tasks"]
 
+    @patch("app.tasks.send_to_all.log_task_progress")
     @patch("app.tasks.send_to_all.SessionLocal")
     @patch("app.tasks.send_to_all.settings")
-    def test_fallback_file_id_lookup(self, mock_settings, mock_session_local, tmp_path):
+    def test_fallback_file_id_lookup(self, mock_settings, mock_session_local, mock_log, tmp_path):
         """Test file_id lookup fallback when not provided."""
         from app.models import FileRecord
 
@@ -339,16 +488,37 @@ class TestSendToAllDestinations:
         # Should attempt database lookup
         mock_db.query.assert_called()
 
+    @patch("app.tasks.send_to_all.SessionLocal")
+    @patch("app.tasks.send_to_all.log_task_progress")
     @patch("app.tasks.send_to_all.settings")
     @patch("app.tasks.send_to_all._should_upload_to_dropbox")
-    def test_should_upload_check_exception_handling(self, mock_should, mock_settings, tmp_path):
+    @patch("app.tasks.send_to_all._should_upload_to_nextcloud")
+    @patch("app.tasks.send_to_all._should_upload_to_paperless")
+    @patch("app.tasks.send_to_all._should_upload_to_google_drive")
+    @patch("app.tasks.send_to_all._should_upload_to_webdav")
+    @patch("app.tasks.send_to_all._should_upload_to_ftp")
+    @patch("app.tasks.send_to_all._should_upload_to_sftp")
+    @patch("app.tasks.send_to_all._should_upload_to_email")
+    @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_s3")
+    def test_should_upload_check_exception_handling(self, mock_s3, mock_onedrive, mock_email, mock_sftp, mock_ftp, mock_webdav, mock_google, mock_paperless, mock_nextcloud, mock_should, mock_settings, mock_log, mock_session_local, tmp_path):
         """Test that exceptions in should_upload checks are handled."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test")
 
         mock_should.side_effect = Exception("Configuration check error")
+        # Mock all other services to return False
+        mock_nextcloud.return_value = False
+        mock_paperless.return_value = False
+        mock_google.return_value = False
+        mock_webdav.return_value = False
+        mock_ftp.return_value = False
+        mock_sftp.return_value = False
+        mock_email.return_value = False
+        mock_onedrive.return_value = False
+        mock_s3.return_value = False
 
         # Should not raise, should treat as not configured
-        result = send_to_all_destinations.apply(args=[str(test_file), False])
+        result = send_to_all_destinations.apply(args=[str(test_file), False, 1])
 
         assert result.result["status"] == "Queued"
