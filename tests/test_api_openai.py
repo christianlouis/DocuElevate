@@ -37,9 +37,9 @@ class TestOpenAIConnectionErrors:
         data = response.json()
 
         assert data["status"] == "error"
-        assert "not configured" in data["message"].lower()
+        assert "openai" in data["message"].lower() and "configured" in data["message"].lower()
 
-    @patch("app.api.openai.openai.OpenAI")
+    @patch("openai.OpenAI")
     @patch("app.api.openai.settings")
     def test_openai_api_key_validation_success(self, mock_settings, mock_openai_class, client):
         """Test OpenAI API key validation success."""
@@ -58,7 +58,7 @@ class TestOpenAIConnectionErrors:
         assert "valid" in data["message"].lower()
         assert data["models_available"] == 2
 
-    @patch("app.api.openai.openai.OpenAI")
+    @patch("openai.OpenAI")
     @patch("app.api.openai.settings")
     def test_openai_api_key_validation_auth_error(self, mock_settings, mock_openai_class, client):
         """Test OpenAI API key validation with auth error."""
@@ -75,7 +75,7 @@ class TestOpenAIConnectionErrors:
         assert "api key" in data["message"].lower() or "validation failed" in data["message"].lower()
         assert data.get("is_auth_error") is True
 
-    @patch("app.api.openai.openai.OpenAI")
+    @patch("openai.OpenAI")
     @patch("app.api.openai.settings")
     def test_openai_api_key_validation_network_error(self, mock_settings, mock_openai_class, client):
         """Test OpenAI API key validation with network error."""
@@ -97,16 +97,16 @@ class TestOpenAIConnectionErrors:
         """Test handling when openai package is not installed."""
         mock_settings.openai_api_key = "sk-test-key"
 
-        # Mock ImportError by patching the import
-        with patch("app.api.openai.openai", side_effect=ImportError()):
-            # Need to reload the module to trigger the import error path
-            # For this test, we'll just verify the endpoint handles missing imports gracefully
+        # Mock ImportError by patching the import at module level
+        with patch.dict("sys.modules", {"openai": None}):
             response = client.get("/api/openai/test")
             # The endpoint should still respond, even if openai is missing
             assert response.status_code == 200
-            # Note: The actual implementation uses try/except ImportError in the endpoint itself
+            data = response.json()
+            assert data["status"] == "error"
+            assert "openai package" in data["message"].lower() or "not installed" in data["message"].lower()
 
-    @patch("app.api.openai.openai.OpenAI")
+    @patch("openai.OpenAI")
     @patch("app.api.openai.settings")
     def test_openai_models_without_data_attribute(self, mock_settings, mock_openai_class, client):
         """Test OpenAI API when models response doesn't have data attribute."""
@@ -124,7 +124,7 @@ class TestOpenAIConnectionErrors:
         assert data["status"] == "success"
         assert data["models_available"] == "Unknown"
 
-    @patch("app.api.openai.openai.OpenAI")
+    @patch("openai.OpenAI")
     @patch("app.api.openai.settings")
     def test_openai_unexpected_exception(self, mock_settings, mock_openai_class, client):
         """Test handling of unexpected exceptions."""
