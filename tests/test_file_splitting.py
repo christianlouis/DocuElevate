@@ -517,8 +517,9 @@ class TestSplitPdfBySizeEdgeCases:
 
     def test_returns_empty_list_for_zero_page_pdf(self, tmp_path):
         """Test handling of PDF with zero pages."""
-        from app.utils.file_splitting import split_pdf_by_size
         from pypdf import PdfWriter
+
+        from app.utils.file_splitting import split_pdf_by_size
 
         # Create a technically valid but empty PDF
         empty_pdf = tmp_path / "empty.pdf"

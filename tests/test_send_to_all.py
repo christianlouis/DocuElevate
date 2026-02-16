@@ -1,6 +1,5 @@
 """Tests for app/tasks/send_to_all.py module."""
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -247,9 +246,7 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all.settings")
     @patch("app.tasks.send_to_all._should_upload_to_dropbox")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
-    def test_with_file_id_parameter(
-        self, mock_upload, mock_should, mock_settings, mock_session_local, tmp_path
-    ):
+    def test_with_file_id_parameter(self, mock_upload, mock_should, mock_settings, mock_session_local, tmp_path):
         """Test send_to_all with explicit file_id parameter."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test")
@@ -267,9 +264,7 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all.settings")
     @patch("app.tasks.send_to_all.get_configured_services_from_validator")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
-    def test_uses_validator_when_enabled(
-        self, mock_upload, mock_validator, mock_settings, tmp_path
-    ):
+    def test_uses_validator_when_enabled(self, mock_upload, mock_validator, mock_settings, tmp_path):
         """Test that validator is used when use_validator=True."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test")
@@ -299,9 +294,7 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all.settings")
     @patch("app.tasks.send_to_all._should_upload_to_dropbox")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
-    def test_handles_upload_task_queue_error(
-        self, mock_upload, mock_should, mock_settings, tmp_path
-    ):
+    def test_handles_upload_task_queue_error(self, mock_upload, mock_should, mock_settings, tmp_path):
         """Test handling when queueing upload task fails."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test")

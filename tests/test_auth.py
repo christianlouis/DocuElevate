@@ -361,9 +361,7 @@ class TestOAuthLogin:
             result = await oauth_login(mock_request)
 
             assert result == "oauth_redirect"
-            mock_authentik.authorize_redirect.assert_called_once_with(
-                mock_request, "http://localhost/oauth-callback"
-            )
+            mock_authentik.authorize_redirect.assert_called_once_with(mock_request, "http://localhost/oauth-callback")
 
 
 @pytest.mark.unit

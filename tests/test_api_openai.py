@@ -129,7 +129,7 @@ class TestOpenAIConnectionErrors:
     def test_openai_unexpected_exception(self, mock_settings, mock_openai_class, client):
         """Test handling of unexpected exceptions."""
         mock_settings.openai_api_key = "sk-test-key"
-        
+
         # Raise an unexpected exception during OpenAI client creation
         mock_openai_class.side_effect = RuntimeError("Unexpected error")
 

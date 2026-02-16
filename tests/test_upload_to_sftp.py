@@ -1,7 +1,6 @@
 """Tests for app/tasks/upload_to_sftp.py module."""
 
-import os
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import paramiko
 import pytest
@@ -20,7 +19,7 @@ class TestUploadToSFTP:
         # Setup
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test content")
-        
+
         mock_settings.sftp_host = "sftp.example.com"
         mock_settings.sftp_port = 22
         mock_settings.sftp_username = "testuser"
@@ -60,7 +59,7 @@ class TestUploadToSFTP:
         # Setup
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test content")
-        
+
         mock_settings.sftp_host = "sftp.example.com"
         mock_settings.sftp_port = 22
         mock_settings.sftp_username = "testuser"
@@ -92,7 +91,7 @@ class TestUploadToSFTP:
         """Test SFTP upload with host key verification disabled."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test content")
-        
+
         mock_settings.sftp_host = "sftp.example.com"
         mock_settings.sftp_port = 22
         mock_settings.sftp_username = "testuser"
@@ -122,7 +121,7 @@ class TestUploadToSFTP:
         mock_settings.sftp_host = "sftp.example.com"
         mock_settings.sftp_port = 22
         mock_settings.sftp_username = "testuser"
-        
+
         with pytest.raises(FileNotFoundError):
             upload_to_sftp.apply(args=["/nonexistent/file.pdf"])
 
@@ -131,7 +130,7 @@ class TestUploadToSFTP:
         """Test SFTP upload with missing configuration."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test content")
-        
+
         mock_settings.sftp_host = None
         mock_settings.sftp_port = None
         mock_settings.sftp_username = None
@@ -147,7 +146,7 @@ class TestUploadToSFTP:
         """Test SFTP upload with no authentication method available."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test content")
-        
+
         mock_settings.sftp_host = "sftp.example.com"
         mock_settings.sftp_port = 22
         mock_settings.sftp_username = "testuser"
@@ -169,7 +168,7 @@ class TestUploadToSFTP:
         """Test that remote directories are created as needed."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test content")
-        
+
         mock_settings.sftp_host = "sftp.example.com"
         mock_settings.sftp_port = 22
         mock_settings.sftp_username = "testuser"
@@ -181,7 +180,7 @@ class TestUploadToSFTP:
         mock_ssh = MagicMock()
         mock_sftp = MagicMock()
         mock_ssh.open_sftp.return_value = mock_sftp
-        
+
         # Simulate directories not existing
         mock_sftp.stat.side_effect = FileNotFoundError
         mock_ssh_class.return_value = mock_ssh
@@ -201,7 +200,7 @@ class TestUploadToSFTP:
         """Test that connections are cleaned up on error."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test content")
-        
+
         mock_settings.sftp_host = "sftp.example.com"
         mock_settings.sftp_port = 22
         mock_settings.sftp_username = "testuser"

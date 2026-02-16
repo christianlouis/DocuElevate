@@ -1,6 +1,5 @@
 """Tests for app/views/license_routes.py module."""
 
-from pathlib import Path
 from unittest.mock import mock_open, patch
 
 import pytest
@@ -19,7 +18,7 @@ class TestLicenseViews:
         """Test successful LGPL license retrieval."""
         # Create a mock license file
         license_content = "GNU Lesser General Public License\nVersion 3, 29 June 2007"
-        
+
         with patch("pathlib.Path.exists", return_value=True):
             with patch("builtins.open", mock_open(read_data=license_content)):
                 response = client.get("/licenses/lgpl.txt")

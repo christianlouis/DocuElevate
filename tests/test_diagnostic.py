@@ -1,6 +1,6 @@
 """Tests for app/api/diagnostic.py module."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

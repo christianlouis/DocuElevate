@@ -8,7 +8,7 @@ Focuses on:
 - Mixed encryption states
 """
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlalchemy.exc import SQLAlchemyError
@@ -397,7 +397,7 @@ class TestSaveSettingErrors:
         mock_db.commit.side_effect = SQLAlchemyError("Database error")
 
         success, error = save_setting(mock_db, "test_key", "test_value")
-        
+
         assert success is False
         assert "error" in error.lower() or "failed" in error.lower()
         # Should rollback on error
