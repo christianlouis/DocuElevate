@@ -1,0 +1,34 @@
+# GitHub Copilot Workspace Configuration
+# This file configures GitHub Copilot coding agent settings for the DocuElevate repository
+
+# Network allowlist for external API services
+# These domains are required for integration tests and external service connectivity
+network:
+  allowlist:
+    # OpenAI API - Required for AI-powered metadata extraction and GPT integration
+    - api.openai.com
+    
+    # Google OAuth2 - Required for Google Drive integration and OAuth authentication
+    - oauth2.googleapis.com
+    - accounts.google.com
+    - www.googleapis.com
+    
+    # Azure Cognitive Services - Required for Azure Document Intelligence and OCR
+    - test.cognitiveservices.azure.com
+    - "*.cognitiveservices.azure.com"
+    
+    # Additional Azure endpoints that may be needed
+    - login.microsoftonline.com
+    - graph.microsoft.com
+    
+    # AWS S3 - Required for S3 storage integration tests
+    - s3.amazonaws.com
+    - "*.s3.amazonaws.com"
+    
+    # Dropbox API - Required for Dropbox storage integration
+    - api.dropboxapi.com
+    - content.dropboxapi.com
+    
+    # Package registries (if needed for dependency installation during tests)
+    - pypi.org
+    - files.pythonhosted.org
