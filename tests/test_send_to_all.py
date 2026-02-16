@@ -182,10 +182,15 @@ class TestGetConfiguredServicesFromValidator:
 class TestSendToAllDestinations:
     """Test send_to_all_destinations task."""
 
-    def test_file_not_found_error(self):
+    @patch("app.tasks.send_to_all.log_task_progress")
+    def test_file_not_found_error(self, mock_log):
         """Test that FileNotFoundError is raised when file doesn't exist."""
-        with pytest.raises(FileNotFoundError):
-            send_to_all_destinations.apply(args=["/nonexistent/file.pdf"])
+        result = send_to_all_destinations.apply(args=["/nonexistent/file.pdf"])
+        
+        # When task raises an exception, result.failed() returns True
+        assert result.failed()
+        # The exception should be FileNotFoundError
+        assert isinstance(result.result, FileNotFoundError)
 
     @patch("app.tasks.send_to_all.settings")
     @patch("app.tasks.send_to_all._should_upload_to_dropbox")
