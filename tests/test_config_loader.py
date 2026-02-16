@@ -166,7 +166,7 @@ class TestLoadSettingsFromDb:
 class TestReloadSettingsFromDb:
     """Tests for reload_settings_from_db function."""
 
-    @patch("app.utils.config_loader.SessionLocal")
+    @patch("app.database.SessionLocal")
     @patch("app.utils.config_loader.load_settings_from_db")
     def test_reload_success(self, mock_load, mock_session_local):
         """Test successful settings reload."""
@@ -180,7 +180,7 @@ class TestReloadSettingsFromDb:
         mock_load.assert_called_once_with(mock_settings, mock_db)
         mock_db.close.assert_called_once()
 
-    @patch("app.utils.config_loader.SessionLocal")
+    @patch("app.database.SessionLocal")
     def test_reload_database_error(self, mock_session_local):
         """Test reload handling database error."""
         mock_settings = MagicMock()
@@ -190,13 +190,15 @@ class TestReloadSettingsFromDb:
 
         assert result is False
 
-    @patch("app.utils.config_loader.SessionLocal")
-    def test_reload_closes_session_on_error(self, mock_session_local):
+    @patch("app.utils.config_loader.load_settings_from_db")
+    @patch("app.database.SessionLocal")
+    def test_reload_closes_session_on_error(self, mock_session_local, mock_load):
         """Test that session is closed even on error."""
         mock_settings = MagicMock()
         mock_db = MagicMock()
-        mock_db.query.side_effect = Exception("Query error")
         mock_session_local.return_value = mock_db
+        # Make load_settings_from_db raise an exception
+        mock_load.side_effect = Exception("Load error")
 
         result = reload_settings_from_db(mock_settings)
 
