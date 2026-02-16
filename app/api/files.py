@@ -334,7 +334,7 @@ def bulk_reprocess_files(request: Request, file_ids: List[int], db: DbSession):
             "status": "success" if processed_files else "error",
             "message": f"Successfully queued {len(processed_files)} files for reprocessing",
             "processed_files": processed_files,
-            "errors": errors if errors else None,
+            "errors": errors,
             "task_ids": task_ids,
         }
 

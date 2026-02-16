@@ -25,21 +25,21 @@ logger = logging.getLogger(__name__)
 
 
 def _should_upload_to_dropbox():
-    return settings.dropbox_app_key and settings.dropbox_app_secret and settings.dropbox_refresh_token
+    return bool(settings.dropbox_app_key and settings.dropbox_app_secret and settings.dropbox_refresh_token)
 
 
 def _should_upload_to_nextcloud():
-    return settings.nextcloud_upload_url and settings.nextcloud_username and settings.nextcloud_password
+    return bool(settings.nextcloud_upload_url and settings.nextcloud_username and settings.nextcloud_password)
 
 
 def _should_upload_to_paperless():
-    return settings.paperless_ngx_api_token and settings.paperless_host
+    return bool(settings.paperless_ngx_api_token and settings.paperless_host)
 
 
 def _should_upload_to_google_drive():
     # Check for OAuth configuration
     if getattr(settings, "google_drive_use_oauth", False):
-        return (
+        return bool(
             settings.google_drive_client_id
             and settings.google_drive_client_secret
             and settings.google_drive_refresh_token
@@ -47,33 +47,33 @@ def _should_upload_to_google_drive():
         )
     # Or check for service account configuration
     else:
-        return settings.google_drive_credentials_json and settings.google_drive_folder_id
+        return bool(settings.google_drive_credentials_json and settings.google_drive_folder_id)
 
 
 def _should_upload_to_webdav():
-    return settings.webdav_url and settings.webdav_username and settings.webdav_password
+    return bool(settings.webdav_url and settings.webdav_username and settings.webdav_password)
 
 
 def _should_upload_to_ftp():
-    return settings.ftp_host and settings.ftp_username and settings.ftp_password
+    return bool(settings.ftp_host and settings.ftp_username and settings.ftp_password)
 
 
 def _should_upload_to_sftp():
-    return settings.sftp_host and settings.sftp_username and (settings.sftp_password or settings.sftp_private_key)
+    return bool(settings.sftp_host and settings.sftp_username and (settings.sftp_password or settings.sftp_private_key))
 
 
 def _should_upload_to_email():
-    return (
+    return bool(
         settings.email_host and settings.email_username and settings.email_password and settings.email_default_recipient
     )
 
 
 def _should_upload_to_onedrive():
-    return settings.onedrive_client_id and settings.onedrive_client_secret and settings.onedrive_refresh_token
+    return bool(settings.onedrive_client_id and settings.onedrive_client_secret and settings.onedrive_refresh_token)
 
 
 def _should_upload_to_s3():
-    return settings.s3_bucket_name and settings.aws_access_key_id and settings.aws_secret_access_key
+    return bool(settings.s3_bucket_name and settings.aws_access_key_id and settings.aws_secret_access_key)
 
 
 def get_configured_services_from_validator():
