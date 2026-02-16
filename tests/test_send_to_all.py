@@ -206,7 +206,24 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
-    def test_queues_single_configured_service(self, mock_upload, mock_s3, mock_onedrive, mock_email, mock_sftp, mock_ftp, mock_webdav, mock_google, mock_paperless, mock_nextcloud, mock_should, mock_settings, mock_log, mock_session_local, tmp_path):
+    def test_queues_single_configured_service(
+        self,
+        mock_upload,
+        mock_s3,
+        mock_onedrive,
+        mock_email,
+        mock_sftp,
+        mock_ftp,
+        mock_webdav,
+        mock_google,
+        mock_paperless,
+        mock_nextcloud,
+        mock_should,
+        mock_settings,
+        mock_log,
+        mock_session_local,
+        tmp_path,
+    ):
         """Test queueing upload to a single configured service."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test")
@@ -245,7 +262,23 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all.upload_to_dropbox")
     @patch("app.tasks.send_to_all.upload_to_s3")
     def test_queues_multiple_services(
-        self, mock_s3_upload, mock_dropbox_upload, mock_onedrive, mock_email, mock_sftp, mock_ftp, mock_webdav, mock_google, mock_paperless, mock_nextcloud, mock_should_s3, mock_should_dropbox, mock_settings, mock_log, mock_session_local, tmp_path
+        self,
+        mock_s3_upload,
+        mock_dropbox_upload,
+        mock_onedrive,
+        mock_email,
+        mock_sftp,
+        mock_ftp,
+        mock_webdav,
+        mock_google,
+        mock_paperless,
+        mock_nextcloud,
+        mock_should_s3,
+        mock_should_dropbox,
+        mock_settings,
+        mock_log,
+        mock_session_local,
+        tmp_path,
     ):
         """Test queueing uploads to multiple services."""
         test_file = tmp_path / "test.pdf"
@@ -284,7 +317,23 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_email")
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
-    def test_skips_unconfigured_services(self, mock_s3, mock_onedrive, mock_email, mock_sftp, mock_ftp, mock_webdav, mock_google, mock_paperless, mock_nextcloud, mock_should, mock_settings, mock_log, mock_session_local, tmp_path):
+    def test_skips_unconfigured_services(
+        self,
+        mock_s3,
+        mock_onedrive,
+        mock_email,
+        mock_sftp,
+        mock_ftp,
+        mock_webdav,
+        mock_google,
+        mock_paperless,
+        mock_nextcloud,
+        mock_should,
+        mock_settings,
+        mock_log,
+        mock_session_local,
+        tmp_path,
+    ):
         """Test that unconfigured services are skipped."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test")
@@ -322,7 +371,24 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
-    def test_with_file_id_parameter(self, mock_upload, mock_s3, mock_onedrive, mock_email, mock_sftp, mock_ftp, mock_webdav, mock_google, mock_paperless, mock_nextcloud, mock_should, mock_settings, mock_session_local, mock_log, tmp_path):
+    def test_with_file_id_parameter(
+        self,
+        mock_upload,
+        mock_s3,
+        mock_onedrive,
+        mock_email,
+        mock_sftp,
+        mock_ftp,
+        mock_webdav,
+        mock_google,
+        mock_paperless,
+        mock_nextcloud,
+        mock_should,
+        mock_settings,
+        mock_session_local,
+        mock_log,
+        tmp_path,
+    ):
         """Test send_to_all with explicit file_id parameter."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test")
@@ -362,7 +428,25 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.get_configured_services_from_validator")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
-    def test_uses_validator_when_enabled(self, mock_upload, mock_validator, mock_s3, mock_onedrive, mock_email, mock_sftp, mock_ftp, mock_webdav, mock_google, mock_paperless, mock_nextcloud, mock_should_dropbox, mock_settings, mock_log, mock_session_local, tmp_path):
+    def test_uses_validator_when_enabled(
+        self,
+        mock_upload,
+        mock_validator,
+        mock_s3,
+        mock_onedrive,
+        mock_email,
+        mock_sftp,
+        mock_ftp,
+        mock_webdav,
+        mock_google,
+        mock_paperless,
+        mock_nextcloud,
+        mock_should_dropbox,
+        mock_settings,
+        mock_log,
+        mock_session_local,
+        tmp_path,
+    ):
         """Test that validator is used when use_validator=True."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test")
@@ -400,7 +484,24 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.get_configured_services_from_validator")
-    def test_validator_exception_fallback(self, mock_validator, mock_s3, mock_onedrive, mock_email, mock_sftp, mock_ftp, mock_webdav, mock_google, mock_paperless, mock_nextcloud, mock_should_dropbox, mock_settings, mock_log, mock_session_local, tmp_path):
+    def test_validator_exception_fallback(
+        self,
+        mock_validator,
+        mock_s3,
+        mock_onedrive,
+        mock_email,
+        mock_sftp,
+        mock_ftp,
+        mock_webdav,
+        mock_google,
+        mock_paperless,
+        mock_nextcloud,
+        mock_should_dropbox,
+        mock_settings,
+        mock_log,
+        mock_session_local,
+        tmp_path,
+    ):
         """Test fallback to individual checks when validator fails."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test")
@@ -437,7 +538,24 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
-    def test_handles_upload_task_queue_error(self, mock_upload, mock_s3, mock_onedrive, mock_email, mock_sftp, mock_ftp, mock_webdav, mock_google, mock_paperless, mock_nextcloud, mock_should, mock_settings, mock_log, mock_session_local, tmp_path):
+    def test_handles_upload_task_queue_error(
+        self,
+        mock_upload,
+        mock_s3,
+        mock_onedrive,
+        mock_email,
+        mock_sftp,
+        mock_ftp,
+        mock_webdav,
+        mock_google,
+        mock_paperless,
+        mock_nextcloud,
+        mock_should,
+        mock_settings,
+        mock_log,
+        mock_session_local,
+        tmp_path,
+    ):
         """Test handling when queueing upload task fails."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test")
@@ -501,7 +619,23 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_email")
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
-    def test_should_upload_check_exception_handling(self, mock_s3, mock_onedrive, mock_email, mock_sftp, mock_ftp, mock_webdav, mock_google, mock_paperless, mock_nextcloud, mock_should, mock_settings, mock_log, mock_session_local, tmp_path):
+    def test_should_upload_check_exception_handling(
+        self,
+        mock_s3,
+        mock_onedrive,
+        mock_email,
+        mock_sftp,
+        mock_ftp,
+        mock_webdav,
+        mock_google,
+        mock_paperless,
+        mock_nextcloud,
+        mock_should,
+        mock_settings,
+        mock_log,
+        mock_session_local,
+        tmp_path,
+    ):
         """Test that exceptions in should_upload checks are handled."""
         test_file = tmp_path / "test.pdf"
         test_file.write_text("test")
