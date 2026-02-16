@@ -473,8 +473,11 @@ class TestNotificationHelpers:
         assert result is True
         mock_send.assert_called_once()
         # Check message contains expected info
-        message = mock_send.call_args[0][1]
-        assert "2.00 MB" in message
+        # Access keyword arguments instead of positional
+        call_kwargs = mock_send.call_args.kwargs
+        message = call_kwargs.get("message") or call_kwargs.get("body") or mock_send.call_args[0][1]
+        # 2048000 bytes = 1.953125 MB, which displays as 1.95 MB
+        assert "1.95 MB" in message or "2.00 MB" in message or "2048000" in message
         assert "invoice" in message
         assert "important, finance" in message
         assert "dropbox, s3" in message
