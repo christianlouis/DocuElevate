@@ -186,7 +186,7 @@ class TestSendToAllDestinations:
     def test_file_not_found_error(self, mock_log):
         """Test that FileNotFoundError is raised when file doesn't exist."""
         result = send_to_all_destinations.apply(args=["/nonexistent/file.pdf"])
-        
+
         # When task raises an exception, result.failed() returns True
         assert result.failed()
         # The exception should be FileNotFoundError
