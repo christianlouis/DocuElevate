@@ -140,4 +140,6 @@ def log_task_progress(
             db.commit()
     except Exception:
         # Database errors in logging should never crash the calling task
-        logging.getLogger(__name__).debug(f"Failed to log task progress to database: {step_name} - {status}")
+        logging.getLogger(__name__).debug(
+            f"Failed to log task progress to database: {step_name} - {status}", exc_info=True
+        )
