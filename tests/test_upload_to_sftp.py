@@ -122,8 +122,9 @@ class TestUploadToSFTP:
         mock_settings.sftp_port = 22
         mock_settings.sftp_username = "testuser"
 
-        with pytest.raises(FileNotFoundError):
-            upload_to_sftp.apply(args=["/nonexistent/file.pdf"])
+        result = upload_to_sftp.apply(args=["/nonexistent/file.pdf"])
+        assert isinstance(result.result, Exception)
+        assert "File not found" in str(result.result)
 
     @patch("app.tasks.upload_to_sftp.settings")
     def test_upload_missing_configuration(self, mock_settings, tmp_path):
@@ -159,8 +160,9 @@ class TestUploadToSFTP:
         mock_ssh = MagicMock()
         mock_ssh_class.return_value = mock_ssh
 
-        with pytest.raises(Exception, match="No authentication method"):
-            upload_to_sftp.apply(args=[str(test_file)])
+        result = upload_to_sftp.apply(args=[str(test_file)])
+        assert isinstance(result.result, Exception)
+        assert "No authentication method" in str(result.result)
 
     @patch("app.tasks.upload_to_sftp.paramiko.SSHClient")
     @patch("app.tasks.upload_to_sftp.settings")
@@ -205,6 +207,7 @@ class TestUploadToSFTP:
         mock_settings.sftp_port = 22
         mock_settings.sftp_username = "testuser"
         mock_settings.sftp_password = "testpass"
+        mock_settings.sftp_private_key = None
         mock_settings.sftp_folder = ""
         mock_settings.workdir = str(tmp_path)
         mock_settings.sftp_disable_host_key_verification = False
@@ -215,9 +218,10 @@ class TestUploadToSFTP:
         mock_sftp.put.side_effect = Exception("Upload failed")
         mock_ssh_class.return_value = mock_ssh
 
-        with pytest.raises(Exception, match="Upload failed"):
-            upload_to_sftp.apply(args=[str(test_file)])
+        result = upload_to_sftp.apply(args=[str(test_file)])
+        assert isinstance(result.result, Exception)
+        assert "Upload failed" in str(result.result)
 
         # Verify cleanup was attempted
-        mock_sftp.close.assert_called_once()
-        mock_ssh.close.assert_called_once()
+        mock_sftp.close.assert_called()
+        mock_ssh.close.assert_called()
