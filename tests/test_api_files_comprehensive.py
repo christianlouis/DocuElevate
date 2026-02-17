@@ -921,7 +921,7 @@ class TestBulkReprocessExceptions:
         db_session.commit()
 
         # Cause an exception during task queuing
-        with patch("app.tasks.process_document.process_document") as mock_task:
+        with patch("app.api.files.process_document") as mock_task:
             mock_task.delay.side_effect = Exception("Task queue error")
             response = client.post("/api/files/bulk-reprocess", json=[file.id])
             assert response.status_code == 200  # Errors are collected in response

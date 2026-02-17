@@ -92,48 +92,54 @@ def log_task_progress(
         if collected:
             detail = collected
 
-    with SessionLocal() as db:
-        # Log to ProcessingLog (for historical viewing)
-        log_entry = ProcessingLog(
-            task_id=task_id,
-            step_name=step_name,
-            status=status,
-            message=message,
-            file_id=file_id,
-            detail=detail,
-        )
-        db.add(log_entry)
-
-        # Update FileProcessingStep table (for status tracking) if file_id is provided
-        if file_id and step_name:
-            # Find or create the step record
-            step_record = (
-                db.query(FileProcessingStep)
-                .filter(FileProcessingStep.file_id == file_id, FileProcessingStep.step_name == step_name)
-                .first()
+    try:
+        with SessionLocal() as db:
+            # Log to ProcessingLog (for historical viewing)
+            log_entry = ProcessingLog(
+                task_id=task_id,
+                step_name=step_name,
+                status=status,
+                message=message,
+                file_id=file_id,
+                detail=detail,
             )
+            db.add(log_entry)
 
-            now = datetime.now(timezone.utc)
-
-            if not step_record:
-                # Create new step record
-                step_record = FileProcessingStep(
-                    file_id=file_id,
-                    step_name=step_name,
-                    status=status,
-                    started_at=now if status == "in_progress" else None,
-                    completed_at=now if status in ("success", "failure", "skipped") else None,
-                    error_message=message if status == "failure" else None,
+            # Update FileProcessingStep table (for status tracking) if file_id is provided
+            if file_id and step_name:
+                # Find or create the step record
+                step_record = (
+                    db.query(FileProcessingStep)
+                    .filter(FileProcessingStep.file_id == file_id, FileProcessingStep.step_name == step_name)
+                    .first()
                 )
-                db.add(step_record)
-            else:
-                # Update existing step record
-                step_record.status = status
-                if status == "in_progress" and not step_record.started_at:
-                    step_record.started_at = now
-                if status in ("success", "failure", "skipped"):
-                    step_record.completed_at = now
-                if status == "failure":
-                    step_record.error_message = message or detail
 
-        db.commit()
+                now = datetime.now(timezone.utc)
+
+                if not step_record:
+                    # Create new step record
+                    step_record = FileProcessingStep(
+                        file_id=file_id,
+                        step_name=step_name,
+                        status=status,
+                        started_at=now if status == "in_progress" else None,
+                        completed_at=now if status in ("success", "failure", "skipped") else None,
+                        error_message=message if status == "failure" else None,
+                    )
+                    db.add(step_record)
+                else:
+                    # Update existing step record
+                    step_record.status = status
+                    if status == "in_progress" and not step_record.started_at:
+                        step_record.started_at = now
+                    if status in ("success", "failure", "skipped"):
+                        step_record.completed_at = now
+                    if status == "failure":
+                        step_record.error_message = message or detail
+
+            db.commit()
+    except Exception:
+        # Database errors in logging should never crash the calling task
+        logging.getLogger(__name__).debug(
+            f"Failed to log task progress to database: {step_name} - {status}", exc_info=True
+        )
