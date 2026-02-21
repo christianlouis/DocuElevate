@@ -172,6 +172,7 @@ def _db_records(db: Session, workdir_base: Path) -> List[Dict[str, Any]]:
     """
     rows = []
     for rec in db.query(FileRecord).order_by(FileRecord.id.desc()).all():
+
         def _check(p: str | None) -> Dict[str, Any]:
             if not p:
                 return {"path": None, "exists": None, "rel": None}

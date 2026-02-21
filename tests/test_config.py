@@ -352,7 +352,7 @@ class TestOuterQuoteStripping:
 
     def test_mismatched_quotes_not_stripped(self):
         """Mismatched quotes (open with one type, close with another) are NOT stripped."""
-        raw = '"sqlite:///test.db\''
+        raw = "\"sqlite:///test.db'"
         config = Settings(
             database_url=raw,
             **_BASE_KWARGS,
