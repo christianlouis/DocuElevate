@@ -289,7 +289,12 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
   - Individual header control and customization
   - Documented in DeploymentGuide.md and ConfigurationGuide.md
 - ⏳ **TODO:** Implement proper CORS configuration (currently not configured) ([#175](https://github.com/christianlouis/DocuElevate/issues/175))
-- ⏳ **TODO:** Add request logging with sensitive data masking ([#170](https://github.com/christianlouis/DocuElevate/issues/170))
+- ✅ **Request logging with sensitive data masking implemented** ([#170](https://github.com/christianlouis/DocuElevate/issues/170))
+  - `AuditLogMiddleware` in `app/middleware/audit_log.py` logs every HTTP request
+  - Logs: method, path, status code, response time, client IP (configurable), username
+  - Sensitive query-parameter values (password, token, key, secret, etc.) are automatically replaced with ``[REDACTED]``
+  - Security events (401, 403, login attempts, 5xx errors) receive elevated ``[SECURITY]`` log entries
+  - Configurable via `AUDIT_LOGGING_ENABLED` and `AUDIT_LOG_INCLUDE_CLIENT_IP` environment variables
 
 ## Recommendations
 
@@ -303,7 +308,7 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
 ### Medium Priority
 1. ~~**Add security headers**~~ ✅ Implemented - Configurable HSTS, CSP, X-Frame-Options, X-Content-Type-Options middleware
 2. **Configure CORS properly** - Currently no CORS middleware configured ([#175](https://github.com/christianlouis/DocuElevate/issues/175))
-3. **Implement audit logging** - Track security-relevant events ([#170](https://github.com/christianlouis/DocuElevate/issues/170))
+3. ~~**Implement audit logging**~~ ✅ Implemented - Request/audit logging with sensitive data masking ([#170](https://github.com/christianlouis/DocuElevate/issues/170))
 4. ~~**Add file upload size limits**~~ ✅ Implemented - Configurable limits with 1GB default, optional file splitting
 5. **Document security architecture** - Security design decisions
 
