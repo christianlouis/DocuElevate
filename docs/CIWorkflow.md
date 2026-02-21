@@ -10,11 +10,12 @@ The CI workflow (`.github/workflows/tests.yaml`) runs automatically on every pus
 
 | Job | Tool | Purpose | Enforced |
 |--------|--------|---------------------------------------------|----------|
-| `test` | pytest | Unit/integration tests with coverage | ✅ |
 | `lint` | Ruff | Fast Python linter (replaces Flake8, Black, isort, Bandit) | ✅ |
+| `dependency-scan` | pip-audit | Dependency vulnerability scanning against OSV/PyPA advisories | ✅ |
+| `test` | pytest | Unit/integration tests with coverage | ✅ |
 | `mypy` | mypy | Static type checking | ✅ |
 
-All three jobs start **in parallel** as soon as the workflow is triggered. No job depends on or waits for any other job.
+`lint` and `dependency-scan` start **in parallel** at the beginning of the pipeline — neither depends on the other. `test` and `mypy` run only after both have passed.
 
 > **Note:** DocuElevate uses Ruff, a modern all-in-one Python linter that consolidates the functionality of Flake8, Black, isort, and Bandit. This streamlined approach reduces CI complexity while maintaining code quality and security standards.
 

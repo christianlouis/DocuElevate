@@ -291,11 +291,17 @@ Tests are organized using pytest markers:
 
 Tests run automatically in GitHub Actions for all pull requests. The CI workflow is organized in stages:
 
-**Stage 1: Ruff Lint & Format** (runs first)
+**Stage 1: Ruff Lint & Format** (runs first, in parallel with dependency scan)
 - Checks code style, formatting, and basic security issues
 - Must pass before tests run
 
-**Stage 2: Tests & Type Checking** (runs after lint passes)
+**Stage 1b: Dependency Vulnerability Scan** (runs in parallel with lint)
+- Runs `pip-audit` against `requirements.txt` and `requirements-dev.txt`
+- Fails the build if any known vulnerabilities are detected
+- Checks the OSV and PyPA advisory databases
+- Runs independently at the same time as Stage 1 so it does not add to total pipeline time
+
+**Stage 2: Tests & Type Checking** (runs after lint and dependency scan both pass)
 
 | Job | Tool | What it checks |
 |--------|--------|--------------------------------------|
@@ -338,6 +344,26 @@ ruff format app/ tests/
 ```
 
 **Note:** The pre-commit hooks and CI pipeline will automatically check (and optionally fix) these for you.
+
+### Dependency Vulnerability Scanning
+
+DocuElevate uses **pip-audit** to scan dependencies for known security vulnerabilities. The CI pipeline runs this automatically and **blocks builds** if any vulnerabilities are found.
+
+To run locally before pushing:
+
+```bash
+# Scan production dependencies
+pip-audit -r requirements.txt --desc on
+
+# Scan all dependencies (including dev)
+pip-audit -r requirements-dev.txt --desc on
+```
+
+If pip-audit is not installed, add it with:
+
+```bash
+pip install pip-audit
+```
 
 ## Project Structure
 

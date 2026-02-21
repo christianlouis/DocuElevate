@@ -246,7 +246,7 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
 ### Dependency Management
 - ✅ Version pinning for security-critical packages (authlib, starlette)
 - ✅ Advisory database checks integrated into development workflow
-- ⏳ TODO: Add automated dependency vulnerability scanning in CI/CD ([#171](https://github.com/christianlouis/DocuElevate/issues/171))
+- ✅ Automated dependency vulnerability scanning in CI/CD via pip-audit ([#171](https://github.com/christianlouis/DocuElevate/issues/171))
 
 ### Authentication & Secrets
 - ✅ Strong validation for SESSION_SECRET (minimum 32 characters)
@@ -265,8 +265,8 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
 - ✅ **COMPLETED:** Bandit (Python security linter) audit completed
 - ✅ **COMPLETED:** Bandit integrated into CI pipeline (fails on high/medium severity issues)
 - ✅ **COMPLETED:** CodeQL security scanning enabled in GitHub Actions
-- ⏳ **TODO:** Add dependency vulnerability scanning (Safety, pip-audit) to CI ([#171](https://github.com/christianlouis/DocuElevate/issues/171))
-- ⏳ **TODO:** Make dependency scans blocking (fail on critical issues) ([#171](https://github.com/christianlouis/DocuElevate/issues/171))
+- ✅ **COMPLETED:** pip-audit dependency vulnerability scanning added to CI ([#171](https://github.com/christianlouis/DocuElevate/issues/171))
+- ✅ **COMPLETED:** Dependency scans are blocking (fail build when vulnerabilities detected) ([#171](https://github.com/christianlouis/DocuElevate/issues/171))
 
 ### Code Security
 - ✅ Authentication required on all sensitive endpoints (@require_login decorator)
