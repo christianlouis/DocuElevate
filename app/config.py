@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 import os
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -266,6 +266,25 @@ class Settings(BaseSettings):
         default="10/minute",
         description="Stricter rate limit for authentication endpoints to prevent brute force attacks.",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def strip_outer_quotes(cls, data: Any) -> Any:
+        """
+        Strip matching surrounding quotes from string values.
+
+        In Kubernetes (and some other environments) env var values can arrive
+        with literal quote characters included, e.g. the value for DATABASE_URL
+        may be ``"postgresql://..."`` (with the quotes as part of the string)
+        rather than just ``postgresql://...``.  Docker Compose strips these
+        automatically; Kubernetes does not.
+        """
+        if isinstance(data, dict):
+            for key, value in data.items():
+                if isinstance(value, str) and len(value) >= 2:
+                    if (value[0] == '"' and value[-1] == '"') or (value[0] == "'" and value[-1] == "'"):
+                        data[key] = value[1:-1]
+        return data
 
     @field_validator("notification_urls", mode="before")
     @classmethod

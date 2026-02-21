@@ -16,6 +16,18 @@
       // Get the display name (prefer name, fall back to preferred_username, then email)
       const displayName = data.name || data.preferred_username || data.email;
 
+      // Show admin menu items if the user is an admin
+      if (data.is_admin) {
+        const adminMenuContainer = document.getElementById("adminMenuContainer");
+        if (adminMenuContainer) {
+          adminMenuContainer.classList.remove("hidden");
+        }
+        const mobileAdminSection = document.getElementById("mobileAdminSection");
+        if (mobileAdminSection) {
+          mobileAdminSection.classList.remove("hidden");
+        }
+      }
+
       // User is logged in - use DOM API to prevent XSS
       if (authSection) {
         authSection.textContent = ''; // Clear existing content

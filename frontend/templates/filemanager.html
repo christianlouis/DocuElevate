@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+{% block title %}File Manager – Admin{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <h1 class="text-3xl font-bold text-gray-900 flex items-center gap-2">
+        <i class="fas fa-folder-open text-blue-500"></i>
+        File Manager
+        <span class="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded px-2 py-0.5 ml-1">Admin Only</span>
+      </h1>
+      <p class="text-gray-400 text-sm mt-1">
+        <code class="bg-gray-100 rounded px-1 text-xs">{{ workdir }}</code>
+      </p>
+    </div>
+    <!-- Summary badges -->
+    <div class="flex gap-3 text-sm flex-wrap">
+      <span class="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-full px-3 py-1">
+        <i class="fas fa-hdd text-xs"></i>
+        {% if total_disk is none %}…{% else %}{{ total_disk }}{% endif %} on disk
+      </span>
+      <span class="inline-flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-700 rounded-full px-3 py-1">
+        <i class="fas fa-database text-xs"></i> {{ total_db }} in DB
+      </span>
+      {% if total_disk is not none and total_disk != total_db %}
+      <span class="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-300 text-amber-700 rounded-full px-3 py-1 font-medium">
+        <i class="fas fa-triangle-exclamation text-xs"></i> Delta detected
+      </span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── View tabs ────────────────────────────────────────────────────────── -->
+  <div class="flex border-b border-gray-200 mb-6 gap-1">
+    <a href="?view=filesystem"
+       class="tab-link px-5 py-2.5 text-sm font-medium rounded-t border-b-2 transition
+              {% if view == 'filesystem' %}border-blue-600 text-blue-600 bg-blue-50{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300{% endif %}">
+      <i class="fas fa-folder-tree mr-1.5"></i>Filesystem
+    </a>
+    <a href="?view=database"
+       class="tab-link px-5 py-2.5 text-sm font-medium rounded-t border-b-2 transition
+              {% if view == 'database' %}border-green-600 text-green-600 bg-green-50{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300{% endif %}">
+      <i class="fas fa-database mr-1.5"></i>Database Records
+    </a>
+    <a href="?view=reconcile"
+       class="tab-link px-5 py-2.5 text-sm font-medium rounded-t border-b-2 transition
+              {% if view == 'reconcile' %}border-amber-500 text-amber-600 bg-amber-50{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300{% endif %}">
+      <i class="fas fa-code-compare mr-1.5"></i>Reconcile
+      {% if total_disk != total_db %}
+        <span class="ml-1 bg-amber-500 text-white rounded-full text-xs px-1.5 py-0.5">!</span>
+      {% endif %}
+    </a>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       FILESYSTEM TAB
+       ═══════════════════════════════════════════════════════════════════ -->
+  {% if view == 'filesystem' %}
+
+  <!-- Legend -->
+  <div class="flex flex-wrap gap-4 text-xs text-gray-500 mb-4">
+    <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full bg-green-400 inline-block"></span> Found in DB</span>
+    <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full bg-amber-400 inline-block"></span> Not in DB (orphan)</span>
+  </div>
+
+  <!-- Breadcrumb -->
+  <nav class="flex mb-4 text-sm" aria-label="Breadcrumb">
+    <ol class="inline-flex items-center space-x-1 flex-wrap">
+      <li>
+        <a href="?view=filesystem" class="text-blue-600 hover:underline flex items-center gap-1">
+          <i class="fas fa-home"></i> workdir
+        </a>
+      </li>
+      {% for crumb in breadcrumbs %}
+      <li class="flex items-center">
+        <i class="fas fa-chevron-right text-gray-300 mx-1 text-xs"></i>
+        {% if loop.last %}
+          <span class="text-gray-700 font-medium">{{ crumb.name }}</span>
+        {% else %}
+          <a href="?view=filesystem&path={{ crumb.path | urlencode }}" class="text-blue-600 hover:underline">{{ crumb.name }}</a>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+  </nav>
+
+  <!-- Directory listing -->
+  <div class="bg-white rounded-lg shadow overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200 text-sm">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-4 py-3 text-left w-8"></th>
+          <th class="px-4 py-3 text-left font-semibold text-gray-600 uppercase tracking-wider text-xs">Name</th>
+          <th class="px-4 py-3 text-left font-semibold text-gray-600 uppercase tracking-wider text-xs hidden sm:table-cell">Size</th>
+          <th class="px-4 py-3 text-left font-semibold text-gray-600 uppercase tracking-wider text-xs hidden md:table-cell">Modified</th>
+          <th class="px-4 py-3 text-left font-semibold text-gray-600 uppercase tracking-wider text-xs">DB</th>
+          <th class="px-4 py-3 text-left font-semibold text-gray-600 uppercase tracking-wider text-xs">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+
+        {% if current_path %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-4 py-3 text-yellow-400"><i class="fas fa-folder"></i></td>
+          <td class="px-4 py-3 font-medium text-gray-900" colspan="4">
+            <a href="?view=filesystem{% if parent_path %}&path={{ parent_path | urlencode }}{% endif %}"
+               class="text-blue-600 hover:underline flex items-center gap-1">
+              <i class="fas fa-level-up-alt text-xs"></i> ..
+            </a>
+          </td>
+          <td></td>
+        </tr>
+        {% endif %}
+
+        {% if fs_entries %}
+          {% for entry in fs_entries %}
+          <tr class="hover:bg-gray-50 {% if entry.db_status == 'orphan' %}bg-amber-50{% endif %}">
+            <td class="px-4 py-3"><i class="{{ entry.icon }}"></i></td>
+            <td class="px-4 py-3 font-medium text-gray-900 max-w-xs truncate">
+              {% if entry.is_dir %}
+                <a href="?view=filesystem&path={{ entry.rel_path | urlencode }}" class="text-blue-600 hover:underline">
+                  {{ entry.name }}
+                </a>
+              {% else %}
+                <span title="{{ entry.rel_path }}">{{ entry.name }}</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-gray-500 hidden sm:table-cell">{{ entry.size }}</td>
+            <td class="px-4 py-3 text-gray-400 hidden md:table-cell">{{ entry.modified }}</td>
+            <td class="px-4 py-3">
+              {% if entry.db_status == 'in_db' %}
+                <span class="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+                  <span class="h-1.5 w-1.5 rounded-full bg-green-500"></span> In DB
+                </span>
+              {% elif entry.db_status == 'orphan' %}
+                <span class="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                  <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span> Orphan
+                </span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3">
+              {% if not entry.is_dir %}
+                <a href="/admin/files/download?path={{ entry.rel_path | urlencode }}"
+                   class="inline-flex items-center gap-1 px-2.5 py-1 border border-gray-200 text-xs font-medium rounded text-gray-600 bg-white hover:bg-gray-50">
+                  <i class="fas fa-download text-xs"></i> Download
+                </a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" class="px-6 py-10 text-center text-sm text-gray-400">
+              <i class="fas fa-folder-open text-gray-200 text-3xl mb-2 block"></i>
+              This directory is empty.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       DATABASE TAB
+       ═══════════════════════════════════════════════════════════════════ -->
+  {% if view == 'database' %}
+
+  <!-- Legend -->
+  <div class="flex flex-wrap gap-4 text-xs text-gray-500 mb-4">
+    <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full bg-green-400 inline-block"></span> File exists on disk</span>
+    <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full bg-red-400 inline-block"></span> File missing from disk</span>
+    <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full bg-gray-300 inline-block"></span> Path not set</span>
+  </div>
+
+  {% if db_records %}
+  <div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200 text-sm">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wider text-xs">ID</th>
+          <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wider text-xs">Original Filename</th>
+          <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wider text-xs hidden md:table-cell">Size</th>
+          <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wider text-xs hidden lg:table-cell">Ingested</th>
+          <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wider text-xs">local_filename</th>
+          <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wider text-xs">original_file_path</th>
+          <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wider text-xs">processed_file_path</th>
+          <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wider text-xs">Health</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for rec in db_records %}
+        <tr class="hover:bg-gray-50 {% if rec.health == 'missing' %}bg-red-50{% endif %}">
+          <td class="px-4 py-3 text-gray-400 font-mono text-xs">{{ rec.id }}</td>
+          <td class="px-4 py-3 font-medium text-gray-800 max-w-xs truncate" title="{{ rec.original_filename }}">
+            {% if rec.is_duplicate %}
+              <span class="text-xs text-purple-600 bg-purple-50 border border-purple-200 rounded px-1 mr-1">dup</span>
+            {% endif %}
+            {{ rec.original_filename }}
+          </td>
+          <td class="px-4 py-3 text-gray-500 hidden md:table-cell">{{ rec.file_size }}</td>
+          <td class="px-4 py-3 text-gray-400 text-xs hidden lg:table-cell">{{ rec.created_at }}</td>
+
+          {# Helper macro: render a path cell #}
+          {% for path_info in [rec.local, rec.original, rec.processed] %}
+          <td class="px-4 py-3 text-xs font-mono max-w-xs">
+            {% if path_info.path is none %}
+              <span class="text-gray-300">—</span>
+            {% elif path_info.exists %}
+              <span class="flex items-start gap-1">
+                <span class="h-2 w-2 rounded-full bg-green-400 mt-0.5 flex-shrink-0"></span>
+                <span class="text-gray-600 truncate" title="{{ path_info.path }}">{{ path_info.rel }}</span>
+              </span>
+            {% else %}
+              <span class="flex items-start gap-1">
+                <span class="h-2 w-2 rounded-full bg-red-400 mt-0.5 flex-shrink-0"></span>
+                <span class="text-red-700 line-through truncate" title="{{ path_info.path }}">{{ path_info.rel }}</span>
+              </span>
+            {% endif %}
+          </td>
+          {% endfor %}
+
+          <td class="px-4 py-3">
+            {% if rec.health == 'ok' %}
+              <span class="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+                <i class="fas fa-check text-xs"></i> OK
+              </span>
+            {% else %}
+              <span class="inline-flex items-center gap-1 text-xs text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5">
+                <i class="fas fa-triangle-exclamation text-xs"></i> Missing
+              </span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="bg-white rounded-lg shadow p-10 text-center text-gray-400">
+    <i class="fas fa-database text-4xl mb-3 block text-gray-200"></i>
+    No file records found in the database.
+  </div>
+  {% endif %}
+  {% endif %}
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       RECONCILE TAB
+       ═══════════════════════════════════════════════════════════════════ -->
+  {% if view == 'reconcile' %}
+
+  {% if orphan_files or ghost_records %}
+  <div class="bg-amber-50 border border-amber-300 rounded-lg px-5 py-4 mb-6 flex items-start gap-3">
+    <i class="fas fa-triangle-exclamation text-amber-500 mt-0.5"></i>
+    <div class="text-sm text-amber-800">
+      <strong>Delta detected.</strong>
+      Found <strong>{{ orphan_files | length }}</strong> orphan file(s) on disk with no DB record,
+      and <strong>{{ ghost_records | length }}</strong> DB record(s) with missing files on disk.
+    </div>
+  </div>
+  {% else %}
+  <div class="bg-green-50 border border-green-300 rounded-lg px-5 py-4 mb-6 flex items-center gap-3">
+    <i class="fas fa-circle-check text-green-500"></i>
+    <span class="text-sm text-green-800 font-medium">No delta found — filesystem and database are in sync.</span>
+  </div>
+  {% endif %}
+
+  <!-- Orphan files (on disk, not in DB) -->
+  <div class="mb-8">
+    <h2 class="text-base font-semibold text-gray-800 mb-3 flex items-center gap-2">
+      <span class="h-3 w-3 rounded-full bg-amber-400 inline-block"></span>
+      Orphan files <span class="text-gray-400 font-normal text-sm ml-1">(on disk, no DB record)</span>
+      <span class="text-xs bg-amber-100 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5 ml-auto">{{ orphan_files | length }}</span>
+    </h2>
+    {% if orphan_files %}
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+      <table class="min-w-full divide-y divide-gray-200 text-sm">
+        <thead class="bg-amber-50">
+          <tr>
+            <th class="px-4 py-3 text-left w-8"></th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wider text-xs">Path (relative to workdir)</th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wider text-xs hidden sm:table-cell">Size</th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wider text-xs hidden md:table-cell">Modified</th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wider text-xs">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for f in orphan_files %}
+          <tr class="hover:bg-amber-50">
+            <td class="px-4 py-3"><i class="{{ f.icon }}"></i></td>
+            <td class="px-4 py-3 font-mono text-xs text-amber-800 max-w-xs truncate" title="{{ f.rel_path }}">{{ f.rel_path }}</td>
+            <td class="px-4 py-3 text-gray-500 hidden sm:table-cell">{{ f.size }}</td>
+            <td class="px-4 py-3 text-gray-400 text-xs hidden md:table-cell">{{ f.modified }}</td>
+            <td class="px-4 py-3">
+              <a href="/admin/files/download?path={{ f.rel_path | urlencode }}"
+                 class="inline-flex items-center gap-1 px-2.5 py-1 border border-gray-200 text-xs font-medium rounded text-gray-600 bg-white hover:bg-gray-50">
+                <i class="fas fa-download text-xs"></i> Download
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-400 italic">No orphan files found.</p>
+    {% endif %}
+  </div>
+
+  <!-- Ghost records (in DB, file missing on disk) -->
+  <div>
+    <h2 class="text-base font-semibold text-gray-800 mb-3 flex items-center gap-2">
+      <span class="h-3 w-3 rounded-full bg-red-400 inline-block"></span>
+      Ghost records <span class="text-gray-400 font-normal text-sm ml-1">(in DB, file(s) missing on disk)</span>
+      <span class="text-xs bg-red-100 text-red-700 border border-red-200 rounded-full px-2 py-0.5 ml-auto">{{ ghost_records | length }}</span>
+    </h2>
+    {% if ghost_records %}
+    <div class="bg-white rounded-lg shadow overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200 text-sm">
+        <thead class="bg-red-50">
+          <tr>
+            <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wider text-xs">ID</th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wider text-xs">Original Filename</th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wider text-xs hidden md:table-cell">Ingested</th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-500 uppercase tracking-wider text-xs">Missing paths</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for rec in ghost_records %}
+          <tr class="hover:bg-red-50">
+            <td class="px-4 py-3 text-gray-400 font-mono text-xs">{{ rec.id }}</td>
+            <td class="px-4 py-3 font-medium text-gray-800 max-w-xs truncate" title="{{ rec.original_filename }}">
+              {{ rec.original_filename }}
+            </td>
+            <td class="px-4 py-3 text-gray-400 text-xs hidden md:table-cell">{{ rec.created_at }}</td>
+            <td class="px-4 py-3 text-xs font-mono">
+              {% for path_info in [rec.local, rec.original, rec.processed] %}
+                {% if path_info.exists is sameas false %}
+                  <div class="flex items-start gap-1 text-red-700">
+                    <span class="h-2 w-2 rounded-full bg-red-400 mt-0.5 flex-shrink-0"></span>
+                    <span class="line-through truncate" title="{{ path_info.path }}">{{ path_info.rel }}</span>
+                  </div>
+                {% endif %}
+              {% endfor %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-400 italic">No ghost records found.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
