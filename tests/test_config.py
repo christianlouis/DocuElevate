@@ -289,3 +289,94 @@ class TestSecurityConfiguration:
 
         # Should not raise an error
         assert config.database_url == "sqlite:///test.db"
+
+
+# ---------------------------------------------------------------------------
+# Helpers shared across quote-stripping tests
+# ---------------------------------------------------------------------------
+
+_BASE_KWARGS = dict(
+    auth_enabled=False,
+    azure_ai_key="test",
+    azure_region="eastus",
+    azure_endpoint="https://test.example.com",
+    gotenberg_url="http://localhost:3000",
+    workdir="/tmp",
+    openai_api_key="sk-test",
+    redis_url="redis://localhost:6379",
+)
+
+
+@pytest.mark.unit
+class TestOuterQuoteStripping:
+    """
+    Tests that Settings strips surrounding quotes from string env var values.
+
+    In Kubernetes env vars can arrive with literal quote characters included
+    (e.g. DATABASE_URL="postgresql://..." with the quotes as part of the value).
+    Docker Compose strips these automatically; Kubernetes does not.
+    """
+
+    def test_double_quotes_stripped_from_url(self):
+        """Double-quoted URL value has quotes removed."""
+        config = Settings(
+            database_url='"sqlite:///test.db"',
+            **_BASE_KWARGS,
+        )
+        assert config.database_url == "sqlite:///test.db"
+
+    def test_single_quotes_stripped_from_url(self):
+        """Single-quoted URL value has quotes removed."""
+        config = Settings(
+            database_url="'sqlite:///test.db'",
+            **_BASE_KWARGS,
+        )
+        assert config.database_url == "sqlite:///test.db"
+
+    def test_double_quotes_stripped_from_optional_field(self):
+        """Quotes are stripped from optional string fields too."""
+        config = Settings(
+            database_url="sqlite:///test.db",
+            dropbox_app_key='"my-app-key"',
+            **_BASE_KWARGS,
+        )
+        assert config.dropbox_app_key == "my-app-key"
+
+    def test_unquoted_value_unchanged(self):
+        """Values without surrounding quotes are left as-is."""
+        config = Settings(
+            database_url="sqlite:///test.db",
+            **_BASE_KWARGS,
+        )
+        assert config.database_url == "sqlite:///test.db"
+
+    def test_mismatched_quotes_not_stripped(self):
+        """Mismatched quotes (open with one type, close with another) are NOT stripped."""
+        raw = '"sqlite:///test.db\''
+        config = Settings(
+            database_url=raw,
+            **_BASE_KWARGS,
+        )
+        assert config.database_url == raw
+
+    def test_single_quote_char_not_stripped(self):
+        """A single-character string that is just one quote is NOT modified."""
+        # A value of exactly one character cannot have matching outer quotes
+        config = Settings(
+            database_url="sqlite:///test.db",
+            openai_model='"',
+            **_BASE_KWARGS,
+        )
+        assert config.openai_model == '"'
+
+    def test_multiple_fields_stripped_simultaneously(self):
+        """Multiple quoted fields in the same config are all stripped."""
+        config = Settings(
+            database_url='"sqlite:///test.db"',
+            redis_url='"redis://localhost:6379"',
+            workdir='"/data/workdir"',
+            **{k: v for k, v in _BASE_KWARGS.items() if k not in ("redis_url", "workdir")},
+        )
+        assert config.database_url == "sqlite:///test.db"
+        assert config.redis_url == "redis://localhost:6379"
+        assert config.workdir == "/data/workdir"
