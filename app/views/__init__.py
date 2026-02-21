@@ -5,6 +5,7 @@ Aggregated view routers for the application.
 from fastapi import APIRouter
 
 from app.views.dropbox import router as dropbox_router
+from app.views.filemanager import router as filemanager_router
 
 # Import all the view routers
 from app.views.general import router as general_router
@@ -25,3 +26,4 @@ router.include_router(dropbox_router)
 router.include_router(google_drive_router)
 router.include_router(license_router)  # Include the license router
 router.include_router(settings_router)
+router.include_router(filemanager_router)

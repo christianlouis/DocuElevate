@@ -41,13 +41,55 @@
         </div>
 
         <!-- Menu Items - using x-data for mobile menu toggle -->
-        <div x-data="{ mobileMenuOpen: false }">
+        <div x-data="{ mobileMenuOpen: false, adminMenuOpen: false }">
           <div class="hidden md:flex space-x-4 items-center">
             <a href="/" class="text-gray-700 hover:text-gray-900">Home</a>
             <a href="/upload" class="text-gray-700 hover:text-gray-900">Upload</a>
             <a href="/files" class="text-gray-700 hover:text-gray-900">Files</a>
-            <a href="/status" class="text-gray-700 hover:text-gray-900">Status</a>
-            <a href="/settings" class="text-gray-700 hover:text-gray-900">Settings</a>
+
+            <!-- Admin dropdown (shown only for admin users via JS) -->
+            <div id="adminMenuContainer" class="relative hidden">
+              <button
+                @click="adminMenuOpen = !adminMenuOpen"
+                @click.outside="adminMenuOpen = false"
+                type="button"
+                class="inline-flex items-center text-gray-700 hover:text-gray-900 focus:outline-none"
+                aria-haspopup="true"
+                :aria-expanded="adminMenuOpen"
+              >
+                <i class="fas fa-shield-alt mr-1 text-red-500"></i>
+                Admin
+                <i class="fas fa-chevron-down ml-1 text-xs"></i>
+              </button>
+              <div
+                x-show="adminMenuOpen"
+                x-transition:enter="transition ease-out duration-100 transform"
+                x-transition:enter-start="opacity-0 scale-95"
+                x-transition:enter-end="opacity-100 scale-100"
+                x-transition:leave="transition ease-in duration-75 transform"
+                x-transition:leave-start="opacity-100 scale-100"
+                x-transition:leave-end="opacity-0 scale-95"
+                class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50"
+              >
+                <div class="py-1">
+                  <a href="/settings" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    <i class="fas fa-cog w-4 mr-2 text-gray-500"></i> Settings
+                  </a>
+                  <a href="/env" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    <i class="fas fa-terminal w-4 mr-2 text-gray-500"></i> Environment
+                  </a>
+                  <a href="/admin/files" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    <i class="fas fa-folder-open w-4 mr-2 text-gray-500"></i> File Manager
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Status (de-emphasized) -->
+            <a href="/status" class="text-gray-400 hover:text-gray-600 text-sm" title="System Status">
+              <i class="fas fa-circle-dot mr-0.5"></i> Status
+            </a>
+
             <a href="/about" class="text-gray-700 hover:text-gray-900">About</a>
 
             <!-- Dynamic Auth Section -->
@@ -82,8 +124,30 @@
               <a href="/" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Home</a>
               <a href="/upload" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Upload</a>
               <a href="/files" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Files</a>
-              <a href="/status" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Status</a>
-              <a href="/settings" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Settings</a>
+
+              <!-- Admin section in mobile menu (shown only for admin users via JS) -->
+              <div id="mobileAdminSection" class="hidden">
+                <div class="border-t border-gray-200 mt-1 pt-1">
+                  <p class="px-3 py-1 text-xs font-semibold text-red-600 uppercase tracking-wider flex items-center">
+                    <i class="fas fa-shield-alt mr-1"></i> Admin
+                  </p>
+                  <a href="/settings" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+                    <i class="fas fa-cog mr-2 text-gray-400"></i> Settings
+                  </a>
+                  <a href="/env" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+                    <i class="fas fa-terminal mr-2 text-gray-400"></i> Environment
+                  </a>
+                  <a href="/admin/files" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+                    <i class="fas fa-folder-open mr-2 text-gray-400"></i> File Manager
+                  </a>
+                </div>
+              </div>
+
+              <!-- Status (de-emphasized) in mobile -->
+              <a href="/status" class="block px-3 py-2 rounded-md text-sm font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-50">
+                <i class="fas fa-circle-dot mr-1"></i> Status
+              </a>
+
               <a href="/about" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">About</a>
 
               <!-- Mobile Auth Section -->

@@ -1,136 +1,159 @@
 {% extends "base.html" %}
-{% block title %}Home - DocuElevate{% endblock %}
+{% block title %}Dashboard – DocuElevate{% endblock %}
 
 {% block content %}
 <div class="container mx-auto px-4 py-8">
-  <!-- Hero Section -->
-  <div class="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg shadow-lg text-white p-8 mb-8">
-    <h1 class="text-4xl font-bold mb-4">Welcome to DocuElevate</h1>
-    <p class="text-xl mb-6">
-      Your intelligent solution for processing, managing, and organizing documents effortlessly.
-    </p>
-    <div class="flex flex-wrap gap-4">
-      <a href="/upload" class="bg-white text-blue-600 hover:bg-gray-100 font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center">
-        <i class="fas fa-upload mr-2"></i> Upload Document
-      </a>
-      <a href="/status" class="bg-transparent border border-white text-white hover:bg-white hover:text-blue-600 font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center">
-        <i class="fas fa-cog mr-2"></i> System Status
-      </a>
-    </div>
-  </div>
 
-  <!-- Stats Section -->
-  <div class="bg-white rounded-lg shadow p-6 mb-8">
-    <h2 class="text-2xl font-semibold mb-4">System Overview</h2>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div class="border-r border-gray-200 px-4">
-        <p class="text-4xl font-bold text-blue-600">{{ stats.processed_files|default('0') }}</p>
-        <p class="text-gray-600">Documents Processed</p>
+  <!-- Hero / Quick Actions -->
+  <div class="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl shadow-lg text-white p-8 mb-8">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-bold mb-1">DocuElevate Dashboard</h1>
+        <p class="text-blue-100 text-sm">Intelligent document processing &amp; management</p>
       </div>
-      <div class="border-r border-gray-200 px-4">
-        <p class="text-4xl font-bold text-green-600">{{ stats.active_integrations|default('0') }}</p>
-        <p class="text-gray-600">Active Integrations</p>
-      </div>
-      <div class="px-4">
-        <p class="text-4xl font-bold text-indigo-600">{{ stats.storage_targets|default('0') }}</p>
-        <p class="text-gray-600">Storage Targets</p>
+      <div class="flex flex-wrap gap-3">
+        <a href="/upload" class="bg-white text-blue-700 hover:bg-blue-50 font-semibold py-2 px-5 rounded-lg transition duration-200 flex items-center shadow-sm">
+          <i class="fas fa-upload mr-2"></i> Upload
+        </a>
+        <a href="/files" class="bg-transparent border border-white text-white hover:bg-white hover:text-blue-700 font-semibold py-2 px-5 rounded-lg transition duration-200 flex items-center">
+          <i class="fas fa-list mr-2"></i> Browse Files
+        </a>
       </div>
     </div>
   </div>
 
-  <!-- Features Section -->
-  <h2 class="text-3xl font-semibold mb-6">Core Features</h2>
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
-    <div class="bg-white shadow rounded-lg p-6 hover:shadow-lg transition duration-300">
-      <div class="text-blue-600 mb-4">
-        <i class="fas fa-file-alt fa-2x"></i>
+  <!-- Stats Row -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+    <div class="bg-white rounded-xl shadow p-6 flex items-center gap-4">
+      <div class="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-file-alt text-blue-600 text-xl"></i>
       </div>
-      <h3 class="text-xl font-semibold mb-2">Document Processing</h3>
-      <p class="text-gray-600 mb-4">
-        Upload and process documents with OCR, metadata extraction, and intelligent classification.
-      </p>
-      <a href="/upload" class="text-blue-600 hover:text-blue-800 font-medium">
-        Start processing &rarr;
-      </a>
+      <div>
+        <p class="text-3xl font-bold text-blue-600">{{ stats.processed_files | default(0) }}</p>
+        <p class="text-gray-500 text-sm">Documents Processed</p>
+      </div>
+    </div>
+    <div class="bg-white rounded-xl shadow p-6 flex items-center gap-4">
+      <div class="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-plug text-green-600 text-xl"></i>
+      </div>
+      <div>
+        <p class="text-3xl font-bold text-green-600">{{ stats.active_integrations | default(0) }}</p>
+        <p class="text-gray-500 text-sm">Active Integrations</p>
+      </div>
+    </div>
+    <div class="bg-white rounded-xl shadow p-6 flex items-center gap-4">
+      <div class="h-12 w-12 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-database text-indigo-600 text-xl"></i>
+      </div>
+      <div>
+        <p class="text-3xl font-bold text-indigo-600">{{ stats.storage_targets | default(0) }}</p>
+        <p class="text-gray-500 text-sm">Storage Targets</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Widget Grid -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+
+    <!-- Quick Actions Widget -->
+    <div class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <i class="fas fa-bolt text-yellow-500"></i> Quick Actions
+      </h2>
+      <ul class="space-y-2">
+        <li>
+          <a href="/upload" class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition group">
+            <span class="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-200">
+              <i class="fas fa-upload text-blue-600 text-sm"></i>
+            </span>
+            <div>
+              <p class="text-sm font-medium text-gray-800">Upload Document</p>
+              <p class="text-xs text-gray-400">Process a new file</p>
+            </div>
+          </a>
+        </li>
+        <li>
+          <a href="/files" class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition group">
+            <span class="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-200">
+              <i class="fas fa-list text-indigo-600 text-sm"></i>
+            </span>
+            <div>
+              <p class="text-sm font-medium text-gray-800">View All Files</p>
+              <p class="text-xs text-gray-400">Browse processed documents</p>
+            </div>
+          </a>
+        </li>
+        <li>
+          <a href="/status" class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition group">
+            <span class="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 group-hover:bg-green-200">
+              <i class="fas fa-heartbeat text-green-600 text-sm"></i>
+            </span>
+            <div>
+              <p class="text-sm font-medium text-gray-800">System Status</p>
+              <p class="text-xs text-gray-400">Check integration health</p>
+            </div>
+          </a>
+        </li>
+      </ul>
     </div>
 
-    <div class="bg-white shadow rounded-lg p-6 hover:shadow-lg transition duration-300">
-      <div class="text-blue-600 mb-4">
-        <i class="fas fa-cloud fa-2x"></i>
-      </div>
-      <h3 class="text-xl font-semibold mb-2">Multiple Storage Options</h3>
-      <p class="text-gray-600 mb-4">
-        Connect to Dropbox, NextCloud, OneDrive and other storage solutions seamlessly.
-      </p>
-      <a href="/status" class="text-blue-600 hover:text-blue-800 font-medium">
-        Configure storage &rarr;
-      </a>
+    <!-- Capabilities Widget -->
+    <div class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <i class="fas fa-cubes text-blue-500"></i> Capabilities
+      </h2>
+      <ul class="space-y-3 text-sm text-gray-600">
+        <li class="flex items-start gap-2">
+          <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0"></i>
+          <span>OCR &amp; metadata extraction with AI</span>
+        </li>
+        <li class="flex items-start gap-2">
+          <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0"></i>
+          <span>Cloud storage: Dropbox, OneDrive, Google Drive, NextCloud</span>
+        </li>
+        <li class="flex items-start gap-2">
+          <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0"></i>
+          <span>Paperless-ngx integration for document management</span>
+        </li>
+        <li class="flex items-start gap-2">
+          <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0"></i>
+          <span>Email &amp; URL-based document ingestion</span>
+        </li>
+        <li class="flex items-start gap-2">
+          <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0"></i>
+          <span>Automated classification &amp; routing workflows</span>
+        </li>
+      </ul>
     </div>
 
-    <div class="bg-white shadow rounded-lg p-6 hover:shadow-lg transition duration-300">
-      <div class="text-blue-600 mb-4">
-        <i class="fas fa-robot fa-2x"></i>
+    <!-- Getting Started / Help Widget -->
+    <div class="bg-white rounded-xl shadow p-6 flex flex-col justify-between">
+      <div>
+        <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <i class="fas fa-compass text-indigo-500"></i> Getting Started
+        </h2>
+        <ol class="space-y-3 text-sm text-gray-600 list-none">
+          <li class="flex items-start gap-2">
+            <span class="h-5 w-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center flex-shrink-0 font-bold mt-0.5">1</span>
+            Configure integrations via <a href="/status" class="text-blue-600 hover:underline">System Status</a>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="h-5 w-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center flex-shrink-0 font-bold mt-0.5">2</span>
+            <a href="/upload" class="text-blue-600 hover:underline">Upload</a> your first document
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="h-5 w-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center flex-shrink-0 font-bold mt-0.5">3</span>
+            Review results in <a href="/files" class="text-blue-600 hover:underline">Files</a>
+          </li>
+        </ol>
       </div>
-      <h3 class="text-xl font-semibold mb-2">AI-Powered Analysis</h3>
-      <p class="text-gray-600 mb-4">
-        Leverage AI to extract metadata, classify documents, and organize your information.
-      </p>
-      <a href="/files" class="text-blue-600 hover:text-blue-800 font-medium">
-        View processed files &rarr;
-      </a>
-    </div>
-
-    <div class="bg-white shadow rounded-lg p-6 hover:shadow-lg transition duration-300">
-      <div class="text-blue-600 mb-4">
-        <i class="fas fa-envelope fa-2x"></i>
-      </div>
-      <h3 class="text-xl font-semibold mb-2">Email Integration</h3>
-      <p class="text-gray-600 mb-4">
-        Auto-process documents received via email with our IMAP polling capabilities.
-      </p>
-      <a href="/status" class="text-blue-600 hover:text-blue-800 font-medium">
-        Set up email &rarr;
-      </a>
-    </div>
-
-    <div class="bg-white shadow rounded-lg p-6 hover:shadow-lg transition duration-300">
-      <div class="text-blue-600 mb-4">
-        <i class="fas fa-cogs fa-2x"></i>
-      </div>
-      <h3 class="text-xl font-semibold mb-2">Workflow Automation</h3>
-      <p class="text-gray-600 mb-4">
-        Create workflows to automatically process and route documents based on content.
-      </p>
-      <a href="/about" class="text-blue-600 hover:text-blue-800 font-medium">
-        Learn more &rarr;
-      </a>
-    </div>
-
-    <div class="bg-white shadow rounded-lg p-6 hover:shadow-lg transition duration-300">
-      <div class="text-blue-600 mb-4">
-        <i class="fas fa-shield-alt fa-2x"></i>
-      </div>
-      <h3 class="text-xl font-semibold mb-2">Secure & Private</h3>
-      <p class="text-gray-600 mb-4">
-        Your documents are processed securely with privacy-focused design principles.
-      </p>
-      <a href="/privacy" class="text-blue-600 hover:text-blue-800 font-medium">
-        Privacy policy &rarr;
+      <a href="/about" class="mt-6 inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+        Learn more about DocuElevate <i class="fas fa-arrow-right ml-1 text-xs"></i>
       </a>
     </div>
   </div>
 
-  <!-- Getting Started Section -->
-  <div class="bg-gray-50 rounded-lg border border-gray-200 p-8">
-    <div class="flex flex-col md:flex-row md:items-center justify-between">
-      <div class="mb-6 md:mb-0">
-        <h2 class="text-2xl font-bold mb-2">Ready to get started?</h2>
-        <p class="text-gray-600">Upload your first document and see DocuElevate in action.</p>
-      </div>
-      <a href="/upload" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300">
-        Try it now
-      </a>
-    </div>
-  </div>
 </div>
 {% endblock %}
+
