@@ -217,7 +217,7 @@ DeepSource provided:
 
 **Analysis:**
 - Would duplicate CodeQL for security scanning
-- Would duplicate Dependabot for dependency vulnerabilities
+- Would duplicate Dependabot + pip-audit for dependency vulnerabilities
 - Current tools provide adequate coverage
 - Not needed at this time
 
@@ -231,6 +231,7 @@ DeepSource provided:
 | Security Linting | Bandit | Ruff | ✅ Consolidated |
 | Code Quality | Pylint, DeepSource | Ruff | ✅ Consolidated |
 | Security Scanning | CodeQL, DeepSource | CodeQL | ✅ De-duplicated |
+| Dependency Vulnerabilities | None | pip-audit | ✅ Added |
 | Type Checking | Mypy | Mypy | ✅ Kept (unique) |
 | Testing | pytest | pytest | ✅ Kept (unique) |
 | Coverage | Codecov | Codecov | ✅ Kept (unique) |
