@@ -210,16 +210,48 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ══════════════════════════════════════════════════════════════════════════
-  # Stage 4: Deploy (only after build succeeds, only on main branch)
+  # Stage 4: Update preprod K8s manifest (ArgoCD GitOps, only on main)
   # ══════════════════════════════════════════════════════════════════════════
 
-  deploy:
-    name: Deploy to Production
+  update-k8s-manifest:
+    name: Update Preprod K8s Manifest
     runs-on: ubuntu-latest
     needs: [build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      - name: Call Deployment Webhook
+      - name: Compute image tag
+        id: tag
         run: |
-          curl -X POST https://docker2.kuechenserver.org/api/stacks/webhooks/960c7d8e-97ec-4175-a8dc-73f037b02349
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "image=ghcr.io/${{ github.repository_owner }}/docuelevate:main-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "tag=main-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout k8s-cluster-state
+        uses: actions/checkout@v4
+        with:
+          repository: christianlouis/k8s-cluster-state
+          token: ${{ secrets.GH_PAT }}
+          path: k8s-cluster-state
+
+      - name: Update image tag in preprod manifest
+        uses: mikefarah/yq@v4.44.6
+        env:
+          IMAGE: ${{ steps.tag.outputs.image }}
+        with:
+          cmd: |
+            yq -i '(.. | select(tag == "!!str") | select(test("^(ghcr\\.io/christianlouis/docuelevate|christianlouis/docuelevate):"))) = strenv(IMAGE)' \
+              k8s-cluster-state/apps/docuelevate/preprod/docuelevate-stack.yaml
+
+      - name: Commit and push
+        run: |
+          cd k8s-cluster-state
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add apps/docuelevate/preprod/docuelevate-stack.yaml
+          if git diff --staged --quiet; then
+            echo "No changes to commit -- image tag already up to date"
+          else
+            git commit -m "chore(preprod): update docuelevate image to ${{ steps.tag.outputs.tag }}"
+            git push
+          fi
