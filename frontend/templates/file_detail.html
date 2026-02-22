@@ -599,7 +599,8 @@
         const response = await fetch(`/api/files/${fileId}/reprocess`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': getCsrfToken()
           }
         });
 
@@ -651,7 +652,8 @@
         const response = await fetch(`/api/files/${fileId}/retry-subtask?subtask_name=${subtaskName}`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': getCsrfToken()
           }
         });
 
