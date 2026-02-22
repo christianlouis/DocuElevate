@@ -42,14 +42,10 @@ def mock_celery_tasks():
 class TestValidFileUploads:
     """Tests for successful file uploads with various valid file types."""
 
-    def test_upload_valid_pdf(
-        self, client: TestClient, sample_pdf_path: str, mock_celery_tasks
-    ):
+    def test_upload_valid_pdf(self, client: TestClient, sample_pdf_path: str, mock_celery_tasks):
         """Test uploading a valid PDF file."""
         with open(sample_pdf_path, "rb") as f:
-            response = client.post(
-                "/api/ui-upload", files={"file": ("document.pdf", f, "application/pdf")}
-            )
+            response = client.post("/api/ui-upload", files={"file": ("document.pdf", f, "application/pdf")})
 
         assert response.status_code == 200
         data = response.json()
@@ -182,9 +178,7 @@ class TestInvalidFileUploads:
         with patch.object(settings, "max_upload_size", small_limit):
             response = client.post(
                 "/api/ui-upload",
-                files={
-                    "file": ("huge.pdf", io.BytesIO(small_content), "application/pdf")
-                },
+                files={"file": ("huge.pdf", io.BytesIO(small_content), "application/pdf")},
             )
 
         assert response.status_code == 413  # Request Entity Too Large
@@ -236,9 +230,7 @@ class TestInvalidFileUploads:
 class TestUploadSecurity:
     """Tests for security aspects of file uploads."""
 
-    def test_path_traversal_prevention_dotdot(
-        self, client: TestClient, mock_celery_tasks
-    ):
+    def test_path_traversal_prevention_dotdot(self, client: TestClient, mock_celery_tasks):
         """Test that path traversal attempts are prevented."""
         # Try to upload a file with path traversal in filename
         malicious_filename = "../../etc/passwd.pdf"
@@ -246,9 +238,7 @@ class TestUploadSecurity:
 
         response = client.post(
             "/api/ui-upload",
-            files={
-                "file": (malicious_filename, io.BytesIO(pdf_content), "application/pdf")
-            },
+            files={"file": (malicious_filename, io.BytesIO(pdf_content), "application/pdf")},
         )
 
         assert response.status_code == 200
@@ -259,18 +249,14 @@ class TestUploadSecurity:
         assert ".." not in data["stored_filename"]
         assert "/" not in data["stored_filename"]
 
-    def test_path_traversal_prevention_absolute(
-        self, client: TestClient, mock_celery_tasks
-    ):
+    def test_path_traversal_prevention_absolute(self, client: TestClient, mock_celery_tasks):
         """Test that absolute path attempts are prevented."""
         malicious_filename = "/etc/shadow.pdf"
         pdf_content = b"%PDF-1.4\n%EOF"
 
         response = client.post(
             "/api/ui-upload",
-            files={
-                "file": (malicious_filename, io.BytesIO(pdf_content), "application/pdf")
-            },
+            files={"file": (malicious_filename, io.BytesIO(pdf_content), "application/pdf")},
         )
 
         assert response.status_code == 200
@@ -280,18 +266,14 @@ class TestUploadSecurity:
         assert data["original_filename"] == "shadow.pdf"
         assert not data["stored_filename"].startswith("/")
 
-    def test_filename_with_special_characters(
-        self, client: TestClient, mock_celery_tasks
-    ):
+    def test_filename_with_special_characters(self, client: TestClient, mock_celery_tasks):
         """Test handling of filenames with special characters."""
         special_filename = "file name with spaces & special!@#chars.pdf"
         pdf_content = b"%PDF-1.4\n%EOF"
 
         response = client.post(
             "/api/ui-upload",
-            files={
-                "file": (special_filename, io.BytesIO(pdf_content), "application/pdf")
-            },
+            files={"file": (special_filename, io.BytesIO(pdf_content), "application/pdf")},
         )
 
         assert response.status_code == 200
@@ -307,9 +289,7 @@ class TestUploadSecurity:
         # Stored filename should have UUID and extension
         assert data["stored_filename"].endswith(".pdf")
 
-    def test_path_traversal_prevention_windows_style(
-        self, client: TestClient, mock_celery_tasks
-    ):
+    def test_path_traversal_prevention_windows_style(self, client: TestClient, mock_celery_tasks):
         """Test that Windows-style path traversal attempts are prevented."""
         # Try Windows-style path with backslashes
         malicious_filename = "..\\..\\..\\windows\\system32\\config.pdf"
@@ -317,9 +297,7 @@ class TestUploadSecurity:
 
         response = client.post(
             "/api/ui-upload",
-            files={
-                "file": (malicious_filename, io.BytesIO(pdf_content), "application/pdf")
-            },
+            files={"file": (malicious_filename, io.BytesIO(pdf_content), "application/pdf")},
         )
 
         assert response.status_code == 200
@@ -338,18 +316,14 @@ class TestUploadSecurity:
         assert ".." not in data["original_filename"]
         assert "/" not in data["original_filename"]
 
-    def test_path_traversal_prevention_mixed_separators(
-        self, client: TestClient, mock_celery_tasks
-    ):
+    def test_path_traversal_prevention_mixed_separators(self, client: TestClient, mock_celery_tasks):
         """Test handling of filenames with mixed path separators."""
         malicious_filename = "../path\\to/file.pdf"
         pdf_content = b"%PDF-1.4\n%EOF"
 
         response = client.post(
             "/api/ui-upload",
-            files={
-                "file": (malicious_filename, io.BytesIO(pdf_content), "application/pdf")
-            },
+            files={"file": (malicious_filename, io.BytesIO(pdf_content), "application/pdf")},
         )
 
         assert response.status_code == 200
@@ -376,9 +350,7 @@ class TestUploadErrorHandling:
 
             response = client.post(
                 "/api/ui-upload",
-                files={
-                    "file": ("test.pdf", io.BytesIO(pdf_content), "application/pdf")
-                },
+                files={"file": ("test.pdf", io.BytesIO(pdf_content), "application/pdf")},
             )
 
             assert response.status_code == 500
@@ -386,9 +358,7 @@ class TestUploadErrorHandling:
 
     def test_upload_celery_task_failure(self, client: TestClient, mock_celery_tasks):
         """Test handling when Celery task queueing fails."""
-        mock_celery_tasks["process_document"].side_effect = Exception(
-            "Celery connection failed"
-        )
+        mock_celery_tasks["process_document"].side_effect = Exception("Celery connection failed")
 
         pdf_content = b"%PDF-1.4\n%EOF"
 
@@ -397,9 +367,7 @@ class TestUploadErrorHandling:
         with pytest.raises(Exception):
             client.post(
                 "/api/ui-upload",
-                files={
-                    "file": ("test.pdf", io.BytesIO(pdf_content), "application/pdf")
-                },
+                files={"file": ("test.pdf", io.BytesIO(pdf_content), "application/pdf")},
             )
 
 
@@ -440,19 +408,14 @@ class TestUploadFilenameHandling:
 
         response = client.post(
             "/api/ui-upload",
-            files={
-                "file": ("NOEXTENSION", io.BytesIO(content), "application/octet-stream")
-            },
+            files={"file": ("NOEXTENSION", io.BytesIO(content), "application/octet-stream")},
         )
 
         assert response.status_code == 200
         data = response.json()
         assert data["original_filename"] == "NOEXTENSION"
         # Stored filename should be just the UUID without extension
-        assert (
-            "." not in data["stored_filename"]
-            or data["stored_filename"].count(".") == 0
-        )
+        assert "." not in data["stored_filename"] or data["stored_filename"].count(".") == 0
 
 
 @pytest.mark.integration
@@ -465,9 +428,7 @@ class TestUploadMimeTypeDetection:
 
         response = client.post(
             "/api/ui-upload",
-            files={
-                "file": ("doc.pdf", io.BytesIO(pdf_content), "application/octet-stream")
-            },
+            files={"file": ("doc.pdf", io.BytesIO(pdf_content), "application/octet-stream")},
         )
 
         assert response.status_code == 200
@@ -499,9 +460,7 @@ class TestUploadMimeTypeDetection:
 class TestFileSplitting:
     """Tests for file splitting functionality when MAX_SINGLE_FILE_SIZE is configured."""
 
-    def test_pdf_splitting_when_configured(
-        self, client: TestClient, sample_pdf_path: str, mock_celery_tasks
-    ):
+    def test_pdf_splitting_when_configured(self, client: TestClient, sample_pdf_path: str, mock_celery_tasks):
         """Test that PDFs are split when they exceed MAX_SINGLE_FILE_SIZE."""
         from app.config import settings
 
@@ -516,9 +475,7 @@ class TestFileSplitting:
                 ]
 
                 # Mock should_split_file to return True
-                with patch(
-                    "app.utils.file_splitting.should_split_file", return_value=True
-                ):
+                with patch("app.utils.file_splitting.should_split_file", return_value=True):
                     with open(sample_pdf_path, "rb") as f:
                         response = client.post(
                             "/api/ui-upload",
@@ -539,9 +496,7 @@ class TestFileSplitting:
                     # Verify each split file was queued for processing
                     assert mock_celery_tasks["process_document"].call_count == 3
 
-    def test_no_splitting_when_not_configured(
-        self, client: TestClient, sample_pdf_path: str, mock_celery_tasks
-    ):
+    def test_no_splitting_when_not_configured(self, client: TestClient, sample_pdf_path: str, mock_celery_tasks):
         """Test that PDFs are not split when MAX_SINGLE_FILE_SIZE is None."""
         from app.config import settings
 
@@ -564,9 +519,7 @@ class TestFileSplitting:
             # Verify file was processed directly without splitting
             mock_celery_tasks["process_document"].assert_called_once()
 
-    def test_no_splitting_for_small_files(
-        self, client: TestClient, sample_pdf_path: str, mock_celery_tasks
-    ):
+    def test_no_splitting_for_small_files(self, client: TestClient, sample_pdf_path: str, mock_celery_tasks):
         """Test that small PDFs are not split even when MAX_SINGLE_FILE_SIZE is configured."""
         from app.config import settings
 
@@ -588,9 +541,7 @@ class TestFileSplitting:
             # Verify file was processed directly
             mock_celery_tasks["process_document"].assert_called_once()
 
-    def test_splitting_fallback_on_error(
-        self, client: TestClient, sample_pdf_path: str, mock_celery_tasks
-    ):
+    def test_splitting_fallback_on_error(self, client: TestClient, sample_pdf_path: str, mock_celery_tasks):
         """Test that if splitting fails, the file is processed as a whole."""
         from app.config import settings
 

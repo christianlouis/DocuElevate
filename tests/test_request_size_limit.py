@@ -93,9 +93,7 @@ class TestRequestSizeLimitMiddleware:
         # May get 200/401/403 but not 413
         assert response.status_code != 413
 
-    def test_middleware_error_message_contains_limit_and_config_hint(
-        self, client: TestClient
-    ):
+    def test_middleware_error_message_contains_limit_and_config_hint(self, client: TestClient):
         """413 response body contains limit details and config variable name."""
         from app.config import settings
 
@@ -132,9 +130,7 @@ class TestFileUploadSizeLimitStreaming:
             mock_conv.delay.return_value = task
             yield
 
-    def test_upload_rejected_when_content_length_declared_too_large(
-        self, client: TestClient
-    ):
+    def test_upload_rejected_when_content_length_declared_too_large(self, client: TestClient):
         """Upload is rejected early via Content-Length check before reading data."""
         from app.config import settings
 
@@ -150,9 +146,7 @@ class TestFileUploadSizeLimitStreaming:
         )
         assert response.status_code == 413
 
-    def test_upload_rejected_mid_stream_when_data_exceeds_limit(
-        self, client: TestClient
-    ):
+    def test_upload_rejected_mid_stream_when_data_exceeds_limit(self, client: TestClient):
         """Upload is rejected mid-stream when actual data exceeds max_upload_size."""
         from app.config import settings
 
@@ -162,9 +156,7 @@ class TestFileUploadSizeLimitStreaming:
             large_content = b"x" * (small_limit + 1)
             response = client.post(
                 "/api/ui-upload",
-                files={
-                    "file": ("big.pdf", io.BytesIO(large_content), "application/pdf")
-                },
+                files={"file": ("big.pdf", io.BytesIO(large_content), "application/pdf")},
             )
         assert response.status_code == 413
         assert "too large" in response.json()["detail"].lower()

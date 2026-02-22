@@ -33,9 +33,7 @@ class Settings(BaseSettings):
     # Making Paperless optional
     paperless_ngx_api_token: Optional[str] = None
     paperless_host: Optional[str] = None
-    paperless_custom_field_absender: Optional[str] = (
-        None  # Name of the "absender" custom field in Paperless
-    )
+    paperless_custom_field_absender: Optional[str] = None  # Name of the "absender" custom field in Paperless
     # JSON mapping of metadata field names to Paperless custom field names
     # Example: {"absender": "Sender", "empfaenger": "Recipient",
     #           "language": "Language", "correspondent": "Correspondent"}
@@ -115,9 +113,7 @@ class Settings(BaseSettings):
     sftp_private_key_passphrase: Optional[str] = None
     # Security: Host key verification is enabled by default for security
     # In development/testing, set to True to disable verification (not recommended)
-    sftp_disable_host_key_verification: bool = (
-        False  # Default enforces host key verification
-    )
+    sftp_disable_host_key_verification: bool = False  # Default enforces host key verification
 
     # Email settings
     email_host: Optional[str] = None
@@ -125,17 +121,13 @@ class Settings(BaseSettings):
     email_username: Optional[str] = None
     email_password: Optional[str] = None
     email_use_tls: bool = True
-    email_sender: Optional[str] = (
-        None  # From address, defaults to email_username if not set
-    )
+    email_sender: Optional[str] = None  # From address, defaults to email_username if not set
     email_default_recipient: Optional[str] = None
 
     # OneDrive settings
     onedrive_client_id: Optional[str] = None
     onedrive_client_secret: Optional[str] = None
-    onedrive_tenant_id: Optional[str] = (
-        "common"  # Default to "common" for personal accounts
-    )
+    onedrive_tenant_id: Optional[str] = "common"  # Default to "common" for personal accounts
     onedrive_refresh_token: Optional[str] = None  # Required for personal accounts
     onedrive_folder_path: Optional[str] = None
 
@@ -153,9 +145,7 @@ class Settings(BaseSettings):
     uptime_kuma_ping_interval: int = 5  # Default ping interval in minutes
 
     # HTTP request settings
-    http_request_timeout: int = (
-        120  # Default timeout for HTTP requests in seconds (handles large file operations)
-    )
+    http_request_timeout: int = 120  # Default timeout for HTTP requests in seconds (handles large file operations)
 
     # Feature flags
     allow_file_delete: bool = True  # Default to allowing file deletion from database
@@ -175,18 +165,12 @@ class Settings(BaseSettings):
         default_factory=list,
         description="List of Apprise notification URLs (e.g., discord://, telegram://, etc.)",
     )
-    notify_on_task_failure: bool = Field(
-        default=True, description="Send notifications when Celery tasks fail"
-    )
+    notify_on_task_failure: bool = Field(default=True, description="Send notifications when Celery tasks fail")
     notify_on_credential_failure: bool = Field(
         default=True, description="Send notifications when credential checks fail"
     )
-    notify_on_startup: bool = Field(
-        default=True, description="Send notifications when application starts"
-    )
-    notify_on_shutdown: bool = Field(
-        default=False, description="Send notifications when application shuts down"
-    )
+    notify_on_startup: bool = Field(default=True, description="Send notifications when application starts")
+    notify_on_shutdown: bool = Field(default=False, description="Send notifications when application shuts down")
     notify_on_file_processed: bool = Field(
         default=True,
         description="Send notifications when files are successfully processed",
@@ -256,9 +240,7 @@ class Settings(BaseSettings):
     )
 
     # Content-Security-Policy (CSP) - Controls resource loading
-    security_header_csp_enabled: bool = Field(
-        default=True, description="Enable CSP header."
-    )
+    security_header_csp_enabled: bool = Field(default=True, description="Enable CSP header.")
     security_header_csp_value: str = Field(
         default=(
             "default-src 'self'; script-src 'self' 'unsafe-inline';"
@@ -268,9 +250,7 @@ class Settings(BaseSettings):
     )
 
     # X-Frame-Options - Prevents clickjacking
-    security_header_x_frame_options_enabled: bool = Field(
-        default=True, description="Enable X-Frame-Options header."
-    )
+    security_header_x_frame_options_enabled: bool = Field(default=True, description="Enable X-Frame-Options header.")
     security_header_x_frame_options_value: str = Field(
         default="DENY",
         description="X-Frame-Options header value. Options: DENY, SAMEORIGIN, or ALLOW-FROM uri",
@@ -335,9 +315,7 @@ class Settings(BaseSettings):
         if isinstance(data, dict):
             for key, value in data.items():
                 if isinstance(value, str) and len(value) >= 2:
-                    if (value[0] == '"' and value[-1] == '"') or (
-                        value[0] == "'" and value[-1] == "'"
-                    ):
+                    if (value[0] == '"' and value[-1] == '"') or (value[0] == "'" and value[-1] == "'"):
                         data[key] = value[1:-1]
         return data
 
@@ -372,9 +350,7 @@ class Settings(BaseSettings):
             return env_build_date
 
         # Then try to get build date from BUILD_DATE file
-        build_date_file = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "BUILD_DATE"
-        )
+        build_date_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "BUILD_DATE")
         if os.path.exists(build_date_file):
             with open(build_date_file, "r") as f:
                 return f.read().strip()
@@ -391,9 +367,7 @@ class Settings(BaseSettings):
             return env_version
 
         # Then try to get version from VERSION file
-        version_file = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "VERSION"
-        )
+        version_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "VERSION")
         if os.path.exists(version_file):
             with open(version_file, "r") as f:
                 return f.read().strip()
@@ -410,9 +384,7 @@ class Settings(BaseSettings):
             return env_sha
 
         # Then try to get from GIT_SHA file
-        git_sha_file = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "GIT_SHA"
-        )
+        git_sha_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "GIT_SHA")
         if os.path.exists(git_sha_file):
             with open(git_sha_file, "r") as f:
                 return f.read().strip()
@@ -423,9 +395,7 @@ class Settings(BaseSettings):
     @property
     def runtime_info(self) -> str:
         """Get runtime information from file."""
-        runtime_info_file = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "RUNTIME_INFO"
-        )
+        runtime_info_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "RUNTIME_INFO")
         if os.path.exists(runtime_info_file):
             with open(runtime_info_file, "r") as f:
                 return f.read().strip()

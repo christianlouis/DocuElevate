@@ -174,16 +174,11 @@ def get_file_details(request: Request, file_id: int, db: DbSession):
     file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
 
     if not file_record:
-        raise HTTPException(
-            status_code=404, detail=f"File record with ID {file_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"File record with ID {file_id} not found")
 
     # Get processing logs
     logs = (
-        db.query(ProcessingLog)
-        .filter(ProcessingLog.file_id == file_id)
-        .order_by(ProcessingLog.timestamp.desc())
-        .all()
+        db.query(ProcessingLog).filter(ProcessingLog.file_id == file_id).order_by(ProcessingLog.timestamp.desc()).all()
     )
 
     # Build log list
@@ -204,13 +199,7 @@ def get_file_details(request: Request, file_id: int, db: DbSession):
     processing_status = _get_file_processing_status(db, file_id)
 
     # Check if files exist on disk
-    files_on_disk = {
-        "original": (
-            os.path.exists(file_record.local_filename)
-            if file_record.local_filename
-            else False
-        )
-    }
+    files_on_disk = {"original": (os.path.exists(file_record.local_filename) if file_record.local_filename else False)}
 
     return {
         "file": {
@@ -220,9 +209,7 @@ def get_file_details(request: Request, file_id: int, db: DbSession):
             "local_filename": file_record.local_filename,
             "file_size": file_record.file_size,
             "mime_type": file_record.mime_type,
-            "created_at": (
-                file_record.created_at.isoformat() if file_record.created_at else None
-            ),
+            "created_at": (file_record.created_at.isoformat() if file_record.created_at else None),
         },
         "processing_status": processing_status,
         "logs": log_list,
@@ -239,23 +226,17 @@ def delete_file_record(request: Request, file_id: int, db: DbSession):
     """
     # Check if file deletion is allowed
     if not settings.allow_file_delete:
-        raise HTTPException(
-            status_code=403, detail="File deletion is disabled in the configuration"
-        )
+        raise HTTPException(status_code=403, detail="File deletion is disabled in the configuration")
 
     try:
         # Find the file record
         file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
 
         if not file_record:
-            raise HTTPException(
-                status_code=404, detail=f"File record with ID {file_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"File record with ID {file_id} not found")
 
         # Log the deletion
-        logger.info(
-            f"Deleting file record: ID={file_id}, Filename={file_record.original_filename}"
-        )
+        logger.info(f"Deleting file record: ID={file_id}, Filename={file_record.original_filename}")
 
         # Delete the record
         db.delete(file_record)
@@ -271,9 +252,7 @@ def delete_file_record(request: Request, file_id: int, db: DbSession):
     except Exception as e:
         db.rollback()
         logger.exception(f"Error deleting file record {file_id}: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error deleting file record: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error deleting file record: {str(e)}")
 
 
 @router.post("/files/bulk-delete")
@@ -285,18 +264,14 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
     """
     # Check if file deletion is allowed
     if not settings.allow_file_delete:
-        raise HTTPException(
-            status_code=403, detail="File deletion is disabled in the configuration"
-        )
+        raise HTTPException(status_code=403, detail="File deletion is disabled in the configuration")
 
     try:
         # Find all file records
         file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
 
         if not file_records:
-            raise HTTPException(
-                status_code=404, detail="No files found with the provided IDs"
-            )
+            raise HTTPException(status_code=404, detail="No files found with the provided IDs")
 
         deleted_count = len(file_records)
         deleted_ids = [f.id for f in file_records]
@@ -321,9 +296,7 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
     except Exception as e:
         db.rollback()
         logger.exception(f"Error bulk deleting file records: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error bulk deleting file records: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error bulk deleting file records: {str(e)}")
 
 
 @router.post("/files/bulk-reprocess")
@@ -337,9 +310,7 @@ def bulk_reprocess_files(request: Request, file_ids: List[int], db: DbSession):
         file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
 
         if not file_records:
-            raise HTTPException(
-                status_code=404, detail="No files found with the provided IDs"
-            )
+            raise HTTPException(status_code=404, detail="No files found with the provided IDs")
 
         task_ids = []
         processed_files = []
@@ -348,9 +319,7 @@ def bulk_reprocess_files(request: Request, file_ids: List[int], db: DbSession):
         for file_record in file_records:
             try:
                 # Check if local file exists
-                if not file_record.local_filename or not os.path.exists(
-                    file_record.local_filename
-                ):
+                if not file_record.local_filename or not os.path.exists(file_record.local_filename):
                     errors.append(
                         {
                             "file_id": file_record.id,
@@ -361,9 +330,7 @@ def bulk_reprocess_files(request: Request, file_ids: List[int], db: DbSession):
                     continue
 
                 # Queue the file for processing, passing file_id to skip duplicate check
-                task = process_document.delay(
-                    file_record.local_filename, file_id=file_record.id
-                )
+                task = process_document.delay(file_record.local_filename, file_id=file_record.id)
                 task_ids.append(task.id)
                 processed_files.append(
                     {
@@ -400,9 +367,7 @@ def bulk_reprocess_files(request: Request, file_ids: List[int], db: DbSession):
         raise
     except Exception as e:
         logger.exception(f"Error bulk reprocessing files: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error bulk reprocessing files: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error bulk reprocessing files: {str(e)}")
 
 
 @router.post("/files/{file_id}/reprocess")
@@ -422,14 +387,10 @@ def reprocess_single_file(request: Request, file_id: int, db: DbSession):
         file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
 
         if not file_record:
-            raise HTTPException(
-                status_code=404, detail=f"File with ID {file_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
 
         # Check if local file exists
-        if not file_record.local_filename or not os.path.exists(
-            file_record.local_filename
-        ):
+        if not file_record.local_filename or not os.path.exists(file_record.local_filename):
             raise HTTPException(
                 status_code=400,
                 detail="Local file not found on disk. Cannot reprocess.",
@@ -458,9 +419,7 @@ def reprocess_single_file(request: Request, file_id: int, db: DbSession):
         raise
     except Exception as e:
         logger.exception(f"Error reprocessing file {file_id}: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error reprocessing file: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error reprocessing file: {str(e)}")
 
 
 @router.post("/files/{file_id}/reprocess-with-cloud-ocr")
@@ -484,19 +443,13 @@ def reprocess_with_cloud_ocr(request: Request, file_id: int, db: DbSession):
         file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
 
         if not file_record:
-            raise HTTPException(
-                status_code=404, detail=f"File with ID {file_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
 
         # Prefer using the original_file_path if available, otherwise fall back to local_filename
         source_file = None
-        if file_record.original_file_path and os.path.exists(
-            file_record.original_file_path
-        ):
+        if file_record.original_file_path and os.path.exists(file_record.original_file_path):
             source_file = file_record.original_file_path
-            logger.info(
-                f"Using original file for Cloud OCR reprocessing: {source_file}"
-            )
+            logger.info(f"Using original file for Cloud OCR reprocessing: {source_file}")
         elif file_record.local_filename and os.path.exists(file_record.local_filename):
             source_file = file_record.local_filename
             logger.info(f"Using local file for Cloud OCR reprocessing: {source_file}")
@@ -532,9 +485,7 @@ def reprocess_with_cloud_ocr(request: Request, file_id: int, db: DbSession):
         raise
     except Exception as e:
         logger.exception(f"Error reprocessing file {file_id} with Cloud OCR: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error reprocessing file with Cloud OCR: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error reprocessing file with Cloud OCR: {str(e)}")
 
 
 def _extract_text_from_pdf(file_path: str) -> str:
@@ -579,31 +530,19 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
 
     if step_name == "process_document":
         # Full reprocessing with duplicate check bypass
-        logger.info(
-            f"Retrying process_document for file {file_id}: local_filename={file_record.local_filename!r}"
-        )
+        logger.info(f"Retrying process_document for file {file_id}: local_filename={file_record.local_filename!r}")
         if not file_record.local_filename:
-            logger.error(
-                f"process_document retry failed for file {file_id}: local_filename is None"
-            )
-            raise HTTPException(
-                status_code=400, detail="Local file path is None. Cannot retry."
-            )
+            logger.error(f"process_document retry failed for file {file_id}: local_filename is None")
+            raise HTTPException(status_code=400, detail="Local file path is None. Cannot retry.")
 
         exists = os.path.exists(file_record.local_filename)
-        logger.info(
-            f"Checking local_filename: {file_record.local_filename!r}, exists={exists}"
-        )
+        logger.info(f"Checking local_filename: {file_record.local_filename!r}, exists={exists}")
         if not exists:
             error_message = f"Local file not found on disk. Cannot retry. Path checked: local_filename={file_record.local_filename!r} (exists=False)"
-            logger.error(
-                f"process_document retry failed for file {file_id}: {error_message}"
-            )
+            logger.error(f"process_document retry failed for file {file_id}: {error_message}")
             raise HTTPException(status_code=400, detail=error_message)
 
-        logger.info(
-            f"Found file for process_document retry at: {file_record.local_filename!r}"
-        )
+        logger.info(f"Found file for process_document retry at: {file_record.local_filename!r}")
         task = process_document.delay(
             file_record.local_filename,
             original_filename=file_record.original_filename,
@@ -621,14 +560,10 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
         )
         if not file_record.local_filename:
             logger.error(f"OCR retry failed for file {file_id}: local_filename is None")
-            raise HTTPException(
-                status_code=400, detail="Local file path is None. Cannot retry OCR."
-            )
+            raise HTTPException(status_code=400, detail="Local file path is None. Cannot retry OCR.")
 
         exists = os.path.exists(file_record.local_filename)
-        logger.info(
-            f"Checking local_filename: {file_record.local_filename!r}, exists={exists}"
-        )
+        logger.info(f"Checking local_filename: {file_record.local_filename!r}, exists={exists}")
         if not exists:
             error_message = f"Local file not found on disk. Cannot retry OCR. Path checked: local_filename={file_record.local_filename!r} (exists=False)"
             logger.error(f"OCR retry failed for file {file_id}: {error_message}")
@@ -644,28 +579,20 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
             f"Retrying extract_metadata_with_gpt for file {file_id}: local_filename={file_record.local_filename!r}"
         )
         if not file_record.local_filename:
-            logger.error(
-                f"Metadata extraction retry failed for file {file_id}: local_filename is None"
-            )
+            logger.error(f"Metadata extraction retry failed for file {file_id}: local_filename is None")
             raise HTTPException(
                 status_code=400,
                 detail="Local file path is None. Cannot retry metadata extraction.",
             )
 
         exists = os.path.exists(file_record.local_filename)
-        logger.info(
-            f"Checking local_filename: {file_record.local_filename!r}, exists={exists}"
-        )
+        logger.info(f"Checking local_filename: {file_record.local_filename!r}, exists={exists}")
         if not exists:
             error_message = f"Local file not found on disk. Cannot retry metadata extraction. Path checked: local_filename={file_record.local_filename!r} (exists=False)"
-            logger.error(
-                f"Metadata extraction retry failed for file {file_id}: {error_message}"
-            )
+            logger.error(f"Metadata extraction retry failed for file {file_id}: {error_message}")
             raise HTTPException(status_code=400, detail=error_message)
 
-        logger.info(
-            f"Found file for metadata extraction retry at: {file_record.local_filename!r}"
-        )
+        logger.info(f"Found file for metadata extraction retry at: {file_record.local_filename!r}")
         extracted_text = _extract_text_from_pdf(file_record.local_filename)
         filename = os.path.basename(file_record.local_filename)
         task = extract_metadata_with_gpt.delay(filename, extracted_text, file_id)
@@ -697,36 +624,24 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
         # Check 1: local_filename (original tmp location)
         if file_record.local_filename:
             exists = os.path.exists(file_record.local_filename)
-            checked_paths.append(
-                f"local_filename={file_record.local_filename!r} (exists={exists})"
-            )
-            logger.info(
-                f"Checking local_filename: {file_record.local_filename!r}, exists={exists}"
-            )
+            checked_paths.append(f"local_filename={file_record.local_filename!r} (exists={exists})")
+            logger.info(f"Checking local_filename: {file_record.local_filename!r}, exists={exists}")
             if exists:
                 file_path = file_record.local_filename
 
         # Check 2: processed_file_path
         if not file_path and file_record.processed_file_path:
             exists = os.path.exists(file_record.processed_file_path)
-            checked_paths.append(
-                f"processed_file_path={file_record.processed_file_path!r} (exists={exists})"
-            )
-            logger.info(
-                f"Checking processed_file_path: {file_record.processed_file_path!r}, exists={exists}"
-            )
+            checked_paths.append(f"processed_file_path={file_record.processed_file_path!r} (exists={exists})")
+            logger.info(f"Checking processed_file_path: {file_record.processed_file_path!r}, exists={exists}")
             if exists:
                 file_path = file_record.processed_file_path
 
         # Check 3: original_file_path (immutable copy in workdir/original/)
         if not file_path and file_record.original_file_path:
             exists = os.path.exists(file_record.original_file_path)
-            checked_paths.append(
-                f"original_file_path={file_record.original_file_path!r} (exists={exists})"
-            )
-            logger.info(
-                f"Checking original_file_path: {file_record.original_file_path!r}, exists={exists}"
-            )
+            checked_paths.append(f"original_file_path={file_record.original_file_path!r} (exists={exists})")
+            logger.info(f"Checking original_file_path: {file_record.original_file_path!r}, exists={exists}")
             if exists:
                 file_path = file_record.original_file_path
 
@@ -734,25 +649,17 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
         if not file_path and file_record.local_filename:
             workdir = settings.workdir
             tmp_dir = os.path.join(workdir, "tmp")
-            fallback_path = os.path.join(
-                tmp_dir, os.path.basename(file_record.local_filename)
-            )
+            fallback_path = os.path.join(tmp_dir, os.path.basename(file_record.local_filename))
             exists = os.path.exists(fallback_path)
-            checked_paths.append(
-                f"workdir_tmp_fallback={fallback_path!r} (exists={exists})"
-            )
-            logger.info(
-                f"Checking workdir/tmp fallback: {fallback_path!r}, exists={exists}"
-            )
+            checked_paths.append(f"workdir_tmp_fallback={fallback_path!r} (exists={exists})")
+            logger.info(f"Checking workdir/tmp fallback: {fallback_path!r}, exists={exists}")
             if exists:
                 file_path = fallback_path
 
         if not file_path:
             paths_detail = "; ".join(checked_paths)
             error_message = f"File not found on disk. Cannot retry metadata embedding. Paths checked: {paths_detail}"
-            logger.error(
-                f"embed_metadata_into_pdf retry failed for file {file_id}: {error_message}"
-            )
+            logger.error(f"embed_metadata_into_pdf retry failed for file {file_id}: {error_message}")
             raise HTTPException(status_code=400, detail=error_message)
 
         logger.info(f"Found file for embed_metadata_into_pdf retry at: {file_path!r}")
@@ -760,13 +667,9 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
         # Pass the full path to the task so it can locate the file
         task = extract_metadata_task.delay(file_path, extracted_text, file_id)
     else:
-        raise HTTPException(
-            status_code=400, detail=f"Unsupported pipeline step: {step_name}"
-        )
+        raise HTTPException(status_code=400, detail=f"Unsupported pipeline step: {step_name}")
 
-    logger.info(
-        f"Retrying pipeline step: FileID={file_record.id}, Step={step_name}, TaskID={task.id}"
-    )
+    logger.info(f"Retrying pipeline step: FileID={file_record.id}, Step={step_name}, TaskID={task.id}")
 
     return {
         "status": "success",
@@ -807,9 +710,7 @@ def retry_subtask(
         file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
 
         if not file_record:
-            raise HTTPException(
-                status_code=404, detail=f"File with ID {file_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
 
         # Pipeline processing steps that can be retried from the failed step
         pipeline_step_names = {
@@ -892,9 +793,7 @@ def retry_subtask(
         upload_task = task_map[subtask_name]
         task = upload_task.delay(file_path, file_id)
 
-        logger.info(
-            f"Retrying upload subtask: FileID={file_record.id}, Subtask={subtask_name}, TaskID={task.id}"
-        )
+        logger.info(f"Retrying upload subtask: FileID={file_record.id}, Subtask={subtask_name}, TaskID={task.id}")
 
         return {
             "status": "success",
@@ -907,9 +806,7 @@ def retry_subtask(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception(
-            f"Error retrying subtask {subtask_name} for file {file_id}: {str(e)}"
-        )
+        logger.exception(f"Error retrying subtask {subtask_name} for file {file_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error retrying subtask: {str(e)}")
 
 
@@ -938,18 +835,12 @@ def get_file_preview(
         file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
 
         if not file_record:
-            raise HTTPException(
-                status_code=404, detail=f"File with ID {file_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
 
         if version == "original":
             # Return the original file from tmp
-            if not file_record.local_filename or not os.path.exists(
-                file_record.local_filename
-            ):
-                raise HTTPException(
-                    status_code=404, detail="Original file not found on disk"
-                )
+            if not file_record.local_filename or not os.path.exists(file_record.local_filename):
+                raise HTTPException(status_code=404, detail="Original file not found on disk")
 
             file_path = file_record.local_filename
 
@@ -984,18 +875,14 @@ def get_file_preview(
         return FileResponse(
             path=file_path,
             media_type=file_record.mime_type or "application/pdf",
-            headers={
-                "Content-Disposition": f'inline; filename="{file_record.original_filename}"'
-            },
+            headers={"Content-Disposition": f'inline; filename="{file_record.original_filename}"'},
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.exception(f"Error retrieving file preview: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error retrieving file preview: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error retrieving file preview: {str(e)}")
 
 
 @router.get("/files/{file_id}/download")
@@ -1023,18 +910,12 @@ def download_file(
         file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
 
         if not file_record:
-            raise HTTPException(
-                status_code=404, detail=f"File with ID {file_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
 
         if version == "original":
             # Return the original file from tmp
-            if not file_record.local_filename or not os.path.exists(
-                file_record.local_filename
-            ):
-                raise HTTPException(
-                    status_code=404, detail="Original file not found on disk"
-                )
+            if not file_record.local_filename or not os.path.exists(file_record.local_filename):
+                raise HTTPException(status_code=404, detail="Original file not found on disk")
 
             file_path = file_record.local_filename
 
@@ -1069,9 +950,7 @@ def download_file(
         return FileResponse(
             path=file_path,
             media_type=file_record.mime_type or "application/pdf",
-            headers={
-                "Content-Disposition": f'attachment; filename="{file_record.original_filename}"'
-            },
+            headers={"Content-Disposition": f'attachment; filename="{file_record.original_filename}"'},
         )
 
     except HTTPException:
@@ -1189,9 +1068,7 @@ async def ui_upload(request: Request, file: UploadFile = File(...)):
     # Check if file splitting is needed (only for PDFs)
     from app.utils.file_splitting import should_split_file
 
-    should_split = is_pdf and should_split_file(
-        target_path, settings.max_single_file_size
-    )
+    should_split = is_pdf and should_split_file(target_path, settings.max_single_file_size)
 
     if should_split:
         # File needs to be split before processing
@@ -1209,9 +1086,7 @@ async def ui_upload(request: Request, file: UploadFile = File(...)):
             task_ids = []
             for split_file in split_files:
                 split_filename = os.path.basename(split_file)
-                task = process_document.delay(
-                    split_file, original_filename=split_filename
-                )
+                task = process_document.delay(split_file, original_filename=split_filename)
                 task_ids.append(task.id)
                 logger.info(f"Enqueued split PDF part for processing: {split_file}")
 
@@ -1229,9 +1104,7 @@ async def ui_upload(request: Request, file: UploadFile = File(...)):
         except Exception as e:
             logger.exception(f"Failed to split file {target_path}: {str(e)}")
             # Fall back to processing the whole file
-            logger.warning(
-                f"Falling back to processing whole file due to split error: {str(e)}"
-            )
+            logger.warning(f"Falling back to processing whole file due to split error: {str(e)}")
             should_split = False
 
     if is_pdf and not should_split:
@@ -1239,8 +1112,7 @@ async def ui_upload(request: Request, file: UploadFile = File(...)):
         task = process_document.delay(target_path, original_filename=safe_filename)
         logger.info(f"Enqueued PDF for processing: {target_path}")
     elif mime_type in IMAGE_MIME_TYPES or any(
-        file_ext.endswith(ext)
-        for ext in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp", ".svg"]
+        file_ext.endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp", ".svg"]
     ):
         # If it's an image, convert to PDF first
         task = convert_to_pdf.delay(target_path, original_filename=safe_filename)
@@ -1267,9 +1139,7 @@ async def ui_upload(request: Request, file: UploadFile = File(...)):
         logger.info(f"Enqueued office document for PDF conversion: {target_path}")
     else:
         # For any other file type, attempt conversion but log a warning
-        logger.warning(
-            f"Unsupported MIME type {mime_type} for {target_path}, attempting conversion"
-        )
+        logger.warning(f"Unsupported MIME type {mime_type} for {target_path}, attempting conversion")
         task = convert_to_pdf.delay(target_path, original_filename=safe_filename)
 
     return {

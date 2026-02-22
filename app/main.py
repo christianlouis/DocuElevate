@@ -41,8 +41,7 @@ if settings.auth_enabled and not settings.session_secret:
         "Generate one with: python -c 'import secrets; print(secrets.token_hex(32))'"
     )
 SESSION_SECRET = (
-    settings.session_secret
-    or "INSECURE_DEFAULT_FOR_DEVELOPMENT_ONLY_DO_NOT_USE_IN_PRODUCTION_MINIMUM_32_CHARS"
+    settings.session_secret or "INSECURE_DEFAULT_FOR_DEVELOPMENT_ONLY_DO_NOT_USE_IN_PRODUCTION_MINIMUM_32_CHARS"
 )
 
 
@@ -81,15 +80,11 @@ async def lifespan(app: FastAPI):
         len(issues) > 0 for provider, issues in config_issues["storage"].items()
     )
     if has_issues:
-        logging.warning(
-            "Application started with configuration issues - some features may be unavailable"
-        )
+        logging.warning("Application started with configuration issues - some features may be unavailable")
     else:
         logging.info("Application started with valid configuration")
 
-    logging.info(
-        "Router organization: Using refactored API routers from app/api/ directory"
-    )
+    logging.info("Router organization: Using refactored API routers from app/api/ directory")
 
     # Initialize notification system
     init_apprise()
@@ -110,9 +105,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="DocuElevate", lifespan=lifespan)
 
 # Initialize rate limiter and attach to app state
-limiter = create_limiter(
-    redis_url=settings.redis_url, enabled=settings.rate_limiting_enabled
-)
+limiter = create_limiter(redis_url=settings.redis_url, enabled=settings.rate_limiting_enabled)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, get_rate_limit_exceeded_handler())
 
@@ -152,9 +145,7 @@ static_dir = pathlib.Path(__file__).parents[1] / "frontend" / "static"
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 else:
-    print(
-        f"WARNING: Static directory not found at {static_dir}. Static files will not be served."
-    )
+    print(f"WARNING: Static directory not found at {static_dir}. Static files will not be served.")
 
 
 # Custom exception handlers that return JSON for API routes and HTML for frontend routes
@@ -173,9 +164,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
     # Handle 404 errors with a custom template
     if exc.status_code == 404:
-        return templates.TemplateResponse(
-            "404.html", {"request": request}, status_code=status.HTTP_404_NOT_FOUND
-        )
+        return templates.TemplateResponse("404.html", {"request": request}, status_code=status.HTTP_404_NOT_FOUND)
 
     # For other HTTP errors, we could create specific templates or use a generic one
     # For now, return a simple error page
