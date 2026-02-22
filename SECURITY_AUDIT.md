@@ -278,7 +278,17 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
 - ✅ Streaming file reads in upload endpoint to prevent memory exhaustion
 - ⏳ **TODO:** Implement rate limiting on API endpoints
 - ⏳ **TODO:** Add CSRF protection for state-changing operations
-- ⏳ **TODO:** Add comprehensive input sanitization for all user inputs ([#172](https://github.com/christianlouis/DocuElevate/issues/172))
+- ✅ **COMPLETED:** Add comprehensive input sanitization for all user inputs ([#172](https://github.com/christianlouis/DocuElevate/issues/172))
+  - `app/utils/input_validation.py` — centralized validation module with:
+    - `validate_setting_key()`: allow-lists setting keys against `SETTING_METADATA` (prevents attribute enumeration / Python object sniffing via `getattr`)
+    - `validate_sort_field()`: enforces sort field against an explicit allow-list
+    - `validate_sort_order()`: ensures sort direction is exactly `asc` or `desc`
+    - `validate_search_query()`: strips whitespace, enforces 255-character maximum
+    - `validate_task_id()`: validates Celery task IDs against UUID v4 format
+  - Applied to `app/api/settings.py` (GET/POST/DELETE `/{key}` endpoints)
+  - Applied to `app/api/files.py` (file list sort + search query parameters)
+  - Applied to `app/api/logs.py` (task_id query filter and path parameter)
+  - 30 unit tests added in `tests/test_input_validation.py`
 - ⏳ **TODO:** Implement proper API key rotation mechanisms ([#168](https://github.com/christianlouis/DocuElevate/issues/168))
 
 ### Infrastructure Security
@@ -303,7 +313,7 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
 ### High Priority
 1. ~~**Enable CodeQL scanning**~~ ✅ Already implemented - Two CodeQL workflows active
 2. **Implement rate limiting** - Prevent abuse and DoS attacks (consider slowapi or fastapi-limiter)
-3. **Add comprehensive input validation** - Prevent injection attacks ([#172](https://github.com/christianlouis/DocuElevate/issues/172))
+3. ~~**Add comprehensive input validation**~~ ✅ Implemented — centralized `app/utils/input_validation.py` module with allow-list validators for sort fields, sort order, search queries, task IDs, and setting keys; applied across `files.py`, `logs.py`, and `settings.py` endpoints ([#172](https://github.com/christianlouis/DocuElevate/issues/172))
 4. ~~**Add request size limits**~~ ✅ Implemented - `RequestSizeLimitMiddleware` enforces `MAX_REQUEST_BODY_SIZE` (default 1 MB) for non-file requests and `MAX_UPLOAD_SIZE` (default 1 GB) for multipart uploads; file uploads also use streaming reads to bound memory usage ([#173](https://github.com/christianlouis/DocuElevate/issues/173))
 5. **Implement CSRF protection** - Protect state-changing operations
 

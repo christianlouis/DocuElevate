@@ -37,15 +37,25 @@ class TestListProcessingLogs:
 
     def test_list_logs_filter_by_task_id(self, client, db_session):
         """Test filtering logs by task_id."""
-        log1 = ProcessingLog(task_id="task-a", step_name="step1", status="success", message="Log A")
-        log2 = ProcessingLog(task_id="task-b", step_name="step2", status="success", message="Log B")
+        log1 = ProcessingLog(
+            task_id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            step_name="step1",
+            status="success",
+            message="Log A",
+        )
+        log2 = ProcessingLog(
+            task_id="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            step_name="step2",
+            status="success",
+            message="Log B",
+        )
         db_session.add_all([log1, log2])
         db_session.commit()
 
-        response = client.get("/api/logs?task_id=task-a")
+        response = client.get("/api/logs?task_id=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
         assert response.status_code == 200
         data = response.json()
-        assert all(log["task_id"] == "task-a" for log in data)
+        assert all(log["task_id"] == "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" for log in data)
 
     def test_list_logs_with_limit(self, client, db_session):
         """Test limiting number of returned logs."""
@@ -106,8 +116,9 @@ class TestGetTaskProcessingLogs:
 
     def test_get_logs_for_existing_task(self, client, db_session):
         """Test getting logs for an existing task."""
+        task_uuid = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
         log = ProcessingLog(
-            task_id="test-task-abc",
+            task_id=task_uuid,
             step_name="process_document",
             status="success",
             message="Done",
@@ -115,13 +126,13 @@ class TestGetTaskProcessingLogs:
         db_session.add(log)
         db_session.commit()
 
-        response = client.get("/api/logs/task/test-task-abc")
+        response = client.get(f"/api/logs/task/{task_uuid}")
         assert response.status_code == 200
         data = response.json()
-        assert data["task_id"] == "test-task-abc"
+        assert data["task_id"] == task_uuid
         assert len(data["logs"]) == 1
 
     def test_get_logs_for_nonexistent_task(self, client):
         """Test getting logs for a task that doesn't exist."""
-        response = client.get("/api/logs/task/nonexistent-task")
+        response = client.get("/api/logs/task/dddddddd-dddd-4ddd-8ddd-dddddddddddd")
         assert response.status_code == 404

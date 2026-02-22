@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.auth import require_login
 from app.database import get_db
 from app.models import FileRecord, ProcessingLog
+from app.utils.input_validation import validate_task_id
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -59,6 +60,7 @@ def list_processing_logs(
     if file_id is not None:
         query = query.filter(ProcessingLog.file_id == file_id)
     if task_id is not None:
+        validate_task_id(task_id)
         query = query.filter(ProcessingLog.task_id == task_id)
 
     # Order by timestamp descending and limit
@@ -132,6 +134,7 @@ def get_task_processing_logs(request: Request, task_id: str, db: DbSession):
     Get all processing logs for a specific task.
     Returns logs ordered by timestamp (oldest first to show processing flow).
     """
+    validate_task_id(task_id)
     # Get all logs for this task
     logs = db.query(ProcessingLog).filter(ProcessingLog.task_id == task_id).order_by(ProcessingLog.timestamp).all()
 
