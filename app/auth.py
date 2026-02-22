@@ -126,10 +126,7 @@ async def oauth_callback(request: Request):
         request.session["user"] = user_data
 
         # Log the successful authentication
-        logger.info(
-            f"[SECURITY] OAUTH_LOGIN_SUCCESS user={user_data.get('email', 'unknown')} "
-            f"admin={is_admin}"
-        )
+        logger.info(f"[SECURITY] OAUTH_LOGIN_SUCCESS user={user_data.get('email', 'unknown')} admin={is_admin}")
 
         # Redirect to original destination or default
         redirect_url = request.session.pop("redirect_after_login", "/upload")

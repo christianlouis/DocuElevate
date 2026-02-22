@@ -13,9 +13,9 @@ Validates:
   and for authentication-endpoint POST requests
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi import Response
 
 from app.middleware.audit_log import (
@@ -24,7 +24,6 @@ from app.middleware.audit_log import (
     get_username,
     mask_query_string,
 )
-
 
 # ---------------------------------------------------------------------------
 # mask_query_string

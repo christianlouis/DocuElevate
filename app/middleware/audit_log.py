@@ -161,10 +161,7 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
         self.include_ip = config.audit_log_include_client_ip
 
         if self.enabled:
-            logger.info(
-                "Audit logging middleware enabled "
-                f"(include_client_ip={self.include_ip})"
-            )
+            logger.info(f"Audit logging middleware enabled (include_client_ip={self.include_ip})")
         else:
             logger.info("Audit logging middleware disabled")
 
@@ -217,9 +214,7 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
         ip_part = f" - {get_client_ip(request)}" if self.include_ip else ""
 
         # Core request log line (always INFO).
-        logger.info(
-            f"[AUDIT] {method} {path} {status_code} {duration_ms}ms{ip_part} - {username}"
-        )
+        logger.info(f"[AUDIT] {method} {path} {status_code} {duration_ms}ms{ip_part} - {username}")
 
         # Security-event log lines for noteworthy conditions.
         self._log_security_event(method, path, status_code, username, ip_part)
@@ -242,22 +237,14 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
             username: Authenticated username or ``"anonymous"``.
             ip_part: Pre-formatted IP string (may be empty string).
         """
-        base_path = path.split("?")[0]
+        base_path = path.split("?", maxsplit=1)[0]
 
         if status_code == 401:
-            logger.warning(
-                f"[SECURITY] AUTH_FAILURE {method} {path} 401{ip_part} - {username}"
-            )
+            logger.warning(f"[SECURITY] AUTH_FAILURE {method} {path} 401{ip_part} - {username}")
         elif status_code == 403:
-            logger.warning(
-                f"[SECURITY] ACCESS_DENIED {method} {path} 403{ip_part} - {username}"
-            )
+            logger.warning(f"[SECURITY] ACCESS_DENIED {method} {path} 403{ip_part} - {username}")
         elif base_path in _AUTH_PATHS and method == "POST":
             # Login attempts (successful or not) are always noted.
-            logger.info(
-                f"[SECURITY] AUTH_ATTEMPT {method} {path} {status_code}{ip_part} - {username}"
-            )
+            logger.info(f"[SECURITY] AUTH_ATTEMPT {method} {path} {status_code}{ip_part} - {username}")
         elif status_code >= 500:
-            logger.error(
-                f"[SECURITY] SERVER_ERROR {method} {path} {status_code}{ip_part} - {username}"
-            )
+            logger.error(f"[SECURITY] SERVER_ERROR {method} {path} {status_code}{ip_part} - {username}")
