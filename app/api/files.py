@@ -21,6 +21,7 @@ from app.tasks.process_document import process_document
 from app.utils.file_queries import apply_status_filter
 from app.utils.file_status import get_files_processing_status
 from app.utils.filename_utils import sanitize_filename
+from app.utils.input_validation import validate_search_query, validate_sort_field, validate_sort_order
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -77,6 +78,11 @@ def list_files_api(
       }
     }
     """
+    # Validate and sanitize query parameters
+    validate_sort_field(sort_by)
+    validate_sort_order(sort_order)
+    search = validate_search_query(search)
+
     # Start with base query
     query = db.query(FileRecord)
 

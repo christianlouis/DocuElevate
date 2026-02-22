@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
+from app.utils.input_validation import validate_setting_key
 from app.utils.settings_service import (
     SETTING_METADATA,
     delete_setting_from_db,
@@ -98,6 +99,7 @@ async def get_setting(key: str, request: Request, db: DbSession, admin: AdminUse
     Get a specific setting by key.
     Admin only.
     """
+    validate_setting_key(key)
     try:
         # Get current value
         value = getattr(settings, key, None)
@@ -125,6 +127,7 @@ async def update_setting(
     Update a specific setting.
     Admin only.
     """
+    validate_setting_key(key)
     try:
         # Validate the setting value
         if setting.value is not None:
@@ -165,6 +168,7 @@ async def delete_setting(key: str, request: Request, db: DbSession, admin: Admin
     Delete a setting from the database (reverts to environment variable or default).
     Admin only.
     """
+    validate_setting_key(key)
     try:
         success = delete_setting_from_db(db, key)
         if not success:
