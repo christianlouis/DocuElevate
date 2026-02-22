@@ -7,7 +7,6 @@ Covers all validators: sort field/order, search query, task ID, and setting key.
 import pytest
 from fastapi import HTTPException
 
-
 # ---------------------------------------------------------------------------
 # validate_sort_field
 # ---------------------------------------------------------------------------
