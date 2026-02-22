@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.utils.config_validator.masking import mask_sensitive_value
 from app.utils.settings_service import (
+    SETTING_METADATA,
     get_all_settings_from_db,
     get_setting_metadata,
     get_settings_by_category,
@@ -116,3 +117,68 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error loading settings page: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load settings page")
+
+
+@router.get("/admin/credentials")
+@require_login
+@require_admin_access
+async def credentials_page(request: Request, db: Session = Depends(get_db)):
+    """
+    Credential audit page - admin only.
+
+    Displays all sensitive credential settings grouped by category, showing
+    whether each is configured and whether it comes from the database or an
+    environment variable. Supports the credential rotation workflow.
+    """
+    try:
+        db_settings = get_all_settings_from_db(db)
+        categories: dict[str, list[dict]] = {}
+
+        for key, meta in SETTING_METADATA.items():
+            if not meta.get("sensitive", False):
+                continue
+
+            env_value = getattr(settings, key, None)
+            in_db = key in db_settings and db_settings[key]
+
+            if in_db:
+                source = "db"
+                configured = True
+            elif env_value:
+                source = "env"
+                configured = True
+            else:
+                source = None
+                configured = False
+
+            category = meta.get("category", "Other")
+            if category not in categories:
+                categories[category] = []
+
+            categories[category].append(
+                {
+                    "key": key,
+                    "description": meta.get("description", ""),
+                    "configured": configured,
+                    "source": source,
+                    "restart_required": meta.get("restart_required", False),
+                }
+            )
+
+        total = sum(len(v) for v in categories.values())
+        configured_count = sum(1 for creds in categories.values() for c in creds if c["configured"])
+
+        return templates.TemplateResponse(
+            "credentials.html",
+            {
+                "request": request,
+                "categories": categories,
+                "total": total,
+                "configured_count": configured_count,
+                "unconfigured_count": total - configured_count,
+                "app_version": settings.version,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error loading credentials page: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load credentials page")
