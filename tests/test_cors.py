@@ -169,12 +169,9 @@ def test_cors_parse_comma_separated_origins():
     original = os.environ.get("CORS_ALLOWED_ORIGINS")
     os.environ["CORS_ALLOWED_ORIGINS"] = "https://app.example.com,https://admin.example.com"
     try:
-        from importlib import reload
+        from app.config import Settings
 
-        import app.config as config_module
-
-        reload(config_module)
-        test_settings = config_module.Settings(
+        test_settings = Settings(
             database_url="sqlite:///:memory:",
             redis_url="redis://localhost:6379/0",
             openai_api_key="test-key",
@@ -204,12 +201,9 @@ def test_cors_single_origin_string_to_list():
     original = os.environ.get("CORS_ALLOWED_ORIGINS")
     os.environ["CORS_ALLOWED_ORIGINS"] = "https://app.example.com"
     try:
-        from importlib import reload
+        from app.config import Settings
 
-        import app.config as config_module
-
-        reload(config_module)
-        test_settings = config_module.Settings(
+        test_settings = Settings(
             database_url="sqlite:///:memory:",
             redis_url="redis://localhost:6379/0",
             openai_api_key="test-key",
