@@ -111,9 +111,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         if request.method in CSRF_PROTECTED_METHODS and request.url.path not in CSRF_EXEMPT_PATHS:
             submitted_token = await self._get_submitted_token(request)
             if not submitted_token or not secrets.compare_digest(csrf_token, submitted_token):
-                logger.warning(
-                    f"[SECURITY] CSRF_VALIDATION_FAILED method={request.method} path={request.url.path}"
-                )
+                logger.warning(f"[SECURITY] CSRF_VALIDATION_FAILED method={request.method} path={request.url.path}")
                 if request.url.path.startswith("/api/"):
                     return JSONResponse(
                         status_code=403,
