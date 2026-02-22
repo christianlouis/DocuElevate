@@ -26,12 +26,19 @@ original_template_response = templates.TemplateResponse
 
 
 def template_response_with_version(*args, **kwargs):
-    """Wrapper for TemplateResponse to include version in all templates"""
+    """Wrapper for TemplateResponse to include version and CSRF token in all templates"""
     # If context dict is provided, add version to it
     if len(args) >= 2 and isinstance(args[1], dict):
         args[1].setdefault("version", settings.version)
+        # Inject CSRF token from request state when available
+        req = args[1].get("request")
+        if req is not None and hasattr(req.state, "csrf_token"):
+            args[1].setdefault("csrf_token", req.state.csrf_token)
     elif "context" in kwargs and isinstance(kwargs["context"], dict):
         kwargs["context"].setdefault("version", settings.version)
+        req = kwargs["context"].get("request")
+        if req is not None and hasattr(req.state, "csrf_token"):
+            kwargs["context"].setdefault("csrf_token", req.state.csrf_token)
     return original_template_response(*args, **kwargs)
 
 

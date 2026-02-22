@@ -80,6 +80,7 @@ async def login(request: Request):
             "show_oauth": OAUTH_CONFIGURED,
             "oauth_provider_name": OAUTH_PROVIDER_NAME,
             "app_version": settings.version,  # Changed from app_version to version
+            "csrf_token": getattr(request.state, "csrf_token", ""),
         },
     )
 

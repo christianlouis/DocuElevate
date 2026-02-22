@@ -18,6 +18,8 @@
           crossorigin="anonymous" referrerpolicy="no-referrer" />
     {% endblock %}
     {% block head_extra %}{% endblock %}
+    <!-- CSRF token for AJAX/fetch requests -->
+    <meta name="csrf-token" content="{{ csrf_token | default('', true) }}">
   </head>
 
   <body class="bg-gray-50 min-h-screen flex flex-col">
