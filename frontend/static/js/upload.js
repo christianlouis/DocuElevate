@@ -140,6 +140,12 @@ async function uploadFile(file, progressBar, statusEl, statusMessage) {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/ui-upload", true);
 
+    // Attach CSRF token so the server-side CSRF middleware accepts the request.
+    const csrfToken = typeof getCsrfToken === 'function' ? getCsrfToken() : '';
+    if (csrfToken) {
+      xhr.setRequestHeader("X-CSRF-Token", csrfToken);
+    }
+
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) {
         const percentComplete = (e.loaded / e.total) * 100;
