@@ -248,6 +248,25 @@ class Settings(BaseSettings):
         default=True, description="Enable X-Content-Type-Options header (always set to 'nosniff')."
     )
 
+    # Audit Logging Configuration (see SECURITY_AUDIT.md – Infrastructure Security)
+    # Logs every HTTP request and security-relevant events (auth failures, 5xx errors).
+    # Sensitive query-parameter values (passwords, tokens, keys) are always masked.
+    audit_logging_enabled: bool = Field(
+        default=True,
+        description=(
+            "Enable audit/request logging middleware. Logs every HTTP request with "
+            "method, path, status code, response time, and username. "
+            "Sensitive query-parameter values are automatically masked."
+        ),
+    )
+    audit_log_include_client_ip: bool = Field(
+        default=True,
+        description=(
+            "Include the client IP address in audit log entries. "
+            "Disable for privacy-sensitive deployments where IP logging is restricted."
+        ),
+    )
+
     # Rate Limiting Configuration (see SECURITY_AUDIT.md and docs/API.md)
     # Protects against DoS attacks and API abuse
     rate_limiting_enabled: bool = Field(

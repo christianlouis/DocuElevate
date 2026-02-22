@@ -1,5 +1,6 @@
 import hashlib
 import inspect
+import logging
 import pathlib
 from functools import wraps
 
@@ -11,6 +12,8 @@ from starlette.responses import RedirectResponse
 from app.config import settings
 
 oauth = OAuth()
+
+logger = logging.getLogger(__name__)
 
 AUTH_ENABLED = settings.auth_enabled
 
@@ -123,13 +126,13 @@ async def oauth_callback(request: Request):
         request.session["user"] = user_data
 
         # Log the successful authentication
-        print(f"User authenticated via OAuth: {user_data.get('email', 'No email')} (admin: {is_admin})")
+        logger.info(f"[SECURITY] OAUTH_LOGIN_SUCCESS user={user_data.get('email', 'unknown')} admin={is_admin}")
 
         # Redirect to original destination or default
         redirect_url = request.session.pop("redirect_after_login", "/upload")
         return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
     except Exception as e:
-        print(f"OAuth authentication error: {str(e)}")
+        logger.warning(f"[SECURITY] OAUTH_LOGIN_FAILURE error={type(e).__name__}")
         return RedirectResponse(url=f"/login?error=Authentication+failed:+{str(e)}", status_code=status.HTTP_302_FOUND)
 
 
@@ -149,15 +152,22 @@ async def auth(request: Request):
             "picture": "/static/images/default-avatar.svg",
             "is_admin": True,
         }
+        logger.info(f"[SECURITY] LOCAL_LOGIN_SUCCESS user={username}")
         # Redirect to original destination or default
         redirect_url = request.session.pop("redirect_after_login", "/upload")
         return RedirectResponse(url=redirect_url, status_code=302)
     else:
+        logger.warning(f"[SECURITY] LOCAL_LOGIN_FAILURE user={username}")
         return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
 
 
 async def logout(request: Request):
     """Handle user logout"""
+    user = request.session.get("user")
+    username = "unknown"
+    if isinstance(user, dict):
+        username = user.get("preferred_username") or user.get("email") or "unknown"
+    logger.info(f"[SECURITY] LOGOUT user={username}")
     request.session.pop("user", None)
     return RedirectResponse(url="/login?message=You+have+been+logged+out+successfully", status_code=302)
 

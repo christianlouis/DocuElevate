@@ -18,6 +18,7 @@ from app.api import router as api_router
 from app.auth import router as auth_router
 from app.config import settings
 from app.database import init_db
+from app.middleware.audit_log import AuditLogMiddleware
 from app.middleware.rate_limit import create_limiter, get_rate_limit_exceeded_handler
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.utils.config_validator import check_all_configs
@@ -115,13 +116,18 @@ app.add_exception_handler(RateLimitExceeded, get_rate_limit_exceeded_handler())
 #    Set to False if reverse proxy (Traefik, Nginx) handles security headers
 app.add_middleware(SecurityHeadersMiddleware, config=settings)
 
-# 2) Session Middleware (for request.session to work)
+# 2) Audit Logging Middleware - logs all requests with sensitive data masking
+#    Configure via AUDIT_LOGGING_ENABLED environment variable
+#    See SECURITY_AUDIT.md – Infrastructure Security section
+app.add_middleware(AuditLogMiddleware, config=settings)
+
+# 3) Session Middleware (for request.session to work)
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 
-# 3) Respect the X-Forwarded-* headers from reverse proxy (Traefik, Nginx)
+# 4) Respect the X-Forwarded-* headers from reverse proxy (Traefik, Nginx)
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
-# 4) Restrict valid hosts to prevent Host header attacks
+# 5) Restrict valid hosts to prevent Host header attacks
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=[settings.external_hostname, "localhost", "127.0.0.1"])
 
 # Mount the static files directory
