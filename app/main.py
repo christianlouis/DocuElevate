@@ -19,6 +19,7 @@ from app.auth import router as auth_router
 from app.config import settings
 from app.database import init_db
 from app.middleware.audit_log import AuditLogMiddleware
+from app.middleware.csrf import CSRFMiddleware
 from app.middleware.rate_limit import create_limiter, get_rate_limit_exceeded_handler
 from app.middleware.request_size_limit import RequestSizeLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
@@ -122,6 +123,11 @@ app.add_middleware(SecurityHeadersMiddleware, config=settings)
 #    MAX_UPLOAD_SIZE: limit for multipart/form-data uploads (default 1 GB)
 #    See SECURITY_AUDIT.md – Code Security section
 app.add_middleware(RequestSizeLimitMiddleware, config=settings)
+
+# 3) CSRF Protection Middleware - validates CSRF tokens for state-changing operations
+#    Only active when AUTH_ENABLED=True. Exempts OAuth callback endpoints.
+#    Tokens are stored in the session and validated via X-CSRF-Token header or form field.
+app.add_middleware(CSRFMiddleware, config=settings)
 
 # 2) Audit Logging Middleware - logs all requests with sensitive data masking
 #    Configure via AUDIT_LOGGING_ENABLED environment variable

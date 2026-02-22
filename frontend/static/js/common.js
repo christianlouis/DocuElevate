@@ -1,5 +1,39 @@
 // frontend/static/js/common.js
 
+// ---------------------------------------------------------------------------
+// CSRF token helper
+// ---------------------------------------------------------------------------
+// Read the CSRF token from the <meta name="csrf-token"> tag injected by the
+// server into base.html for every authenticated page.
+function getCsrfToken() {
+  const meta = document.querySelector('meta[name="csrf-token"]');
+  return meta ? meta.getAttribute('content') : '';
+}
+
+// Wrap the native fetch() so that every state-changing request automatically
+// includes the X-CSRF-Token header without requiring callers to remember it.
+(function patchFetch() {
+  const _CSRF_METHODS = new Set(['POST', 'PUT', 'DELETE', 'PATCH']);
+  const _originalFetch = window.fetch;
+  window.fetch = function (input, init) {
+    init = init || {};
+    const method = (init.method || 'GET').toUpperCase();
+    if (_CSRF_METHODS.has(method)) {
+      const token = getCsrfToken();
+      if (token) {
+        // Merge headers so a caller-supplied X-CSRF-Token is not overwritten,
+        // but add the token when no override is present.
+        const headers = Object.assign({}, init.headers || {});
+        if (!headers['X-CSRF-Token']) {
+          headers['X-CSRF-Token'] = token;
+        }
+        init.headers = headers;
+      }
+    }
+    return _originalFetch.call(this, input, init);
+  };
+})();
+
 // Check authentication status and update the auth section
 (async function() {
   console.log('Checking authentication status...');

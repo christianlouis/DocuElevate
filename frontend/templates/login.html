@@ -33,6 +33,7 @@
         <div class="mb-8" id="local-auth">
             <h2 class="text-lg font-semibold mb-4 text-gray-700">Sign in with username</h2>
             <form method="POST" action="/auth" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token | default('', true) }}">
                 <div>
                     <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
                     <input type="text" id="username" name="username" required
