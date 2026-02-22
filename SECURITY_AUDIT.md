@@ -300,7 +300,11 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
   - Can be enabled for direct deployment without reverse proxy
   - Individual header control and customization
   - Documented in DeploymentGuide.md and ConfigurationGuide.md
-- ⏳ **TODO:** Implement proper CORS configuration (currently not configured) ([#175](https://github.com/christianlouis/DocuElevate/issues/175))
+- ✅ **CORS middleware implemented** - Configurable `CORSMiddleware` with allowed origins, methods, headers, and credentials ([#175](https://github.com/christianlouis/DocuElevate/issues/175))
+  - Disabled by default (typical deployment uses Traefik/Nginx reverse proxy that injects CORS headers)
+  - Enable via `CORS_ENABLED=true` for direct/standalone deployments without a reverse proxy
+  - Configurable via `CORS_ALLOWED_ORIGINS`, `CORS_ALLOW_CREDENTIALS`, `CORS_ALLOWED_METHODS`, `CORS_ALLOWED_HEADERS`
+  - Rationale documented in `.env.demo` and `DeploymentGuide.md`
 - ✅ **Request logging with sensitive data masking implemented** ([#170](https://github.com/christianlouis/DocuElevate/issues/170))
   - `AuditLogMiddleware` in `app/middleware/audit_log.py` logs every HTTP request
   - Logs: method, path, status code, response time, client IP (configurable), username
@@ -319,7 +323,7 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
 
 ### Medium Priority
 1. ~~**Add security headers**~~ ✅ Implemented - Configurable HSTS, CSP, X-Frame-Options, X-Content-Type-Options middleware
-2. **Configure CORS properly** - Currently no CORS middleware configured ([#175](https://github.com/christianlouis/DocuElevate/issues/175))
+2. ~~**Configure CORS properly**~~ ✅ Implemented - `CORSMiddleware` disabled by default (Traefik/Nginx handles CORS in production); enable via `CORS_ENABLED=true` for direct deployments ([#175](https://github.com/christianlouis/DocuElevate/issues/175))
 3. ~~**Implement audit logging**~~ ✅ Implemented - Request/audit logging with sensitive data masking ([#170](https://github.com/christianlouis/DocuElevate/issues/170))
 4. ~~**Add file upload size limits**~~ ✅ Implemented - Configurable limits with 1GB default, optional file splitting
 5. **Document security architecture** - Security design decisions

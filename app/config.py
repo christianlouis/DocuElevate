@@ -300,6 +300,42 @@ class Settings(BaseSettings):
         description="Stricter rate limit for authentication endpoints to prevent brute force attacks.",
     )
 
+    # CORS Configuration (see SECURITY_AUDIT.md – Infrastructure Security section)
+    # Disabled by default since most deployments use a reverse proxy (Traefik, Nginx, etc.)
+    # that already adds CORS headers. Enable only if deploying without a reverse proxy or if
+    # the proxy does not handle CORS. See docs/DeploymentGuide.md for rationale.
+    cors_enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable CORS middleware. Set to False if reverse proxy (Traefik, Nginx) handles CORS headers. "
+            "When True, CORSMiddleware is added to the application with the settings below."
+        ),
+    )
+    cors_allowed_origins: Union[List[str], str] = Field(
+        default_factory=lambda: ["*"],
+        description=(
+            "List of allowed CORS origins. Use ['*'] to allow all origins (not recommended with "
+            "cors_allow_credentials=True). Comma-separated string is also accepted via env var, "
+            "e.g. CORS_ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com"
+        ),
+    )
+    cors_allow_credentials: bool = Field(
+        default=False,
+        description=(
+            "Allow credentials (cookies, Authorization headers) in CORS requests. "
+            "Cannot be True when cors_allowed_origins=['*']. "
+            "When True, set cors_allowed_origins to specific origins."
+        ),
+    )
+    cors_allowed_methods: Union[List[str], str] = Field(
+        default_factory=lambda: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+        description="Allowed HTTP methods for CORS requests.",
+    )
+    cors_allowed_headers: Union[List[str], str] = Field(
+        default_factory=lambda: ["*"],
+        description="Allowed request headers for CORS. Use ['*'] to allow all headers.",
+    )
+
     @model_validator(mode="before")
     @classmethod
     def strip_outer_quotes(cls, data: Any) -> Any:
@@ -326,6 +362,18 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             if "," in v:
                 return [url.strip() for url in v.split(",") if url.strip()]
+            elif v.strip():
+                return [v.strip()]
+            return []
+        return v
+
+    @field_validator("cors_allowed_origins", "cors_allowed_methods", "cors_allowed_headers", mode="before")
+    @classmethod
+    def parse_comma_separated_list(cls, v: str | list[str]) -> list[str]:
+        """Parse comma-separated string or list for CORS list settings."""
+        if isinstance(v, str):
+            if "," in v:
+                return [item.strip() for item in v.split(",") if item.strip()]
             elif v.strip():
                 return [v.strip()]
             return []
