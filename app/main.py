@@ -5,6 +5,7 @@ import pathlib
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -136,6 +137,21 @@ app.add_middleware(AuditLogMiddleware, config=settings)
 
 # 3) Session Middleware (for request.session to work)
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+
+# 3a) CORS Middleware - handles cross-origin requests and preflight (OPTIONS) responses.
+#     Disabled by default: set CORS_ENABLED=True only when NOT using a reverse proxy
+#     (Traefik, Nginx) that already injects CORS headers. When enabled, this middleware
+#     runs after the session layer so preflight requests bypass CSRF/auth checks.
+#     Allowed origins, methods, headers, and credentials are all configurable via env vars.
+#     See SECURITY_AUDIT.md – Infrastructure Security section and docs/DeploymentGuide.md.
+if settings.cors_enabled:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_allowed_origins,
+        allow_credentials=settings.cors_allow_credentials,
+        allow_methods=settings.cors_allowed_methods,
+        allow_headers=settings.cors_allowed_headers,
+    )
 
 # 4) Respect the X-Forwarded-* headers from reverse proxy (Traefik, Nginx)
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
