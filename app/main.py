@@ -20,6 +20,7 @@ from app.config import settings
 from app.database import init_db
 from app.middleware.audit_log import AuditLogMiddleware
 from app.middleware.rate_limit import create_limiter, get_rate_limit_exceeded_handler
+from app.middleware.request_size_limit import RequestSizeLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.utils.config_validator import check_all_configs
 from app.utils.notification import init_apprise, notify_shutdown, notify_startup
@@ -40,7 +41,8 @@ if settings.auth_enabled and not settings.session_secret:
         "Generate one with: python -c 'import secrets; print(secrets.token_hex(32))'"
     )
 SESSION_SECRET = (
-    settings.session_secret or "INSECURE_DEFAULT_FOR_DEVELOPMENT_ONLY_DO_NOT_USE_IN_PRODUCTION_MINIMUM_32_CHARS"
+    settings.session_secret
+    or "INSECURE_DEFAULT_FOR_DEVELOPMENT_ONLY_DO_NOT_USE_IN_PRODUCTION_MINIMUM_32_CHARS"
 )
 
 
@@ -79,11 +81,15 @@ async def lifespan(app: FastAPI):
         len(issues) > 0 for provider, issues in config_issues["storage"].items()
     )
     if has_issues:
-        logging.warning("Application started with configuration issues - some features may be unavailable")
+        logging.warning(
+            "Application started with configuration issues - some features may be unavailable"
+        )
     else:
         logging.info("Application started with valid configuration")
 
-    logging.info("Router organization: Using refactored API routers from app/api/ directory")
+    logging.info(
+        "Router organization: Using refactored API routers from app/api/ directory"
+    )
 
     # Initialize notification system
     init_apprise()
@@ -104,7 +110,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="DocuElevate", lifespan=lifespan)
 
 # Initialize rate limiter and attach to app state
-limiter = create_limiter(redis_url=settings.redis_url, enabled=settings.rate_limiting_enabled)
+limiter = create_limiter(
+    redis_url=settings.redis_url, enabled=settings.rate_limiting_enabled
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, get_rate_limit_exceeded_handler())
 
@@ -115,6 +123,12 @@ app.add_exception_handler(RateLimitExceeded, get_rate_limit_exceeded_handler())
 #    Configure via SECURITY_HEADERS_ENABLED environment variable
 #    Set to False if reverse proxy (Traefik, Nginx) handles security headers
 app.add_middleware(SecurityHeadersMiddleware, config=settings)
+
+# 2) Request Size Limit Middleware - enforces body size limits before reading
+#    MAX_REQUEST_BODY_SIZE: limit for non-file requests (default 1 MB)
+#    MAX_UPLOAD_SIZE: limit for multipart/form-data uploads (default 1 GB)
+#    See SECURITY_AUDIT.md – Code Security section
+app.add_middleware(RequestSizeLimitMiddleware, config=settings)
 
 # 2) Audit Logging Middleware - logs all requests with sensitive data masking
 #    Configure via AUDIT_LOGGING_ENABLED environment variable
@@ -128,14 +142,19 @@ app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 # 5) Restrict valid hosts to prevent Host header attacks
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=[settings.external_hostname, "localhost", "127.0.0.1"])
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=[settings.external_hostname, "localhost", "127.0.0.1"],
+)
 
 # Mount the static files directory
 static_dir = pathlib.Path(__file__).parents[1] / "frontend" / "static"
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 else:
-    print(f"WARNING: Static directory not found at {static_dir}. Static files will not be served.")
+    print(
+        f"WARNING: Static directory not found at {static_dir}. Static files will not be served."
+    )
 
 
 # Custom exception handlers that return JSON for API routes and HTML for frontend routes
@@ -154,7 +173,9 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
     # Handle 404 errors with a custom template
     if exc.status_code == 404:
-        return templates.TemplateResponse("404.html", {"request": request}, status_code=status.HTTP_404_NOT_FOUND)
+        return templates.TemplateResponse(
+            "404.html", {"request": request}, status_code=status.HTTP_404_NOT_FOUND
+        )
 
     # For other HTTP errors, we could create specific templates or use a generic one
     # For now, return a simple error page
@@ -174,13 +195,16 @@ async def custom_500_handler(request: Request, exc: Exception):
     # For API routes, return JSON instead of HTML
     if request.url.path.startswith("/api/"):
         return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"detail": "Internal server error"}
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": "Internal server error"},
         )
 
     # Serve the 500 template for non-API routes
     templates = Jinja2Templates(directory=str(static_dir.parent / "templates"))
     return templates.TemplateResponse(
-        "500.html", {"request": request, "exc": exc}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        "500.html",
+        {"request": request, "exc": exc},
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
     )
 
 

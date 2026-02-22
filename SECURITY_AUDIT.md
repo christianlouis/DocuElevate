@@ -274,6 +274,8 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
 - ✅ Unique filenames with UUID to prevent conflicts and overwrites
 - ✅ File upload size limits with configurable maximum (default: 1GB)
 - ✅ Optional file splitting for large PDFs (when max_single_file_size is configured)
+- ✅ Request body size limits via `RequestSizeLimitMiddleware` (non-upload: 1MB default; uploads: governed by MAX_UPLOAD_SIZE)
+- ✅ Streaming file reads in upload endpoint to prevent memory exhaustion
 - ⏳ **TODO:** Implement rate limiting on API endpoints
 - ⏳ **TODO:** Add CSRF protection for state-changing operations
 - ⏳ **TODO:** Add comprehensive input sanitization for all user inputs ([#172](https://github.com/christianlouis/DocuElevate/issues/172))
@@ -302,7 +304,7 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
 1. ~~**Enable CodeQL scanning**~~ ✅ Already implemented - Two CodeQL workflows active
 2. **Implement rate limiting** - Prevent abuse and DoS attacks (consider slowapi or fastapi-limiter)
 3. **Add comprehensive input validation** - Prevent injection attacks ([#172](https://github.com/christianlouis/DocuElevate/issues/172))
-4. **Add request size limits** - Prevent memory exhaustion from large uploads ([#173](https://github.com/christianlouis/DocuElevate/issues/173))
+4. ~~**Add request size limits**~~ ✅ Implemented - `RequestSizeLimitMiddleware` enforces `MAX_REQUEST_BODY_SIZE` (default 1 MB) for non-file requests and `MAX_UPLOAD_SIZE` (default 1 GB) for multipart uploads; file uploads also use streaming reads to bound memory usage ([#173](https://github.com/christianlouis/DocuElevate/issues/173))
 5. **Implement CSRF protection** - Protect state-changing operations
 
 ### Medium Priority

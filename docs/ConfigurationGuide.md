@@ -39,12 +39,14 @@ Control how the `/processall` endpoint handles large batches of files to prevent
 |---------------------------|--------------------------------------------------------------------------------------------------------------|---------------|
 | `MAX_UPLOAD_SIZE`         | Maximum file upload size in bytes. Files exceeding this limit are rejected.                                | `1073741824` (1GB) |
 | `MAX_SINGLE_FILE_SIZE`    | Optional: Maximum size for a single file chunk in bytes. Files exceeding this are split into smaller parts. | `None` (no splitting) |
+| `MAX_REQUEST_BODY_SIZE`   | Maximum request body size in bytes for non-file-upload requests (JSON, form data, etc.). File uploads use `MAX_UPLOAD_SIZE` instead. | `1048576` (1MB) |
 
 **Configuration Examples:**
 
 ```bash
-# Default: Allow up to 1GB uploads, no splitting
+# Default: Allow up to 1GB uploads, no splitting, 1MB JSON/form body limit
 MAX_UPLOAD_SIZE=1073741824
+MAX_REQUEST_BODY_SIZE=1048576
 
 # Conservative: 100MB max, split files over 50MB
 MAX_UPLOAD_SIZE=104857600
