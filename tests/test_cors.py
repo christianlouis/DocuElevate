@@ -10,8 +10,6 @@ These tests validate that:
 - Preflight (OPTIONS) requests are handled correctly when CORS is enabled
 """
 
-from unittest.mock import Mock
-
 import pytest
 
 
