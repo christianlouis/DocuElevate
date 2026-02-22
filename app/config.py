@@ -152,15 +152,18 @@ class Settings(BaseSettings):
 
     # Batch processing settings
     processall_throttle_threshold: int = Field(
-        default=20, description="Number of files above which throttling is applied in /processall endpoint"
+        default=20,
+        description="Number of files above which throttling is applied in /processall endpoint",
     )
     processall_throttle_delay: int = Field(
-        default=3, description="Delay in seconds between each task submission when throttling in /processall"
+        default=3,
+        description="Delay in seconds between each task submission when throttling in /processall",
     )
 
     # Notification settings
     notification_urls: Union[List[str], str] = Field(
-        default_factory=list, description="List of Apprise notification URLs (e.g., discord://, telegram://, etc.)"
+        default_factory=list,
+        description="List of Apprise notification URLs (e.g., discord://, telegram://, etc.)",
     )
     notify_on_task_failure: bool = Field(default=True, description="Send notifications when Celery tasks fail")
     notify_on_credential_failure: bool = Field(
@@ -169,7 +172,8 @@ class Settings(BaseSettings):
     notify_on_startup: bool = Field(default=True, description="Send notifications when application starts")
     notify_on_shutdown: bool = Field(default=False, description="Send notifications when application shuts down")
     notify_on_file_processed: bool = Field(
-        default=True, description="Send notifications when files are successfully processed"
+        default=True,
+        description="Send notifications when files are successfully processed",
     )
 
     # File upload size limits (for security - see SECURITY_AUDIT.md)
@@ -182,6 +186,14 @@ class Settings(BaseSettings):
         description=(
             "Maximum size for a single file chunk in bytes. If set and file exceeds this,"
             " it will be split into smaller chunks for processing. Default: None (no splitting)."
+        ),
+    )
+    max_request_body_size: int = Field(
+        default=1048576,  # 1MB in bytes (1024 * 1024)
+        description=(
+            "Maximum request body size in bytes for non-file-upload requests. Default: 1MB."
+            " Prevents memory exhaustion attacks via oversized JSON/form payloads."
+            " File uploads are governed by MAX_UPLOAD_SIZE instead."
         ),
     )
 
@@ -240,12 +252,14 @@ class Settings(BaseSettings):
     # X-Frame-Options - Prevents clickjacking
     security_header_x_frame_options_enabled: bool = Field(default=True, description="Enable X-Frame-Options header.")
     security_header_x_frame_options_value: str = Field(
-        default="DENY", description="X-Frame-Options header value. Options: DENY, SAMEORIGIN, or ALLOW-FROM uri"
+        default="DENY",
+        description="X-Frame-Options header value. Options: DENY, SAMEORIGIN, or ALLOW-FROM uri",
     )
 
     # X-Content-Type-Options - Prevents MIME sniffing
     security_header_x_content_type_options_enabled: bool = Field(
-        default=True, description="Enable X-Content-Type-Options header (always set to 'nosniff')."
+        default=True,
+        description="Enable X-Content-Type-Options header (always set to 'nosniff').",
     )
 
     # Audit Logging Configuration (see SECURITY_AUDIT.md – Infrastructure Security)

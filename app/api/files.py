@@ -45,7 +45,8 @@ def list_files_api(
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(50, ge=1, le=200, description="Items per page"),
     sort_by: str = Query(
-        "created_at", description="Sort field: id, original_filename, file_size, mime_type, created_at, status"
+        "created_at",
+        description="Sort field: id, original_filename, file_size, mime_type, created_at, status",
     ),
     sort_order: str = Query("desc", description="Sort order: asc or desc"),
     search: Optional[str] = Query(None, description="Search in filename"),
@@ -128,7 +129,13 @@ def list_files_api(
                 "mime_type": f.mime_type,
                 "created_at": f.created_at.isoformat() if f.created_at else None,
                 "processing_status": statuses.get(
-                    f.id, {"status": "pending", "last_step": None, "has_errors": False, "total_steps": 0}
+                    f.id,
+                    {
+                        "status": "pending",
+                        "last_step": None,
+                        "has_errors": False,
+                        "total_steps": 0,
+                    },
                 ),
             }
         )
@@ -138,7 +145,12 @@ def list_files_api(
 
     return {
         "files": result,
-        "pagination": {"page": page, "per_page": per_page, "total_items": total_items, "total_pages": total_pages},
+        "pagination": {
+            "page": page,
+            "per_page": per_page,
+            "total_items": total_items,
+            "total_pages": total_pages,
+        },
     }
 
 
@@ -187,7 +199,7 @@ def get_file_details(request: Request, file_id: int, db: DbSession):
     processing_status = _get_file_processing_status(db, file_id)
 
     # Check if files exist on disk
-    files_on_disk = {"original": os.path.exists(file_record.local_filename) if file_record.local_filename else False}
+    files_on_disk = {"original": (os.path.exists(file_record.local_filename) if file_record.local_filename else False)}
 
     return {
         "file": {
@@ -197,7 +209,7 @@ def get_file_details(request: Request, file_id: int, db: DbSession):
             "local_filename": file_record.local_filename,
             "file_size": file_record.file_size,
             "mime_type": file_record.mime_type,
-            "created_at": file_record.created_at.isoformat() if file_record.created_at else None,
+            "created_at": (file_record.created_at.isoformat() if file_record.created_at else None),
         },
         "processing_status": processing_status,
         "logs": log_list,
@@ -230,7 +242,10 @@ def delete_file_record(request: Request, file_id: int, db: DbSession):
         db.delete(file_record)
         db.commit()
 
-        return {"status": "success", "message": f"File record {file_id} deleted successfully"}
+        return {
+            "status": "success",
+            "message": f"File record {file_id} deleted successfully",
+        }
 
     except HTTPException:
         raise
@@ -318,7 +333,11 @@ def bulk_reprocess_files(request: Request, file_ids: List[int], db: DbSession):
                 task = process_document.delay(file_record.local_filename, file_id=file_record.id)
                 task_ids.append(task.id)
                 processed_files.append(
-                    {"file_id": file_record.id, "filename": file_record.original_filename, "task_id": task.id}
+                    {
+                        "file_id": file_record.id,
+                        "filename": file_record.original_filename,
+                        "task_id": task.id,
+                    }
                 )
 
                 logger.info(
@@ -328,7 +347,13 @@ def bulk_reprocess_files(request: Request, file_ids: List[int], db: DbSession):
 
             except Exception as e:
                 logger.exception(f"Error reprocessing file {file_record.id}: {str(e)}")
-                errors.append({"file_id": file_record.id, "filename": file_record.original_filename, "error": str(e)})
+                errors.append(
+                    {
+                        "file_id": file_record.id,
+                        "filename": file_record.original_filename,
+                        "error": str(e),
+                    }
+                )
 
         return {
             "status": "success" if processed_files else "error",
@@ -366,11 +391,16 @@ def reprocess_single_file(request: Request, file_id: int, db: DbSession):
 
         # Check if local file exists
         if not file_record.local_filename or not os.path.exists(file_record.local_filename):
-            raise HTTPException(status_code=400, detail="Local file not found on disk. Cannot reprocess.")
+            raise HTTPException(
+                status_code=400,
+                detail="Local file not found on disk. Cannot reprocess.",
+            )
 
         # Queue the file for processing, passing file_id to skip duplicate check
         task = process_document.delay(
-            file_record.local_filename, original_filename=file_record.original_filename, file_id=file_record.id
+            file_record.local_filename,
+            original_filename=file_record.original_filename,
+            file_id=file_record.id,
         )
 
         logger.info(
@@ -425,12 +455,16 @@ def reprocess_with_cloud_ocr(request: Request, file_id: int, db: DbSession):
             logger.info(f"Using local file for Cloud OCR reprocessing: {source_file}")
         else:
             raise HTTPException(
-                status_code=400, detail="Neither original nor local file found on disk. Cannot reprocess."
+                status_code=400,
+                detail="Neither original nor local file found on disk. Cannot reprocess.",
             )
 
         # Queue the file for processing with force_cloud_ocr=True
         task = process_document.delay(
-            source_file, original_filename=file_record.original_filename, file_id=file_record.id, force_cloud_ocr=True
+            source_file,
+            original_filename=file_record.original_filename,
+            file_id=file_record.id,
+            force_cloud_ocr=True,
         )
 
         logger.info(
@@ -510,10 +544,14 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
 
         logger.info(f"Found file for process_document retry at: {file_record.local_filename!r}")
         task = process_document.delay(
-            file_record.local_filename, original_filename=file_record.original_filename, file_id=file_id
+            file_record.local_filename,
+            original_filename=file_record.original_filename,
+            file_id=file_id,
         )
     elif step_name == "process_with_azure_document_intelligence":
-        from app.tasks.process_with_azure_document_intelligence import process_with_azure_document_intelligence
+        from app.tasks.process_with_azure_document_intelligence import (
+            process_with_azure_document_intelligence,
+        )
 
         # OCR needs the file in workdir/tmp
         logger.info(
@@ -542,7 +580,10 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
         )
         if not file_record.local_filename:
             logger.error(f"Metadata extraction retry failed for file {file_id}: local_filename is None")
-            raise HTTPException(status_code=400, detail="Local file path is None. Cannot retry metadata extraction.")
+            raise HTTPException(
+                status_code=400,
+                detail="Local file path is None. Cannot retry metadata extraction.",
+            )
 
         exists = os.path.exists(file_record.local_filename)
         logger.info(f"Checking local_filename: {file_record.local_filename!r}, exists={exists}")
@@ -556,7 +597,9 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
         filename = os.path.basename(file_record.local_filename)
         task = extract_metadata_with_gpt.delay(filename, extracted_text, file_id)
     elif step_name == "embed_metadata_into_pdf":
-        from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt as extract_metadata_task
+        from app.tasks.extract_metadata_with_gpt import (
+            extract_metadata_with_gpt as extract_metadata_task,
+        )
 
         # Retrying embed requires re-running metadata extraction first, because
         # embed_metadata_into_pdf needs the actual metadata dict (not empty).
@@ -644,7 +687,8 @@ def retry_subtask(
     file_id: int,
     db: DbSession,
     subtask_name: str = Query(
-        ..., description="Name of the subtask to retry (e.g., 'upload_to_dropbox', 'extract_metadata_with_gpt')"
+        ...,
+        description="Name of the subtask to retry (e.g., 'upload_to_dropbox', 'extract_metadata_with_gpt')",
     ),
 ):
     """
@@ -822,7 +866,10 @@ def get_file_preview(
             if not file_path:
                 raise HTTPException(status_code=404, detail="Processed file not found")
         else:
-            raise HTTPException(status_code=400, detail="Invalid version parameter. Use 'original' or 'processed'")
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid version parameter. Use 'original' or 'processed'",
+            )
 
         # Return the file
         return FileResponse(
@@ -894,7 +941,10 @@ def download_file(
             if not file_path:
                 raise HTTPException(status_code=404, detail="Processed file not found")
         else:
-            raise HTTPException(status_code=400, detail="Invalid version parameter. Use 'original' or 'processed'")
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid version parameter. Use 'original' or 'processed'",
+            )
 
         # Return the file with attachment disposition to trigger download
         return FileResponse(
@@ -916,6 +966,21 @@ async def ui_upload(request: Request, file: UploadFile = File(...)):
     """Endpoint to accept a user-uploaded file and enqueue it for processing."""
     workdir = settings.workdir
 
+    # Early size check: reject before reading the body if Content-Length is known
+    max_size = settings.max_upload_size
+    content_length_header = request.headers.get("content-length")
+    if content_length_header is not None:
+        try:
+            declared_size = int(content_length_header)
+            if declared_size > max_size:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File too large: declared size {declared_size} bytes exceeds maximum "
+                    f"{max_size} bytes. See SECURITY_AUDIT.md for configuration details.",
+                )
+        except ValueError:
+            pass  # Malformed header; proceed and check actual size after reading
+
     # Extract just the filename without any path components to prevent path traversal
     # First, use basename to remove any directory components
     base_filename = os.path.basename(file.filename)
@@ -934,27 +999,37 @@ async def ui_upload(request: Request, file: UploadFile = File(...)):
     # Store both the safe original name and the unique name
     target_path = os.path.join(workdir, target_filename)
 
+    # Read file in chunks to avoid loading the entire body into memory at once,
+    # enforcing the size limit during the read so memory usage stays bounded.
     try:
+        written_size = 0
         with open(target_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
+            chunk_size = 65536  # 64 KB chunks
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                written_size += len(chunk)
+                if written_size > max_size:
+                    # Exceeded limit mid-stream; clean up and reject
+                    f.close()
+                    os.remove(target_path)
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File too large: exceeded {max_size} bytes during upload. "
+                        f"See SECURITY_AUDIT.md for configuration details.",
+                    )
+                f.write(chunk)
+    except HTTPException:
+        raise
     except Exception as e:
+        if os.path.exists(target_path):
+            os.remove(target_path)
         raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
 
     # Log the mapping between original and safe filename
     logger.info(f"Saved uploaded file '{safe_filename}' as '{target_filename}'")
-
-    # Check file size against configured maximum
-    file_size = os.path.getsize(target_path)
-    max_size = settings.max_upload_size
-    if file_size > max_size:
-        # Remove the file if it's too large
-        os.remove(target_path)
-        raise HTTPException(
-            status_code=413,
-            detail=f"File too large: {file_size} bytes (max {max_size} bytes). "
-            f"See SECURITY_AUDIT.md for configuration details.",
-        )
+    file_size = written_size
 
     # Same set of allowed file types as in the IMAP task
     ALLOWED_MIME_TYPES = {
@@ -1044,7 +1119,20 @@ async def ui_upload(request: Request, file: UploadFile = File(...)):
         logger.info(f"Enqueued image for PDF conversion: {target_path}")
     elif mime_type in ALLOWED_MIME_TYPES or any(
         file_ext.endswith(ext)
-        for ext in [".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".odp", ".rtf", ".txt", ".csv"]
+        for ext in [
+            ".doc",
+            ".docx",
+            ".xls",
+            ".xlsx",
+            ".ppt",
+            ".pptx",
+            ".odt",
+            ".ods",
+            ".odp",
+            ".rtf",
+            ".txt",
+            ".csv",
+        ]
     ):
         # If it's an office document, convert to PDF first
         task = convert_to_pdf.delay(target_path, original_filename=safe_filename)

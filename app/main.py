@@ -20,6 +20,7 @@ from app.config import settings
 from app.database import init_db
 from app.middleware.audit_log import AuditLogMiddleware
 from app.middleware.rate_limit import create_limiter, get_rate_limit_exceeded_handler
+from app.middleware.request_size_limit import RequestSizeLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.utils.config_validator import check_all_configs
 from app.utils.notification import init_apprise, notify_shutdown, notify_startup
@@ -116,6 +117,12 @@ app.add_exception_handler(RateLimitExceeded, get_rate_limit_exceeded_handler())
 #    Set to False if reverse proxy (Traefik, Nginx) handles security headers
 app.add_middleware(SecurityHeadersMiddleware, config=settings)
 
+# 2) Request Size Limit Middleware - enforces body size limits before reading
+#    MAX_REQUEST_BODY_SIZE: limit for non-file requests (default 1 MB)
+#    MAX_UPLOAD_SIZE: limit for multipart/form-data uploads (default 1 GB)
+#    See SECURITY_AUDIT.md – Code Security section
+app.add_middleware(RequestSizeLimitMiddleware, config=settings)
+
 # 2) Audit Logging Middleware - logs all requests with sensitive data masking
 #    Configure via AUDIT_LOGGING_ENABLED environment variable
 #    See SECURITY_AUDIT.md – Infrastructure Security section
@@ -128,7 +135,10 @@ app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 # 5) Restrict valid hosts to prevent Host header attacks
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=[settings.external_hostname, "localhost", "127.0.0.1"])
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=[settings.external_hostname, "localhost", "127.0.0.1"],
+)
 
 # Mount the static files directory
 static_dir = pathlib.Path(__file__).parents[1] / "frontend" / "static"
@@ -174,13 +184,16 @@ async def custom_500_handler(request: Request, exc: Exception):
     # For API routes, return JSON instead of HTML
     if request.url.path.startswith("/api/"):
         return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"detail": "Internal server error"}
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": "Internal server error"},
         )
 
     # Serve the 500 template for non-API routes
     templates = Jinja2Templates(directory=str(static_dir.parent / "templates"))
     return templates.TemplateResponse(
-        "500.html", {"request": request, "exc": exc}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        "500.html",
+        {"request": request, "exc": exc},
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
     )
 
 
