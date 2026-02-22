@@ -187,6 +187,60 @@ async def delete_setting(key: str, request: Request, db: DbSession, admin: Admin
         )
 
 
+@router.get("/credentials")
+async def list_credentials(request: Request, db: DbSession, admin: AdminUser):
+    """
+    List all sensitive credential settings with their configured/unconfigured status.
+
+    Returns a credential audit report indicating which credentials are set and whether
+    each value originates from the database or an environment variable.
+    This endpoint is intended to support credential rotation workflows.
+    Admin only.
+    """
+    try:
+        db_settings = get_all_settings_from_db(db)
+        credentials = []
+
+        for key, meta in SETTING_METADATA.items():
+            if not meta.get("sensitive", False):
+                continue
+
+            env_value = getattr(settings, key, None)
+            in_db = key in db_settings and db_settings[key]
+
+            if in_db:
+                source = "db"
+                configured = True
+            elif env_value:
+                source = "env"
+                configured = True
+            else:
+                source = None
+                configured = False
+
+            credentials.append(
+                {
+                    "key": key,
+                    "category": meta.get("category", "Other"),
+                    "description": meta.get("description", ""),
+                    "configured": configured,
+                    "source": source,
+                    "restart_required": meta.get("restart_required", False),
+                }
+            )
+
+        configured_count = sum(1 for c in credentials if c["configured"])
+        return {
+            "credentials": credentials,
+            "total": len(credentials),
+            "configured_count": configured_count,
+            "unconfigured_count": len(credentials) - configured_count,
+        }
+    except Exception as e:
+        logger.error(f"Error retrieving credential list: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve credentials")
+
+
 @router.post("/bulk-update")
 async def bulk_update_settings(updates: list[SettingUpdate], request: Request, db: DbSession, admin: AdminUser):
     """

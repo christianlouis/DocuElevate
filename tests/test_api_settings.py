@@ -203,3 +203,177 @@ class TestSettingModels:
         assert "test_key" in response.settings
         assert "General" in response.categories
         assert "test_key" in response.db_settings
+
+
+@pytest.mark.unit
+class TestListCredentials:
+    """Tests for the list_credentials function (GET /api/settings/credentials)."""
+
+    @patch("app.api.settings.get_all_settings_from_db")
+    def test_list_credentials_returns_sensitive_keys_only(self, mock_db_settings):
+        """Test that list_credentials only includes keys marked sensitive in SETTING_METADATA."""
+        import asyncio
+
+        from app.api.settings import list_credentials
+        from app.utils.settings_service import SETTING_METADATA
+
+        mock_db_settings.return_value = {}
+        mock_request = MagicMock()
+        mock_db = MagicMock()
+        mock_admin = {"is_admin": True}
+
+        with patch("app.api.settings.settings") as mock_settings:
+            for key in SETTING_METADATA:
+                setattr(mock_settings, key, None)
+
+            result = asyncio.get_event_loop().run_until_complete(
+                list_credentials(mock_request, mock_db, mock_admin)
+            )
+
+        returned_keys = {c["key"] for c in result["credentials"]}
+        sensitive_keys = {k for k, v in SETTING_METADATA.items() if v.get("sensitive")}
+        assert returned_keys == sensitive_keys
+
+    @patch("app.api.settings.get_all_settings_from_db")
+    def test_list_credentials_source_db_when_in_database(self, mock_db_settings):
+        """Test that credentials stored in the database report source='db'."""
+        import asyncio
+
+        from app.api.settings import list_credentials
+
+        mock_db_settings.return_value = {"openai_api_key": "sk-db-key"}
+        mock_request = MagicMock()
+        mock_db = MagicMock()
+        mock_admin = {"is_admin": True}
+
+        with patch("app.api.settings.settings") as mock_settings:
+            mock_settings.openai_api_key = "sk-env-key"
+
+            result = asyncio.get_event_loop().run_until_complete(
+                list_credentials(mock_request, mock_db, mock_admin)
+            )
+
+        openai_entry = next(c for c in result["credentials"] if c["key"] == "openai_api_key")
+        assert openai_entry["source"] == "db"
+        assert openai_entry["configured"] is True
+
+    @patch("app.api.settings.get_all_settings_from_db")
+    def test_list_credentials_source_env_when_only_in_env(self, mock_db_settings):
+        """Test that credentials only in env report source='env'."""
+        import asyncio
+
+        from app.api.settings import list_credentials
+
+        mock_db_settings.return_value = {}
+        mock_request = MagicMock()
+        mock_db = MagicMock()
+        mock_admin = {"is_admin": True}
+
+        with patch("app.api.settings.settings") as mock_settings:
+            mock_settings.openai_api_key = "sk-env-key"
+
+            result = asyncio.get_event_loop().run_until_complete(
+                list_credentials(mock_request, mock_db, mock_admin)
+            )
+
+        openai_entry = next(c for c in result["credentials"] if c["key"] == "openai_api_key")
+        assert openai_entry["source"] == "env"
+        assert openai_entry["configured"] is True
+
+    @patch("app.api.settings.get_all_settings_from_db")
+    def test_list_credentials_unconfigured_when_no_value(self, mock_db_settings):
+        """Test that credentials with no value are marked as unconfigured."""
+        import asyncio
+
+        from app.api.settings import list_credentials
+
+        mock_db_settings.return_value = {}
+        mock_request = MagicMock()
+        mock_db = MagicMock()
+        mock_admin = {"is_admin": True}
+
+        with patch("app.api.settings.settings") as mock_settings:
+            mock_settings.openai_api_key = None
+
+            result = asyncio.get_event_loop().run_until_complete(
+                list_credentials(mock_request, mock_db, mock_admin)
+            )
+
+        openai_entry = next(c for c in result["credentials"] if c["key"] == "openai_api_key")
+        assert openai_entry["configured"] is False
+        assert openai_entry["source"] is None
+
+    @patch("app.api.settings.get_all_settings_from_db")
+    def test_list_credentials_counts_are_accurate(self, mock_db_settings):
+        """Test that configured_count and unconfigured_count are correct."""
+        import asyncio
+
+        from app.api.settings import list_credentials
+
+        mock_db_settings.return_value = {"openai_api_key": "sk-db-key"}
+        mock_request = MagicMock()
+        mock_db = MagicMock()
+        mock_admin = {"is_admin": True}
+
+        with patch("app.api.settings.settings") as mock_settings:
+            # Most keys will be None, one will be set via db_settings mock
+            mock_settings.openai_api_key = "sk-key"
+
+            result = asyncio.get_event_loop().run_until_complete(
+                list_credentials(mock_request, mock_db, mock_admin)
+            )
+
+        assert result["total"] == len(result["credentials"])
+        assert result["configured_count"] + result["unconfigured_count"] == result["total"]
+
+    @patch("app.api.settings.get_all_settings_from_db")
+    def test_list_credentials_raises_500_on_exception(self, mock_db_settings):
+        """Test that list_credentials raises HTTP 500 on unexpected errors."""
+        import asyncio
+
+        from fastapi import HTTPException
+
+        from app.api.settings import list_credentials
+
+        mock_db_settings.side_effect = Exception("DB failure")
+        mock_request = MagicMock()
+        mock_db = MagicMock()
+        mock_admin = {"is_admin": True}
+
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.get_event_loop().run_until_complete(
+                list_credentials(mock_request, mock_db, mock_admin)
+            )
+        assert exc_info.value.status_code == 500
+
+    def test_list_credentials_endpoint_requires_admin(self, client):
+        """Test that GET /api/settings/credentials requires admin access."""
+        response = client.get("/api/settings/credentials")
+        assert response.status_code in [302, 401, 403]
+
+    @patch("app.api.settings.get_all_settings_from_db")
+    def test_list_credentials_response_has_required_fields(self, mock_db_settings):
+        """Test that each credential entry has the required fields."""
+        import asyncio
+
+        from app.api.settings import list_credentials
+
+        mock_db_settings.return_value = {}
+        mock_request = MagicMock()
+        mock_db = MagicMock()
+        mock_admin = {"is_admin": True}
+
+        with patch("app.api.settings.settings") as mock_settings:
+            mock_settings.openai_api_key = None
+
+            result = asyncio.get_event_loop().run_until_complete(
+                list_credentials(mock_request, mock_db, mock_admin)
+            )
+
+        for cred in result["credentials"]:
+            assert "key" in cred
+            assert "category" in cred
+            assert "description" in cred
+            assert "configured" in cred
+            assert "source" in cred
+            assert "restart_required" in cred

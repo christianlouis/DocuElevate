@@ -289,7 +289,14 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
   - Applied to `app/api/files.py` (file list sort + search query parameters)
   - Applied to `app/api/logs.py` (task_id query filter and path parameter)
   - 30 unit tests added in `tests/test_input_validation.py`
-- ⏳ **TODO:** Implement proper API key rotation mechanisms ([#168](https://github.com/christianlouis/DocuElevate/issues/168))
+- ✅ **COMPLETED:** Implement proper API key rotation mechanisms ([#168](https://github.com/christianlouis/DocuElevate/issues/168))
+  - `docs/CredentialRotationGuide.md` — comprehensive rotation guide covering:
+    - Recommended rotation schedule for all credential types
+    - Per-credential rotation procedures for OpenAI, Azure, AWS S3, Dropbox, Google Drive, OneDrive, Authentik, Paperless-ngx, SMTP, IMAP, Nextcloud, FTP, SFTP, WebDAV, and admin credentials
+    - Onboarding instructions (creating service-specific credentials with minimal permissions)
+    - Offboarding instructions (revocation, rotation of shared credentials, audit log review)
+    - Emergency revocation procedure
+  - `GET /api/settings/credentials` — admin-only endpoint listing all sensitive credential settings with configured/unconfigured status and source (`env` vs `db`), enabling credential rotation audits without exposing secret values
 
 ### Infrastructure Security
 - ✅ TrustedHostMiddleware configured (restricts valid hosts)
@@ -328,7 +335,7 @@ ftp = ftplib.FTP()  # nosec B321 - Plaintext FTP intentional when configured
 1. **Security training documentation** - For contributors
 2. **Penetration testing** - Professional security assessment
 3. **Bug bounty program** - Community security contributions
-4. **API key rotation** - Automated credential rotation ([#168](https://github.com/christianlouis/DocuElevate/issues/168))
+4. ~~**API key rotation**~~ ✅ Implemented — `docs/CredentialRotationGuide.md` documents rotation procedures, onboarding/offboarding, and emergency revocation; `GET /api/settings/credentials` provides a credential audit endpoint ([#168](https://github.com/christianlouis/DocuElevate/issues/168))
 
 ## Security Contact
 
