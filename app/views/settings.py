@@ -181,6 +181,4 @@ async def credentials_page(request: Request, db: Session = Depends(get_db)):
         )
     except Exception as e:
         logger.error(f"Error loading credentials page: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load credentials page"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load credentials page")

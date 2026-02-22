@@ -226,9 +226,7 @@ class TestListCredentials:
             for key in SETTING_METADATA:
                 setattr(mock_settings, key, None)
 
-            result = asyncio.get_event_loop().run_until_complete(
-                list_credentials(mock_request, mock_db, mock_admin)
-            )
+            result = asyncio.get_event_loop().run_until_complete(list_credentials(mock_request, mock_db, mock_admin))
 
         returned_keys = {c["key"] for c in result["credentials"]}
         sensitive_keys = {k for k, v in SETTING_METADATA.items() if v.get("sensitive")}
@@ -249,9 +247,7 @@ class TestListCredentials:
         with patch("app.api.settings.settings") as mock_settings:
             mock_settings.openai_api_key = "sk-env-key"
 
-            result = asyncio.get_event_loop().run_until_complete(
-                list_credentials(mock_request, mock_db, mock_admin)
-            )
+            result = asyncio.get_event_loop().run_until_complete(list_credentials(mock_request, mock_db, mock_admin))
 
         openai_entry = next(c for c in result["credentials"] if c["key"] == "openai_api_key")
         assert openai_entry["source"] == "db"
@@ -272,9 +268,7 @@ class TestListCredentials:
         with patch("app.api.settings.settings") as mock_settings:
             mock_settings.openai_api_key = "sk-env-key"
 
-            result = asyncio.get_event_loop().run_until_complete(
-                list_credentials(mock_request, mock_db, mock_admin)
-            )
+            result = asyncio.get_event_loop().run_until_complete(list_credentials(mock_request, mock_db, mock_admin))
 
         openai_entry = next(c for c in result["credentials"] if c["key"] == "openai_api_key")
         assert openai_entry["source"] == "env"
@@ -295,9 +289,7 @@ class TestListCredentials:
         with patch("app.api.settings.settings") as mock_settings:
             mock_settings.openai_api_key = None
 
-            result = asyncio.get_event_loop().run_until_complete(
-                list_credentials(mock_request, mock_db, mock_admin)
-            )
+            result = asyncio.get_event_loop().run_until_complete(list_credentials(mock_request, mock_db, mock_admin))
 
         openai_entry = next(c for c in result["credentials"] if c["key"] == "openai_api_key")
         assert openai_entry["configured"] is False
@@ -319,9 +311,7 @@ class TestListCredentials:
             # Most keys will be None, one will be set via db_settings mock
             mock_settings.openai_api_key = "sk-key"
 
-            result = asyncio.get_event_loop().run_until_complete(
-                list_credentials(mock_request, mock_db, mock_admin)
-            )
+            result = asyncio.get_event_loop().run_until_complete(list_credentials(mock_request, mock_db, mock_admin))
 
         assert result["total"] == len(result["credentials"])
         assert result["configured_count"] + result["unconfigured_count"] == result["total"]
@@ -341,9 +331,7 @@ class TestListCredentials:
         mock_admin = {"is_admin": True}
 
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.get_event_loop().run_until_complete(
-                list_credentials(mock_request, mock_db, mock_admin)
-            )
+            asyncio.get_event_loop().run_until_complete(list_credentials(mock_request, mock_db, mock_admin))
         assert exc_info.value.status_code == 500
 
     def test_list_credentials_endpoint_requires_admin(self, client):
@@ -366,9 +354,7 @@ class TestListCredentials:
         with patch("app.api.settings.settings") as mock_settings:
             mock_settings.openai_api_key = None
 
-            result = asyncio.get_event_loop().run_until_complete(
-                list_credentials(mock_request, mock_db, mock_admin)
-            )
+            result = asyncio.get_event_loop().run_until_complete(list_credentials(mock_request, mock_db, mock_admin))
 
         for cred in result["credentials"]:
             assert "key" in cred
