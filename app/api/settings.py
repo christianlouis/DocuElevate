@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.utils.input_validation import validate_setting_key
+from app.utils.input_validation import validate_setting_key, validate_setting_key_format
 from app.utils.settings_service import (
     SETTING_METADATA,
     delete_setting_from_db,
@@ -99,7 +99,7 @@ async def get_setting(key: str, request: Request, db: DbSession, admin: AdminUse
     Get a specific setting by key.
     Admin only.
     """
-    validate_setting_key(key)
+    validate_setting_key_format(key)
     try:
         # Get current value
         value = getattr(settings, key, None)

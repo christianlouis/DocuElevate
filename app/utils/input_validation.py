@@ -126,6 +126,31 @@ def validate_task_id(task_id: str) -> str:
     return task_id
 
 
+def validate_setting_key_format(key: str) -> str:
+    """
+    Validate that *key* has a valid setting key format (alphanumeric + underscore,
+    starting with a letter).  Does **not** check whether the key exists in the
+    ``SETTING_METADATA`` registry — use this for read-only lookups where an
+    unknown key should return ``None`` rather than a 404 error.
+
+    Args:
+        key: The setting key supplied by the client.
+
+    Returns:
+        The validated setting key (unchanged).
+
+    Raises:
+        HTTPException 400: If the key contains invalid characters.
+    """
+    if not _SETTING_KEY_RE.match(key):
+        logger.warning(f"Invalid setting key format rejected: {key!r}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid setting key format",
+        )
+    return key
+
+
 def validate_setting_key(key: str) -> str:
     """
     Validate that *key* is a syntactically valid setting key.
