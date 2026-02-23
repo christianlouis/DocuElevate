@@ -174,7 +174,8 @@ def test_create_document(db_session):
 ```
 
 ## Test Coverage Goals
-- Aim for **80% code coverage** for all new code
+- Achieve **100% test coverage** for all new code — use `# pragma: no cover` only for genuinely unreachable or platform-specific branches, with an inline comment explaining why
+- Enforce the threshold: `pytest --cov=app --cov-fail-under=100`
 - Focus on critical paths and error handling
 - Test both success and failure scenarios
 - Don't test third-party library code

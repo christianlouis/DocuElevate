@@ -7,16 +7,18 @@ applyTo: "app/**/*.py"
 These instructions apply to all Python code in the `app/` directory.
 
 ## Code Style
-- Use **Ruff** for linting and formatting with 120 character line length
+- Use **Ruff** for all formatting, linting, import sorting, and security scanning — `ruff format app/ tests/ && ruff check app/ tests/ --fix`
+- Line length: 120 characters (configured in `pyproject.toml` `[tool.ruff]`)
 - All functions must have type hints for parameters and return values
-- Use `from typing import Optional, Dict, List, Any, Union` as needed
+- Use modern Python 3.10+ type hints: `list[str]`, `dict[str, Any]`, `str | None`
+- Only import from `typing` for `Any`, `Callable`, `TypeVar`, `Protocol` (not `Dict`, `List`, `Optional`, `Union`)
 
-## Import Order (Ruff enforces isort-compatible ordering)
+## Import Order (enforced by Ruff `I` rules)
 ```python
 # Standard library imports
 import os
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Any  # Only for Any, Callable, TypeVar, Protocol
 
 # Third-party imports
 from fastapi import APIRouter, Depends, HTTPException
@@ -33,7 +35,7 @@ from app.models import Document, User
 def process_document(
     file_path: Path,
     user_id: int,
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 ) -> DocumentMetadata:
     """
     Process a document and extract metadata.
@@ -127,7 +129,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 @shared_task(bind=True, max_retries=3)
-def process_ocr(self, document_id: int) -> Dict[str, Any]:
+def process_ocr(self, document_id: int) -> dict[str, Any]:
     """Process OCR for a document."""
     try:
         # Processing logic
@@ -153,10 +155,11 @@ class Settings(BaseSettings):
         env_file = ".env"
 ```
 
-## Security
-- Never commit secrets
-- Validate all user inputs
-- Use parameterized queries
-- Sanitize file paths
-- Check file permissions
-- Review SECURITY_AUDIT.md for guidelines
+## Security (First and Foremost)
+- **Security first**: treat every change as a potential attack surface — review `SECURITY_AUDIT.md` before making any security-related change
+- Never commit secrets, tokens, or credentials
+- Validate and sanitize all user inputs
+- Use parameterized queries — never raw SQL with user data
+- Sanitize file paths; check file permissions before access
+- Security linting is built into Ruff via `S` rules — fix all `S`-prefixed findings before committing
+- Run `safety check` before submitting any PR to catch dependency CVEs

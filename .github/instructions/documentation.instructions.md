@@ -230,12 +230,15 @@ For API details, refer to the [API Documentation](./API.md).
 ```
 
 ## Updating Documentation
+Documentation updates are **mandatory** — every PR that changes code must include matching documentation updates in the same PR. There are no exceptions.
+
 When making code changes:
-1. Update relevant documentation in the same PR
-2. Check for outdated information
+1. **Update relevant documentation** in the same PR — never defer docs to a follow-up
+2. Check for outdated information in existing docs
 3. Add new sections for new features
 4. Update examples if behavior changes
 5. Review related documentation for consistency
+6. Update `docs/ConfigurationGuide.md` and `.env.demo` for any new or changed configuration options
 
 ## Screenshots and Diagrams
 - Use clear, high-quality images
