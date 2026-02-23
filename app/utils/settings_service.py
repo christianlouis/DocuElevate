@@ -1287,3 +1287,38 @@ def rollback_setting(
         )
         db.rollback()
         return False
+
+
+def get_settings_for_export(db: Session, source: str = "db") -> Dict[str, str]:
+    """
+    Collect settings for export as environment variables.
+
+    Args:
+        db: Database session
+        source: ``"db"`` to export only database-persisted settings (default);
+                ``"effective"`` to export the full current runtime configuration
+                (DB overrides ENV overrides application defaults) for every key
+                listed in SETTING_METADATA.
+
+    Returns:
+        Ordered dict mapping uppercase ENV variable names to their string values.
+        Sensitive values are included (the caller is responsible for access control).
+    """
+    if source == "effective":
+        from app.config import settings as app_settings
+
+        db_settings = get_all_settings_from_db(db)
+        result = {}
+        for key in sorted(SETTING_METADATA.keys()):
+            # DB wins, then live settings object (ENV/default)
+            if key in db_settings and db_settings[key] is not None:
+                value = db_settings[key]
+            else:
+                value = getattr(app_settings, key, None)
+            if value is not None:
+                result[key.upper()] = str(value)
+        return result
+    else:
+        # DB only
+        db_settings = get_all_settings_from_db(db)
+        return {k.upper(): v for k, v in sorted(db_settings.items()) if v is not None}

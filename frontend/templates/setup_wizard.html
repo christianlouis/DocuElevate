@@ -134,11 +134,19 @@
               type="{% if setting.sensitive %}password{% else %}text{% endif %}"
               id="{{ setting.key }}"
               name="{{ setting.key }}"
-              value="{{ setting.default if setting.default else '' }}"
+              value="{{ setting.current_value if setting.current_value else '' }}"
               class="wizard-input w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               placeholder="{{ setting.description }}"
               {% if setting.default is none or setting.key in ['admin_password', 'openai_api_key', 'azure_ai_key', 'azure_endpoint'] %}required{% endif %}
             />
+            {% endif %}
+
+            {% if setting.value_source == 'db' %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 mt-1">DB</span>
+            {% elif setting.value_source == 'env' %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mt-1">ENV</span>
+            {% elif setting.value_source == 'default' %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 mt-1">DEFAULT</span>
             {% endif %}
 
             {% if setting.key == 'admin_password' %}
@@ -159,7 +167,12 @@
         <!-- Navigation Buttons -->
         <div class="flex justify-between items-center mt-8 pt-6 border-t border-gray-200">
           <div>
-            {% if current_step == 1 %}
+            {% if setup_skipped %}
+            <span class="text-sm text-amber-600 font-medium">
+              <i class="fas fa-exclamation-triangle"></i>
+              Setup was previously skipped.
+            </span>
+            {% elif current_step == 1 %}
             <a href="/setup/skip" class="text-sm text-gray-600 hover:text-gray-900">
               <i class="fas fa-forward"></i>
               Skip setup (advanced users)
@@ -200,6 +213,12 @@
       <p class="text-xs text-gray-500 mt-2">
         Fields marked with <span class="text-red-600">*</span> are required.
       </p>
+      {% if setup_skipped %}
+      <p class="text-xs text-amber-600 mt-2">
+        <i class="fas fa-info-circle"></i>
+        You previously skipped the setup wizard. <a href="/setup/undo-skip" class="underline hover:text-amber-800">Click here to re-run it.</a>
+      </p>
+      {% endif %}
     </div>
 
   </div>
