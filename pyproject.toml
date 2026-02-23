@@ -49,7 +49,6 @@ match = "main"
 prerelease = false
 
 [tool.semantic_release.changelog]
-changelog_file = "CHANGELOG.md"
 mode = "update"
 exclude_commit_patterns = [
     "^chore\\(release\\):",

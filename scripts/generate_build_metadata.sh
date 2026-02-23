@@ -55,29 +55,17 @@ else
     GIT_BRANCH="unknown"
 fi
 
-# Read VERSION file
-if [ -f "VERSION" ]; then
+# Update VERSION file: prefer PSR's NEW_VERSION env var, then existing file
+if [ -n "${NEW_VERSION}" ]; then
+    echo "${NEW_VERSION}" > VERSION
+    VERSION="${NEW_VERSION}"
+    echo "✓ VERSION (from NEW_VERSION env): ${VERSION}"
+elif [ -f "VERSION" ]; then
     VERSION=$(cat VERSION | tr -d '\n')
     echo "✓ VERSION (from file): ${VERSION}"
 else
-    echo "⚠ Warning: VERSION file not found"
+    echo "⚠ Warning: VERSION file not found and NEW_VERSION not set"
     VERSION="unknown"
-fi
-
-# Try to derive version from the latest git tag (semantic-release creates vX.Y.Z tags)
-if git rev-parse --git-dir > /dev/null 2>&1; then
-    LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-    if [ -n "${LATEST_TAG}" ]; then
-        # Strip the 'v' prefix from the tag (e.g., v0.9.1 -> 0.9.1)
-        TAG_VERSION="${LATEST_TAG#v}"
-        if [ "${TAG_VERSION}" != "${VERSION}" ]; then
-            echo "⚠ VERSION file (${VERSION}) is out of sync with latest tag (${TAG_VERSION})"
-            echo "  Updating VERSION file to ${TAG_VERSION}"
-            echo "${TAG_VERSION}" > VERSION
-            VERSION="${TAG_VERSION}"
-            echo "✓ VERSION (updated from tag): ${VERSION}"
-        fi
-    fi
 fi
 
 # Generate RUNTIME_INFO with combined metadata
