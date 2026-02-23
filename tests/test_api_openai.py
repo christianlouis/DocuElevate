@@ -44,6 +44,7 @@ class TestOpenAIConnectionErrors:
     def test_openai_api_key_validation_success(self, mock_settings, mock_openai_class, client):
         """Test OpenAI API key validation success."""
         mock_settings.openai_api_key = "sk-test-key"
+        mock_settings.openai_base_url = "https://api.openai.com/v1"
 
         mock_client = MagicMock()
         mock_models = MagicMock()
@@ -57,6 +58,35 @@ class TestOpenAIConnectionErrors:
         assert data["status"] == "success"
         assert "valid" in data["message"].lower()
         assert data["models_available"] == 2
+
+    @patch("openai.OpenAI")
+    @patch("app.api.openai.settings")
+    def test_openai_uses_configured_base_url(self, mock_settings, mock_openai_class, client):
+        """Test that the client is created with the configured base_url from settings.
+
+        Regression test: previously the endpoint created openai.OpenAI without
+        base_url, causing the OpenAI library to read the raw OPENAI_BASE_URL
+        env var which may contain literal quote characters (e.g. in Kubernetes).
+        Those quotes are URL-encoded by httpx to %22 and produce an
+        UnsupportedProtocol error.
+        """
+        mock_settings.openai_api_key = "sk-test-key"
+        mock_settings.openai_base_url = "http://litellm.example.com/v1"
+
+        mock_client = MagicMock()
+        mock_models = MagicMock()
+        mock_models.data = []
+        mock_client.models.list.return_value = mock_models
+        mock_openai_class.return_value = mock_client
+
+        client.get("/api/openai/test")
+
+        # The OpenAI client must be constructed with the configured base_url so
+        # that Settings' strip_outer_quotes sanitisation takes effect.
+        mock_openai_class.assert_called_once_with(
+            api_key="sk-test-key",
+            base_url="http://litellm.example.com/v1",
+        )
 
     @patch("openai.OpenAI")
     @patch("app.api.openai.settings")
