@@ -102,7 +102,6 @@ class AzureOCRProvider(OCRProvider):
     name = "azure"
 
     def process(self, file_path: str) -> OCRResult:
-        import azure.core.exceptions
         from azure.ai.documentintelligence import DocumentIntelligenceClient
         from azure.ai.documentintelligence.models import AnalyzeOutputOption
         from azure.core.credentials import AzureKeyCredential
@@ -390,7 +389,7 @@ class AWSTextractOCRProvider(OCRProvider):
 
         if not aws_access_key_id or not aws_secret_access_key:
             raise ValueError(
-                "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be set " "when using the AWS Textract OCR provider."
+                "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be set when using the AWS Textract OCR provider."
             )
 
         logger.info(f"[AWSTextract] Processing {os.path.basename(file_path)} (region={region})")

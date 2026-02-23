@@ -14,9 +14,6 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import FileRecord
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
-from app.tasks.process_with_azure_document_intelligence import (
-    process_with_azure_document_intelligence,
-)
 from app.tasks.process_with_ocr import process_with_ocr
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils import get_unique_filepath_with_counter, hash_file, log_task_progress
