@@ -147,6 +147,36 @@ DocuElevate uses [semantic-release](https://github.com/semantic-release/semantic
 
 - **Manual Version Changes**: Do NOT manually edit `VERSION` or `CHANGELOG.md` - these are managed by semantic-release
 
+## Documentation-First Development
+
+Documentation is a first-class citizen in DocuElevate. Every contribution **must** include relevant documentation updates. This is not optional.
+
+### What Requires Documentation
+
+| Change Type | Required Documentation |
+|-------------|----------------------|
+| New feature | User Guide + API docs (if API change) + Configuration Guide (if new config) |
+| Bug fix | Troubleshooting guide (if user-facing) |
+| New config option | ConfigurationGuide.md + `.env.demo` example |
+| New API endpoint | docs/API.md |
+| Deployment change | DeploymentGuide.md |
+| Security change | SECURITY_AUDIT.md |
+| Breaking change | CHANGELOG.md note + migration instructions |
+
+### Documentation Standards
+
+- Keep `docs/` files in sync with code changes in the same PR
+- Update `TODO.md` when completing or adding tasks
+- `CHANGELOG.md` is generated automatically—**do not add regular release entries manually**. Retroactive corrections to historical entries are the only acceptable exception.
+- Screenshots in README and docs should reflect current UI; update them when the UI changes significantly
+- Use present tense and second person ("you") in user-facing docs
+
+### Automated Changelog
+
+`CHANGELOG.md` is generated automatically by [python-semantic-release](https://github.com/python-semantic-release/python-semantic-release) on every merge to `main`. **Do not edit it manually.** Your commit messages (following Conventional Commits) drive the changelog content.
+
+---
+
 ## Pull Request Checklist
 
 Before submitting a pull request:
@@ -155,7 +185,7 @@ Before submitting a pull request:
 - [ ] Commit messages follow conventional commit format
 - [ ] Pre-commit hooks installed and passing (see below)
 - [ ] Tests added/updated for new functionality
-- [ ] Documentation updated if user-facing changes
+- [ ] **Documentation updated** for any user-facing, API, or configuration changes
 - [ ] No manual edits to `VERSION` or `CHANGELOG.md`
 - [ ] All tests pass locally
 - [ ] Security scan passes (if applicable)

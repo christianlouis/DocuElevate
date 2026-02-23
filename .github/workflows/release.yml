@@ -49,6 +49,21 @@ jobs:
           semantic-release version
           semantic-release publish
 
+      - name: Update changelog if no new version was released
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --name-only HEAD~1 2>/dev/null | grep -q CHANGELOG.md; then
+            echo "CHANGELOG.md was already updated by semantic-release version"
+          else
+            semantic-release changelog
+            if ! git diff --quiet CHANGELOG.md; then
+              git add CHANGELOG.md
+              git commit -m "docs(changelog): update changelog [skip ci]"
+              git push
+            fi
+          fi
+
       - name: Update build metadata files if changed
         run: |
           for f in VERSION BUILD_DATE GIT_SHA RUNTIME_INFO; do

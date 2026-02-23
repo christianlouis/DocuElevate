@@ -65,6 +65,8 @@ The project includes a **UI** for uploading and managing files, and an API docum
   <p><em>Files view with processed documents and metadata</em></p>
 </div>
 
+> **Note:** Screenshots may not reflect the very latest UI. For the most current look, visit [docuelevate.org](https://www.docuelevate.org).
+
 ## Workflow Process
 
 DocuElevate follows a streamlined document processing workflow:
@@ -140,11 +142,11 @@ For detailed installation and deployment instructions, please refer to the [Depl
 
 ```bash
 # Clone the repository
-git clone <repository_url>
-cd document-processor
+git clone https://github.com/christianlouis/DocuElevate.git
+cd DocuElevate
 
 # Configure environment variables
-cp .env.example .env
+cp .env.demo .env
 # Edit .env with your settings
 
 # Run with Docker Compose

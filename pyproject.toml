@@ -49,7 +49,8 @@ match = "main"
 prerelease = false
 
 [tool.semantic_release.changelog]
-template_dir = "templates"
+changelog_file = "CHANGELOG.md"
+mode = "update"
 exclude_commit_patterns = [
     "^chore\\(release\\):",
     "^Merge",
@@ -58,6 +59,7 @@ exclude_commit_patterns = [
 
 [tool.semantic_release.changelog.default_templates]
 changelog_file = "CHANGELOG.md"
+output_format = "md"
 
 [tool.semantic_release.changelog.environment]
 block_start_string = "{%"
@@ -71,7 +73,7 @@ lstrip_blocks = false
 newline_sequence = "\n"
 keep_trailing_newline = false
 extensions = []
-autoescape = true
+autoescape = false
 
 [tool.semantic_release.commit_parser_options]
 allowed_tags = [
