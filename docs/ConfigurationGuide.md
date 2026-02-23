@@ -302,11 +302,154 @@ SECURITY_HEADER_CSP_VALUE="default-src 'self'; script-src 'self' https://trusted
 - [Deployment Guide - Security Headers](DeploymentGuide.md#security-headers) for Traefik/Nginx examples
 - [SECURITY_AUDIT.md](../SECURITY_AUDIT.md#infrastructure-security) for security rationale
 
-### OpenAI & Azure Document Intelligence
+### AI Provider & Model Selection
+
+DocuElevate supports multiple AI providers for metadata extraction and OCR text refinement. Select the provider via `AI_PROVIDER` and configure the matching credentials below.
+
+| **Variable**      | **Description**                                                       | **Default**        |
+|-------------------|-----------------------------------------------------------------------|--------------------|
+| `AI_PROVIDER`     | Active AI provider. See supported values below.                       | `openai`           |
+| `AI_MODEL`        | Model name for the selected provider. Falls back to `OPENAI_MODEL` when not set. | *(unset)* |
+| `OPENAI_MODEL`    | Default model name (used when `AI_MODEL` is not set).                 | `gpt-4o-mini`      |
+
+**Supported `AI_PROVIDER` values**: `openai`, `azure`, `anthropic`, `gemini`, `ollama`, `openrouter`, `portkey`, `litellm`
+
+---
+
+#### OpenAI (default)
+
+| **Variable**          | **Description**                                  | **Default**                      |
+|-----------------------|--------------------------------------------------|----------------------------------|
+| `OPENAI_API_KEY`      | OpenAI API key.                                  | *(required)*                     |
+| `OPENAI_BASE_URL`     | API base URL. Change for compatible proxies.     | `https://api.openai.com/v1`      |
+
+```bash
+AI_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+```
+
+#### Azure OpenAI
+
+| **Variable**                  | **Description**                              | **Default**    |
+|-------------------------------|----------------------------------------------|----------------|
+| `OPENAI_API_KEY`              | Azure OpenAI API key.                        | *(required)*   |
+| `OPENAI_BASE_URL`             | Azure resource endpoint URL.                 | *(required)*   |
+| `AZURE_OPENAI_API_VERSION`    | Azure OpenAI API version string.             | `2024-02-01`   |
+
+```bash
+AI_PROVIDER=azure
+OPENAI_API_KEY=<azure-key>
+OPENAI_BASE_URL=https://my-resource.openai.azure.com
+AI_MODEL=gpt-4o   # deployment name in Azure
+```
+
+#### Anthropic Claude
+
+| **Variable**        | **Description**          |
+|---------------------|--------------------------|
+| `ANTHROPIC_API_KEY` | Anthropic API key.       |
+
+```bash
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+AI_MODEL=claude-3-5-sonnet-20241022
+```
+
+#### Google Gemini
+
+| **Variable**      | **Description**            |
+|-------------------|----------------------------|
+| `GEMINI_API_KEY`  | Google AI Studio API key.  |
+
+```bash
+AI_PROVIDER=gemini
+GEMINI_API_KEY=AIza...
+AI_MODEL=gemini-1.5-pro
+```
+
+#### Ollama (local LLMs – CPU-friendly)
+
+Run models locally using [Ollama](https://ollama.com). Recommended for CPU-only deployments:
+
+| **Variable**       | **Description**                         | **Default**               |
+|--------------------|-----------------------------------------|---------------------------|
+| `OLLAMA_BASE_URL`  | Ollama server URL.                      | `http://localhost:11434`  |
+
+```bash
+AI_PROVIDER=ollama
+OLLAMA_BASE_URL=http://ollama:11434   # Docker service name
+AI_MODEL=llama3.2                     # or qwen2.5, phi3, etc.
+```
+
+Recommended models for document processing on CPU:
+
+- **`llama3.2`** (3B) – good balance of speed and JSON output quality
+- **`qwen2.5`** (3B/7B) – excellent at structured extraction
+- **`phi3`** (3.8B) – strong reasoning, very fast on CPU
+
+#### OpenRouter
+
+[OpenRouter](https://openrouter.ai) provides access to 100+ models from a single endpoint using the `provider/model` name format.
+
+| **Variable**            | **Description**                     | **Default**                       |
+|-------------------------|-------------------------------------|-----------------------------------|
+| `OPENROUTER_API_KEY`    | OpenRouter API key.                 | *(required)*                      |
+| `OPENROUTER_BASE_URL`   | Override the gateway URL.           | `https://openrouter.ai/api/v1`    |
+
+```bash
+AI_PROVIDER=openrouter
+OPENROUTER_API_KEY=sk-or-...
+AI_MODEL=anthropic/claude-3.5-sonnet
+```
+
+#### Portkey AI Gateway
+
+[Portkey](https://portkey.ai) is an AI gateway that adds observability, caching, fallbacks, and load balancing across 200+ models behind a single OpenAI-compatible endpoint.
+
+| **Variable**          | **Description**                                                                                          | **Default**                      |
+|-----------------------|----------------------------------------------------------------------------------------------------------|----------------------------------|
+| `PORTKEY_API_KEY`     | Portkey account API key.                                                                                 | *(required)*                     |
+| `PORTKEY_VIRTUAL_KEY` | Optional Virtual Key (stores provider credentials in Portkey vault, keeping them out of your env file). | *(unset)*                        |
+| `PORTKEY_CONFIG`      | Optional saved Config ID (e.g. `pc-fallback-abc123`) for routing rules, fallbacks, and load balancing. | *(unset)*                        |
+| `PORTKEY_BASE_URL`    | Override the Portkey gateway URL (for self-hosted deployments).                                         | `https://api.portkey.ai/v1`      |
+
+```bash
+AI_PROVIDER=portkey
+PORTKEY_API_KEY=pk-...
+PORTKEY_VIRTUAL_KEY=vk-openai-abc123   # optional – routes to your OpenAI key stored in Portkey
+AI_MODEL=gpt-4o
+```
+
+Using a Config for fallback routing:
+```bash
+AI_PROVIDER=portkey
+PORTKEY_API_KEY=pk-...
+PORTKEY_CONFIG=pc-fallback-config-xyz  # applies your saved routing rules
+AI_MODEL=gpt-4o
+```
+
+#### LiteLLM (aggregator proxy)
+
+[LiteLLM](https://litellm.ai) provides a unified `provider/model` interface for 100+ LLMs including OpenAI, Anthropic, Gemini, Cohere, Ollama, and many more.
+
+| **Variable**       | **Description**                                 | **Default**                   |
+|--------------------|-------------------------------------------------|-------------------------------|
+| `OPENAI_API_KEY`   | API key forwarded to LiteLLM (provider-specific). | *(depends on model)*        |
+| `OPENAI_BASE_URL`  | Optional proxy/gateway URL.                     | `https://api.openai.com/v1`   |
+
+```bash
+AI_PROVIDER=litellm
+AI_MODEL=anthropic/claude-3-5-sonnet-20241022
+OPENAI_API_KEY=sk-ant-...   # passed as the api_key to LiteLLM
+```
+
+---
+
+### Azure Document Intelligence
 
 | **Variable**                     | **Description**                          | **How to Obtain**                                                        |
 |---------------------------------|------------------------------------------|--------------------------------------------------------------------------|
-| `OPENAI_API_KEY`                | OpenAI API key for GPT metadata extraction. | [OpenAI API keys](https://platform.openai.com/account/api-keys)             |
 | `AZURE_DOCUMENT_INTELLIGENCE_KEY` | Azure Document Intelligence API key for OCR. | [Azure Portal](https://portal.azure.com/) |
 | `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` | Endpoint URL for Azure Doc Intelligence API. | [Azure Portal](https://portal.azure.com/) |
 

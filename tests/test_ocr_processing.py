@@ -423,7 +423,7 @@ class TestRefineTextWithGPT:
         mock_provider.chat_completion.return_value = cleaned
 
         with (
-            patch("app.utils.ai_provider.get_ai_provider", return_value=mock_provider),
+            patch("app.tasks.refine_text_with_gpt.get_ai_provider", return_value=mock_provider),
             patch.object(metadata_module, "extract_metadata_with_gpt") as mock_extract,
             patch("app.tasks.refine_text_with_gpt.settings") as mock_settings,
         ):
@@ -456,7 +456,7 @@ class TestRefineTextWithGPT:
         mock_provider.chat_completion.side_effect = Exception("OpenAI API error")
 
         with (
-            patch("app.utils.ai_provider.get_ai_provider", return_value=mock_provider),
+            patch("app.tasks.refine_text_with_gpt.get_ai_provider", return_value=mock_provider),
             patch("app.tasks.refine_text_with_gpt.settings") as mock_settings,
         ):
             mock_settings.openai_model = "gpt-4"

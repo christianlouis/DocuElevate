@@ -35,6 +35,13 @@ class Settings(BaseSettings):
     openrouter_api_key: Optional[str] = None
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
+    # Portkey AI gateway settings (used when ai_provider="portkey")
+    # See https://portkey.ai for setup instructions
+    portkey_api_key: Optional[str] = None
+    portkey_virtual_key: Optional[str] = None   # Routes to a specific provider via Portkey vault
+    portkey_config: Optional[str] = None         # Portkey Config ID for advanced routing rules
+    portkey_base_url: str = "https://api.portkey.ai/v1"
+
     # Azure OpenAI API version (used when ai_provider="azure")
     azure_openai_api_version: str = "2024-02-01"
     workdir: str

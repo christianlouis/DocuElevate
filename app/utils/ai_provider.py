@@ -3,8 +3,8 @@
 
 This module provides a pluggable abstraction for various AI model providers,
 allowing the platform to work with OpenAI, Azure OpenAI, Anthropic Claude,
-Google Gemini, Ollama (local LLMs), OpenRouter, and any LiteLLM-compatible
-provider without being locked to a single vendor.
+Google Gemini, Ollama (local LLMs), OpenRouter, Portkey, and any
+LiteLLM-compatible provider without being locked to a single vendor.
 
 Provider selection is controlled by the ``AI_PROVIDER`` environment variable.
 See the Configuration Guide for full details on each provider's settings.
@@ -14,7 +14,34 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
+
+
+def _require_text_content(content: Optional[str]) -> str:
+    """Raise a clear error if the AI response contains no text content.
+
+    This can happen when the model returns a tool/function call instead of
+    a plain text message.  All DocuElevate prompts expect a plain-text or
+    JSON response, so ``None`` content is always an unexpected condition.
+
+    Args:
+        content: The ``message.content`` value from the completion response.
+
+    Returns:
+        The original string, guaranteed non-None.
+
+    Raises:
+        ValueError: If *content* is ``None``.
+    """
+    if content is None:
+        raise ValueError(
+            "AI provider returned a response with no text content (content=None). "
+            "This may occur when the model generates a tool call instead of a plain text reply. "
+            "Ensure the model and prompt are configured for text/JSON output."
+        )
+    return content
 
 
 class AIProvider(ABC):
@@ -80,7 +107,8 @@ class OpenAIProvider(AIProvider):
             temperature=temperature,
             **kwargs,
         )
-        return completion.choices[0].message.content
+        _content = completion.choices[0].message.content
+        return _require_text_content(_content)
 
 
 class AzureOpenAIProvider(AIProvider):
@@ -108,7 +136,8 @@ class AzureOpenAIProvider(AIProvider):
             temperature=temperature,
             **kwargs,
         )
-        return completion.choices[0].message.content
+        _content = completion.choices[0].message.content
+        return _require_text_content(_content)
 
 
 class AnthropicProvider(AIProvider):
@@ -139,7 +168,8 @@ class AnthropicProvider(AIProvider):
             api_key=self._api_key,
             **kwargs,
         )
-        return response.choices[0].message.content
+        _content = response.choices[0].message.content
+        return _require_text_content(_content)
 
 
 class GeminiProvider(AIProvider):
@@ -170,7 +200,8 @@ class GeminiProvider(AIProvider):
             api_key=self._api_key,
             **kwargs,
         )
-        return response.choices[0].message.content
+        _content = response.choices[0].message.content
+        return _require_text_content(_content)
 
 
 class OllamaProvider(AIProvider):
@@ -210,7 +241,8 @@ class OllamaProvider(AIProvider):
             temperature=temperature,
             **kwargs,
         )
-        return completion.choices[0].message.content
+        _content = completion.choices[0].message.content
+        return _require_text_content(_content)
 
 
 class OpenRouterProvider(AIProvider):
@@ -243,7 +275,74 @@ class OpenRouterProvider(AIProvider):
             temperature=temperature,
             **kwargs,
         )
-        return completion.choices[0].message.content
+        _content = completion.choices[0].message.content
+        return _require_text_content(_content)
+
+
+class PortkeyProvider(AIProvider):
+    """Portkey AI gateway (https://portkey.ai).
+
+    Portkey is an AI gateway that provides observability, caching, automatic
+    retries, fallbacks, and load balancing across 200+ LLMs via a single
+    OpenAI-compatible endpoint.
+
+    Required settings:
+        ``PORTKEY_API_KEY`` – your Portkey account API key.
+
+    Optional settings:
+        ``PORTKEY_VIRTUAL_KEY`` – a Portkey *Virtual Key* that maps to the
+        credentials of a specific provider stored in your Portkey vault.
+        When set, you do not need to expose the underlying provider's API key
+        in your environment.
+
+        ``PORTKEY_CONFIG`` – a saved Portkey *Config* ID (e.g.
+        ``pc-my-config-abc123``) that applies advanced routing rules such as
+        fallbacks and load balancing.
+
+        ``PORTKEY_BASE_URL`` – override the gateway endpoint.
+        Default: ``https://api.portkey.ai/v1``.
+
+    The model name should match what the underlying provider expects (e.g.
+    ``gpt-4o`` for OpenAI, ``claude-3-5-sonnet-20241022`` for Anthropic via a
+    virtual key).
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        virtual_key: Optional[str] = None,
+        config: Optional[str] = None,
+        base_url: str = "https://api.portkey.ai/v1",
+    ) -> None:
+        import openai
+
+        portkey_headers: Dict[str, str] = {"x-portkey-api-key": api_key}
+        if virtual_key:
+            portkey_headers["x-portkey-virtual-key"] = virtual_key
+        if config:
+            portkey_headers["x-portkey-config"] = config
+
+        self._client = openai.OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            default_headers=portkey_headers,
+        )
+
+    def chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        model: str,
+        temperature: float = 0,
+        **kwargs: Any,
+    ) -> str:
+        completion = self._client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            **kwargs,
+        )
+        _content = completion.choices[0].message.content
+        return _require_text_content(_content)
 
 
 class LiteLLMProvider(AIProvider):
@@ -283,7 +382,8 @@ class LiteLLMProvider(AIProvider):
             completion_kwargs["api_base"] = self._api_base
         completion_kwargs.update(kwargs)
         response = litellm.completion(**completion_kwargs)
-        return response.choices[0].message.content
+        _content = response.choices[0].message.content
+        return _require_text_content(_content)
 
 
 def get_ai_provider() -> AIProvider:
@@ -300,8 +400,6 @@ def get_ai_provider() -> AIProvider:
         ValueError: If the configured provider name is not recognised.
         ValueError: If required credentials for the selected provider are absent.
     """
-    from app.config import settings
-
     provider = settings.ai_provider.lower()
     logger.debug(f"Creating AI provider: {provider}")
 
@@ -333,6 +431,15 @@ def get_ai_provider() -> AIProvider:
             api_key=settings.openrouter_api_key,
             base_url=settings.openrouter_base_url,
         )
+    elif provider == "portkey":
+        if not settings.portkey_api_key:
+            raise ValueError("PORTKEY_API_KEY must be set when AI_PROVIDER='portkey'")
+        return PortkeyProvider(
+            api_key=settings.portkey_api_key,
+            virtual_key=settings.portkey_virtual_key,
+            config=settings.portkey_config,
+            base_url=settings.portkey_base_url,
+        )
     elif provider == "litellm":
         return LiteLLMProvider(
             api_key=settings.openai_api_key or None,
@@ -341,5 +448,5 @@ def get_ai_provider() -> AIProvider:
     else:
         raise ValueError(
             f"Unknown AI provider: '{provider}'. "
-            "Supported providers: openai, azure, anthropic, gemini, ollama, openrouter, litellm"
+            "Supported providers: openai, azure, anthropic, gemini, ollama, openrouter, portkey, litellm"
         )

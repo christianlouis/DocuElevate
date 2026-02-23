@@ -14,6 +14,8 @@ from app.utils.ai_provider import (
     OllamaProvider,
     OpenAIProvider,
     OpenRouterProvider,
+    PortkeyProvider,
+    _require_text_content,
     get_ai_provider,
 )
 
@@ -38,6 +40,37 @@ def _make_litellm_response(content: str) -> MagicMock:
     resp = MagicMock()
     resp.choices = [choice]
     return resp
+
+
+def _make_none_content_response() -> MagicMock:
+    """Build a mock response where message.content is None (e.g. tool call)."""
+    msg = SimpleNamespace(content=None)
+    choice = SimpleNamespace(message=msg)
+    resp = MagicMock()
+    resp.choices = [choice]
+    return resp
+
+
+# ---------------------------------------------------------------------------
+# _require_text_content helper
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+class TestRequireTextContent:
+    """Tests for the _require_text_content guard helper."""
+
+    def test_returns_non_none_string_unchanged(self):
+        """Returns the string as-is when content is not None."""
+        assert _require_text_content("hello") == "hello"
+
+    def test_returns_empty_string_unchanged(self):
+        """Returns an empty string as-is (empty ≠ None)."""
+        assert _require_text_content("") == ""
+
+    def test_raises_value_error_when_none(self):
+        """Raises ValueError with descriptive message when content is None."""
+        with pytest.raises(ValueError, match="content=None"):
+            _require_text_content(None)
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +161,20 @@ class TestOpenAIProvider:
         call_kwargs = mock_client.chat.completions.create.call_args[1]
         assert call_kwargs["max_tokens"] == 100
         assert call_kwargs["temperature"] == 0.7
+
+    @patch("openai.OpenAI")
+    def test_chat_completion_raises_on_none_content(self, mock_openai_cls):
+        """chat_completion raises ValueError when the response content is None."""
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = _make_none_content_response()
+        mock_openai_cls.return_value = mock_client
+
+        provider = OpenAIProvider(api_key="sk-test")
+        with pytest.raises(ValueError, match="content=None"):
+            provider.chat_completion(
+                messages=[{"role": "user", "content": "test"}],
+                model="gpt-4o-mini",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -344,6 +391,97 @@ class TestOpenRouterProvider:
 
 
 # ---------------------------------------------------------------------------
+# PortkeyProvider
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+class TestPortkeyProvider:
+    """Tests for PortkeyProvider."""
+
+    @patch("openai.OpenAI")
+    def test_initialises_with_required_api_key(self, mock_openai_cls):
+        """Provider passes x-portkey-api-key header and uses default gateway URL."""
+        PortkeyProvider(api_key="pk-key")
+        call_kwargs = mock_openai_cls.call_args[1]
+        assert call_kwargs["base_url"] == "https://api.portkey.ai/v1"
+        assert call_kwargs["api_key"] == "pk-key"
+        assert call_kwargs["default_headers"]["x-portkey-api-key"] == "pk-key"
+
+    @patch("openai.OpenAI")
+    def test_sets_virtual_key_header_when_provided(self, mock_openai_cls):
+        """Provider includes x-portkey-virtual-key header when virtual_key is set."""
+        PortkeyProvider(api_key="pk-key", virtual_key="vk-abc123")
+        call_kwargs = mock_openai_cls.call_args[1]
+        assert call_kwargs["default_headers"]["x-portkey-virtual-key"] == "vk-abc123"
+
+    @patch("openai.OpenAI")
+    def test_omits_virtual_key_header_when_not_provided(self, mock_openai_cls):
+        """Provider does not include x-portkey-virtual-key header when virtual_key is None."""
+        PortkeyProvider(api_key="pk-key")
+        call_kwargs = mock_openai_cls.call_args[1]
+        assert "x-portkey-virtual-key" not in call_kwargs["default_headers"]
+
+    @patch("openai.OpenAI")
+    def test_sets_config_header_when_provided(self, mock_openai_cls):
+        """Provider includes x-portkey-config header when config is set."""
+        PortkeyProvider(api_key="pk-key", config="pc-my-config-xyz")
+        call_kwargs = mock_openai_cls.call_args[1]
+        assert call_kwargs["default_headers"]["x-portkey-config"] == "pc-my-config-xyz"
+
+    @patch("openai.OpenAI")
+    def test_omits_config_header_when_not_provided(self, mock_openai_cls):
+        """Provider does not include x-portkey-config header when config is None."""
+        PortkeyProvider(api_key="pk-key")
+        call_kwargs = mock_openai_cls.call_args[1]
+        assert "x-portkey-config" not in call_kwargs["default_headers"]
+
+    @patch("openai.OpenAI")
+    def test_uses_custom_base_url(self, mock_openai_cls):
+        """Provider forwards a custom gateway base URL."""
+        PortkeyProvider(api_key="pk-key", base_url="https://my-portkey-instance.example.com/v1")
+        call_kwargs = mock_openai_cls.call_args[1]
+        assert call_kwargs["base_url"] == "https://my-portkey-instance.example.com/v1"
+
+    @patch("openai.OpenAI")
+    def test_chat_completion_returns_content(self, mock_openai_cls):
+        """chat_completion returns the message content string."""
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = _make_openai_response("Portkey response")
+        mock_openai_cls.return_value = mock_client
+
+        provider = PortkeyProvider(api_key="pk-key")
+        result = provider.chat_completion(
+            messages=[{"role": "user", "content": "hello"}],
+            model="gpt-4o",
+        )
+
+        assert result == "Portkey response"
+
+    @patch("openai.OpenAI")
+    def test_chat_completion_with_all_options(self, mock_openai_cls):
+        """Provider works correctly with virtual_key, config, and custom model."""
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = _make_openai_response("ok")
+        mock_openai_cls.return_value = mock_client
+
+        provider = PortkeyProvider(
+            api_key="pk-key",
+            virtual_key="vk-anthropic",
+            config="pc-fallback-config",
+        )
+        result = provider.chat_completion(
+            messages=[{"role": "user", "content": "test"}],
+            model="claude-3-5-sonnet-20241022",
+            temperature=0.5,
+        )
+
+        assert result == "ok"
+        call_kwargs = mock_client.chat.completions.create.call_args[1]
+        assert call_kwargs["model"] == "claude-3-5-sonnet-20241022"
+        assert call_kwargs["temperature"] == 0.5
+
+
+# ---------------------------------------------------------------------------
 # LiteLLMProvider
 # ---------------------------------------------------------------------------
 
@@ -444,6 +582,10 @@ class TestGetAIProvider:
             "ollama_base_url": "http://localhost:11434",
             "openrouter_api_key": None,
             "openrouter_base_url": "https://openrouter.ai/api/v1",
+            "portkey_api_key": None,
+            "portkey_virtual_key": None,
+            "portkey_config": None,
+            "portkey_base_url": "https://api.portkey.ai/v1",
         }
         defaults.update(kwargs)
         mock_settings = MagicMock()
@@ -534,6 +676,37 @@ class TestGetAIProvider:
             self._mock_settings(ai_provider="openrouter", openrouter_api_key=None),
         ):
             with pytest.raises(ValueError, match="OPENROUTER_API_KEY"):
+                get_ai_provider()
+
+    @patch("openai.OpenAI")
+    def test_returns_portkey_provider(self, mock_openai_cls):
+        """get_ai_provider returns PortkeyProvider for ai_provider='portkey'."""
+        with patch(
+            "app.utils.ai_provider.settings",
+            self._mock_settings(
+                ai_provider="portkey",
+                portkey_api_key="pk-test",
+                portkey_virtual_key=None,
+                portkey_config=None,
+                portkey_base_url="https://api.portkey.ai/v1",
+            ),
+        ):
+            provider = get_ai_provider()
+        assert isinstance(provider, PortkeyProvider)
+
+    def test_portkey_raises_without_api_key(self):
+        """get_ai_provider raises ValueError when portkey_api_key is missing."""
+        with patch(
+            "app.utils.ai_provider.settings",
+            self._mock_settings(
+                ai_provider="portkey",
+                portkey_api_key=None,
+                portkey_virtual_key=None,
+                portkey_config=None,
+                portkey_base_url="https://api.portkey.ai/v1",
+            ),
+        ):
+            with pytest.raises(ValueError, match="PORTKEY_API_KEY"):
                 get_ai_provider()
 
     def test_returns_litellm_provider(self):

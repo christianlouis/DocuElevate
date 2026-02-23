@@ -67,7 +67,7 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.utils.ai_provider.get_ai_provider")
+    @patch("app.tasks.extract_metadata_with_gpt.get_ai_provider")
     def test_successful_metadata_extraction(self, mock_get_provider, mock_log_progress, mock_embed_task):
         """Test successful metadata extraction with valid AI provider response."""
         mock_provider = MagicMock()
@@ -116,7 +116,7 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.utils.ai_provider.get_ai_provider")
+    @patch("app.tasks.extract_metadata_with_gpt.get_ai_provider")
     def test_handles_json_in_backticks(self, mock_get_provider, mock_log_progress, mock_embed_task):
         """Test extraction handles JSON wrapped in markdown code blocks."""
         mock_provider = MagicMock()
@@ -135,7 +135,7 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.utils.ai_provider.get_ai_provider")
+    @patch("app.tasks.extract_metadata_with_gpt.get_ai_provider")
     def test_handles_invalid_json_response(self, mock_get_provider, mock_log_progress, mock_embed_task):
         """Test handling of invalid JSON in AI provider response."""
         mock_provider = MagicMock()
@@ -154,7 +154,7 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.utils.ai_provider.get_ai_provider")
+    @patch("app.tasks.extract_metadata_with_gpt.get_ai_provider")
     def test_handles_api_exception(self, mock_get_provider, mock_log_progress, mock_embed_task):
         """Test handling of AI provider API exceptions."""
         mock_provider = MagicMock()
@@ -173,7 +173,7 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.utils.ai_provider.get_ai_provider")
+    @patch("app.tasks.extract_metadata_with_gpt.get_ai_provider")
     @patch("app.tasks.extract_metadata_with_gpt.SessionLocal")
     def test_retrieves_file_id_from_database_when_not_provided(
         self, mock_session_local, mock_get_provider, mock_log_progress, mock_embed_task
@@ -207,7 +207,7 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.utils.ai_provider.get_ai_provider")
+    @patch("app.tasks.extract_metadata_with_gpt.get_ai_provider")
     def test_validates_filename_security(self, mock_get_provider, mock_log_progress, mock_embed_task):
         """Test filename validation to prevent path traversal."""
         mock_provider = MagicMock()
@@ -227,7 +227,7 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.utils.ai_provider.get_ai_provider")
+    @patch("app.tasks.extract_metadata_with_gpt.get_ai_provider")
     def test_validates_filename_with_dots(self, mock_get_provider, mock_log_progress, mock_embed_task):
         """Test filename validation rejects '..' in filenames."""
         mock_provider = MagicMock()
@@ -245,7 +245,7 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.utils.ai_provider.get_ai_provider")
+    @patch("app.tasks.extract_metadata_with_gpt.get_ai_provider")
     def test_accepts_valid_filename(self, mock_get_provider, mock_log_progress, mock_embed_task):
         """Test that valid filenames are accepted."""
         mock_provider = MagicMock()
@@ -263,7 +263,7 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.utils.ai_provider.get_ai_provider")
+    @patch("app.tasks.extract_metadata_with_gpt.get_ai_provider")
     def test_handles_malformed_json_with_valid_structure(self, mock_get_provider, mock_log_progress, mock_embed_task):
         """Test handling of JSON that's parseable but missing expected fields."""
         mock_provider = MagicMock()
@@ -280,7 +280,7 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.utils.ai_provider.get_ai_provider")
+    @patch("app.tasks.extract_metadata_with_gpt.get_ai_provider")
     def test_handles_absolute_path_filename(self, mock_get_provider, mock_log_progress, mock_embed_task):
         """Test handling when filename is provided as an absolute path."""
         mock_provider = MagicMock()
@@ -299,7 +299,7 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.utils.ai_provider.get_ai_provider")
+    @patch("app.tasks.extract_metadata_with_gpt.get_ai_provider")
     @patch("app.tasks.extract_metadata_with_gpt.SessionLocal")
     def test_database_lookup_with_existing_file(
         self, mock_session_local, mock_get_provider, mock_log_progress, mock_embed_task
