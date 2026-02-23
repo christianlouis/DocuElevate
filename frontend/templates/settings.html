@@ -139,8 +139,21 @@
                   Enable {{ setting.key.replace('_', ' ').title() }}
                 </label>
               </div>
+              {% elif setting.metadata.options %}
+              <!-- Dropdown Select for fields with a fixed list of values -->
+              <select
+                id="{{ setting.key }}"
+                name="{{ setting.key }}"
+                x-model="formData['{{ setting.key }}']"
+                class="setting-input w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">— select —</option>
+                {% for opt in setting.metadata.options %}
+                <option value="{{ opt }}">{{ opt }}</option>
+                {% endfor %}
+              </select>
               {% else %}
-              <!-- Text Input -->
+              <!-- Text / Password Input -->
               <div class="relative">
                 {% if setting.metadata.sensitive %}
                 <!-- Sensitive Field with Show/Hide Toggle -->

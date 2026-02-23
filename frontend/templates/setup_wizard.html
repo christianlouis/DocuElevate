@@ -92,7 +92,7 @@
           <div class="border-b border-gray-200 pb-6 last:border-b-0">
             <label for="{{ setting.key }}" class="block text-sm font-medium text-gray-900 mb-1">
               {{ setting.label }}
-              {% if setting.default is none or setting.key in ['admin_password', 'openai_api_key', 'azure_ai_key', 'azure_endpoint'] %}
+              {% if setting.default is none or setting.key in ['admin_password'] %}
               <span class="text-red-600">*</span>
               {% endif %}
             </label>
@@ -129,7 +129,18 @@
               />
             </div>
             {% else %}
-            <!-- Regular input -->
+            <!-- Regular input or select -->
+            {% if setting.options %}
+            <select
+              id="{{ setting.key }}"
+              name="{{ setting.key }}"
+              class="wizard-input w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            >
+              {% for opt in setting.options %}
+              <option value="{{ opt }}" {% if setting.current_value == opt %}selected{% elif not setting.current_value and opt == setting.default %}selected{% endif %}>{{ opt }}</option>
+              {% endfor %}
+            </select>
+            {% else %}
             <input
               type="{% if setting.sensitive %}password{% else %}text{% endif %}"
               id="{{ setting.key }}"
@@ -137,8 +148,9 @@
               value="{{ setting.current_value if setting.current_value else '' }}"
               class="wizard-input w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               placeholder="{{ setting.description }}"
-              {% if setting.default is none or setting.key in ['admin_password', 'openai_api_key', 'azure_ai_key', 'azure_endpoint'] %}required{% endif %}
+              {% if setting.default is none or setting.key in ['admin_password'] %}required{% endif %}
             />
+            {% endif %}
             {% endif %}
 
             {% if setting.value_source == 'db' %}

@@ -31,7 +31,7 @@
 
 DocuElevate automates the handling, extraction, and processing of documents using a variety of services, including:
 
-- **OpenAI** for metadata extraction and text refinement.
+- **AI Provider** (pluggable – OpenAI, Anthropic, Gemini, Ollama, OpenRouter, Portkey, and more) for metadata extraction and text refinement.
 - **Dropbox**, **Nextcloud**, and **Google Drive** for file storage and uploads.
 - **Paperless NGX** for document indexing and management.
 - **Azure Document Intelligence** for OCR on PDFs.
@@ -86,7 +86,7 @@ Documents enter DocuElevate through four possible channels:
 Every document goes through the following steps:
 1. **PDF Conversion**: Non-PDF files are converted to PDF format using Gotenberg
 2. **OCR Processing**: Azure Document Intelligence extracts text from images/scans
-3. **Metadata Extraction**: OpenAI analyzes document content to identify:
+3. **Metadata Extraction**: The configured AI provider analyzes document content to identify:
    - Document type (invoice, receipt, contract, etc.)
    - Key entities (dates, names, amounts, account numbers)
    - Important data points specific to the document type
@@ -116,8 +116,8 @@ Users can choose to send documents to any combination of these destinations thro
   - Manual uploads (via API or UI) to Dropbox, Nextcloud, Google Drive, or Paperless
 - **OCR Processing (Azure)**:
   - Extract text from scanned PDFs using Azure Document Intelligence
-- **Metadata Extraction (OpenAI)**:
-  - Use GPT to classify, label, or otherwise enrich the text with structured metadata
+- **Metadata Extraction (AI Provider)**:
+  - Use any supported AI provider (OpenAI, Anthropic, Gemini, Ollama, etc.) to classify, label, or otherwise enrich the text with structured metadata
 - **PDF Conversion (Gotenberg)**:
   - Convert non-PDF attachments (e.g., Word docs, images) into PDFs
 - **Document Management (Paperless NGX)**:
@@ -214,7 +214,8 @@ The following is a summary of the licenses used by our direct dependencies:
 | Uvicorn    | BSD     |
 | SQLAlchemy | MIT     |
 | Pydantic   | MIT     |
-| OpenAI     | MIT     |
+| openai     | MIT     |
+| litellm    | MIT     |
 | pypdf      | BSD     |
 | Requests   | Apache 2.0 |
 | puremagic  | MIT     |

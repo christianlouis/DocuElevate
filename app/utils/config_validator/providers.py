@@ -57,20 +57,69 @@ def get_provider_status() -> dict[str, dict[str, object]]:
         "test_endpoint": "/api/diagnostic/test-notification",
     }
 
-    # Add AI services first
-    providers["OpenAI"] = {
-        "name": "OpenAI",
-        "icon": "fa-brands fa-openai",
-        "configured": bool(
-            getattr(settings, "openai_api_key", None) and str(getattr(settings, "openai_api_key", "")).startswith("sk-")
-        ),
+    # Add AI provider (dynamic – reflects whichever provider is configured)
+    ai_provider_name = getattr(settings, "ai_provider", "openai").lower()
+    model = getattr(settings, "ai_model", None) or getattr(settings, "openai_model", "gpt-4o-mini")
+
+    # Determine whether the active provider has its required credentials set
+    def _ai_configured() -> bool:
+        if ai_provider_name in ("openai", "azure", "litellm"):
+            return bool(getattr(settings, "openai_api_key", None))
+        elif ai_provider_name == "anthropic":
+            return bool(getattr(settings, "anthropic_api_key", None))
+        elif ai_provider_name == "gemini":
+            return bool(getattr(settings, "gemini_api_key", None))
+        elif ai_provider_name == "ollama":
+            return bool(getattr(settings, "ollama_base_url", None))
+        elif ai_provider_name == "openrouter":
+            return bool(getattr(settings, "openrouter_api_key", None))
+        elif ai_provider_name == "portkey":
+            return bool(getattr(settings, "portkey_api_key", None))
+        return False
+
+    # Build provider-specific detail rows
+    def _ai_details() -> dict:
+        base = {"provider": ai_provider_name, "model": model}
+        if ai_provider_name in ("openai", "azure", "litellm"):
+            base["api_key"] = mask_sensitive_value(getattr(settings, "openai_api_key", None))
+            base["base_url"] = getattr(settings, "openai_base_url", "https://api.openai.com/v1")
+        elif ai_provider_name == "anthropic":
+            base["api_key"] = mask_sensitive_value(getattr(settings, "anthropic_api_key", None))
+        elif ai_provider_name == "gemini":
+            base["api_key"] = mask_sensitive_value(getattr(settings, "gemini_api_key", None))
+        elif ai_provider_name == "ollama":
+            base["base_url"] = getattr(settings, "ollama_base_url", "http://localhost:11434")
+        elif ai_provider_name == "openrouter":
+            base["api_key"] = mask_sensitive_value(getattr(settings, "openrouter_api_key", None))
+            base["base_url"] = getattr(settings, "openrouter_base_url", "https://openrouter.ai/api/v1")
+        elif ai_provider_name == "portkey":
+            base["api_key"] = mask_sensitive_value(getattr(settings, "portkey_api_key", None))
+            if getattr(settings, "portkey_virtual_key", None):
+                base["virtual_key"] = mask_sensitive_value(settings.portkey_virtual_key)
+            if getattr(settings, "portkey_config", None):
+                base["config"] = settings.portkey_config
+        return base
+
+    _PROVIDER_ICONS = {
+        "openai": "fa-brands fa-openai",
+        "azure": "fa-brands fa-microsoft",
+        "anthropic": "fa-solid fa-robot",
+        "gemini": "fa-brands fa-google",
+        "ollama": "fa-solid fa-server",
+        "openrouter": "fa-solid fa-route",
+        "portkey": "fa-solid fa-key",
+        "litellm": "fa-solid fa-layer-group",
+    }
+
+    providers["AI Provider"] = {
+        "name": "AI Provider",
+        "icon": _PROVIDER_ICONS.get(ai_provider_name, "fa-solid fa-microchip"),
+        "configured": _ai_configured(),
         "enabled": True,
-        "description": "AI-powered document analysis and metadata extraction",
-        "details": {
-            "api_key": mask_sensitive_value(getattr(settings, "openai_api_key", None)),
-            "base_url": getattr(settings, "openai_base_url", "https://api.openai.com/v1"),
-            "model": getattr(settings, "openai_model", "gpt-4"),
-        },
+        "description": f"AI-powered metadata extraction and OCR refinement ({ai_provider_name})",
+        "details": _ai_details(),
+        "testable": True,
+        "test_endpoint": "/api/ai/test",
     }
 
     providers["Azure AI"] = {

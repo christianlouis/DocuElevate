@@ -1,5 +1,9 @@
 """
-OpenAI API endpoints
+AI provider and OpenAI API endpoints.
+
+Exposes two endpoints:
+- GET /api/ai/test   – tests the currently configured AI provider (generic, provider-agnostic)
+- GET /api/openai/test – backward-compatible alias that tests the OpenAI API specifically
 """
 
 import logging
@@ -146,3 +150,55 @@ async def test_openai_connection(request: Request):
     except Exception as e:
         logger.exception("Unexpected error testing OpenAI connection")
         return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+
+@router.get("/ai/test")
+@require_login
+async def test_ai_provider_connection(request: Request):
+    """
+    Test the currently configured AI provider connection.
+
+    Uses ``get_ai_provider()`` to instantiate the active provider and sends a
+    minimal chat completion to verify that the credentials and endpoint are
+    reachable.  Works for all supported providers (OpenAI, Azure, Anthropic,
+    Gemini, Ollama, OpenRouter, Portkey, LiteLLM).
+    """
+    from app.utils.ai_provider import get_ai_provider
+
+    provider_name = settings.ai_provider
+    model = settings.ai_model or settings.openai_model
+
+    logger.info(f"Testing AI provider connection: provider={provider_name}, model={model}")
+
+    try:
+        provider = get_ai_provider()
+        response = provider.chat_completion(
+            messages=[{"role": "user", "content": "Reply with the single word: ok"}],
+            model=model,
+            temperature=0,
+            max_tokens=5,
+        )
+        logger.info(f"AI provider test successful: provider={provider_name}")
+        return {
+            "status": "success",
+            "message": f"AI provider '{provider_name}' is reachable and responding",
+            "provider": provider_name,
+            "model": model,
+            "response_preview": (response or "")[:50],
+        }
+    except ValueError as e:
+        # Configuration errors (missing keys, unknown provider)
+        logger.warning(f"AI provider configuration error: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "provider": provider_name,
+        }
+    except Exception as e:
+        detail = _get_exception_chain_detail(e)
+        logger.error(f"AI provider test failed for '{provider_name}': {detail}", exc_info=True)
+        return {
+            "status": "error",
+            "message": f"Connection failed: {detail}",
+            "provider": provider_name,
+        }

@@ -150,7 +150,7 @@ View the complete processing history with a timeline showing:
 - Timestamps for each operation
 
 **Retry Processing**: If a file's processing has failed, you can use the "Retry Processing" button to reprocess the entire file. This is useful when:
-- External API services (like OpenAI) had temporary issues
+- External API services (like the configured AI provider) had temporary issues
 - Network connectivity was lost during processing
 - Configuration has been updated and you want to reprocess with new settings
 

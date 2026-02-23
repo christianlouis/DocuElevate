@@ -26,7 +26,7 @@ Settings are organized into logical categories for easy navigation:
 
 - **Core**: Database, Redis, working directory, external hostname, debug mode
 - **Authentication**: Login settings, session secrets, OAuth configuration
-- **AI Services**: OpenAI and Azure AI configuration
+- **AI Services**: AI provider selection and credentials (OpenAI, Azure, Anthropic, Gemini, Ollama, OpenRouter, Portkey, LiteLLM)
 - **Storage Providers**: Dropbox, Google Drive, OneDrive, S3, FTP, SFTP, WebDAV, Nextcloud, Paperless
 - **Email**: SMTP configuration for sending emails
 - **IMAP**: Email ingestion configuration (supports multiple accounts)
@@ -152,7 +152,8 @@ Removes a setting from the database (reverts to environment variable or default)
 POST /api/settings/bulk-update
 [
   {"key": "debug", "value": "true"},
-  {"key": "openai_model", "value": "gpt-4"}
+  {"key": "ai_provider", "value": "anthropic"},
+  {"key": "openai_model", "value": "claude-3-5-sonnet-20241022"}
 ]
 ```
 

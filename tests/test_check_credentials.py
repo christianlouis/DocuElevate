@@ -205,7 +205,7 @@ class TestCheckCredentialsTask:
     @patch("app.tasks.check_credentials.get_failure_state")
     @patch("app.tasks.check_credentials.get_provider_status")
     @patch("app.tasks.check_credentials.validate_storage_configs")
-    @patch("app.tasks.check_credentials.sync_test_openai_connection")
+    @patch("app.tasks.check_credentials.sync_test_ai_provider_connection")
     @patch("app.tasks.check_credentials.sync_test_azure_connection")
     @patch("app.tasks.check_credentials.sync_test_dropbox_token")
     @patch("app.tasks.check_credentials.sync_test_google_drive_token")
@@ -216,7 +216,7 @@ class TestCheckCredentialsTask:
         mock_gdrive,
         mock_dropbox,
         mock_azure,
-        mock_openai,
+        mock_ai_provider,
         mock_storage_configs,
         mock_provider_status,
         mock_get_state,
@@ -225,7 +225,7 @@ class TestCheckCredentialsTask:
         """Test checks all configured services."""
         mock_get_state.return_value = {}
         mock_provider_status.return_value = {
-            "OpenAI": {"configured": True},
+            "AI Provider": {"configured": True},
             "Azure AI": {"configured": True},
             "Dropbox": {"configured": True},
             "Google Drive": {"configured": True},
@@ -234,7 +234,7 @@ class TestCheckCredentialsTask:
         mock_storage_configs.return_value = {"dropbox": [], "google_drive": [], "onedrive": []}
 
         # All tests succeed
-        mock_openai.return_value = {"status": "success"}
+        mock_ai_provider.return_value = {"status": "success"}
         mock_azure.return_value = {"status": "success"}
         mock_dropbox.return_value = {"status": "success"}
         mock_gdrive.return_value = {"status": "success"}
@@ -249,14 +249,14 @@ class TestCheckCredentialsTask:
     @patch("app.tasks.check_credentials.get_failure_state")
     @patch("app.tasks.check_credentials.get_provider_status")
     @patch("app.tasks.check_credentials.validate_storage_configs")
-    @patch("app.tasks.check_credentials.sync_test_openai_connection")
+    @patch("app.tasks.check_credentials.sync_test_ai_provider_connection")
     def test_tracks_failures(
-        self, mock_openai, mock_storage_configs, mock_provider_status, mock_get_state, mock_save_state
+        self, mock_ai_provider, mock_storage_configs, mock_provider_status, mock_get_state, mock_save_state
     ):
         """Test tracks credential failures."""
         mock_get_state.return_value = {}
         mock_provider_status.return_value = {
-            "OpenAI": {"configured": True},
+            "AI Provider": {"configured": True},
             "Azure AI": {"configured": False},
             "Dropbox": {"configured": False},
             "Google Drive": {"configured": False},
@@ -264,7 +264,7 @@ class TestCheckCredentialsTask:
         }
         mock_storage_configs.return_value = {}
 
-        mock_openai.return_value = {"status": "error", "message": "Invalid API key"}
+        mock_ai_provider.return_value = {"status": "error", "message": "Invalid API key"}
 
         result = check_credentials()
 
@@ -281,7 +281,7 @@ class TestCheckCredentialsTask:
         """Test skips unconfigured services."""
         mock_get_state.return_value = {}
         mock_provider_status.return_value = {
-            "OpenAI": {"configured": False},
+            "AI Provider": {"configured": False},
             "Azure AI": {"configured": False},
             "Dropbox": {"configured": False},
             "Google Drive": {"configured": False},
@@ -298,15 +298,15 @@ class TestCheckCredentialsTask:
     @patch("app.tasks.check_credentials.get_failure_state")
     @patch("app.tasks.check_credentials.get_provider_status")
     @patch("app.tasks.check_credentials.validate_storage_configs")
-    @patch("app.tasks.check_credentials.sync_test_openai_connection")
+    @patch("app.tasks.check_credentials.sync_test_ai_provider_connection")
     @patch("app.tasks.check_credentials.notify_credential_failure")
     def test_sends_notifications_on_failure(
-        self, mock_notify, mock_openai, mock_storage_configs, mock_provider_status, mock_get_state, mock_save_state
+        self, mock_notify, mock_ai_provider, mock_storage_configs, mock_provider_status, mock_get_state, mock_save_state
     ):
         """Test sends notifications on credential failure."""
         mock_get_state.return_value = {}
         mock_provider_status.return_value = {
-            "OpenAI": {"configured": True},
+            "AI Provider": {"configured": True},
             "Azure AI": {"configured": False},
             "Dropbox": {"configured": False},
             "Google Drive": {"configured": False},
@@ -314,7 +314,7 @@ class TestCheckCredentialsTask:
         }
         mock_storage_configs.return_value = {}
 
-        mock_openai.return_value = {"status": "error", "message": "Invalid API key"}
+        mock_ai_provider.return_value = {"status": "error", "message": "Invalid API key"}
 
         check_credentials()
 
@@ -324,16 +324,16 @@ class TestCheckCredentialsTask:
     @patch("app.tasks.check_credentials.get_failure_state")
     @patch("app.tasks.check_credentials.get_provider_status")
     @patch("app.tasks.check_credentials.validate_storage_configs")
-    @patch("app.tasks.check_credentials.sync_test_openai_connection")
+    @patch("app.tasks.check_credentials.sync_test_ai_provider_connection")
     @patch("app.tasks.check_credentials.notify_credential_failure")
     def test_suppresses_notifications_after_threshold(
-        self, mock_notify, mock_openai, mock_storage_configs, mock_provider_status, mock_get_state, mock_save_state
+        self, mock_notify, mock_ai_provider, mock_storage_configs, mock_provider_status, mock_get_state, mock_save_state
     ):
         """Test suppresses notifications after failure threshold."""
         # Existing state with 4 failures
-        mock_get_state.return_value = {"OpenAI": {"count": 4, "last_notified": 12345}}
+        mock_get_state.return_value = {"AI Provider": {"count": 4, "last_notified": 12345}}
         mock_provider_status.return_value = {
-            "OpenAI": {"configured": True},
+            "AI Provider": {"configured": True},
             "Azure AI": {"configured": False},
             "Dropbox": {"configured": False},
             "Google Drive": {"configured": False},
@@ -341,7 +341,7 @@ class TestCheckCredentialsTask:
         }
         mock_storage_configs.return_value = {}
 
-        mock_openai.return_value = {"status": "error", "message": "Invalid API key"}
+        mock_ai_provider.return_value = {"status": "error", "message": "Invalid API key"}
 
         check_credentials()
 
@@ -352,15 +352,15 @@ class TestCheckCredentialsTask:
     @patch("app.tasks.check_credentials.get_failure_state")
     @patch("app.tasks.check_credentials.get_provider_status")
     @patch("app.tasks.check_credentials.validate_storage_configs")
-    @patch("app.tasks.check_credentials.sync_test_openai_connection")
+    @patch("app.tasks.check_credentials.sync_test_ai_provider_connection")
     def test_tracks_recovery(
-        self, mock_openai, mock_storage_configs, mock_provider_status, mock_get_state, mock_save_state
+        self, mock_ai_provider, mock_storage_configs, mock_provider_status, mock_get_state, mock_save_state
     ):
         """Test tracks service recovery."""
         # Existing state with failures
-        mock_get_state.return_value = {"OpenAI": {"count": 2, "last_notified": 12345}}
+        mock_get_state.return_value = {"AI Provider": {"count": 2, "last_notified": 12345}}
         mock_provider_status.return_value = {
-            "OpenAI": {"configured": True},
+            "AI Provider": {"configured": True},
             "Azure AI": {"configured": False},
             "Dropbox": {"configured": False},
             "Google Drive": {"configured": False},
@@ -369,7 +369,7 @@ class TestCheckCredentialsTask:
         mock_storage_configs.return_value = {}
 
         # Service is now valid
-        mock_openai.return_value = {"status": "success"}
+        mock_ai_provider.return_value = {"status": "success"}
 
         result = check_credentials()
 
@@ -379,14 +379,14 @@ class TestCheckCredentialsTask:
     @patch("app.tasks.check_credentials.get_failure_state")
     @patch("app.tasks.check_credentials.get_provider_status")
     @patch("app.tasks.check_credentials.validate_storage_configs")
-    @patch("app.tasks.check_credentials.sync_test_openai_connection")
+    @patch("app.tasks.check_credentials.sync_test_ai_provider_connection")
     def test_handles_exception_during_check(
-        self, mock_openai, mock_storage_configs, mock_provider_status, mock_get_state, mock_save_state
+        self, mock_ai_provider, mock_storage_configs, mock_provider_status, mock_get_state, mock_save_state
     ):
         """Test handles exception during credential check."""
         mock_get_state.return_value = {}
         mock_provider_status.return_value = {
-            "OpenAI": {"configured": True},
+            "AI Provider": {"configured": True},
             "Azure AI": {"configured": False},
             "Dropbox": {"configured": False},
             "Google Drive": {"configured": False},
@@ -394,11 +394,11 @@ class TestCheckCredentialsTask:
         }
         mock_storage_configs.return_value = {}
 
-        mock_openai.side_effect = Exception("Network error")
+        mock_ai_provider.side_effect = Exception("Network error")
 
         result = check_credentials()
 
         # Should still complete and record the error
         assert result["failures"] == 1
-        assert "OpenAI" in result["results"]
-        assert result["results"]["OpenAI"]["status"] == "error"
+        assert "AI Provider" in result["results"]
+        assert result["results"]["AI Provider"]["status"] == "error"

@@ -5,8 +5,6 @@ import logging
 import os
 import re
 
-import openai
-
 # Import the shared Celery instance
 from app.celery_app import celery
 from app.config import settings
@@ -15,16 +13,9 @@ from app.models import FileRecord
 from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils import log_task_progress
+from app.utils.ai_provider import get_ai_provider
 
 logger = logging.getLogger(__name__)
-
-# Initialize OpenAI client dynamically with better error handling
-try:
-    client = openai.OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
-    logger.info("OpenAI client initialized successfully")
-except Exception as e:
-    logger.error(f"Failed to initialize OpenAI client: {e}")
-    client = None
 
 
 def extract_json_from_text(text):
@@ -114,23 +105,24 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
 
     try:
         logger.info(f"[{task_id}] Sending classification request for {filename}...")
-        log_task_progress(task_id, "call_openai", "in_progress", "Calling OpenAI API", file_id=file_id)
-        completion = client.chat.completions.create(
-            model=settings.openai_model,
+        log_task_progress(task_id, "call_ai_provider", "in_progress", "Calling AI provider API", file_id=file_id)
+        provider = get_ai_provider()
+        model = settings.ai_model or settings.openai_model
+        content = provider.chat_completion(
             messages=[
                 {"role": "system", "content": "You are an intelligent document classifier."},
                 {"role": "user", "content": prompt},
             ],
+            model=model,
             temperature=0,
         )
 
-        content = completion.choices[0].message.content
         logger.info(f"[{task_id}] Raw classification response for {filename}: {content[:200]}...")
         log_task_progress(
             task_id,
-            "call_openai",
+            "call_ai_provider",
             "success",
-            "Received OpenAI response",
+            "Received AI provider response",
             file_id=file_id,
             detail=f"Raw classification response:\n{content}",
         )
@@ -187,13 +179,13 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
         return {"s3_file": os.path.basename(filename), "metadata": metadata}
 
     except Exception as e:
-        logger.exception(f"[{task_id}] OpenAI classification failed for {filename}: {e}")
+        logger.exception(f"[{task_id}] AI provider classification failed for {filename}: {e}")
         log_task_progress(
             task_id,
             "extract_metadata_with_gpt",
             "failure",
             f"Exception: {str(e)}",
             file_id=file_id,
-            detail=f"OpenAI classification failed for {filename}.\nException: {str(e)}",
+            detail=f"AI provider classification failed for {filename}.\nException: {str(e)}",
         )
         return {}

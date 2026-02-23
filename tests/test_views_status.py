@@ -35,7 +35,7 @@ class TestStatusDashboard:
 
         mock_exists.return_value = False
         mock_providers.return_value = {
-            "OpenAI": {"configured": True, "status": "success"},
+            "AI Provider": {"configured": True, "status": "success"},
             "Azure AI": {"configured": False},
         }
         mock_settings.version = "1.0.0"
