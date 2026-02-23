@@ -22,6 +22,7 @@ nothing has changed.
 
 import logging
 import time
+from typing import Any
 
 import redis
 from celery.signals import task_prerun
@@ -67,7 +68,7 @@ def register_settings_reload_signal() -> None:
     """
 
     @task_prerun.connect(weak=False)
-    def _reload_if_stale(sender, **kwargs) -> None:  # type: ignore[misc]
+    def _reload_if_stale(sender: Any, **kwargs: Any) -> None:
         """Reload settings from DB if the Redis version key has changed."""
         global _last_seen_version
         try:

@@ -3,7 +3,7 @@ Setup wizard views for initial system configuration.
 """
 
 import logging
-import secrets
+from secrets import token_hex
 
 from fastapi import Depends, Form, Request
 from fastapi.responses import RedirectResponse
@@ -104,7 +104,7 @@ async def setup_wizard_save(request: Request, step: int = Form(...), db: Session
             if value and value.strip():
                 # Auto-generate session_secret if needed
                 if key == "session_secret" and value == "auto-generate":
-                    value = secrets.token_hex(32)
+                    value = token_hex(32)
                     logger.info("Auto-generated session secret")
 
                 # Save to database
