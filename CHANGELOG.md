@@ -8,23 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > **This CHANGELOG is automatically generated and maintained by [python-semantic-release](https://github.com/python-semantic-release/python-semantic-release). Do not edit it manually.**
 > New entries are prepended automatically on every merge to `main` that triggers a version bump.
 
----
-
-## [Unreleased]
-
-### Fixed
-- Fixed CHANGELOG.md not being updated by semantic-release (`autoescape = true` Jinja2 bug)
-- Added explicit `changelog_file`, `mode = "update"`, and `output_format = "md"` to semantic-release config
-- Added fallback `semantic-release changelog` step in release workflow for safety
-
-### Documentation
-- Added Documentation-First Development section to CONTRIBUTING.md and AGENTIC_CODING.md
-- Fixed README.md quick-start commands (`cd DocuElevate`, `cp .env.demo .env`)
-- Added note to README.md screenshots section indicating they may lag the current UI
-- Updated TODO.md to reflect current version (v0.40.0) and completed tasks
-- Retroactively populated CHANGELOG.md with all post-v0.5.0 changes
-
----
+<!-- version list -->
 
 ## [0.40.0] - 2026-02-23
 
