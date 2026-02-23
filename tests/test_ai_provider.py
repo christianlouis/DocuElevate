@@ -16,6 +16,7 @@ from app.utils.ai_provider import (
     OpenRouterProvider,
     PortkeyProvider,
     _require_text_content,
+    _resolve_temperature,
     get_ai_provider,
 )
 
@@ -72,6 +73,77 @@ class TestRequireTextContent:
         """Raises ValueError with descriptive message when content is None."""
         with pytest.raises(ValueError, match="content=None"):
             _require_text_content(None)
+
+
+# ---------------------------------------------------------------------------
+# _resolve_temperature helper
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestResolveTemperature:
+    """Tests for the _resolve_temperature compatibility helper."""
+
+    def test_regular_model_returns_requested_temperature(self):
+        """Standard models return the temperature unchanged."""
+        assert _resolve_temperature("gpt-4o", 0) == 0
+        assert _resolve_temperature("gpt-4o-mini", 0.7) == 0.7
+
+    def test_gpt4_model_returns_requested_temperature(self):
+        """gpt-4 models are not gpt-5, so temperature is returned as-is."""
+        assert _resolve_temperature("gpt-4-turbo", 0) == 0
+
+    def test_gpt5_model_forces_temperature_1(self):
+        """gpt-5 models only accept temperature=1; any other value is coerced."""
+        assert _resolve_temperature("gpt-5", 0) == 1.0
+
+    def test_gpt5_nano_forces_temperature_1(self):
+        """gpt-5-nano (gpt-5 variant) gets temperature coerced to 1."""
+        assert _resolve_temperature("gpt-5-nano", 0) == 1.0
+
+    def test_gpt5_codex_forces_temperature_1(self):
+        """gpt-5-codex (gpt-5 variant) gets temperature coerced to 1."""
+        assert _resolve_temperature("gpt-5-codex", 0) == 1.0
+
+    def test_gpt5_already_at_1_unchanged(self):
+        """gpt-5 with temperature=1 returns 1 (no unnecessary log noise)."""
+        assert _resolve_temperature("gpt-5", 1.0) == 1.0
+
+    def test_o1_returns_none(self):
+        """o1 reasoning model does not support temperature; None is returned."""
+        assert _resolve_temperature("o1", 0) is None
+
+    def test_o1_mini_returns_none(self):
+        """o1-mini returns None (temperature not supported)."""
+        assert _resolve_temperature("o1-mini", 0) is None
+
+    def test_o1_preview_returns_none(self):
+        """o1-preview returns None (temperature not supported)."""
+        assert _resolve_temperature("o1-preview", 0) is None
+
+    def test_o3_returns_none(self):
+        """o3 reasoning model does not support temperature."""
+        assert _resolve_temperature("o3", 0) is None
+
+    def test_o3_mini_returns_none(self):
+        """o3-mini returns None (temperature not supported)."""
+        assert _resolve_temperature("o3-mini", 0) is None
+
+    def test_o4_mini_returns_none(self):
+        """o4-mini returns None (temperature not supported)."""
+        assert _resolve_temperature("o4-mini", 0) is None
+
+    def test_provider_prefix_is_stripped(self):
+        """Provider prefix (e.g. 'openai/') is ignored when matching."""
+        assert _resolve_temperature("openai/gpt-5-nano", 0) == 1.0
+        assert _resolve_temperature("openai/o1-mini", 0) is None
+        assert _resolve_temperature("openai/gpt-4o", 0) == 0
+
+    def test_model_names_are_case_insensitive(self):
+        """Model matching is case-insensitive."""
+        assert _resolve_temperature("GPT-5", 0) == 1.0
+        assert _resolve_temperature("O1", 0) is None
+        assert _resolve_temperature("O3-Mini", 0) is None
 
 
 # ---------------------------------------------------------------------------
