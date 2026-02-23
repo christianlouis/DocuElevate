@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.43.0 (2026-02-23)
+
+### Features
+
+- **ui**: Implement responsive mobile interface
+  ([`d08e175`](https://github.com/christianlouis/DocuElevate/commit/d08e175352bae477e657cbd7ab27839de406cbc3))
+
+
 ## v0.42.2 (2026-02-23)
 
 ### Bug Fixes
