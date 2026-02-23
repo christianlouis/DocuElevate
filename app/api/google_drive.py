@@ -49,9 +49,7 @@ async def exchange_google_drive_token(
     }
 
     # Use shared OAuth helper (handles secure logging and error handling)
-    token_data = exchange_oauth_token(
-        provider_name="Google Drive", token_url=token_url, payload=payload
-    )
+    token_data = exchange_oauth_token(provider_name="Google Drive", token_url=token_url, payload=payload)
 
     # Return just what's needed by the frontend
     return {
@@ -80,11 +78,7 @@ async def update_google_drive_settings(
 
         user = request.session.get("user", {}) if hasattr(request, "session") else {}
         changed_by = (
-            user.get("preferred_username")
-            or user.get("username")
-            or user.get("email")
-            or user.get("id")
-            or "wizard"
+            user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "wizard"
         )
 
         # Convert use_oauth string to boolean
@@ -93,30 +87,22 @@ async def update_google_drive_settings(
         # Update settings in memory and persist to database
         if refresh_token:
             settings.google_drive_refresh_token = refresh_token
-            save_setting_to_db(
-                db, "google_drive_refresh_token", refresh_token, changed_by=changed_by
-            )
+            save_setting_to_db(db, "google_drive_refresh_token", refresh_token, changed_by=changed_by)
             logger.info("Updated GOOGLE_DRIVE_REFRESH_TOKEN in memory and database")
 
         if client_id:
             settings.google_drive_client_id = client_id
-            save_setting_to_db(
-                db, "google_drive_client_id", client_id, changed_by=changed_by
-            )
+            save_setting_to_db(db, "google_drive_client_id", client_id, changed_by=changed_by)
             logger.info("Updated GOOGLE_DRIVE_CLIENT_ID in memory and database")
 
         if client_secret:
             settings.google_drive_client_secret = client_secret
-            save_setting_to_db(
-                db, "google_drive_client_secret", client_secret, changed_by=changed_by
-            )
+            save_setting_to_db(db, "google_drive_client_secret", client_secret, changed_by=changed_by)
             logger.info("Updated GOOGLE_DRIVE_CLIENT_SECRET in memory and database")
 
         if folder_id:
             settings.google_drive_folder_id = folder_id
-            save_setting_to_db(
-                db, "google_drive_folder_id", folder_id, changed_by=changed_by
-            )
+            save_setting_to_db(db, "google_drive_folder_id", folder_id, changed_by=changed_by)
             logger.info("Updated GOOGLE_DRIVE_FOLDER_ID in memory and database")
 
         # Set the OAuth flag
@@ -127,9 +113,7 @@ async def update_google_drive_settings(
             str(use_oauth_bool).lower(),
             changed_by=changed_by,
         )
-        logger.info(
-            f"Updated GOOGLE_DRIVE_USE_OAUTH in memory and database to {use_oauth_bool}"
-        )
+        logger.info(f"Updated GOOGLE_DRIVE_USE_OAUTH in memory and database to {use_oauth_bool}")
 
         notify_settings_updated()
 
@@ -154,8 +138,7 @@ async def test_google_drive_token(request: Request):
     Tests both OAuth and service account approaches based on configuration.
     """
     try:
-        from app.tasks.upload_to_google_drive import (get_drive_service_oauth,
-                                                      get_google_drive_service)
+        from app.tasks.upload_to_google_drive import get_drive_service_oauth, get_google_drive_service
 
         logger.info("Testing Google Drive token validity")
 
@@ -232,9 +215,7 @@ async def test_google_drive_token(request: Request):
         else:
             # Test service account connection
             if not settings.google_drive_credentials_json:
-                logger.warning(
-                    "Google Drive service account credentials not configured"
-                )
+                logger.warning("Google Drive service account credentials not configured")
                 return {
                     "status": "error",
                     "message": "Google Drive service account credentials are not configured",
@@ -253,9 +234,7 @@ async def test_google_drive_token(request: Request):
                 else:
                     user_display = user_email
 
-                logger.info(
-                    f"Successfully connected to Google Drive using service account as {user_display}"
-                )
+                logger.info(f"Successfully connected to Google Drive using service account as {user_display}")
 
                 return {
                     "status": "success",
@@ -398,20 +377,14 @@ async def save_dropbox_settings(
     """
     try:
         # Get the path to the .env file
-        env_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"
-        )
+        env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
 
         # Convert use_oauth string to boolean
         use_oauth_bool = use_oauth.lower() in ("true", "1", "yes", "y", "t")
 
         user = request.session.get("user", {}) if hasattr(request, "session") else {}
         changed_by = (
-            user.get("preferred_username")
-            or user.get("username")
-            or user.get("email")
-            or user.get("id")
-            or "wizard"
+            user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "wizard"
         )
 
         # Define settings to update
@@ -446,9 +419,7 @@ async def save_dropbox_settings(
                     stripped_line = line.rstrip()
                     is_updated = False
                     for key, value in drive_settings.items():
-                        if stripped_line.startswith(
-                            f"{key}="
-                        ) or stripped_line.startswith(f"# {key}="):
+                        if stripped_line.startswith(f"{key}=") or stripped_line.startswith(f"# {key}="):
                             # Uncomment if commented out - check the original stripped line
                             new_env_lines.append(f"{key}={value}")
                             updated.add(key)
@@ -468,9 +439,7 @@ async def save_dropbox_settings(
 
                 logger.info("Successfully updated Google Drive settings in .env file")
             except Exception as e:
-                logger.warning(
-                    f"Failed to update .env file: {str(e)}, but will continue with in-memory update"
-                )
+                logger.warning(f"Failed to update .env file: {str(e)}, but will continue with in-memory update")
         else:
             logger.warning(
                 f".env file not found at {env_path}, skipping file update but continuing with in-memory update"
@@ -497,21 +466,13 @@ async def save_dropbox_settings(
             changed_by=changed_by,
         )
         if refresh_token:
-            save_setting_to_db(
-                db, "google_drive_refresh_token", refresh_token, changed_by=changed_by
-            )
+            save_setting_to_db(db, "google_drive_refresh_token", refresh_token, changed_by=changed_by)
         if client_id:
-            save_setting_to_db(
-                db, "google_drive_client_id", client_id, changed_by=changed_by
-            )
+            save_setting_to_db(db, "google_drive_client_id", client_id, changed_by=changed_by)
         if client_secret:
-            save_setting_to_db(
-                db, "google_drive_client_secret", client_secret, changed_by=changed_by
-            )
+            save_setting_to_db(db, "google_drive_client_secret", client_secret, changed_by=changed_by)
         if folder_id:
-            save_setting_to_db(
-                db, "google_drive_folder_id", folder_id, changed_by=changed_by
-            )
+            save_setting_to_db(db, "google_drive_folder_id", folder_id, changed_by=changed_by)
 
         notify_settings_updated()
 

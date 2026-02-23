@@ -51,9 +51,7 @@ async def exchange_onedrive_token(
     }
 
     # Use shared OAuth helper (handles secure logging and error handling)
-    token_data = exchange_oauth_token(
-        provider_name="OneDrive", token_url=token_url, payload=payload
-    )
+    token_data = exchange_oauth_token(provider_name="OneDrive", token_url=token_url, payload=payload)
 
     # Return just what's needed by the frontend
     return {
@@ -94,9 +92,7 @@ async def test_onedrive_token(request: Request):
             "scope": "offline_access Files.ReadWrite",
         }
 
-        response = requests.post(
-            token_url, data=refresh_data, timeout=settings.http_request_timeout
-        )
+        response = requests.post(token_url, data=refresh_data, timeout=settings.http_request_timeout)
 
         if response.status_code != 200:
             logger.error(f"Failed to refresh OneDrive token: {response.text}")
@@ -108,25 +104,19 @@ async def test_onedrive_token(request: Request):
 
         token_data = response.json()
         access_token = token_data.get("access_token")
-        expires_in = token_data.get(
-            "expires_in", 3600
-        )  # Default to 1 hour if not specified
+        expires_in = token_data.get("expires_in", 3600)  # Default to 1 hour if not specified
 
         # Check if we got a new refresh token (Microsoft sometimes issues a new one)
         new_refresh_token = token_data.get("refresh_token")
         if new_refresh_token and new_refresh_token != settings.onedrive_refresh_token:
-            logger.info(
-                "Received new refresh token from Microsoft - will update configuration"
-            )
+            logger.info("Received new refresh token from Microsoft - will update configuration")
 
             # Update refresh token in memory
             settings.onedrive_refresh_token = new_refresh_token
 
             # Also try to update .env file if it exists
             try:
-                env_path = os.path.join(
-                    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"
-                )
+                env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
                 if os.path.exists(env_path):
                     with open(env_path, "r") as f:
                         env_lines = f.readlines()
@@ -136,17 +126,13 @@ async def test_onedrive_token(request: Request):
 
                     for line in env_lines:
                         if line.startswith("ONEDRIVE_REFRESH_TOKEN="):
-                            updated_lines.append(
-                                f"ONEDRIVE_REFRESH_TOKEN={new_refresh_token}\n"
-                            )
+                            updated_lines.append(f"ONEDRIVE_REFRESH_TOKEN={new_refresh_token}\n")
                             updated = True
                         else:
                             updated_lines.append(line)
 
                     if not updated:
-                        updated_lines.append(
-                            f"ONEDRIVE_REFRESH_TOKEN={new_refresh_token}\n"
-                        )
+                        updated_lines.append(f"ONEDRIVE_REFRESH_TOKEN={new_refresh_token}\n")
 
                     with open(env_path, "w") as f:
                         f.writelines(updated_lines)
@@ -172,22 +158,16 @@ async def test_onedrive_token(request: Request):
                 finally:
                     _db.close()
             except Exception as _e:
-                logger.warning(
-                    f"Failed to persist rotated OneDrive refresh token to database: {_e}"
-                )
+                logger.warning(f"Failed to persist rotated OneDrive refresh token to database: {_e}")
 
         # Test the access token by getting user information
         user_info_url = "https://graph.microsoft.com/v1.0/me"
         headers = {"Authorization": f"Bearer {access_token}"}
 
-        user_response = requests.get(
-            user_info_url, headers=headers, timeout=settings.http_request_timeout
-        )
+        user_response = requests.get(user_info_url, headers=headers, timeout=settings.http_request_timeout)
 
         if user_response.status_code != 200:
-            logger.error(
-                f"OneDrive token test failed: {user_response.status_code} {user_response.text}"
-            )
+            logger.error(f"OneDrive token test failed: {user_response.status_code} {user_response.text}")
             return {
                 "status": "error",
                 "message": f"Token validation failed with status {user_response.status_code}: {user_response.text}",
@@ -263,22 +243,14 @@ async def save_onedrive_settings(
     try:
         user = request.session.get("user", {}) if hasattr(request, "session") else {}
         changed_by = (
-            user.get("preferred_username")
-            or user.get("username")
-            or user.get("email")
-            or user.get("id")
-            or "wizard"
+            user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "wizard"
         )
 
         # Best-effort .env file write
         try:
-            env_path = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"
-            )
+            env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
             if not os.path.exists(env_path):
-                logger.warning(
-                    f".env file not found at {env_path}, skipping file write"
-                )
+                logger.warning(f".env file not found at {env_path}, skipping file write")
             else:
                 logger.info(f"Updating OneDrive settings in {env_path}")
 
@@ -301,9 +273,7 @@ async def save_onedrive_settings(
                     stripped_line = line.rstrip()
                     is_updated = False
                     for key, value in onedrive_settings.items():
-                        if stripped_line.startswith(
-                            f"{key}="
-                        ) or stripped_line.startswith(f"# {key}="):
+                        if stripped_line.startswith(f"{key}=") or stripped_line.startswith(f"# {key}="):
                             new_env_lines.append(f"{key}={value}")
                             updated.add(key)
                             is_updated = True
@@ -336,25 +306,15 @@ async def save_onedrive_settings(
 
         # Persist to database (primary)
         if refresh_token:
-            save_setting_to_db(
-                db, "onedrive_refresh_token", refresh_token, changed_by=changed_by
-            )
+            save_setting_to_db(db, "onedrive_refresh_token", refresh_token, changed_by=changed_by)
         if client_id:
-            save_setting_to_db(
-                db, "onedrive_client_id", client_id, changed_by=changed_by
-            )
+            save_setting_to_db(db, "onedrive_client_id", client_id, changed_by=changed_by)
         if client_secret:
-            save_setting_to_db(
-                db, "onedrive_client_secret", client_secret, changed_by=changed_by
-            )
+            save_setting_to_db(db, "onedrive_client_secret", client_secret, changed_by=changed_by)
         if tenant_id:
-            save_setting_to_db(
-                db, "onedrive_tenant_id", tenant_id, changed_by=changed_by
-            )
+            save_setting_to_db(db, "onedrive_tenant_id", tenant_id, changed_by=changed_by)
         if folder_path:
-            save_setting_to_db(
-                db, "onedrive_folder_path", folder_path, changed_by=changed_by
-            )
+            save_setting_to_db(db, "onedrive_folder_path", folder_path, changed_by=changed_by)
 
         notify_settings_updated()
 
@@ -388,47 +348,33 @@ async def update_onedrive_settings(
 
         user = request.session.get("user", {}) if hasattr(request, "session") else {}
         changed_by = (
-            user.get("preferred_username")
-            or user.get("username")
-            or user.get("email")
-            or user.get("id")
-            or "wizard"
+            user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "wizard"
         )
 
         # Update settings in memory and persist to database
         if refresh_token:
             settings.onedrive_refresh_token = refresh_token
-            save_setting_to_db(
-                db, "onedrive_refresh_token", refresh_token, changed_by=changed_by
-            )
+            save_setting_to_db(db, "onedrive_refresh_token", refresh_token, changed_by=changed_by)
             logger.info("Updated ONEDRIVE_REFRESH_TOKEN in memory and database")
 
         if client_id:
             settings.onedrive_client_id = client_id
-            save_setting_to_db(
-                db, "onedrive_client_id", client_id, changed_by=changed_by
-            )
+            save_setting_to_db(db, "onedrive_client_id", client_id, changed_by=changed_by)
             logger.info("Updated ONEDRIVE_CLIENT_ID in memory and database")
 
         if client_secret:
             settings.onedrive_client_secret = client_secret
-            save_setting_to_db(
-                db, "onedrive_client_secret", client_secret, changed_by=changed_by
-            )
+            save_setting_to_db(db, "onedrive_client_secret", client_secret, changed_by=changed_by)
             logger.info("Updated ONEDRIVE_CLIENT_SECRET in memory and database")
 
         if tenant_id:
             settings.onedrive_tenant_id = tenant_id
-            save_setting_to_db(
-                db, "onedrive_tenant_id", tenant_id, changed_by=changed_by
-            )
+            save_setting_to_db(db, "onedrive_tenant_id", tenant_id, changed_by=changed_by)
             logger.info("Updated ONEDRIVE_TENANT_ID in memory and database")
 
         if folder_path:
             settings.onedrive_folder_path = folder_path
-            save_setting_to_db(
-                db, "onedrive_folder_path", folder_path, changed_by=changed_by
-            )
+            save_setting_to_db(db, "onedrive_folder_path", folder_path, changed_by=changed_by)
             logger.info("Updated ONEDRIVE_FOLDER_PATH in memory and database")
 
         notify_settings_updated()

@@ -249,9 +249,7 @@ class TestTestDropboxToken:
         mock_settings.dropbox_app_secret = "app-secret"
         mock_settings.http_request_timeout = 30
 
-        mock_post.side_effect = requests.exceptions.ConnectionError(
-            "Connection refused"
-        )
+        mock_post.side_effect = requests.exceptions.ConnectionError("Connection refused")
 
         response = client.get("/api/dropbox/test-token")
 
@@ -312,9 +310,7 @@ class TestSaveDropboxSettings:
         assert "new-token" in content
 
     @patch("app.api.dropbox.settings")
-    def test_save_settings_with_all_optional_fields(
-        self, mock_settings, client, tmp_path
-    ):
+    def test_save_settings_with_all_optional_fields(self, mock_settings, client, tmp_path):
         """Test saving all Dropbox settings including optional fields."""
         mock_settings.dropbox_refresh_token = ""
         mock_settings.dropbox_app_key = ""

@@ -72,9 +72,7 @@ class TestExchangeOneDriveToken:
     @patch("app.api.onedrive.exchange_oauth_token")
     def test_exchange_token_error(self, mock_exchange, client: TestClient):
         """Test token exchange with error from OAuth provider."""
-        mock_exchange.side_effect = HTTPException(
-            status_code=400, detail="Invalid authorization code"
-        )
+        mock_exchange.side_effect = HTTPException(status_code=400, detail="Invalid authorization code")
 
         response = client.post(
             "/api/onedrive/exchange-token",
@@ -109,9 +107,7 @@ class TestTestOneDriveToken:
     @patch("requests.post")
     @patch("requests.get")
     @patch("app.config.settings")
-    def test_test_token_success(
-        self, mock_settings, mock_get, mock_post, client: TestClient
-    ):
+    def test_test_token_success(self, mock_settings, mock_get, mock_post, client: TestClient):
         """Test successful token validation with properly mocked responses."""
         # Configure settings with property mocking
         type(mock_settings).onedrive_refresh_token = "test_refresh_token"
@@ -162,9 +158,7 @@ class TestTestOneDriveToken:
 
     @patch("requests.post")
     @patch("app.config.settings")
-    def test_test_token_refresh_failed(
-        self, mock_settings, mock_post, client: TestClient
-    ):
+    def test_test_token_refresh_failed(self, mock_settings, mock_post, client: TestClient):
         """Test when token refresh fails."""
         type(mock_settings).onedrive_refresh_token = "invalid_token"
         type(mock_settings).onedrive_client_id = "test_client_id"
@@ -189,9 +183,7 @@ class TestTestOneDriveToken:
     @patch("requests.post")
     @patch("requests.get")
     @patch("app.config.settings")
-    def test_test_token_new_refresh_token_issued(
-        self, mock_settings, mock_get, mock_post, client: TestClient
-    ):
+    def test_test_token_new_refresh_token_issued(self, mock_settings, mock_get, mock_post, client: TestClient):
         """Test when Microsoft issues a new refresh token."""
         type(mock_settings).onedrive_refresh_token = "old_refresh_token"
         type(mock_settings).onedrive_client_id = "test_client_id"
@@ -278,9 +270,7 @@ class TestTestOneDriveToken:
     @patch("requests.post")
     @patch("requests.get")
     @patch("app.config.settings")
-    def test_test_token_user_info_failed(
-        self, mock_settings, mock_get, mock_post, client: TestClient
-    ):
+    def test_test_token_user_info_failed(self, mock_settings, mock_get, mock_post, client: TestClient):
         """Test when user info request fails."""
         mock_settings.onedrive_refresh_token = "test_token"
         mock_settings.onedrive_client_id = "test_client_id"
@@ -356,9 +346,7 @@ class TestSaveOneDriveSettings:
     @patch("os.path.exists")
     @patch("os.path.dirname")
     @patch("app.config.settings")
-    def test_save_settings_success(
-        self, mock_settings, mock_dirname, mock_exists, mock_file, client: TestClient
-    ):
+    def test_save_settings_success(self, mock_settings, mock_dirname, mock_exists, mock_file, client: TestClient):
         """Test successful save to .env file."""
         mock_exists.return_value = True
         mock_dirname.return_value = "/app"
@@ -380,9 +368,7 @@ class TestSaveOneDriveSettings:
 
     @patch("os.path.exists")
     @patch("os.path.dirname")
-    def test_save_settings_env_file_not_found(
-        self, mock_dirname, mock_exists, client: TestClient
-    ):
+    def test_save_settings_env_file_not_found(self, mock_dirname, mock_exists, client: TestClient):
         """Test that missing .env file is non-fatal — DB write still succeeds."""
         mock_exists.return_value = False
         mock_dirname.return_value = "/app"
@@ -468,17 +454,13 @@ class TestSaveOneDriveSettings:
 
     def test_save_settings_missing_required_field(self, client: TestClient):
         """Test save without required refresh_token."""
-        response = client.post(
-            "/api/onedrive/save-settings", data={"tenant_id": "common"}
-        )
+        response = client.post("/api/onedrive/save-settings", data={"tenant_id": "common"})
 
         assert response.status_code == 422  # Validation error
 
     @patch("os.path.exists")
     @patch("os.path.dirname")
-    def test_save_settings_exception_handling(
-        self, mock_dirname, mock_exists, client: TestClient
-    ):
+    def test_save_settings_exception_handling(self, mock_dirname, mock_exists, client: TestClient):
         """Test that exceptions in .env write are non-fatal — DB write still succeeds."""
         mock_exists.side_effect = Exception("Unexpected error")
 
@@ -498,9 +480,7 @@ class TestUpdateOneDriveSettings:
 
     @patch("app.tasks.upload_to_onedrive.get_onedrive_token")
     @patch("app.config.settings")
-    def test_update_settings_success(
-        self, mock_settings, mock_get_token, client: TestClient
-    ):
+    def test_update_settings_success(self, mock_settings, mock_get_token, client: TestClient):
         """Test successful settings update in memory."""
         mock_get_token.return_value = "test_token"
 
@@ -521,9 +501,7 @@ class TestUpdateOneDriveSettings:
 
     @patch("app.tasks.upload_to_onedrive.get_onedrive_token")
     @patch("app.config.settings")
-    def test_update_settings_minimal(
-        self, mock_settings, mock_get_token, client: TestClient
-    ):
+    def test_update_settings_minimal(self, mock_settings, mock_get_token, client: TestClient):
         """Test update with only required fields."""
         mock_get_token.return_value = "test_token"
 
@@ -536,9 +514,7 @@ class TestUpdateOneDriveSettings:
 
     @patch("app.tasks.upload_to_onedrive.get_onedrive_token")
     @patch("app.config.settings")
-    def test_update_settings_token_test_fails(
-        self, mock_settings, mock_get_token, client: TestClient
-    ):
+    def test_update_settings_token_test_fails(self, mock_settings, mock_get_token, client: TestClient):
         """Test update when token test fails."""
         mock_get_token.side_effect = Exception("Token invalid")
 
@@ -554,16 +530,12 @@ class TestUpdateOneDriveSettings:
 
     def test_update_settings_missing_required_field(self, client: TestClient):
         """Test update without required refresh_token."""
-        response = client.post(
-            "/api/onedrive/update-settings", data={"tenant_id": "common"}
-        )
+        response = client.post("/api/onedrive/update-settings", data={"tenant_id": "common"})
 
         assert response.status_code == 422
 
     @patch("app.config.settings")
-    def test_update_settings_exception_handling(
-        self, mock_settings, client: TestClient
-    ):
+    def test_update_settings_exception_handling(self, mock_settings, client: TestClient):
         """Test exception handling in update settings."""
         mock_settings.onedrive_refresh_token = None
 
@@ -619,9 +591,7 @@ class TestGetOneDriveFullConfig:
         assert "status" in data
 
     @patch("app.config.settings")
-    def test_get_full_config_exception_handling(
-        self, mock_settings, client: TestClient
-    ):
+    def test_get_full_config_exception_handling(self, mock_settings, client: TestClient):
         """Test exception handling in get full config."""
         # Even with exception, endpoint catches it
         response = client.get("/api/onedrive/get-full-config")
@@ -676,9 +646,7 @@ class TestOneDriveIntegration:
     @patch("requests.post")
     @patch("requests.get")
     @patch("app.config.settings")
-    def test_token_refresh_rotation(
-        self, mock_settings, mock_get, mock_post, client: TestClient
-    ):
+    def test_token_refresh_rotation(self, mock_settings, mock_get, mock_post, client: TestClient):
         """Test token refresh with automatic rotation."""
         type(mock_settings).onedrive_refresh_token = "old_token"
         type(mock_settings).onedrive_client_id = "test_client_id"

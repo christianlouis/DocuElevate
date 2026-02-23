@@ -11,16 +11,19 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.utils.input_validation import (validate_setting_key,
-                                        validate_setting_key_format)
-from app.utils.settings_service import (SETTING_METADATA,
-                                        delete_setting_from_db,
-                                        get_all_settings_from_db,
-                                        get_audit_log, get_setting_history,
-                                        get_setting_metadata,
-                                        get_settings_by_category,
-                                        rollback_setting, save_setting_to_db,
-                                        validate_setting_value)
+from app.utils.input_validation import validate_setting_key, validate_setting_key_format
+from app.utils.settings_service import (
+    SETTING_METADATA,
+    delete_setting_from_db,
+    get_all_settings_from_db,
+    get_audit_log,
+    get_setting_history,
+    get_setting_metadata,
+    get_settings_by_category,
+    rollback_setting,
+    save_setting_to_db,
+    validate_setting_value,
+)
 from app.utils.settings_sync import notify_settings_updated
 
 logger = logging.getLogger(__name__)
@@ -37,9 +40,7 @@ def require_admin(request: Request) -> dict:
     """
     user = request.session.get("user")
     if not user or not user.get("is_admin"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return user
 
 
@@ -93,9 +94,7 @@ async def get_settings(request: Request, db: DbSession, admin: AdminUser):
         # Get settings organized by category
         categories = get_settings_by_category()
 
-        return SettingsListResponse(
-            settings=current_settings, categories=categories, db_settings=db_settings
-        )
+        return SettingsListResponse(settings=current_settings, categories=categories, db_settings=db_settings)
     except Exception as e:
         logger.error(f"Error retrieving settings: {e}")
         raise HTTPException(
@@ -118,9 +117,7 @@ async def get_setting(key: str, request: Request, db: DbSession, admin: AdminUse
         # Get metadata
         metadata = get_setting_metadata(key)
 
-        return SettingResponse(
-            key=key, value=str(value) if value is not None else None, metadata=metadata
-        )
+        return SettingResponse(key=key, value=str(value) if value is not None else None, metadata=metadata)
     except Exception as e:
         logger.error(f"Error retrieving setting {key}: {e}")
         raise HTTPException(
@@ -147,18 +144,12 @@ async def update_setting(
         if setting.value is not None:
             is_valid, error_message = validate_setting_value(key, setting.value)
             if not is_valid:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail=error_message
-                )
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_message)
 
         # Determine the username for the audit log
         user = request.session.get("user", {}) if hasattr(request, "session") else {}
         changed_by = (
-            user.get("preferred_username")
-            or user.get("username")
-            or user.get("email")
-            or user.get("id")
-            or "admin"
+            user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "admin"
         )
 
         # Save to database
@@ -203,11 +194,7 @@ async def delete_setting(key: str, request: Request, db: DbSession, admin: Admin
     try:
         user = request.session.get("user", {}) if hasattr(request, "session") else {}
         changed_by = (
-            user.get("preferred_username")
-            or user.get("username")
-            or user.get("email")
-            or user.get("id")
-            or "admin"
+            user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "admin"
         )
 
         success = delete_setting_from_db(db, key, changed_by=changed_by)
@@ -291,9 +278,7 @@ async def list_credentials(request: Request, db: DbSession, admin: AdminUser):
 
 
 @router.post("/bulk-update")
-async def bulk_update_settings(
-    updates: list[SettingUpdate], request: Request, db: DbSession, admin: AdminUser
-):
+async def bulk_update_settings(updates: list[SettingUpdate], request: Request, db: DbSession, admin: AdminUser):
     """
     Update multiple settings at once.
     Admin only.
@@ -303,36 +288,24 @@ async def bulk_update_settings(
 
     user = request.session.get("user", {}) if hasattr(request, "session") else {}
     changed_by = (
-        user.get("preferred_username")
-        or user.get("username")
-        or user.get("email")
-        or user.get("id")
-        or "admin"
+        user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "admin"
     )
 
     for update in updates:
         try:
             # Validate the setting value
             if update.value is not None:
-                is_valid, error_message = validate_setting_value(
-                    update.key, update.value
-                )
+                is_valid, error_message = validate_setting_value(update.key, update.value)
                 if not is_valid:
                     errors.append({"key": update.key, "error": error_message})
                     continue
 
             # Save to database
-            success = save_setting_to_db(
-                db, update.key, update.value, changed_by=changed_by
-            )
+            success = save_setting_to_db(db, update.key, update.value, changed_by=changed_by)
             if success:
-                results.append(
-                    {"key": update.key, "value": update.value, "status": "success"}
-                )
+                results.append({"key": update.key, "value": update.value, "status": "success"})
             else:
-                errors.append(
-                    {"key": update.key, "error": "Failed to save to database"}
-                )
+                errors.append({"key": update.key, "error": "Failed to save to database"})
         except Exception as e:
             logger.error(f"Error updating setting {update.key}: {e}")
             errors.append({"key": update.key, "error": str(e)})
@@ -340,10 +313,7 @@ async def bulk_update_settings(
     if results:
         notify_settings_updated()
 
-    restart_required = any(
-        get_setting_metadata(result["key"]).get("restart_required", False)
-        for result in results
-    )
+    restart_required = any(get_setting_metadata(result["key"]).get("restart_required", False) for result in results)
 
     return {
         "success": len(errors) == 0,
@@ -422,11 +392,7 @@ async def rollback_setting_to_history(
     try:
         user = request.session.get("user", {}) if hasattr(request, "session") else {}
         changed_by = (
-            user.get("preferred_username")
-            or user.get("username")
-            or user.get("email")
-            or user.get("id")
-            or "admin"
+            user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "admin"
         )
 
         success = rollback_setting(db, key, history_id, changed_by=changed_by)
@@ -498,9 +464,7 @@ async def export_env_settings(
         return FastAPIResponse(
             content=content,
             media_type="text/plain",
-            headers={
-                "Content-Disposition": f'attachment; filename="docuelevate-{source}.env"'
-            },
+            headers={"Content-Disposition": f'attachment; filename="docuelevate-{source}.env"'},
         )
     except Exception as e:
         logger.error(f"Error exporting settings: {e}")

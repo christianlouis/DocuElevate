@@ -12,12 +12,13 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.utils.config_validator.masking import mask_sensitive_value
-from app.utils.settings_service import (SETTING_METADATA,
-                                        get_all_settings_from_db,
-                                        get_setting_metadata,
-                                        get_settings_by_category)
-from app.views.base import (APIRouter, get_db, require_login, settings,
-                            templates)
+from app.utils.settings_service import (
+    SETTING_METADATA,
+    get_all_settings_from_db,
+    get_setting_metadata,
+    get_settings_by_category,
+)
+from app.views.base import APIRouter, get_db, require_login, settings, templates
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -102,9 +103,7 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
                 settings_data[category].append(
                     {
                         "key": key,
-                        "display_value": (
-                            display_value if display_value is not None else ""
-                        ),
+                        "display_value": (display_value if display_value is not None else ""),
                         "metadata": metadata,
                         "source": source,
                         "source_label": source_label,
@@ -175,9 +174,7 @@ async def credentials_page(request: Request, db: Session = Depends(get_db)):
             )
 
         total = sum(len(v) for v in categories.values())
-        configured_count = sum(
-            1 for creds in categories.values() for c in creds if c["configured"]
-        )
+        configured_count = sum(1 for creds in categories.values() for c in creds if c["configured"])
 
         return templates.TemplateResponse(
             "credentials.html",

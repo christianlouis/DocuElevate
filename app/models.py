@@ -1,7 +1,6 @@
 # app/models.py
 
-from sqlalchemy import (Boolean, Column, DateTime, ForeignKey, Integer, String,
-                        Text, UniqueConstraint, func)
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 
 from app.database import Base
 
@@ -70,33 +69,21 @@ class FileProcessingStep(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     file_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=False, index=True)
-    step_name = Column(
-        String, nullable=False, index=True
-    )  # e.g., "hash_file", "upload_to_dropbox"
-    status = Column(
-        String, nullable=False
-    )  # "pending", "in_progress", "success", "failure", "skipped"
+    step_name = Column(String, nullable=False, index=True)  # e.g., "hash_file", "upload_to_dropbox"
+    status = Column(String, nullable=False)  # "pending", "in_progress", "success", "failure", "skipped"
     started_at = Column(DateTime(timezone=True), nullable=True)  # When step started
-    completed_at = Column(
-        DateTime(timezone=True), nullable=True
-    )  # When step finished (success/failure)
+    completed_at = Column(DateTime(timezone=True), nullable=True)  # When step finished (success/failure)
     error_message = Column(Text, nullable=True)  # Error message if status is "failure"
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    __table_args__ = (
-        UniqueConstraint("file_id", "step_name", name="unique_file_step"),
-    )
+    __table_args__ = (UniqueConstraint("file_id", "step_name", name="unique_file_step"),)
 
 
 class ProcessingLog(Base):
     __tablename__ = "processing_logs"
     id = Column(Integer, primary_key=True, index=True)
-    file_id = Column(
-        Integer, ForeignKey(_FILES_ID_FK), nullable=True
-    )  # Optional file association
+    file_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=True)  # Optional file association
     task_id = Column(String, index=True)  # Celery task ID
     step_name = Column(String)  # e.g., "OCR", "convert_to_pdf", "upload_s3"
     status = Column(String)  # "pending", "in_progress", "success", "failure"
@@ -111,16 +98,10 @@ class ApplicationSettings(Base):
     __tablename__ = "application_settings"
 
     id = Column(Integer, primary_key=True, index=True)
-    key = Column(
-        String, unique=True, index=True, nullable=False
-    )  # Setting key (e.g., 'database_url')
-    value = Column(
-        String, nullable=True
-    )  # Setting value (stored as string, converted as needed)
+    key = Column(String, unique=True, index=True, nullable=False)  # Setting key (e.g., 'database_url')
+    value = Column(String, nullable=True)  # Setting value (stored as string, converted as needed)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class SettingsAuditLog(Base):
@@ -132,8 +113,6 @@ class SettingsAuditLog(Base):
     key = Column(String, nullable=False, index=True)  # Setting key that was changed
     old_value = Column(String, nullable=True)  # Previous value (None if first-time set)
     new_value = Column(String, nullable=True)  # New value (None if deleted)
-    changed_by = Column(
-        String, nullable=False
-    )  # Username of the admin who made the change
+    changed_by = Column(String, nullable=False)  # Username of the admin who made the change
     changed_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     action = Column(String, nullable=False)  # "update" or "delete"

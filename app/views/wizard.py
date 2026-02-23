@@ -40,11 +40,7 @@ async def setup_wizard(request: Request, step: int = 1, db: Session = Depends(ge
     current_settings = wizard_steps.get(step, [])
 
     # Get step category (all settings in a step should have same category)
-    step_category = (
-        current_settings[0].get("wizard_category", "Configuration")
-        if current_settings
-        else "Configuration"
-    )
+    step_category = current_settings[0].get("wizard_category", "Configuration") if current_settings else "Configuration"
 
     # Enrich settings with current live values
     from app.config import settings as app_settings
@@ -68,9 +64,7 @@ async def setup_wizard(request: Request, step: int = 1, db: Session = Depends(ge
         else:
             current_value = ""
             value_source = "none"
-        enriched_settings.append(
-            {**s, "current_value": current_value, "value_source": value_source}
-        )
+        enriched_settings.append({**s, "current_value": current_value, "value_source": value_source})
     current_settings = enriched_settings
 
     return templates.TemplateResponse(
@@ -88,9 +82,7 @@ async def setup_wizard(request: Request, step: int = 1, db: Session = Depends(ge
 
 
 @router.post("/setup")
-async def setup_wizard_save(
-    request: Request, step: int = Form(...), db: Session = Depends(get_db)
-):
+async def setup_wizard_save(request: Request, step: int = Form(...), db: Session = Depends(get_db)):
     """
     Save settings from the current wizard step.
     """
@@ -138,9 +130,7 @@ async def setup_wizard_save(
 
     except Exception as e:
         logger.error(f"Error saving wizard settings: {e}")
-        return RedirectResponse(
-            url=f"/setup?step={step}&error=save_failed", status_code=303
-        )
+        return RedirectResponse(url=f"/setup?step={step}&error=save_failed", status_code=303)
 
 
 @router.get("/setup/skip")
@@ -176,9 +166,7 @@ async def setup_wizard_undo_skip(request: Request, db: Session = Depends(get_db)
     try:
         from app.utils.settings_service import delete_setting_from_db
 
-        delete_setting_from_db(
-            db, "_setup_wizard_skipped", changed_by="wizard_undo_skip"
-        )
+        delete_setting_from_db(db, "_setup_wizard_skipped", changed_by="wizard_undo_skip")
         logger.info("Setup wizard skip marker removed; redirecting to wizard")
         return RedirectResponse(url="/setup?step=1", status_code=303)
     except Exception as e:

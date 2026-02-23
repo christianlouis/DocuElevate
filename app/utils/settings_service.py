@@ -871,9 +871,7 @@ def get_setting_from_db(db: Session, key: str) -> Optional[str]:
         Setting value as string (decrypted if necessary), or None if not found
     """
     try:
-        setting = (
-            db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
-        )
+        setting = db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
         if not setting:
             return None
 
@@ -890,9 +888,7 @@ def get_setting_from_db(db: Session, key: str) -> Optional[str]:
         return None
 
 
-def save_setting_to_db(
-    db: Session, key: str, value: Optional[str], changed_by: str = "system"
-) -> bool:
+def save_setting_to_db(db: Session, key: str, value: Optional[str], changed_by: str = "system") -> bool:
     """
     Save or update a setting in the database.
 
@@ -914,20 +910,15 @@ def save_setting_to_db(
         storage_value = value
 
         if metadata.get("sensitive", False) and value:
-            from app.utils.encryption import (encrypt_value,
-                                              is_encryption_available)
+            from app.utils.encryption import encrypt_value, is_encryption_available
 
             if is_encryption_available():
                 storage_value = encrypt_value(value)
                 logger.debug(f"Encrypted sensitive setting: {key}")
             else:
-                logger.warning(
-                    f"Storing sensitive setting {key} in plaintext (encryption unavailable)"
-                )
+                logger.warning(f"Storing sensitive setting {key} in plaintext (encryption unavailable)")
 
-        setting = (
-            db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
-        )
+        setting = db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
         old_storage_value = setting.value if setting else None
 
         if setting:
@@ -1015,9 +1006,7 @@ def delete_setting_from_db(db: Session, key: str, changed_by: str = "system") ->
         True if successful, False otherwise
     """
     try:
-        setting = (
-            db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
-        )
+        setting = db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
         if setting:
             # Capture old value for audit log (decrypt if sensitive)
             metadata = get_setting_metadata(key)
@@ -1045,9 +1034,7 @@ def delete_setting_from_db(db: Session, key: str, changed_by: str = "system") ->
             db.add(audit_entry)
 
             db.commit()
-            logger.info(
-                f"Deleted setting {key} from database (changed_by={changed_by})"
-            )
+            logger.info(f"Deleted setting {key} from database (changed_by={changed_by})")
             return True
         return False
     except SQLAlchemyError as e:
@@ -1131,9 +1118,7 @@ def validate_setting_value(key: str, value: str) -> Tuple[bool, Optional[str]]:
     return True, None
 
 
-def get_audit_log(
-    db: Session, limit: int = 100, offset: int = 0
-) -> List[Dict[str, Any]]:
+def get_audit_log(db: Session, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
     """
     Retrieve the settings audit log, most recent first.
 
@@ -1150,11 +1135,7 @@ def get_audit_log(
     """
     try:
         entries = (
-            db.query(SettingsAuditLog)
-            .order_by(SettingsAuditLog.changed_at.desc())
-            .limit(limit)
-            .offset(offset)
-            .all()
+            db.query(SettingsAuditLog).order_by(SettingsAuditLog.changed_at.desc()).limit(limit).offset(offset).all()
         )
         result = []
         for entry in entries:
@@ -1164,20 +1145,10 @@ def get_audit_log(
                 {
                     "id": entry.id,
                     "key": entry.key,
-                    "old_value": (
-                        "[REDACTED]"
-                        if is_sensitive and entry.old_value
-                        else entry.old_value
-                    ),
-                    "new_value": (
-                        "[REDACTED]"
-                        if is_sensitive and entry.new_value
-                        else entry.new_value
-                    ),
+                    "old_value": ("[REDACTED]" if is_sensitive and entry.old_value else entry.old_value),
+                    "new_value": ("[REDACTED]" if is_sensitive and entry.new_value else entry.new_value),
                     "changed_by": entry.changed_by,
-                    "changed_at": (
-                        entry.changed_at.isoformat() if entry.changed_at else None
-                    ),
+                    "changed_at": (entry.changed_at.isoformat() if entry.changed_at else None),
                     "action": entry.action,
                 }
             )
@@ -1215,20 +1186,10 @@ def get_setting_history(db: Session, key: str) -> List[Dict[str, Any]]:
                 {
                     "id": entry.id,
                     "key": entry.key,
-                    "old_value": (
-                        "[REDACTED]"
-                        if is_sensitive and entry.old_value
-                        else entry.old_value
-                    ),
-                    "new_value": (
-                        "[REDACTED]"
-                        if is_sensitive and entry.new_value
-                        else entry.new_value
-                    ),
+                    "old_value": ("[REDACTED]" if is_sensitive and entry.old_value else entry.old_value),
+                    "new_value": ("[REDACTED]" if is_sensitive and entry.new_value else entry.new_value),
                     "changed_by": entry.changed_by,
-                    "changed_at": (
-                        entry.changed_at.isoformat() if entry.changed_at else None
-                    ),
+                    "changed_at": (entry.changed_at.isoformat() if entry.changed_at else None),
                     "action": entry.action,
                 }
             )
@@ -1238,9 +1199,7 @@ def get_setting_history(db: Session, key: str) -> List[Dict[str, Any]]:
         return []
 
 
-def rollback_setting(
-    db: Session, key: str, history_id: int, changed_by: str = "system"
-) -> bool:
+def rollback_setting(db: Session, key: str, history_id: int, changed_by: str = "system") -> bool:
     """
     Revert a setting to the value recorded in a specific audit log entry.
 
@@ -1264,14 +1223,10 @@ def rollback_setting(
     """
     try:
         history_entry = (
-            db.query(SettingsAuditLog)
-            .filter(SettingsAuditLog.id == history_id, SettingsAuditLog.key == key)
-            .first()
+            db.query(SettingsAuditLog).filter(SettingsAuditLog.id == history_id, SettingsAuditLog.key == key).first()
         )
         if not history_entry:
-            logger.warning(
-                f"Rollback failed: audit log entry {history_id} not found for key '{key}'"
-            )
+            logger.warning(f"Rollback failed: audit log entry {history_id} not found for key '{key}'")
             return False
 
         target_value = history_entry.new_value
@@ -1282,9 +1237,7 @@ def rollback_setting(
         else:
             return save_setting_to_db(db, key, target_value, changed_by=changed_by)
     except SQLAlchemyError as e:
-        logger.error(
-            f"Error rolling back setting {key} to history entry {history_id}: {e}"
-        )
+        logger.error(f"Error rolling back setting {key} to history entry {history_id}: {e}")
         db.rollback()
         return False
 

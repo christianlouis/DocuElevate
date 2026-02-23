@@ -49,9 +49,7 @@ async def exchange_dropbox_token(
     }
 
     # Use shared OAuth helper (handles secure logging and error handling)
-    token_data = exchange_oauth_token(
-        provider_name="Dropbox", token_url=token_url, payload=payload
-    )
+    token_data = exchange_oauth_token(provider_name="Dropbox", token_url=token_url, payload=payload)
 
     # Return just what's needed by the frontend
     return {
@@ -79,19 +77,13 @@ async def update_dropbox_settings(
 
         user = request.session.get("user", {}) if hasattr(request, "session") else {}
         changed_by = (
-            user.get("preferred_username")
-            or user.get("username")
-            or user.get("email")
-            or user.get("id")
-            or "wizard"
+            user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "wizard"
         )
 
         # Update settings in memory and persist to database
         if refresh_token:
             settings.dropbox_refresh_token = refresh_token
-            save_setting_to_db(
-                db, "dropbox_refresh_token", refresh_token, changed_by=changed_by
-            )
+            save_setting_to_db(db, "dropbox_refresh_token", refresh_token, changed_by=changed_by)
             logger.info("Updated DROPBOX_REFRESH_TOKEN in memory and database")
 
         if app_key:
@@ -101,9 +93,7 @@ async def update_dropbox_settings(
 
         if app_secret:
             settings.dropbox_app_secret = app_secret
-            save_setting_to_db(
-                db, "dropbox_app_secret", app_secret, changed_by=changed_by
-            )
+            save_setting_to_db(db, "dropbox_app_secret", app_secret, changed_by=changed_by)
             logger.info("Updated DROPBOX_APP_SECRET in memory and database")
 
         if folder_path:
@@ -135,11 +125,7 @@ async def test_dropbox_token(request: Request):
     try:
         logger.info("Testing Dropbox token validity")
 
-        if (
-            not settings.dropbox_refresh_token
-            or not settings.dropbox_app_key
-            or not settings.dropbox_app_secret
-        ):
+        if not settings.dropbox_refresh_token or not settings.dropbox_app_key or not settings.dropbox_app_secret:
             logger.warning("Dropbox credentials not fully configured")
             return {
                 "status": "error",
@@ -167,14 +153,10 @@ async def test_dropbox_token(request: Request):
                 "client_secret": settings.dropbox_app_secret,
             }
 
-            refresh_response = requests.post(
-                refresh_url, data=refresh_data, timeout=settings.http_request_timeout
-            )
+            refresh_response = requests.post(refresh_url, data=refresh_data, timeout=settings.http_request_timeout)
 
             if refresh_response.status_code != 200:
-                logger.error(
-                    f"Failed to refresh Dropbox token: {refresh_response.text}"
-                )
+                logger.error(f"Failed to refresh Dropbox token: {refresh_response.text}")
                 return {
                     "status": "error",
                     "message": "Refresh token has expired or is invalid",
@@ -193,9 +175,7 @@ async def test_dropbox_token(request: Request):
             )
 
         if response.status_code != 200:
-            logger.error(
-                f"Dropbox token test failed: {response.status_code} {response.text}"
-            )
+            logger.error(f"Dropbox token test failed: {response.status_code} {response.text}")
             return {
                 "status": "error",
                 "message": f"Token validation failed with status {response.status_code}: {response.text}",
@@ -243,11 +223,7 @@ async def save_dropbox_settings(
     try:
         user = request.session.get("user", {}) if hasattr(request, "session") else {}
         changed_by = (
-            user.get("preferred_username")
-            or user.get("username")
-            or user.get("email")
-            or user.get("id")
-            or "wizard"
+            user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "wizard"
         )
 
         # Update settings in memory
@@ -262,27 +238,19 @@ async def save_dropbox_settings(
 
         # Persist to database (primary storage)
         if refresh_token:
-            save_setting_to_db(
-                db, "dropbox_refresh_token", refresh_token, changed_by=changed_by
-            )
+            save_setting_to_db(db, "dropbox_refresh_token", refresh_token, changed_by=changed_by)
         if app_key:
             save_setting_to_db(db, "dropbox_app_key", app_key, changed_by=changed_by)
         if app_secret:
-            save_setting_to_db(
-                db, "dropbox_app_secret", app_secret, changed_by=changed_by
-            )
+            save_setting_to_db(db, "dropbox_app_secret", app_secret, changed_by=changed_by)
         if folder_path:
             save_setting_to_db(db, "dropbox_folder", folder_path, changed_by=changed_by)
 
         # Best-effort .env file write
         try:
-            env_path = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"
-            )
+            env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
             if not os.path.exists(env_path):
-                logger.warning(
-                    f".env file not found at {env_path}, skipping file write"
-                )
+                logger.warning(f".env file not found at {env_path}, skipping file write")
             else:
                 logger.info(f"Updating Dropbox settings in {env_path}")
 
@@ -303,9 +271,7 @@ async def save_dropbox_settings(
                     stripped_line = line.rstrip()
                     is_updated = False
                     for key, value in dropbox_settings.items():
-                        if stripped_line.startswith(
-                            f"{key}="
-                        ) or stripped_line.startswith(f"# {key}="):
+                        if stripped_line.startswith(f"{key}=") or stripped_line.startswith(f"# {key}="):
                             new_env_lines.append(f"{key}={value}")
                             updated.add(key)
                             is_updated = True

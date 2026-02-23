@@ -45,9 +45,7 @@ class TestAuditLogOnSave:
     def test_save_creates_audit_entry(self, db_session):
         from app.utils.settings_service import save_setting_to_db
 
-        result = save_setting_to_db(
-            db_session, "workdir", "/new/path", changed_by="alice"
-        )
+        result = save_setting_to_db(db_session, "workdir", "/new/path", changed_by="alice")
 
         assert result is True
         entry = db_session.query(SettingsAuditLog).filter_by(key="workdir").first()
@@ -73,18 +71,13 @@ class TestAuditLogOnSave:
         assert update_entry.new_value == "/new/path"
 
     def test_delete_creates_audit_entry(self, db_session):
-        from app.utils.settings_service import (delete_setting_from_db,
-                                                save_setting_to_db)
+        from app.utils.settings_service import delete_setting_from_db, save_setting_to_db
 
         save_setting_to_db(db_session, "workdir", "/some/path", changed_by="admin")
         result = delete_setting_from_db(db_session, "workdir", changed_by="carol")
 
         assert result is True
-        delete_entry = (
-            db_session.query(SettingsAuditLog)
-            .filter_by(key="workdir", action="delete")
-            .first()
-        )
+        delete_entry = db_session.query(SettingsAuditLog).filter_by(key="workdir", action="delete").first()
         assert delete_entry is not None
         assert delete_entry.old_value == "/some/path"
         assert delete_entry.new_value is None
@@ -93,9 +86,7 @@ class TestAuditLogOnSave:
     def test_delete_nonexistent_returns_false_no_entry(self, db_session):
         from app.utils.settings_service import delete_setting_from_db
 
-        result = delete_setting_from_db(
-            db_session, "nonexistent_key", changed_by="admin"
-        )
+        result = delete_setting_from_db(db_session, "nonexistent_key", changed_by="admin")
 
         assert result is False
         assert db_session.query(SettingsAuditLog).count() == 0
@@ -119,8 +110,7 @@ class TestGetAuditLog:
     """get_audit_log returns entries, masks sensitive values."""
 
     def test_returns_all_entries_most_recent_first(self, db_session):
-        from app.utils.settings_service import (get_audit_log,
-                                                save_setting_to_db)
+        from app.utils.settings_service import get_audit_log, save_setting_to_db
 
         save_setting_to_db(db_session, "workdir", "/first", changed_by="u1")
         save_setting_to_db(db_session, "workdir", "/second", changed_by="u2")
@@ -133,12 +123,9 @@ class TestGetAuditLog:
         assert log[1]["new_value"] == "/first"
 
     def test_sensitive_values_are_masked(self, db_session):
-        from app.utils.settings_service import (get_audit_log,
-                                                save_setting_to_db)
+        from app.utils.settings_service import get_audit_log, save_setting_to_db
 
-        save_setting_to_db(
-            db_session, "openai_api_key", "sk-secret123", changed_by="admin"
-        )
+        save_setting_to_db(db_session, "openai_api_key", "sk-secret123", changed_by="admin")
 
         log = get_audit_log(db_session)
 
@@ -146,8 +133,7 @@ class TestGetAuditLog:
         assert entry["new_value"] == "[REDACTED]"
 
     def test_required_fields_present(self, db_session):
-        from app.utils.settings_service import (get_audit_log,
-                                                save_setting_to_db)
+        from app.utils.settings_service import get_audit_log, save_setting_to_db
 
         save_setting_to_db(db_session, "workdir", "/path", changed_by="alice")
 
@@ -167,8 +153,7 @@ class TestGetAuditLog:
             assert field in entry
 
     def test_limit_and_offset(self, db_session):
-        from app.utils.settings_service import (get_audit_log,
-                                                save_setting_to_db)
+        from app.utils.settings_service import get_audit_log, save_setting_to_db
 
         for i in range(5):
             save_setting_to_db(db_session, "workdir", f"/path{i}", changed_by="admin")
@@ -190,8 +175,7 @@ class TestGetSettingHistory:
     """get_setting_history returns only entries for the requested key."""
 
     def test_returns_only_matching_key(self, db_session):
-        from app.utils.settings_service import (get_setting_history,
-                                                save_setting_to_db)
+        from app.utils.settings_service import get_setting_history, save_setting_to_db
 
         save_setting_to_db(db_session, "workdir", "/wdir", changed_by="admin")
         save_setting_to_db(db_session, "debug", "true", changed_by="admin")
@@ -219,32 +203,21 @@ class TestRollbackSetting:
     """rollback_setting reinstates the value from a given audit log entry."""
 
     def test_rollback_to_previous_value(self, db_session):
-        from app.utils.settings_service import (get_setting_from_db,
-                                                rollback_setting,
-                                                save_setting_to_db)
+        from app.utils.settings_service import get_setting_from_db, rollback_setting, save_setting_to_db
 
-        save_setting_to_db(
-            db_session, "workdir", "/v1", changed_by="admin"
-        )  # entry id 1
-        save_setting_to_db(
-            db_session, "workdir", "/v2", changed_by="admin"
-        )  # entry id 2
+        save_setting_to_db(db_session, "workdir", "/v1", changed_by="admin")  # entry id 1
+        save_setting_to_db(db_session, "workdir", "/v2", changed_by="admin")  # entry id 2
 
-        first_entry = (
-            db_session.query(SettingsAuditLog).filter_by(key="workdir").first()
-        )
+        first_entry = db_session.query(SettingsAuditLog).filter_by(key="workdir").first()
         # first entry has new_value="/v1"
-        success = rollback_setting(
-            db_session, "workdir", first_entry.id, changed_by="rollbacker"
-        )
+        success = rollback_setting(db_session, "workdir", first_entry.id, changed_by="rollbacker")
 
         assert success is True
         current = get_setting_from_db(db_session, "workdir")
         assert current == "/v1"
 
     def test_rollback_creates_new_audit_entry(self, db_session):
-        from app.utils.settings_service import (rollback_setting,
-                                                save_setting_to_db)
+        from app.utils.settings_service import rollback_setting, save_setting_to_db
 
         save_setting_to_db(db_session, "workdir", "/v1", changed_by="admin")
         entry = db_session.query(SettingsAuditLog).filter_by(key="workdir").first()
@@ -255,8 +228,7 @@ class TestRollbackSetting:
         assert db_session.query(SettingsAuditLog).count() == initial_count + 1
 
     def test_rollback_wrong_history_id_returns_false(self, db_session):
-        from app.utils.settings_service import (rollback_setting,
-                                                save_setting_to_db)
+        from app.utils.settings_service import rollback_setting, save_setting_to_db
 
         save_setting_to_db(db_session, "workdir", "/v1", changed_by="admin")
 
@@ -265,8 +237,7 @@ class TestRollbackSetting:
         assert result is False
 
     def test_rollback_wrong_key_returns_false(self, db_session):
-        from app.utils.settings_service import (rollback_setting,
-                                                save_setting_to_db)
+        from app.utils.settings_service import rollback_setting, save_setting_to_db
 
         save_setting_to_db(db_session, "workdir", "/v1", changed_by="admin")
         entry = db_session.query(SettingsAuditLog).filter_by(key="workdir").first()
@@ -287,8 +258,7 @@ class TestNotifySettingsUpdated:
     """notify_settings_updated publishes the settings version key to Redis."""
 
     def test_sets_redis_key(self):
-        from app.utils.settings_sync import (SETTINGS_VERSION_KEY,
-                                             notify_settings_updated)
+        from app.utils.settings_sync import SETTINGS_VERSION_KEY, notify_settings_updated
 
         mock_redis = MagicMock()
         mock_redis_instance = MagicMock()
@@ -394,9 +364,7 @@ class TestHistoryEndpoint:
         mock_db = MagicMock()
         mock_admin = {"is_admin": True}
 
-        result = asyncio.run(
-            get_key_history("workdir", mock_request, mock_db, mock_admin)
-        )
+        result = asyncio.run(get_key_history("workdir", mock_request, mock_db, mock_admin))
 
         assert result["key"] == "workdir"
         assert len(result["history"]) == 1
@@ -421,9 +389,7 @@ class TestRollbackEndpoint:
         mock_db = MagicMock()
         mock_admin = {"is_admin": True}
 
-        result = asyncio.run(
-            rollback_setting_to_history("workdir", 1, mock_request, mock_db, mock_admin)
-        )
+        result = asyncio.run(rollback_setting_to_history("workdir", 1, mock_request, mock_db, mock_admin))
 
         assert result["success"] is True
         mock_notify.assert_called_once()
@@ -443,10 +409,6 @@ class TestRollbackEndpoint:
         mock_admin = {"is_admin": True}
 
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.run(
-                rollback_setting_to_history(
-                    "workdir", 9999, mock_request, mock_db, mock_admin
-                )
-            )
+            asyncio.run(rollback_setting_to_history("workdir", 9999, mock_request, mock_db, mock_admin))
 
         assert exc_info.value.status_code == 404
