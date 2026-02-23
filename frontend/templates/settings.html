@@ -186,7 +186,19 @@
             </div>
 
             <!-- Per-setting Save / Back-to-ENV buttons -->
-            <div class="ml-4 flex-shrink-0 flex flex-col items-end gap-1 pt-1">
+            <div class="ml-4 flex-shrink-0 flex flex-row items-center gap-2 pt-1">
+              <button
+                type="button"
+                x-show="isDbOverride['{{ setting.key }}']"
+                x-transition
+                @click="revertSetting('{{ setting.key }}')"
+                :disabled="revertingKey === '{{ setting.key }}'"
+                class="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                title="Remove DB override and revert to environment variable or default"
+              >
+                <span x-show="revertingKey !== '{{ setting.key }}'"><i class="fas fa-trash-alt mr-1"></i>Remove from DB</span>
+                <span x-show="revertingKey === '{{ setting.key }}'">Reverting…</span>
+              </button>
               <button
                 type="button"
                 x-show="formData['{{ setting.key }}'] !== originalData['{{ setting.key }}']"
@@ -198,18 +210,6 @@
               >
                 <span x-show="savingKey !== '{{ setting.key }}'"><i class="fas fa-save mr-1"></i>Save</span>
                 <span x-show="savingKey === '{{ setting.key }}'">Saving…</span>
-              </button>
-              <button
-                type="button"
-                x-show="isDbOverride['{{ setting.key }}']"
-                x-transition
-                @click="revertSetting('{{ setting.key }}')"
-                :disabled="revertingKey === '{{ setting.key }}'"
-                class="px-3 py-1 text-sm bg-orange-500 text-white rounded-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-400 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                title="Remove DB override and revert to environment variable or default"
-              >
-                <span x-show="revertingKey !== '{{ setting.key }}'"><i class="fas fa-trash-alt mr-1"></i>Remove from DB</span>
-                <span x-show="revertingKey === '{{ setting.key }}'">Reverting…</span>
               </button>
             </div>
           </div>
