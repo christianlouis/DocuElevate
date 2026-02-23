@@ -490,21 +490,6 @@ class TestLicenseRoutes:
 # ---------------------------------------------------------------------------
 
 
-class TestDiagnosticSettings:
-    """GET /api/diagnostic/settings - dump settings."""
-
-    @pytest.mark.unit
-    def test_diagnostic_settings_success(self, client):
-        """Returns safe subset of settings."""
-        with patch("app.utils.config_validator.dump_all_settings"):
-            response = client.get("/api/diagnostic/settings")
-            assert response.status_code == 200
-            data = response.json()
-            assert data["status"] == "success"
-            assert "settings" in data
-            assert "configured_services" in data["settings"]
-
-
 class TestDiagnosticTestNotification:
     """POST /api/diagnostic/test-notification - send test notification."""
 

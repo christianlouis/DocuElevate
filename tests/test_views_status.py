@@ -14,11 +14,6 @@ class TestStatusViews:
         response = client.get("/status")
         assert response.status_code == 200
 
-    def test_env_debug_page(self, client):
-        """Test env debug page."""
-        response = client.get("/env")
-        assert response.status_code == 200
-
 
 @pytest.mark.unit
 class TestStatusDashboard:
@@ -147,89 +142,6 @@ class TestStatusDashboard:
         call_args = mock_templates.TemplateResponse.call_args
         context = call_args[0][1]
         assert context["settings"]["notification_urls"] == ["https://webhook.example.com/notify"]
-
-
-@pytest.mark.unit
-class TestEnvDebug:
-    """Tests for env_debug function."""
-
-    @patch("app.views.status.get_settings_for_display")
-    @patch("app.views.status.templates")
-    @patch("app.views.status.settings")
-    @pytest.mark.asyncio
-    async def test_env_debug_returns_template(self, mock_settings, mock_templates, mock_get_settings):
-        """Test env debug returns template response."""
-        from app.views.status import env_debug
-
-        mock_settings.debug = False
-        mock_settings.version = "1.0.0"
-        mock_get_settings.return_value = {"workdir": {"value": "/app/workdir"}}
-
-        mock_request = Mock()
-
-        result = await env_debug(mock_request)
-
-        mock_templates.TemplateResponse.assert_called_once()
-        call_args = mock_templates.TemplateResponse.call_args
-        assert call_args[0][0] == "env_debug.html"
-
-    @patch("app.views.status.get_settings_for_display")
-    @patch("app.views.status.templates")
-    @patch("app.views.status.settings")
-    @pytest.mark.asyncio
-    async def test_env_debug_respects_debug_setting(self, mock_settings, mock_templates, mock_get_settings):
-        """Test env debug respects debug setting."""
-        from app.views.status import env_debug
-
-        mock_settings.debug = True
-        mock_settings.version = "1.0.0"
-        mock_get_settings.return_value = {}
-
-        mock_request = Mock()
-
-        await env_debug(mock_request)
-
-        # Should call with show_values=True when debug is enabled
-        mock_get_settings.assert_called_once_with(show_values=True)
-
-    @patch("app.views.status.get_settings_for_display")
-    @patch("app.views.status.templates")
-    @patch("app.views.status.settings")
-    @pytest.mark.asyncio
-    async def test_env_debug_hides_values_when_debug_disabled(self, mock_settings, mock_templates, mock_get_settings):
-        """Test env debug hides values when debug is disabled."""
-        from app.views.status import env_debug
-
-        mock_settings.debug = False
-        mock_settings.version = "1.0.0"
-        mock_get_settings.return_value = {}
-
-        mock_request = Mock()
-
-        await env_debug(mock_request)
-
-        # Should call with show_values=False when debug is disabled
-        mock_get_settings.assert_called_once_with(show_values=False)
-
-    @patch("app.views.status.get_settings_for_display")
-    @patch("app.views.status.templates")
-    @patch("app.views.status.settings")
-    @pytest.mark.asyncio
-    async def test_env_debug_includes_app_version(self, mock_settings, mock_templates, mock_get_settings):
-        """Test env debug includes app version."""
-        from app.views.status import env_debug
-
-        mock_settings.debug = False
-        mock_settings.version = "1.2.3"
-        mock_get_settings.return_value = {}
-
-        mock_request = Mock()
-
-        await env_debug(mock_request)
-
-        call_args = mock_templates.TemplateResponse.call_args
-        context = call_args[0][1]
-        assert context["app_version"] == "1.2.3"
 
 
 @pytest.mark.unit
@@ -385,10 +297,4 @@ class TestStatusEndpointsRequireAuth:
         """Test status dashboard requires authentication."""
         # Should return 200 or redirect to login
         response = client.get("/status", follow_redirects=False)
-        assert response.status_code in [200, 302, 401]
-
-    def test_env_debug_requires_login(self, client):
-        """Test env debug requires authentication."""
-        # Should return 200 or redirect to login
-        response = client.get("/env", follow_redirects=False)
         assert response.status_code in [200, 302, 401]

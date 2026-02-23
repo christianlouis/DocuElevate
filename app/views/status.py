@@ -8,7 +8,7 @@ from datetime import datetime
 
 from fastapi import Request
 
-from app.utils.config_validator import get_provider_status, get_settings_for_display
+from app.utils.config_validator import get_provider_status
 from app.views.base import APIRouter, require_login, settings, templates
 
 logger = logging.getLogger(__name__)
@@ -84,29 +84,5 @@ async def status_dashboard(request: Request):
             "last_check": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "container_info": container_info,
             "settings": {"notification_urls": notification_urls},
-        },
-    )
-
-
-@router.get("/env")
-@require_login
-async def env_debug(request: Request):
-    """
-    Debug endpoint to view environment variables and settings
-    Uses actual debug setting from config
-    """
-    # Use the actual debug setting from configuration
-    debug_enabled = settings.debug
-
-    # Get settings data
-    settings_data = get_settings_for_display(show_values=debug_enabled)
-
-    return templates.TemplateResponse(
-        "env_debug.html",
-        {
-            "request": request,
-            "settings": settings_data,
-            "debug_enabled": debug_enabled,
-            "app_version": settings.version,
         },
     )
