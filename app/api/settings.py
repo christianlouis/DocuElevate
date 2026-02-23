@@ -16,11 +16,15 @@ from app.utils.settings_service import (
     SETTING_METADATA,
     delete_setting_from_db,
     get_all_settings_from_db,
+    get_audit_log,
+    get_setting_history,
     get_setting_metadata,
     get_settings_by_category,
+    rollback_setting,
     save_setting_to_db,
     validate_setting_value,
 )
+from app.utils.settings_sync import notify_settings_updated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -79,7 +83,10 @@ async def get_settings(request: Request, db: DbSession, admin: AdminUser):
         for key in SETTING_METADATA.keys():
             if hasattr(settings, key):
                 value = getattr(settings, key)
-                current_settings[key] = {"value": value, "metadata": get_setting_metadata(key)}
+                current_settings[key] = {
+                    "value": value,
+                    "metadata": get_setting_metadata(key),
+                }
 
         # Get settings stored in database
         db_settings = get_all_settings_from_db(db)
@@ -90,7 +97,10 @@ async def get_settings(request: Request, db: DbSession, admin: AdminUser):
         return SettingsListResponse(settings=current_settings, categories=categories, db_settings=db_settings)
     except Exception as e:
         logger.error(f"Error retrieving settings: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve settings")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve settings",
+        )
 
 
 @router.get("/{key}", response_model=SettingResponse)
@@ -111,7 +121,8 @@ async def get_setting(key: str, request: Request, db: DbSession, admin: AdminUse
     except Exception as e:
         logger.error(f"Error retrieving setting {key}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to retrieve setting: {key}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve setting: {key}",
         )
 
 
@@ -135,12 +146,22 @@ async def update_setting(
             if not is_valid:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_message)
 
+        # Determine the username for the audit log
+        user = request.session.get("user", {}) if hasattr(request, "session") else {}
+        changed_by = (
+            user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "admin"
+        )
+
         # Save to database
-        success = save_setting_to_db(db, key, setting.value)
+        success = save_setting_to_db(db, key, setting.value, changed_by=changed_by)
         if not success:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to save setting to database"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to save setting to database",
             )
+
+        # Notify workers that settings have changed
+        notify_settings_updated()
 
         # Get metadata
         metadata = get_setting_metadata(key)
@@ -158,7 +179,8 @@ async def update_setting(
     except Exception as e:
         logger.error(f"Error updating setting {key}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update setting: {key}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update setting: {key}",
         )
 
 
@@ -170,9 +192,19 @@ async def delete_setting(key: str, request: Request, db: DbSession, admin: Admin
     """
     validate_setting_key(key)
     try:
-        success = delete_setting_from_db(db, key)
+        user = request.session.get("user", {}) if hasattr(request, "session") else {}
+        changed_by = (
+            user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "admin"
+        )
+
+        success = delete_setting_from_db(db, key, changed_by=changed_by)
         if not success:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Setting '{key}' not found in database")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Setting '{key}' not found in database",
+            )
+
+        notify_settings_updated()
 
         return {
             "success": True,
@@ -183,7 +215,8 @@ async def delete_setting(key: str, request: Request, db: DbSession, admin: Admin
     except Exception as e:
         logger.error(f"Error deleting setting {key}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete setting: {key}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete setting: {key}",
         )
 
 
@@ -238,7 +271,10 @@ async def list_credentials(request: Request, db: DbSession, admin: AdminUser):
         }
     except Exception as e:
         logger.error(f"Error retrieving credential list: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve credentials")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve credentials",
+        )
 
 
 @router.post("/bulk-update")
@@ -250,6 +286,11 @@ async def bulk_update_settings(updates: list[SettingUpdate], request: Request, d
     results = []
     errors = []
 
+    user = request.session.get("user", {}) if hasattr(request, "session") else {}
+    changed_by = (
+        user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "admin"
+    )
+
     for update in updates:
         try:
             # Validate the setting value
@@ -260,7 +301,7 @@ async def bulk_update_settings(updates: list[SettingUpdate], request: Request, d
                     continue
 
             # Save to database
-            success = save_setting_to_db(db, update.key, update.value)
+            success = save_setting_to_db(db, update.key, update.value, changed_by=changed_by)
             if success:
                 results.append({"key": update.key, "value": update.value, "status": "success"})
             else:
@@ -269,6 +310,165 @@ async def bulk_update_settings(updates: list[SettingUpdate], request: Request, d
             logger.error(f"Error updating setting {update.key}: {e}")
             errors.append({"key": update.key, "error": str(e)})
 
+    if results:
+        notify_settings_updated()
+
     restart_required = any(get_setting_metadata(result["key"]).get("restart_required", False) for result in results)
 
-    return {"success": len(errors) == 0, "updated": results, "errors": errors, "restart_required": restart_required}
+    return {
+        "success": len(errors) == 0,
+        "updated": results,
+        "errors": errors,
+        "restart_required": restart_required,
+    }
+
+
+@router.get("/audit-log")
+async def list_audit_log(
+    request: Request,
+    db: DbSession,
+    admin: AdminUser,
+    limit: int = 100,
+    offset: int = 0,
+):
+    """
+    Retrieve the settings audit log (most recent first).
+
+    Returns all configuration changes recorded in the audit log.
+    Sensitive values are masked in the response.
+    Admin only.
+    """
+    try:
+        entries = get_audit_log(db, limit=limit, offset=offset)
+        return {"entries": entries, "limit": limit, "offset": offset}
+    except Exception as e:
+        logger.error(f"Error retrieving audit log: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve audit log",
+        )
+
+
+@router.get("/{key}/history")
+async def get_key_history(key: str, request: Request, db: DbSession, admin: AdminUser):
+    """
+    Get the change history for a specific setting key.
+
+    Returns all audit log entries for that key, most recent first.
+    Admin only.
+    """
+    validate_setting_key_format(key)
+    try:
+        entries = get_setting_history(db, key)
+        return {"key": key, "history": entries}
+    except Exception as e:
+        logger.error(f"Error retrieving history for {key}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve history for setting: {key}",
+        )
+
+
+@router.post("/{key}/rollback/{history_id}")
+async def rollback_setting_to_history(
+    key: str,
+    history_id: int,
+    request: Request,
+    db: DbSession,
+    admin: AdminUser,
+):
+    """
+    Revert a setting to the value it held at a specific point in the audit log.
+
+    The ``history_id`` is the ID of the :class:`~app.models.SettingsAuditLog`
+    entry whose ``new_value`` should be reinstated.  If that entry recorded a
+    deletion (``new_value`` is ``None``), the setting is removed from the
+    database and reverts to its ENV/default value.
+
+    A new audit log entry is written to record the rollback.
+    Admin only.
+    """
+    validate_setting_key_format(key)
+    try:
+        user = request.session.get("user", {}) if hasattr(request, "session") else {}
+        changed_by = (
+            user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "admin"
+        )
+
+        success = rollback_setting(db, key, history_id, changed_by=changed_by)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"History entry {history_id} not found for setting '{key}'",
+            )
+
+        notify_settings_updated()
+
+        return {
+            "success": True,
+            "message": f"Setting '{key}' rolled back to history entry {history_id}",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error rolling back setting {key} to history {history_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to roll back setting: {key}",
+        )
+
+
+@router.get("/export-env")
+async def export_env_settings(
+    request: Request,
+    db: DbSession,
+    admin: AdminUser,
+    source: str = "db",
+):
+    """
+    Export current settings as a ``.env`` file.
+
+    Query params:
+    - ``source=db`` (default) – only settings explicitly saved to the database.
+    - ``source=effective`` – full runtime configuration (DB > ENV > defaults) for
+      every key defined in SETTING_METADATA.
+
+    Returns a downloadable plain-text file suitable for bootstrapping another
+    installation.  All values — including sensitive ones — are included; only
+    admins can access this endpoint.
+    """
+    from fastapi.responses import Response as FastAPIResponse
+
+    from app.utils.settings_service import get_settings_for_export
+
+    if source not in ("db", "effective"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="source must be 'db' or 'effective'",
+        )
+
+    try:
+        export_data = get_settings_for_export(db, source=source)
+        lines = [
+            "# DocuElevate configuration export",
+            f"# Source: {source}",
+            "# Generated by DocuElevate Settings Export",
+            "# WARNING: This file contains sensitive values. Handle with care.",
+            "",
+        ]
+        for env_key, value in export_data.items():
+            lines.append(f"{env_key}={value}")
+        lines.append("")  # trailing newline
+        content = "\n".join(lines)
+
+        return FastAPIResponse(
+            content=content,
+            media_type="text/plain",
+            headers={"Content-Disposition": f'attachment; filename="docuelevate-{source}.env"'},
+        )
+    except Exception as e:
+        logger.error(f"Error exporting settings: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to export settings",
+        )

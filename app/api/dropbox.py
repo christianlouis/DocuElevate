@@ -7,11 +7,15 @@ import os
 from typing import Annotated, Optional
 
 import requests
-from fastapi import APIRouter, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from sqlalchemy.orm import Session
 
 from app.auth import require_login
 from app.config import settings
+from app.database import get_db
 from app.utils.oauth_helper import exchange_oauth_token
+from app.utils.settings_service import save_setting_to_db
+from app.utils.settings_sync import notify_settings_updated
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -63,38 +67,52 @@ async def update_dropbox_settings(
     app_key: Annotated[Optional[str], Form()] = None,
     app_secret: Annotated[Optional[str], Form()] = None,
     folder_path: Annotated[Optional[str], Form()] = None,
+    db: Session = Depends(get_db),
 ):
     """
-    Update Dropbox settings in memory
+    Update Dropbox settings in memory and persist to the database.
     """
     try:
-        logger.info("Updating Dropbox settings in memory")
+        logger.info("Updating Dropbox settings in memory and database")
 
-        # Update settings in memory
+        user = request.session.get("user", {}) if hasattr(request, "session") else {}
+        changed_by = (
+            user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "wizard"
+        )
+
+        # Update settings in memory and persist to database
         if refresh_token:
             settings.dropbox_refresh_token = refresh_token
-            logger.info("Updated DROPBOX_REFRESH_TOKEN in memory")
+            save_setting_to_db(db, "dropbox_refresh_token", refresh_token, changed_by=changed_by)
+            logger.info("Updated DROPBOX_REFRESH_TOKEN in memory and database")
 
         if app_key:
             settings.dropbox_app_key = app_key
-            logger.info("Updated DROPBOX_APP_KEY in memory")
+            save_setting_to_db(db, "dropbox_app_key", app_key, changed_by=changed_by)
+            logger.info("Updated DROPBOX_APP_KEY in memory and database")
 
         if app_secret:
             settings.dropbox_app_secret = app_secret
-            logger.info("Updated DROPBOX_APP_SECRET in memory")
+            save_setting_to_db(db, "dropbox_app_secret", app_secret, changed_by=changed_by)
+            logger.info("Updated DROPBOX_APP_SECRET in memory and database")
 
         if folder_path:
             settings.dropbox_folder = folder_path
-            logger.info("Updated DROPBOX_FOLDER in memory")
+            save_setting_to_db(db, "dropbox_folder", folder_path, changed_by=changed_by)
+            logger.info("Updated DROPBOX_FOLDER in memory and database")
 
-        # Test token validity would be here, but we'll skip it for now
+        notify_settings_updated()
 
-        return {"status": "success", "message": "Dropbox settings have been updated in memory"}
+        return {
+            "status": "success",
+            "message": "Dropbox settings have been updated in memory and saved to database",
+        }
 
     except Exception as e:
         logger.exception(f"Unexpected error updating Dropbox settings: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update Dropbox settings: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update Dropbox settings: {str(e)}",
         )
 
 
@@ -109,7 +127,10 @@ async def test_dropbox_token(request: Request):
 
         if not settings.dropbox_refresh_token or not settings.dropbox_app_key or not settings.dropbox_app_secret:
             logger.warning("Dropbox credentials not fully configured")
-            return {"status": "error", "message": "Dropbox credentials are not fully configured"}
+            return {
+                "status": "error",
+                "message": "Dropbox credentials are not fully configured",
+            }
 
         # Check token validity by getting current account info
         headers = {"Authorization": f"Bearer {settings.dropbox_refresh_token}"}
@@ -136,7 +157,11 @@ async def test_dropbox_token(request: Request):
 
             if refresh_response.status_code != 200:
                 logger.error(f"Failed to refresh Dropbox token: {refresh_response.text}")
-                return {"status": "error", "message": "Refresh token has expired or is invalid", "needs_reauth": True}
+                return {
+                    "status": "error",
+                    "message": "Refresh token has expired or is invalid",
+                    "needs_reauth": True,
+                }
 
             token_info = refresh_response.json()
             access_token = token_info.get("access_token")
@@ -162,7 +187,10 @@ async def test_dropbox_token(request: Request):
         account_name = account_info.get("name", {}).get("display_name", "Unknown user")
 
         # Dropbox refresh tokens don't expire, but we should note that in our response
-        token_info = {"expires_in_human": "Never expires (perpetual token)", "is_perpetual": True}
+        token_info = {
+            "expires_in_human": "Never expires (perpetual token)",
+            "is_perpetual": True,
+        }
 
         logger.info(f"Successfully connected to Dropbox as {account_email}")
 
@@ -187,65 +215,18 @@ async def save_dropbox_settings(
     app_key: Annotated[Optional[str], Form()] = None,
     app_secret: Annotated[Optional[str], Form()] = None,
     folder_path: Annotated[Optional[str], Form()] = None,
+    db: Session = Depends(get_db),
 ):
     """
-    Save Dropbox settings to the .env file
+    Save Dropbox settings to database (primary) and .env file (best-effort).
     """
     try:
-        # Get the path to the .env file
-        env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
+        user = request.session.get("user", {}) if hasattr(request, "session") else {}
+        changed_by = (
+            user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "wizard"
+        )
 
-        if not os.path.exists(env_path):
-            logger.error(f".env file not found at {env_path}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not find .env file to update"
-            )
-
-        logger.info(f"Updating Dropbox settings in {env_path}")
-
-        # Read the current .env file
-        with open(env_path, "r") as f:
-            env_lines = f.readlines()
-
-        # Define settings to update
-        dropbox_settings = {
-            "DROPBOX_REFRESH_TOKEN": refresh_token,
-        }
-
-        # Only update these if provided
-        if app_key:
-            dropbox_settings["DROPBOX_APP_KEY"] = app_key
-        if app_secret:
-            dropbox_settings["DROPBOX_APP_SECRET"] = app_secret
-        if folder_path:
-            dropbox_settings["DROPBOX_FOLDER"] = folder_path
-
-        # Process each line and update or add settings
-        updated = set()
-        new_env_lines = []
-        for line in env_lines:
-            stripped_line = line.rstrip()
-            is_updated = False
-            for key, value in dropbox_settings.items():
-                if stripped_line.startswith(f"{key}=") or stripped_line.startswith(f"# {key}="):
-                    # Uncomment if commented out - check the original stripped line
-                    new_env_lines.append(f"{key}={value}")
-                    updated.add(key)
-                    is_updated = True
-                    break
-            if not is_updated:
-                new_env_lines.append(stripped_line)
-
-        # Add any settings that weren't updated (they weren't in the file)
-        for key, value in dropbox_settings.items():
-            if key not in updated:
-                new_env_lines.append(f"{key}={value}")
-
-        # Write the updated .env file
-        with open(env_path, "w") as f:
-            f.write("\n".join(new_env_lines) + "\n")
-
-        # Update the settings in memory
+        # Update settings in memory
         if refresh_token:
             settings.dropbox_refresh_token = refresh_token
         if app_key:
@@ -255,14 +236,68 @@ async def save_dropbox_settings(
         if folder_path:
             settings.dropbox_folder = folder_path
 
-        logger.info("Successfully updated Dropbox settings")
+        # Persist to database (primary storage)
+        if refresh_token:
+            save_setting_to_db(db, "dropbox_refresh_token", refresh_token, changed_by=changed_by)
+        if app_key:
+            save_setting_to_db(db, "dropbox_app_key", app_key, changed_by=changed_by)
+        if app_secret:
+            save_setting_to_db(db, "dropbox_app_secret", app_secret, changed_by=changed_by)
+        if folder_path:
+            save_setting_to_db(db, "dropbox_folder", folder_path, changed_by=changed_by)
 
+        # Best-effort .env file write
+        try:
+            env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
+            if not os.path.exists(env_path):
+                logger.warning(f".env file not found at {env_path}, skipping file write")
+            else:
+                logger.info(f"Updating Dropbox settings in {env_path}")
+
+                with open(env_path, "r") as f:
+                    env_lines = f.readlines()
+
+                dropbox_settings = {"DROPBOX_REFRESH_TOKEN": refresh_token}
+                if app_key:
+                    dropbox_settings["DROPBOX_APP_KEY"] = app_key
+                if app_secret:
+                    dropbox_settings["DROPBOX_APP_SECRET"] = app_secret
+                if folder_path:
+                    dropbox_settings["DROPBOX_FOLDER"] = folder_path
+
+                updated = set()
+                new_env_lines = []
+                for line in env_lines:
+                    stripped_line = line.rstrip()
+                    is_updated = False
+                    for key, value in dropbox_settings.items():
+                        if stripped_line.startswith(f"{key}=") or stripped_line.startswith(f"# {key}="):
+                            new_env_lines.append(f"{key}={value}")
+                            updated.add(key)
+                            is_updated = True
+                            break
+                    if not is_updated:
+                        new_env_lines.append(stripped_line)
+
+                for key, value in dropbox_settings.items():
+                    if key not in updated:
+                        new_env_lines.append(f"{key}={value}")
+
+                with open(env_path, "w") as f:
+                    f.write("\n".join(new_env_lines) + "\n")
+
+                logger.info("Successfully updated Dropbox settings in .env file")
+        except Exception as env_err:
+            logger.warning(f"Failed to write .env file (non-fatal): {env_err}")
+
+        notify_settings_updated()
+
+        logger.info("Successfully saved Dropbox settings")
         return {"status": "success", "message": "Dropbox settings have been saved"}
 
-    except HTTPException:
-        raise
     except Exception as e:
         logger.exception(f"Unexpected error saving Dropbox settings: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to save Dropbox settings: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save Dropbox settings: {str(e)}",
         )

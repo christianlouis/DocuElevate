@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Settings Audit Log - DocuElevate{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8" x-data="auditLogApp()">
+  <!-- Header -->
+  <div class="mb-8 flex justify-between items-start">
+    <div>
+      <h1 class="text-3xl font-bold mb-2">Settings Audit Log</h1>
+      <p class="text-gray-600">
+        Chronological record of all configuration changes made via the settings UI.
+        Sensitive values are masked. Use the rollback button to revert any setting to a prior value.
+      </p>
+    </div>
+    <a href="/settings"
+       class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+      <i class="fas fa-cog mr-2"></i> Back to Settings
+    </a>
+  </div>
+
+  <!-- Alert Messages -->
+  <div x-show="showAlert" x-transition class="mb-4">
+    <div :class="alertType === 'success' ? 'bg-green-100 border-green-500 text-green-700' : 'bg-red-100 border-red-500 text-red-700'"
+         class="border-l-4 p-4" role="alert">
+      <p class="font-bold" x-text="alertTitle"></p>
+      <p x-text="alertMessage"></p>
+    </div>
+  </div>
+
+  {% if entries %}
+  <div class="bg-white shadow rounded-lg overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">When</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Changed By</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Setting Key</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Old Value</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">New Value</th>
+          <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rollback</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        {% for entry in entries %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{{ entry.changed_at }}</td>
+          <td class="px-4 py-3 text-sm text-gray-800 font-medium">{{ entry.changed_by }}</td>
+          <td class="px-4 py-3 text-sm font-mono text-blue-700">{{ entry.key }}</td>
+          <td class="px-4 py-3 text-sm">
+            {% if entry.action == 'delete' %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">delete</span>
+            {% elif entry.action == 'rollback' %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">rollback</span>
+            {% else %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">update</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-sm text-gray-600 font-mono max-w-xs truncate" title="{{ entry.old_value or '' }}">
+            {% if entry.old_value %}
+              <span class="text-gray-500">{{ entry.old_value }}</span>
+            {% else %}
+              <span class="italic text-gray-400">—</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-sm text-gray-800 font-mono max-w-xs truncate" title="{{ entry.new_value or '' }}">
+            {% if entry.new_value %}
+              {{ entry.new_value }}
+            {% else %}
+              <span class="italic text-gray-400">— (deleted)</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-sm">
+            <button
+              type="button"
+              @click="rollback('{{ entry.key }}', {{ entry.id }}, '{{ entry.new_value or '' }}')"
+              :disabled="rollingBack === {{ entry.id }}"
+              class="inline-flex items-center px-2 py-1 text-xs font-medium rounded border border-gray-300 text-gray-700 bg-white hover:bg-yellow-50 hover:border-yellow-400 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Revert '{{ entry.key }}' to the value in this log entry"
+            >
+              <span x-show="rollingBack !== {{ entry.id }}"><i class="fas fa-undo mr-1"></i>Rollback</span>
+              <span x-show="rollingBack === {{ entry.id }}">Working…</span>
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="bg-white shadow rounded-lg p-8 text-center text-gray-500">
+    <i class="fas fa-history text-4xl mb-4 block text-gray-300"></i>
+    <p class="text-lg">No configuration changes recorded yet.</p>
+    <p class="text-sm mt-2">Changes you make on the <a href="/settings" class="text-blue-600 hover:underline">Settings page</a> will appear here.</p>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function auditLogApp() {
+  return {
+    rollingBack: null,
+    showAlert: false,
+    alertType: 'success',
+    alertTitle: '',
+    alertMessage: '',
+
+    showSuccessAlert(title, message) {
+      this.alertType = 'success';
+      this.alertTitle = title;
+      this.alertMessage = message;
+      this.showAlert = true;
+      setTimeout(() => this.showAlert = false, 6000);
+    },
+
+    showErrorAlert(title, message) {
+      this.alertType = 'error';
+      this.alertTitle = title;
+      this.alertMessage = message;
+      this.showAlert = true;
+      setTimeout(() => this.showAlert = false, 10000);
+    },
+
+    async rollback(key, historyId, targetValue) {
+      const label = targetValue ? `'${targetValue}'` : '(deleted / ENV default)';
+      if (!confirm(`Revert '${key}' to ${label}?\n\nThis will write a new audit log entry.`)) {
+        return;
+      }
+
+      this.rollingBack = historyId;
+      this.showAlert = false;
+
+      try {
+        const response = await fetch(`/api/settings/${key}/rollback/${historyId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          this.showSuccessAlert('Rollback Successful', `Setting '${key}' has been reverted. Reloading…`);
+          setTimeout(() => window.location.reload(), 1500);
+        } else {
+          this.showErrorAlert('Rollback Failed', result.detail || 'Unknown error');
+        }
+      } catch (error) {
+        console.error('Rollback error:', error);
+        this.showErrorAlert('Error', 'Failed to perform rollback. Please try again.');
+      } finally {
+        this.rollingBack = null;
+      }
+    }
+  };
+}
+</script>
+{% endblock %}

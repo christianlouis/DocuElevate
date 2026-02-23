@@ -107,7 +107,8 @@ class TestUpdateDropboxSettings:
         """Test that exceptions return 500 error."""
         # Make setting the attribute raise an exception
         type(mock_settings).dropbox_refresh_token = property(
-            lambda self: "", lambda self, v: (_ for _ in ()).throw(RuntimeError("forced"))
+            lambda self: "",
+            lambda self, v: (_ for _ in ()).throw(RuntimeError("forced")),
         )
 
         response = client.post(
@@ -264,15 +265,16 @@ class TestSaveDropboxSettings:
 
     @patch("app.api.dropbox.settings")
     def test_save_settings_env_not_found(self, mock_settings, client):
-        """Test error when .env file is not found."""
-        # The endpoint constructs the env path using __file__
+        """Test that missing .env file is non-fatal — DB write still succeeds."""
         with patch("os.path.exists", return_value=False):
             response = client.post(
                 "/api/dropbox/save-settings",
                 data={"refresh_token": "test-token"},
             )
 
-        assert response.status_code == 500
+        # .env write is best-effort; endpoint should still succeed via DB write
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
 
     @patch("app.api.dropbox.settings")
     def test_save_settings_success(self, mock_settings, client, tmp_path):
@@ -389,7 +391,7 @@ class TestSaveDropboxSettings:
 
     @patch("app.api.dropbox.settings")
     def test_save_settings_io_error(self, mock_settings, client, tmp_path):
-        """Test handling of I/O errors when saving settings."""
+        """Test that I/O errors on .env write are non-fatal — DB write still succeeds."""
         mock_settings.dropbox_refresh_token = ""
 
         # Create a temporary .env file
@@ -407,6 +409,6 @@ class TestSaveDropboxSettings:
                 data={"refresh_token": "new-token"},
             )
 
-        assert response.status_code == 500
-        data = response.json()
-        assert "Failed to save Dropbox settings" in data["detail"]
+        # .env write is best-effort; endpoint should still succeed via DB write
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"

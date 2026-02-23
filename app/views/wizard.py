@@ -10,6 +10,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.utils.settings_service import save_setting_to_db
+from app.utils.settings_sync import notify_settings_updated
 from app.utils.setup_wizard import get_wizard_steps
 from app.views.base import APIRouter, get_db, templates
 
@@ -18,7 +19,7 @@ router = APIRouter()
 
 
 @router.get("/setup")
-async def setup_wizard(request: Request, step: int = 1):
+async def setup_wizard(request: Request, step: int = 1, db: Session = Depends(get_db)):
     """
     Setup wizard for first-time configuration.
 
@@ -41,6 +42,31 @@ async def setup_wizard(request: Request, step: int = 1):
     # Get step category (all settings in a step should have same category)
     step_category = current_settings[0].get("wizard_category", "Configuration") if current_settings else "Configuration"
 
+    # Enrich settings with current live values
+    from app.config import settings as app_settings
+    from app.utils.settings_service import get_setting_from_db
+
+    enriched_settings = []
+    for s in current_settings:
+        key = s["key"]
+        db_val = get_setting_from_db(db, key)
+        env_val = getattr(app_settings, key, None)
+        # Determine current_value and source
+        if db_val is not None:
+            current_value = db_val
+            value_source = "db"
+        elif env_val is not None and str(env_val).strip():
+            current_value = str(env_val)
+            value_source = "env"
+        elif s.get("default") is not None:
+            current_value = s["default"]
+            value_source = "default"
+        else:
+            current_value = ""
+            value_source = "none"
+        enriched_settings.append({**s, "current_value": current_value, "value_source": value_source})
+    current_settings = enriched_settings
+
     return templates.TemplateResponse(
         "setup_wizard.html",
         {
@@ -50,6 +76,7 @@ async def setup_wizard(request: Request, step: int = 1):
             "settings": current_settings,
             "step_category": step_category,
             "progress_percent": int((step / max_step) * 100),
+            "setup_skipped": bool(get_setting_from_db(db, "_setup_wizard_skipped")),
         },
     )
 
@@ -87,6 +114,9 @@ async def setup_wizard_save(request: Request, step: int = Form(...), db: Session
 
         logger.info(f"Setup wizard step {step}: Saved {saved_count} settings")
 
+        if saved_count > 0:
+            notify_settings_updated()
+
         # Determine next step
         max_step = max(wizard_steps.keys())
         next_step = step + 1
@@ -122,3 +152,23 @@ async def setup_wizard_skip(request: Request):
     except Exception as e:
         logger.error(f"Error skipping setup wizard: {e}")
         return RedirectResponse(url="/", status_code=303)
+
+
+@router.get("/setup/undo-skip")
+async def setup_wizard_undo_skip(request: Request, db: Session = Depends(get_db)):
+    """
+    Undo a previously skipped setup wizard.
+
+    Removes the skip marker from the database so the wizard will be
+    presented again on next visit to the home page.  Redirects to
+    step 1 of the wizard immediately.
+    """
+    try:
+        from app.utils.settings_service import delete_setting_from_db
+
+        delete_setting_from_db(db, "_setup_wizard_skipped", changed_by="wizard_undo_skip")
+        logger.info("Setup wizard skip marker removed; redirecting to wizard")
+        return RedirectResponse(url="/setup?step=1", status_code=303)
+    except Exception as e:
+        logger.error(f"Error undoing setup wizard skip: {e}")
+        return RedirectResponse(url="/settings", status_code=303)

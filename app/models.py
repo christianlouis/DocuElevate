@@ -102,3 +102,17 @@ class ApplicationSettings(Base):
     value = Column(String, nullable=True)  # Setting value (stored as string, converted as needed)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class SettingsAuditLog(Base):
+    """Audit log for all configuration changes made via the settings UI."""
+
+    __tablename__ = "settings_audit_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, nullable=False, index=True)  # Setting key that was changed
+    old_value = Column(String, nullable=True)  # Previous value (None if first-time set)
+    new_value = Column(String, nullable=True)  # New value (None if deleted)
+    changed_by = Column(String, nullable=False)  # Username of the admin who made the change
+    changed_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    action = Column(String, nullable=False)  # "update" or "delete"

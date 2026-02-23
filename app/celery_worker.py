@@ -35,6 +35,11 @@ from app.tasks.upload_to_sftp import upload_to_sftp  # noqa: F401
 from app.tasks.upload_to_webdav import upload_to_webdav  # noqa: F401
 from app.tasks.uptime_kuma_tasks import ping_uptime_kuma  # noqa: F401
 
+# Register the settings reload signal handler so workers pick up config changes
+from app.utils.settings_sync import register_settings_reload_signal
+
+register_settings_reload_signal()
+
 celery.conf.task_routes = {
     "app.tasks.*": {"queue": "default"},
 }
