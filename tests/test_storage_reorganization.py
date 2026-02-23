@@ -352,7 +352,7 @@ startxref
             patch("app.tasks.process_document.SessionLocal") as mock_session_local,
             patch("app.tasks.process_document.settings") as mock_settings,
             patch("app.tasks.process_document.log_task_progress"),
-            patch("app.tasks.process_document.process_with_azure_document_intelligence") as mock_azure,
+            patch("app.tasks.process_document.process_with_ocr") as mock_azure,
         ):
             mock_settings.workdir = str(tmp_path)
             mock_session_local.return_value.__enter__.return_value = db_session
@@ -362,6 +362,6 @@ startxref
             # Process with force_cloud_ocr=True
             result = process_document(str(test_pdf), force_cloud_ocr=True)
 
-            # Should queue Azure OCR, not local extraction
+            # Should queue OCR, not local extraction
             mock_azure.delay.assert_called_once()
             assert result["status"] == "Queued for forced OCR"
