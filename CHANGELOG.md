@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.46.0 (2026-02-23)
+
+### Bug Fixes
+
+- **api**: Swap parameter order in test_ai_extraction to fix 500 error
+  ([`ce4700a`](https://github.com/christianlouis/DocuElevate/commit/ce4700ae44abf55a87bc94b83c4d41e4cac2278e))
+
+### Features
+
+- **ui**: Add copy button to text modals in file detail view
+  ([`219e03e`](https://github.com/christianlouis/DocuElevate/commit/219e03ed3dc5cd80c1ed073167669db49dc01512))
+
+
 ## v0.45.0 (2026-02-23)
 
 ### Chores
