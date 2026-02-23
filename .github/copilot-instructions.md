@@ -66,42 +66,59 @@ pytest --cov=app --cov-report=html
 ## Lint / Format Commands
 
 ```bash
-# Format code with Black (line length 120)
-black app/ tests/
-
-# Sort imports with isort (Black-compatible profile)
-isort app/ tests/
-
-# Lint with flake8 (max line length 120, ignores E203/W503)
-flake8 app/ --max-line-length=120
+# Format and lint with Ruff (replaces Black, isort, Flake8, Bandit — all-in-one)
+ruff format app/ tests/
+ruff check app/ tests/ --fix
 
 # Type checking with mypy
 mypy app/
 
-# Security lint with bandit (excludes tests)
-bandit -r app/
-
 # Check for dependency vulnerabilities
 safety check
 
-# Run all pre-commit hooks at once
+# Run all pre-commit hooks at once (recommended — runs ruff, mypy, secret detection, etc.)
 pre-commit run --all-files
 ```
+
+## Agent Workflow (Follow for Every Task)
+
+Follow these steps **in order** for every task — do not skip any:
+
+1. **Understand** — read the issue/request in full before writing any code
+2. **Explore** — search the codebase for existing patterns and relevant implementations
+3. **Plan** — outline your changes as a checklist before starting
+4. **Implement** — make the smallest correct change that solves the problem
+5. **Test** — write or update tests; new code requires 100% test coverage
+6. **Document** — update all relevant docs in `docs/`; this is mandatory, not optional
+7. **Quality Gate** — run the single gate command below and fix every failure before committing:
+
+```bash
+ruff format app/ tests/ && \
+ruff check app/ tests/ --fix && \
+safety check && \
+pytest --tb=short -q
+```
+
+8. **Review** — re-read your own diff; confirm it is clean, secure, minimal, and well-documented
+
+> All commands in the quality gate must exit with code 0. Never submit with failures.
 
 ## Core Principles
 
 ### Code Quality
-- Always use **Black** for formatting (line length: 120)
-- Use **isort** with Black profile for import sorting
-- Use **flake8** for linting (ignore E203, W503)
+- **Security first**: treat security as a non-negotiable requirement, not an afterthought — review [SECURITY_AUDIT.md](../SECURITY_AUDIT.md) for every change
+- Write **clean, modern, well-documented code** — prioritize readability, maintainability, and idiomatic Python
+- Use **Ruff** for all formatting, linting, import sorting, and security scanning — `ruff format` + `ruff check --fix` (replaces Black, isort, Flake8, Bandit)
+- Line length: 120 characters (configured in `pyproject.toml`)
 - Use **type hints** for all function parameters and return values
 - Write **docstrings** for all public functions, classes, and modules
-- Maintain **80% test coverage** for new code
+- Maintain **100% test coverage** for new code
 
 ### Python Conventions
 - Use descriptive variable names (e.g., `user_document_path`, not `udp`)
 - Follow PEP 8 naming: `snake_case` for functions/variables, `PascalCase` for classes
-- Use type hints from `typing` module (Dict, List, Optional, etc.)
+- Use modern Python 3.10+ type hints: `list[str]`, `dict[str, Any]`, `str | None` — avoid `List`, `Dict`, `Optional` from `typing`
+- Only import from `typing` for `Any`, `Callable`, `TypeVar`, `Protocol`, and other constructs unavailable natively
 - Prefer `pathlib.Path` over string paths for file operations
 - Use f-strings for string formatting, not `.format()` or `%`
 - Handle exceptions explicitly - avoid bare `except:` clauses
@@ -112,7 +129,8 @@ pre-commit run --all-files
 - Validate and sanitize all user inputs
 - Use parameterized queries with SQLAlchemy (never raw SQL with user input)
 - Review [SECURITY_AUDIT.md](../SECURITY_AUDIT.md) before making security-related changes
-- Run `bandit` to check for security issues in Python code
+- Security linting is built into Ruff via `S` rules — runs automatically with `ruff check`; fix all `S`-prefixed findings
+- Run `safety check` to scan dependencies for known CVEs before submitting any PR
 
 ### FastAPI Patterns
 - Organize endpoints by feature in `app/api/` directory
@@ -152,6 +170,8 @@ pre-commit run --all-files
 - Use `pytest.fixture` for test setup and teardown
 - Run tests with: `pytest -v`
 - Check coverage with: `pytest --cov=app --cov-report=term-missing`
+- **All tests must pass** before submitting changes — never leave failing tests
+- **All linters must pass** before submitting — run `pre-commit run --all-files`
 
 ### Configuration
 - All configuration is in `app/config.py` using Pydantic Settings
@@ -161,7 +181,7 @@ pre-commit run --all-files
 
 ### Documentation
 - Keep documentation in `docs/` directory in Markdown format
-- Update relevant docs when adding features or changing behavior
+- **Always update** relevant docs when adding or changing any feature — documentation updates are mandatory, never optional
 - User-facing documentation should be clear and include examples
 - Reference existing docs: `docs/UserGuide.md`, `docs/API.md`, `docs/DeploymentGuide.md`
 - See [AGENTIC_CODING.md](../AGENTIC_CODING.md) for detailed development guide
@@ -223,7 +243,8 @@ These files and directories are managed by automation or are critical infrastruc
 - Write clear, descriptive commit messages
 - **ALWAYS follow Conventional Commits format** (see below)
 - Keep commits focused and atomic
-- Run tests and linters before committing
+- **All tests must pass** before committing — `pytest` must succeed with no failures
+- **All linters must pass** before committing — `pre-commit run --all-files` must succeed
 - Pre-commit hooks are configured (`.pre-commit-config.yaml`)
 
 ## Conventional Commits (REQUIRED)
@@ -313,7 +334,7 @@ These files are managed entirely by the semantic-release automation.
 - Configuration in `app/config.py`
 
 ### Common Patterns
-- Use `from typing import Optional, Dict, List, Any` for type hints
+- Use modern Python 3.10+ type hints: `list[str]`, `dict[str, Any]`, `str | None`; only import from `typing` for `Any`, `Callable`, `TypeVar`, `Protocol`
 - Import FastAPI dependencies: `from fastapi import Depends, HTTPException, status`
 - Get DB session: `db: Session = Depends(get_db)`
 - Current user: `current_user: User = Depends(get_current_user)`

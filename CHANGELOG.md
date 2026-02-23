@@ -10,6 +10,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.47.0 (2026-02-23)
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`d70fffd`](https://github.com/christianlouis/DocuElevate/commit/d70fffd4d21214900fdb018066f10a60019b5706))
+
+- **copilot**: Checkpoint before comprehensive instructions overhaul
+  ([`dbea61d`](https://github.com/christianlouis/DocuElevate/commit/dbea61dc0b5808cb25db15553a950ca849a3228d))
+
+- **copilot**: Overhaul instructions — Ruff toolchain, 100% coverage, agent workflow, modern Python
+  ([`156e0ba`](https://github.com/christianlouis/DocuElevate/commit/156e0ba524000a1063c0cb316063f1e28e5f0182))
+
+### Features
+
+- **ai**: Handle temperature incompatibility for gpt-5 and o-series models, add model picker UI
+  ([`a94b52e`](https://github.com/christianlouis/DocuElevate/commit/a94b52ee144e6e1f5a54ebc85d548bf5f860626b))
+
+
+## Unreleased
+
+### Documentation
+
+- **copilot**: Checkpoint before comprehensive instructions overhaul
+  ([`dbea61d`](https://github.com/christianlouis/DocuElevate/commit/dbea61dc0b5808cb25db15553a950ca849a3228d))
+
+- **copilot**: Overhaul instructions — Ruff toolchain, 100% coverage, agent workflow, modern Python
+  ([`156e0ba`](https://github.com/christianlouis/DocuElevate/commit/156e0ba524000a1063c0cb316063f1e28e5f0182))
+
+
+## v0.46.0 (2026-02-23)
+
+### Bug Fixes
+
+- **api**: Swap parameter order in test_ai_extraction to fix 500 error
+  ([`ce4700a`](https://github.com/christianlouis/DocuElevate/commit/ce4700ae44abf55a87bc94b83c4d41e4cac2278e))
+
+### Features
+
+- **ui**: Add copy button to text modals in file detail view
+  ([`219e03e`](https://github.com/christianlouis/DocuElevate/commit/219e03ed3dc5cd80c1ed073167669db49dc01512))
+
+
+## v0.45.0 (2026-02-23)
+
+### Chores
+
+- Add example.com and smtp.example.com to copilot agent network allowlist
+  ([`d93cd96`](https://github.com/christianlouis/DocuElevate/commit/d93cd96b6205021c4739765090fa55641e23e2ee))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`d5e4a74`](https://github.com/christianlouis/DocuElevate/commit/d5e4a74f693b6a458dcdc2978d834d41c5b4cb4d))
+
+### Features
+
+- **api**: Add POST /api/ai/test-extraction endpoint and Test Extraction UI button
+  ([`ce73f23`](https://github.com/christianlouis/DocuElevate/commit/ce73f23a8981ffae94594461362df3834481ced7))
+
+### Testing
+
+- **api**: Add comprehensive tests for AI extraction endpoint reaching 100% coverage
+  ([`3262d65`](https://github.com/christianlouis/DocuElevate/commit/3262d65bfe38d0669ba7eb6c0c51961ff6817976))
+
+
+## Unreleased
+
+### Chores
+
+- Add example.com and smtp.example.com to copilot agent network allowlist
+  ([`d93cd96`](https://github.com/christianlouis/DocuElevate/commit/d93cd96b6205021c4739765090fa55641e23e2ee))
+
+
 ## v0.44.0 (2026-02-23)
 
 ### Code Style

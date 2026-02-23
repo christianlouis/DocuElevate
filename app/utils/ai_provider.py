@@ -11,12 +11,57 @@ See the Configuration Guide for full details on each provider's settings.
 """
 
 import logging
+import re
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_temperature(model: str, requested: float) -> Optional[float]:
+    """Return a temperature value compatible with the given model, or ``None`` to omit it.
+
+    Certain model families have restrictions on the ``temperature`` parameter:
+
+    * **o-series reasoning models** (``o1``, ``o3``, ``o4``, …) – do not accept
+      a ``temperature`` argument at all.  Return ``None`` so callers can skip the
+      parameter entirely.
+    * **gpt-5 family** (``gpt-5``, ``gpt-5-nano``, ``gpt-5-codex``, …) – only
+      ``temperature=1`` is accepted; passing ``0`` raises a 400 error.  Return
+      ``1`` and emit a debug log so the caller is aware of the coercion.
+    * All other models – return the requested value unchanged.
+
+    The model string may include a provider prefix (e.g. ``openai/gpt-4o``);
+    only the part after the last ``/`` is examined.
+
+    Args:
+        model: Model identifier (may include a provider prefix).
+        requested: The temperature the caller wants to use.
+
+    Returns:
+        A compatible temperature float, or ``None`` if temperature should be
+        omitted from the API call.
+    """
+    bare = model.lower().split("/")[-1]
+
+    # o-series reasoning models (o1, o3, o4 …) do not support temperature
+    if re.match(r"^o\d+(-|$)", bare):
+        logger.debug("Dropping temperature parameter for reasoning model '%s' (not supported)", model)
+        return None
+
+    # gpt-5 family only supports temperature=1
+    if bare.startswith("gpt-5"):
+        if requested != 1.0:
+            logger.debug(
+                "Coercing temperature from %s to 1 for model '%s' (only temperature=1 is supported)",
+                requested,
+                model,
+            )
+        return 1.0
+
+    return requested
 
 
 def _require_text_content(content: Optional[str]) -> str:
@@ -101,12 +146,12 @@ class OpenAIProvider(AIProvider):
         temperature: float = 0,
         **kwargs: Any,
     ) -> str:
-        completion = self._client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            **kwargs,
-        )
+        call_kwargs: Dict[str, Any] = {"model": model, "messages": messages}
+        safe_temp = _resolve_temperature(model, temperature)
+        if safe_temp is not None:
+            call_kwargs["temperature"] = safe_temp
+        call_kwargs.update(kwargs)
+        completion = self._client.chat.completions.create(**call_kwargs)
         _content = completion.choices[0].message.content
         return _require_text_content(_content)
 
@@ -130,12 +175,12 @@ class AzureOpenAIProvider(AIProvider):
         temperature: float = 0,
         **kwargs: Any,
     ) -> str:
-        completion = self._client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            **kwargs,
-        )
+        call_kwargs: Dict[str, Any] = {"model": model, "messages": messages}
+        safe_temp = _resolve_temperature(model, temperature)
+        if safe_temp is not None:
+            call_kwargs["temperature"] = safe_temp
+        call_kwargs.update(kwargs)
+        completion = self._client.chat.completions.create(**call_kwargs)
         _content = completion.choices[0].message.content
         return _require_text_content(_content)
 
@@ -161,13 +206,12 @@ class AnthropicProvider(AIProvider):
         import litellm
 
         model_name = model if model.startswith("anthropic/") else f"anthropic/{model}"
-        response = litellm.completion(
-            model=model_name,
-            messages=messages,
-            temperature=temperature,
-            api_key=self._api_key,
-            **kwargs,
-        )
+        call_kwargs: Dict[str, Any] = {"model": model_name, "messages": messages, "api_key": self._api_key}
+        safe_temp = _resolve_temperature(model, temperature)
+        if safe_temp is not None:
+            call_kwargs["temperature"] = safe_temp
+        call_kwargs.update(kwargs)
+        response = litellm.completion(**call_kwargs)
         _content = response.choices[0].message.content
         return _require_text_content(_content)
 
@@ -193,13 +237,12 @@ class GeminiProvider(AIProvider):
         import litellm
 
         model_name = model if model.startswith("gemini/") else f"gemini/{model}"
-        response = litellm.completion(
-            model=model_name,
-            messages=messages,
-            temperature=temperature,
-            api_key=self._api_key,
-            **kwargs,
-        )
+        call_kwargs: Dict[str, Any] = {"model": model_name, "messages": messages, "api_key": self._api_key}
+        safe_temp = _resolve_temperature(model, temperature)
+        if safe_temp is not None:
+            call_kwargs["temperature"] = safe_temp
+        call_kwargs.update(kwargs)
+        response = litellm.completion(**call_kwargs)
         _content = response.choices[0].message.content
         return _require_text_content(_content)
 
@@ -235,12 +278,12 @@ class OllamaProvider(AIProvider):
         temperature: float = 0,
         **kwargs: Any,
     ) -> str:
-        completion = self._client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            **kwargs,
-        )
+        call_kwargs: Dict[str, Any] = {"model": model, "messages": messages}
+        safe_temp = _resolve_temperature(model, temperature)
+        if safe_temp is not None:
+            call_kwargs["temperature"] = safe_temp
+        call_kwargs.update(kwargs)
+        completion = self._client.chat.completions.create(**call_kwargs)
         _content = completion.choices[0].message.content
         return _require_text_content(_content)
 
@@ -269,12 +312,12 @@ class OpenRouterProvider(AIProvider):
         temperature: float = 0,
         **kwargs: Any,
     ) -> str:
-        completion = self._client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            **kwargs,
-        )
+        call_kwargs: Dict[str, Any] = {"model": model, "messages": messages}
+        safe_temp = _resolve_temperature(model, temperature)
+        if safe_temp is not None:
+            call_kwargs["temperature"] = safe_temp
+        call_kwargs.update(kwargs)
+        completion = self._client.chat.completions.create(**call_kwargs)
         _content = completion.choices[0].message.content
         return _require_text_content(_content)
 
@@ -335,12 +378,12 @@ class PortkeyProvider(AIProvider):
         temperature: float = 0,
         **kwargs: Any,
     ) -> str:
-        completion = self._client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            **kwargs,
-        )
+        call_kwargs: Dict[str, Any] = {"model": model, "messages": messages}
+        safe_temp = _resolve_temperature(model, temperature)
+        if safe_temp is not None:
+            call_kwargs["temperature"] = safe_temp
+        call_kwargs.update(kwargs)
+        completion = self._client.chat.completions.create(**call_kwargs)
         _content = completion.choices[0].message.content
         return _require_text_content(_content)
 
@@ -371,11 +414,10 @@ class LiteLLMProvider(AIProvider):
     ) -> str:
         import litellm
 
-        completion_kwargs: Dict[str, Any] = {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-        }
+        completion_kwargs: Dict[str, Any] = {"model": model, "messages": messages}
+        safe_temp = _resolve_temperature(model, temperature)
+        if safe_temp is not None:
+            completion_kwargs["temperature"] = safe_temp
         if self._api_key:
             completion_kwargs["api_key"] = self._api_key
         if self._api_base:
