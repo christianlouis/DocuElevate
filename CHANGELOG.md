@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Chores
+
+- Add example.com and smtp.example.com to copilot agent network allowlist
+  ([`d93cd96`](https://github.com/christianlouis/DocuElevate/commit/d93cd96b6205021c4739765090fa55641e23e2ee))
+
+
 ## v0.44.0 (2026-02-23)
 
 ### Code Style
