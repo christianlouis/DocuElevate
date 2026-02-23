@@ -1,7 +1,7 @@
 # DocuElevate TODO List
 
-**Last Updated:** 2026-02-08
-**Current Version:** v0.5.0
+**Last Updated:** 2026-02-23
+**Current Version:** v0.40.0 (see `VERSION` file; managed by semantic-release)
 
 This document tracks actionable tasks for the current development cycle. For long-term planning, see [ROADMAP.md](ROADMAP.md) and [MILESTONES.md](MILESTONES.md).
 
@@ -57,6 +57,7 @@ As of this update, DocuElevate uses **automated semantic versioning** via `pytho
 - [x] Add CodeQL scanning
 - [x] Implement semantic-release for automated versioning
 - [x] Add conventional commit validation (commitlint)
+- [x] Fix CHANGELOG.md automation (autoescape bug, explicit changelog settings)
 - [ ] Add dependency scanning (Dependabot or similar)
 - [ ] Make linting checks blocking (once critical issues fixed)
 - [ ] Add build status badges to README.md
@@ -69,6 +70,9 @@ As of this update, DocuElevate uses **automated semantic versioning** via `pytho
 - [x] Create AGENTIC_CODING.md
 - [x] Update CONTRIBUTING.md with testing guidelines and conventional commits
 - [x] Archive one-off documentation files to docs/archive/
+- [x] Add documentation-first principle to CONTRIBUTING.md and AGENTIC_CODING.md
+- [x] Fix README.md quick start commands and screenshots section
+- [ ] Update all screenshots to reflect current UI
 - [ ] Add architecture diagram to docs/
 - [ ] Document all environment variables in docs/ConfigurationGuide.md
 - [ ] Add troubleshooting section for common test failures

@@ -71,6 +71,22 @@ DocuElevate/
    - Ensure you understand the Celery task flow
    - Consider impact on database schema
 
+### Documentation-First Principle
+
+**Documentation is as important as tests and code.** Every change must include documentation updates in the same commit/PR.
+
+| Change type | What to update |
+|-------------|---------------|
+| New feature | `docs/UserGuide.md`, `docs/API.md` (if API), `docs/ConfigurationGuide.md` (if config) |
+| New config option | `docs/ConfigurationGuide.md` and `.env.demo` |
+| New API endpoint | `docs/API.md` |
+| Bug fix (user-visible) | `docs/Troubleshooting.md` |
+| Deployment change | `docs/DeploymentGuide.md` |
+| Security change | `SECURITY_AUDIT.md` |
+| Breaking change | CHANGELOG (auto-generated) + migration notes in relevant docs |
+
+**Never edit `CHANGELOG.md` or `VERSION` manually.** These are managed automatically by `python-semantic-release` on every merge to `main`.
+
 ### Code Conventions
 
 #### Python Style
