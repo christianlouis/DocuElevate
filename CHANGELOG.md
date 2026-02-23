@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Documentation
+
+- **copilot**: Checkpoint before comprehensive instructions overhaul
+  ([`dbea61d`](https://github.com/christianlouis/DocuElevate/commit/dbea61dc0b5808cb25db15553a950ca849a3228d))
+
+- **copilot**: Overhaul instructions — Ruff toolchain, 100% coverage, agent workflow, modern Python
+  ([`156e0ba`](https://github.com/christianlouis/DocuElevate/commit/156e0ba524000a1063c0cb316063f1e28e5f0182))
+
+
 ## v0.46.0 (2026-02-23)
 
 ### Bug Fixes
