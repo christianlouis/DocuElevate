@@ -271,7 +271,7 @@ def _extract_json_from_text(text: str):
 
 @router.post("/ai/test-extraction")
 @require_login
-async def test_ai_extraction(body: ExtractionTestRequest, request: Request):
+async def test_ai_extraction(request: Request, body: ExtractionTestRequest):
     """
     Run the metadata-extraction prompt against the configured AI provider.
 
