@@ -1,14 +1,20 @@
 """
 AI provider and OpenAI API endpoints.
 
-Exposes two endpoints:
-- GET /api/ai/test   – tests the currently configured AI provider (generic, provider-agnostic)
-- GET /api/openai/test – backward-compatible alias that tests the OpenAI API specifically
+Exposes three endpoints:
+- GET /api/ai/test             – tests the currently configured AI provider (generic, provider-agnostic)
+- GET /api/openai/test         – backward-compatible alias that tests the OpenAI API specifically
+- POST /api/ai/test-extraction – runs the metadata-extraction prompt against the configured AI provider
+                                 with caller-supplied plaintext and returns the raw response, parsed JSON,
+                                 and extracted tags so operators can evaluate model quality.
 """
 
+import json
 import logging
+import re
 
 from fastapi import APIRouter, Request
+from pydantic import BaseModel, Field
 
 from app.auth import require_login
 from app.config import settings
@@ -17,6 +23,10 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Maximum number of characters accepted for a test-extraction request.
+# Keeps individual requests reasonable without blocking any real-world document.
+_MAX_EXTRACTION_TEXT_LEN = 50_000
 
 
 def _get_exception_chain_detail(exc: Exception) -> str:
@@ -202,3 +212,123 @@ async def test_ai_provider_connection(request: Request):
             "message": f"Connection failed: {detail}",
             "provider": provider_name,
         }
+
+
+class ExtractionTestRequest(BaseModel):
+    """Request body for the AI extraction test endpoint."""
+
+    text: str = Field(..., min_length=1, max_length=_MAX_EXTRACTION_TEXT_LEN, description="Plain-text document content")
+
+
+def _build_extraction_prompt(text: str) -> str:
+    """Return the metadata-extraction prompt used in the standard processing pipeline."""
+    return (
+        "You are a specialized document analyzer trained to extract structured metadata from documents.\n"
+        "Your task is to analyze the given text and return a well-structured JSON object.\n\n"
+        "Extract and return the following fields:\n"
+        "1. **filename**: Machine-readable filename "
+        "(YYYY-MM-DD_DescriptiveTitle, use only letters, numbers, periods, and underscores).\n"
+        '2. **empfaenger**: The recipient, or "Unknown" if not found.\n'
+        '3. **absender**: The sender, or "Unknown" if not found.\n'
+        "4. **correspondent**: The entity or company that issued the document "
+        '(shortest possible name, e.g., "Amazon" instead of "Amazon EU SARL, German branch").\n'
+        "5. **kommunikationsart**: One of [Behoerdlicher_Brief, Rechnung, Kontoauszug, Vertrag, "
+        "Quittung, Privater_Brief, Einladung, Gewerbliche_Korrespondenz, Newsletter, Werbung, Sonstiges].\n"
+        "6. **kommunikationskategorie**: One of [Amtliche_Postbehoerdliche_Dokumente, "
+        "Finanz_und_Vertragsdokumente, Geschaeftliche_Kommunikation, "
+        "Private_Korrespondenz, Sonstige_Informationen].\n"
+        "7. **document_type**: Precise classification (e.g., Invoice, Contract, Information, Unknown).\n"
+        "8. **tags**: A list of up to 4 relevant thematic keywords.\n"
+        '9. **language**: Detected document language (ISO 639-1 code, e.g., "de" or "en").\n'
+        "10. **title**: A human-readable title summarizing the document content.\n"
+        "11. **confidence_score**: A numeric value (0-100) indicating the confidence level "
+        "of the extracted metadata.\n"
+        "12. **reference_number**: Extracted invoice/order/reference number if available.\n"
+        "13. **monetary_amounts**: A list of key monetary values detected in the document.\n\n"
+        "### Important Rules:\n"
+        "- **OCR Correction**: Assume the text has been corrected for OCR errors.\n"
+        "- **Tagging**: Max 4 tags, avoiding generic or overly specific terms.\n"
+        "- **Title**: Concise, no addresses, and contains key identifying features.\n"
+        "- **Date Selection**: Use the most relevant date if multiple are found.\n"
+        "- **Output Language**: Maintain the document's original language.\n\n"
+        f"Extracted text:\n{text}\n\n"
+        "Return only valid JSON with no additional commentary.\n"
+    )
+
+
+def _extract_json_from_text(text: str):
+    """Try to extract a JSON object from the LLM response text."""
+    pattern = r"```(?:json)?\s*(\{.*?\})\s*```"
+    match = re.search(pattern, text, re.DOTALL)
+    if match:
+        return match.group(1)
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        return text[start : end + 1]
+    return None
+
+
+@router.post("/ai/test-extraction")
+@require_login
+async def test_ai_extraction(body: ExtractionTestRequest, request: Request):
+    """
+    Run the metadata-extraction prompt against the configured AI provider.
+
+    Accepts plain-text document content, sends it through the same prompt used
+    by the background processing pipeline, and returns:
+    - ``raw_response``:  verbatim LLM output
+    - ``parsed_json``:   the extracted JSON object (null when parsing fails)
+    - ``tags``:          the ``tags`` list from the parsed JSON (empty list on failure)
+    - ``provider`` / ``model``: which provider / model was used
+    """
+    from app.utils.ai_provider import get_ai_provider
+
+    provider_name = settings.ai_provider
+    model = settings.ai_model or settings.openai_model
+
+    logger.info(f"AI extraction test requested: provider={provider_name}, model={model}")
+
+    try:
+        provider = get_ai_provider()
+        prompt = _build_extraction_prompt(body.text)
+        raw_response = provider.chat_completion(
+            messages=[
+                {"role": "system", "content": "You are an intelligent document classifier."},
+                {"role": "user", "content": prompt},
+            ],
+            model=model,
+            temperature=0,
+        )
+    except ValueError as e:
+        logger.warning(f"AI extraction test – configuration error: {e}")
+        return {"status": "error", "message": str(e), "provider": provider_name}
+    except Exception as e:
+        detail = _get_exception_chain_detail(e)
+        logger.error(f"AI extraction test failed for provider '{provider_name}': {detail}", exc_info=True)
+        return {"status": "error", "message": f"AI call failed: {detail}", "provider": provider_name}
+
+    # Attempt to parse JSON from the response
+    parsed_json = None
+    tags: list = []
+    parse_error = None
+    json_text = _extract_json_from_text(raw_response)
+    if json_text:
+        try:
+            parsed_json = json.loads(json_text)
+            tags = parsed_json.get("tags", [])
+        except json.JSONDecodeError as exc:
+            parse_error = str(exc)
+            logger.warning(f"AI extraction test: JSON parse error: {exc}")
+    else:
+        parse_error = "No JSON object found in response"
+
+    return {
+        "status": "success",
+        "provider": provider_name,
+        "model": model,
+        "raw_response": raw_response,
+        "parsed_json": parsed_json,
+        "tags": tags,
+        "parse_error": parse_error,
+    }
