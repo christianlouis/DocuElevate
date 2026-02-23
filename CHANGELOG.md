@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.42.1 (2026-02-23)
+
+### Bug Fixes
+
+- Fix automatic changelog creation with PSR v10
+  ([`7f3e831`](https://github.com/christianlouis/DocuElevate/commit/7f3e8312de33b44eba3c021ac4cf58e504528b85))
+
+
 ## [0.40.0] - 2026-02-23
 
 > **Retroactive summary.** Releases v0.6.0 through v0.40.0 were cut automatically by
