@@ -38,3 +38,7 @@ apprise>=1.4.0
 
 # AI provider aggregator - enables Anthropic, Gemini, Ollama, and 100+ LLM providers
 litellm>=1.0.0,<2.0.0
+
+# Self-hosted OCR engines (optional – only required when the provider is enabled)
+pytesseract>=0.3.10  # Python wrapper for Tesseract OCR
+pdf2image>=1.17.0  # Convert PDF pages to images (used by Tesseract and EasyOCR providers)

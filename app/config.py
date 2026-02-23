@@ -72,6 +72,40 @@ class Settings(BaseSettings):
     azure_region: str
     azure_endpoint: str
     gotenberg_url: str
+
+    # ---------------------------------------------------------------------------
+    # OCR provider settings
+    # ---------------------------------------------------------------------------
+    # Comma-separated list of OCR engines to use.
+    # Supported values: azure, tesseract, easyocr, mistral, google_docai, aws_textract
+    # When multiple engines are listed all are run and results are merged.
+    # Example: OCR_PROVIDERS=azure,tesseract
+    ocr_providers: str = "azure"
+
+    # Strategy for merging results from multiple OCR providers.
+    # - ai_merge  : Ask the AI model to produce the best merged text (default).
+    # - longest   : Return the result with the most characters.
+    # - primary   : Return only the first provider's result (no merging).
+    ocr_merge_strategy: str = "ai_merge"
+
+    # Tesseract OCR settings (used when "tesseract" is in OCR_PROVIDERS)
+    tesseract_cmd: Optional[str] = None  # Path to tesseract binary (e.g. /usr/bin/tesseract)
+    tesseract_language: str = "eng"  # Tesseract language code(s), e.g. "eng" or "eng+deu"
+
+    # EasyOCR settings (used when "easyocr" is in OCR_PROVIDERS)
+    easyocr_languages: str = "en"  # Comma-separated language codes, e.g. "en,de,fr"
+    easyocr_gpu: bool = False  # Enable GPU acceleration for EasyOCR
+
+    # Mistral OCR settings (used when "mistral" is in OCR_PROVIDERS)
+    mistral_api_key: Optional[str] = None
+    mistral_ocr_model: str = "mistral-ocr-latest"
+
+    # Google Cloud Document AI settings (used when "google_docai" is in OCR_PROVIDERS)
+    # Falls back to google_drive_credentials_json for service account credentials.
+    google_docai_credentials_json: Optional[str] = None
+    google_docai_project_id: Optional[str] = None
+    google_docai_processor_id: Optional[str] = None
+    google_docai_location: str = "us"  # Processor location, e.g. "us" or "eu"
     external_hostname: str = "localhost"  # Default to localhost
 
     # Authentication settings
