@@ -185,7 +185,7 @@
               {% endif %}
             </div>
 
-            <!-- Per-setting Save button (visible only when value has changed) -->
+            <!-- Per-setting Save / Back-to-ENV buttons -->
             <div class="ml-4 flex-shrink-0 flex flex-col items-end gap-1 pt-1">
               <button
                 type="button"
@@ -198,6 +198,18 @@
               >
                 <span x-show="savingKey !== '{{ setting.key }}'"><i class="fas fa-save mr-1"></i>Save</span>
                 <span x-show="savingKey === '{{ setting.key }}'">Saving…</span>
+              </button>
+              <button
+                type="button"
+                x-show="isDbOverride['{{ setting.key }}'] && formData['{{ setting.key }}'] === originalData['{{ setting.key }}']"
+                x-transition
+                @click="revertSetting('{{ setting.key }}')"
+                :disabled="revertingKey === '{{ setting.key }}'"
+                class="px-3 py-1 text-sm bg-orange-500 text-white rounded-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-400 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                title="Remove DB override and revert to environment variable or default"
+              >
+                <span x-show="revertingKey !== '{{ setting.key }}'"><i class="fas fa-undo mr-1"></i>Back to ENV</span>
+                <span x-show="revertingKey === '{{ setting.key }}'">Reverting…</span>
               </button>
             </div>
           </div>
@@ -233,9 +245,11 @@ function settingsApp() {
   return {
     formData: {},
     originalData: {},
+    isDbOverride: {},
     showPassword: {},
     saving: false,
     savingKey: null,
+    revertingKey: null,
     showAlert: false,
     alertType: 'success',
     alertTitle: '',
@@ -247,6 +261,7 @@ function settingsApp() {
         {% for setting in settings_list %}
           this.formData['{{ setting.key }}'] = {{ setting.display_value|tojson }};
           this.originalData['{{ setting.key }}'] = {{ setting.display_value|tojson }};
+          this.isDbOverride['{{ setting.key }}'] = {{ (setting.source == 'database')|tojson }};
           this.showPassword['{{ setting.key }}'] = false;
         {% endfor %}
       {% endfor %}
@@ -297,6 +312,7 @@ function settingsApp() {
 
         if (response.ok && result.success) {
           this.originalData[key] = value;
+          this.isDbOverride[key] = true;
           let message = `Setting '${key}' saved successfully.`;
           if (result.restart_required) {
             message += ' Please restart the application for this change to take effect.';
@@ -310,6 +326,30 @@ function settingsApp() {
         this.showErrorAlert('Error', 'Failed to save setting. Please try again.');
       } finally {
         this.savingKey = null;
+      }
+    },
+
+    async revertSetting(key) {
+      this.revertingKey = key;
+      this.hideAlert();
+
+      try {
+        const response = await fetch(`/api/settings/${key}`, {
+          method: 'DELETE',
+        });
+
+        if (response.ok) {
+          // Reload the page so the ENV/default value and source badge refresh
+          window.location.reload();
+        } else {
+          const result = await response.json();
+          this.showErrorAlert('Revert Failed', result.detail || 'Unknown error');
+          this.revertingKey = null;
+        }
+      } catch (error) {
+        console.error('Error reverting setting:', error);
+        this.showErrorAlert('Error', 'Failed to revert setting. Please try again.');
+        this.revertingKey = null;
       }
     },
 
@@ -345,7 +385,10 @@ function settingsApp() {
         const result = await response.json();
 
         if (response.ok && result.success) {
-          this.originalData = { ...this.formData };
+          for (const updated of result.updated) {
+            this.originalData[updated.key] = updated.value;
+            this.isDbOverride[updated.key] = true;
+          }
           let message = `${result.updated.length} setting(s) updated successfully.`;
           if (result.restart_required) {
             message += ' Please restart the application for changes to take effect.';

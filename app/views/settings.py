@@ -72,25 +72,25 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
         for category, keys in categories.items():
             settings_data[category] = []
             for key in keys:
-                # Get current value from settings (already has precedence applied)
-                value = getattr(settings, key, None)
-
-                # Determine the source of this setting
-                # Check if it's in the database
+                # Determine the source of this setting and get the effective value
+                # Check if it's in the database (DB takes precedence)
                 if key in db_settings:
                     source = "database"
                     source_label = "DB"
                     source_color = "green"
+                    value = db_settings[key]
                 # Check if it's from environment variable
                 elif key.upper() in os.environ or key in os.environ:
                     source = "environment"
                     source_label = "ENV"
                     source_color = "blue"
+                    value = getattr(settings, key, None)
                 else:
                     # It's using the default value
                     source = "default"
                     source_label = "DEFAULT"
                     source_color = "gray"
+                    value = getattr(settings, key, None)
 
                 # Get metadata
                 metadata = get_setting_metadata(key)
