@@ -13,6 +13,7 @@ from typing import Any, Optional, Union
 from sqlalchemy.orm import Session
 
 from app.models import ApplicationSettings
+from app.utils.settings_service import get_setting_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,17 @@ def load_settings_from_db(settings_obj: object, db_session: Session) -> None:
         for db_setting in db_settings:
             key = db_setting.key
             value = db_setting.value
+
+            # Decrypt sensitive settings before applying to the settings object
+            metadata = get_setting_metadata(key)
+            if metadata.get("sensitive", False) and value:
+                try:
+                    from app.utils.encryption import decrypt_value
+
+                    value = decrypt_value(value)
+                except Exception as e:
+                    logger.error(f"Failed to decrypt setting {key}: {e}")
+                    continue
 
             # Check if the setting exists in the Settings class
             if hasattr(settings_obj, key):

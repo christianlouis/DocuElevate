@@ -161,6 +161,77 @@ class TestLoadSettingsFromDb:
         # Should not raise, just log warning
         load_settings_from_db(mock_settings, mock_db)
 
+    @patch("app.utils.config_loader.get_setting_metadata")
+    @patch("app.utils.encryption.decrypt_value")
+    def test_decrypts_sensitive_settings(self, mock_decrypt, mock_metadata):
+        """Test that sensitive settings are decrypted before being applied."""
+        from app.models import ApplicationSettings
+
+        mock_metadata.return_value = {"sensitive": True}
+        mock_decrypt.return_value = "plaintext_token"
+
+        mock_settings = MagicMock()
+        mock_settings.__fields__ = {
+            "onedrive_refresh_token": MagicMock(annotation=str),
+        }
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.all.return_value = [
+            ApplicationSettings(key="onedrive_refresh_token", value="enc:gAAAAABencryptedvalue"),
+        ]
+
+        load_settings_from_db(mock_settings, mock_db)
+
+        mock_decrypt.assert_called_once_with("enc:gAAAAABencryptedvalue")
+        assert mock_settings.onedrive_refresh_token == "plaintext_token"
+
+    @patch("app.utils.config_loader.get_setting_metadata")
+    def test_non_sensitive_settings_not_decrypted(self, mock_metadata):
+        """Test that non-sensitive settings are applied as-is without decryption."""
+        from app.models import ApplicationSettings
+
+        mock_metadata.return_value = {"sensitive": False}
+
+        mock_settings = MagicMock()
+        mock_settings.__fields__ = {
+            "some_setting": MagicMock(annotation=str),
+        }
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.all.return_value = [
+            ApplicationSettings(key="some_setting", value="plain_value"),
+        ]
+
+        with patch("app.utils.encryption.decrypt_value") as mock_decrypt:
+            load_settings_from_db(mock_settings, mock_db)
+            mock_decrypt.assert_not_called()
+
+        assert mock_settings.some_setting == "plain_value"
+
+    @patch("app.utils.config_loader.get_setting_metadata")
+    def test_decryption_failure_skips_setting(self, mock_metadata):
+        """Test that a setting is skipped if decryption fails."""
+        from app.models import ApplicationSettings
+
+        mock_metadata.return_value = {"sensitive": True}
+
+        mock_settings = MagicMock()
+        mock_settings.__fields__ = {
+            "onedrive_refresh_token": MagicMock(annotation=str),
+        }
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.all.return_value = [
+            ApplicationSettings(key="onedrive_refresh_token", value="enc:corrupted"),
+        ]
+
+        with patch("app.utils.encryption.decrypt_value", side_effect=Exception("Decryption error")):
+            load_settings_from_db(mock_settings, mock_db)
+
+        # The attribute should not have been overwritten with a real value,
+        # since decryption failed and the setting was skipped
+        assert isinstance(mock_settings.onedrive_refresh_token, MagicMock)
+
 
 @pytest.mark.unit
 class TestReloadSettingsFromDb:
