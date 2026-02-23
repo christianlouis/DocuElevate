@@ -10,6 +10,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.44.0 (2026-02-23)
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`724d7d8`](https://github.com/christianlouis/DocuElevate/commit/724d7d870f5804fe6254809af488155a4c68be79))
+
+### Features
+
+- Add AI provider abstraction layer with OpenAI, Azure, Anthropic, Gemini, Ollama, OpenRouter,
+  LiteLLM support
+  ([`d4c7fb2`](https://github.com/christianlouis/DocuElevate/commit/d4c7fb26ac6a8365843310979ee83f7e1538cf95))
+
+- Add Portkey provider support and null-content guard to AI abstraction layer
+  ([`dcdef44`](https://github.com/christianlouis/DocuElevate/commit/dcdef443032e5c43202566b3545560c3464f3848))
+
+- Update all OpenAI/ChatGPT refs + settings dropdown for fixed-value fields
+  ([`044da0f`](https://github.com/christianlouis/DocuElevate/commit/044da0ff471d59ffaa483ee0ed108238b6000835))
+
+
 ## v0.43.0 (2026-02-23)
 
 ### Features
