@@ -10,6 +10,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.45.0 (2026-02-23)
+
+### Chores
+
+- Add example.com and smtp.example.com to copilot agent network allowlist
+  ([`d93cd96`](https://github.com/christianlouis/DocuElevate/commit/d93cd96b6205021c4739765090fa55641e23e2ee))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`d5e4a74`](https://github.com/christianlouis/DocuElevate/commit/d5e4a74f693b6a458dcdc2978d834d41c5b4cb4d))
+
+### Features
+
+- **api**: Add POST /api/ai/test-extraction endpoint and Test Extraction UI button
+  ([`ce73f23`](https://github.com/christianlouis/DocuElevate/commit/ce73f23a8981ffae94594461362df3834481ced7))
+
+### Testing
+
+- **api**: Add comprehensive tests for AI extraction endpoint reaching 100% coverage
+  ([`3262d65`](https://github.com/christianlouis/DocuElevate/commit/3262d65bfe38d0669ba7eb6c0c51961ff6817976))
+
+
 ## Unreleased
 
 ### Chores
