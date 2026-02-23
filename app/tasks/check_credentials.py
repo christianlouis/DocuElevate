@@ -11,7 +11,7 @@ from app.api.google_drive import test_google_drive_token
 from app.api.onedrive import test_onedrive_token
 
 # Import the test functions from API routes
-from app.api.openai import test_openai_connection
+from app.api.openai import test_ai_provider_connection, test_openai_connection
 from app.celery_app import celery
 from app.config import settings
 
@@ -75,8 +75,17 @@ def unwrap_decorated_function(func):
 
 
 # Create synchronous versions of the test functions that bypass authentication
+def sync_test_ai_provider_connection():
+    """Synchronous wrapper for the AI provider test function that bypasses auth."""
+    inner_func = unwrap_decorated_function(test_ai_provider_connection)
+    request = MockRequest()
+    if inspect.iscoroutinefunction(inner_func):
+        return asyncio.run(inner_func(request))
+    return inner_func(request)
+
+
 def sync_test_openai_connection():
-    """Synchronous wrapper for the OpenAI test function that bypasses auth"""
+    """Synchronous wrapper for the OpenAI test function that bypasses auth."""
     # Get the original function without the @require_login decorator
     inner_func = unwrap_decorated_function(test_openai_connection)
     request = MockRequest()
@@ -139,10 +148,10 @@ def check_credentials():
     # Define services with their test functions and configuration status
     services = [
         {
-            "name": "OpenAI",
-            "check_func": sync_test_openai_connection,
-            "configured": provider_status.get("OpenAI", {}).get("configured", False),
-            "config_issues": [],  # OpenAI isn't in storage_configs
+            "name": "AI Provider",
+            "check_func": sync_test_ai_provider_connection,
+            "configured": provider_status.get("AI Provider", {}).get("configured", False),
+            "config_issues": [],
         },
         {
             "name": "Azure Document Intelligence",

@@ -6,7 +6,7 @@ This guide provides instructions for deploying DocuElevate in various environmen
 
 - Docker and Docker Compose
 - Access to required external services (if configured):
-  - OpenAI API
+  - AI provider API key (OpenAI, Anthropic, Gemini, or other configured provider)
   - Azure Document Intelligence
   - Dropbox API
   - Nextcloud instance
