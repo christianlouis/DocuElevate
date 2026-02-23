@@ -112,7 +112,7 @@ class TestSetupWizardUndoSkip:
         location = response.headers.get("location", "")
         assert "/setup" in location or "/settings" in location
 
-    @patch("app.views.wizard.delete_setting_from_db" if False else "app.utils.settings_service.delete_setting_from_db")
+    @patch("app.utils.settings_service.delete_setting_from_db")
     def test_undo_skip_calls_delete(self, mock_delete, client):
         """Test that undo-skip calls delete_setting_from_db."""
         mock_delete.return_value = True
