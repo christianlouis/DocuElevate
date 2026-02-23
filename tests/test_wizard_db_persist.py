@@ -8,7 +8,6 @@ import pytest
 
 from app.utils.settings_service import get_setting_from_db, save_setting_to_db
 
-
 # ---------------------------------------------------------------------------
 # TestSetupWizardDbPersist
 # ---------------------------------------------------------------------------
@@ -49,7 +48,9 @@ class TestSetupWizardDbPersist:
 
     @patch("app.views.wizard.notify_settings_updated")
     @patch("app.views.wizard.save_setting_to_db")
-    def test_notify_not_called_when_no_settings_saved(self, mock_save, mock_notify, client):
+    def test_notify_not_called_when_no_settings_saved(
+        self, mock_save, mock_notify, client
+    ):
         """Test that notify_settings_updated is NOT called when saved_count == 0."""
         mock_save.return_value = False
 
@@ -64,7 +65,9 @@ class TestSetupWizardDbPersist:
     @patch("app.views.wizard.notify_settings_updated")
     @patch("app.views.wizard.secrets.token_hex")
     @patch("app.views.wizard.save_setting_to_db")
-    def test_auto_generate_session_secret(self, mock_save, mock_token, mock_notify, client):
+    def test_auto_generate_session_secret(
+        self, mock_save, mock_token, mock_notify, client
+    ):
         """Test that session_secret auto-generate path produces a real token."""
         mock_save.return_value = True
         mock_token.return_value = "deadbeef" * 8
@@ -130,9 +133,12 @@ class TestSetupWizardUndoSkip:
 class TestDropboxSaveSettingsDbPersist:
     """Unit tests for save_dropbox_settings DB persistence."""
 
+    @patch("app.api.dropbox.settings")
     @patch("app.api.dropbox.notify_settings_updated")
     @patch("app.api.dropbox.save_setting_to_db")
-    def test_db_written_even_when_env_missing(self, mock_save, mock_notify, client):
+    def test_db_written_even_when_env_missing(
+        self, mock_save, mock_notify, mock_settings, client
+    ):
         """Test that DB is written even when .env doesn't exist (no exception)."""
         mock_save.return_value = True
 
@@ -148,9 +154,12 @@ class TestDropboxSaveSettingsDbPersist:
         assert data["status"] == "success"
         mock_save.assert_called()
 
+    @patch("app.api.dropbox.settings")
     @patch("app.api.dropbox.notify_settings_updated")
     @patch("app.api.dropbox.save_setting_to_db")
-    def test_notify_settings_updated_called(self, mock_save, mock_notify, client):
+    def test_notify_settings_updated_called(
+        self, mock_save, mock_notify, mock_settings, client
+    ):
         """Test that notify_settings_updated is called."""
         mock_save.return_value = True
 
@@ -163,9 +172,12 @@ class TestDropboxSaveSettingsDbPersist:
 
         mock_notify.assert_called_once()
 
+    @patch("app.api.dropbox.settings")
     @patch("app.api.dropbox.notify_settings_updated")
     @patch("app.api.dropbox.save_setting_to_db")
-    def test_all_provided_values_persisted(self, mock_save, mock_notify, client):
+    def test_all_provided_values_persisted(
+        self, mock_save, mock_notify, mock_settings, client
+    ):
         """Test that all provided values are persisted to DB."""
         mock_save.return_value = True
 
@@ -197,9 +209,12 @@ class TestDropboxSaveSettingsDbPersist:
 class TestGoogleDriveUpdateSettingsDbPersist:
     """Unit tests for update_google_drive_settings DB persistence."""
 
+    @patch("app.api.google_drive.settings")
     @patch("app.api.google_drive.notify_settings_updated")
     @patch("app.api.google_drive.save_setting_to_db")
-    def test_db_written_for_each_provided_field(self, mock_save, mock_notify, client):
+    def test_db_written_for_each_provided_field(
+        self, mock_save, mock_notify, mock_settings, client
+    ):
         """Test that DB is written for each provided field."""
         mock_save.return_value = True
 
@@ -223,9 +238,12 @@ class TestGoogleDriveUpdateSettingsDbPersist:
         assert "google_drive_folder_id" in keys_saved
         assert "google_drive_use_oauth" in keys_saved
 
+    @patch("app.api.google_drive.settings")
     @patch("app.api.google_drive.notify_settings_updated")
     @patch("app.api.google_drive.save_setting_to_db")
-    def test_use_oauth_saved_as_lowercase_string(self, mock_save, mock_notify, client):
+    def test_use_oauth_saved_as_lowercase_string(
+        self, mock_save, mock_notify, mock_settings, client
+    ):
         """Test that use_oauth is saved as 'true' or 'false' string."""
         mock_save.return_value = True
 
@@ -235,13 +253,18 @@ class TestGoogleDriveUpdateSettingsDbPersist:
             follow_redirects=False,
         )
 
-        use_oauth_calls = [call for call in mock_save.call_args_list if call[0][1] == "google_drive_use_oauth"]
+        use_oauth_calls = [
+            call
+            for call in mock_save.call_args_list
+            if call[0][1] == "google_drive_use_oauth"
+        ]
         assert len(use_oauth_calls) == 1
         assert use_oauth_calls[0][0][2] in ("true", "false")
 
+    @patch("app.api.google_drive.settings")
     @patch("app.api.google_drive.notify_settings_updated")
     @patch("app.api.google_drive.save_setting_to_db")
-    def test_notify_called(self, mock_save, mock_notify, client):
+    def test_notify_called(self, mock_save, mock_notify, mock_settings, client):
         """Test that notify_settings_updated is called."""
         mock_save.return_value = True
 
@@ -263,9 +286,12 @@ class TestGoogleDriveUpdateSettingsDbPersist:
 class TestOneDriveSaveSettingsDbPersist:
     """Unit tests for save_onedrive_settings DB persistence."""
 
+    @patch("app.api.onedrive.settings")
     @patch("app.api.onedrive.notify_settings_updated")
     @patch("app.api.onedrive.save_setting_to_db")
-    def test_db_written_even_without_env_file(self, mock_save, mock_notify, client):
+    def test_db_written_even_without_env_file(
+        self, mock_save, mock_notify, mock_settings, client
+    ):
         """Test that DB is written even when .env file does not exist."""
         mock_save.return_value = True
 
@@ -281,9 +307,10 @@ class TestOneDriveSaveSettingsDbPersist:
         assert data["status"] == "success"
         mock_save.assert_called()
 
+    @patch("app.api.onedrive.settings")
     @patch("app.api.onedrive.notify_settings_updated")
     @patch("app.api.onedrive.save_setting_to_db")
-    def test_all_fields_persisted(self, mock_save, mock_notify, client):
+    def test_all_fields_persisted(self, mock_save, mock_notify, mock_settings, client):
         """Test that all provided fields are persisted to DB."""
         mock_save.return_value = True
 
@@ -307,9 +334,10 @@ class TestOneDriveSaveSettingsDbPersist:
         assert "onedrive_tenant_id" in keys_saved
         assert "onedrive_folder_path" in keys_saved
 
+    @patch("app.api.onedrive.settings")
     @patch("app.api.onedrive.notify_settings_updated")
     @patch("app.api.onedrive.save_setting_to_db")
-    def test_notify_called(self, mock_save, mock_notify, client):
+    def test_notify_called(self, mock_save, mock_notify, mock_settings, client):
         """Test that notify_settings_updated is called."""
         mock_save.return_value = True
 
@@ -344,7 +372,7 @@ class TestGetSettingsForExport:
 
     def test_source_effective_includes_metadata_keys(self, db_session):
         """Test that source=effective includes keys from SETTING_METADATA."""
-        from app.utils.settings_service import SETTING_METADATA, get_settings_for_export
+        from app.utils.settings_service import get_settings_for_export
 
         result = get_settings_for_export(db_session, source="effective")
 
@@ -407,7 +435,9 @@ class TestExportEnvEndpoint:
         mock_request = MagicMock()
         mock_admin = {"id": "admin", "is_admin": True}
 
-        result = asyncio.run(export_env_settings(mock_request, db_session, mock_admin, source="db"))
+        result = asyncio.run(
+            export_env_settings(mock_request, db_session, mock_admin, source="db")
+        )
         assert result.media_type == "text/plain"
 
     def test_content_disposition_header(self, db_session):
@@ -419,7 +449,9 @@ class TestExportEnvEndpoint:
         mock_request = MagicMock()
         mock_admin = {"id": "admin", "is_admin": True}
 
-        result = asyncio.run(export_env_settings(mock_request, db_session, mock_admin, source="db"))
+        result = asyncio.run(
+            export_env_settings(mock_request, db_session, mock_admin, source="db")
+        )
         cd = result.headers.get("content-disposition", "")
         assert "attachment" in cd
         assert ".env" in cd
@@ -436,7 +468,11 @@ class TestExportEnvEndpoint:
         mock_admin = {"id": "admin", "is_admin": True}
 
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.run(export_env_settings(mock_request, db_session, mock_admin, source="invalid"))
+            asyncio.run(
+                export_env_settings(
+                    mock_request, db_session, mock_admin, source="invalid"
+                )
+            )
         assert exc_info.value.status_code == 400
 
     def test_default_source_is_db(self, db_session):
@@ -461,7 +497,11 @@ class TestExportEnvEndpoint:
         mock_request = MagicMock()
         mock_admin = {"id": "admin", "is_admin": True}
 
-        result = asyncio.run(export_env_settings(mock_request, db_session, mock_admin, source="effective"))
+        result = asyncio.run(
+            export_env_settings(
+                mock_request, db_session, mock_admin, source="effective"
+            )
+        )
         assert result.media_type == "text/plain"
 
     def test_output_contains_docuelevate_header(self, db_session):
@@ -473,5 +513,7 @@ class TestExportEnvEndpoint:
         mock_request = MagicMock()
         mock_admin = {"id": "admin", "is_admin": True}
 
-        result = asyncio.run(export_env_settings(mock_request, db_session, mock_admin, source="db"))
+        result = asyncio.run(
+            export_env_settings(mock_request, db_session, mock_admin, source="db")
+        )
         assert b"DocuElevate" in result.body
