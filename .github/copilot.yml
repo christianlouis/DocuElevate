@@ -29,6 +29,10 @@ network:
     - api.dropboxapi.com
     - content.dropboxapi.com
     
+    # Example/test domains - Used in test fixtures and SMTP configuration tests
+    - example.com
+    - smtp.example.com
+
     # Package registries (if needed for dependency installation during tests)
     - pypi.org
     - files.pythonhosted.org
