@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.models import ApplicationSettings
+from app.models import ApplicationSettings, SettingsAuditLog
 
 logger = logging.getLogger(__name__)
 
@@ -871,7 +871,9 @@ def get_setting_from_db(db: Session, key: str) -> Optional[str]:
         Setting value as string (decrypted if necessary), or None if not found
     """
     try:
-        setting = db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
+        setting = (
+            db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
+        )
         if not setting:
             return None
 
@@ -888,16 +890,20 @@ def get_setting_from_db(db: Session, key: str) -> Optional[str]:
         return None
 
 
-def save_setting_to_db(db: Session, key: str, value: Optional[str]) -> bool:
+def save_setting_to_db(
+    db: Session, key: str, value: Optional[str], changed_by: str = "system"
+) -> bool:
     """
     Save or update a setting in the database.
 
     Automatically encrypts sensitive values if encryption is enabled.
+    Records an entry in the settings audit log.
 
     Args:
         db: Database session
         key: Setting key
         value: Setting value (as string)
+        changed_by: Username of the admin performing the change (for audit log)
 
     Returns:
         True if successful, False otherwise
@@ -908,22 +914,53 @@ def save_setting_to_db(db: Session, key: str, value: Optional[str]) -> bool:
         storage_value = value
 
         if metadata.get("sensitive", False) and value:
-            from app.utils.encryption import encrypt_value, is_encryption_available
+            from app.utils.encryption import (encrypt_value,
+                                              is_encryption_available)
 
             if is_encryption_available():
                 storage_value = encrypt_value(value)
                 logger.debug(f"Encrypted sensitive setting: {key}")
             else:
-                logger.warning(f"Storing sensitive setting {key} in plaintext (encryption unavailable)")
+                logger.warning(
+                    f"Storing sensitive setting {key} in plaintext (encryption unavailable)"
+                )
 
-        setting = db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
+        setting = (
+            db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
+        )
+        old_storage_value = setting.value if setting else None
+
         if setting:
             setting.value = storage_value
         else:
             setting = ApplicationSettings(key=key, value=storage_value)
             db.add(setting)
+
+        # Determine human-readable old value for audit log (decrypt if needed)
+        old_display_value = None
+        if old_storage_value is not None:
+            if metadata.get("sensitive", False):
+                try:
+                    from app.utils.encryption import decrypt_value
+
+                    old_display_value = decrypt_value(old_storage_value)
+                except Exception:
+                    old_display_value = old_storage_value
+            else:
+                old_display_value = old_storage_value
+
+        # Write audit log entry
+        audit_entry = SettingsAuditLog(
+            key=key,
+            old_value=old_display_value,
+            new_value=value,
+            changed_by=changed_by,
+            action="update",
+        )
+        db.add(audit_entry)
+
         db.commit()
-        logger.info(f"Saved setting {key} to database")
+        logger.info(f"Saved setting {key} to database (changed_by={changed_by})")
         return True
     except SQLAlchemyError as e:
         logger.error(f"Error saving setting {key} to database: {e}")
@@ -963,23 +1000,54 @@ def get_all_settings_from_db(db: Session) -> Dict[str, str]:
         return {}
 
 
-def delete_setting_from_db(db: Session, key: str) -> bool:
+def delete_setting_from_db(db: Session, key: str, changed_by: str = "system") -> bool:
     """
     Delete a setting from the database.
+
+    Records an entry in the settings audit log.
 
     Args:
         db: Database session
         key: Setting key to delete
+        changed_by: Username of the admin performing the change (for audit log)
 
     Returns:
         True if successful, False otherwise
     """
     try:
-        setting = db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
+        setting = (
+            db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
+        )
         if setting:
+            # Capture old value for audit log (decrypt if sensitive)
+            metadata = get_setting_metadata(key)
+            old_display_value = None
+            if setting.value is not None:
+                if metadata.get("sensitive", False):
+                    try:
+                        from app.utils.encryption import decrypt_value
+
+                        old_display_value = decrypt_value(setting.value)
+                    except Exception:
+                        old_display_value = setting.value
+                else:
+                    old_display_value = setting.value
+
             db.delete(setting)
+
+            audit_entry = SettingsAuditLog(
+                key=key,
+                old_value=old_display_value,
+                new_value=None,
+                changed_by=changed_by,
+                action="delete",
+            )
+            db.add(audit_entry)
+
             db.commit()
-            logger.info(f"Deleted setting {key} from database")
+            logger.info(
+                f"Deleted setting {key} from database (changed_by={changed_by})"
+            )
             return True
         return False
     except SQLAlchemyError as e:
@@ -1061,3 +1129,161 @@ def validate_setting_value(key: str, value: str) -> Tuple[bool, Optional[str]]:
         return False, "session_secret must be at least 32 characters"
 
     return True, None
+
+
+def get_audit_log(
+    db: Session, limit: int = 100, offset: int = 0
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve the settings audit log, most recent first.
+
+    Sensitive values are masked in the returned list so the log is safe to
+    display in the admin UI without leaking secrets.
+
+    Args:
+        db: Database session
+        limit: Maximum number of entries to return
+        offset: Number of entries to skip (for pagination)
+
+    Returns:
+        List of audit log entry dicts ordered by changed_at descending
+    """
+    try:
+        entries = (
+            db.query(SettingsAuditLog)
+            .order_by(SettingsAuditLog.changed_at.desc())
+            .limit(limit)
+            .offset(offset)
+            .all()
+        )
+        result = []
+        for entry in entries:
+            meta = get_setting_metadata(entry.key)
+            is_sensitive = meta.get("sensitive", False)
+            result.append(
+                {
+                    "id": entry.id,
+                    "key": entry.key,
+                    "old_value": (
+                        "[REDACTED]"
+                        if is_sensitive and entry.old_value
+                        else entry.old_value
+                    ),
+                    "new_value": (
+                        "[REDACTED]"
+                        if is_sensitive and entry.new_value
+                        else entry.new_value
+                    ),
+                    "changed_by": entry.changed_by,
+                    "changed_at": (
+                        entry.changed_at.isoformat() if entry.changed_at else None
+                    ),
+                    "action": entry.action,
+                }
+            )
+        return result
+    except SQLAlchemyError as e:
+        logger.error(f"Error retrieving audit log: {e}")
+        return []
+
+
+def get_setting_history(db: Session, key: str) -> List[Dict[str, Any]]:
+    """
+    Retrieve the change history for a specific setting key, most recent first.
+
+    Sensitive values are masked so the response is safe to surface in the UI.
+
+    Args:
+        db: Database session
+        key: Setting key
+
+    Returns:
+        List of audit log entry dicts for this key
+    """
+    try:
+        entries = (
+            db.query(SettingsAuditLog)
+            .filter(SettingsAuditLog.key == key)
+            .order_by(SettingsAuditLog.changed_at.desc())
+            .all()
+        )
+        meta = get_setting_metadata(key)
+        is_sensitive = meta.get("sensitive", False)
+        result = []
+        for entry in entries:
+            result.append(
+                {
+                    "id": entry.id,
+                    "key": entry.key,
+                    "old_value": (
+                        "[REDACTED]"
+                        if is_sensitive and entry.old_value
+                        else entry.old_value
+                    ),
+                    "new_value": (
+                        "[REDACTED]"
+                        if is_sensitive and entry.new_value
+                        else entry.new_value
+                    ),
+                    "changed_by": entry.changed_by,
+                    "changed_at": (
+                        entry.changed_at.isoformat() if entry.changed_at else None
+                    ),
+                    "action": entry.action,
+                }
+            )
+        return result
+    except SQLAlchemyError as e:
+        logger.error(f"Error retrieving history for setting {key}: {e}")
+        return []
+
+
+def rollback_setting(
+    db: Session, key: str, history_id: int, changed_by: str = "system"
+) -> bool:
+    """
+    Revert a setting to the value recorded in a specific audit log entry.
+
+    The value stored in the chosen history entry's ``new_value`` field is
+    re-applied as the current database value.  If that value is ``None``
+    (i.e. the entry recorded a deletion) the setting is removed from the
+    database entirely, reverting to ENV/defaults.
+
+    A new audit log entry is written to record the rollback operation.
+
+    Args:
+        db: Database session
+        key: Setting key to roll back
+        history_id: ID of the SettingsAuditLog entry whose ``new_value``
+                    should become the restored value
+        changed_by: Username performing the rollback (for audit log)
+
+    Returns:
+        True if successful, False if the history entry was not found or an
+        error occurred
+    """
+    try:
+        history_entry = (
+            db.query(SettingsAuditLog)
+            .filter(SettingsAuditLog.id == history_id, SettingsAuditLog.key == key)
+            .first()
+        )
+        if not history_entry:
+            logger.warning(
+                f"Rollback failed: audit log entry {history_id} not found for key '{key}'"
+            )
+            return False
+
+        target_value = history_entry.new_value
+
+        if target_value is None:
+            # The history entry recorded a deletion – reinstate that by deleting the current db value
+            return delete_setting_from_db(db, key, changed_by=changed_by)
+        else:
+            return save_setting_to_db(db, key, target_value, changed_by=changed_by)
+    except SQLAlchemyError as e:
+        logger.error(
+            f"Error rolling back setting {key} to history entry {history_id}: {e}"
+        )
+        db.rollback()
+        return False

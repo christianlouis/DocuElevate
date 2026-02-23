@@ -12,13 +12,12 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.utils.config_validator.masking import mask_sensitive_value
-from app.utils.settings_service import (
-    SETTING_METADATA,
-    get_all_settings_from_db,
-    get_setting_metadata,
-    get_settings_by_category,
-)
-from app.views.base import APIRouter, get_db, require_login, settings, templates
+from app.utils.settings_service import (SETTING_METADATA,
+                                        get_all_settings_from_db,
+                                        get_setting_metadata,
+                                        get_settings_by_category)
+from app.views.base import (APIRouter, get_db, require_login, settings,
+                            templates)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -103,7 +102,9 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
                 settings_data[category].append(
                     {
                         "key": key,
-                        "display_value": display_value if display_value is not None else "",
+                        "display_value": (
+                            display_value if display_value is not None else ""
+                        ),
                         "metadata": metadata,
                         "source": source,
                         "source_label": source_label,
@@ -112,11 +113,19 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
                 )
 
         return templates.TemplateResponse(
-            "settings.html", {"request": request, "settings_data": settings_data, "app_version": settings.version}
+            "settings.html",
+            {
+                "request": request,
+                "settings_data": settings_data,
+                "app_version": settings.version,
+            },
         )
     except Exception as e:
         logger.error(f"Error loading settings page: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load settings page")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load settings page",
+        )
 
 
 @router.get("/admin/credentials")
@@ -166,7 +175,9 @@ async def credentials_page(request: Request, db: Session = Depends(get_db)):
             )
 
         total = sum(len(v) for v in categories.values())
-        configured_count = sum(1 for creds in categories.values() for c in creds if c["configured"])
+        configured_count = sum(
+            1 for creds in categories.values() for c in creds if c["configured"]
+        )
 
         return templates.TemplateResponse(
             "credentials.html",
@@ -181,4 +192,39 @@ async def credentials_page(request: Request, db: Session = Depends(get_db)):
         )
     except Exception as e:
         logger.error(f"Error loading credentials page: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load credentials page")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load credentials page",
+        )
+
+
+@router.get("/admin/settings/audit-log")
+@require_login
+@require_admin_access
+async def audit_log_page(request: Request, db: Session = Depends(get_db)):
+    """
+    Settings audit log page - admin only.
+
+    Displays a chronological log of all configuration changes made via the
+    settings UI, including who made the change and what the old/new values
+    were.  Sensitive values are masked.  Provides rollback buttons to revert
+    any setting to a previous value.
+    """
+    from app.utils.settings_service import get_audit_log
+
+    try:
+        entries = get_audit_log(db, limit=200)
+        return templates.TemplateResponse(
+            "audit_log.html",
+            {
+                "request": request,
+                "entries": entries,
+                "app_version": settings.version,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error loading audit log page: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load audit log page",
+        )
