@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.42.2 (2026-02-23)
+
+### Bug Fixes
+
+- **api**: Pass base_url to OpenAI client in test endpoint to prevent UnsupportedProtocol error
+  ([`d885b63`](https://github.com/christianlouis/DocuElevate/commit/d885b63d38ff151c5dc3e70ad51fbf1d56a5f7df))
+
+
 ## v0.42.1 (2026-02-23)
 
 ### Bug Fixes
