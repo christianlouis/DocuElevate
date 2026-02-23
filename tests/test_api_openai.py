@@ -309,3 +309,136 @@ class TestOpenAIConnectionErrors:
 
         assert data["status"] == "error"
         assert data.get("is_auth_error") is False
+
+
+@pytest.mark.unit
+class TestAiExtractionEndpoint:
+    """Tests for POST /api/ai/test-extraction endpoint."""
+
+    @patch("app.api.openai.settings")
+    def test_extraction_missing_text_returns_422(self, mock_settings, client):
+        """Test that missing text body returns 422 validation error."""
+        response = client.post("/api/ai/test-extraction", json={})
+        assert response.status_code == 422
+
+    @patch("app.api.openai.settings")
+    def test_extraction_empty_text_returns_422(self, mock_settings, client):
+        """Test that empty string text returns 422 validation error."""
+        response = client.post("/api/ai/test-extraction", json={"text": ""})
+        assert response.status_code == 422
+
+    @patch("app.utils.ai_provider.get_ai_provider")
+    @patch("app.api.openai.settings")
+    def test_extraction_returns_raw_response_and_parsed_json(self, mock_settings, mock_get_provider, client):
+        """Test successful extraction returns raw response, parsed JSON, and tags."""
+        import json as json_module
+
+        mock_settings.ai_provider = "openai"
+        mock_settings.ai_model = "gpt-4o-mini"
+        mock_settings.openai_model = "gpt-4o-mini"
+
+        expected_json = {
+            "filename": "2024-01-01_Invoice",
+            "tags": ["invoice", "payment"],
+            "title": "January Invoice",
+            "document_type": "Invoice",
+        }
+        raw = "```json\n" + json_module.dumps(expected_json) + "\n```"
+
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.return_value = raw
+        mock_get_provider.return_value = mock_provider
+
+        response = client.post("/api/ai/test-extraction", json={"text": "Invoice content here"})
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["status"] == "success"
+        assert data["raw_response"] == raw
+        assert data["parsed_json"]["filename"] == "2024-01-01_Invoice"
+        assert data["tags"] == ["invoice", "payment"]
+        assert data["parse_error"] is None
+        assert data["provider"] == "openai"
+        assert data["model"] == "gpt-4o-mini"
+
+    @patch("app.utils.ai_provider.get_ai_provider")
+    @patch("app.api.openai.settings")
+    def test_extraction_handles_invalid_json_in_response(self, mock_settings, mock_get_provider, client):
+        """Test that invalid JSON in LLM response is reported via parse_error."""
+        mock_settings.ai_provider = "openai"
+        mock_settings.ai_model = "gpt-4o-mini"
+        mock_settings.openai_model = "gpt-4o-mini"
+
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.return_value = "Sorry, I cannot help with that."
+        mock_get_provider.return_value = mock_provider
+
+        response = client.post("/api/ai/test-extraction", json={"text": "Some document text"})
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["status"] == "success"
+        assert data["parsed_json"] is None
+        assert data["tags"] == []
+        assert data["parse_error"] is not None
+
+    @patch("app.utils.ai_provider.get_ai_provider")
+    @patch("app.api.openai.settings")
+    def test_extraction_provider_config_error(self, mock_settings, mock_get_provider, client):
+        """Test that configuration errors (missing keys) are returned as error status."""
+        mock_settings.ai_provider = "anthropic"
+        mock_settings.ai_model = "claude-3"
+        mock_settings.openai_model = "gpt-4o-mini"
+
+        mock_get_provider.side_effect = ValueError("ANTHROPIC_API_KEY must be set")
+
+        response = client.post("/api/ai/test-extraction", json={"text": "Some document text"})
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["status"] == "error"
+        assert "ANTHROPIC_API_KEY" in data["message"]
+
+    @patch("app.utils.ai_provider.get_ai_provider")
+    @patch("app.api.openai.settings")
+    def test_extraction_provider_runtime_error(self, mock_settings, mock_get_provider, client):
+        """Test that runtime errors during AI call are returned as error status."""
+        mock_settings.ai_provider = "openai"
+        mock_settings.ai_model = "gpt-4o-mini"
+        mock_settings.openai_model = "gpt-4o-mini"
+
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.side_effect = Exception("Connection refused")
+        mock_get_provider.return_value = mock_provider
+
+        response = client.post("/api/ai/test-extraction", json={"text": "Some document text"})
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["status"] == "error"
+        assert "Connection refused" in data["message"]
+
+    @patch("app.utils.ai_provider.get_ai_provider")
+    @patch("app.api.openai.settings")
+    def test_extraction_plain_json_without_code_fences(self, mock_settings, mock_get_provider, client):
+        """Test that JSON returned without code fences is still parsed correctly."""
+        import json as json_module
+
+        mock_settings.ai_provider = "openai"
+        mock_settings.ai_model = "gpt-4o-mini"
+        mock_settings.openai_model = "gpt-4o-mini"
+
+        expected_json = {"tags": ["contract"], "title": "Service Agreement"}
+        raw = json_module.dumps(expected_json)
+
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.return_value = raw
+        mock_get_provider.return_value = mock_provider
+
+        response = client.post("/api/ai/test-extraction", json={"text": "Contract content"})
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["status"] == "success"
+        assert data["tags"] == ["contract"]
+        assert data["parse_error"] is None
