@@ -210,7 +210,9 @@ class TestRollbackSetting:
         save_setting_to_db(db_session, "workdir", "/v2", changed_by="admin")  # entry 2: old=/v1, new=/v2
 
         # Rolling back entry 2 should undo the /v1→/v2 change and restore /v1
-        second_entry = db_session.query(SettingsAuditLog).filter_by(key="workdir").order_by(SettingsAuditLog.id.desc()).first()
+        second_entry = (
+            db_session.query(SettingsAuditLog).filter_by(key="workdir").order_by(SettingsAuditLog.id.desc()).first()
+        )
         success = rollback_setting(db_session, "workdir", second_entry.id, changed_by="rollbacker")
 
         assert success is True
