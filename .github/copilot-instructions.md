@@ -91,12 +91,14 @@ pre-commit run --all-files
 ## Core Principles
 
 ### Code Quality
+- **Security first**: treat security as a non-negotiable requirement, not an afterthought — review [SECURITY_AUDIT.md](../SECURITY_AUDIT.md) for every change
+- Write **clean, modern, well-documented code** — prioritize readability, maintainability, and idiomatic Python
 - Always use **Black** for formatting (line length: 120)
 - Use **isort** with Black profile for import sorting
 - Use **flake8** for linting (ignore E203, W503)
 - Use **type hints** for all function parameters and return values
 - Write **docstrings** for all public functions, classes, and modules
-- Maintain **80% test coverage** for new code
+- Maintain **100% test coverage** for new code
 
 ### Python Conventions
 - Use descriptive variable names (e.g., `user_document_path`, not `udp`)
@@ -152,6 +154,8 @@ pre-commit run --all-files
 - Use `pytest.fixture` for test setup and teardown
 - Run tests with: `pytest -v`
 - Check coverage with: `pytest --cov=app --cov-report=term-missing`
+- **All tests must pass** before submitting changes — never leave failing tests
+- **All linters must pass** before submitting — run `pre-commit run --all-files`
 
 ### Configuration
 - All configuration is in `app/config.py` using Pydantic Settings
@@ -161,7 +165,7 @@ pre-commit run --all-files
 
 ### Documentation
 - Keep documentation in `docs/` directory in Markdown format
-- Update relevant docs when adding features or changing behavior
+- **Always update** relevant docs when adding or changing any feature — documentation updates are mandatory, never optional
 - User-facing documentation should be clear and include examples
 - Reference existing docs: `docs/UserGuide.md`, `docs/API.md`, `docs/DeploymentGuide.md`
 - See [AGENTIC_CODING.md](../AGENTIC_CODING.md) for detailed development guide
@@ -223,7 +227,8 @@ These files and directories are managed by automation or are critical infrastruc
 - Write clear, descriptive commit messages
 - **ALWAYS follow Conventional Commits format** (see below)
 - Keep commits focused and atomic
-- Run tests and linters before committing
+- **All tests must pass** before committing — `pytest` must succeed with no failures
+- **All linters must pass** before committing — `pre-commit run --all-files` must succeed
 - Pre-commit hooks are configured (`.pre-commit-config.yaml`)
 
 ## Conventional Commits (REQUIRED)
