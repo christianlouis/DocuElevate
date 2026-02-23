@@ -53,8 +53,10 @@ async def test_openai_connection(request: Request):
             logger.warning("No OpenAI API key configured")
             return {"status": "error", "message": "No OpenAI API key is configured"}
 
-        # Configure the client
-        client = openai.OpenAI(api_key=settings.openai_api_key)
+        # Configure the client, explicitly passing base_url so the sanitized
+        # value from Settings (strip_outer_quotes) is used instead of the raw
+        # OPENAI_BASE_URL env var which may contain literal quote characters.
+        client = openai.OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
 
         # Try to make a simple request to validate the key
         try:
