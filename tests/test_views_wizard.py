@@ -84,7 +84,7 @@ class TestWizardViewsPost:
         assert mock_save.call_count == 0
 
     @patch("app.views.wizard.save_setting_to_db")
-    @patch("app.views.wizard.secrets.token_hex")
+    @patch("app.views.wizard.token_hex")
     def test_setup_wizard_auto_generate_session_secret(self, mock_token, mock_save, client):
         """Test auto-generation of session secret."""
         mock_token.return_value = "auto_generated_secret_token_12345678"

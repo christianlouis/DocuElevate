@@ -61,7 +61,7 @@ class TestSetupWizardDbPersist:
         mock_notify.assert_not_called()
 
     @patch("app.views.wizard.notify_settings_updated")
-    @patch("app.views.wizard.secrets.token_hex")
+    @patch("app.views.wizard.token_hex")
     @patch("app.views.wizard.save_setting_to_db")
     def test_auto_generate_session_secret(self, mock_save, mock_token, mock_notify, client):
         """Test that session_secret auto-generate path produces a real token."""
