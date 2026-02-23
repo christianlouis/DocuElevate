@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.48.0 (2026-02-23)
+
+### Bug Fixes
+
+- **tests**: Update process_document test patches to use process_with_ocr
+  ([`8828b71`](https://github.com/christianlouis/DocuElevate/commit/8828b710315ba0c5add8546842c05c3f46cb98ca))
+
+- **tests**: Update process_with_azure patch target in test_storage_reorganization
+  ([`7fdd8a4`](https://github.com/christianlouis/DocuElevate/commit/7fdd8a4d3fa3af3633e7c58862a5e26aa18050d4))
+
+
 ## v0.47.0 (2026-02-23)
 
 ### Documentation
