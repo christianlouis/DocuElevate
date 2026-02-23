@@ -12,7 +12,6 @@ from app.tasks.check_credentials import (
     get_failure_state,
     save_failure_state,
     sync_test_azure_connection,
-    sync_test_ai_provider_connection,
     sync_test_openai_connection,
     unwrap_decorated_function,
 )

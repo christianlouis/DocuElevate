@@ -19,10 +19,10 @@ from app.utils.ai_provider import (
     get_ai_provider,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_openai_response(content: str) -> MagicMock:
     """Build a minimal mock that looks like an openai ChatCompletion response."""
@@ -55,6 +55,7 @@ def _make_none_content_response() -> MagicMock:
 # _require_text_content helper
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestRequireTextContent:
     """Tests for the _require_text_content guard helper."""
@@ -76,6 +77,7 @@ class TestRequireTextContent:
 # ---------------------------------------------------------------------------
 # Abstract base class
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestAIProviderABC:
@@ -99,6 +101,7 @@ class TestAIProviderABC:
 # ---------------------------------------------------------------------------
 # OpenAIProvider
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestOpenAIProvider:
@@ -181,6 +184,7 @@ class TestOpenAIProvider:
 # AzureOpenAIProvider
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestAzureOpenAIProvider:
     """Tests for AzureOpenAIProvider."""
@@ -221,6 +225,7 @@ class TestAzureOpenAIProvider:
 # ---------------------------------------------------------------------------
 # AnthropicProvider
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestAnthropicProvider:
@@ -274,6 +279,7 @@ class TestAnthropicProvider:
 # GeminiProvider
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGeminiProvider:
     """Tests for GeminiProvider."""
@@ -311,6 +317,7 @@ class TestGeminiProvider:
 # ---------------------------------------------------------------------------
 # OllamaProvider
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestOllamaProvider:
@@ -361,6 +368,7 @@ class TestOllamaProvider:
 # OpenRouterProvider
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestOpenRouterProvider:
     """Tests for OpenRouterProvider."""
@@ -393,6 +401,7 @@ class TestOpenRouterProvider:
 # ---------------------------------------------------------------------------
 # PortkeyProvider
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestPortkeyProvider:
@@ -485,6 +494,7 @@ class TestPortkeyProvider:
 # LiteLLMProvider
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestLiteLLMProvider:
     """Tests for LiteLLMProvider."""
@@ -565,6 +575,7 @@ class TestLiteLLMProvider:
 # ---------------------------------------------------------------------------
 # get_ai_provider factory function
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestGetAIProvider:
