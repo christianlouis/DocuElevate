@@ -201,14 +201,14 @@
               </button>
               <button
                 type="button"
-                x-show="isDbOverride['{{ setting.key }}'] && formData['{{ setting.key }}'] === originalData['{{ setting.key }}']"
+                x-show="isDbOverride['{{ setting.key }}']"
                 x-transition
                 @click="revertSetting('{{ setting.key }}')"
                 :disabled="revertingKey === '{{ setting.key }}'"
                 class="px-3 py-1 text-sm bg-orange-500 text-white rounded-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-400 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 title="Remove DB override and revert to environment variable or default"
               >
-                <span x-show="revertingKey !== '{{ setting.key }}'"><i class="fas fa-undo mr-1"></i>Back to ENV</span>
+                <span x-show="revertingKey !== '{{ setting.key }}'"><i class="fas fa-trash-alt mr-1"></i>Remove from DB</span>
                 <span x-show="revertingKey === '{{ setting.key }}'">Reverting…</span>
               </button>
             </div>
@@ -330,6 +330,10 @@ function settingsApp() {
     },
 
     async revertSetting(key) {
+      if (!confirm(`Remove '${key}' from the database?\n\nThe setting will revert to its environment variable or default value.`)) {
+        return;
+      }
+
       this.revertingKey = key;
       this.hideAlert();
 

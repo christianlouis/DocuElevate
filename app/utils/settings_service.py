@@ -1201,19 +1201,20 @@ def get_setting_history(db: Session, key: str) -> List[Dict[str, Any]]:
 
 def rollback_setting(db: Session, key: str, history_id: int, changed_by: str = "system") -> bool:
     """
-    Revert a setting to the value recorded in a specific audit log entry.
+    Revert a setting to the value it had *before* a specific audit log entry.
 
-    The value stored in the chosen history entry's ``new_value`` field is
-    re-applied as the current database value.  If that value is ``None``
-    (i.e. the entry recorded a deletion) the setting is removed from the
-    database entirely, reverting to ENV/defaults.
+    The value stored in the chosen history entry's ``old_value`` field is
+    re-applied as the current database value, effectively undoing that change.
+    If ``old_value`` is ``None`` (i.e. the setting did not exist before that
+    change) the setting is removed from the database entirely, reverting to
+    ENV/defaults.
 
     A new audit log entry is written to record the rollback operation.
 
     Args:
         db: Database session
         key: Setting key to roll back
-        history_id: ID of the SettingsAuditLog entry whose ``new_value``
+        history_id: ID of the SettingsAuditLog entry whose ``old_value``
                     should become the restored value
         changed_by: Username performing the rollback (for audit log)
 
@@ -1229,10 +1230,10 @@ def rollback_setting(db: Session, key: str, history_id: int, changed_by: str = "
             logger.warning(f"Rollback failed: audit log entry {history_id} not found for key '{key}'")
             return False
 
-        target_value = history_entry.new_value
+        target_value = history_entry.old_value
 
         if target_value is None:
-            # The history entry recorded a deletion – reinstate that by deleting the current db value
+            # The old value was empty – remove the current db value to revert to ENV/default
             return delete_setting_from_db(db, key, changed_by=changed_by)
         else:
             return save_setting_to_db(db, key, target_value, changed_by=changed_by)

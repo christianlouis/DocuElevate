@@ -434,12 +434,13 @@ async def rollback_setting_to_history(
     admin: AdminUser,
 ):
     """
-    Revert a setting to the value it held at a specific point in the audit log.
+    Revert a setting to the value it had *before* a specific audit log change.
 
     The ``history_id`` is the ID of the :class:`~app.models.SettingsAuditLog`
-    entry whose ``new_value`` should be reinstated.  If that entry recorded a
-    deletion (``new_value`` is ``None``), the setting is removed from the
-    database and reverts to its ENV/default value.
+    entry whose ``old_value`` should be reinstated, effectively undoing that
+    change.  If ``old_value`` is ``None`` (the setting did not exist before
+    that change), the setting is removed from the database and reverts to its
+    ENV/default value.
 
     A new audit log entry is written to record the rollback.
     Admin only.
