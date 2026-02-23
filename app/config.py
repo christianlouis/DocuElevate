@@ -90,10 +90,10 @@ class Settings(BaseSettings):
 
     # Tesseract OCR settings (used when "tesseract" is in OCR_PROVIDERS)
     tesseract_cmd: Optional[str] = None  # Path to tesseract binary (e.g. /usr/bin/tesseract)
-    tesseract_language: str = "eng"  # Tesseract language code(s), e.g. "eng" or "eng+deu"
+    tesseract_language: str = "eng+deu"  # Tesseract language code(s), e.g. "eng" or "eng+deu"
 
     # EasyOCR settings (used when "easyocr" is in OCR_PROVIDERS)
-    easyocr_languages: str = "en"  # Comma-separated language codes, e.g. "en,de,fr"
+    easyocr_languages: str = "en,de"  # Comma-separated language codes, e.g. "en,de,fr"
     easyocr_gpu: bool = False  # Enable GPU acceleration for EasyOCR
 
     # Mistral OCR settings (used when "mistral" is in OCR_PROVIDERS)

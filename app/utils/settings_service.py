@@ -320,7 +320,7 @@ SETTING_METADATA = {
     },
     "tesseract_language": {
         "category": "OCR Engines",
-        "description": "Tesseract language code(s), e.g. 'eng' or 'eng+deu'. Default: eng.",
+        "description": "Tesseract language code(s), e.g. 'eng' or 'eng+deu'. Default: eng+deu (English + German).",
         "type": "string",
         "sensitive": False,
         "required": False,
@@ -329,7 +329,7 @@ SETTING_METADATA = {
     # OCR – EasyOCR
     "easyocr_languages": {
         "category": "OCR Engines",
-        "description": "Comma-separated EasyOCR language codes, e.g. 'en,de,fr'. Default: en.",
+        "description": "Comma-separated EasyOCR language codes, e.g. 'en,de,fr'. Default: en,de (English + German).",
         "type": "string",
         "sensitive": False,
         "required": False,
