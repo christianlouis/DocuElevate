@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.47.0 (2026-02-23)
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`d70fffd`](https://github.com/christianlouis/DocuElevate/commit/d70fffd4d21214900fdb018066f10a60019b5706))
+
+- **copilot**: Checkpoint before comprehensive instructions overhaul
+  ([`dbea61d`](https://github.com/christianlouis/DocuElevate/commit/dbea61dc0b5808cb25db15553a950ca849a3228d))
+
+- **copilot**: Overhaul instructions — Ruff toolchain, 100% coverage, agent workflow, modern Python
+  ([`156e0ba`](https://github.com/christianlouis/DocuElevate/commit/156e0ba524000a1063c0cb316063f1e28e5f0182))
+
+### Features
+
+- **ai**: Handle temperature incompatibility for gpt-5 and o-series models, add model picker UI
+  ([`a94b52e`](https://github.com/christianlouis/DocuElevate/commit/a94b52ee144e6e1f5a54ebc85d548bf5f860626b))
+
+
 ## Unreleased
 
 ### Documentation
