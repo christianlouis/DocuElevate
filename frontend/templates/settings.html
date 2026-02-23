@@ -139,6 +139,29 @@
                   Enable {{ setting.key.replace('_', ' ').title() }}
                 </label>
               </div>
+<<<<<<< copilot/add-self-hosted-ocr-support
+              {% elif setting.metadata.type == 'multiselect' and setting.metadata.options %}
+              <!-- Multi-select checkboxes: stored as comma-separated string -->
+              <div class="flex flex-wrap gap-2 mt-1">
+                {% for opt in setting.metadata.options %}
+                <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border cursor-pointer select-none
+                              transition-colors
+                              bg-white border-gray-300 hover:border-blue-400"
+                       :class="isSelected('{{ setting.key }}', '{{ opt }}')
+                               ? 'bg-blue-100 border-blue-500 text-blue-800 font-medium'
+                               : 'text-gray-700'">
+                  <input type="checkbox"
+                         class="sr-only"
+                         :checked="isSelected('{{ setting.key }}', '{{ opt }}')"
+                         @change="toggleMultiselect('{{ setting.key }}', '{{ opt }}', $event.target.checked)"
+                  />
+                  <i :class="isSelected('{{ setting.key }}', '{{ opt }}') ? 'fas fa-check-circle text-blue-600' : 'far fa-circle text-gray-400'"></i>
+                  <span class="text-sm">{{ opt }}</span>
+                </label>
+                {% endfor %}
+              </div>
+              <p class="mt-1 text-xs text-gray-400">Effective value: <code x-text="formData['{{ setting.key }}'] || '(none)'"></code></p>
+=======
               {% elif setting.metadata.type == 'model_picker' %}
               <!-- Model Picker: free-text input with datalist of common models -->
               <div class="relative">
@@ -162,6 +185,7 @@
                   Pick from the list or type any model name supported by your provider.
                 </p>
               </div>
+>>>>>>> main
               {% elif setting.metadata.options %}
               <!-- Dropdown Select for fields with a fixed list of values -->
               <select
@@ -301,6 +325,28 @@ function settingsApp() {
           this.showPassword['{{ setting.key }}'] = false;
         {% endfor %}
       {% endfor %}
+    },
+
+    /** Parse a comma-separated multiselect value into a trimmed array. */
+    parseMultiselect(key) {
+      return (this.formData[key] || '').split(',').map(s => s.trim()).filter(Boolean);
+    },
+
+    /** Return true when *option* is present in the comma-separated *key* value. */
+    isSelected(key, option) {
+      return this.parseMultiselect(key).includes(option);
+    },
+
+    /** Add or remove *option* from the comma-separated *key* value. */
+    toggleMultiselect(key, option, checked) {
+      const current = this.parseMultiselect(key);
+      if (checked) {
+        if (!current.includes(option)) current.push(option);
+      } else {
+        const idx = current.indexOf(option);
+        if (idx !== -1) current.splice(idx, 1);
+      }
+      this.formData[key] = current.join(',');
     },
 
     togglePassword(key) {

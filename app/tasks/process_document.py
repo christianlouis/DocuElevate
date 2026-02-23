@@ -14,9 +14,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import FileRecord
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
-from app.tasks.process_with_azure_document_intelligence import (
-    process_with_azure_document_intelligence,
-)
+from app.tasks.process_with_ocr import process_with_ocr
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils import get_unique_filepath_with_counter, hash_file, log_task_progress
 
@@ -313,7 +311,7 @@ def process_document(
             "Queued for forced OCR processing",
             file_id=file_id,
         )
-        process_with_azure_document_intelligence.delay(new_filename, file_id)
+        process_with_ocr.delay(new_filename, file_id)
         return {"file": new_local_path, "status": "Queued for forced OCR", "file_id": file_id}
 
     # If the file is not a PDF, skip embedded text check and convert to PDF first
@@ -411,12 +409,12 @@ def process_document(
             file_id=file_id,
         )
 
-        # Mark Azure OCR as skipped since we extracted text locally
+        # Mark OCR as skipped since we extracted text locally
         log_task_progress(
             task_id,
             "process_with_azure_document_intelligence",
             "skipped",
-            "Local text extraction succeeded, Azure OCR not needed",
+            "Local text extraction succeeded, OCR not needed",
             file_id=file_id,
         )
 
@@ -436,8 +434,8 @@ def process_document(
             "file_id": file_id,
         }
 
-    # 3. If no embedded text, queue Azure Document Intelligence processing
-    logger.info(f"[{task_id}] No embedded text found. Queueing Azure Document Intelligence processing")
+    # 3. If no embedded text, queue OCR processing
+    logger.info(f"[{task_id}] No embedded text found. Queueing OCR processing")
     log_task_progress(
         task_id,
         "check_text",
@@ -446,12 +444,12 @@ def process_document(
         file_id=file_id,
     )
 
-    # Mark local text extraction as skipped since we're using Azure OCR
+    # Mark local text extraction as skipped since we're using cloud OCR
     log_task_progress(
         task_id,
         "extract_text",
         "skipped",
-        "No embedded text, using Azure OCR instead",
+        "No embedded text, using OCR instead",
         file_id=file_id,
     )
 
@@ -462,5 +460,5 @@ def process_document(
         "Queued for OCR processing",
         file_id=file_id,
     )
-    process_with_azure_document_intelligence.delay(new_filename, file_id)
+    process_with_ocr.delay(new_filename, file_id)
     return {"file": new_local_path, "status": "Queued for OCR", "file_id": file_id}

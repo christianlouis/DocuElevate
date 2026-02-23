@@ -14,6 +14,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.models import ApplicationSettings, SettingsAuditLog
+from app.utils.ocr_provider import KNOWN_OCR_PROVIDERS
 
 logger = logging.getLogger(__name__)
 
@@ -325,6 +326,122 @@ SETTING_METADATA = {
         "sensitive": False,
         "required": False,
         "restart_required": False,
+    },
+    # OCR Engine Configuration
+    "ocr_providers": {
+        "category": "OCR Engines",
+        "description": (
+            "Active OCR engines. Select one or more engines to enable. "
+            "When multiple engines are selected all run in parallel and results are merged. "
+            "Stored as a comma-separated list (e.g. azure,tesseract)."
+        ),
+        "type": "multiselect",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "options": KNOWN_OCR_PROVIDERS,
+    },
+    "ocr_merge_strategy": {
+        "category": "OCR Engines",
+        "description": (
+            "Strategy for merging results from multiple OCR providers. "
+            "ai_merge: use AI to produce best merged text (default); "
+            "longest: return the result with most characters; "
+            "primary: return only the first provider's result."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "options": ["ai_merge", "longest", "primary"],
+    },
+    # OCR – Tesseract
+    "tesseract_cmd": {
+        "category": "OCR Engines",
+        "description": "Path to the Tesseract binary (e.g. /usr/bin/tesseract). Leave blank to use system PATH.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "tesseract_language": {
+        "category": "OCR Engines",
+        "description": "Tesseract language code(s), e.g. 'eng' or 'eng+deu'. Default: eng+deu (English + German).",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # OCR – EasyOCR
+    "easyocr_languages": {
+        "category": "OCR Engines",
+        "description": "Comma-separated EasyOCR language codes, e.g. 'en,de,fr'. Default: en,de (English + German).",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "easyocr_gpu": {
+        "category": "OCR Engines",
+        "description": "Enable GPU acceleration for EasyOCR (requires CUDA). Default: False.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # OCR – Mistral
+    "mistral_api_key": {
+        "category": "OCR Engines",
+        "description": "Mistral API key (required when 'mistral' is in OCR_PROVIDERS).",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "mistral_ocr_model": {
+        "category": "OCR Engines",
+        "description": "Mistral OCR model name. Default: mistral-ocr-latest.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # OCR – Google Cloud Document AI
+    "google_docai_credentials_json": {
+        "category": "OCR Engines",
+        "description": (
+            "Google Cloud service account credentials JSON for Document AI "
+            "(optional; falls back to google_drive_credentials_json or Application Default Credentials)."
+        ),
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "google_docai_project_id": {
+        "category": "OCR Engines",
+        "description": "GCP project ID for Google Cloud Document AI (required when 'google_docai' is in OCR_PROVIDERS).",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "google_docai_processor_id": {
+        "category": "OCR Engines",
+        "description": "Document AI processor ID (required when 'google_docai' is in OCR_PROVIDERS).",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "google_docai_location": {
+        "category": "OCR Engines",
+        "description": "Document AI processor location (e.g. 'us' or 'eu'). Default: us.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "options": ["us", "eu"],
     },
     # Storage Providers - Dropbox
     "dropbox_app_key": {

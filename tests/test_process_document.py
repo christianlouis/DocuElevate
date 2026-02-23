@@ -220,7 +220,7 @@ startxref
         patch("app.tasks.process_document.SessionLocal") as mock_session_local,
         patch("app.tasks.process_document.settings") as mock_settings,
         patch("app.tasks.process_document.log_task_progress"),
-        patch("app.tasks.process_document.process_with_azure_document_intelligence") as mock_azure,
+        patch("app.tasks.process_document.process_with_ocr") as mock_azure,
     ):
         # Setup mocks
         mock_settings.workdir = str(tmp_path)
@@ -235,7 +235,7 @@ startxref
         assert result["status"] == "Queued for OCR"
         assert "file_id" in result
 
-        # Verify that process_with_azure_document_intelligence was called with file_id
+        # Verify that process_with_ocr was called with file_id
         mock_azure.delay.assert_called_once()
         call_args = mock_azure.delay.call_args
 
@@ -618,7 +618,7 @@ startxref
         patch("app.tasks.process_document.SessionLocal") as mock_session_local,
         patch("app.tasks.process_document.settings") as mock_settings,
         patch("app.tasks.process_document.log_task_progress"),
-        patch("app.tasks.process_document.process_with_azure_document_intelligence") as mock_azure,
+        patch("app.tasks.process_document.process_with_ocr") as mock_azure,
     ):
         # Setup mocks
         mock_settings.workdir = str(tmp_path)
@@ -633,7 +633,7 @@ startxref
         assert result["status"] == "Queued for forced OCR"
         assert "file_id" in result
 
-        # Verify that process_with_azure_document_intelligence was called
+        # Verify that process_with_ocr was called
         mock_azure.delay.assert_called_once()
 
 
