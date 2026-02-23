@@ -15,6 +15,28 @@ class Settings(BaseSettings):
     openai_api_key: str
     openai_base_url: str = "https://api.openai.com/v1"  # Default to OpenAI's endpoint
     openai_model: str = "gpt-4o-mini"  # Default model
+
+    # AI provider abstraction layer
+    # Supported values: openai, azure, anthropic, gemini, ollama, openrouter, litellm
+    ai_provider: str = "openai"
+    # Override model for any provider; falls back to openai_model when not set
+    ai_model: Optional[str] = None
+
+    # Anthropic Claude settings (used when ai_provider="anthropic")
+    anthropic_api_key: Optional[str] = None
+
+    # Google Gemini settings (used when ai_provider="gemini")
+    gemini_api_key: Optional[str] = None
+
+    # Ollama local LLM settings (used when ai_provider="ollama")
+    ollama_base_url: str = "http://localhost:11434"
+
+    # OpenRouter settings (used when ai_provider="openrouter")
+    openrouter_api_key: Optional[str] = None
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+
+    # Azure OpenAI API version (used when ai_provider="azure")
+    azure_openai_api_version: str = "2024-02-01"
     workdir: str
     debug: bool = False  # Default to False
 

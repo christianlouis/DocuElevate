@@ -407,65 +407,60 @@ startxref
 
 @pytest.mark.unit
 class TestRefineTextWithGPT:
-    """Tests for OpenAI text refinement task."""
+    """Tests for AI provider text refinement task."""
 
     @patch("app.tasks.refine_text_with_gpt.log_task_progress")
     def test_successful_text_refinement(self, mock_log):
-        """Test successful text refinement with OpenAI."""
+        """Test successful text refinement with AI provider."""
         raw_text = "This is s0me text with OCR err0rs"
         filename = "test.pdf"
-
-        # Mock OpenAI response
-        mock_choice = Mock()
-        mock_choice.message.content = "This is some text with OCR errors"
-
-        mock_response = Mock()
-        mock_response.choices = [mock_choice]
-
-        mock_client = Mock()
-        mock_client.chat.completions.create.return_value = mock_response
+        cleaned = "This is some text with OCR errors"
 
         # Import the module to patch the correct function
         from app.tasks import extract_metadata_with_gpt as metadata_module
 
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.return_value = cleaned
+
         with (
-            patch("app.tasks.refine_text_with_gpt.client", mock_client),
+            patch("app.utils.ai_provider.get_ai_provider", return_value=mock_provider),
             patch.object(metadata_module, "extract_metadata_with_gpt") as mock_extract,
             patch("app.tasks.refine_text_with_gpt.settings") as mock_settings,
         ):
             mock_settings.openai_model = "gpt-4"
+            mock_settings.ai_model = None
             mock_extract.delay = MagicMock()
 
             result = refine_text_with_gpt.run(filename, raw_text)
 
             # Verify results
             assert result["filename"] == filename
-            assert result["cleaned_text"] == "This is some text with OCR errors"
+            assert result["cleaned_text"] == cleaned
 
-            # Verify OpenAI was called correctly
-            mock_client.chat.completions.create.assert_called_once()
-            call_kwargs = mock_client.chat.completions.create.call_args[1]
-            assert call_kwargs["model"] == "gpt-4"
+            # Verify AI provider was called correctly
+            mock_provider.chat_completion.assert_called_once()
+            call_kwargs = mock_provider.chat_completion.call_args[1]
             assert len(call_kwargs["messages"]) == 2
             assert call_kwargs["messages"][1]["content"] == raw_text
 
             # Verify metadata extraction was queued
-            mock_extract.delay.assert_called_once_with(filename, "This is some text with OCR errors")
+            mock_extract.delay.assert_called_once_with(filename, cleaned)
 
     @patch("app.tasks.refine_text_with_gpt.log_task_progress")
     def test_openai_api_error(self, mock_log):
-        """Test error handling when OpenAI API fails."""
+        """Test error handling when AI provider call fails."""
         raw_text = "Test text"
         filename = "test.pdf"
 
-        mock_client = Mock()
-        mock_client.chat.completions.create.side_effect = Exception("OpenAI API error")
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.side_effect = Exception("OpenAI API error")
 
         with (
-            patch("app.tasks.refine_text_with_gpt.client", mock_client),
+            patch("app.utils.ai_provider.get_ai_provider", return_value=mock_provider),
             patch("app.tasks.refine_text_with_gpt.settings") as mock_settings,
         ):
             mock_settings.openai_model = "gpt-4"
+            mock_settings.ai_model = None
 
             # Should raise the exception
             with pytest.raises(Exception) as exc_info:

@@ -2,32 +2,29 @@
 
 import logging
 
-import openai
-
 # Import the shared Celery instance
 from app.celery_app import celery
 from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils import log_task_progress
+from app.utils.ai_provider import get_ai_provider
 
 logger = logging.getLogger(__name__)
-
-# Initialize OpenAI client dynamically
-client = openai.OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
 
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
 def refine_text_with_gpt(self, filename: str, raw_text: str):
-    """Uses OpenAI to clean and refine OCR text."""
+    """Uses the configured AI provider to clean and refine OCR text."""
     task_id = self.request.id
     logger.info(f"[{task_id}] Starting OCR text refinement for: {filename}")
     log_task_progress(task_id, "refine_text_with_gpt", "in_progress", f"Refining OCR text for {filename}")
 
     try:
-        log_task_progress(task_id, "call_openai", "in_progress", "Calling OpenAI for text refinement")
+        log_task_progress(task_id, "call_ai_provider", "in_progress", "Calling AI provider for text refinement")
 
-        response = client.chat.completions.create(
-            model=settings.openai_model,
+        provider = get_ai_provider()
+        model = settings.ai_model or settings.openai_model
+        cleaned_text = provider.chat_completion(
             messages=[
                 {
                     "role": "system",
@@ -38,16 +35,15 @@ def refine_text_with_gpt(self, filename: str, raw_text: str):
                 },
                 {"role": "user", "content": raw_text},
             ],
+            model=model,
         )
-
-        cleaned_text = response.choices[0].message.content
 
         logger.info(f"[{task_id}] Text refinement complete for {filename}: {len(cleaned_text)} characters")
         log_task_progress(
             task_id,
-            "call_openai",
+            "call_ai_provider",
             "success",
-            "Received refined text from OpenAI",
+            "Received refined text from AI provider",
             detail=f"Input: {len(raw_text)} chars → Output: {len(cleaned_text)} chars",
         )
 

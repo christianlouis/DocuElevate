@@ -67,12 +67,11 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.tasks.extract_metadata_with_gpt.client")
-    def test_successful_metadata_extraction(self, mock_client, mock_log_progress, mock_embed_task):
-        """Test successful metadata extraction with valid GPT response."""
-        # Mock the OpenAI client response
-        mock_completion = MagicMock()
-        mock_completion.choices[0].message.content = json.dumps(
+    @patch("app.utils.ai_provider.get_ai_provider")
+    def test_successful_metadata_extraction(self, mock_get_provider, mock_log_progress, mock_embed_task):
+        """Test successful metadata extraction with valid AI provider response."""
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.return_value = json.dumps(
             {
                 "filename": "2024-01-15_Invoice_Amazon",
                 "empfaenger": "John Doe",
@@ -89,7 +88,7 @@ class TestExtractMetadataWithGpt:
                 "monetary_amounts": ["99.99 EUR"],
             }
         )
-        mock_client.chat.completions.create.return_value = mock_completion
+        mock_get_provider.return_value = mock_provider
 
         # Set task request context directly on the Celery task
         extract_metadata_with_gpt.request.id = "test-task-id"
@@ -97,11 +96,11 @@ class TestExtractMetadataWithGpt:
         # Call the underlying function directly (not through Celery)
         result = extract_metadata_with_gpt.__wrapped__("test_invoice.pdf", "Invoice from Amazon for 99.99 EUR", 123)
 
-        # Verify OpenAI was called
-        mock_client.chat.completions.create.assert_called_once()
-        call_args = mock_client.chat.completions.create.call_args
-        assert call_args[1]["temperature"] == 0
-        assert len(call_args[1]["messages"]) == 2
+        # Verify AI provider was called
+        mock_provider.chat_completion.assert_called_once()
+        call_kwargs = mock_provider.chat_completion.call_args[1]
+        assert call_kwargs["temperature"] == 0
+        assert len(call_kwargs["messages"]) == 2
 
         # Verify metadata was extracted correctly
         assert result["s3_file"] == "test_invoice.pdf"
@@ -117,14 +116,14 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.tasks.extract_metadata_with_gpt.client")
-    def test_handles_json_in_backticks(self, mock_client, mock_log_progress, mock_embed_task):
+    @patch("app.utils.ai_provider.get_ai_provider")
+    def test_handles_json_in_backticks(self, mock_get_provider, mock_log_progress, mock_embed_task):
         """Test extraction handles JSON wrapped in markdown code blocks."""
-        mock_completion = MagicMock()
-        mock_completion.choices[
-            0
-        ].message.content = '```json\n{"filename": "test.pdf", "document_type": "Unknown"}\n```'
-        mock_client.chat.completions.create.return_value = mock_completion
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.return_value = (
+            '```json\n{"filename": "test.pdf", "document_type": "Unknown"}\n```'
+        )
+        mock_get_provider.return_value = mock_provider
 
         extract_metadata_with_gpt.request.id = "test-task-id"
 
@@ -136,12 +135,12 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.tasks.extract_metadata_with_gpt.client")
-    def test_handles_invalid_json_response(self, mock_client, mock_log_progress, mock_embed_task):
-        """Test handling of invalid JSON in GPT response."""
-        mock_completion = MagicMock()
-        mock_completion.choices[0].message.content = "This is not valid JSON at all"
-        mock_client.chat.completions.create.return_value = mock_completion
+    @patch("app.utils.ai_provider.get_ai_provider")
+    def test_handles_invalid_json_response(self, mock_get_provider, mock_log_progress, mock_embed_task):
+        """Test handling of invalid JSON in AI provider response."""
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.return_value = "This is not valid JSON at all"
+        mock_get_provider.return_value = mock_provider
 
         extract_metadata_with_gpt.request.id = "test-task-id"
 
@@ -155,10 +154,12 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.tasks.extract_metadata_with_gpt.client")
-    def test_handles_openai_api_exception(self, mock_client, mock_log_progress, mock_embed_task):
-        """Test handling of OpenAI API exceptions."""
-        mock_client.chat.completions.create.side_effect = Exception("API Error: Rate limit exceeded")
+    @patch("app.utils.ai_provider.get_ai_provider")
+    def test_handles_api_exception(self, mock_get_provider, mock_log_progress, mock_embed_task):
+        """Test handling of AI provider API exceptions."""
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.side_effect = Exception("API Error: Rate limit exceeded")
+        mock_get_provider.return_value = mock_provider
 
         extract_metadata_with_gpt.request.id = "test-task-id"
 
@@ -172,15 +173,15 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.tasks.extract_metadata_with_gpt.client")
+    @patch("app.utils.ai_provider.get_ai_provider")
     @patch("app.tasks.extract_metadata_with_gpt.SessionLocal")
     def test_retrieves_file_id_from_database_when_not_provided(
-        self, mock_session_local, mock_client, mock_log_progress, mock_embed_task
+        self, mock_session_local, mock_get_provider, mock_log_progress, mock_embed_task
     ):
         """Test file_id retrieval from database when not provided."""
-        mock_completion = MagicMock()
-        mock_completion.choices[0].message.content = '{"filename": "test.pdf", "document_type": "Unknown"}'
-        mock_client.chat.completions.create.return_value = mock_completion
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.return_value = '{"filename": "test.pdf", "document_type": "Unknown"}'
+        mock_get_provider.return_value = mock_provider
 
         # Mock database session
         mock_db = MagicMock()
@@ -206,15 +207,15 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.tasks.extract_metadata_with_gpt.client")
-    def test_validates_filename_security(self, mock_client, mock_log_progress, mock_embed_task):
+    @patch("app.utils.ai_provider.get_ai_provider")
+    def test_validates_filename_security(self, mock_get_provider, mock_log_progress, mock_embed_task):
         """Test filename validation to prevent path traversal."""
-        mock_completion = MagicMock()
+        mock_provider = MagicMock()
         # Try to inject a malicious filename
-        mock_completion.choices[0].message.content = json.dumps(
+        mock_provider.chat_completion.return_value = json.dumps(
             {"filename": "../../../etc/passwd", "document_type": "Invoice"}
         )
-        mock_client.chat.completions.create.return_value = mock_completion
+        mock_get_provider.return_value = mock_provider
 
         extract_metadata_with_gpt.request.id = "test-task-id"
 
@@ -226,14 +227,14 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.tasks.extract_metadata_with_gpt.client")
-    def test_validates_filename_with_dots(self, mock_client, mock_log_progress, mock_embed_task):
+    @patch("app.utils.ai_provider.get_ai_provider")
+    def test_validates_filename_with_dots(self, mock_get_provider, mock_log_progress, mock_embed_task):
         """Test filename validation rejects '..' in filenames."""
-        mock_completion = MagicMock()
-        mock_completion.choices[0].message.content = json.dumps(
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.return_value = json.dumps(
             {"filename": "test..invoice.pdf", "document_type": "Invoice"}
         )
-        mock_client.chat.completions.create.return_value = mock_completion
+        mock_get_provider.return_value = mock_provider
 
         extract_metadata_with_gpt.request.id = "test-task-id"
 
@@ -244,14 +245,14 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.tasks.extract_metadata_with_gpt.client")
-    def test_accepts_valid_filename(self, mock_client, mock_log_progress, mock_embed_task):
+    @patch("app.utils.ai_provider.get_ai_provider")
+    def test_accepts_valid_filename(self, mock_get_provider, mock_log_progress, mock_embed_task):
         """Test that valid filenames are accepted."""
-        mock_completion = MagicMock()
-        mock_completion.choices[0].message.content = json.dumps(
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.return_value = json.dumps(
             {"filename": "2024-01-15_Invoice_Amazon.pdf", "document_type": "Invoice"}
         )
-        mock_client.chat.completions.create.return_value = mock_completion
+        mock_get_provider.return_value = mock_provider
 
         extract_metadata_with_gpt.request.id = "test-task-id"
 
@@ -262,12 +263,12 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.tasks.extract_metadata_with_gpt.client")
-    def test_handles_malformed_json_with_valid_structure(self, mock_client, mock_log_progress, mock_embed_task):
+    @patch("app.utils.ai_provider.get_ai_provider")
+    def test_handles_malformed_json_with_valid_structure(self, mock_get_provider, mock_log_progress, mock_embed_task):
         """Test handling of JSON that's parseable but missing expected fields."""
-        mock_completion = MagicMock()
-        mock_completion.choices[0].message.content = '{"unexpected_field": "value"}'
-        mock_client.chat.completions.create.return_value = mock_completion
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.return_value = '{"unexpected_field": "value"}'
+        mock_get_provider.return_value = mock_provider
 
         extract_metadata_with_gpt.request.id = "test-task-id"
 
@@ -279,12 +280,12 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.tasks.extract_metadata_with_gpt.client")
-    def test_handles_absolute_path_filename(self, mock_client, mock_log_progress, mock_embed_task):
-        """Test handling when filename is provided as an absolute path (line 73)."""
-        mock_completion = MagicMock()
-        mock_completion.choices[0].message.content = '{"filename": "test.pdf", "document_type": "Unknown"}'
-        mock_client.chat.completions.create.return_value = mock_completion
+    @patch("app.utils.ai_provider.get_ai_provider")
+    def test_handles_absolute_path_filename(self, mock_get_provider, mock_log_progress, mock_embed_task):
+        """Test handling when filename is provided as an absolute path."""
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.return_value = '{"filename": "test.pdf", "document_type": "Unknown"}'
+        mock_get_provider.return_value = mock_provider
 
         extract_metadata_with_gpt.request.id = "test-task-id"
 
@@ -298,15 +299,15 @@ class TestExtractMetadataWithGpt:
 
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
-    @patch("app.tasks.extract_metadata_with_gpt.client")
+    @patch("app.utils.ai_provider.get_ai_provider")
     @patch("app.tasks.extract_metadata_with_gpt.SessionLocal")
     def test_database_lookup_with_existing_file(
-        self, mock_session_local, mock_client, mock_log_progress, mock_embed_task
+        self, mock_session_local, mock_get_provider, mock_log_progress, mock_embed_task
     ):
-        """Test file_id retrieval when file exists on disk and in database (branches 76->82, 79->82)."""
-        mock_completion = MagicMock()
-        mock_completion.choices[0].message.content = '{"filename": "test.pdf", "document_type": "Unknown"}'
-        mock_client.chat.completions.create.return_value = mock_completion
+        """Test file_id retrieval when file exists on disk and in database."""
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.return_value = '{"filename": "test.pdf", "document_type": "Unknown"}'
+        mock_get_provider.return_value = mock_provider
 
         # Mock database session
         mock_db = MagicMock()
@@ -333,20 +334,14 @@ class TestExtractMetadataWithGpt:
 
 
 @pytest.mark.unit
-class TestClientInitialization:
-    """Tests for OpenAI client initialization error handling."""
+class TestModuleImports:
+    """Tests for module import behaviour."""
 
-    def test_client_initialization_imports_successfully(self):
-        """Test that module imports successfully even if client initialization fails (lines 25-27).
+    def test_module_imports_successfully(self):
+        """Test that the module imports successfully."""
+        import app.tasks.extract_metadata_with_gpt as mod
 
-        The module has a try/except block for client initialization that sets client to None
-        on failure. This test verifies the module can be imported without crashing,
-        regardless of whether the client initializes successfully or not.
-        """
-        # Import should succeed regardless of client initialization success
-        from app.tasks.extract_metadata_with_gpt import client
-
-        # Client will be either an OpenAI client instance or None
-        # Both are valid states - the important thing is the import doesn't crash
-        # We verify the client variable exists and has a defined type
-        assert hasattr(client, "__class__") or client is None
+        assert mod is not None
+        assert hasattr(mod, "extract_metadata_with_gpt")
+        assert hasattr(mod, "extract_json_from_text")
+        assert hasattr(mod, "get_ai_provider")

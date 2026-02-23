@@ -35,3 +35,6 @@ paramiko>=3.4.0  # SSH/SFTP implementation for Python (LGPL license)
 
 # Notification service
 apprise>=1.4.0
+
+# AI provider aggregator - enables Anthropic, Gemini, Ollama, and 100+ LLM providers
+litellm>=1.0.0,<2.0.0
