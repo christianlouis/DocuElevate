@@ -73,7 +73,7 @@
           <td class="px-4 py-3 text-sm">
             <button
               type="button"
-              @click="rollback('{{ entry.key }}', {{ entry.id }}, '{{ entry.new_value or '' }}')"
+              @click="rollback('{{ entry.key }}', {{ entry.id }}, '{{ entry.old_value or '' }}')"
               :disabled="rollingBack === {{ entry.id }}"
               class="inline-flex items-center px-2 py-1 text-xs font-medium rounded border border-gray-300 text-gray-700 bg-white hover:bg-yellow-50 hover:border-yellow-400 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed"
               title="Revert '{{ entry.key }}' to the value in this log entry"

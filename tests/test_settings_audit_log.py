@@ -203,18 +203,33 @@ class TestRollbackSetting:
     """rollback_setting reinstates the value from a given audit log entry."""
 
     def test_rollback_to_previous_value(self, db_session):
+        """Rolling back an entry restores the old_value (the value *before* that change)."""
         from app.utils.settings_service import get_setting_from_db, rollback_setting, save_setting_to_db
 
-        save_setting_to_db(db_session, "workdir", "/v1", changed_by="admin")  # entry id 1
-        save_setting_to_db(db_session, "workdir", "/v2", changed_by="admin")  # entry id 2
+        save_setting_to_db(db_session, "workdir", "/v1", changed_by="admin")  # entry 1: old=None, new=/v1
+        save_setting_to_db(db_session, "workdir", "/v2", changed_by="admin")  # entry 2: old=/v1, new=/v2
 
-        first_entry = db_session.query(SettingsAuditLog).filter_by(key="workdir").first()
-        # first entry has new_value="/v1"
-        success = rollback_setting(db_session, "workdir", first_entry.id, changed_by="rollbacker")
+        # Rolling back entry 2 should undo the /v1→/v2 change and restore /v1
+        second_entry = db_session.query(SettingsAuditLog).filter_by(key="workdir").order_by(SettingsAuditLog.id.desc()).first()
+        success = rollback_setting(db_session, "workdir", second_entry.id, changed_by="rollbacker")
 
         assert success is True
         current = get_setting_from_db(db_session, "workdir")
         assert current == "/v1"
+
+    def test_rollback_deletes_setting_when_old_value_is_none(self, db_session):
+        """Rolling back the first-ever entry (old_value=None) deletes the setting from DB."""
+        from app.utils.settings_service import get_setting_from_db, rollback_setting, save_setting_to_db
+
+        save_setting_to_db(db_session, "workdir", "/v1", changed_by="admin")  # old=None, new=/v1
+
+        first_entry = db_session.query(SettingsAuditLog).filter_by(key="workdir").first()
+        success = rollback_setting(db_session, "workdir", first_entry.id, changed_by="rollbacker")
+
+        assert success is True
+        # Setting should be removed from DB (fallback to ENV/default)
+        current = get_setting_from_db(db_session, "workdir")
+        assert current is None
 
     def test_rollback_creates_new_audit_entry(self, db_session):
         from app.utils.settings_service import rollback_setting, save_setting_to_db
