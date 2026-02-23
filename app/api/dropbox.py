@@ -7,11 +7,15 @@ import os
 from typing import Annotated, Optional
 
 import requests
-from fastapi import APIRouter, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from sqlalchemy.orm import Session
 
 from app.auth import require_login
 from app.config import settings
+from app.database import get_db
 from app.utils.oauth_helper import exchange_oauth_token
+from app.utils.settings_service import save_setting_to_db
+from app.utils.settings_sync import notify_settings_updated
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -63,33 +67,43 @@ async def update_dropbox_settings(
     app_key: Annotated[Optional[str], Form()] = None,
     app_secret: Annotated[Optional[str], Form()] = None,
     folder_path: Annotated[Optional[str], Form()] = None,
+    db: Session = Depends(get_db),
 ):
     """
-    Update Dropbox settings in memory
+    Update Dropbox settings in memory and persist to the database.
     """
     try:
-        logger.info("Updating Dropbox settings in memory")
+        logger.info("Updating Dropbox settings in memory and database")
 
-        # Update settings in memory
+        user = request.session.get("user", {}) if hasattr(request, "session") else {}
+        changed_by = (
+            user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "wizard"
+        )
+
+        # Update settings in memory and persist to database
         if refresh_token:
             settings.dropbox_refresh_token = refresh_token
-            logger.info("Updated DROPBOX_REFRESH_TOKEN in memory")
+            save_setting_to_db(db, "dropbox_refresh_token", refresh_token, changed_by=changed_by)
+            logger.info("Updated DROPBOX_REFRESH_TOKEN in memory and database")
 
         if app_key:
             settings.dropbox_app_key = app_key
-            logger.info("Updated DROPBOX_APP_KEY in memory")
+            save_setting_to_db(db, "dropbox_app_key", app_key, changed_by=changed_by)
+            logger.info("Updated DROPBOX_APP_KEY in memory and database")
 
         if app_secret:
             settings.dropbox_app_secret = app_secret
-            logger.info("Updated DROPBOX_APP_SECRET in memory")
+            save_setting_to_db(db, "dropbox_app_secret", app_secret, changed_by=changed_by)
+            logger.info("Updated DROPBOX_APP_SECRET in memory and database")
 
         if folder_path:
             settings.dropbox_folder = folder_path
-            logger.info("Updated DROPBOX_FOLDER in memory")
+            save_setting_to_db(db, "dropbox_folder", folder_path, changed_by=changed_by)
+            logger.info("Updated DROPBOX_FOLDER in memory and database")
 
-        # Test token validity would be here, but we'll skip it for now
+        notify_settings_updated()
 
-        return {"status": "success", "message": "Dropbox settings have been updated in memory"}
+        return {"status": "success", "message": "Dropbox settings have been updated in memory and saved to database"}
 
     except Exception as e:
         logger.exception(f"Unexpected error updating Dropbox settings: {str(e)}")
