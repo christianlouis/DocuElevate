@@ -802,6 +802,50 @@
       }
     }
 
+    function showCopyFeedback(type, success) {
+      const btn = document.getElementById(type + '-copy-btn');
+      if (!btn) return;
+      const original = btn.innerHTML;
+      if (success) {
+        btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+        btn.style.backgroundColor = '#48bb78';
+      } else {
+        btn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Failed';
+        btn.style.backgroundColor = '#f56565';
+      }
+      setTimeout(() => {
+        btn.innerHTML = original;
+        btn.style.backgroundColor = '#4299e1';
+      }, 2000);
+    }
+
+    function copyTextToClipboard(type) {
+      const contentId = type + '-text-content';
+      const content = document.getElementById(contentId);
+      const text = content ? content.textContent : '';
+
+      if (!text) return;
+
+      navigator.clipboard.writeText(text).then(() => {
+        showCopyFeedback(type, true);
+      }).catch(() => {
+        // Fallback for older browsers
+        try {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.select();
+          const ok = document.execCommand('copy');
+          document.body.removeChild(textarea);
+          showCopyFeedback(type, ok);
+        } catch (e) {
+          showCopyFeedback(type, false);
+        }
+      });
+    }
+
     // Close modal when clicking outside the content
     window.onclick = function(event) {
       const modals = document.querySelectorAll('.text-modal');
@@ -1210,12 +1254,21 @@
     <div class="text-modal-content">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 2px solid #e2e8f0;">
         <h3 style="margin: 0; color: #2d3748;">Extracted Text (Original)</h3>
-        <button
-          onclick="toggleTextModal('original-text-modal')"
-          style="background-color: #f56565; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;"
-        >
-          <i class="fas fa-times"></i> Close
-        </button>
+        <div style="display: flex; gap: 0.5rem;">
+          <button
+            id="original-copy-btn"
+            onclick="copyTextToClipboard('original')"
+            style="background-color: #4299e1; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;"
+          >
+            <i class="fas fa-copy"></i> Copy
+          </button>
+          <button
+            onclick="toggleTextModal('original-text-modal')"
+            style="background-color: #f56565; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;"
+          >
+            <i class="fas fa-times"></i> Close
+          </button>
+        </div>
       </div>
       <div id="original-text-loading" style="text-align: center; padding: 3rem; color: #4299e1;">
         <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
@@ -1230,12 +1283,21 @@
     <div class="text-modal-content">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 2px solid #e2e8f0;">
         <h3 style="margin: 0; color: #2d3748;">Extracted Text (Processed)</h3>
-        <button
-          onclick="toggleTextModal('processed-text-modal')"
-          style="background-color: #f56565; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;"
-        >
-          <i class="fas fa-times"></i> Close
-        </button>
+        <div style="display: flex; gap: 0.5rem;">
+          <button
+            id="processed-copy-btn"
+            onclick="copyTextToClipboard('processed')"
+            style="background-color: #4299e1; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;"
+          >
+            <i class="fas fa-copy"></i> Copy
+          </button>
+          <button
+            onclick="toggleTextModal('processed-text-modal')"
+            style="background-color: #f56565; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;"
+          >
+            <i class="fas fa-times"></i> Close
+          </button>
+        </div>
       </div>
       <div id="processed-text-loading" style="text-align: center; padding: 3rem; color: #48bb78;">
         <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
