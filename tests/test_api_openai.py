@@ -62,34 +62,143 @@ class TestOpenAIConnectionErrors:
     @patch("app.api.openai.settings")
     def test_openai_api_key_validation_auth_error(self, mock_settings, mock_openai_class, client):
         """Test OpenAI API key validation with auth error."""
+        import openai as openai_module
+
         mock_settings.openai_api_key = "sk-invalid-key"
 
         mock_client = MagicMock()
-        mock_client.models.list.side_effect = Exception("Incorrect API key")
+        auth_exc = openai_module.AuthenticationError(
+            message="Incorrect API key provided",
+            response=MagicMock(status_code=401, headers={}),
+            body={"error": {"message": "Incorrect API key provided"}},
+        )
+        mock_client.models.list.side_effect = auth_exc
         mock_openai_class.return_value = mock_client
 
         response = client.get("/api/openai/test")
         data = response.json()
 
         assert data["status"] == "error"
-        assert "api key" in data["message"].lower() or "validation failed" in data["message"].lower()
         assert data.get("is_auth_error") is True
+        assert data.get("error_type") == "authentication_error"
 
     @patch("openai.OpenAI")
     @patch("app.api.openai.settings")
     def test_openai_api_key_validation_network_error(self, mock_settings, mock_openai_class, client):
-        """Test OpenAI API key validation with network error."""
+        """Test OpenAI API key validation with network/connection error."""
+        import openai as openai_module
+
         mock_settings.openai_api_key = "sk-test-key"
 
         mock_client = MagicMock()
-        mock_client.models.list.side_effect = Exception("Network timeout")
+        conn_exc = openai_module.APIConnectionError(request=MagicMock())
+        mock_client.models.list.side_effect = conn_exc
         mock_openai_class.return_value = mock_client
 
         response = client.get("/api/openai/test")
         data = response.json()
 
         assert data["status"] == "error"
-        # Not an auth error, so is_auth_error should be False
+        assert data.get("is_auth_error") is False
+        assert data.get("error_type") == "connection_error"
+        assert "connection error" in data["message"].lower()
+
+    @patch("openai.OpenAI")
+    @patch("app.api.openai.settings")
+    def test_openai_api_connection_error_with_dns_cause(self, mock_settings, mock_openai_class, client):
+        """Test that DNS resolution failures are surfaced in the connection error message."""
+        import openai as openai_module
+
+        mock_settings.openai_api_key = "sk-test-key"
+
+        dns_err = OSError("[Errno -2] Name or service not known")
+        conn_exc = openai_module.APIConnectionError(request=MagicMock())
+        conn_exc.__cause__ = dns_err
+        mock_client = MagicMock()
+        mock_client.models.list.side_effect = conn_exc
+        mock_openai_class.return_value = mock_client
+
+        response = client.get("/api/openai/test")
+        data = response.json()
+
+        assert data["status"] == "error"
+        assert data.get("error_type") == "connection_error"
+        # The DNS detail should be propagated to the message
+        assert "name or service not known" in data["message"].lower()
+
+    @patch("openai.OpenAI")
+    @patch("app.api.openai.settings")
+    def test_openai_api_timeout_error(self, mock_settings, mock_openai_class, client):
+        """Test OpenAI API key validation with timeout error."""
+        import openai as openai_module
+
+        mock_settings.openai_api_key = "sk-test-key"
+
+        mock_client = MagicMock()
+        timeout_exc = openai_module.APITimeoutError(request=MagicMock())
+        mock_client.models.list.side_effect = timeout_exc
+        mock_openai_class.return_value = mock_client
+
+        response = client.get("/api/openai/test")
+        data = response.json()
+
+        assert data["status"] == "error"
+        assert data.get("is_auth_error") is False
+        assert data.get("error_type") == "timeout"
+        assert "timed out" in data["message"].lower()
+
+    @patch("openai.OpenAI")
+    @patch("app.api.openai.settings")
+    def test_openai_api_status_error(self, mock_settings, mock_openai_class, client):
+        """Test OpenAI API returning an unexpected HTTP status code."""
+        import openai as openai_module
+
+        mock_settings.openai_api_key = "sk-test-key"
+
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.headers = {"x-request-id": "test-req-id"}
+        status_exc = openai_module.InternalServerError(
+            message="Internal Server Error",
+            response=mock_response,
+            body={"error": {"message": "Internal Server Error"}},
+        )
+        mock_client = MagicMock()
+        mock_client.models.list.side_effect = status_exc
+        mock_openai_class.return_value = mock_client
+
+        response = client.get("/api/openai/test")
+        data = response.json()
+
+        assert data["status"] == "error"
+        assert data.get("error_type") == "api_status_error"
+        assert data.get("http_status") == 500
+
+    @patch("openai.OpenAI")
+    @patch("app.api.openai.settings")
+    def test_openai_api_rate_limit_error(self, mock_settings, mock_openai_class, client):
+        """Test OpenAI API returning a rate-limit error."""
+        import openai as openai_module
+
+        mock_settings.openai_api_key = "sk-test-key"
+
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        mock_response.headers = {}
+        rate_exc = openai_module.RateLimitError(
+            message="Rate limit exceeded",
+            response=mock_response,
+            body={"error": {"message": "Rate limit exceeded"}},
+        )
+        mock_client = MagicMock()
+        mock_client.models.list.side_effect = rate_exc
+        mock_openai_class.return_value = mock_client
+
+        response = client.get("/api/openai/test")
+        data = response.json()
+
+        assert data["status"] == "error"
+        assert data.get("error_type") == "rate_limit"
         assert data.get("is_auth_error") is False
 
     @patch("app.api.openai.settings")
@@ -138,3 +247,35 @@ class TestOpenAIConnectionErrors:
 
         assert data["status"] == "error"
         assert "unexpected error" in data["message"].lower()
+
+    @patch("openai.OpenAI")
+    @patch("app.api.openai.settings")
+    def test_openai_generic_error_still_detects_auth(self, mock_settings, mock_openai_class, client):
+        """Test that generic exception fallback still detects auth-related errors."""
+        mock_settings.openai_api_key = "sk-test-key"
+
+        mock_client = MagicMock()
+        mock_client.models.list.side_effect = Exception("Incorrect API key provided")
+        mock_openai_class.return_value = mock_client
+
+        response = client.get("/api/openai/test")
+        data = response.json()
+
+        assert data["status"] == "error"
+        assert data.get("is_auth_error") is True
+
+    @patch("openai.OpenAI")
+    @patch("app.api.openai.settings")
+    def test_openai_generic_network_error_not_auth(self, mock_settings, mock_openai_class, client):
+        """Test that generic network errors are not flagged as auth errors."""
+        mock_settings.openai_api_key = "sk-test-key"
+
+        mock_client = MagicMock()
+        mock_client.models.list.side_effect = Exception("Network timeout")
+        mock_openai_class.return_value = mock_client
+
+        response = client.get("/api/openai/test")
+        data = response.json()
+
+        assert data["status"] == "error"
+        assert data.get("is_auth_error") is False
