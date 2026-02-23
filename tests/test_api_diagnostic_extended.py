@@ -3,7 +3,6 @@
 from unittest.mock import patch
 
 import pytest
-from fastapi.testclient import TestClient
 
 
 @pytest.mark.unit
