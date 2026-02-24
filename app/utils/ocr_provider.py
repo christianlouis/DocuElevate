@@ -10,16 +10,135 @@ Provider selection is controlled by the ``OCR_PROVIDERS`` environment variable
 (comma-separated list, e.g. ``azure,tesseract``).  When multiple providers are
 specified, all enabled providers run in parallel and the results are
 cross-checked by the configured AI model to produce the best final output.
+
+**Searchable PDF support by provider**:
+
++---------------------+---------------------------+-----------------------------+
+| Provider            | Embeds text layer in PDF? | Notes                       |
++=====================+===========================+=============================+
+| azure               | Yes                       | Returns PDF/A with text     |
+|                     |                           | layer from Document         |
+|                     |                           | Intelligence.               |
++---------------------+---------------------------+-----------------------------+
+| tesseract           | No (text only)            | Falls back to               |
+|                     |                           | ``embed_text_layer``.       |
++---------------------+---------------------------+-----------------------------+
+| easyocr             | No (text only)            | Falls back to               |
+|                     |                           | ``embed_text_layer``.       |
++---------------------+---------------------------+-----------------------------+
+| mistral             | No (text only)            | Falls back to               |
+|                     |                           | ``embed_text_layer``.       |
++---------------------+---------------------------+-----------------------------+
+| google_docai        | No (text only)            | Falls back to               |
+|                     |                           | ``embed_text_layer``.       |
++---------------------+---------------------------+-----------------------------+
+| aws_textract        | No (text only)            | Falls back to               |
+|                     |                           | ``embed_text_layer``.       |
++---------------------+---------------------------+-----------------------------+
+
+Providers that do **not** embed a text layer return ``searchable_pdf_path=None``
+in their :class:`OCRResult`.  The :func:`embed_text_layer` helper can be used
+as a post-processing step to add a searchable text layer via ``ocrmypdf``
+(which uses Tesseract for layout analysis and text positioning).
 """
 
 import logging
 import os
+import shutil
+import subprocess
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def embed_text_layer(input_pdf_path: str, output_pdf_path: str, *, language: str = "eng") -> bool:
+    """Embed a searchable text layer into a PDF using ``ocrmypdf``.
+
+    This function is used as a post-processing step for OCR providers that
+    return plain text only (Tesseract, EasyOCR, Mistral, Google DocAI, AWS
+    Textract).  It calls ``ocrmypdf --skip-text`` which runs Tesseract under
+    the hood to detect text regions and embed an invisible text layer that
+    makes the PDF content selectable and searchable in PDF viewers.
+
+    Pages that already contain embedded text (e.g. from Azure Document
+    Intelligence) are skipped automatically by ``--skip-text``.
+
+    Args:
+        input_pdf_path: Absolute path to the source PDF file.
+        output_pdf_path: Absolute path where the searchable PDF is written.
+            If equal to *input_pdf_path* the file is overwritten in-place.
+        language: Tesseract language code(s) passed to ``ocrmypdf`` via
+            ``-l``.  Defaults to ``"eng"``.  Use ``+``-separated codes for
+            multi-language documents, e.g. ``"eng+deu"``.
+
+    Returns:
+        ``True`` when a searchable PDF was written successfully, ``False``
+        when ``ocrmypdf`` is not available or the process fails (a warning is
+        logged in the latter case so callers can degrade gracefully).
+
+    Raises:
+        FileNotFoundError: If *input_pdf_path* does not exist.
+    """
+    if not os.path.exists(input_pdf_path):
+        raise FileNotFoundError(f"embed_text_layer: input file not found: {input_pdf_path}")
+
+    ocrmypdf_bin = shutil.which("ocrmypdf")
+    if ocrmypdf_bin is None:
+        logger.warning(
+            "ocrmypdf not found on PATH – skipping text-layer embedding. "
+            "Install ocrmypdf (and tesseract-ocr) to enable searchable PDF output."
+        )
+        return False
+
+    in_place = input_pdf_path == output_pdf_path
+    if in_place:
+        import tempfile
+
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".pdf", dir=os.path.dirname(input_pdf_path))
+        os.close(tmp_fd)
+        final_output = tmp_path
+    else:
+        final_output = output_pdf_path
+
+    cmd = [
+        ocrmypdf_bin,
+        "--skip-text",  # skip pages that already have a text layer (e.g. Azure output)
+        "--quiet",  # suppress progress output; errors still appear on stderr
+        "-l",
+        language,
+        input_pdf_path,
+        final_output,
+    ]
+
+    logger.info(f"[embed_text_layer] Running: {' '.join(cmd)}")
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=False)  # noqa: S603
+    except subprocess.TimeoutExpired:
+        logger.warning("[embed_text_layer] ocrmypdf timed out after 600 s; skipping text-layer embedding")
+        if in_place and os.path.exists(final_output):
+            os.remove(final_output)
+        return False
+
+    if proc.returncode != 0:
+        stderr_snippet = proc.stderr.strip()[:500]
+        logger.warning(
+            f"[embed_text_layer] ocrmypdf exited with code {proc.returncode}; "
+            f"skipping text-layer embedding. stderr: {stderr_snippet}"
+        )
+        if in_place and os.path.exists(final_output):
+            os.remove(final_output)
+        return False
+
+    if in_place:
+        # Atomically replace the original file with the processed output.
+        os.replace(final_output, input_pdf_path)
+
+    logger.info(f"[embed_text_layer] Searchable PDF written to {output_pdf_path}")
+    return True
 
 
 class OCRResult:

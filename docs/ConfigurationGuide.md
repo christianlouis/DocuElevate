@@ -446,7 +446,106 @@ OPENAI_API_KEY=sk-ant-...   # passed as the api_key to LiteLLM
 
 ---
 
-### Azure Document Intelligence
+### OCR Providers
+
+DocuElevate supports multiple OCR engines that can be used individually or in combination. Configure the list of active providers with `OCR_PROVIDERS` and tune each provider with the settings below.
+
+#### Provider Selection
+
+| **Variable**          | **Description**                                                                                   | **Default** |
+|-----------------------|---------------------------------------------------------------------------------------------------|-------------|
+| `OCR_PROVIDERS`       | Comma-separated list of OCR engines to use, e.g. `azure`, `mistral`, `azure,tesseract`.         | `azure`     |
+| `OCR_MERGE_STRATEGY`  | Strategy for combining results from multiple providers: `ai_merge`, `longest`, or `primary`.     | `ai_merge`  |
+
+**Supported `OCR_PROVIDERS` values**: `azure`, `tesseract`, `easyocr`, `mistral`, `google_docai`, `aws_textract`
+
+When multiple providers are listed, all run in parallel and their results are merged according to `OCR_MERGE_STRATEGY`.
+
+#### Searchable PDF Text Layer
+
+Not all OCR providers embed a searchable text layer in the output PDF. The table below summarises each provider's behaviour and how DocuElevate handles it:
+
+| **Provider**      | **Embeds text layer?** | **Notes** |
+|-------------------|------------------------|-----------|
+| `azure`           | ✅ Yes                 | Azure Document Intelligence returns a PDF/A with an embedded text layer. |
+| `tesseract`       | ❌ No (text only)      | Text is extracted but the PDF is not modified. `embed_text_layer` post-processing is applied automatically. |
+| `easyocr`         | ❌ No (text only)      | Same as above. |
+| `mistral`         | ❌ No (text only)      | Mistral OCR API returns plain text; `embed_text_layer` post-processing is applied automatically. |
+| `google_docai`    | ❌ No (text only)      | Google Cloud Document AI returns plain text; `embed_text_layer` post-processing is applied automatically. |
+| `aws_textract`    | ❌ No (text only)      | AWS Textract returns plain text; `embed_text_layer` post-processing is applied automatically. |
+
+For providers that do **not** embed a text layer, DocuElevate automatically runs `ocrmypdf --skip-text` after OCR to add an invisible Tesseract-generated text layer to the PDF. This makes the file selectable and searchable in PDF viewers. The step is silently skipped if `ocrmypdf` is not available on `PATH` (a warning is logged).
+
+#### Azure Document Intelligence
+
+| **Variable**                              | **Description**                                          | **How to Obtain**                       |
+|-------------------------------------------|----------------------------------------------------------|-----------------------------------------|
+| `AZURE_DOCUMENT_INTELLIGENCE_KEY`         | Azure Document Intelligence API key for OCR.            | [Azure Portal](https://portal.azure.com/) |
+| `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT`   | Endpoint URL for Azure Document Intelligence API.        | [Azure Portal](https://portal.azure.com/) |
+
+#### Tesseract (self-hosted)
+
+Requires `tesseract-ocr` to be installed in the Docker image or on the host. The default Docker image ships with Tesseract.
+
+| **Variable**           | **Description**                                                                   | **Default** |
+|------------------------|-----------------------------------------------------------------------------------|-------------|
+| `TESSERACT_CMD`        | Path to the `tesseract` binary (optional; auto-detected from `PATH`).            | *(auto)*    |
+| `TESSERACT_LANGUAGE`   | Tesseract language code(s), e.g. `eng`, `eng+deu`, `deu`.                       | `eng+deu`   |
+
+```bash
+OCR_PROVIDERS=tesseract
+TESSERACT_LANGUAGE=eng+deu
+```
+
+#### EasyOCR (self-hosted)
+
+Requires the `easyocr` Python package. Install it separately as it is not included in the base requirements.
+
+| **Variable**          | **Description**                                                        | **Default** |
+|-----------------------|------------------------------------------------------------------------|-------------|
+| `EASYOCR_LANGUAGES`   | Comma-separated EasyOCR language codes, e.g. `en,de,fr`.              | `en,de`     |
+| `EASYOCR_GPU`         | Enable GPU acceleration for EasyOCR (`true`/`false`).                 | `false`     |
+
+#### Mistral OCR
+
+| **Variable**           | **Description**                                | **How to Obtain**                              |
+|------------------------|------------------------------------------------|------------------------------------------------|
+| `MISTRAL_API_KEY`      | Mistral API key.                               | [console.mistral.ai](https://console.mistral.ai) |
+| `MISTRAL_OCR_MODEL`    | Mistral OCR model name.                        | `mistral-ocr-latest`                           |
+
+#### Google Cloud Document AI
+
+| **Variable**                     | **Description**                                                                       | **Default** |
+|----------------------------------|---------------------------------------------------------------------------------------|-------------|
+| `GOOGLE_DOCAI_PROJECT_ID`        | GCP project ID (required).                                                           | *(required)* |
+| `GOOGLE_DOCAI_PROCESSOR_ID`      | Document AI processor ID (required).                                                 | *(required)* |
+| `GOOGLE_DOCAI_LOCATION`          | Processor location, e.g. `us` or `eu`.                                              | `us`         |
+| `GOOGLE_DOCAI_CREDENTIALS_JSON`  | Service account JSON (optional; falls back to `GOOGLE_DRIVE_CREDENTIALS_JSON`).      | *(optional)* |
+
+#### AWS Textract
+
+Reuses the AWS credentials already configured for S3 integration.
+
+| **Variable**              | **Description**                      |
+|---------------------------|--------------------------------------|
+| `AWS_ACCESS_KEY_ID`       | AWS access key ID.                   |
+| `AWS_SECRET_ACCESS_KEY`   | AWS secret access key.               |
+| `AWS_REGION`              | AWS region, e.g. `us-east-1`.       |
+
+#### Multi-Provider Example
+
+```bash
+# Use both Azure (for accuracy) and Tesseract (for redundancy); merge via AI
+OCR_PROVIDERS=azure,tesseract
+OCR_MERGE_STRATEGY=ai_merge
+AZURE_AI_KEY=...
+AZURE_ENDPOINT=https://...
+TESSERACT_LANGUAGE=eng+deu
+```
+
+### Azure Document Intelligence (Legacy)
+
+> **Note:** This section documents the standalone Azure Document Intelligence credentials. When using `OCR_PROVIDERS=azure` these same credentials are used automatically.
 
 | **Variable**                     | **Description**                          | **How to Obtain**                                                        |
 |---------------------------------|------------------------------------------|--------------------------------------------------------------------------|
