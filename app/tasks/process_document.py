@@ -17,6 +17,7 @@ from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.tasks.process_with_ocr import process_with_ocr
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils import get_unique_filepath_with_counter, hash_file, log_task_progress
+from app.utils.text_quality import check_text_quality, detect_pdf_text_source
 
 logger = logging.getLogger(__name__)
 
@@ -408,6 +409,69 @@ def process_document(
             f"Extracted {len(extracted_text)} characters",
             file_id=file_id,
         )
+
+        # ----------------------------------------------------------------
+        # AI-based text quality check
+        # Digitally-created PDFs are always trusted; OCR-sourced or unknown
+        # PDFs are validated.  Poor-quality text triggers automatic re-OCR.
+        # ----------------------------------------------------------------
+        if settings.enable_text_quality_check:
+            text_source = detect_pdf_text_source(new_local_path)
+            logger.info(f"[{task_id}] Detected PDF text source: {text_source.value}")
+
+            quality_result = check_text_quality(extracted_text, text_source)
+            logger.info(
+                f"[{task_id}] Text quality check result: "
+                f"good={quality_result.is_good_quality}, score={quality_result.quality_score}, "
+                f"source={quality_result.text_source.value}, feedback={quality_result.feedback!r}"
+            )
+
+            if not quality_result.is_good_quality:
+                # Poor quality: discard embedded text and re-OCR instead.
+                issues_str = ", ".join(quality_result.issues) if quality_result.issues else "unspecified"
+                detail_msg = (
+                    f"Text quality check FAILED – score={quality_result.quality_score}/100, "
+                    f"source={quality_result.text_source.value}, issues=[{issues_str}].\n"
+                    f"AI feedback: {quality_result.feedback}\n"
+                    f"Embedded text will be ignored; re-running OCR."
+                )
+                logger.warning(f"[{task_id}] {detail_msg}")
+                log_task_progress(
+                    task_id,
+                    "check_text_quality",
+                    "failure",
+                    f"Poor quality text (score={quality_result.quality_score}/100); queuing OCR",
+                    file_id=file_id,
+                    detail=detail_msg,
+                )
+                log_task_progress(
+                    task_id,
+                    "process_document",
+                    "success",
+                    "Queued for OCR (text quality too low)",
+                    file_id=file_id,
+                )
+                process_with_ocr.delay(new_filename, file_id)
+                return {
+                    "file": new_local_path,
+                    "status": "Queued for OCR (poor embedded text quality)",
+                    "file_id": file_id,
+                }
+
+            # Good quality: record the result and proceed with local extraction.
+            detail_msg = (
+                f"Text quality check PASSED – score={quality_result.quality_score}/100, "
+                f"source={quality_result.text_source.value}.\n"
+                f"AI feedback: {quality_result.feedback}"
+            )
+            log_task_progress(
+                task_id,
+                "check_text_quality",
+                "success",
+                f"Text quality OK (score={quality_result.quality_score}/100)",
+                file_id=file_id,
+                detail=detail_msg,
+            )
 
         # Mark OCR as skipped since we extracted text locally
         log_task_progress(

@@ -461,6 +461,28 @@ DocuElevate supports multiple OCR engines that can be used individually or in co
 
 When multiple providers are listed, all run in parallel and their results are merged according to `OCR_MERGE_STRATEGY`.
 
+#### Embedded Text Quality Check
+
+DocuElevate can automatically assess whether the text already embedded in a PDF is of sufficient quality before deciding to skip OCR. This prevents poor OCR output from a previous scan being silently used for downstream processing.
+
+| **Variable**                   | **Description**                                                                 | **Default** |
+|--------------------------------|---------------------------------------------------------------------------------|-------------|
+| `ENABLE_TEXT_QUALITY_CHECK`    | Enable AI-based quality assessment of embedded PDF text.                       | `true`      |
+
+**How it works:**
+
+1. When a PDF with embedded text is received, DocuElevate first examines the PDF metadata (`/Producer`, `/Creator`).
+2. If the PDF was **digitally created** (e.g., exported from Word, LibreOffice, LaTeX, or any modern authoring tool), the embedded text is considered trustworthy and the quality check is skipped — digital text cannot be improved by re-OCRing.
+3. If the PDF was **previously OCR'd** (Tesseract, ABBYY, ocrmypdf, etc.) or the origin is **unknown**, an AI model evaluates a sample of the extracted text for:
+   - Excessive typos and character-substitution artefacts typical of OCR
+   - Garbage characters or symbol soup
+   - Incoherent or nonsensical sentences
+   - Heavy fragmentation
+4. If the quality score falls **below 65/100**, the embedded text is discarded and the file is sent to the configured OCR providers for a fresh scan.
+5. All quality decisions (score, source, AI feedback) are recorded in the processing log for review.
+
+> **Tip**: Set `ENABLE_TEXT_QUALITY_CHECK=false` to disable the check entirely and always use embedded text as-is. This is useful when the AI provider is unavailable or when processing speed is more important than text accuracy.
+
 #### Searchable PDF Text Layer
 
 Not all OCR providers embed a searchable text layer in the output PDF. The table below summarises each provider's behaviour and how DocuElevate handles it:
