@@ -1309,3 +1309,117 @@ class TestProcessWithOCRTextLayerEmbedding:
         # Task should succeed and return the original file path as searchable_pdf
         assert result["cleaned_text"] == "Hello Tesseract"
         assert result["searchable_pdf"] == str(pdf_file)
+
+
+@pytest.mark.unit
+class TestProcessWithOCRMissingCoverage:
+    """Tests targeting specific uncovered lines in process_with_ocr.py."""
+
+    _MINIMAL_PDF = (
+        b"%PDF-1.4\n"
+        b"1 0 obj\n<</Type /Catalog /Pages 2 0 R>>\nendobj\n"
+        b"2 0 obj\n<</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n"
+        b"3 0 obj\n<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]>>\nendobj\n"
+        b"xref\n0 4\n"
+        b"0000000000 65535 f \n"
+        b"0000000009 00000 n \n"
+        b"0000000058 00000 n \n"
+        b"0000000115 00000 n \n"
+        b"trailer\n<</Size 4 /Root 1 0 R>>\n"
+        b"startxref\n190\n%%EOF\n"
+    )
+
+    @patch("app.tasks.process_with_ocr.log_task_progress")
+    @patch("app.tasks.process_with_ocr.rotate_pdf_pages")
+    def test_file_not_found_raises_and_logs_failure(self, mock_rotate, mock_log, tmp_path):
+        """Covers line 52: FileNotFoundError when file doesn't exist, and lines 160-170 (outer except)."""
+        from app.tasks.process_with_ocr import process_with_ocr
+
+        tmp_dir = tmp_path / "tmp"
+        tmp_dir.mkdir()
+        # Do NOT create the file so it triggers FileNotFoundError
+
+        with (
+            patch("app.tasks.process_with_ocr.settings") as mock_settings,
+            patch("app.tasks.process_with_ocr.get_ocr_providers") as mock_providers,
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_providers.return_value = []
+
+            with pytest.raises(FileNotFoundError):
+                process_with_ocr.run("missing.pdf", file_id=42)
+
+        # Verify the outer exception handler logged a failure (lines 162-169)
+        failure_calls = [c for c in mock_log.call_args_list if c[0][2] == "failure"]
+        assert len(failure_calls) >= 1
+
+    @patch("app.tasks.process_with_ocr.log_task_progress")
+    @patch("app.tasks.process_with_ocr.rotate_pdf_pages")
+    def test_provider_exception_partial_success(self, mock_rotate, mock_log, tmp_path):
+        """Covers lines 75-77 (provider exception) and 92 (warning when partial failures)."""
+        from app.tasks.process_with_ocr import process_with_ocr
+        from app.utils.ocr_provider import OCRResult
+
+        tmp_dir = tmp_path / "tmp"
+        tmp_dir.mkdir()
+        pdf_file = tmp_dir / "doc.pdf"
+        pdf_file.write_bytes(self._MINIMAL_PDF)
+
+        good_result = OCRResult(provider="azure", text="azure text", searchable_pdf_path=str(pdf_file))
+        mock_rotate.delay = Mock()
+
+        # First provider fails, second succeeds
+        failing_provider = Mock()
+        failing_provider.name = "tesseract"
+        failing_provider.__class__.__name__ = "TesseractOCRProvider"
+        failing_provider.process.side_effect = RuntimeError("Tesseract unavailable")
+
+        good_provider = Mock()
+        good_provider.name = "azure"
+        good_provider.__class__.__name__ = "AzureOCRProvider"
+        good_provider.process.return_value = good_result
+
+        with (
+            patch("app.tasks.process_with_ocr.settings") as mock_settings,
+            patch("app.tasks.process_with_ocr.get_ocr_providers") as mock_providers,
+            patch("app.tasks.process_with_ocr.merge_ocr_results", return_value=("azure text", str(pdf_file), {})),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.tesseract_language = "eng"
+            mock_providers.return_value = [failing_provider, good_provider]
+
+            result = process_with_ocr.run("doc.pdf", file_id=None)
+
+        assert result["cleaned_text"] == "azure text"
+        # errors list should be non-empty so line 92 was executed
+        assert result["providers_used"] == ["azure"]
+
+    @patch("app.tasks.process_with_ocr.log_task_progress")
+    @patch("app.tasks.process_with_ocr.rotate_pdf_pages")
+    def test_all_providers_fail_raises_runtime_error(self, mock_rotate, mock_log, tmp_path):
+        """Covers lines 80-89: all providers fail → RuntimeError logged and raised."""
+        from app.tasks.process_with_ocr import process_with_ocr
+
+        tmp_dir = tmp_path / "tmp"
+        tmp_dir.mkdir()
+        pdf_file = tmp_dir / "fail.pdf"
+        pdf_file.write_bytes(self._MINIMAL_PDF)
+
+        fail_provider = Mock()
+        fail_provider.name = "azure"
+        fail_provider.__class__.__name__ = "AzureOCRProvider"
+        fail_provider.process.side_effect = RuntimeError("Azure down")
+
+        with (
+            patch("app.tasks.process_with_ocr.settings") as mock_settings,
+            patch("app.tasks.process_with_ocr.get_ocr_providers") as mock_providers,
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_providers.return_value = [fail_provider]
+
+            with pytest.raises(RuntimeError, match="All OCR providers failed"):
+                process_with_ocr.run("fail.pdf", file_id=None)
+
+        # Verify failure was logged (lines 81-88)
+        failure_calls = [c for c in mock_log.call_args_list if c[0][2] == "failure"]
+        assert len(failure_calls) >= 1
