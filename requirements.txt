@@ -42,3 +42,4 @@ litellm>=1.0.0,<2.0.0
 # Self-hosted OCR engines (optional – only required when the provider is enabled)
 pytesseract>=0.3.10  # Python wrapper for Tesseract OCR
 pdf2image>=1.17.0  # Convert PDF pages to images (used by Tesseract and EasyOCR providers)
+ocrmypdf>=16.0.0,<17.0.0  # Post-processing: embeds searchable text layers into PDFs via Tesseract

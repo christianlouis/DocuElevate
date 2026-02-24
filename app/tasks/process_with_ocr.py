@@ -21,7 +21,7 @@ from app.config import settings
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.tasks.rotate_pdf_pages import rotate_pdf_pages
 from app.utils import log_task_progress
-from app.utils.ocr_provider import OCRResult, get_ocr_providers, merge_ocr_results
+from app.utils.ocr_provider import OCRResult, embed_text_layer, get_ocr_providers, merge_ocr_results
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +106,37 @@ def process_with_ocr(self, filename: str, file_id: Optional[int] = None):
             f"pdf={'yes' if searchable_pdf_path else 'no'}, "
             f"rotations={len(rotation_data)}"
         )
+
+        # If no provider produced a searchable PDF, post-process the original
+        # PDF with ocrmypdf to embed an invisible text layer so the output is
+        # selectable/searchable in PDF viewers.
+        if searchable_pdf_path is None:
+            lang = getattr(settings, "tesseract_language", None) or "eng"
+            log_task_progress(
+                task_id,
+                "embed_text_layer",
+                "in_progress",
+                "Embedding searchable text layer into PDF",
+                file_id=file_id,
+            )
+            embedded = embed_text_layer(tmp_file_path, tmp_file_path, language=lang)
+            if embedded:
+                searchable_pdf_path = tmp_file_path
+                log_task_progress(
+                    task_id,
+                    "embed_text_layer",
+                    "success",
+                    "Searchable text layer embedded via ocrmypdf",
+                    file_id=file_id,
+                )
+            else:
+                log_task_progress(
+                    task_id,
+                    "embed_text_layer",
+                    "skipped",
+                    "ocrmypdf unavailable – PDF will not have a searchable text layer",
+                    file_id=file_id,
+                )
 
         log_task_progress(
             task_id,

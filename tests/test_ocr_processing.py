@@ -1020,3 +1020,287 @@ class TestMistralOCRProvider:
 
             with pytest.raises(HTTPError):
                 provider.process(str(pdf_file))
+
+
+@pytest.mark.unit
+class TestEmbedTextLayer:
+    """Tests for the embed_text_layer utility function."""
+
+    def _make_pdf(self, tmp_path, name: str = "test.pdf") -> str:
+        """Create a minimal but valid-ish PDF file for testing."""
+        pdf_path = tmp_path / name
+        pdf_path.write_bytes(
+            b"%PDF-1.4\n"
+            b"1 0 obj\n<</Type /Catalog /Pages 2 0 R>>\nendobj\n"
+            b"2 0 obj\n<</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n"
+            b"3 0 obj\n<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]>>\nendobj\n"
+            b"xref\n0 4\n"
+            b"0000000000 65535 f \n"
+            b"0000000009 00000 n \n"
+            b"0000000058 00000 n \n"
+            b"0000000115 00000 n \n"
+            b"trailer\n<</Size 4 /Root 1 0 R>>\n"
+            b"startxref\n190\n%%EOF\n"
+        )
+        return str(pdf_path)
+
+    def test_missing_input_raises_file_not_found(self, tmp_path):
+        """FileNotFoundError is raised when the input PDF does not exist."""
+        from app.utils.ocr_provider import embed_text_layer
+
+        with pytest.raises(FileNotFoundError, match="embed_text_layer"):
+            embed_text_layer("/nonexistent/path.pdf", str(tmp_path / "out.pdf"))
+
+    def test_returns_false_when_ocrmypdf_not_on_path(self, tmp_path):
+        """Returns False (and logs a warning) when ocrmypdf is not installed."""
+        from app.utils.ocr_provider import embed_text_layer
+
+        pdf = self._make_pdf(tmp_path)
+
+        with patch("shutil.which", return_value=None):
+            result = embed_text_layer(pdf, str(tmp_path / "out.pdf"))
+
+        assert result is False
+
+    def test_returns_true_on_success(self, tmp_path):
+        """Returns True when ocrmypdf exits with code 0."""
+        from app.utils.ocr_provider import embed_text_layer
+
+        pdf = self._make_pdf(tmp_path)
+        output = str(tmp_path / "out.pdf")
+
+        mock_proc = Mock()
+        mock_proc.returncode = 0
+        mock_proc.stderr = ""
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/ocrmypdf"),
+            patch("subprocess.run", return_value=mock_proc) as mock_run,
+        ):
+            result = embed_text_layer(pdf, output, language="eng")
+
+        assert result is True
+        args = mock_run.call_args[0][0]
+        assert "--skip-text" in args
+        assert "-l" in args
+        assert "eng" in args
+
+    def test_returns_false_on_nonzero_exit(self, tmp_path):
+        """Returns False when ocrmypdf exits with a non-zero code."""
+        from app.utils.ocr_provider import embed_text_layer
+
+        pdf = self._make_pdf(tmp_path)
+
+        mock_proc = Mock()
+        mock_proc.returncode = 1
+        mock_proc.stderr = "some error"
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/ocrmypdf"),
+            patch("subprocess.run", return_value=mock_proc),
+        ):
+            result = embed_text_layer(pdf, str(tmp_path / "out.pdf"))
+
+        assert result is False
+
+    def test_returns_false_on_timeout(self, tmp_path):
+        """Returns False when ocrmypdf times out."""
+        import subprocess
+
+        from app.utils.ocr_provider import embed_text_layer
+
+        pdf = self._make_pdf(tmp_path)
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/ocrmypdf"),
+            patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="ocrmypdf", timeout=600)),
+        ):
+            result = embed_text_layer(pdf, str(tmp_path / "out.pdf"))
+
+        assert result is False
+
+    def test_in_place_overwrite_on_success(self, tmp_path):
+        """When input == output the original file is replaced in-place."""
+        from app.utils.ocr_provider import embed_text_layer
+
+        pdf = self._make_pdf(tmp_path)
+        original_content = b"ORIGINAL"
+        new_content = b"OCRMYPDF_OUTPUT"
+
+        mock_proc = Mock()
+        mock_proc.returncode = 0
+        mock_proc.stderr = ""
+
+        def fake_run(cmd: list[str], **kwargs: object) -> Mock:
+            # Simulate ocrmypdf writing to the temp output path.
+            out_path = cmd[-1]
+            with open(out_path, "wb") as fh:
+                fh.write(new_content)
+            return mock_proc
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/ocrmypdf"),
+            patch("subprocess.run", side_effect=fake_run),
+        ):
+            result = embed_text_layer(pdf, pdf)
+
+        assert result is True
+        with open(pdf, "rb") as fh:
+            assert fh.read() == new_content
+
+    def test_in_place_cleans_up_temp_file_on_failure(self, tmp_path):
+        """Temp file created during in-place processing is removed on failure."""
+        from app.utils.ocr_provider import embed_text_layer
+
+        pdf = self._make_pdf(tmp_path)
+
+        mock_proc = Mock()
+        mock_proc.returncode = 1
+        mock_proc.stderr = "error"
+
+        created_tmp: list[str] = []
+
+        real_mkstemp = __import__("tempfile").mkstemp
+
+        def fake_mkstemp(**kwargs: object) -> tuple[int, str]:
+            fd, path = real_mkstemp(**kwargs)
+            created_tmp.append(path)
+            # Write something so the cleanup code can find the file.
+            with open(path, "wb") as fh:
+                fh.write(b"temp")
+            return fd, path
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/ocrmypdf"),
+            patch("subprocess.run", return_value=mock_proc),
+            patch("tempfile.mkstemp", side_effect=fake_mkstemp),
+        ):
+            result = embed_text_layer(pdf, pdf)
+
+        assert result is False
+        # The temporary file should have been cleaned up.
+        for tmp in created_tmp:
+            assert not __import__("os").path.exists(tmp)
+
+
+@pytest.mark.unit
+class TestProcessWithOCRTextLayerEmbedding:
+    """Tests for the embed_text_layer step in process_with_ocr."""
+
+    _MINIMAL_PDF = (
+        b"%PDF-1.4\n"
+        b"1 0 obj\n<</Type /Catalog /Pages 2 0 R>>\nendobj\n"
+        b"2 0 obj\n<</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n"
+        b"3 0 obj\n<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]>>\nendobj\n"
+        b"xref\n0 4\n"
+        b"0000000000 65535 f \n"
+        b"0000000009 00000 n \n"
+        b"0000000058 00000 n \n"
+        b"0000000115 00000 n \n"
+        b"trailer\n<</Size 4 /Root 1 0 R>>\n"
+        b"startxref\n190\n%%EOF\n"
+    )
+
+    @patch("app.tasks.process_with_ocr.log_task_progress")
+    @patch("app.tasks.process_with_ocr.rotate_pdf_pages")
+    def test_embed_text_layer_called_when_no_searchable_pdf(self, mock_rotate, mock_log, tmp_path):
+        """embed_text_layer is called when no provider returns a searchable PDF."""
+        from app.tasks.process_with_ocr import process_with_ocr
+        from app.utils.ocr_provider import OCRResult
+
+        tmp_dir = tmp_path / "tmp"
+        tmp_dir.mkdir()
+        pdf_file = tmp_dir / "scan.pdf"
+        pdf_file.write_bytes(self._MINIMAL_PDF)
+
+        mock_result = OCRResult(provider="mistral", text="Hello from Mistral")
+
+        mock_rotate.delay = Mock()
+
+        with (
+            patch("app.tasks.process_with_ocr.settings") as mock_settings,
+            patch("app.tasks.process_with_ocr.get_ocr_providers") as mock_providers,
+            patch("app.tasks.process_with_ocr.merge_ocr_results", return_value=("Hello from Mistral", None, {})),
+            patch("app.tasks.process_with_ocr.embed_text_layer", return_value=True) as mock_embed,
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.tesseract_language = "eng"
+            provider_mock = Mock()
+            provider_mock.name = "mistral"
+            provider_mock.process.return_value = mock_result
+            mock_providers.return_value = [provider_mock]
+
+            process_with_ocr.run("scan.pdf", file_id=None)
+
+        mock_embed.assert_called_once_with(str(pdf_file), str(pdf_file), language="eng")
+
+    @patch("app.tasks.process_with_ocr.log_task_progress")
+    @patch("app.tasks.process_with_ocr.rotate_pdf_pages")
+    def test_embed_text_layer_skipped_when_searchable_pdf_exists(self, mock_rotate, mock_log, tmp_path):
+        """embed_text_layer is NOT called when a provider already returned a searchable PDF."""
+        from app.tasks.process_with_ocr import process_with_ocr
+        from app.utils.ocr_provider import OCRResult
+
+        tmp_dir = tmp_path / "tmp"
+        tmp_dir.mkdir()
+        pdf_file = tmp_dir / "scan.pdf"
+        pdf_file.write_bytes(self._MINIMAL_PDF)
+
+        # Azure returns searchable_pdf_path set
+        mock_result = OCRResult(provider="azure", text="Hello Azure", searchable_pdf_path=str(pdf_file))
+
+        mock_rotate.delay = Mock()
+
+        with (
+            patch("app.tasks.process_with_ocr.settings") as mock_settings,
+            patch("app.tasks.process_with_ocr.get_ocr_providers") as mock_providers,
+            patch(
+                "app.tasks.process_with_ocr.merge_ocr_results",
+                return_value=("Hello Azure", str(pdf_file), {}),
+            ),
+            patch("app.tasks.process_with_ocr.embed_text_layer") as mock_embed,
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.tesseract_language = "eng"
+            provider_mock = Mock()
+            provider_mock.name = "azure"
+            provider_mock.process.return_value = mock_result
+            mock_providers.return_value = [provider_mock]
+
+            process_with_ocr.run("scan.pdf", file_id=None)
+
+        mock_embed.assert_not_called()
+
+    @patch("app.tasks.process_with_ocr.log_task_progress")
+    @patch("app.tasks.process_with_ocr.rotate_pdf_pages")
+    def test_embed_text_layer_unavailable_is_handled_gracefully(self, mock_rotate, mock_log, tmp_path):
+        """When embed_text_layer returns False the task still succeeds."""
+        from app.tasks.process_with_ocr import process_with_ocr
+        from app.utils.ocr_provider import OCRResult
+
+        tmp_dir = tmp_path / "tmp"
+        tmp_dir.mkdir()
+        pdf_file = tmp_dir / "scan.pdf"
+        pdf_file.write_bytes(self._MINIMAL_PDF)
+
+        mock_result = OCRResult(provider="tesseract", text="Hello Tesseract")
+        mock_rotate.delay = Mock()
+
+        with (
+            patch("app.tasks.process_with_ocr.settings") as mock_settings,
+            patch("app.tasks.process_with_ocr.get_ocr_providers") as mock_providers,
+            patch("app.tasks.process_with_ocr.merge_ocr_results", return_value=("Hello Tesseract", None, {})),
+            patch("app.tasks.process_with_ocr.embed_text_layer", return_value=False),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.tesseract_language = "eng+deu"
+            provider_mock = Mock()
+            provider_mock.name = "tesseract"
+            provider_mock.process.return_value = mock_result
+            mock_providers.return_value = [provider_mock]
+
+            result = process_with_ocr.run("scan.pdf", file_id=None)
+
+        # Task should succeed and return the original file path as searchable_pdf
+        assert result["cleaned_text"] == "Hello Tesseract"
+        assert result["searchable_pdf"] == str(pdf_file)
