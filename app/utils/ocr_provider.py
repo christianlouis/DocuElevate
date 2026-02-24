@@ -239,10 +239,15 @@ class EasyOCRProvider(OCRProvider):
 
 
 class MistralOCRProvider(OCRProvider):
-    """OCR via Mistral's document understanding API.
+    """OCR via Mistral's dedicated OCR API (``/v1/ocr``).
 
-    Uses the ``mistral-ocr-latest`` model (or ``settings.mistral_ocr_model``)
-    via the OpenAI-compatible messages API.
+    For **PDF** files the document is first uploaded to the Mistral Files API
+    (``POST /v1/files``) to obtain a signed URL, then the OCR endpoint is
+    called with ``document_url``.  For **image** files (JPEG, PNG, GIF, WEBP,
+    BMP, TIFF) the file is base64-encoded and passed directly as
+    ``image_url``.  Passing a PDF as a ``data:application/pdf`` data-URI to
+    the image path is explicitly rejected by the API and will produce a 422
+    error, so the two paths are kept strictly separate.
 
     Config knobs (from :class:`~app.config.Settings`):
     - ``mistral_api_key`` – Mistral API key.
@@ -251,13 +256,26 @@ class MistralOCRProvider(OCRProvider):
 
     name = "mistral"
 
+    # MIME types that may be sent as base64 image_url payloads
+    _IMAGE_MIME_TYPES: frozenset = frozenset(
+        {
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "image/webp",
+            "image/bmp",
+            "image/tiff",
+        }
+    )
+
     def process(self, file_path: str) -> OCRResult:
         import base64
+        import mimetypes
 
         try:
-            import openai
+            import requests as req
         except ImportError as exc:
-            raise RuntimeError("openai package is required for the Mistral OCR provider.") from exc
+            raise RuntimeError("requests package is required for the Mistral OCR provider.") from exc
 
         api_key = getattr(settings, "mistral_api_key", None)
         if not api_key:
@@ -265,35 +283,104 @@ class MistralOCRProvider(OCRProvider):
 
         model = getattr(settings, "mistral_ocr_model", None) or "mistral-ocr-latest"
         base_url = "https://api.mistral.ai/v1"
+        auth_headers: Dict[str, str] = {"Authorization": f"Bearer {api_key}"}
 
         logger.info(f"[MistralOCR] Processing {os.path.basename(file_path)} with {model}")
 
-        with open(file_path, "rb") as f:
-            pdf_b64 = base64.b64encode(f.read()).decode("utf-8")
+        # Determine MIME type from extension, falling back to magic bytes.
+        mime_type, _ = mimetypes.guess_type(file_path)
+        if mime_type is None:
+            with open(file_path, "rb") as fh:
+                magic = fh.read(5)
+            if magic.startswith(b"%PDF-"):
+                mime_type = "application/pdf"
+            else:
+                raise ValueError(
+                    f"[MistralOCR] Cannot determine file type for '{os.path.basename(file_path)}'. "
+                    "Supported types: PDF, JPEG, PNG, GIF, WEBP, BMP, TIFF."
+                )
 
-        client = openai.OpenAI(api_key=api_key, base_url=base_url)
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:application/pdf;base64,{pdf_b64}"},
-                        },
-                        {
-                            "type": "text",
-                            "text": "Extract all text from this document. Return only the extracted text, preserving structure.",
-                        },
-                    ],
-                }
-            ],
+        document: Dict[str, Any]
+        if mime_type == "application/pdf":
+            document = self._upload_pdf_and_get_document(file_path, base_url, auth_headers, req)
+        elif mime_type in self._IMAGE_MIME_TYPES:
+            with open(file_path, "rb") as fh:
+                img_b64 = base64.b64encode(fh.read()).decode("utf-8")
+            document = {
+                "type": "image_url",
+                "image_url": f"data:{mime_type};base64,{img_b64}",
+            }
+        else:
+            raise ValueError(
+                f"[MistralOCR] Unsupported file type '{mime_type}' for "
+                f"'{os.path.basename(file_path)}'. "
+                "Supported types: PDF, JPEG, PNG, GIF, WEBP, BMP, TIFF."
+            )
+
+        ocr_payload: Dict[str, Any] = {"model": model, "document": document}
+
+        resp = req.post(
+            f"{base_url}/ocr",
+            headers={**auth_headers, "Content-Type": "application/json"},
+            json=ocr_payload,
+            timeout=300,
         )
-        extracted_text = response.choices[0].message.content or ""
-        logger.info(f"[MistralOCR] Extracted {len(extracted_text)} chars")
+        resp.raise_for_status()
+        ocr_data = resp.json()
+
+        pages = ocr_data.get("pages", [])
+        extracted_text = "\n\n".join(page.get("markdown", "") for page in pages).strip()
+        logger.info(f"[MistralOCR] Extracted {len(extracted_text)} chars from {len(pages)} page(s)")
 
         return OCRResult(provider="mistral", text=extracted_text)
+
+    def _upload_pdf_and_get_document(
+        self,
+        file_path: str,
+        base_url: str,
+        auth_headers: Dict[str, str],
+        req: Any,
+    ) -> Dict[str, Any]:
+        """Upload *file_path* to the Mistral Files API and return an OCR document dict.
+
+        Args:
+            file_path: Local path to the PDF file.
+            base_url: Mistral API base URL.
+            auth_headers: Dict containing the ``Authorization`` header.
+            req: The ``requests`` module (injected to allow mocking in tests).
+
+        Returns:
+            A document dict suitable for the ``/v1/ocr`` payload, e.g.
+            ``{"type": "document_url", "document_url": "https://..."}``.
+
+        Raises:
+            requests.HTTPError: If the Files API upload or URL retrieval fails.
+        """
+        logger.info(f"[MistralOCR] Uploading '{os.path.basename(file_path)}' to Mistral Files API")
+
+        with open(file_path, "rb") as fh:
+            upload_resp = req.post(
+                f"{base_url}/files",
+                headers=auth_headers,
+                files={"file": (os.path.basename(file_path), fh, "application/pdf")},
+                data={"purpose": "ocr"},
+                timeout=300,
+            )
+        upload_resp.raise_for_status()
+        file_id = upload_resp.json()["id"]
+
+        logger.info(f"[MistralOCR] Uploaded file id={file_id}; fetching signed URL")
+
+        url_resp = req.get(
+            f"{base_url}/files/{file_id}/url",
+            headers=auth_headers,
+            params={"expiry": 24},
+            timeout=30,
+        )
+        url_resp.raise_for_status()
+        signed_url: str = url_resp.json()["url"]
+
+        return {"type": "document_url", "document_url": signed_url}
 
 
 class GoogleDocAIOCRProvider(OCRProvider):

@@ -777,3 +777,246 @@ startxref
             # Verify rotation was applied despite string keys
             assert result["status"] == "rotated"
             assert "applied_rotations" in result
+
+
+@pytest.mark.unit
+class TestMistralOCRProvider:
+    """Tests for MistralOCRProvider – Mistral native OCR API integration."""
+
+    def _make_provider(self):
+        from app.utils.ocr_provider import MistralOCRProvider
+
+        return MistralOCRProvider()
+
+    # ------------------------------------------------------------------
+    # Helpers: build mock response objects
+    # ------------------------------------------------------------------
+
+    def _mock_response(self, json_data: dict, status_code: int = 200):
+        mock_resp = Mock()
+        mock_resp.status_code = status_code
+        mock_resp.json.return_value = json_data
+        mock_resp.raise_for_status = Mock()
+        return mock_resp
+
+    def _mock_error_response(self, status_code: int = 422):
+        from requests import HTTPError
+
+        mock_resp = Mock()
+        mock_resp.status_code = status_code
+        mock_resp.raise_for_status.side_effect = HTTPError(response=mock_resp)
+        return mock_resp
+
+    # ------------------------------------------------------------------
+    # Missing API key
+    # ------------------------------------------------------------------
+
+    def test_missing_api_key_raises(self, tmp_path):
+        """ValueError is raised when MISTRAL_API_KEY is not configured."""
+        provider = self._make_provider()
+        dummy_pdf = tmp_path / "doc.pdf"
+        dummy_pdf.write_bytes(b"%PDF-1.4\n%%EOF")
+
+        with patch("app.utils.ocr_provider.settings") as mock_settings:
+            mock_settings.mistral_api_key = None
+            mock_settings.mistral_ocr_model = None
+
+            with pytest.raises(ValueError, match="MISTRAL_API_KEY must be set"):
+                provider.process(str(dummy_pdf))
+
+    # ------------------------------------------------------------------
+    # PDF workflow
+    # ------------------------------------------------------------------
+
+    def test_pdf_uses_document_url_workflow(self, tmp_path):
+        """PDF files are uploaded then processed via document_url."""
+        provider = self._make_provider()
+        pdf_file = tmp_path / "sample.pdf"
+        pdf_file.write_bytes(b"%PDF-1.4\n%%EOF")
+
+        upload_resp = self._mock_response({"id": "file-abc123"})
+        signed_url_resp = self._mock_response({"url": "https://signed.example.com/doc"})
+        ocr_resp = self._mock_response({"pages": [{"markdown": "Hello PDF World"}]})
+
+        with (
+            patch("app.utils.ocr_provider.settings") as mock_settings,
+            patch("requests.post", side_effect=[upload_resp, ocr_resp]) as mock_post,
+            patch("requests.get", return_value=signed_url_resp) as mock_get,
+        ):
+            mock_settings.mistral_api_key = "test-key"
+            mock_settings.mistral_ocr_model = "mistral-ocr-latest"
+
+            result = provider.process(str(pdf_file))
+
+        assert result.provider == "mistral"
+        assert result.text == "Hello PDF World"
+
+        # First POST should be the file upload
+        upload_call = mock_post.call_args_list[0]
+        assert "/files" in upload_call[0][0]
+        assert upload_call[1]["data"] == {"purpose": "ocr"}
+
+        # GET should fetch the signed URL
+        get_call = mock_get.call_args_list[0]
+        assert "file-abc123" in get_call[0][0]
+
+        # Second POST should be the OCR call
+        ocr_call = mock_post.call_args_list[1]
+        assert "/ocr" in ocr_call[0][0]
+        ocr_json = ocr_call[1]["json"]
+        assert ocr_json["document"]["type"] == "document_url"
+        assert ocr_json["document"]["document_url"] == "https://signed.example.com/doc"
+
+    def test_pdf_multi_page_text_joined(self, tmp_path):
+        """Text from multiple pages is joined with double newlines."""
+        provider = self._make_provider()
+        pdf_file = tmp_path / "multi.pdf"
+        pdf_file.write_bytes(b"%PDF-1.4\n%%EOF")
+
+        upload_resp = self._mock_response({"id": "file-xyz"})
+        signed_url_resp = self._mock_response({"url": "https://signed.example.com/multi"})
+        ocr_resp = self._mock_response({"pages": [{"markdown": "Page one text"}, {"markdown": "Page two text"}]})
+
+        with (
+            patch("app.utils.ocr_provider.settings") as mock_settings,
+            patch("requests.post", side_effect=[upload_resp, ocr_resp]),
+            patch("requests.get", return_value=signed_url_resp),
+        ):
+            mock_settings.mistral_api_key = "test-key"
+            mock_settings.mistral_ocr_model = "mistral-ocr-latest"
+
+            result = provider.process(str(pdf_file))
+
+        assert "Page one text" in result.text
+        assert "Page two text" in result.text
+
+    # ------------------------------------------------------------------
+    # Image workflow
+    # ------------------------------------------------------------------
+
+    def test_image_uses_image_url_workflow(self, tmp_path):
+        """Image files are base64-encoded and passed as image_url (not document_url)."""
+        provider = self._make_provider()
+        img_file = tmp_path / "photo.jpg"
+        img_file.write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 20)  # minimal JPEG bytes
+
+        ocr_resp = self._mock_response({"pages": [{"markdown": "Image text here"}]})
+
+        with (
+            patch("app.utils.ocr_provider.settings") as mock_settings,
+            patch("requests.post", return_value=ocr_resp) as mock_post,
+            patch("requests.get") as mock_get,
+        ):
+            mock_settings.mistral_api_key = "test-key"
+            mock_settings.mistral_ocr_model = "mistral-ocr-latest"
+
+            result = provider.process(str(img_file))
+
+        assert result.provider == "mistral"
+        assert result.text == "Image text here"
+
+        # Should only make a single POST (no file upload step)
+        assert mock_post.call_count == 1
+        assert mock_get.call_count == 0
+
+        ocr_call = mock_post.call_args_list[0]
+        assert "/ocr" in ocr_call[0][0]
+        ocr_json = ocr_call[1]["json"]
+        assert ocr_json["document"]["type"] == "image_url"
+        assert ocr_json["document"]["image_url"].startswith("data:image/jpeg;base64,")
+
+    # ------------------------------------------------------------------
+    # Unsupported file type
+    # ------------------------------------------------------------------
+
+    def test_unsupported_mime_type_raises(self, tmp_path):
+        """ValueError is raised for unsupported file types."""
+        provider = self._make_provider()
+        txt_file = tmp_path / "document.txt"
+        txt_file.write_text("hello world")
+
+        with patch("app.utils.ocr_provider.settings") as mock_settings:
+            mock_settings.mistral_api_key = "test-key"
+            mock_settings.mistral_ocr_model = "mistral-ocr-latest"
+
+            with pytest.raises(ValueError, match="Unsupported file type"):
+                provider.process(str(txt_file))
+
+    def test_unknown_extension_pdf_magic_bytes_detected(self, tmp_path):
+        """Files without extension are identified as PDF via magic bytes."""
+        provider = self._make_provider()
+        no_ext_file = tmp_path / "nodotfile"
+        no_ext_file.write_bytes(b"%PDF-1.4\n%%EOF")
+
+        upload_resp = self._mock_response({"id": "file-magic"})
+        signed_url_resp = self._mock_response({"url": "https://signed.example.com/magic"})
+        ocr_resp = self._mock_response({"pages": [{"markdown": "Magic PDF"}]})
+
+        with (
+            patch("app.utils.ocr_provider.settings") as mock_settings,
+            patch("requests.post", side_effect=[upload_resp, ocr_resp]),
+            patch("requests.get", return_value=signed_url_resp),
+        ):
+            mock_settings.mistral_api_key = "test-key"
+            mock_settings.mistral_ocr_model = "mistral-ocr-latest"
+
+            result = provider.process(str(no_ext_file))
+
+        assert result.text == "Magic PDF"
+
+    def test_unknown_extension_non_pdf_magic_bytes_raises(self, tmp_path):
+        """Files without extension that aren't PDFs raise ValueError."""
+        provider = self._make_provider()
+        unknown_file = tmp_path / "unknownfile"
+        unknown_file.write_bytes(b"\x00\x01\x02\x03\x04")
+
+        with patch("app.utils.ocr_provider.settings") as mock_settings:
+            mock_settings.mistral_api_key = "test-key"
+            mock_settings.mistral_ocr_model = "mistral-ocr-latest"
+
+            with pytest.raises(ValueError, match="Cannot determine file type"):
+                provider.process(str(unknown_file))
+
+    # ------------------------------------------------------------------
+    # Upload / API error propagation
+    # ------------------------------------------------------------------
+
+    def test_upload_failure_raises_http_error(self, tmp_path):
+        """HTTPError from the Files API upload is propagated to the caller."""
+        from requests import HTTPError
+
+        provider = self._make_provider()
+        pdf_file = tmp_path / "bad.pdf"
+        pdf_file.write_bytes(b"%PDF-1.4\n%%EOF")
+
+        with (
+            patch("app.utils.ocr_provider.settings") as mock_settings,
+            patch("requests.post", return_value=self._mock_error_response(status_code=401)),
+        ):
+            mock_settings.mistral_api_key = "bad-key"
+            mock_settings.mistral_ocr_model = "mistral-ocr-latest"
+
+            with pytest.raises(HTTPError):
+                provider.process(str(pdf_file))
+
+    def test_ocr_api_failure_raises_http_error(self, tmp_path):
+        """HTTPError from the /ocr endpoint is propagated to the caller."""
+        from requests import HTTPError
+
+        provider = self._make_provider()
+        pdf_file = tmp_path / "bad.pdf"
+        pdf_file.write_bytes(b"%PDF-1.4\n%%EOF")
+
+        upload_resp = self._mock_response({"id": "file-err"})
+        signed_url_resp = self._mock_response({"url": "https://signed.example.com/err"})
+
+        with (
+            patch("app.utils.ocr_provider.settings") as mock_settings,
+            patch("requests.post", side_effect=[upload_resp, self._mock_error_response(status_code=422)]),
+            patch("requests.get", return_value=signed_url_resp),
+        ):
+            mock_settings.mistral_api_key = "test-key"
+            mock_settings.mistral_ocr_model = "mistral-ocr-latest"
+
+            with pytest.raises(HTTPError):
+                provider.process(str(pdf_file))
