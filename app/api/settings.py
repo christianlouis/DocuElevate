@@ -405,6 +405,47 @@ async def bulk_update_settings(updates: list[SettingUpdate], request: Request, d
     }
 
 
+@router.post("/install-ocr-languages")
+async def install_ocr_languages(request: Request, admin: AdminUser):
+    """
+    Trigger on-demand installation of Tesseract language data files and
+    EasyOCR model downloads for the languages currently configured in the
+    application settings.
+
+    This endpoint is useful after changing ``tesseract_language`` or
+    ``easyocr_languages`` so that the required data is available without
+    restarting the container.  The download runs synchronously and may take
+    a few seconds (or minutes for large EasyOCR models).
+
+    Returns a summary of which languages are now available and which could
+    not be installed.
+    Admin only.
+    """
+    from app.utils.ocr_language_manager import ensure_ocr_languages_from_settings  # noqa: PLC0415
+
+    try:
+        result = ensure_ocr_languages_from_settings()
+        tesseract_missing = result.get("tesseract_missing", [])
+        easyocr_failed = result.get("easyocr_failed", [])
+        all_ok = not tesseract_missing and not easyocr_failed
+        return {
+            "success": all_ok,
+            "tesseract_missing": tesseract_missing,
+            "easyocr_failed": easyocr_failed,
+            "message": (
+                "All configured OCR languages are available."
+                if all_ok
+                else f"Some languages could not be installed: tesseract={tesseract_missing}, easyocr={easyocr_failed}"
+            ),
+        }
+    except Exception as e:
+        logger.error(f"Error during OCR language installation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to install OCR language data",
+        )
+
+
 @router.get("/{key}/history")
 async def get_key_history(key: str, request: Request, db: DbSession, admin: AdminUser):
     """

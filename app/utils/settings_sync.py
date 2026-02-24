@@ -71,6 +71,17 @@ def notify_settings_updated() -> None:
     except Exception as exc:
         logger.warning(f"Could not reload in-process settings: {exc}")
 
+    # Re-check OCR language availability in the background whenever settings
+    # are updated.  This ensures that if a user changes tesseract_language or
+    # easyocr_languages via the UI, the new language data is downloaded without
+    # requiring a container restart.
+    try:
+        from app.utils.ocr_language_manager import ensure_ocr_languages_async
+
+        ensure_ocr_languages_async()
+    except Exception as exc:
+        logger.warning(f"Could not schedule OCR language check: {exc}")
+
 
 def register_settings_reload_signal() -> None:
     """
@@ -96,6 +107,13 @@ def register_settings_reload_signal() -> None:
                 reload_settings_from_db(settings)
                 _last_seen_version = current_version
                 logger.info(f"Worker settings reloaded (version={current_version})")
+                # Ensure OCR language data is up to date after a settings reload.
+                try:
+                    from app.utils.ocr_language_manager import ensure_ocr_languages_async
+
+                    ensure_ocr_languages_async()
+                except Exception as lang_exc:
+                    logger.warning(f"Could not schedule OCR language check on worker: {lang_exc}")
         except Exception as exc:
             logger.debug(f"Settings version check skipped: {exc}")
 
