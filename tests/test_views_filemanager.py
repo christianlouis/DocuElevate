@@ -15,13 +15,13 @@ from itsdangerous import TimestampSigner
 
 from app.models import FileRecord
 
-_SESSION_SECRET = "test_secret_key_for_testing_must_be_at_least_32_characters_long"
+TEST_SESSION_SECRET = "test_secret_key_for_testing_must_be_at_least_32_characters_long"
 
 
 def _make_admin_session_cookie() -> str:
     """Create a properly signed admin session cookie for tests."""
     session_data = {"user": {"id": "admin", "is_admin": True}}
-    signer = TimestampSigner(_SESSION_SECRET)
+    signer = TimestampSigner(TEST_SESSION_SECRET)
     data = base64.b64encode(json.dumps(session_data).encode()).decode("utf-8")
     return signer.sign(data).decode("utf-8")
 
@@ -457,8 +457,8 @@ class TestFilemanagerRoute:
     def test_redirects_non_admin(self, client):
         """Test that non-admin users are redirected."""
         response = client.get("/admin/files", follow_redirects=False)
-        # Without admin session, should redirect to home
-        assert response.status_code in (200, 302, 303)
+        # Without admin session, require_admin_access redirects to home
+        assert response.status_code == 302
 
     def test_filesystem_view_with_admin_session(self, client):
         """Test filesystem view with admin session cookie."""
@@ -513,7 +513,7 @@ class TestFilemanagerDownloadRoute:
     def test_redirects_non_admin(self, client):
         """Test that non-admin users are redirected."""
         response = client.get("/admin/files/download?path=test.pdf", follow_redirects=False)
-        assert response.status_code in (200, 302, 303)
+        assert response.status_code == 302
 
     def test_download_invalid_path_returns_400(self, client):
         """Test that invalid (traversal) path returns 400."""

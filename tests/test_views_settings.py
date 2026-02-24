@@ -9,13 +9,13 @@ from itsdangerous import TimestampSigner
 
 from app.views.settings import require_admin_access
 
-_SESSION_SECRET = "test_secret_key_for_testing_must_be_at_least_32_characters_long"
+TEST_SESSION_SECRET = "test_secret_key_for_testing_must_be_at_least_32_characters_long"
 
 
 def _make_admin_session_cookie() -> str:
     """Create a properly signed session cookie with admin user for tests."""
     session_data = {"user": {"id": "admin", "is_admin": True}}
-    signer = TimestampSigner(_SESSION_SECRET)
+    signer = TimestampSigner(TEST_SESSION_SECRET)
     data = base64.b64encode(json.dumps(session_data).encode()).decode("utf-8")
     return signer.sign(data).decode("utf-8")
 
@@ -436,7 +436,7 @@ class TestCredentialsPage:
     def test_credentials_page_redirects_non_admin(self, client):
         """Test that non-admin users are redirected from credentials page."""
         response = client.get("/admin/credentials", follow_redirects=False)
-        assert response.status_code in (200, 302, 303)
+        assert response.status_code == 302
 
     def test_credentials_page_accessible_with_admin(self, client):
         """Test credentials page is accessible with admin session."""
@@ -512,7 +512,7 @@ class TestAuditLogPage:
     def test_audit_log_redirects_non_admin(self, client):
         """Test that non-admin users are redirected."""
         response = client.get("/admin/settings/audit-log", follow_redirects=False)
-        assert response.status_code in (200, 302, 303)
+        assert response.status_code == 302
 
     def test_audit_log_accessible_with_admin(self, client):
         """Test audit log page is accessible with admin session."""
