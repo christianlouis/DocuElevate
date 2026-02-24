@@ -279,6 +279,12 @@ def ensure_ocr_languages_from_settings() -> dict[str, list[str]]:
     present.  Missing Tesseract tessdata files are downloaded automatically;
     missing EasyOCR models are downloaded via the library's built-in mechanism.
 
+    Tesseract language data is always ensured when ``ocrmypdf`` is available on
+    the system, regardless of which OCR providers are active.  This is required
+    because :func:`~app.utils.ocr_provider.embed_text_layer` uses ``ocrmypdf``
+    (and therefore Tesseract) as a post-processing fallback for **all** OCR
+    providers – not only the ``tesseract`` provider.
+
     This function is idempotent – calling it multiple times is safe.
 
     Returns:
@@ -297,7 +303,12 @@ def ensure_ocr_languages_from_settings() -> dict[str, list[str]]:
     providers_raw = getattr(settings, "ocr_providers", None) or "azure"
     active_providers = {p.strip().lower() for p in providers_raw.split(",") if p.strip()}
 
-    if "tesseract" in active_providers:
+    # Always ensure Tesseract language data when ocrmypdf is on the system PATH.
+    # embed_text_layer() calls ocrmypdf as a text-layer post-processor for every
+    # OCR provider that does not natively produce a searchable PDF (azure,
+    # easyocr, mistral, google_docai, aws_textract).  If the tessdata files are
+    # absent, ocrmypdf exits with code 3 and the text layer is silently skipped.
+    if "tesseract" in active_providers or shutil.which("ocrmypdf") is not None:
         lang_str = getattr(settings, "tesseract_language", None) or "eng"
         logger.info("Ensuring Tesseract language data for configured languages: %s", lang_str)
         result["tesseract_missing"] = ensure_tesseract_languages(lang_str)

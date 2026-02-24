@@ -344,7 +344,10 @@ class TestEnsureOCRLanguagesFromSettings:
         assert result == {"tesseract_missing": [], "easyocr_failed": []}
 
     def test_runs_easyocr_check_when_provider_active(self):
-        """Calls ensure_easyocr_models when 'easyocr' is in ocr_providers."""
+        """Calls ensure_easyocr_models when 'easyocr' is in ocr_providers.
+
+        When ocrmypdf is absent, only easyocr language checks run.
+        """
         from app.utils.ocr_language_manager import ensure_ocr_languages_from_settings
 
         mock_settings = self._mock_settings(providers="easyocr", easyocr_langs="en,de")
@@ -352,6 +355,7 @@ class TestEnsureOCRLanguagesFromSettings:
             patch("app.utils.ocr_language_manager.ensure_tesseract_languages", return_value=[]) as mock_tess,
             patch("app.utils.ocr_language_manager.ensure_easyocr_models", return_value=[]) as mock_easy,
             patch("app.config.settings", mock_settings),
+            patch("shutil.which", return_value=None),
         ):
             result = ensure_ocr_languages_from_settings()
 
@@ -359,8 +363,8 @@ class TestEnsureOCRLanguagesFromSettings:
         mock_easy.assert_called_once_with(["en", "de"])
         assert result["easyocr_failed"] == []
 
-    def test_skips_both_when_only_azure(self):
-        """Neither Tesseract nor EasyOCR checks run when only Azure is configured."""
+    def test_skips_both_when_only_azure_and_no_ocrmypdf(self):
+        """Neither Tesseract nor EasyOCR checks run when only Azure is configured and ocrmypdf is absent."""
         from app.utils.ocr_language_manager import ensure_ocr_languages_from_settings
 
         mock_settings = self._mock_settings(providers="azure")
@@ -368,10 +372,32 @@ class TestEnsureOCRLanguagesFromSettings:
             patch("app.utils.ocr_language_manager.ensure_tesseract_languages") as mock_tess,
             patch("app.utils.ocr_language_manager.ensure_easyocr_models") as mock_easy,
             patch("app.config.settings", mock_settings),
+            patch("shutil.which", return_value=None),
         ):
             result = ensure_ocr_languages_from_settings()
 
         mock_tess.assert_not_called()
+        mock_easy.assert_not_called()
+        assert result == {"tesseract_missing": [], "easyocr_failed": []}
+
+    def test_runs_tesseract_when_ocrmypdf_available_with_non_tesseract_provider(self):
+        """Tesseract language check runs when ocrmypdf is on PATH even without the tesseract provider.
+
+        embed_text_layer() uses ocrmypdf internally regardless of the active OCR
+        provider.  Pre-downloading language data on startup prevents code-3 failures.
+        """
+        from app.utils.ocr_language_manager import ensure_ocr_languages_from_settings
+
+        mock_settings = self._mock_settings(providers="azure", tesseract_lang="eng+deu+fra")
+        with (
+            patch("app.utils.ocr_language_manager.ensure_tesseract_languages", return_value=[]) as mock_tess,
+            patch("app.utils.ocr_language_manager.ensure_easyocr_models") as mock_easy,
+            patch("app.config.settings", mock_settings),
+            patch("shutil.which", return_value="/usr/local/bin/ocrmypdf"),
+        ):
+            result = ensure_ocr_languages_from_settings()
+
+        mock_tess.assert_called_once_with("eng+deu+fra")
         mock_easy.assert_not_called()
         assert result == {"tesseract_missing": [], "easyocr_failed": []}
 
