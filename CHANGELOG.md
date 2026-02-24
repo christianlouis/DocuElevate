@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.50.0 (2026-02-24)
+
+### Code Style
+
+- **tests**: Rename _SESSION_SECRET to TEST_SESSION_SECRET; tighten non-admin redirect assertions to
+  == 302
+  ([`1f080a8`](https://github.com/christianlouis/DocuElevate/commit/1f080a8a431746d2750bc8101912f52aae7a76c3))
+
+### Features
+
+- **tests**: Increase code coverage from 89.28% to 92.15%
+  ([`a1b9ac1`](https://github.com/christianlouis/DocuElevate/commit/a1b9ac1db6e07f2858c8bdc2c539b8d3935aeb7c))
+
+
 ## v0.49.0 (2026-02-24)
 
 ### Code Style
