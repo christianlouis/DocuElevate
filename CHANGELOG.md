@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.50.1 (2026-02-24)
+
+### Bug Fixes
+
+- **ocr**: Rewrite MistralOCRProvider to use native Mistral OCR API
+  ([`c742383`](https://github.com/christianlouis/DocuElevate/commit/c7423834d51a2e4231b55520fc04a49ce38563c1))
+
+
 ## v0.50.0 (2026-02-24)
 
 ### Code Style
