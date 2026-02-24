@@ -1075,6 +1075,7 @@ class TestEmbedTextLayer:
 
         with (
             patch("shutil.which", return_value="/usr/bin/ocrmypdf"),
+            patch("app.utils.ocr_language_manager.ensure_tesseract_languages", return_value=[]),
             patch("subprocess.run", return_value=mock_proc) as mock_run,
         ):
             result = embed_text_layer(pdf, output, language="eng")
@@ -1097,6 +1098,7 @@ class TestEmbedTextLayer:
 
         with (
             patch("shutil.which", return_value="/usr/bin/ocrmypdf"),
+            patch("app.utils.ocr_language_manager.ensure_tesseract_languages", return_value=[]),
             patch("subprocess.run", return_value=mock_proc),
         ):
             result = embed_text_layer(pdf, str(tmp_path / "out.pdf"))
@@ -1113,6 +1115,7 @@ class TestEmbedTextLayer:
 
         with (
             patch("shutil.which", return_value="/usr/bin/ocrmypdf"),
+            patch("app.utils.ocr_language_manager.ensure_tesseract_languages", return_value=[]),
             patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="ocrmypdf", timeout=600)),
         ):
             result = embed_text_layer(pdf, str(tmp_path / "out.pdf"))
@@ -1140,6 +1143,7 @@ class TestEmbedTextLayer:
 
         with (
             patch("shutil.which", return_value="/usr/bin/ocrmypdf"),
+            patch("app.utils.ocr_language_manager.ensure_tesseract_languages", return_value=[]),
             patch("subprocess.run", side_effect=fake_run),
         ):
             result = embed_text_layer(pdf, pdf)
@@ -1172,6 +1176,7 @@ class TestEmbedTextLayer:
 
         with (
             patch("shutil.which", return_value="/usr/bin/ocrmypdf"),
+            patch("app.utils.ocr_language_manager.ensure_tesseract_languages", return_value=[]),
             patch("subprocess.run", return_value=mock_proc),
             patch("tempfile.mkstemp", side_effect=fake_mkstemp),
         ):

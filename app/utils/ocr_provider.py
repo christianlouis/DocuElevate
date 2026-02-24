@@ -93,6 +93,19 @@ def embed_text_layer(input_pdf_path: str, output_pdf_path: str, *, language: str
         )
         return False
 
+    # Ensure Tesseract language data is present before invoking ocrmypdf.
+    # ocrmypdf uses Tesseract internally regardless of which OCR provider is
+    # active, so we must guarantee the tessdata files exist here.
+    from app.utils.ocr_language_manager import ensure_tesseract_languages  # noqa: PLC0415
+
+    missing_langs = ensure_tesseract_languages(language)
+    if missing_langs:
+        logger.warning(
+            "[embed_text_layer] Missing Tesseract language data for: %s – "
+            "text-layer embedding may fail or produce degraded results.",
+            ", ".join(missing_langs),
+        )
+
     in_place = input_pdf_path == output_pdf_path
     if in_place:
         import tempfile
