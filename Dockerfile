@@ -21,11 +21,13 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 #   ghostscript     – required by ocrmypdf for PDF/PS operations
 #   poppler-utils   – provides pdfinfo/pdftoppm used by pdf2image
 #   unpaper         – optional deskewing pre-processor used by ocrmypdf
+#   wget            – used by ocr_language_manager to download tessdata files
 RUN apt-get update && apt-get install -y --no-install-recommends \
         tesseract-ocr \
         ghostscript \
         poppler-utils \
         unpaper \
+        wget \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Copy application code

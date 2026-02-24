@@ -69,6 +69,11 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
+    # Ensure OCR language data is available (background download, non-blocking)
+    from app.utils.ocr_language_manager import ensure_ocr_languages_async
+
+    ensure_ocr_languages_async()
+
     # Force settings dump to log for troubleshooting
     from app.utils.config_validator import dump_all_settings
 

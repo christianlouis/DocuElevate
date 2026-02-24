@@ -485,7 +485,9 @@ For providers that do **not** embed a text layer, DocuElevate automatically runs
 
 #### Tesseract (self-hosted)
 
-Requires `tesseract-ocr` to be installed in the Docker image or on the host. The default Docker image ships with Tesseract.
+Requires `tesseract-ocr` to be installed in the Docker image or on the host. The default Docker image ships with Tesseract (English language data only).
+
+**Automatic language data download**: DocuElevate automatically downloads missing Tesseract `.traineddata` files at startup using `wget` from the [tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast) repository. No manual installation is required — simply set `TESSERACT_LANGUAGE` to the desired language codes and the data files are fetched on first start. The container must have outbound internet access for this to work.
 
 | **Variable**           | **Description**                                                                   | **Default** |
 |------------------------|-----------------------------------------------------------------------------------|-------------|
@@ -497,9 +499,16 @@ OCR_PROVIDERS=tesseract
 TESSERACT_LANGUAGE=eng+deu
 ```
 
+> **Language codes**: Use ISO 639-2 codes separated by `+`, e.g. `eng+deu+fra` for English + German + French.
+> All codes supported by Tesseract are available. See the [tessdata repository](https://github.com/tesseract-ocr/tessdata_fast) for the full list.
+
+> **No internet access?** Set `TESSDATA_PREFIX` to a writable directory and pre-populate it with the required `.traineddata` files. Alternatively, build a custom Docker image that installs the needed language packages via `apt-get install tesseract-ocr-<lang>`.
+
 #### EasyOCR (self-hosted)
 
 Requires the `easyocr` Python package. Install it separately as it is not included in the base requirements.
+
+**Automatic model download**: EasyOCR model files are downloaded automatically on first use (or at startup) to `~/.EasyOCR/model/`. The container must have outbound internet access. Model download can take several minutes depending on the language.
 
 | **Variable**          | **Description**                                                        | **Default** |
 |-----------------------|------------------------------------------------------------------------|-------------|

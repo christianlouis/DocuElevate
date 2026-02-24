@@ -297,6 +297,19 @@ class TesseractOCRProvider(OCRProvider):
 
         lang = getattr(settings, "tesseract_language", None) or "eng"
 
+        # Ensure language data files are present; attempt download if missing.
+        from app.utils.ocr_language_manager import ensure_tesseract_languages  # noqa: PLC0415
+
+        missing = ensure_tesseract_languages(lang)
+        if missing:
+            raise RuntimeError(
+                f"[TesseractOCR] Required language data files are not available and could not be "
+                f"downloaded: {', '.join(missing)}. "
+                "Install the corresponding tesseract-ocr language packages "
+                "(e.g. apt-get install tesseract-ocr-deu) or ensure internet access so DocuElevate "
+                "can download them automatically."
+            )
+
         logger.info(f"[TesseractOCR] Processing {os.path.basename(file_path)} (lang={lang})")
         pages = convert_from_path(file_path, dpi=300)
         texts: List[str] = []
@@ -342,6 +355,9 @@ class EasyOCRProvider(OCRProvider):
         gpu = getattr(settings, "easyocr_gpu", False)
 
         logger.info(f"[EasyOCR] Processing {os.path.basename(file_path)} (langs={langs}, gpu={gpu})")
+        # easyocr.Reader automatically downloads missing models on first use;
+        # log a clear message so operators know a download may be in progress.
+        logger.info(f"[EasyOCR] Initialising reader for langs={langs} (models will be downloaded if absent)")
         reader = easyocr.Reader(langs, gpu=gpu)
         pages = convert_from_path(file_path, dpi=300)
         texts: List[str] = []
