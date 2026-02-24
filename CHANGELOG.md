@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.52.0 (2026-02-24)
+
+### Features
+
+- **ocr**: Auto-install Tesseract/EasyOCR languages from settings
+  ([`8a2a4dc`](https://github.com/christianlouis/DocuElevate/commit/8a2a4dc2b3b6535fe1b6e3821e7f80fb41fe61c4))
+
+
 ## v0.51.0 (2026-02-24)
 
 ### Bug Fixes
