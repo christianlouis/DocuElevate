@@ -1131,7 +1131,7 @@ class TestEmbedTextLayer:
         mock_proc.returncode = 0
         mock_proc.stderr = ""
 
-        def fake_run(cmd, **kwargs):  # noqa: ANN001
+        def fake_run(cmd: list[str], **kwargs: object) -> Mock:
             # Simulate ocrmypdf writing to the temp output path.
             out_path = cmd[-1]
             with open(out_path, "wb") as fh:
@@ -1162,7 +1162,7 @@ class TestEmbedTextLayer:
 
         real_mkstemp = __import__("tempfile").mkstemp
 
-        def fake_mkstemp(**kwargs):  # noqa: ANN001
+        def fake_mkstemp(**kwargs: object) -> tuple[int, str]:
             fd, path = real_mkstemp(**kwargs)
             created_tmp.append(path)
             # Write something so the cleanup code can find the file.

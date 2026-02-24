@@ -115,6 +115,9 @@ def embed_text_layer(input_pdf_path: str, output_pdf_path: str, *, language: str
 
     logger.info(f"[embed_text_layer] Running: {' '.join(cmd)}")
 
+    # Security note: shell=False (the default) is used so no shell interpolation occurs.
+    # ocrmypdf_bin is resolved via shutil.which() (trusted system PATH).
+    # input_pdf_path / final_output are internal workdir paths, not raw user input.
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=False)  # noqa: S603
     except subprocess.TimeoutExpired:
