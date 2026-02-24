@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.52.2 (2026-02-24)
+
+### Bug Fixes
+
+- **ocr**: Ensure Tesseract language data for embed_text_layer regardless of active OCR provider
+  ([`2b2a97c`](https://github.com/christianlouis/DocuElevate/commit/2b2a97c2fa32e3aaaf7a02ed3856dbd927b8b856))
+
+
 ## v0.52.1 (2026-02-24)
 
 ### Bug Fixes
