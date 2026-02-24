@@ -210,6 +210,14 @@ omit = [
     "*/__pycache__/*",
     "*/venv/*",
     "*/env/*",
+    # This file is shadowed by the config_validator/ package directory and
+    # can never be imported via the normal Python import system. It is kept
+    # for historical reference only.
+    "app/utils/config_validator.py",
+    # celery_worker.py is an entry-point script for the Celery worker process;
+    # it initialises Celery beat schedules and cannot be meaningfully unit-tested
+    # without a live Redis + Celery environment.
+    "app/celery_worker.py",
 ]
 
 [tool.coverage.report]

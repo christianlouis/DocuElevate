@@ -286,3 +286,190 @@ class TestComputeStatusFromLogsDeprecated:
         result = _compute_status_from_logs(logs)
         assert result["status"] == "processing"
         assert result["last_step"] == "step1"  # First log in list
+
+
+@pytest.mark.unit
+class TestFileStatusMissingCoverage:
+    """Tests for uncovered lines in file_status.py."""
+
+    @pytest.fixture
+    def db_session(self):
+        """Create an in-memory SQLite database for testing."""
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        SessionLocal = sessionmaker(bind=engine)
+        session = SessionLocal()
+        yield session
+        session.close()
+        Base.metadata.drop_all(engine)
+
+    def test_get_file_processing_status_duplicate(self, db_session):
+        """Covers line 28: returns duplicate status for duplicate files."""
+        from app.utils.file_status import get_file_processing_status
+
+        file_record = FileRecord(
+            filehash="dup1",
+            original_filename="dup.pdf",
+            local_filename="/tmp/dup.pdf",
+            file_size=100,
+            is_duplicate=True,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        result = get_file_processing_status(db_session, file_record.id)
+        assert result["status"] == "duplicate"
+        assert result["last_step"] == "check_for_duplicates"
+        assert result["has_errors"] is False
+
+    def test_get_files_processing_status_deduplication_enabled(self, db_session):
+        """Covers line 105->109: check_for_duplicates step added when deduplication enabled."""
+        from unittest.mock import patch
+
+        from app.utils.file_status import get_files_processing_status
+
+        file_record = FileRecord(
+            filehash="dedup1",
+            original_filename="dedup.pdf",
+            local_filename="/tmp/dedup.pdf",
+            file_size=100,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        with patch("app.config.settings") as ms:
+            ms.enable_deduplication = True
+            result = get_files_processing_status(db_session, [file_record.id])
+
+        # File has no steps, so should be pending
+        assert result[file_record.id]["status"] == "pending"
+
+    def test_get_files_processing_status_pending_steps(self, db_session):
+        """Covers line 154: some steps exist but not all are completed (pending status)."""
+        from datetime import datetime
+
+        from app.models import FileProcessingStep
+        from app.utils.file_status import get_files_processing_status
+
+        file_record = FileRecord(
+            filehash="pend1",
+            original_filename="pending.pdf",
+            local_filename="/tmp/pending.pdf",
+            file_size=100,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        # Add a step that is neither success nor failure nor in_progress
+        step = FileProcessingStep(
+            file_id=file_record.id,
+            step_name="create_file_record",
+            status="pending",
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        db_session.add(step)
+        db_session.commit()
+
+        from unittest.mock import patch
+
+        with patch("app.config.settings") as ms:
+            ms.enable_deduplication = False
+            result = get_files_processing_status(db_session, [file_record.id])
+
+        assert result[file_record.id]["status"] == "pending"
+
+    def test_compute_status_from_logs_failed(self):
+        """Covers lines 203: status is 'failed' when there's a failure log."""
+        from app.models import ProcessingLog
+        from app.utils.file_status import _compute_status_from_logs
+
+        logs = [
+            ProcessingLog(
+                file_id=1,
+                task_id="t1",
+                step_name="extract",
+                status="failure",
+                message="Error",
+                timestamp=None,
+            ),
+        ]
+        result = _compute_status_from_logs(logs)
+        assert result["status"] == "failed"
+        assert result["has_errors"] is True
+
+    def test_compute_status_from_logs_completed(self):
+        """Covers lines 206-207: status is 'completed' when latest log is success."""
+        from app.models import ProcessingLog
+        from app.utils.file_status import _compute_status_from_logs
+
+        logs = [
+            ProcessingLog(
+                file_id=1,
+                task_id="t1",
+                step_name="finalize",
+                status="success",
+                message="Done",
+                timestamp=None,
+            ),
+        ]
+        result = _compute_status_from_logs(logs)
+        assert result["status"] == "completed"
+        assert result["has_errors"] is False
+
+    def test_compute_status_from_logs_pending_non_success(self):
+        """Covers lines 208-209: status is 'pending' when latest log is not success/failure/in_progress."""
+        from app.models import ProcessingLog
+        from app.utils.file_status import _compute_status_from_logs
+
+        logs = [
+            ProcessingLog(
+                file_id=1,
+                task_id="t1",
+                step_name="upload",
+                status="queued",
+                message="Waiting",
+                timestamp=None,
+            ),
+        ]
+        result = _compute_status_from_logs(logs)
+        assert result["status"] == "pending"
+        assert result["has_errors"] is False
+
+    def test_get_files_processing_status_with_completed_steps(self, db_session):
+        """Covers line 189->188: completed + skipped == total_steps → completed status."""
+        from datetime import datetime
+        from unittest.mock import patch
+
+        from app.models import FileProcessingStep
+        from app.utils.file_status import get_files_processing_status
+
+        file_record = FileRecord(
+            filehash="comp1",
+            original_filename="comp.pdf",
+            local_filename="/tmp/comp.pdf",
+            file_size=100,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        now = datetime.utcnow()
+        for step_name, step_status in [
+            ("create_file_record", "success"),
+            ("finalize_document_storage", "skipped"),
+        ]:
+            step = FileProcessingStep(
+                file_id=file_record.id,
+                step_name=step_name,
+                status=step_status,
+                created_at=now,
+                updated_at=now,
+            )
+            db_session.add(step)
+        db_session.commit()
+
+        with patch("app.config.settings") as ms:
+            ms.enable_deduplication = False
+            result = get_files_processing_status(db_session, [file_record.id])
+
+        assert result[file_record.id]["status"] == "completed"
