@@ -46,6 +46,13 @@ jobs:
       - name: Show Ruff version (debug)
         run: ruff --version
 
+      - name: Check for merge conflict markers
+        run: |
+          if git grep -rn -E '^(<{7} |>{7} |={7}$)' -- '.'; then
+            echo "ERROR: Merge conflict markers found in tracked files."
+            exit 1
+          fi
+
       - name: Run Ruff Lint (check)
         # ruff check can --fix locally, but CI should only check (no modifications)
         run: ruff check app/ tests/
