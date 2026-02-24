@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.52.1 (2026-02-24)
+
+### Bug Fixes
+
+- **ui**: Resolve merge conflict markers in settings.html and add CI guard
+  ([`66a4570`](https://github.com/christianlouis/DocuElevate/commit/66a45703cf4a625c01a6d381296fc95d6d51f4cb))
+
+
 ## v0.52.0 (2026-02-24)
 
 ### Features
