@@ -10,6 +10,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.53.0 (2026-02-24)
+
+### Bug Fixes
+
+- **ocr**: Address code review: add model fallback default, remove unused variable
+  ([`0c500e1`](https://github.com/christianlouis/DocuElevate/commit/0c500e1ec659e88b7b638380e338c4f2f7985308))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`b5fb7da`](https://github.com/christianlouis/DocuElevate/commit/b5fb7da18c21753bcdd44fc8b95a736030fae98e))
+
+### Features
+
+- **ocr**: Add AI-based embedded text quality check with automatic OCR fallback
+  ([`b03bfb5`](https://github.com/christianlouis/DocuElevate/commit/b03bfb5e026abd02b9284537c4c6257a5da418f3))
+
+### Testing
+
+- Achieve 90%+ code coverage across codebase
+  ([`02ad558`](https://github.com/christianlouis/DocuElevate/commit/02ad558330382679e5ed60f53dc4fdb3d2aeae15))
+
+
 ## Unreleased
 
 ### Testing
