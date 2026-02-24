@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Testing
+
+- Achieve 90%+ code coverage across codebase
+  ([`02ad558`](https://github.com/christianlouis/DocuElevate/commit/02ad558330382679e5ed60f53dc4fdb3d2aeae15))
+
+
 ## v0.52.2 (2026-02-24)
 
 ### Bug Fixes
