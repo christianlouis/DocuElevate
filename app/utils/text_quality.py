@@ -261,7 +261,7 @@ def check_text_quality(text: str, text_source: TextSource) -> TextQualityResult:
     response_text: Optional[str] = None
     try:
         provider = get_ai_provider()
-        model = settings.ai_model or settings.openai_model
+        model = settings.ai_model or settings.openai_model or "gpt-4o-mini"
         response_text = provider.chat_completion(
             messages=[
                 {

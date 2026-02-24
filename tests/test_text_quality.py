@@ -401,7 +401,6 @@ class TestCheckTextQualityAI:
 
         assert len(captured_prompts) == 1
         # The prompt should NOT contain more than _TEXT_SAMPLE_MAX_CHARS "a"s
-        count_a = captured_prompts[0].count("a" * 100)
         assert "a" * (_TEXT_SAMPLE_MAX_CHARS + 1) not in captured_prompts[0]
 
 
