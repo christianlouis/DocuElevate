@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.49.0 (2026-02-24)
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`0827b6e`](https://github.com/christianlouis/DocuElevate/commit/0827b6eaa97783b6ec2a11191d4089dcfa36210c))
+
+### Features
+
+- **api**: Remove redundant /env and /api/diagnostic/settings endpoints
+  ([`f9d849f`](https://github.com/christianlouis/DocuElevate/commit/f9d849f7eb49426c1b945df158aa553460519673))
+
+
 ## v0.48.0 (2026-02-23)
 
 ### Bug Fixes
