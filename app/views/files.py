@@ -222,11 +222,11 @@ def _compute_processing_flow(logs):
         "create_file_record": {"label": "Create File Record", "next": ["check_text"]},
         "check_text": {
             "label": "Check Embedded Text",
-            "next": ["extract_text", "process_with_azure_document_intelligence"],
+            "next": ["extract_text", "process_with_ocr"],
         },
         "extract_text": {"label": "Extract Text (Local)", "next": ["extract_metadata_with_gpt"]},
-        "process_with_azure_document_intelligence": {
-            "label": "OCR Processing (Azure)",
+        "process_with_ocr": {
+            "label": "OCR Processing",
             "next": ["extract_metadata_with_gpt"],
         },
         "extract_metadata_with_gpt": {"label": "Extract Metadata (GPT)", "next": ["embed_metadata_into_pdf"]},
@@ -285,6 +285,9 @@ def _compute_processing_flow(logs):
                 {"status": log.status, "message": log.message, "timestamp": log.timestamp, "task_id": log.task_id}
             )
         else:
+            # Normalize legacy OCR step name for backward compatibility with old log entries
+            if step_name == "process_with_azure_document_intelligence":
+                step_name = "process_with_ocr"
             # Regular processing step
             if step_name not in step_map:
                 step_map[step_name] = []
@@ -366,7 +369,7 @@ def _compute_step_summary(logs):
             "create_file_record",
             "check_text",
             "extract_text",
-            "process_with_azure_document_intelligence",
+            "process_with_ocr",
             "extract_metadata_with_gpt",
             "embed_metadata_into_pdf",
             "finalize_document_storage",
@@ -390,6 +393,10 @@ def _compute_step_summary(logs):
         # Normalize status
         if status == "pending":
             status = "queued"
+
+        # Normalize legacy OCR step name for backward compatibility
+        if step_name == "process_with_azure_document_intelligence":
+            step_name = "process_with_ocr"
 
         # Check if it's an upload task
         is_upload = any(step_name.startswith(prefix) for prefix in upload_prefixes)
