@@ -950,9 +950,7 @@ class TestRetryPipelineSteps:
         db_session.add(file)
         db_session.commit()
 
-        with patch(
-            "app.tasks.process_with_azure_document_intelligence.process_with_azure_document_intelligence"
-        ) as mock_task:
+        with patch("app.tasks.process_with_ocr.process_with_ocr") as mock_task:
             mock_task.delay.return_value = Mock(id="task-azure")
             result = _retry_pipeline_step(file, "process_with_azure_document_intelligence", db_session)
             assert result["task_id"] == "task-azure"
