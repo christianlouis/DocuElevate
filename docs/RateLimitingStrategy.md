@@ -60,7 +60,6 @@ All API endpoints are protected with a default rate limit unless explicitly exem
 - `GET /api/files/{file_id}/metadata` - Get file metadata
 - `GET /api/files/{file_id}/preview` - Get file preview
 - `GET /api/files/{file_id}/download` - Download file
-- `GET /api/diagnostic/settings` - Get settings
 - `GET /api/logs` - Get logs
 
 **Rationale**: Read-only operations are less resource-intensive but still need protection against scraping and excessive polling. The default limit of 100 requests per minute allows legitimate applications while preventing abuse.

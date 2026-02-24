@@ -92,7 +92,6 @@ class TestEndpointRegistration:
         # Test a few known API endpoints to ensure the /api prefix works
         endpoints_to_check = [
             ("/api/process-url", "post"),
-            ("/api/diagnostic/settings", "get"),
         ]
 
         for endpoint, method in endpoints_to_check:

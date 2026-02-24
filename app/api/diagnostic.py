@@ -3,59 +3,16 @@ Diagnostic API endpoints
 """
 
 import logging
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 
-from app.auth import get_current_user, require_login
+from app.auth import require_login
 from app.config import settings
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-CurrentUser = Annotated[dict, Depends(get_current_user)]
-
-
-@router.get("/diagnostic/settings")
-@require_login
-async def diagnostic_settings(request: Request, current_user: CurrentUser):
-    """
-    API endpoint to dump settings to the log and view basic config information
-    This endpoint doesn't expose sensitive information like passwords or tokens
-    """
-    from app.utils.config_validator import dump_all_settings
-
-    # Dump full settings to log for admin to see
-    dump_all_settings()
-
-    # Return safe subset of settings for API response
-    safe_settings = {
-        "workdir": settings.workdir,
-        "external_hostname": settings.external_hostname,
-        "configured_services": {
-            "email": bool(getattr(settings, "email_host", None)),
-            "s3": bool(getattr(settings, "s3_bucket_name", None)),
-            "dropbox": bool(getattr(settings, "dropbox_refresh_token", None)),
-            "onedrive": bool(getattr(settings, "onedrive_refresh_token", None)),
-            "nextcloud": bool(getattr(settings, "nextcloud_upload_url", None)),
-            "sftp": bool(getattr(settings, "sftp_host", None)),
-            "paperless": bool(getattr(settings, "paperless_host", None)),
-            "google_drive": bool(getattr(settings, "google_drive_credentials_json", None)),
-            "uptime_kuma": bool(getattr(settings, "uptime_kuma_url", None)),
-            "auth": bool(getattr(settings, "authentik_config_url", None)),
-            "openai": bool(getattr(settings, "openai_api_key", None)),
-            "azure": bool(getattr(settings, "azure_api_key", None) and getattr(settings, "azure_endpoint", None)),
-        },
-        "imap_enabled": bool(getattr(settings, "imap1_host", None) or getattr(settings, "imap2_host", None)),
-    }
-
-    return {
-        "status": "success",
-        "settings": safe_settings,
-        "message": "Full settings have been dumped to application logs",
-    }
 
 
 @router.post("/diagnostic/test-notification")
