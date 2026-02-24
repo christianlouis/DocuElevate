@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.51.0 (2026-02-24)
+
+### Bug Fixes
+
+- **ocr**: Address code review - add subprocess security comment and type hints in tests
+  ([`50573ec`](https://github.com/christianlouis/DocuElevate/commit/50573ec7be67a9d7d337960b9a0206d9acb1d1b8))
+
+### Features
+
+- **ocr**: Embed searchable text layer for providers without native PDF output
+  ([`fec0326`](https://github.com/christianlouis/DocuElevate/commit/fec032643beda655c96585a7be79ba74f6357bf3))
+
+
 ## v0.50.1 (2026-02-24)
 
 ### Bug Fixes
