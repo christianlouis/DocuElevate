@@ -276,6 +276,19 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Text quality check - AI-based assessment of embedded PDF text
+    enable_text_quality_check: bool = Field(
+        default=True,
+        description=(
+            "Enable AI-based quality check for embedded PDF text. "
+            "When enabled, text extracted from non-digital PDFs is evaluated by the AI model. "
+            "If the text is poor quality (OCR artefacts, typos, incoherence), the file is "
+            "re-processed with OCR instead of using the embedded text. "
+            "Digitally-created PDFs (Word, LibreOffice, LaTeX, etc.) are always trusted and "
+            "bypass the check. Default: True (enabled)."
+        ),
+    )
+
     # Processing step timeout - prevents files from getting stuck in "in_progress" state
     step_timeout: int = Field(
         default=600,

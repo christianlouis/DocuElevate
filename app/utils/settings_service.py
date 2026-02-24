@@ -1057,6 +1057,19 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "enable_text_quality_check": {
+        "category": "Processing",
+        "description": (
+            "Enable AI-based quality check for embedded PDF text. "
+            "When enabled, text extracted from non-digital PDFs is evaluated by the AI model. "
+            "Poor-quality text (OCR artefacts, typos, incoherence) triggers automatic re-OCR. "
+            "Digitally-created PDFs (Word, LibreOffice, LaTeX, etc.) are always trusted and skip the check."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Notifications Settings
     "notification_urls": {
         "category": "Notifications",
