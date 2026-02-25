@@ -1,40 +1,48 @@
 # Deployment Guide
 
-This guide provides instructions for deploying DocuElevate in various environments.
+This guide covers all supported deployment methods for DocuElevate.
+
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Docker Compose Deployment](#docker-compose-deployment) *(recommended for single-server)*
+- [Kubernetes / Helm Deployment](#kubernetes--helm-deployment) *(recommended for production scale-out)*
+- [Production Considerations](#production-considerations)
+- [Scaling](#scaling)
+- [Backup Procedures](#backup-procedures)
+- [Updates](#updates)
+- [Troubleshooting](#troubleshooting)
 
 ## Prerequisites
 
-- Docker and Docker Compose
+- Docker and Docker Compose **or** a Kubernetes cluster with Helm 3
 - Access to required external services (if configured):
   - AI provider API key (OpenAI, Anthropic, Gemini, or other configured provider)
   - Azure Document Intelligence
-  - Dropbox API
-  - Nextcloud instance
-  - Paperless NGX instance
-  - SMTP server (for email notifications)
-  - IMAP server(s) (for email attachment processing)
-  - Notification services (Discord, Telegram, etc. for system alerts)
+  - Dropbox, Google Drive, OneDrive, S3, or other storage APIs
+  - SMTP / IMAP server (for email processing)
+  - Notification services (Discord, Telegram, etc.)
 
-## Docker Deployment
+---
 
-Docker is the recommended deployment method for DocuElevate.
+## Docker Compose Deployment
+
+Docker Compose is the quickest way to run DocuElevate on a single server.
 
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/christianlouis/document-processor.git
-cd document-processor
+git clone https://github.com/christianlouis/DocuElevate.git
+cd DocuElevate
 ```
 
 ### Step 2: Configure Environment Variables
 
-Create a `.env` file based on the example:
-
 ```bash
-cp .env.example .env
+cp .env.demo .env
 ```
 
-Edit the `.env` file with your configuration settings. See the [Configuration Guide](ConfigurationGuide.md) for details.
+Edit `.env` with your settings. See the [Configuration Guide](ConfigurationGuide.md) for all options.
 
 ### Step 3: Run with Docker Compose
 
@@ -42,41 +50,237 @@ Edit the `.env` file with your configuration settings. See the [Configuration Gu
 docker-compose up -d
 ```
 
-This will start:
-- The DocuElevate API server
-- A worker for background tasks
-- Redis for message broker and result storage
-- Gotenberg for PDF processing
+This starts:
+
+| Service | Purpose |
+|---------|---------|
+| `api` | FastAPI web server (port 8000) |
+| `worker` | Celery background task worker |
+| `redis` | Message broker for Celery |
+| `gotenberg` | PDF conversion (LibreOffice headless) |
+| `meilisearch` | Full-text search engine (port 7700) |
 
 ### Step 4: Verify the Installation
 
-Access the web interface at `http://localhost:8000` and the API documentation at `http://localhost:8000/docs`.
+Access the web interface at `http://localhost:8000` and the API docs at `http://localhost:8000/docs`.
+
+---
+
+## Kubernetes / Helm Deployment
+
+The Helm chart at `helm/docuelevate/` packages all components into a single, configurable release.  It supports:
+
+- Multiple replicas for the API and Worker
+- Horizontal Pod Autoscaling (HPA)
+- Bundled or external Redis
+- Persistent volumes for workdir and Meilisearch data
+- Alembic database migration Job (pre-install/upgrade hook)
+- TLS Ingress via any controller (nginx, Traefik, etc.)
+
+### Prerequisites
+
+- Kubernetes 1.24+
+- Helm 3.10+
+- A storage class that supports **ReadWriteMany** (e.g. NFS, CephFS, Azure Files, EFS) for the shared workdir PVC when running multiple replicas.  Single-replica clusters can use `ReadWriteOnce`.
+- A PostgreSQL database (strongly recommended over SQLite for multi-replica).
+
+### Quick Start
+
+```bash
+# 1. Add the Bitnami chart repository (needed for bundled Redis)
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo update
+
+# 2. Update chart dependencies
+helm dependency update ./helm/docuelevate
+
+# 3. Install with a minimal values override
+helm install docuelevate ./helm/docuelevate \
+  --namespace docuelevate --create-namespace \
+  --set secrets.DATABASE_URL="postgresql://user:pass@postgres:5432/docuelevate" \
+  --set secrets.SESSION_SECRET="$(openssl rand -hex 32)" \
+  --set secrets.OPENAI_API_KEY="sk-..." \
+  --set secrets.AZURE_AI_KEY="..." \
+  --set env.AZURE_ENDPOINT="https://my-resource.cognitiveservices.azure.com/" \
+  --set env.EXTERNAL_HOSTNAME="docuelevate.example.com"
+```
+
+### Values Reference
+
+The full list of configurable values is in [`helm/docuelevate/values.yaml`](../helm/docuelevate/values.yaml).  Key sections:
+
+#### Container Image
+
+```yaml
+image:
+  repository: ghcr.io/christianlouis/docuelevate
+  tag: ""          # defaults to chart appVersion
+  pullPolicy: IfNotPresent
+```
+
+#### Non-Secret Config (`env`)
+
+```yaml
+env:
+  WORKDIR: /workdir
+  AI_PROVIDER: openai
+  OPENAI_MODEL: gpt-4o-mini
+  AZURE_REGION: eastus
+  AZURE_ENDPOINT: "https://my-resource.cognitiveservices.azure.com/"
+  MEILISEARCH_URL: http://docuelevate-meilisearch:7700  # auto-resolved from service name
+  ENABLE_SEARCH: "true"
+  AUTH_ENABLED: "true"
+  EXTERNAL_HOSTNAME: docuelevate.example.com
+```
+
+#### Secrets (`secrets`)
+
+All secrets are stored in a Kubernetes `Secret` and injected as environment variables.
+
+```yaml
+secrets:
+  DATABASE_URL: "postgresql://user:pass@postgres:5432/docuelevate"
+  SESSION_SECRET: "<min-32-char-random-string>"
+  OPENAI_API_KEY: "sk-..."
+  AZURE_AI_KEY: "..."
+  MEILISEARCH_API_KEY: ""   # leave blank for unauthenticated dev Meilisearch
+  # Storage provider secrets ...
+```
+
+> **Tip:** In production use an external secret manager (Vault, ESO, Sealed Secrets) and reference the secret by name instead of embedding values in values.yaml.
+
+#### Replicas & Autoscaling
+
+```yaml
+api:
+  replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+
+worker:
+  replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 75
+```
+
+#### Shared Workdir PVC
+
+```yaml
+workdir:
+  persistence:
+    enabled: true
+    accessMode: ReadWriteMany   # RWX required for multi-replica
+    size: 20Gi
+    storageClass: "nfs-client"  # or leave blank for cluster default
+```
+
+#### Ingress (nginx example)
+
+```yaml
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "1g"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: docuelevate.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: docuelevate-tls
+      hosts:
+        - docuelevate.example.com
+```
+
+#### External Redis
+
+```yaml
+redis:
+  enabled: false          # disable bundled Redis
+
+externalRedis:
+  url: "redis://my-redis-host:6379/0"
+```
+
+#### Meilisearch
+
+The bundled Meilisearch deployment is a single-replica, persistent StatefulSet-equivalent.  For production, consider [Meilisearch Cloud](https://www.meilisearch.com/cloud) and point `env.MEILISEARCH_URL` at it.
+
+```yaml
+meilisearch:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 10Gi
+```
+
+### Upgrading
+
+```bash
+helm upgrade docuelevate ./helm/docuelevate \
+  --namespace docuelevate \
+  -f my-values.yaml
+```
+
+The pre-upgrade hook runs `alembic upgrade head` automatically before the new pods start.
+
+### Uninstalling
+
+```bash
+helm uninstall docuelevate --namespace docuelevate
+# PVCs are NOT deleted automatically — remove manually if desired:
+kubectl delete pvc -l app.kubernetes.io/instance=docuelevate -n docuelevate
+```
+
+### Kubernetes Architecture Diagram
+
+```
+Internet
+   │
+   ▼
+[Ingress / LoadBalancer]
+   │
+   ▼
+[API Deployment] ─────── [Worker Deployment]
+   │        │                │        │
+   │        └── shared PVC ──┘        │
+   │              (workdir)            │
+   ▼                                  ▼
+[Redis Service]              [Gotenberg Service]
+   │
+[Meilisearch Service]
+```
+
+---
 
 ## Production Considerations
 
-### Security Headers
+### Database
 
-DocuElevate includes built-in support for HTTP security headers to improve browser-side security. **These headers are disabled by default** since most deployments use a reverse proxy (Traefik, Nginx, etc.) that already adds these headers.
+SQLite is fine for development but **not recommended for multi-replica production** deployments because it cannot be shared safely across pods.  Use PostgreSQL:
 
-#### Supported Security Headers
-
-- **Strict-Transport-Security (HSTS)**: Forces browsers to use HTTPS for all future requests
-- **Content-Security-Policy (CSP)**: Controls which resources browsers are allowed to load
-- **X-Frame-Options**: Prevents the page from being loaded in frames (clickjacking protection)
-- **X-Content-Type-Options**: Prevents browsers from MIME-sniffing responses
-
-#### Reverse Proxy Deployment (Traefik, Nginx, etc.) - DEFAULT
-
-**Most deployments use a reverse proxy**, which is why security headers are disabled by default in DocuElevate. The reverse proxy should add these headers.
-
-```bash
-# In .env file (or omit - this is the default)
-SECURITY_HEADERS_ENABLED=false
+```
+DATABASE_URL=postgresql://docuelevate:secret@postgres-host:5432/docuelevate
 ```
 
-##### Traefik Configuration Example
+### Security Headers
 
-Traefik can add security headers using middleware. Create a `docker-compose.yaml` with Traefik labels:
+DocuElevate's built-in security headers are **disabled by default** since most deployments use a reverse proxy that already adds them.
+
+```bash
+# Enable only if running without a reverse proxy
+SECURITY_HEADERS_ENABLED=true
+```
+
+#### Traefik (Docker Compose) example
 
 ```yaml
 services:
@@ -85,35 +289,25 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.docuelevate.rule=Host(`docuelevate.example.com`)"
       - "traefik.http.routers.docuelevate.entrypoints=websecure"
-      - "traefik.http.routers.docuelevate.tls=true"
       - "traefik.http.routers.docuelevate.tls.certresolver=letsencrypt"
-      # Security headers middleware
       - "traefik.http.routers.docuelevate.middlewares=security-headers@docker"
       - "traefik.http.middlewares.security-headers.headers.stsSeconds=31536000"
       - "traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains=true"
-      - "traefik.http.middlewares.security-headers.headers.contentSecurityPolicy=default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
-      - "traefik.http.middlewares.security-headers.headers.customFrameOptionsValue=DENY"
       - "traefik.http.middlewares.security-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.security-headers.headers.customFrameOptionsValue=DENY"
 ```
 
-Then set `SECURITY_HEADERS_ENABLED=false` in your `.env` file.
-
-##### Nginx Configuration Example
-
-Add security headers to your Nginx configuration:
+#### Nginx example
 
 ```nginx
 server {
     listen 443 ssl http2;
     server_name docuelevate.example.com;
 
-    # SSL configuration
     ssl_certificate /etc/nginx/ssl/cert.pem;
     ssl_certificate_key /etc/nginx/ssl/key.pem;
 
-    # Security headers
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;" always;
     add_header X-Frame-Options "DENY" always;
     add_header X-Content-Type-Options "nosniff" always;
 
@@ -123,144 +317,109 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size 1g;
     }
 }
 ```
 
-Then keep `SECURITY_HEADERS_ENABLED=false` in your `.env` file (or omit it, as this is the default).
-
-#### Direct Deployment (No Reverse Proxy)
-
-If you're running DocuElevate **directly without a reverse proxy**, enable security headers:
-
-```bash
-# In .env file
-SECURITY_HEADERS_ENABLED=true
-```
-
-You can also configure individual headers:
-
-```bash
-SECURITY_HEADER_HSTS_ENABLED=true
-SECURITY_HEADER_CSP_ENABLED=true
-SECURITY_HEADER_X_FRAME_OPTIONS_ENABLED=true
-SECURITY_HEADER_X_CONTENT_TYPE_OPTIONS_ENABLED=true
-```
-
-**Note**: HSTS only works when serving content over HTTPS. If using HTTP for development, you can disable it:
-
-```bash
-SECURITY_HEADER_HSTS_ENABLED=false
-```
-
-#### Customizing Security Headers
-
-If you enable security headers, you can customize individual header values in your `.env` file:
-
-```bash
-# Customize HSTS (e.g., shorter duration for testing)
-SECURITY_HEADER_HSTS_VALUE="max-age=300"
-
-# Customize CSP (e.g., allow specific external domains)
-SECURITY_HEADER_CSP_VALUE="default-src 'self'; script-src 'self' https://cdn.example.com; style-src 'self' 'unsafe-inline';"
-
-# Allow framing from same origin
-SECURITY_HEADER_X_FRAME_OPTIONS_VALUE="SAMEORIGIN"
-```
-
-#### Security Considerations
-
-1. **HSTS and HTTPS**: HSTS only works over HTTPS. Ensure you have a valid SSL certificate before enabling HSTS.
-2. **CSP Testing**: The default CSP policy allows inline scripts and styles for compatibility. Test thoroughly before tightening.
-3. **Content-Security-Policy**: The default policy allows `'unsafe-inline'` for scripts and styles for compatibility with Tailwind CSS and inline JavaScript. For stricter security, consider using nonces or hashes.
-4. **X-Frame-Options**: Set to `DENY` by default. Change to `SAMEORIGIN` if you need to embed DocuElevate in iframes on the same domain.
-
-See the [Configuration Guide](ConfigurationGuide.md) for all security header options.
-
-### Reverse Proxy Setup
-
-For production use, we recommend setting up a reverse proxy (like Nginx or Traefik) to handle HTTPS and domain routing:
-
-```nginx
-server {
-    listen 80;
-    server_name docuelevate.example.com;
-
-    location / {
-        proxy_pass http://localhost:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-### Persistent Storage
-
-The Docker setup uses volumes for persistent storage. For production, consider:
+### Storage
 
 ```yaml
+# Docker Compose
 volumes:
   - /path/to/persistent/storage:/workdir
+
+# Helm — use a RWX storage class for multi-replica
+workdir:
+  persistence:
+    size: 20Gi
+    accessMode: ReadWriteMany
+    storageClass: "nfs-client"
 ```
 
-### Security
+### General Security Checklist
 
 1. **Always use HTTPS** in production
-2. Enable authentication by setting `AUTH_ENABLED=true`
-3. Use strong passwords for all services
-4. Limit access to the Docker host
-5. Regularly update the application and dependencies
+2. Set `AUTH_ENABLED=true` and use a strong `SESSION_SECRET`
+3. Rotate API keys and secrets regularly — see the [Credential Rotation Guide](CredentialRotationGuide.md)
+4. Limit network access to Redis and Meilisearch (both should be internal-only)
+5. Regularly update the container image to pick up dependency patches
+
+---
 
 ## Scaling
 
-For high-volume deployments:
+### Docker Compose
 
-1. Increase worker processes by adding more worker containers:
+Add more worker containers:
 
 ```yaml
 worker:
-  image: christianlouis/document-processor:latest
   deploy:
     replicas: 3
 ```
 
-2. Consider using dedicated Redis and database servers
-3. Monitor system performance and adjust resources as needed
+### Kubernetes / Helm
+
+Enable HPA:
+
+```yaml
+api:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+
+worker:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+```
+
+---
 
 ## Monitoring
 
-Monitor your DocuElevate deployment using:
+- **Docker Compose**: `docker-compose logs -f`, `docker stats`
+- **Kubernetes**: `kubectl logs -l app.kubernetes.io/component=api -f`
+- **Prometheus / Grafana**: Scrape the `/api/health` endpoint for readiness; add custom metrics as needed.
+- **Uptime Kuma**: Set `UPTIME_KUMA_URL` to your push URL for heartbeat monitoring.
 
-- Docker's built-in logging: `docker-compose logs -f`
-- Container metrics: `docker stats`
-- External monitoring tools like Prometheus and Grafana
+---
 
 ## Backup Procedures
 
-Regularly back up the following:
+Regularly back up:
 
-1. The `/workdir` directory containing all processed documents
-2. The database file (if using SQLite) or database contents (if using another DBMS)
-3. The `.env` configuration file
+1. The `/workdir` volume (all processed documents and originals)
+2. The database (PostgreSQL `pg_dump` or SQLite file)
+3. The Meilisearch data directory (`/meili_data`)
+4. Your `.env` / Helm values file (store securely, it contains secrets)
+
+---
 
 ## Updates
 
-To update DocuElevate to a newer version:
+### Docker Compose
 
 ```bash
-# Pull the latest changes
 git pull
-
-# Pull the latest Docker images
 docker-compose pull
-
-# Restart the services
-docker-compose down
-docker-compose up -d
+docker-compose down && docker-compose up -d
 ```
+
+### Helm
+
+```bash
+helm repo update          # if using a hosted chart repository
+helm upgrade docuelevate ./helm/docuelevate --namespace docuelevate -f my-values.yaml
+```
+
+The migration Job runs automatically on every `helm upgrade`.
+
+---
 
 ## Troubleshooting
 
-See the [Troubleshooting](Troubleshooting.md) guide for common deployment issues and solutions.
+See the [Troubleshooting Guide](Troubleshooting.md) for common issues and solutions.

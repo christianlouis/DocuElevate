@@ -1,0 +1,45 @@
+Thank you for installing {{ .Chart.Name }} {{ .Chart.Version }}!
+
+{{- if .Values.ingress.enabled }}
+The application will be available at:
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+To access DocuElevate, run:
+
+  kubectl port-forward svc/{{ include "docuelevate.fullname" . }}-api {{ .Values.api.service.port }}:{{ .Values.api.service.port }} -n {{ .Release.Namespace }}
+
+Then open http://localhost:{{ .Values.api.service.port }}
+{{- end }}
+
+API docs are available at: <your-url>/docs
+
+{{- if not .Values.secrets.SESSION_SECRET }}
+
+⚠️  WARNING: secrets.SESSION_SECRET is not set.
+   Generate one with:  openssl rand -hex 32
+   Then pass it via:   --set secrets.SESSION_SECRET=<value>
+   or via a values file / external secret.
+
+{{- end }}
+
+{{- if not .Values.secrets.DATABASE_URL }}
+
+⚠️  WARNING: secrets.DATABASE_URL is not set.
+   For production, use PostgreSQL:
+     postgresql://user:pass@host:5432/docuelevate
+   SQLite with a PVC is supported but not recommended for multi-replica
+   deployments (use ReadWriteOnce PVC and replicaCount=1 in that case).
+
+{{- end }}
+
+Useful commands:
+  # View API logs
+  kubectl logs -l app.kubernetes.io/component=api -n {{ .Release.Namespace }} -f
+
+  # View worker logs
+  kubectl logs -l app.kubernetes.io/component=worker -n {{ .Release.Namespace }} -f
+
+  # Run a database migration manually
+  kubectl create job --from=cronjob/{{ include "docuelevate.fullname" . }}-migrate migrate-manual -n {{ .Release.Namespace }}

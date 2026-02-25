@@ -59,6 +59,15 @@ services:
     container_name: gotenberg
     restart: always
 
+  meilisearch:
+    image: getmeili/meilisearch:latest
+    container_name: document_meilisearch
+    restart: always
+    environment:
+      - MEILI_NO_ANALYTICS=true
+    volumes:
+      - /var/docparse/meilisearch:/meili_data
+
   redis:
     image: redis:alpine
     container_name: document_redis

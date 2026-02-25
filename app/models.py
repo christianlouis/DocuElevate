@@ -55,6 +55,15 @@ class FileRecord(Base):
     # If this is a duplicate, record the ID of the original file for reference
     duplicate_of_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=True)
 
+    # Full OCR/extracted text for full-text search and RAG
+    ocr_text = Column(Text, nullable=True)
+
+    # AI-extracted metadata stored as JSON string (filename, tags, title, sender, etc.)
+    ai_metadata = Column(Text, nullable=True)
+
+    # Human-readable document title from AI metadata
+    document_title = Column(String, nullable=True)
+
     # Timestamp when we inserted this record
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

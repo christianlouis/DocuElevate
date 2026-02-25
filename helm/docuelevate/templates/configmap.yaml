@@ -1,0 +1,40 @@
+# Non-sensitive application configuration.
+# All values are injected as environment variables into the API and Worker pods.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "docuelevate.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "docuelevate.labels" . | nindent 4 }}
+data:
+  WORKDIR: {{ .Values.env.WORKDIR | quote }}
+  PYTHONPATH: "/app"
+  PYTHONUNBUFFERED: "1"
+
+  # AI provider
+  AI_PROVIDER: {{ .Values.env.AI_PROVIDER | quote }}
+  OPENAI_MODEL: {{ .Values.env.OPENAI_MODEL | quote }}
+
+  # Azure
+  AZURE_REGION: {{ .Values.env.AZURE_REGION | quote }}
+  AZURE_ENDPOINT: {{ .Values.env.AZURE_ENDPOINT | quote }}
+
+  # Service URLs — resolved from helper templates so they always match the
+  # in-cluster service names even if values.yaml uses template expressions.
+  GOTENBERG_URL: {{ include "docuelevate.gotenbergUrl" . | quote }}
+  MEILISEARCH_URL: {{ include "docuelevate.meilisearchUrl" . | quote }}
+  MEILISEARCH_INDEX_NAME: {{ .Values.env.MEILISEARCH_INDEX_NAME | quote }}
+  ENABLE_SEARCH: {{ .Values.env.ENABLE_SEARCH | quote }}
+
+  # Auth
+  AUTH_ENABLED: {{ .Values.env.AUTH_ENABLED | quote }}
+  ADMIN_USERNAME: {{ .Values.env.ADMIN_USERNAME | quote }}
+  EXTERNAL_HOSTNAME: {{ .Values.env.EXTERNAL_HOSTNAME | quote }}
+
+  # Feature flags
+  ENABLE_DEDUPLICATION: {{ .Values.env.ENABLE_DEDUPLICATION | quote }}
+  ENABLE_TEXT_QUALITY_CHECK: {{ .Values.env.ENABLE_TEXT_QUALITY_CHECK | quote }}
+  ALLOW_FILE_DELETE: {{ .Values.env.ALLOW_FILE_DELETE | quote }}
+
+  DEBUG: {{ .Values.env.DEBUG | quote }}

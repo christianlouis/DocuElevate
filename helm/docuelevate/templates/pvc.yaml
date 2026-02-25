@@ -1,0 +1,49 @@
+# Shared workdir PVC — mounted by both the API and the Worker so they can
+# exchange files during processing.  Requires ReadWriteMany (e.g. NFS,
+# CephFS, Azure Files, EFS) when running multiple replicas.
+# Set workdir.persistence.accessMode=ReadWriteOnce and replicaCount=1
+# for single-node / dev clusters.
+{{- if .Values.workdir.persistence.enabled }}
+{{- if not .Values.workdir.persistence.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "docuelevate.fullname" . }}-workdir
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "docuelevate.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.workdir.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.workdir.persistence.size }}
+  {{- if .Values.workdir.persistence.storageClass }}
+  storageClassName: {{ .Values.workdir.persistence.storageClass }}
+  {{- end }}
+{{- end }}
+{{- end }}
+
+---
+
+# Meilisearch data PVC
+{{- if and .Values.meilisearch.enabled .Values.meilisearch.persistence.enabled }}
+{{- if not .Values.meilisearch.persistence.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "docuelevate.fullname" . }}-meilisearch-data
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "docuelevate.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.meilisearch.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.meilisearch.persistence.size }}
+  {{- if .Values.meilisearch.persistence.storageClass }}
+  storageClassName: {{ .Values.meilisearch.persistence.storageClass }}
+  {{- end }}
+{{- end }}
+{{- end }}

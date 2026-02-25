@@ -195,8 +195,26 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
                     original_file_path = file_record.original_file_path
                     # Update the processed_file_path in the database
                     file_record.processed_file_path = final_file_path
+                    # Persist extracted text and AI metadata to DB for full-text search / RAG
+                    file_record.ocr_text = extracted_text or None
+                    if metadata:
+                        try:
+                            file_record.ai_metadata = json.dumps(metadata, ensure_ascii=False)
+                        except Exception as json_exc:
+                            logger.warning(f"[{task_id}] Could not serialise ai_metadata: {json_exc}")
+                        file_record.document_title = (
+                            metadata.get("title") or metadata.get("filename") or file_record.original_filename
+                        )
                     db.commit()
-                    logger.info(f"[{task_id}] Updated database with processed_file_path: {final_file_path}")
+                    logger.info(f"[{task_id}] Updated database with processed_file_path and search fields")
+
+                    # Index into Meilisearch for full-text search (non-blocking, best-effort)
+                    try:
+                        from app.utils.meilisearch_client import index_document
+
+                        index_document(file_record, extracted_text or "", metadata or {})
+                    except Exception as search_exc:
+                        logger.warning(f"[{task_id}] Meilisearch indexing failed (non-fatal): {search_exc}")
 
         # Persist the metadata into a JSON file with the same base name.
         # Include file path references for traceability
