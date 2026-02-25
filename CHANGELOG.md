@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.57.0 (2026-02-25)
+
+### Features
+
+- **privacy**: Implement GDPR and global privacy compliance
+  ([`0821e2f`](https://github.com/christianlouis/DocuElevate/commit/0821e2f989416f596f62620bed1b160f5b35bd19))
+
+
 ## v0.56.2 (2026-02-25)
 
 ### Bug Fixes
