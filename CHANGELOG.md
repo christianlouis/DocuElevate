@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.54.0 (2026-02-25)
+
+### Features
+
+- **ocr**: Fine-tune OCR quality criteria with stricter threshold and head-to-head comparison
+  ([`89d5df7`](https://github.com/christianlouis/DocuElevate/commit/89d5df71c837f07111ad691ce455f7d253a14584))
+
+
 ## v0.53.1 (2026-02-25)
 
 ### Bug Fixes
