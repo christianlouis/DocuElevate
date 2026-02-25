@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.55.0 (2026-02-25)
+
+### Bug Fixes
+
+- **config**: Default meilisearch_url to http://meilisearch:7700 for Docker/K8s service discovery
+  ([`ff96340`](https://github.com/christianlouis/DocuElevate/commit/ff963401549eabeee6de6bc1421949e5df2213e2))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`0930765`](https://github.com/christianlouis/DocuElevate/commit/093076515e7686b94af31dd6a3f9ca9d393dc01a))
+
+### Features
+
+- **helm**: Add Helm chart for Kubernetes deployment and update DeploymentGuide
+  ([`a08bfb9`](https://github.com/christianlouis/DocuElevate/commit/a08bfb9f1a21105c48356655e7bb5e129b7d8b43))
+
+
 ## v0.54.0 (2026-02-25)
 
 ### Features
