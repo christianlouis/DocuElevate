@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.56.0 (2026-02-25)
+
+### Features
+
+- **ui**: Add dark mode support with system preference detection and localStorage persistence
+  ([`c428a7e`](https://github.com/christianlouis/DocuElevate/commit/c428a7ec00e3b600cd2ecbb8edfdd9112ebf5d31))
+
+
 ## v0.55.0 (2026-02-25)
 
 ### Bug Fixes
