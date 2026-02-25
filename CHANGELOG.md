@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.56.1 (2026-02-25)
+
+### Bug Fixes
+
+- **mypy**: Add missing type annotations in meilisearch_client.py
+  ([`07e7b49`](https://github.com/christianlouis/DocuElevate/commit/07e7b49ac83604e9bac5ca53266d7475b9f8a45d))
+
+### Documentation
+
+- Add Setup Wizard, Production Readiness, Database, K8s, and Licensing guides
+  ([`139e23c`](https://github.com/christianlouis/DocuElevate/commit/139e23c9e48a872e1d4f6c16443053489273b661))
+
+
 ## v0.56.0 (2026-02-25)
 
 ### Features
