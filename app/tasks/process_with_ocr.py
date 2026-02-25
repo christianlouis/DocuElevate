@@ -8,7 +8,10 @@ task with a multi-engine OCR pipeline that:
 2. Merges/cross-checks the results using the configured AI model when more
    than one provider is active (see ``OCR_MERGE_STRATEGY``).
 3. Writes the best searchable PDF back to the working directory.
-4. Hands off to the page-rotation and metadata-extraction pipeline exactly as
+4. Optionally compares the OCR output against the original embedded text
+   (passed as *original_text*) using a head-to-head AI review and keeps the
+   higher-quality text for downstream processing.
+5. Hands off to the page-rotation and metadata-extraction pipeline exactly as
    the legacy Azure task did.
 """
 
@@ -22,20 +25,26 @@ from app.tasks.retry_config import BaseTaskWithRetry
 from app.tasks.rotate_pdf_pages import rotate_pdf_pages
 from app.utils import log_task_progress
 from app.utils.ocr_provider import OCRResult, embed_text_layer, get_ocr_providers, merge_ocr_results
+from app.utils.text_quality import compare_text_quality
 
 logger = logging.getLogger(__name__)
 
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
-def process_with_ocr(self, filename: str, file_id: Optional[int] = None):
+def process_with_ocr(self, filename: str, file_id: Optional[int] = None, original_text: Optional[str] = None):
     """Run the configured OCR providers on *filename* and continue the pipeline.
 
     When multiple OCR providers are configured the results are merged using the
     AI model (or a simpler strategy controlled by ``OCR_MERGE_STRATEGY``).
 
+    If *original_text* is provided (the original embedded text that failed the
+    quality check), the OCR result is compared against it using a head-to-head
+    AI review.  The higher-quality text is passed to downstream tasks.
+
     Args:
         filename: Base name of the file inside ``<workdir>/tmp/``.
         file_id: Optional database record ID passed through to downstream tasks.
+        original_text: Optional original embedded text for head-to-head comparison.
     """
     task_id = self.request.id
     log_task_progress(
@@ -138,22 +147,107 @@ def process_with_ocr(self, filename: str, file_id: Optional[int] = None):
                     file_id=file_id,
                 )
 
+        # ----------------------------------------------------------------
+        # Head-to-head comparison with original embedded text (if provided)
+        # ----------------------------------------------------------------
+        final_text = extracted_text
+        if original_text and original_text.strip() and extracted_text.strip():
+            logger.info(f"[{task_id}] Original embedded text provided; running head-to-head quality comparison")
+            log_task_progress(
+                task_id,
+                "compare_ocr_quality",
+                "in_progress",
+                "Comparing OCR result against original embedded text",
+                file_id=file_id,
+            )
+            try:
+                comparison = compare_text_quality(original_text, extracted_text)
+                comparison_detail = (
+                    f"Original score: {comparison.original_score}/100, "
+                    f"OCR score: {comparison.ocr_score}/100, "
+                    f"Preferred: {comparison.preferred}\n"
+                    f"AI explanation: {comparison.explanation}"
+                )
+                logger.info(f"[{task_id}] OCR comparison – {comparison_detail}")
+
+                if comparison.preferred == "original":
+                    # Original text is actually better – use it instead of OCR.
+                    final_text = original_text
+                    logger.info(
+                        f"[{task_id}] Original embedded text selected "
+                        f"(original={comparison.original_score} > ocr={comparison.ocr_score})"
+                    )
+                    log_task_progress(
+                        task_id,
+                        "compare_ocr_quality",
+                        "success",
+                        f"Original text preferred (original={comparison.original_score}/100 vs "
+                        f"ocr={comparison.ocr_score}/100)",
+                        file_id=file_id,
+                        detail=comparison_detail,
+                    )
+                else:
+                    logger.info(
+                        f"[{task_id}] OCR text selected "
+                        f"(preferred={comparison.preferred!r}, "
+                        f"ocr={comparison.ocr_score}, original={comparison.original_score})"
+                    )
+                    log_task_progress(
+                        task_id,
+                        "compare_ocr_quality",
+                        "success",
+                        f"OCR text preferred (ocr={comparison.ocr_score}/100 vs "
+                        f"original={comparison.original_score}/100)",
+                        file_id=file_id,
+                        detail=comparison_detail,
+                    )
+            except Exception as cmp_exc:
+                logger.warning(f"[{task_id}] Head-to-head comparison failed ({cmp_exc}); keeping OCR text")
+                log_task_progress(
+                    task_id,
+                    "compare_ocr_quality",
+                    "skipped",
+                    f"Comparison failed ({cmp_exc}); keeping OCR output",
+                    file_id=file_id,
+                )
+        elif original_text is not None:
+            # original_text was provided but one side is empty – pick whichever has content.
+            if not extracted_text.strip() and original_text.strip():
+                final_text = original_text
+                logger.info(f"[{task_id}] OCR returned empty text; falling back to original embedded text")
+                log_task_progress(
+                    task_id,
+                    "compare_ocr_quality",
+                    "success",
+                    "OCR empty – using original embedded text",
+                    file_id=file_id,
+                )
+            else:
+                log_task_progress(
+                    task_id,
+                    "compare_ocr_quality",
+                    "skipped",
+                    "No original text to compare; using OCR output",
+                    file_id=file_id,
+                )
+
         log_task_progress(
             task_id,
             "process_with_ocr",
             "success",
             f"OCR complete for {filename}",
             file_id=file_id,
-            detail=f"Extracted {len(extracted_text)} chars using {len(results)} provider(s)",
+            detail=f"Extracted {len(extracted_text)} chars using {len(results)} provider(s); "
+            f"final text length: {len(final_text)} chars",
         )
 
         # Continue pipeline: rotate pages (if needed), then extract metadata
-        rotate_pdf_pages.delay(filename, extracted_text, rotation_data, file_id)
+        rotate_pdf_pages.delay(filename, final_text, rotation_data, file_id)
 
         return {
             "file": filename,
             "searchable_pdf": searchable_pdf_path or tmp_file_path,
-            "cleaned_text": extracted_text,
+            "cleaned_text": final_text,
             "providers_used": [r.provider for r in results],
         }
 

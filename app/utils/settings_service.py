@@ -1070,6 +1070,31 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "text_quality_threshold": {
+        "category": "Processing",
+        "description": (
+            "Minimum quality score (0–100) required to accept embedded PDF text without re-OCR. "
+            "Text scoring below this threshold triggers a fresh OCR pass. "
+            "Default: 85. Lower values are more permissive; higher values enforce stricter quality."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "text_quality_significant_issues": {
+        "category": "Processing",
+        "description": (
+            "Comma-separated list of quality issue labels that force OCR re-run even when the quality "
+            "score meets TEXT_QUALITY_THRESHOLD. Any matching issue in the AI assessment will trigger "
+            "re-OCR regardless of the numeric score. "
+            "Default: excessive_typos,garbage_characters,incoherent_text,fragmented_sentences"
+        ),
+        "type": "list",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Notifications Settings
     "notification_urls": {
         "category": "Notifications",

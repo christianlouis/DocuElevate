@@ -428,19 +428,21 @@ def process_document(
 
             if not quality_result.is_good_quality:
                 # Poor quality: discard embedded text and re-OCR instead.
+                # Pass the original embedded text so the OCR task can compare
+                # its result against the original and keep the better version.
                 issues_str = ", ".join(quality_result.issues) if quality_result.issues else "unspecified"
                 detail_msg = (
                     f"Text quality check FAILED – score={quality_result.quality_score}/100, "
                     f"source={quality_result.text_source.value}, issues=[{issues_str}].\n"
                     f"AI feedback: {quality_result.feedback}\n"
-                    f"Embedded text will be ignored; re-running OCR."
+                    f"Embedded text will be compared with fresh OCR output; best version will be used."
                 )
                 logger.warning(f"[{task_id}] {detail_msg}")
                 log_task_progress(
                     task_id,
                     "check_text_quality",
                     "failure",
-                    f"Poor quality text (score={quality_result.quality_score}/100); queuing OCR",
+                    f"Poor quality text (score={quality_result.quality_score}/100); queuing OCR for comparison",
                     file_id=file_id,
                     detail=detail_msg,
                 )
@@ -451,7 +453,7 @@ def process_document(
                     "Queued for OCR (text quality too low)",
                     file_id=file_id,
                 )
-                process_with_ocr.delay(new_filename, file_id)
+                process_with_ocr.delay(new_filename, file_id, extracted_text)
                 return {
                     "file": new_local_path,
                     "status": "Queued for OCR (poor embedded text quality)",

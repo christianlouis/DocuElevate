@@ -465,9 +465,11 @@ When multiple providers are listed, all run in parallel and their results are me
 
 DocuElevate can automatically assess whether the text already embedded in a PDF is of sufficient quality before deciding to skip OCR. This prevents poor OCR output from a previous scan being silently used for downstream processing.
 
-| **Variable**                   | **Description**                                                                 | **Default** |
-|--------------------------------|---------------------------------------------------------------------------------|-------------|
-| `ENABLE_TEXT_QUALITY_CHECK`    | Enable AI-based quality assessment of embedded PDF text.                       | `true`      |
+| **Variable**                              | **Description**                                                                                         | **Default**                                                                               |
+|-------------------------------------------|---------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------|
+| `ENABLE_TEXT_QUALITY_CHECK`               | Enable AI-based quality assessment of embedded PDF text.                                                | `true`                                                                                    |
+| `TEXT_QUALITY_THRESHOLD`                  | Minimum quality score (0–100) required to accept embedded text without re-OCR.                         | `85`                                                                                      |
+| `TEXT_QUALITY_SIGNIFICANT_ISSUES`         | Comma-separated issue labels that force re-OCR even when the score meets the threshold.                 | `excessive_typos,garbage_characters,incoherent_text,fragmented_sentences`                 |
 
 **How it works:**
 
@@ -478,10 +480,15 @@ DocuElevate can automatically assess whether the text already embedded in a PDF 
    - Garbage characters or symbol soup
    - Incoherent or nonsensical sentences
    - Heavy fragmentation
-4. If the quality score falls **below 65/100**, the embedded text is discarded and the file is sent to the configured OCR providers for a fresh scan.
-5. All quality decisions (score, source, AI feedback) are recorded in the processing log for review.
+4. The text is **rejected** (and re-OCR triggered) when **either** of these conditions is true:
+   - The quality score is **below** `TEXT_QUALITY_THRESHOLD` (default 85), **or**
+   - The AI identifies one or more issues listed in `TEXT_QUALITY_SIGNIFICANT_ISSUES` — even if the numeric score is above the threshold. This prevents edge cases such as a score of 68 with `excessive_typos` and `garbage_characters` being silently accepted.
+5. After the re-OCR pass, the fresh OCR result is compared **head-to-head** against the original embedded text using an AI side-by-side review. The higher-quality text is passed to downstream processing (metadata extraction, AI analysis). This ensures re-OCR never degrades quality.
+6. All quality decisions (score, source, AI feedback, comparison outcome) are recorded in the processing log for review.
 
 > **Tip**: Set `ENABLE_TEXT_QUALITY_CHECK=false` to disable the check entirely and always use embedded text as-is. This is useful when the AI provider is unavailable or when processing speed is more important than text accuracy.
+
+> **Tuning the threshold**: The default of `TEXT_QUALITY_THRESHOLD=85` is intentionally strict. Lower it (e.g., `70`) for environments with consistently good existing OCR. Raise it (up to `100`) for maximum quality enforcement.
 
 #### Searchable PDF Text Layer
 
