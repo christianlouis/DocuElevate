@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.56.2 (2026-02-25)
+
+### Bug Fixes
+
+- **database**: Add runtime migrations for ocr_text, ai_metadata, document_title columns
+  ([`db581ba`](https://github.com/christianlouis/DocuElevate/commit/db581ba355834a514606717fb5f8f9673fc0dce6))
+
+### Documentation
+
+- Add missing docs to mkdocs nav and README index
+  ([`6e78e9e`](https://github.com/christianlouis/DocuElevate/commit/6e78e9e7cf37ce53700bd4b0ce5b599c8c5ac029))
+
+- **changelog**: Update changelog [skip ci]
+  ([`3dced5e`](https://github.com/christianlouis/DocuElevate/commit/3dced5eba42ef39144695003924dcf9425532ed8))
+
+
 ## Unreleased
 
 ### Documentation
