@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Documentation
+
+- Add missing docs to mkdocs nav and README index
+  ([`6e78e9e`](https://github.com/christianlouis/DocuElevate/commit/6e78e9e7cf37ce53700bd4b0ce5b599c8c5ac029))
+
+
 ## v0.56.1 (2026-02-25)
 
 ### Bug Fixes
