@@ -13,16 +13,26 @@ theme:
     - search.suggest
     - content.code.copy
 nav:
-  - User Guide: UserGuide
+  - Getting Started:
+      - Setup Wizard: SetupWizard
+      - User Guide: UserGuide
   - API: API
-  - Deployment: DeploymentGuide
+  - Deployment:
+      - Overview: DeploymentGuide
+      - Kubernetes / Helm: KubernetesDeployment
+      - Production Readiness: ProductionReadiness
   - Configuration:
       - Overview: ConfigurationMaster
       - Configuration Guide: ConfigurationGuide
+      - Database: DatabaseConfiguration
       - Dropbox: DropboxSetup
       - Google Drive: GoogleDriveSetup
       - OneDrive: OneDriveSetup
       - Amazon S3: AmazonS3Setup
+      - Authentication: AuthenticationSetup
+      - Notifications: NotificationsSetup
   - Troubleshooting:
       - General: Troubleshooting
       - Configuration: ConfigurationTroubleshooting
+  - Compliance:
+      - Licensing: LicensingCompliance
