@@ -382,6 +382,16 @@ class Settings(BaseSettings):
         ),
     )
 
+    # UI / Appearance
+    ui_default_color_scheme: str = Field(
+        default="system",
+        description=(
+            "Default color scheme for the web interface. "
+            "Options: 'system' (follow OS preference), 'light', 'dark'. "
+            "Individual users can override this with the in-app toggle; their choice is persisted in localStorage."
+        ),
+    )
+
     # Rate Limiting Configuration (see SECURITY_AUDIT.md and docs/API.md)
     # Protects against DoS attacks and API abuse
     rate_limiting_enabled: bool = Field(
