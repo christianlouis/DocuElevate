@@ -201,10 +201,13 @@ def get_file_overall_status(db: Session, file_id: int) -> Dict:
 
     # Define which steps are "real" status-determining steps
     # Only high-level logical steps, not implementation sub-steps
+    # Both process_with_ocr (current) and process_with_azure_document_intelligence (legacy)
+    # are included to correctly count steps for files processed before the OCR abstraction.
     REAL_MAIN_STEPS = {
         "create_file_record",
         "check_text",
         "extract_text",
+        "process_with_ocr",
         "process_with_azure_document_intelligence",
         "extract_metadata_with_gpt",
         "embed_metadata_into_pdf",
@@ -286,10 +289,13 @@ def get_step_summary(db: Session, file_id: int) -> Dict:
     """
     # Define which steps are "real" status-determining steps
     # Only high-level logical steps, not implementation sub-steps
+    # Both process_with_ocr (current) and process_with_azure_document_intelligence (legacy)
+    # are included to correctly count steps for files processed before the OCR abstraction.
     REAL_MAIN_STEPS = {
         "create_file_record",
         "check_text",
         "extract_text",
+        "process_with_ocr",
         "process_with_azure_document_intelligence",
         "extract_metadata_with_gpt",
         "embed_metadata_into_pdf",

@@ -476,7 +476,7 @@ def process_document(
         # Mark OCR as skipped since we extracted text locally
         log_task_progress(
             task_id,
-            "process_with_azure_document_intelligence",
+            "process_with_ocr",
             "skipped",
             "Local text extraction succeeded, OCR not needed",
             file_id=file_id,

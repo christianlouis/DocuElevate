@@ -56,9 +56,9 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
     Get processing status for multiple files efficiently.
 
     Only counts "real" processing steps that represent user-facing status:
-    - Main steps: create_file_record, check_text, extract_text, process_with_azure_document_intelligence,
-                  extract_metadata_with_gpt, embed_metadata_into_pdf, finalize_document_storage,
-                  send_to_all_destinations
+    - Main steps: create_file_record, check_text, extract_text, process_with_ocr,
+                  process_with_azure_document_intelligence (legacy), extract_metadata_with_gpt,
+                  embed_metadata_into_pdf, finalize_document_storage, send_to_all_destinations
     - Upload steps: upload_to_*
 
     Diagnostic/internal steps (poll_task, upload_file, set_custom_fields, etc.) are ignored.
@@ -83,6 +83,7 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
         "create_file_record",
         "check_text",
         "extract_text",
+        "process_with_ocr",
         "process_with_azure_document_intelligence",
         "extract_metadata_with_gpt",
         "embed_metadata_into_pdf",

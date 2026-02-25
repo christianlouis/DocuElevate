@@ -520,7 +520,8 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
 
     Supports restarting from intermediate pipeline steps:
     - process_document: Full reprocessing (skips duplicate check)
-    - process_with_azure_document_intelligence: OCR processing
+    - process_with_ocr: OCR processing (multi-provider)
+    - process_with_azure_document_intelligence: OCR processing (legacy alias for process_with_ocr)
     - extract_metadata_with_gpt: Metadata extraction
     - embed_metadata_into_pdf: Metadata embedding
 
@@ -554,16 +555,11 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
             original_filename=file_record.original_filename,
             file_id=file_id,
         )
-    elif step_name == "process_with_azure_document_intelligence":
-        from app.tasks.process_with_azure_document_intelligence import (
-            process_with_azure_document_intelligence,
-        )
+    elif step_name in ("process_with_ocr", "process_with_azure_document_intelligence"):
+        from app.tasks.process_with_ocr import process_with_ocr
 
         # OCR needs the file in workdir/tmp
-        logger.info(
-            f"Retrying process_with_azure_document_intelligence for file {file_id}: "
-            f"local_filename={file_record.local_filename!r}"
-        )
+        logger.info(f"Retrying process_with_ocr for file {file_id}: local_filename={file_record.local_filename!r}")
         if not file_record.local_filename:
             logger.error(f"OCR retry failed for file {file_id}: local_filename is None")
             raise HTTPException(status_code=400, detail="Local file path is None. Cannot retry OCR.")
@@ -577,7 +573,7 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
 
         logger.info(f"Found file for OCR retry at: {file_record.local_filename!r}")
         filename = os.path.basename(file_record.local_filename)
-        task = process_with_azure_document_intelligence.delay(filename, file_id)
+        task = process_with_ocr.delay(filename, file_id)
     elif step_name == "extract_metadata_with_gpt":
         from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 
@@ -701,7 +697,7 @@ def retry_subtask(
     Retry a specific failed subtask for a file.
 
     Supports both upload tasks (e.g., upload_to_dropbox) and pipeline processing
-    steps (e.g., process_with_azure_document_intelligence, extract_metadata_with_gpt,
+    steps (e.g., process_with_ocr, extract_metadata_with_gpt,
     embed_metadata_into_pdf).
 
     Args:
@@ -721,6 +717,7 @@ def retry_subtask(
         # Pipeline processing steps that can be retried from the failed step
         pipeline_step_names = {
             "process_document",
+            "process_with_ocr",
             "process_with_azure_document_intelligence",
             "extract_metadata_with_gpt",
             "embed_metadata_into_pdf",

@@ -21,9 +21,9 @@ def apply_status_filter(query: Query, db: Session, status: Optional[str]) -> Que
     processing status by examining associated FileProcessingStep entries.
 
     Only tracks "real" processing steps that represent user-facing status:
-    - Main steps: create_file_record, check_text, extract_text, process_with_azure_document_intelligence,
-                  extract_metadata_with_gpt, embed_metadata_into_pdf, finalize_document_storage,
-                  send_to_all_destinations
+    - Main steps: create_file_record, check_text, extract_text, process_with_ocr,
+                  process_with_azure_document_intelligence (legacy), extract_metadata_with_gpt,
+                  embed_metadata_into_pdf, finalize_document_storage, send_to_all_destinations
     - Upload steps: queue_*, upload_to_*
 
     Diagnostic/internal steps (poll_task, upload_file, set_custom_fields, etc.) are ignored
@@ -58,6 +58,7 @@ def apply_status_filter(query: Query, db: Session, status: Optional[str]) -> Que
         "create_file_record",
         "check_text",
         "extract_text",
+        "process_with_ocr",
         "process_with_azure_document_intelligence",
         "extract_metadata_with_gpt",
         "embed_metadata_into_pdf",
