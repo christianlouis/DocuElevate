@@ -7,6 +7,7 @@ Welcome to the DocuElevate documentation. This directory contains comprehensive 
 ### Getting Started
 - [Setup Wizard Guide](SetupWizard.md) - First-run wizard walkthrough and initial configuration
 - [User Guide](UserGuide.md) - How to use DocuElevate's features and interface
+- [Browser Extension](BrowserExtension.md) - Send files and clip web pages directly from your browser
 
 ### Deployment
 - [Deployment Guide](DeploymentGuide.md) - Docker Compose and Kubernetes/Helm deployment
@@ -16,6 +17,7 @@ Welcome to the DocuElevate documentation. This directory contains comprehensive 
 ### Configuration
 - [Configuration Overview](ConfigurationMaster.md) - Overview of configuration options, including:
   - [Configuration Guide](ConfigurationGuide.md) - Complete list of all available configuration parameters
+  - [Settings Management](SettingsManagement.md) - Web-based settings UI and API reference
   - [Database Configuration](DatabaseConfiguration.md) - SQLite, PostgreSQL, migrations, and optimization
   - [Google Drive Setup](GoogleDriveSetup.md) - How to set up Google Drive integration
   - [Dropbox Setup](DropboxSetup.md) - How to set up Dropbox integration
@@ -23,6 +25,9 @@ Welcome to the DocuElevate documentation. This directory contains comprehensive 
   - [Amazon S3 Setup](AmazonS3Setup.md) - How to set up Amazon S3 integration
   - [Authentication Setup](AuthenticationSetup.md) - How to set up user authentication
   - [Notifications Setup](NotificationsSetup.md) - How to set up system notifications
+
+### Security
+- [Credential Rotation Guide](CredentialRotationGuide.md) - Procedures for rotating API keys, passwords, and OAuth tokens
 
 ### Reference
 - [API Documentation](API.md) - Complete API reference for developers

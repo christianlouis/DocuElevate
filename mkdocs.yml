@@ -16,6 +16,7 @@ nav:
   - Getting Started:
       - Setup Wizard: SetupWizard
       - User Guide: UserGuide
+      - Browser Extension: BrowserExtension
   - API: API
   - Deployment:
       - Overview: DeploymentGuide
@@ -24,6 +25,7 @@ nav:
   - Configuration:
       - Overview: ConfigurationMaster
       - Configuration Guide: ConfigurationGuide
+      - Settings Management: SettingsManagement
       - Database: DatabaseConfiguration
       - Dropbox: DropboxSetup
       - Google Drive: GoogleDriveSetup
@@ -31,6 +33,8 @@ nav:
       - Amazon S3: AmazonS3Setup
       - Authentication: AuthenticationSetup
       - Notifications: NotificationsSetup
+  - Security:
+      - Credential Rotation: CredentialRotationGuide
   - Troubleshooting:
       - General: Troubleshooting
       - Configuration: ConfigurationTroubleshooting
