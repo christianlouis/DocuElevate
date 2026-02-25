@@ -5,7 +5,6 @@ Focuses on uncovered lines: 98-99, 121-143, 160-161, 170-171,
 324-326, 400-402, 436-438.
 """
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest

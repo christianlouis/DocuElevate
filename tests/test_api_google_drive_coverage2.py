@@ -139,7 +139,6 @@ class TestTestTokenOuterException:
 
     def test_test_token_outer_exception(self, client: TestClient):
         """Trigger the outermost exception handler in test_google_drive_token."""
-        from app.config import settings
 
         # Patch getattr on settings to raise on the first call within the try block
         with patch("app.api.google_drive.getattr", side_effect=Exception("unexpected error")):
