@@ -1153,6 +1153,20 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # UI / Appearance
+    "ui_default_color_scheme": {
+        "category": "UI",
+        "description": (
+            "Default color scheme for the web interface. "
+            "Options: 'system' (follow OS preference), 'light', 'dark'. "
+            "Individual users can override this with the in-app toggle; their choice is persisted in localStorage."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "options": ["system", "light", "dark"],
+    },
 }
 
 

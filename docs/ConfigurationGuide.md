@@ -759,6 +759,32 @@ For detailed setup instructions, see the [Notifications Setup Guide](Notificatio
 | `UPTIME_KUMA_URL`           | Uptime Kuma push URL for monitoring the application's health.   |
 | `UPTIME_KUMA_PING_INTERVAL` | How often to ping Uptime Kuma in minutes (default: `5`).       |
 
+### UI / Appearance
+
+DocuElevate supports a **dark mode** toggle in the navbar. Users can switch between light and dark themes at any time; their choice is stored in `localStorage` and persists across page reloads in the same browser.
+
+Administrators can set the **site-wide default** colour scheme that is applied when a user has not yet made a personal choice:
+
+| **Variable**               | **Description**                                                                                                                                  | **Default** |
+|----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|-------------|
+| `UI_DEFAULT_COLOR_SCHEME`  | Default colour scheme for all users. Options: `system` (follow OS preference), `light`, `dark`. Users can always override with the navbar toggle. | `system`    |
+
+**How it works:**
+
+1. On page load an inline script checks the user's `localStorage` preference first.
+2. If no stored preference exists, the server-supplied `UI_DEFAULT_COLOR_SCHEME` is used.
+3. When the value is `system` (the default), the OS-level `prefers-color-scheme` media query is respected.
+4. Clicking the 🌙 / ☀️ toggle in the navbar saves the new preference to `localStorage` immediately.
+
+**WCAG AA compliance:** All dark-mode colour pairs have been chosen with a minimum 4.5:1 contrast ratio for normal text and 3:1 for large text.
+
+**Example:**
+
+```dotenv
+# Force dark mode for all users by default
+UI_DEFAULT_COLOR_SCHEME=dark
+```
+
 ## Configuration Examples
 
 ### Minimal Configuration

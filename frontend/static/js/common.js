@@ -34,6 +34,81 @@ function getCsrfToken() {
   };
 })();
 
+// ---------------------------------------------------------------------------
+// Dark mode
+// ---------------------------------------------------------------------------
+// Preference is stored in localStorage under the key 'colorScheme'.
+// Values: 'dark' | 'light'  (absence means "follow server/system default").
+// The anti-flash <script> in base.html applies the class before page paint.
+// ---------------------------------------------------------------------------
+
+/**
+ * Sync the icon and label of both desktop and mobile toggle buttons to the
+ * current dark-mode state.
+ */
+function _updateDarkModeButtons() {
+  const isDark = document.documentElement.classList.contains('dark');
+
+  // Desktop button
+  const btn = document.getElementById('darkModeToggle');
+  if (btn) {
+    const icon = btn.querySelector('i');
+    if (icon) {
+      icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+    }
+    const label = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+    btn.setAttribute('title', label);
+    btn.setAttribute('aria-label', label);
+  }
+
+  // Mobile button
+  const mobileIcon = document.getElementById('darkModeIconMobile');
+  if (mobileIcon) {
+    mobileIcon.className = isDark ? 'fas fa-sun mr-2' : 'fas fa-moon mr-2';
+  }
+  const mobileText = document.getElementById('darkModeTextMobile');
+  if (mobileText) {
+    mobileText.textContent = isDark ? 'Light Mode' : 'Dark Mode';
+  }
+}
+
+/**
+ * Toggle dark mode and persist the choice to localStorage.
+ * Called from the navbar button (onclick="toggleDarkMode()").
+ */
+function toggleDarkMode() {
+  const isDark = document.documentElement.classList.toggle('dark');
+  localStorage.setItem('colorScheme', isDark ? 'dark' : 'light');
+  _updateDarkModeButtons();
+}
+
+// Initialise button state once the DOM is ready.
+document.addEventListener('DOMContentLoaded', function () {
+  _updateDarkModeButtons();
+});
+
+// React to OS-level theme changes when the user has not explicitly chosen a
+// scheme (no localStorage value means "follow the server/system default").
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function (e) {
+  if (localStorage.getItem('colorScheme')) {
+    return; // User has an explicit preference; ignore OS changes.
+  }
+  var serverDefault = document.documentElement.getAttribute('data-color-scheme-default') || 'system';
+  if (serverDefault !== 'system') {
+    return; // Admin has forced a specific scheme; ignore OS changes.
+  }
+  if (e.matches) {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
+  _updateDarkModeButtons();
+});
+
+// ---------------------------------------------------------------------------
+// Authentication status
+// ---------------------------------------------------------------------------
+
 // Check authentication status and update the auth section
 (async function() {
   console.log('Checking authentication status...');

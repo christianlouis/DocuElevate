@@ -34,11 +34,15 @@ def template_response_with_version(*args, **kwargs):
         req = args[1].get("request")
         if req is not None and hasattr(req.state, "csrf_token"):
             args[1].setdefault("csrf_token", req.state.csrf_token)
+        # Inject default color scheme for dark-mode initialisation
+        args[1].setdefault("ui_default_color_scheme", getattr(settings, "ui_default_color_scheme", "system"))
     elif "context" in kwargs and isinstance(kwargs["context"], dict):
         kwargs["context"].setdefault("version", settings.version)
         req = kwargs["context"].get("request")
         if req is not None and hasattr(req.state, "csrf_token"):
             kwargs["context"].setdefault("csrf_token", req.state.csrf_token)
+        # Inject default color scheme for dark-mode initialisation
+        kwargs["context"].setdefault("ui_default_color_scheme", getattr(settings, "ui_default_color_scheme", "system"))
     return original_template_response(*args, **kwargs)
 
 
