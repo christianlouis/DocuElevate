@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.53.1 (2026-02-25)
+
+### Bug Fixes
+
+- **ocr**: Sync workflow steps with process_with_ocr replacing legacy azure step
+  ([`37a3f7a`](https://github.com/christianlouis/DocuElevate/commit/37a3f7aae7b1691915c65c481dbca061061d610a))
+
+### Testing
+
+- Fix test_retry_azure_ocr_success to patch process_with_ocr instead of legacy azure task
+  ([`44c9f6d`](https://github.com/christianlouis/DocuElevate/commit/44c9f6dc3811ef82c16fee25575ea66fe8ba7929))
+
+
 ## v0.53.0 (2026-02-24)
 
 ### Bug Fixes
