@@ -9,7 +9,10 @@ metadata fields.
 """
 
 import logging
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from app.models import FileRecord
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +67,7 @@ _INDEX_SETTINGS = {
 }
 
 
-def get_meilisearch_client():
+def get_meilisearch_client() -> Any | None:
     """Return a configured Meilisearch client, or None if unavailable/disabled."""
     try:
         import meilisearch
@@ -88,7 +91,7 @@ def get_meilisearch_client():
         return None
 
 
-def _get_or_create_index(client):
+def _get_or_create_index(client: Any) -> Any:
     """Get the documents index, creating it with settings if it doesn't exist."""
     from app.config import settings
 
@@ -109,7 +112,7 @@ def _get_or_create_index(client):
     return index
 
 
-def _build_document(file_record, text: str, metadata: dict) -> dict:
+def _build_document(file_record: "FileRecord", text: str, metadata: dict) -> dict:
     """Build a Meilisearch document from a FileRecord and extracted content."""
 
     tags = metadata.get("tags", [])
@@ -142,7 +145,7 @@ def _build_document(file_record, text: str, metadata: dict) -> dict:
     }
 
 
-def index_document(file_record, text: str, metadata: dict) -> bool:
+def index_document(file_record: "FileRecord", text: str, metadata: dict) -> bool:
     """Index a document in Meilisearch.
 
     Args:
