@@ -103,6 +103,25 @@ def _run_schema_migrations(engine: Any) -> None:
                 conn.execute(text("ALTER TABLE files ADD COLUMN duplicate_of_id INTEGER"))
             logger.info("Migration complete: 'duplicate_of_id' column added to files")
 
+        # Migration: Add search/OCR fields to files table
+        if "ocr_text" not in columns:
+            logger.info("Migrating files: adding 'ocr_text' column")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE files ADD COLUMN ocr_text TEXT"))
+            logger.info("Migration complete: 'ocr_text' column added to files")
+
+        if "ai_metadata" not in columns:
+            logger.info("Migrating files: adding 'ai_metadata' column")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE files ADD COLUMN ai_metadata TEXT"))
+            logger.info("Migration complete: 'ai_metadata' column added to files")
+
+        if "document_title" not in columns:
+            logger.info("Migrating files: adding 'document_title' column")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE files ADD COLUMN document_title VARCHAR"))
+            logger.info("Migration complete: 'document_title' column added to files")
+
         # Migration: Drop unique index on filehash to allow duplicate records
         try:
             indexes = inspector.get_indexes("files")

@@ -186,6 +186,48 @@ class TestSchemaMigrations:
         assert "duplicate_of_id" in columns
         assert columns["duplicate_of_id"]["type"].__class__.__name__ in ("INTEGER", "Integer")
 
+        assert "ocr_text" in columns
+        assert "ai_metadata" in columns
+        assert "document_title" in columns
+
+        engine.dispose()
+
+    def test_migration_adds_search_fields(self, tmp_path):
+        """Test that _run_schema_migrations adds ocr_text, ai_metadata, document_title to files table."""
+        from sqlalchemy import create_engine, text
+
+        from app.database import _run_schema_migrations
+
+        # Create a database with the old schema (no search fields)
+        db_path = str(tmp_path / "migration_search_fields_test.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "CREATE TABLE files ("
+                    "id INTEGER PRIMARY KEY, "
+                    "filename VARCHAR, "
+                    "filehash VARCHAR, "
+                    "original_file_path VARCHAR, "
+                    "processed_file_path VARCHAR, "
+                    "is_duplicate BOOLEAN DEFAULT FALSE NOT NULL, "
+                    "duplicate_of_id INTEGER)"
+                )
+            )
+
+        # Run migrations
+        _run_schema_migrations(engine)
+
+        # Verify search columns were added
+        from sqlalchemy import inspect
+
+        inspector = inspect(engine)
+        columns = {col["name"]: col for col in inspector.get_columns("files")}
+
+        assert "ocr_text" in columns
+        assert "ai_metadata" in columns
+        assert "document_title" in columns
+
         engine.dispose()
 
     def test_migration_drops_unique_filehash_index(self, tmp_path):
@@ -299,6 +341,9 @@ class TestSchemaMigrations:
         assert "processed_file_path" in files_columns
         assert "is_duplicate" in files_columns
         assert "duplicate_of_id" in files_columns
+        assert "ocr_text" in files_columns
+        assert "ai_metadata" in files_columns
+        assert "document_title" in files_columns
 
         engine.dispose()
 
