@@ -8,7 +8,6 @@ Generation) workflows by storing full document text alongside structured
 metadata fields.
 """
 
-import json
 import logging
 from typing import Any, Optional
 
@@ -112,7 +111,6 @@ def _get_or_create_index(client):
 
 def _build_document(file_record, text: str, metadata: dict) -> dict:
     """Build a Meilisearch document from a FileRecord and extracted content."""
-    import json as _json
 
     tags = metadata.get("tags", [])
     if isinstance(tags, str):
@@ -123,8 +121,8 @@ def _build_document(file_record, text: str, metadata: dict) -> dict:
     if file_record.created_at:
         try:
             created_at_ts = int(file_record.created_at.timestamp())
-        except Exception:
-            pass
+        except Exception as ts_exc:  # noqa: BLE001
+            logger.debug(f"Could not convert created_at to timestamp: {ts_exc}")
 
     return {
         "file_id": file_record.id,
@@ -229,7 +227,6 @@ def search_documents(
         return empty
 
     try:
-        from app.config import settings
 
         index = _get_or_create_index(client)
 

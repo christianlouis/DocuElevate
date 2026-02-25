@@ -1,0 +1,306 @@
+# =============================================================================
+# DocuElevate Helm Chart — values.yaml
+#
+# Override any value with:
+#   helm install docuelevate ./helm/docuelevate -f my-values.yaml
+#   helm install docuelevate ./helm/docuelevate --set key=value
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Global image settings
+# ---------------------------------------------------------------------------
+image:
+  repository: ghcr.io/christianlouis/docuelevate
+  # Defaults to the chart appVersion; pin to a specific digest in production.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ---------------------------------------------------------------------------
+# Shared environment — non-secret application config
+# All values map 1-to-1 onto DocuElevate environment variables.
+# Sensitive values (API keys, passwords) go into `secrets` below.
+# ---------------------------------------------------------------------------
+env:
+  # Required ----------------------------------------------------------------
+  WORKDIR: /workdir
+
+  # AI provider (openai | azure | anthropic | gemini | ollama | openrouter)
+  AI_PROVIDER: openai
+  OPENAI_MODEL: gpt-4o-mini
+
+  # Azure Document Intelligence (required when OCR_PROVIDERS includes "azure")
+  AZURE_REGION: eastus
+  AZURE_ENDPOINT: ""   # e.g. https://my-resource.cognitiveservices.azure.com/
+
+  # Gotenberg PDF conversion service
+  GOTENBERG_URL: http://{{ include "docuelevate.fullname" . }}-gotenberg:3000
+
+  # Full-text search — uses the in-cluster Meilisearch service by default
+  MEILISEARCH_URL: http://{{ include "docuelevate.fullname" . }}-meilisearch:7700
+  MEILISEARCH_INDEX_NAME: documents
+  ENABLE_SEARCH: "true"
+
+  # Authentication
+  AUTH_ENABLED: "true"
+  ADMIN_USERNAME: admin
+
+  # Feature flags
+  ENABLE_DEDUPLICATION: "true"
+  ENABLE_TEXT_QUALITY_CHECK: "true"
+  ALLOW_FILE_DELETE: "true"
+
+  # Logging / misc
+  DEBUG: "false"
+  EXTERNAL_HOSTNAME: localhost   # set to your public hostname / Ingress host
+
+# ---------------------------------------------------------------------------
+# Secrets — values are stored in a Kubernetes Secret and injected as env vars.
+# In production, use an external secret manager (Vault, ESO, Sealed Secrets)
+# and leave these blank, then mount the Secret yourself.
+# ---------------------------------------------------------------------------
+secrets:
+  DATABASE_URL: ""         # e.g. postgresql://user:pass@postgres:5432/docuelevate
+  REDIS_URL: ""            # leave blank to use bundled Redis
+  SESSION_SECRET: ""       # min 32-char random string — generate with: openssl rand -hex 32
+  OPENAI_API_KEY: ""
+  AZURE_AI_KEY: ""
+  MEILISEARCH_API_KEY: "" # leave blank for unauthenticated (dev) Meilisearch
+
+  # Storage provider secrets (only the ones you use)
+  DROPBOX_APP_KEY: ""
+  DROPBOX_APP_SECRET: ""
+  DROPBOX_REFRESH_TOKEN: ""
+  GOOGLE_DRIVE_CREDENTIALS_JSON: ""
+  ONEDRIVE_CLIENT_ID: ""
+  ONEDRIVE_CLIENT_SECRET: ""
+  ONEDRIVE_REFRESH_TOKEN: ""
+  AWS_ACCESS_KEY_ID: ""
+  AWS_SECRET_ACCESS_KEY: ""
+
+  # OAuth / Authentik
+  AUTHENTIK_CLIENT_ID: ""
+  AUTHENTIK_CLIENT_SECRET: ""
+  AUTHENTIK_CONFIG_URL: ""
+
+# ---------------------------------------------------------------------------
+# External services
+# Set externalRedis.url (and disable bundled redis) when you have your own.
+# ---------------------------------------------------------------------------
+externalRedis:
+  # When non-empty this value is injected as REDIS_URL, overriding secrets.REDIS_URL
+  # and the auto-generated bundled-Redis URL.
+  url: ""
+
+# ---------------------------------------------------------------------------
+# API deployment
+# ---------------------------------------------------------------------------
+api:
+  replicaCount: 2
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+  # Horizontal Pod Autoscaler
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+
+  service:
+    type: ClusterIP
+    port: 8000
+
+  # Liveness / readiness probes
+  livenessProbe:
+    httpGet:
+      path: /api/health
+      port: 8000
+    initialDelaySeconds: 30
+    periodSeconds: 20
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /api/health
+      port: 8000
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    failureThreshold: 3
+
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false  # app writes to /workdir
+    capabilities:
+      drop: ["ALL"]
+
+# ---------------------------------------------------------------------------
+# Celery worker deployment
+# ---------------------------------------------------------------------------
+worker:
+  replicaCount: 2
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 75
+
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop: ["ALL"]
+
+# ---------------------------------------------------------------------------
+# Shared workdir volume (api + worker mount the same PVC)
+# ---------------------------------------------------------------------------
+workdir:
+  persistence:
+    enabled: true
+    # storageClass: "" # leave blank for cluster default
+    accessMode: ReadWriteMany  # RWX required for multiple pods
+    size: 20Gi
+    # existingClaim: ""
+
+# ---------------------------------------------------------------------------
+# Gotenberg (PDF conversion)
+# ---------------------------------------------------------------------------
+gotenberg:
+  enabled: true
+  image:
+    repository: gotenberg/gotenberg
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    port: 3000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+# ---------------------------------------------------------------------------
+# Meilisearch (full-text search)
+# ---------------------------------------------------------------------------
+meilisearch:
+  enabled: true
+  image:
+    repository: getmeili/meilisearch
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    port: 7700
+  env:
+    MEILI_NO_ANALYTICS: "true"
+    # MEILI_MASTER_KEY: ""  # set via secrets.MEILISEARCH_API_KEY instead
+  persistence:
+    enabled: true
+    # storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 10Gi
+    # existingClaim: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+# ---------------------------------------------------------------------------
+# Bundled Redis (from Bitnami chart)
+# Disable and set externalRedis.url to use your own.
+# ---------------------------------------------------------------------------
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    persistence:
+      enabled: true
+      size: 4Gi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+# ---------------------------------------------------------------------------
+# Ingress
+# ---------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: ""   # e.g. nginx, traefik
+  annotations: {}
+  # nginx.ingress.kubernetes.io/proxy-body-size: "1g"
+  # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: docuelevate.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  # - secretName: docuelevate-tls
+  #   hosts:
+  #     - docuelevate.example.com
+
+# ---------------------------------------------------------------------------
+# ServiceAccount
+# ---------------------------------------------------------------------------
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# ---------------------------------------------------------------------------
+# Database migration job
+# Runs `alembic upgrade head` before the api/worker start.
+# ---------------------------------------------------------------------------
+migrations:
+  enabled: true
+  # Automatically deleted after successful completion
+  ttlSecondsAfterFinished: 120

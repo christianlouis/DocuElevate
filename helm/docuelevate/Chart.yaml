@@ -1,0 +1,37 @@
+apiVersion: v2
+name: docuelevate
+description: >
+  DocuElevate — intelligent document processing with OCR, AI metadata
+  extraction, full-text search (Meilisearch), and multi-cloud storage.
+
+type: application
+
+# Chart version — bump on every chart change (independent of appVersion).
+version: 0.1.0
+
+# Application version — kept in sync with the VERSION file.
+appVersion: "0.54.0"
+
+keywords:
+  - document-management
+  - ocr
+  - ai
+  - meilisearch
+  - fastapi
+  - celery
+
+home: https://github.com/christianlouis/DocuElevate
+sources:
+  - https://github.com/christianlouis/DocuElevate
+
+maintainers:
+  - name: DocuElevate Contributors
+    url: https://github.com/christianlouis/DocuElevate
+
+dependencies:
+  # Bundled Redis (optional — disable and point to an external instance via
+  # externalRedis.url if you already have Redis in the cluster).
+  - name: redis
+    version: "20.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled

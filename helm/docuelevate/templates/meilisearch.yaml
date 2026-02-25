@@ -1,0 +1,89 @@
+{{- if .Values.meilisearch.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "docuelevate.fullname" . }}-meilisearch
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "docuelevate.labels" . | nindent 4 }}
+    app.kubernetes.io/component: meilisearch
+spec:
+  # Single replica — Meilisearch Community Edition is single-node only.
+  # Use Meilisearch Cloud or the paid Meilisearch Cluster for HA.
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "docuelevate.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: meilisearch
+  strategy:
+    # Recreate ensures the PVC is released before the new pod starts
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "docuelevate.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: meilisearch
+    spec:
+      containers:
+        - name: meilisearch
+          image: {{ .Values.meilisearch.image.repository }}:{{ .Values.meilisearch.image.tag }}
+          imagePullPolicy: {{ .Values.meilisearch.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 7700
+              protocol: TCP
+          env:
+            - name: MEILI_NO_ANALYTICS
+              value: {{ .Values.meilisearch.env.MEILI_NO_ANALYTICS | quote }}
+            {{- if .Values.secrets.MEILISEARCH_API_KEY }}
+            - name: MEILI_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "docuelevate.fullname" . }}-secret
+                  key: MEILISEARCH_API_KEY
+            {{- end }}
+          resources:
+            {{- toYaml .Values.meilisearch.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /meili_data
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 7700
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 7700
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: data
+          {{- if .Values.meilisearch.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.meilisearch.persistence.existingClaim | default (printf "%s-meilisearch-data" (include "docuelevate.fullname" .)) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "docuelevate.fullname" . }}-meilisearch
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "docuelevate.labels" . | nindent 4 }}
+    app.kubernetes.io/component: meilisearch
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.meilisearch.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "docuelevate.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: meilisearch
+{{- end }}

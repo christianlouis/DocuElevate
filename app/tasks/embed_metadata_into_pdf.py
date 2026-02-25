@@ -200,8 +200,8 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
                     if metadata:
                         try:
                             file_record.ai_metadata = json.dumps(metadata, ensure_ascii=False)
-                        except Exception:
-                            pass
+                        except Exception as json_exc:
+                            logger.warning(f"[{task_id}] Could not serialise ai_metadata: {json_exc}")
                         file_record.document_title = (
                             metadata.get("title") or metadata.get("filename") or file_record.original_filename
                         )
