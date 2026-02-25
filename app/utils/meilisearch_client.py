@@ -227,7 +227,6 @@ def search_documents(
         return empty
 
     try:
-
         index = _get_or_create_index(client)
 
         # Build filter expressions
