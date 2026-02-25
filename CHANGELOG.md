@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Testing
+
+- Improve coverage for process_with_ocr, api/settings, and settings_service to 90%+
+  ([`d9abbc1`](https://github.com/christianlouis/DocuElevate/commit/d9abbc1c998668ffae485493f27e82aed4fd1527))
+
+- **coverage**: Add tests to push coverage above 95% for 11 target files
+  ([`759647f`](https://github.com/christianlouis/DocuElevate/commit/759647f9577e9afd57313cefe8731b6502bcca77))
+
+
 ## v0.57.0 (2026-02-25)
 
 ### Features
