@@ -418,6 +418,47 @@
     </form>
   </div>
 
+  <!-- Full-Text Search Section -->
+  <div class="filters-section" style="margin-top: 0.75rem;">
+    <div style="width: 100%;">
+      <label for="fulltext-search" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">
+        <i class="fas fa-search"></i> Full-Text Search (OCR text, metadata, tags)
+      </label>
+      <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+        <input
+          type="text"
+          id="fulltext-search"
+          placeholder="Search document content, sender, tags, type..."
+          style="flex: 1; min-width: 220px; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; font-size: 0.875rem;"
+          oninput="debounceSearch(this.value)"
+        >
+        <button
+          type="button"
+          onclick="runFullTextSearch()"
+          style="padding: 0.5rem 1rem; background-color: #3182ce; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem; white-space: nowrap;"
+        >
+          Search
+        </button>
+        <button
+          type="button"
+          onclick="clearFullTextSearch()"
+          style="padding: 0.5rem 1rem; background-color: #6b7280; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem; white-space: nowrap;"
+        >
+          Clear
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Full-Text Search Results Panel -->
+  <div id="search-results-panel" style="display: none; margin-top: 0.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+    <div style="padding: 0.75rem 1rem; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; background: #f9fafb; border-radius: 0.5rem 0.5rem 0 0;">
+      <span id="search-results-summary" style="font-size: 0.875rem; color: #374151;"></span>
+      <div id="search-results-pagination" style="display: flex; gap: 0.5rem;"></div>
+    </div>
+    <div id="search-results-list" style="padding: 0.5rem 0;"></div>
+  </div>
+
   <!-- Bulk Actions Section -->
   <div id="bulkActionsBar" class="filters-section" style="display: none; background-color: #e6f3ff;">
     <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
@@ -886,6 +927,117 @@
 
     function closeUploadModal() {
       uploadModal.classList.remove('active');
+    }
+
+    // ---- Full-Text Search (Meilisearch) ----
+    let _searchDebounceTimer = null;
+    let _searchCurrentPage = 1;
+
+    function debounceSearch(value) {
+      clearTimeout(_searchDebounceTimer);
+      if (!value || value.trim().length < 2) {
+        clearFullTextSearch();
+        return;
+      }
+      _searchDebounceTimer = setTimeout(() => {
+        _searchCurrentPage = 1;
+        runFullTextSearch();
+      }, 400);
+    }
+
+    function runFullTextSearch(page) {
+      const input = document.getElementById('fulltext-search');
+      const q = input ? input.value.trim() : '';
+      if (!q) { clearFullTextSearch(); return; }
+      if (page) _searchCurrentPage = page;
+
+      const panel = document.getElementById('search-results-panel');
+      const list = document.getElementById('search-results-list');
+      const summary = document.getElementById('search-results-summary');
+      const pagination = document.getElementById('search-results-pagination');
+
+      list.innerHTML = '<div style="padding: 1rem; color: #6b7280; font-size: 0.875rem;"><i class="fas fa-spinner fa-spin"></i> Searching…</div>';
+      summary.textContent = '';
+      pagination.innerHTML = '';
+      panel.style.display = 'block';
+
+      const params = new URLSearchParams({ q, page: _searchCurrentPage, per_page: 20 });
+      fetch(`/api/search?${params.toString()}`)
+        .then(r => {
+          if (!r.ok) throw new Error(`Search returned ${r.status}`);
+          return r.json();
+        })
+        .then(data => renderSearchResults(data, q))
+        .catch(err => {
+          list.innerHTML = `<div style="padding: 1rem; color: #dc2626; font-size: 0.875rem;"><i class="fas fa-exclamation-triangle"></i> Search unavailable: ${err.message}</div>`;
+          summary.textContent = '';
+        });
+    }
+
+    function renderSearchResults(data, q) {
+      const panel = document.getElementById('search-results-panel');
+      const list = document.getElementById('search-results-list');
+      const summary = document.getElementById('search-results-summary');
+      const pagination = document.getElementById('search-results-pagination');
+
+      const { results, total, page, pages } = data;
+      summary.textContent = `${total} result${total !== 1 ? 's' : ''} for "${q}"`;
+
+      if (!results || results.length === 0) {
+        list.innerHTML = '<div style="padding: 1rem; color: #6b7280; font-size: 0.875rem;">No results found.</div>';
+        pagination.innerHTML = '';
+        return;
+      }
+
+      list.innerHTML = results.map(hit => {
+        const fmt = hit._formatted || {};
+        const title = fmt.document_title || hit.document_title || hit.original_filename || '(untitled)';
+        const filename = fmt.original_filename || hit.original_filename || '';
+        const snippet = fmt.ocr_text || '';
+        const tags = Array.isArray(hit.tags) ? hit.tags.join(', ') : (hit.tags || '');
+        const docType = hit.document_type || '';
+
+        return `<div style="padding: 0.75rem 1rem; border-bottom: 1px solid #f3f4f6; display: flex; gap: 0.75rem; align-items: flex-start;">
+          <div style="flex-shrink: 0; color: #3b82f6; font-size: 1.25rem; padding-top: 0.1rem;">
+            <i class="fas fa-file-pdf"></i>
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-weight: 600; font-size: 0.9rem; color: #111827;">${title}</div>
+            ${filename ? `<div style="font-size: 0.8rem; color: #6b7280; margin-top: 0.15rem;">${filename}</div>` : ''}
+            ${docType ? `<span style="display: inline-block; margin-top: 0.25rem; padding: 0.1rem 0.5rem; background: #eff6ff; color: #1d4ed8; border-radius: 9999px; font-size: 0.75rem;">${docType}</span>` : ''}
+            ${tags ? `<span style="display: inline-block; margin-top: 0.25rem; margin-left: 0.25rem; padding: 0.1rem 0.5rem; background: #f0fdf4; color: #15803d; border-radius: 9999px; font-size: 0.75rem;">${tags}</span>` : ''}
+            ${snippet ? `<div style="margin-top: 0.4rem; font-size: 0.8rem; color: #374151; white-space: pre-wrap; word-break: break-word;">…${snippet}…</div>` : ''}
+          </div>
+          <div style="flex-shrink: 0;">
+            <a href="/files/${hit.file_id}" style="padding: 0.25rem 0.6rem; background: #f3f4f6; color: #374151; border-radius: 0.25rem; font-size: 0.8rem; text-decoration: none; white-space: nowrap;" title="View file">
+              <i class="fas fa-external-link-alt"></i>
+            </a>
+          </div>
+        </div>`;
+      }).join('');
+
+      // Pagination
+      if (pages > 1) {
+        const btns = [];
+        if (page > 1) {
+          btns.push(`<button onclick="runFullTextSearch(${page - 1})" style="padding: 0.25rem 0.6rem; border: 1px solid #d1d5db; border-radius: 0.25rem; font-size: 0.8rem; cursor: pointer; background: white;">« Prev</button>`);
+        }
+        btns.push(`<span style="padding: 0.25rem 0.6rem; font-size: 0.8rem; color: #6b7280;">Page ${page} / ${pages}</span>`);
+        if (page < pages) {
+          btns.push(`<button onclick="runFullTextSearch(${page + 1})" style="padding: 0.25rem 0.6rem; border: 1px solid #d1d5db; border-radius: 0.25rem; font-size: 0.8rem; cursor: pointer; background: white;">Next »</button>`);
+        }
+        pagination.innerHTML = btns.join('');
+      } else {
+        pagination.innerHTML = '';
+      }
+    }
+
+    function clearFullTextSearch() {
+      const panel = document.getElementById('search-results-panel');
+      const input = document.getElementById('fulltext-search');
+      if (panel) panel.style.display = 'none';
+      if (input) input.value = '';
+      _searchCurrentPage = 1;
     }
   </script>
 </div>

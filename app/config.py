@@ -207,6 +207,15 @@ class Settings(BaseSettings):
     uptime_kuma_url: Optional[str] = None
     uptime_kuma_ping_interval: int = 5  # Default ping interval in minutes
 
+    # Meilisearch settings (full-text search engine)
+    # Default uses the Docker Compose / K8s service name so container-to-container
+    # networking works without any extra configuration.  Override to
+    # "http://localhost:7700" only when running the API process outside of Docker.
+    meilisearch_url: str = "http://meilisearch:7700"
+    meilisearch_api_key: Optional[str] = None  # Master or API key (optional for local dev)
+    meilisearch_index_name: str = "documents"
+    enable_search: bool = True  # Enable Meilisearch full-text search integration
+
     # HTTP request settings
     http_request_timeout: int = 120  # Default timeout for HTTP requests in seconds (handles large file operations)
 
