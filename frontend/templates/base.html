@@ -217,6 +217,47 @@
       </div>
     </footer>
 
+    <!-- Cookie Notice Banner -->
+    <!-- DocuElevate uses only strictly necessary session cookies (no tracking/analytics).
+         Under GDPR Art. 5(3) ePrivacy Directive, strictly necessary cookies do not require
+         prior consent, but transparency is required. This banner provides that notice. -->
+    <div id="cookieNotice"
+         class="fixed bottom-0 inset-x-0 z-50 bg-gray-800 text-white text-sm px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-2"
+         style="display:none!important"
+         aria-live="polite"
+         role="region"
+         aria-label="Cookie notice">
+      <p class="text-center sm:text-left">
+        DocuElevate uses only essential session cookies required for authentication and service operation.
+        No tracking or analytics cookies are used.
+        <a href="/cookies" class="underline hover:text-blue-300 ml-1">Cookie Policy</a> &middot;
+        <a href="/privacy" class="underline hover:text-blue-300 ml-1">Privacy Notice</a>
+      </p>
+      <button
+        id="cookieNoticeAccept"
+        type="button"
+        class="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-1.5 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+        aria-label="Acknowledge cookie notice">
+        Got it
+      </button>
+    </div>
+    <script>
+      (function () {
+        var NOTICE_KEY = 'cookieNoticeDismissed';
+        var notice = document.getElementById('cookieNotice');
+        var btn = document.getElementById('cookieNoticeAccept');
+        if (!localStorage.getItem(NOTICE_KEY)) {
+          notice.style.removeProperty('display');
+        }
+        if (btn) {
+          btn.addEventListener('click', function () {
+            localStorage.setItem(NOTICE_KEY, '1');
+            notice.style.display = 'none';
+          });
+        }
+      })();
+    </script>
+
     <!-- Common JS (shared) -->
     <script src="/static/js/common.js"></script>
 

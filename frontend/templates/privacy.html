@@ -6,103 +6,383 @@
   <h1 class="text-4xl font-bold mb-6">DocuElevate – Privacy Notice</h1>
   <p class="text-sm text-gray-500 mb-8">Last Updated: {{ build_date|default(current_date|default('April 7, 2024')) }}</p>
 
-  <div class="bg-white shadow rounded-lg p-6 mb-6">
-    <h2 class="text-2xl font-semibold mb-4">Data Controller</h2>
+  <!-- Table of Contents -->
+  <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+    <h2 class="text-lg font-semibold mb-2 text-blue-800">Contents</h2>
+    <ol class="list-decimal list-inside text-blue-700 space-y-1 text-sm">
+      <li><a href="#controller" class="hover:underline">Data Controller</a></li>
+      <li><a href="#scope" class="hover:underline">Scope of this Privacy Notice</a></li>
+      <li><a href="#data-collection" class="hover:underline">Data Collection &amp; Purposes</a></li>
+      <li><a href="#data-minimization" class="hover:underline">Data Minimization &amp; Purpose Limitation</a></li>
+      <li><a href="#cookies" class="hover:underline">Use of Cookies &amp; Similar Technologies</a></li>
+      <li><a href="#third-parties" class="hover:underline">Third-Party Services</a></li>
+      <li><a href="#international-transfers" class="hover:underline">International Data Transfers</a></li>
+      <li><a href="#retention" class="hover:underline">Data Retention</a></li>
+      <li><a href="#security" class="hover:underline">Data Security</a></li>
+      <li><a href="#gdpr-rights" class="hover:underline">Your Rights (EU / EEA / UK / Switzerland)</a></li>
+      <li><a href="#us-rights" class="hover:underline">Additional Rights – United States (CCPA/CPRA)</a></li>
+      <li><a href="#canada-rights" class="hover:underline">Additional Rights – Canada (PIPEDA / Law 25)</a></li>
+      <li><a href="#latam-rights" class="hover:underline">Additional Rights – Latin America (LGPD &amp; others)</a></li>
+      <li><a href="#apj-rights" class="hover:underline">Additional Rights – Asia-Pacific &amp; Japan</a></li>
+      <li><a href="#ukraine-rights" class="hover:underline">Additional Rights – Ukraine</a></li>
+      <li><a href="#updates" class="hover:underline">Updates to this Privacy Notice</a></li>
+    </ol>
+  </div>
+
+  <div id="controller" class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">1. Data Controller</h2>
     <p class="text-gray-700 mb-3">
-      The controller responsible for processing your personal data under the EU General Data Protection Regulation (GDPR) is DocuElevate.
+      The controller responsible for processing your personal data under the EU General Data Protection Regulation (GDPR) and equivalent privacy laws worldwide is:
+    </p>
+    <p class="text-gray-700 mb-3">
+      <strong>Christian Louis IT Beratung</strong><br />
+      Alter Steinweg 3, 20459 Hamburg, Germany
     </p>
     <p class="text-gray-700 mb-3">
       Contact Email: <a href="mailto:docuelevate@christian-louis.de" class="text-blue-600 hover:underline">docuelevate@christian-louis.de</a>
     </p>
-  </div>
-
-  <div class="bg-white shadow rounded-lg p-6 mb-6">
-    <h2 class="text-2xl font-semibold mb-4">Scope of this Privacy Notice</h2>
     <p class="text-gray-700">
-      This notice applies to the DocuElevate web application, hosted at <a href="{{ request.url.scheme }}://{{ request.url.netloc }}/" class="text-blue-600 hover:underline" target="_blank">{{ request.url.scheme }}://{{ request.url.netloc }}/</a>.
+      For all privacy-related requests (access, deletion, rectification, opt-out, or complaints), please contact us at the email address above.
+      We will respond within 30 days (or the period prescribed by applicable law).
     </p>
   </div>
 
-  <div class="bg-white shadow rounded-lg p-6 mb-6">
-    <h2 class="text-2xl font-semibold mb-4">Data Collection & Purposes</h2>
+  <div id="scope" class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">2. Scope of this Privacy Notice</h2>
     <p class="text-gray-700 mb-3">
-      <strong>User Authentication:</strong> We use Google, Dropbox, and Microsoft OAuth for sign-in. Through these services, we may receive information such as your name, email address, and profile picture.
+      This notice applies to the DocuElevate web application, hosted at
+      <a href="{{ request.url.scheme }}://{{ request.url.netloc }}/" class="text-blue-600 hover:underline" target="_blank">{{ request.url.scheme }}://{{ request.url.netloc }}/</a>.
+    </p>
+    <p class="text-gray-700">
+      It covers all users globally, including those in the European Union (EU), European Economic Area (EEA),
+      Germany, United Kingdom (UK), Switzerland, Ukraine, United States (US), Canada, Latin America (Latam),
+      Asia-Pacific, and Japan. Market-specific disclosures are provided in dedicated sections below.
+    </p>
+  </div>
+
+  <div id="data-collection" class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">3. Data Collection &amp; Purposes</h2>
+    <p class="text-gray-700 mb-3">
+      <strong>User Authentication:</strong> We use OAuth 2.0 (Google, Dropbox, Microsoft/OneDrive) and optional
+      local authentication. Through OAuth, we may receive your name, email address, and profile picture.
     </p>
     <p class="text-gray-700 mb-3">
-      <strong>Purpose:</strong> We use this information to authenticate you, personalize your experience, and provide the core functionality of DocuElevate.
+      <strong>Document Processing:</strong> Documents you upload are processed for OCR (optical character recognition),
+      metadata extraction, and storage to your chosen cloud provider. Document content is processed only for the
+      purpose you initiate and is not stored beyond what is operationally necessary.
+    </p>
+    <p class="text-gray-700 mb-3">
+      <strong>Audit Logs:</strong> We maintain limited audit logs (action type, timestamp, user identifier) to
+      ensure service integrity and security. These logs do not include document content.
     </p>
     <p class="text-gray-700 mb-3">
       <strong>Legal Basis (GDPR Art. 6):</strong> Our primary legal bases for processing are:
     </p>
     <ul class="list-disc list-inside text-gray-700 ml-4 mb-3">
-      <li>(1)(b) Performance of a contract: to provide the DocuElevate service.</li>
+      <li class="mb-1">(1)(b) Performance of a contract: to provide the DocuElevate service you have requested.</li>
+      <li class="mb-1">(1)(c) Legal obligation: to comply with applicable laws and regulations.</li>
       <li>(1)(f) Legitimate interests: ensuring the security of the service and preventing fraud.</li>
     </ul>
   </div>
 
-  <div class="bg-white shadow rounded-lg p-6 mb-6">
-    <h2 class="text-2xl font-semibold mb-4">Use of Cookies & Similar Technologies</h2>
+  <div id="data-minimization" class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">4. Data Minimization &amp; Purpose Limitation</h2>
     <p class="text-gray-700 mb-3">
-      We may use cookies or similar technologies to maintain your session, remember your preferences, and enhance your user experience.
+      DocuElevate is designed with data minimization as a core principle (GDPR Art. 5(1)(c)):
     </p>
-    <p class="text-gray-700">
-      For more information about our use of cookies, please visit our <a href="/cookies" class="text-blue-600 hover:underline">Cookie Policy</a>.
-    </p>
-  </div>
-
-  <div class="bg-white shadow rounded-lg p-6 mb-6">
-    <h2 class="text-2xl font-semibold mb-4">Third-Party Services</h2>
-    <p class="text-gray-700 mb-3">
-      <strong>OAuth Providers:</strong> Google, Dropbox, and Microsoft. These providers may process your personal data according to their own privacy policies.
-    </p>
-    <p class="text-gray-700">
-      <strong>No Additional Sharing:</strong> We do not share, sell, or otherwise disclose your personal data to third parties for advertising or marketing purposes.
-    </p>
-    <p class="text-gray-700 mt-3">
-      <strong>Cloud Storage Integration:</strong> We integrate with Google Drive, Dropbox, OneDrive and other storage providers to enable you to save and access your documents across services.
-    </p>
-  </div>
-
-  <div class="bg-white shadow rounded-lg p-6 mb-6">
-    <h2 class="text-2xl font-semibold mb-4">Data Retention</h2>
-    <p class="text-gray-700 mb-3">
-      We retain your personal data only as long as necessary to provide the DocuElevate service or to comply with legal obligations.
-    </p>
-    <p class="text-gray-700">
-      If you wish to have your data deleted or your account removed, please contact us at <a href="mailto:docuelevate@christian-louis.de" class="text-blue-600 hover:underline">docuelevate@christian-louis.de</a>.
-    </p>
-  </div>
-
-  <div class="bg-white shadow rounded-lg p-6 mb-6">
-    <h2 class="text-2xl font-semibold mb-4">Data Security</h2>
-    <p class="text-gray-700">
-      We implement appropriate technical and organizational measures to protect your personal data against unauthorized access, alteration, disclosure, or destruction.
-    </p>
-  </div>
-
-  <div class="bg-white shadow rounded-lg p-6 mb-6">
-    <h2 class="text-2xl font-semibold mb-4">Your Rights under GDPR</h2>
-    <ul class="list-disc list-inside text-gray-700 ml-4">
-      <li class="mb-2"><strong>Access & Rectification:</strong> You can request to see the data we hold about you and ask for corrections if necessary.</li>
-      <li class="mb-2"><strong>Erasure (Right to be Forgotten):</strong> You can request deletion of your data where there is no legitimate reason for us to continue processing it.</li>
-      <li class="mb-2"><strong>Restriction of Processing:</strong> In certain circumstances, you can request a temporary block on processing your personal data.</li>
-      <li class="mb-2"><strong>Data Portability:</strong> You can request a copy of your data in a commonly used, machine-readable format.</li>
-      <li class="mb-2"><strong>Objection:</strong> You have the right to object to data processing, especially where processing is based on legitimate interests.</li>
-      <li class="mb-2"><strong>Withdrawal of Consent:</strong> If processing is based on your consent, you have the right to withdraw that consent at any time.</li>
-      <li><strong>Complaint:</strong> If you believe your rights have been violated, you have the right to lodge a complaint with a supervisory authority in the EU Member State of your residence or workplace.</li>
+    <ul class="list-disc list-inside text-gray-700 ml-4 mb-3">
+      <li class="mb-1">We collect only the minimum personal data required to operate the service.</li>
+      <li class="mb-1">Document content is processed strictly for the purpose you initiate (OCR, storage, metadata extraction).
+        We do not use your documents to train AI models or for any secondary purpose.</li>
+      <li class="mb-1">No advertising, behavioural tracking, or profiling is performed.</li>
+      <li class="mb-1">No tracking cookies or analytics scripts are loaded.</li>
+      <li>Third-party AI services (e.g., OpenAI, Azure Document Intelligence) are invoked only when you initiate
+        document processing, and data is transmitted under data processing agreements.</li>
     </ul>
   </div>
 
-  <div class="bg-white shadow rounded-lg p-6 mb-6">
-    <h2 class="text-2xl font-semibold mb-4">Updates to this Privacy Notice</h2>
+  <div id="cookies" class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">5. Use of Cookies &amp; Similar Technologies</h2>
     <p class="text-gray-700 mb-3">
-      We may update this notice from time to time to reflect changes in our practices or applicable laws. Any changes will be posted at <a href="{{ request.url.scheme }}://{{ request.url.netloc }}/" class="text-blue-600 hover:underline" target="_blank">{{ request.url.scheme }}://{{ request.url.netloc }}/</a>, and where appropriate, we will notify you via email or other channels.
+      DocuElevate uses <strong>only strictly necessary session cookies</strong> to maintain your authenticated
+      session. These cookies are essential for the service to function and are exempt from prior-consent
+      requirements under the EU ePrivacy Directive (Art. 5(3)) and equivalent national laws.
     </p>
     <p class="text-gray-700 mb-3">
-      If you have any questions or concerns about this Privacy Notice or your personal data, please contact us at <a href="mailto:docuelevate@christian-louis.de" class="text-blue-600 hover:underline">docuelevate@christian-louis.de</a>.
+      <strong>We do not use:</strong> analytics cookies, advertising cookies, tracking pixels, or any
+      third-party cookies that would require your consent.
     </p>
     <p class="text-gray-700">
-      Please also review our <a href="/terms" class="text-blue-600 hover:underline">Terms of Service</a> and <a href="/license" class="text-blue-600 hover:underline">License Information</a>.
+      For full details on the cookies we set, their names, duration, and purpose, please visit our
+      <a href="/cookies" class="text-blue-600 hover:underline">Cookie Policy</a>.
+    </p>
+  </div>
+
+  <div id="third-parties" class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">6. Third-Party Services</h2>
+    <p class="text-gray-700 mb-3">
+      <strong>OAuth Providers (Google, Dropbox, Microsoft):</strong> When you choose to authenticate via
+      OAuth, the respective provider processes your credentials and may share limited profile information
+      with us. These providers maintain their own privacy policies.
+    </p>
+    <p class="text-gray-700 mb-3">
+      <strong>Cloud Storage Providers (Google Drive, Dropbox, OneDrive, Amazon S3, Nextcloud, WebDAV/SFTP/FTP):</strong>
+      Documents are stored in the cloud provider you configure. Your configured credentials are stored
+      encrypted in the application database and are used solely to perform the storage operations you request.
+    </p>
+    <p class="text-gray-700 mb-3">
+      <strong>AI Processing Services (OpenAI, Azure Document Intelligence, others):</strong> When you initiate
+      OCR or AI-based metadata extraction, document data is transmitted to the AI service you or your
+      administrator has configured. This transmission is governed by a data processing agreement with the
+      respective provider.
+    </p>
+    <p class="text-gray-700">
+      <strong>No Sale or Sharing for Advertising:</strong> We do not sell, rent, or share your personal data
+      with third parties for advertising, marketing, or any purpose unrelated to providing the service.
+    </p>
+  </div>
+
+  <div id="international-transfers" class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">7. International Data Transfers</h2>
+    <p class="text-gray-700 mb-3">
+      DocuElevate is hosted in the European Union / EEA by default. Where personal data is transferred
+      outside the EEA (for example to US-based AI service providers such as OpenAI), we rely on
+      appropriate safeguards including:
+    </p>
+    <ul class="list-disc list-inside text-gray-700 ml-4 mb-3">
+      <li class="mb-1">
+        <strong>Standard Contractual Clauses (SCCs)</strong> adopted by the European Commission (2021/914/EU)
+        for transfers to processors and controllers in third countries.
+      </li>
+      <li class="mb-1">
+        <strong>Adequacy Decisions</strong> where the European Commission has recognised an equivalent level
+        of protection (e.g., United Kingdom, Switzerland, Canada (commercial organisations), Japan, South Korea).
+      </li>
+      <li>
+        <strong>UK International Data Transfer Agreements (IDTAs)</strong> for transfers from the UK after Brexit.
+      </li>
+    </ul>
+    <p class="text-gray-700">
+      You may request a copy of the relevant safeguards by contacting us at
+      <a href="mailto:docuelevate@christian-louis.de" class="text-blue-600 hover:underline">docuelevate@christian-louis.de</a>.
+    </p>
+  </div>
+
+  <div id="retention" class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">8. Data Retention</h2>
+    <p class="text-gray-700 mb-3">
+      We retain personal data only as long as strictly necessary to provide the DocuElevate service or to
+      comply with legal obligations:
+    </p>
+    <ul class="list-disc list-inside text-gray-700 ml-4 mb-3">
+      <li class="mb-1"><strong>Session data:</strong> Deleted when you log out or after session timeout.</li>
+      <li class="mb-1"><strong>File records and metadata:</strong> Retained for the duration of your use of the
+        service. You may delete individual files at any time through the application.</li>
+      <li class="mb-1"><strong>Audit logs:</strong> Retained for up to 90 days for security and compliance purposes.</li>
+      <li><strong>OAuth tokens:</strong> Stored in encrypted form and revocable at any time via your OAuth provider.</li>
+    </ul>
+    <p class="text-gray-700">
+      To request deletion of your account and all associated personal data, please contact us at
+      <a href="mailto:docuelevate@christian-louis.de" class="text-blue-600 hover:underline">docuelevate@christian-louis.de</a>.
+    </p>
+  </div>
+
+  <div id="security" class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">9. Data Security</h2>
+    <p class="text-gray-700 mb-3">
+      We implement appropriate technical and organisational measures (TOMs) to protect your personal data,
+      including:
+    </p>
+    <ul class="list-disc list-inside text-gray-700 ml-4">
+      <li class="mb-1">Encryption of credentials and sensitive configuration at rest.</li>
+      <li class="mb-1">Transport Layer Security (TLS/HTTPS) for all communications.</li>
+      <li class="mb-1">Role-based access controls limiting access to personal data.</li>
+      <li class="mb-1">Regular security audits and dependency vulnerability scanning.</li>
+      <li>CSRF protection on all state-changing requests.</li>
+    </ul>
+  </div>
+
+  <div id="gdpr-rights" class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">10. Your Rights (EU / EEA / UK / Switzerland)</h2>
+    <p class="text-gray-700 mb-3">
+      Under GDPR (and the UK GDPR / Swiss nFADP equivalent), you have the following rights:
+    </p>
+    <ul class="list-disc list-inside text-gray-700 ml-4 mb-3">
+      <li class="mb-2"><strong>Right of Access (Art. 15):</strong> You may request a copy of the personal data
+        we hold about you.</li>
+      <li class="mb-2"><strong>Right to Rectification (Art. 16):</strong> You may request correction of inaccurate
+        or incomplete personal data.</li>
+      <li class="mb-2"><strong>Right to Erasure (Art. 17):</strong> You may request deletion of your personal data
+        where there is no overriding legitimate reason for us to retain it.</li>
+      <li class="mb-2"><strong>Right to Restriction (Art. 18):</strong> You may request that we temporarily halt
+        processing of your data in certain circumstances.</li>
+      <li class="mb-2"><strong>Right to Data Portability (Art. 20):</strong> You may request your data in a
+        structured, commonly used, machine-readable format.</li>
+      <li class="mb-2"><strong>Right to Object (Art. 21):</strong> You may object to processing based on
+        legitimate interests at any time.</li>
+      <li class="mb-2"><strong>Right to Withdraw Consent:</strong> Where processing is based on consent, you
+        may withdraw that consent at any time without affecting the lawfulness of prior processing.</li>
+      <li><strong>Right to Lodge a Complaint:</strong> You have the right to lodge a complaint with your
+        national Data Protection Authority (DPA). In Germany: Bundesbeauftragte für den Datenschutz und
+        die Informationsfreiheit (BfDI). In the UK: Information Commissioner's Office (ICO). In Switzerland:
+        Federal Data Protection and Information Commissioner (FDPIC).</li>
+    </ul>
+    <p class="text-gray-700">
+      To exercise any of the above rights, contact us at
+      <a href="mailto:docuelevate@christian-louis.de" class="text-blue-600 hover:underline">docuelevate@christian-louis.de</a>.
+      We will respond within one calendar month (extendable by two further months for complex requests).
+    </p>
+  </div>
+
+  <div id="us-rights" class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">11. Additional Rights – United States (CCPA / CPRA)</h2>
+    <p class="text-gray-700 mb-3">
+      If you are a resident of California or another US state with applicable privacy legislation
+      (including Virginia VCDPA, Colorado CPA, Connecticut CTDPA, Utah UCPA), the following additional
+      disclosures apply:
+    </p>
+    <ul class="list-disc list-inside text-gray-700 ml-4 mb-3">
+      <li class="mb-2"><strong>Categories of personal information collected:</strong> Identifiers (name, email),
+        account authentication tokens, and document metadata that you choose to upload.</li>
+      <li class="mb-2"><strong>Purpose of collection:</strong> Providing, improving, and securing the
+        DocuElevate service. We do not sell or share personal information for cross-context behavioural
+        advertising.</li>
+      <li class="mb-2"><strong>Right to Know:</strong> You may request disclosure of the categories and
+        specific pieces of personal information we have collected about you.</li>
+      <li class="mb-2"><strong>Right to Delete:</strong> You may request deletion of personal information we
+        have collected, subject to certain exceptions.</li>
+      <li class="mb-2"><strong>Right to Correct:</strong> You may request correction of inaccurate personal
+        information.</li>
+      <li class="mb-2"><strong>Right to Opt Out of Sale / Sharing:</strong> We do not sell or share personal
+        information as defined by CCPA/CPRA. No opt-out mechanism is required; however, you may contact
+        us to confirm this.</li>
+      <li class="mb-2"><strong>Right to Limit Use of Sensitive Personal Information:</strong> We do not use
+        sensitive personal information beyond what is necessary to provide the service.</li>
+      <li><strong>Non-Discrimination:</strong> We will not discriminate against you for exercising any of
+        these rights.</li>
+    </ul>
+    <p class="text-gray-700">
+      To submit a verifiable consumer request, contact us at
+      <a href="mailto:docuelevate@christian-louis.de" class="text-blue-600 hover:underline">docuelevate@christian-louis.de</a>.
+      We will respond within 45 days (extendable by an additional 45 days when reasonably necessary).
+    </p>
+  </div>
+
+  <div id="canada-rights" class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">12. Additional Rights – Canada (PIPEDA / Québec Law 25)</h2>
+    <p class="text-gray-700 mb-3">
+      If you are located in Canada, the following applies under the Personal Information Protection and
+      Electronic Documents Act (PIPEDA) and applicable provincial legislation (including Québec Law 25 /
+      Bill 64):
+    </p>
+    <ul class="list-disc list-inside text-gray-700 ml-4 mb-3">
+      <li class="mb-2">We collect, use, and disclose personal information only with your knowledge and
+        consent, or as permitted by law.</li>
+      <li class="mb-2"><strong>Right of Access:</strong> You may request access to your personal information
+        and information about how it has been used or disclosed.</li>
+      <li class="mb-2"><strong>Right to Correction:</strong> You may challenge the accuracy or completeness
+        of your personal information and request correction.</li>
+      <li class="mb-2"><strong>Right to Withdraw Consent:</strong> Subject to legal or contractual
+        restrictions, you may withdraw consent to the collection, use, or disclosure of your personal
+        information on reasonable notice.</li>
+      <li class="mb-2"><strong>Québec residents:</strong> Under Law 25, you have additional rights including
+        the right to data portability (effective September 2023) and the right to de-indexation where
+        personal information is disseminated online.</li>
+    </ul>
+    <p class="text-gray-700">
+      Direct privacy complaints to our Privacy Officer at
+      <a href="mailto:docuelevate@christian-louis.de" class="text-blue-600 hover:underline">docuelevate@christian-louis.de</a>,
+      or to the Office of the Privacy Commissioner of Canada.
+    </p>
+  </div>
+
+  <div id="latam-rights" class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">13. Additional Rights – Latin America (LGPD &amp; Others)</h2>
+    <p class="text-gray-700 mb-3">
+      <strong>Brazil (LGPD – Lei Geral de Proteção de Dados, Law 13.709/2018):</strong>
+      If you are located in Brazil, you have the following rights under the LGPD:
+    </p>
+    <ul class="list-disc list-inside text-gray-700 ml-4 mb-3">
+      <li class="mb-1">Confirmation of the existence of processing and access to your data.</li>
+      <li class="mb-1">Correction of incomplete, inaccurate, or outdated data.</li>
+      <li class="mb-1">Anonymisation, blocking, or deletion of unnecessary or excessive data.</li>
+      <li class="mb-1">Portability of your data to another service or product provider.</li>
+      <li class="mb-1">Deletion of personal data processed with your consent.</li>
+      <li class="mb-1">Information about entities with which your data has been shared.</li>
+      <li class="mb-1">Information about the possibility of not consenting and the consequences of refusal.</li>
+      <li>Revocation of consent.</li>
+    </ul>
+    <p class="text-gray-700 mb-3">
+      <strong>Other Latin American Countries:</strong> We also recognise applicable privacy laws in Argentina
+      (PDPA), Mexico (LFPDPPP), Chile, Colombia (Ley 1581), and others. Users in these jurisdictions may
+      exercise equivalent rights as outlined under their national law by contacting us.
+    </p>
+    <p class="text-gray-700">
+      Contact:
+      <a href="mailto:docuelevate@christian-louis.de" class="text-blue-600 hover:underline">docuelevate@christian-louis.de</a>
+    </p>
+  </div>
+
+  <div id="apj-rights" class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">14. Additional Rights – Asia-Pacific &amp; Japan</h2>
+    <p class="text-gray-700 mb-3">
+      <strong>Japan (APPI – Act on the Protection of Personal Information):</strong>
+      Japanese residents may request disclosure, correction, addition or deletion, suspension of use,
+      erasure, or suspension of third-party provision of their personal information held by us.
+      Third-party disclosures require your prior consent except where permitted by law.
+    </p>
+    <p class="text-gray-700 mb-3">
+      <strong>Australia (Privacy Act 1988 and Australian Privacy Principles):</strong>
+      Australian residents may request access to and correction of their personal information.
+      We will respond to access requests within 30 days. Complaints may be lodged with the
+      Office of the Australian Information Commissioner (OAIC).
+    </p>
+    <p class="text-gray-700 mb-3">
+      <strong>South Korea (PIPA – Personal Information Protection Act):</strong>
+      Korean residents may request access, correction, deletion, and suspension of processing.
+      We handle personal information of Korean residents in accordance with the PIPA.
+    </p>
+    <p class="text-gray-700 mb-3">
+      <strong>Other APJ markets (Singapore PDPA, New Zealand Privacy Act, India DPDP Act):</strong>
+      We recognise the data protection rights afforded to residents of these jurisdictions under their
+      respective national laws. Contact us to exercise your rights.
+    </p>
+    <p class="text-gray-700">
+      Contact:
+      <a href="mailto:docuelevate@christian-louis.de" class="text-blue-600 hover:underline">docuelevate@christian-louis.de</a>
+    </p>
+  </div>
+
+  <div id="ukraine-rights" class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">15. Additional Rights – Ukraine</h2>
+    <p class="text-gray-700 mb-3">
+      Users located in Ukraine are protected under the Law of Ukraine "On Personal Data Protection"
+      (No. 2297-VI). Your rights include access to, correction, blocking, and deletion of your personal
+      data, as well as the right to object to processing.
+    </p>
+    <p class="text-gray-700">
+      Contact:
+      <a href="mailto:docuelevate@christian-louis.de" class="text-blue-600 hover:underline">docuelevate@christian-louis.de</a>
+    </p>
+  </div>
+
+  <div id="updates" class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-4">16. Updates to this Privacy Notice</h2>
+    <p class="text-gray-700 mb-3">
+      We may update this notice from time to time to reflect changes in our practices or applicable laws.
+      The "Last Updated" date at the top of this page indicates when the notice was last revised.
+      Where changes are material, we will notify users via in-application notification or email where
+      appropriate.
+    </p>
+    <p class="text-gray-700 mb-3">
+      If you have any questions or concerns about this Privacy Notice or your personal data, please
+      contact us at
+      <a href="mailto:docuelevate@christian-louis.de" class="text-blue-600 hover:underline">docuelevate@christian-louis.de</a>.
+    </p>
+    <p class="text-gray-700">
+      Please also review our <a href="/terms" class="text-blue-600 hover:underline">Terms of Service</a>,
+      <a href="/cookies" class="text-blue-600 hover:underline">Cookie Policy</a>, and
+      <a href="/license" class="text-blue-600 hover:underline">License Information</a>.
     </p>
   </div>
 </div>
