@@ -288,6 +288,22 @@ class Settings(BaseSettings):
             "bypass the check. Default: True (enabled)."
         ),
     )
+    text_quality_threshold: int = Field(
+        default=85,
+        description=(
+            "Minimum quality score (0–100) required to accept embedded PDF text without re-OCR. "
+            "Text scoring below this threshold is discarded and the file is re-processed with OCR. "
+            "Default: 85. The stricter this value, the more files will be re-OCR'd."
+        ),
+    )
+    text_quality_significant_issues: Union[List[str], str] = Field(
+        default_factory=lambda: ["excessive_typos", "garbage_characters", "incoherent_text", "fragmented_sentences"],
+        description=(
+            "Comma-separated list of quality issue labels that force OCR re-run even when the quality "
+            "score is above TEXT_QUALITY_THRESHOLD. Any of these issues present in the AI assessment "
+            "will trigger re-OCR. Default: excessive_typos,garbage_characters,incoherent_text,fragmented_sentences"
+        ),
+    )
 
     # Processing step timeout - prevents files from getting stuck in "in_progress" state
     step_timeout: int = Field(
@@ -438,6 +454,18 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             if "," in v:
                 return [url.strip() for url in v.split(",") if url.strip()]
+            elif v.strip():
+                return [v.strip()]
+            return []
+        return v
+
+    @field_validator("text_quality_significant_issues", mode="before")
+    @classmethod
+    def parse_text_quality_significant_issues(cls, v: str | list[str]) -> list[str]:
+        """Parse significant issue labels from comma-separated string or list."""
+        if isinstance(v, str):
+            if "," in v:
+                return [item.strip() for item in v.split(",") if item.strip()]
             elif v.strip():
                 return [v.strip()]
             return []

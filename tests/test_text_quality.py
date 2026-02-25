@@ -4,6 +4,8 @@ Comprehensive tests for app/utils/text_quality.py.
 Covers:
 - detect_pdf_text_source: digital, OCR, and unknown PDF metadata
 - check_text_quality: digital bypass, good text, poor text, empty text
+- Strict threshold (85) and significant-issues override logic
+- compare_text_quality: head-to-head comparison between original and OCR text
 - AI failure and JSON-parse error handling
 - Integration with process_document: quality check disabled, good quality,
   poor quality (triggers re-OCR), digital source bypass
@@ -14,9 +16,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.utils.text_quality import (
+    TextComparisonResult,
     TextQualityResult,
     TextSource,
     check_text_quality,
+    compare_text_quality,
     detect_pdf_text_source,
 )
 
@@ -257,6 +261,18 @@ class TestCheckTextQualityAI:
         provider.chat_completion.return_value = response
         return provider
 
+    def _mock_settings(self, mock_settings, threshold: int = 85):
+        """Configure mock settings with sensible defaults for quality check tests."""
+        mock_settings.ai_model = "gpt-4o-mini"
+        mock_settings.openai_model = "gpt-4o-mini"
+        mock_settings.text_quality_threshold = threshold
+        mock_settings.text_quality_significant_issues = [
+            "excessive_typos",
+            "garbage_characters",
+            "incoherent_text",
+            "fragmented_sentences",
+        ]
+
     def test_good_text_passes(self):
         """A high-quality AI response marks text as good."""
         ai_resp = _make_ai_response(90, True, "Well-structured invoice text.", [])
@@ -266,8 +282,7 @@ class TestCheckTextQualityAI:
             patch("app.utils.text_quality.get_ai_provider", return_value=provider),
             patch("app.utils.text_quality.settings") as mock_settings,
         ):
-            mock_settings.ai_model = "gpt-4o-mini"
-            mock_settings.openai_model = "gpt-4o-mini"
+            self._mock_settings(mock_settings)
             result = check_text_quality(GOOD_TEXT, TextSource.OCR_PREVIOUS)
 
         assert result.is_good_quality is True
@@ -285,8 +300,7 @@ class TestCheckTextQualityAI:
             patch("app.utils.text_quality.get_ai_provider", return_value=provider),
             patch("app.utils.text_quality.settings") as mock_settings,
         ):
-            mock_settings.ai_model = "gpt-4o-mini"
-            mock_settings.openai_model = "gpt-4o-mini"
+            self._mock_settings(mock_settings)
             result = check_text_quality(POOR_OCR_TEXT, TextSource.OCR_PREVIOUS)
 
         assert result.is_good_quality is False
@@ -303,8 +317,7 @@ class TestCheckTextQualityAI:
             patch("app.utils.text_quality.get_ai_provider", return_value=provider),
             patch("app.utils.text_quality.settings") as mock_settings,
         ):
-            mock_settings.ai_model = "gpt-4o-mini"
-            mock_settings.openai_model = "gpt-4o-mini"
+            self._mock_settings(mock_settings)
             result = check_text_quality(GARBAGE_TEXT, TextSource.UNKNOWN)
 
         assert result.is_good_quality is False
@@ -319,34 +332,125 @@ class TestCheckTextQualityAI:
             patch("app.utils.text_quality.get_ai_provider", return_value=provider),
             patch("app.utils.text_quality.settings") as mock_settings,
         ):
-            mock_settings.ai_model = None
-            mock_settings.openai_model = "gpt-4o-mini"
+            self._mock_settings(mock_settings)
             result = check_text_quality(FRAGMENTED_TEXT, TextSource.OCR_PREVIOUS)
 
         assert result.is_good_quality is False
 
-    def test_borderline_score_uses_is_good_quality_field(self):
-        """The is_good_quality field from the AI takes precedence over the threshold."""
-        # Score 64 but AI explicitly says True
-        ai_resp = _make_ai_response(64, True, "Mostly readable despite minor issues.", [])
+    def test_score_below_threshold_rejected_even_if_ai_says_good(self):
+        """Score below threshold forces rejection even when AI returns is_good_quality=True."""
+        # This is the key issue from the bug report: score=68 with is_good_quality=True
+        # should NOT be accepted.
+        ai_resp = _make_ai_response(68, True, "Text is largely legible with some OCR-induced typos.", [])
         provider = self._mock_provider(ai_resp)
 
         with (
             patch("app.utils.text_quality.get_ai_provider", return_value=provider),
             patch("app.utils.text_quality.settings") as mock_settings,
         ):
-            mock_settings.ai_model = None
-            mock_settings.openai_model = "gpt-4o-mini"
+            self._mock_settings(mock_settings, threshold=85)
+            result = check_text_quality(POOR_OCR_TEXT, TextSource.OCR_PREVIOUS)
+
+        assert result.is_good_quality is False
+        assert result.quality_score == 68
+
+    def test_significant_issues_force_rejection_above_threshold(self):
+        """Significant issues force rejection even when score is above threshold."""
+        # Score is 88 (above default threshold of 85), but has excessive_typos and garbage_characters.
+        ai_resp = _make_ai_response(
+            88,
+            True,
+            "Mostly readable text with some OCR artefacts.",
+            ["excessive_typos", "garbage_characters"],
+        )
+        provider = self._mock_provider(ai_resp)
+
+        with (
+            patch("app.utils.text_quality.get_ai_provider", return_value=provider),
+            patch("app.utils.text_quality.settings") as mock_settings,
+        ):
+            self._mock_settings(mock_settings, threshold=85)
+            result = check_text_quality(POOR_OCR_TEXT, TextSource.OCR_PREVIOUS)
+
+        assert result.is_good_quality is False
+        assert result.quality_score == 88
+
+    def test_significant_issues_with_incoherent_text(self):
+        """incoherent_text in issues forces rejection even above threshold."""
+        ai_resp = _make_ai_response(
+            90,
+            True,
+            "Text has coherent paragraphs but some incoherent passages.",
+            ["incoherent_text"],
+        )
+        provider = self._mock_provider(ai_resp)
+
+        with (
+            patch("app.utils.text_quality.get_ai_provider", return_value=provider),
+            patch("app.utils.text_quality.settings") as mock_settings,
+        ):
+            self._mock_settings(mock_settings, threshold=85)
+            result = check_text_quality(POOR_OCR_TEXT, TextSource.OCR_PREVIOUS)
+
+        assert result.is_good_quality is False
+
+    def test_non_significant_issues_do_not_block_good_score(self):
+        """Issues not in significant_issues list do not override a good score."""
+        # 'minor_formatting' is not in the significant issues list.
+        ai_resp = _make_ai_response(
+            90,
+            True,
+            "Well-structured text with minor formatting issues.",
+            ["minor_formatting"],
+        )
+        provider = self._mock_provider(ai_resp)
+
+        with (
+            patch("app.utils.text_quality.get_ai_provider", return_value=provider),
+            patch("app.utils.text_quality.settings") as mock_settings,
+        ):
+            self._mock_settings(mock_settings, threshold=85)
             result = check_text_quality(GOOD_TEXT, TextSource.OCR_PREVIOUS)
 
         assert result.is_good_quality is True
-        assert result.quality_score == 64
+        assert result.quality_score == 90
+
+    def test_borderline_score_below_threshold_is_rejected(self):
+        """A score just below the threshold is rejected regardless of AI verdict."""
+        ai_resp = _make_ai_response(84, True, "Mostly readable despite minor issues.", [])
+        provider = self._mock_provider(ai_resp)
+
+        with (
+            patch("app.utils.text_quality.get_ai_provider", return_value=provider),
+            patch("app.utils.text_quality.settings") as mock_settings,
+        ):
+            self._mock_settings(mock_settings, threshold=85)
+            result = check_text_quality(GOOD_TEXT, TextSource.OCR_PREVIOUS)
+
+        # Score 84 < threshold 85 → rejected
+        assert result.is_good_quality is False
+        assert result.quality_score == 84
+
+    def test_borderline_score_at_threshold_is_accepted(self):
+        """A score exactly at the threshold is accepted when no significant issues."""
+        ai_resp = _make_ai_response(85, True, "Meets the quality threshold.", [])
+        provider = self._mock_provider(ai_resp)
+
+        with (
+            patch("app.utils.text_quality.get_ai_provider", return_value=provider),
+            patch("app.utils.text_quality.settings") as mock_settings,
+        ):
+            self._mock_settings(mock_settings, threshold=85)
+            result = check_text_quality(GOOD_TEXT, TextSource.OCR_PREVIOUS)
+
+        assert result.is_good_quality is True
+        assert result.quality_score == 85
 
     def test_markdown_fences_stripped_before_parse(self):
         """The parser handles AI responses wrapped in markdown code fences."""
         import json as _json
 
-        inner = _json.dumps({"quality_score": 80, "is_good_quality": True, "feedback": "Fine.", "issues": []})
+        inner = _json.dumps({"quality_score": 90, "is_good_quality": True, "feedback": "Fine.", "issues": []})
         fenced = f"```json\n{inner}\n```"
         provider = self._mock_provider(fenced)
 
@@ -354,12 +458,11 @@ class TestCheckTextQualityAI:
             patch("app.utils.text_quality.get_ai_provider", return_value=provider),
             patch("app.utils.text_quality.settings") as mock_settings,
         ):
-            mock_settings.ai_model = None
-            mock_settings.openai_model = "gpt-4o-mini"
+            self._mock_settings(mock_settings)
             result = check_text_quality(GOOD_TEXT, TextSource.UNKNOWN)
 
         assert result.is_good_quality is True
-        assert result.quality_score == 80
+        assert result.quality_score == 90
 
     def test_raw_ai_response_stored_in_result(self):
         """The raw AI response is preserved in TextQualityResult.ai_response_raw."""
@@ -370,8 +473,7 @@ class TestCheckTextQualityAI:
             patch("app.utils.text_quality.get_ai_provider", return_value=provider),
             patch("app.utils.text_quality.settings") as mock_settings,
         ):
-            mock_settings.ai_model = None
-            mock_settings.openai_model = "gpt-4o-mini"
+            self._mock_settings(mock_settings)
             result = check_text_quality(GOOD_TEXT, TextSource.OCR_PREVIOUS)
 
         assert result.ai_response_raw == ai_resp
@@ -381,7 +483,7 @@ class TestCheckTextQualityAI:
         from app.utils.text_quality import _TEXT_SAMPLE_MAX_CHARS
 
         long_text = "a" * (_TEXT_SAMPLE_MAX_CHARS + 5000)
-        ai_resp = _make_ai_response(85, True, "Fine.", [])
+        ai_resp = _make_ai_response(90, True, "Fine.", [])
         provider = self._mock_provider(ai_resp)
         captured_prompts: list[str] = []
 
@@ -395,8 +497,7 @@ class TestCheckTextQualityAI:
             patch("app.utils.text_quality.get_ai_provider", return_value=provider),
             patch("app.utils.text_quality.settings") as mock_settings,
         ):
-            mock_settings.ai_model = None
-            mock_settings.openai_model = "gpt-4o-mini"
+            self._mock_settings(mock_settings)
             check_text_quality(long_text, TextSource.UNKNOWN)
 
         assert len(captured_prompts) == 1
@@ -424,6 +525,13 @@ class TestCheckTextQualityErrorHandling:
         ):
             mock_settings.ai_model = None
             mock_settings.openai_model = "gpt-4o-mini"
+            mock_settings.text_quality_threshold = 85
+            mock_settings.text_quality_significant_issues = [
+                "excessive_typos",
+                "garbage_characters",
+                "incoherent_text",
+                "fragmented_sentences",
+            ]
             result = check_text_quality(GOOD_TEXT, TextSource.UNKNOWN)
 
         assert result.is_good_quality is True
@@ -440,6 +548,13 @@ class TestCheckTextQualityErrorHandling:
         ):
             mock_settings.ai_model = None
             mock_settings.openai_model = "gpt-4o-mini"
+            mock_settings.text_quality_threshold = 85
+            mock_settings.text_quality_significant_issues = [
+                "excessive_typos",
+                "garbage_characters",
+                "incoherent_text",
+                "fragmented_sentences",
+            ]
             result = check_text_quality(GOOD_TEXT, TextSource.OCR_PREVIOUS)
 
         assert result.is_good_quality is True
@@ -456,6 +571,13 @@ class TestCheckTextQualityErrorHandling:
         ):
             mock_settings.ai_model = None
             mock_settings.openai_model = "gpt-4o-mini"
+            mock_settings.text_quality_threshold = 85
+            mock_settings.text_quality_significant_issues = [
+                "excessive_typos",
+                "garbage_characters",
+                "incoherent_text",
+                "fragmented_sentences",
+            ]
             result = check_text_quality(GOOD_TEXT, TextSource.UNKNOWN)
 
         assert result.ai_response_raw is None
@@ -665,6 +787,13 @@ class TestProcessDocumentTextQuality:
         mock_ocr.delay.assert_called_once()
         mock_gpt.delay.assert_not_called()
         assert "OCR" in result["status"]
+        # Verify original text is passed to the OCR task for comparison
+        call_args = mock_ocr.delay.call_args
+        assert call_args is not None
+        # Third argument (original_text) should be a non-empty string
+        assert len(call_args.args) >= 3
+        assert isinstance(call_args.args[2], str)
+        assert len(call_args.args[2]) > 0
 
     def test_quality_check_digital_source_skips_ai_call(self, db_session, tmp_path):
         """Digital-origin PDFs bypass the AI and proceed directly to GPT."""
@@ -700,3 +829,188 @@ class TestProcessDocumentTextQuality:
         mock_gpt.delay.assert_called_once()
         mock_ocr.delay.assert_not_called()
         assert result["status"] == "Text extracted locally"
+
+
+# ---------------------------------------------------------------------------
+# TextComparisonResult dataclass
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestTextComparisonResult:
+    """Tests for the TextComparisonResult dataclass."""
+
+    def test_default_ai_response_raw_is_none(self):
+        result = TextComparisonResult(
+            preferred="ocr",
+            original_score=60,
+            ocr_score=85,
+            explanation="OCR is cleaner.",
+        )
+        assert result.preferred == "ocr"
+        assert result.original_score == 60
+        assert result.ocr_score == 85
+        assert result.ai_response_raw is None
+
+    def test_preferred_original(self):
+        result = TextComparisonResult(
+            preferred="original",
+            original_score=90,
+            ocr_score=70,
+            explanation="Original is higher quality.",
+        )
+        assert result.preferred == "original"
+
+
+# ---------------------------------------------------------------------------
+# compare_text_quality
+# ---------------------------------------------------------------------------
+
+
+def _make_comparison_response(original_score: int, ocr_score: int, preferred: str, explanation: str) -> str:
+    import json as _json
+
+    return _json.dumps(
+        {
+            "original_score": original_score,
+            "ocr_score": ocr_score,
+            "preferred": preferred,
+            "explanation": explanation,
+        }
+    )
+
+
+@pytest.mark.unit
+class TestCompareTextQuality:
+    """Tests for compare_text_quality() head-to-head comparison."""
+
+    def _mock_provider(self, response: str) -> MagicMock:
+        provider = MagicMock()
+        provider.chat_completion.return_value = response
+        return provider
+
+    def test_ocr_preferred(self):
+        """When AI prefers OCR text, preferred='ocr'."""
+        ai_resp = _make_comparison_response(60, 88, "ocr", "OCR output is much cleaner.")
+        provider = self._mock_provider(ai_resp)
+
+        with (
+            patch("app.utils.text_quality.get_ai_provider", return_value=provider),
+            patch("app.utils.text_quality.settings") as mock_settings,
+        ):
+            mock_settings.ai_model = "gpt-4o-mini"
+            mock_settings.openai_model = "gpt-4o-mini"
+            result = compare_text_quality(POOR_OCR_TEXT, GOOD_TEXT)
+
+        assert result.preferred == "ocr"
+        assert result.original_score == 60
+        assert result.ocr_score == 88
+        assert "OCR" in result.explanation
+
+    def test_original_preferred(self):
+        """When AI prefers original text, preferred='original'."""
+        ai_resp = _make_comparison_response(92, 70, "original", "Original is higher quality.")
+        provider = self._mock_provider(ai_resp)
+
+        with (
+            patch("app.utils.text_quality.get_ai_provider", return_value=provider),
+            patch("app.utils.text_quality.settings") as mock_settings,
+        ):
+            mock_settings.ai_model = "gpt-4o-mini"
+            mock_settings.openai_model = "gpt-4o-mini"
+            result = compare_text_quality(GOOD_TEXT, POOR_OCR_TEXT)
+
+        assert result.preferred == "original"
+        assert result.original_score == 92
+        assert result.ocr_score == 70
+
+    def test_equal_preferred(self):
+        """When AI finds both equal, preferred='equal'."""
+        ai_resp = _make_comparison_response(85, 85, "equal", "Both texts are equivalent quality.")
+        provider = self._mock_provider(ai_resp)
+
+        with (
+            patch("app.utils.text_quality.get_ai_provider", return_value=provider),
+            patch("app.utils.text_quality.settings") as mock_settings,
+        ):
+            mock_settings.ai_model = None
+            mock_settings.openai_model = "gpt-4o-mini"
+            result = compare_text_quality(GOOD_TEXT, GOOD_TEXT)
+
+        assert result.preferred == "equal"
+
+    def test_invalid_preferred_value_defaults_to_ocr(self):
+        """An unexpected preferred value in the AI response defaults to 'ocr'."""
+        import json as _json
+
+        ai_resp = _json.dumps(
+            {
+                "original_score": 80,
+                "ocr_score": 75,
+                "preferred": "neither",  # invalid
+                "explanation": "Both are bad.",
+            }
+        )
+        provider = self._mock_provider(ai_resp)
+
+        with (
+            patch("app.utils.text_quality.get_ai_provider", return_value=provider),
+            patch("app.utils.text_quality.settings") as mock_settings,
+        ):
+            mock_settings.ai_model = None
+            mock_settings.openai_model = "gpt-4o-mini"
+            result = compare_text_quality(GOOD_TEXT, GOOD_TEXT)
+
+        assert result.preferred == "ocr"
+
+    def test_markdown_fences_stripped(self):
+        """Markdown code fences in comparison response are stripped before parsing."""
+        import json as _json
+
+        inner = _json.dumps(
+            {"original_score": 70, "ocr_score": 90, "preferred": "ocr", "explanation": "OCR is better."}
+        )
+        fenced = f"```json\n{inner}\n```"
+        provider = self._mock_provider(fenced)
+
+        with (
+            patch("app.utils.text_quality.get_ai_provider", return_value=provider),
+            patch("app.utils.text_quality.settings") as mock_settings,
+        ):
+            mock_settings.ai_model = None
+            mock_settings.openai_model = "gpt-4o-mini"
+            result = compare_text_quality(POOR_OCR_TEXT, GOOD_TEXT)
+
+        assert result.preferred == "ocr"
+        assert result.ocr_score == 90
+
+    def test_ai_error_defaults_to_ocr(self):
+        """AI error during comparison safely defaults to OCR text preferred."""
+        provider = MagicMock()
+        provider.chat_completion.side_effect = RuntimeError("Timeout")
+
+        with (
+            patch("app.utils.text_quality.get_ai_provider", return_value=provider),
+            patch("app.utils.text_quality.settings") as mock_settings,
+        ):
+            mock_settings.ai_model = None
+            mock_settings.openai_model = "gpt-4o-mini"
+            result = compare_text_quality(POOR_OCR_TEXT, GOOD_TEXT)
+
+        assert result.preferred == "ocr"
+        assert "Timeout" in result.explanation
+
+    def test_raw_response_stored(self):
+        """The raw AI response is stored in ai_response_raw."""
+        ai_resp = _make_comparison_response(75, 88, "ocr", "OCR is better.")
+        provider = self._mock_provider(ai_resp)
+
+        with (
+            patch("app.utils.text_quality.get_ai_provider", return_value=provider),
+            patch("app.utils.text_quality.settings") as mock_settings,
+        ):
+            mock_settings.ai_model = None
+            mock_settings.openai_model = "gpt-4o-mini"
+            result = compare_text_quality(POOR_OCR_TEXT, GOOD_TEXT)
+
+        assert result.ai_response_raw == ai_resp
