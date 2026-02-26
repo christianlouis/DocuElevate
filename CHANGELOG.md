@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.57.3 (2026-02-26)
+
+### Bug Fixes
+
+- **tests**: Correct mock patch targets in google_drive coverage tests
+  ([`096aedb`](https://github.com/christianlouis/DocuElevate/commit/096aedb8a0ea3988a8072634647cfc3b1def0309))
+
+- **tests**: Use targeted settings mock instead of broad getattr patch
+  ([`c6ac6b5`](https://github.com/christianlouis/DocuElevate/commit/c6ac6b50e998876543a2f167f126ff064c29ec16))
+
+### Testing
+
+- **coverage**: Add celery_worker coverage and remove dead config_validator.py
+  ([`ffa0e1e`](https://github.com/christianlouis/DocuElevate/commit/ffa0e1eb7bf9a945fee63b7c6623ac45e733e4c6))
+
+
 ## v0.57.2 (2026-02-26)
 
 ### Bug Fixes
