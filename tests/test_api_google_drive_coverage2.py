@@ -118,7 +118,11 @@ class TestGetTokenInfoOuterException:
 
     def test_get_token_info_outer_exception(self, client: TestClient):
         """Trigger the outer exception handler in get_google_drive_token_info."""
-        with patch("app.api.google_drive.getattr", side_effect=Exception("boom")):
+        mock_settings = MagicMock()
+        # Property on the mock type so getattr() propagates a non-AttributeError,
+        # bypassing the default value and reaching the outer except block.
+        type(mock_settings).google_drive_use_oauth = property(lambda self: (_ for _ in ()).throw(Exception("boom")))
+        with patch("app.api.google_drive.settings", mock_settings):
             response = client.get("/api/google-drive/get-token-info")
 
         assert response.status_code == 200
