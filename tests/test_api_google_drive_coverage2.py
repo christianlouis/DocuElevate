@@ -31,7 +31,7 @@ class TestUpdateSettingsExceptionHandler:
 class TestTestTokenServiceAccount:
     """Cover lines 214-255: service account test-token paths."""
 
-    @patch("app.api.google_drive.get_google_drive_service")
+    @patch("app.tasks.upload_to_google_drive.get_google_drive_service")
     def test_test_token_service_account_success_no_delegation(self, mock_get_service, client: TestClient):
         """Test successful service account connection without delegation."""
         from app.config import settings
@@ -55,7 +55,7 @@ class TestTestTokenServiceAccount:
         assert data["auth_type"] == "service_account"
         assert "sa@project.iam.gserviceaccount.com" in data["message"]
 
-    @patch("app.api.google_drive.get_google_drive_service")
+    @patch("app.tasks.upload_to_google_drive.get_google_drive_service")
     def test_test_token_service_account_with_delegation(self, mock_get_service, client: TestClient):
         """Test service account with delegation shows delegated user info."""
         from app.config import settings
@@ -93,7 +93,7 @@ class TestTestTokenServiceAccount:
         assert data["status"] == "error"
         assert "not configured" in data["message"]
 
-    @patch("app.api.google_drive.get_google_drive_service")
+    @patch("app.tasks.upload_to_google_drive.get_google_drive_service")
     def test_test_token_service_account_connection_error(self, mock_get_service, client: TestClient):
         """Test service account connection error (lines 245-251)."""
         from app.config import settings
@@ -118,13 +118,11 @@ class TestGetTokenInfoOuterException:
 
     def test_get_token_info_outer_exception(self, client: TestClient):
         """Trigger the outer exception handler in get_google_drive_token_info."""
-        from app.config import settings
-
-        with patch.object(
-            type(settings),
-            "google_drive_use_oauth",
-            property(fget=lambda self: (_ for _ in ()).throw(Exception("boom"))),
-        ):
+        mock_settings = MagicMock()
+        # Property on the mock type so getattr() propagates a non-AttributeError,
+        # bypassing the default value and reaching the outer except block.
+        type(mock_settings).google_drive_use_oauth = property(lambda self: (_ for _ in ()).throw(Exception("boom")))
+        with patch("app.api.google_drive.settings", mock_settings):
             response = client.get("/api/google-drive/get-token-info")
 
         assert response.status_code == 200

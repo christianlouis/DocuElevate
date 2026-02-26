@@ -1,7 +1,7 @@
 """
-Tests for app/utils/config_validator.py
+Tests for app/utils/config_validator/ package
 
-This module tests the config_validator re-export module.
+This module tests the config_validator package re-exports from __init__.py.
 """
 
 import pytest
