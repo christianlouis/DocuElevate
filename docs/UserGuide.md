@@ -39,6 +39,7 @@ DocuElevate features a simple navigation system with the following main sections
 - **Home**: Dashboard and overview
 - **Upload**: For adding new documents to the system
 - **Files**: For viewing and managing processed documents
+- **Search**: Dedicated full-text search across all document content
 - **About**: Information about DocuElevate
 
 ## Uploading Documents
@@ -87,9 +88,32 @@ If configured, DocuElevate can automatically fetch documents from email attachme
 The **Files** page provides access to all processed documents:
 
 1. Navigate to the **Files** page
-2. Use the search box to find specific documents
+2. Use the search box to find specific documents by filename, or the full-text search bar to search document content, metadata, and tags
 3. Click on any file to view its details
 4. Sort the list by any column by clicking on the column header
+
+## Searching Documents
+
+DocuElevate provides two ways to search your documents:
+
+### Full-Text Search on the Files Page
+
+The **Files** page includes a full-text search bar (labelled "Full-Text Search") that searches across OCR-extracted text, AI metadata, tags, sender, recipient, and document type. Type at least 2 characters and results appear automatically below the search bar.
+
+### Dedicated Search Page
+
+For a more focused search experience, use the **Search** page accessible from the main navigation:
+
+1. Navigate to the **Search** page
+2. Type your query into the search box — results appear automatically as you type (or press Enter)
+3. Results are displayed in a Google-style format showing:
+   - **Document title** (linked to the file detail page)
+   - **Filename**
+   - **Document type**, **sender**, and **tag** badges
+   - **Content preview** with highlighted matching terms
+4. Use pagination to browse through large result sets
+
+The search page is also accessible via URL with a pre-filled query: `/search?q=invoice`
 
 ### File Detail View
 

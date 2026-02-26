@@ -9,10 +9,10 @@ from app.views.filemanager import router as filemanager_router
 
 # Import all the view routers
 from app.views.general import router as general_router
-from app.views.search import router as search_router
 from app.views.google_drive import router as google_drive_router
 from app.views.license_routes import router as license_router  # Add the license router
 from app.views.onedrive import router as onedrive_router
+from app.views.search import router as search_router
 from app.views.settings import router as settings_router
 from app.views.status import router as status_router
 from app.views.wizard import router as wizard_router
