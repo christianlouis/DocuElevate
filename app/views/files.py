@@ -17,6 +17,26 @@ router = APIRouter()
 _FILE_NOT_FOUND = "File not found"
 
 
+def _get_upload_concurrency() -> int:
+    """Return the configured upload concurrency (falls back to default on error)."""
+    try:
+        from app.config import settings
+
+        return settings.upload_concurrency
+    except Exception:
+        return 3
+
+
+def _get_upload_queue_delay_ms() -> int:
+    """Return the configured upload queue delay in ms (falls back to default on error)."""
+    try:
+        from app.config import settings
+
+        return settings.upload_queue_delay_ms
+    except Exception:
+        return 500
+
+
 @router.get("/files")
 @require_login
 def files_page(
@@ -111,6 +131,8 @@ def files_page(
                 "mime_type": mime_type or "",
                 "status": status or "",
                 "mime_types": mime_types,
+                "upload_concurrency": _get_upload_concurrency(),
+                "upload_queue_delay_ms": _get_upload_queue_delay_ms(),
             },
         )
     except Exception as e:
@@ -124,6 +146,8 @@ def files_page(
                 "files": [],
                 "pagination": {"page": 1, "per_page": per_page, "total_items": 0, "total_pages": 0},
                 "error": str(e),
+                "upload_concurrency": _get_upload_concurrency(),
+                "upload_queue_delay_ms": _get_upload_queue_delay_ms(),
             },
         )
 

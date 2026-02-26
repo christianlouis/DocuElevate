@@ -1057,6 +1057,28 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "upload_concurrency": {
+        "category": "Processing",
+        "description": (
+            "Maximum number of files uploaded simultaneously from the browser. "
+            "Limits parallel uploads to prevent API overload when dragging directories. Default: 3."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "upload_queue_delay_ms": {
+        "category": "Processing",
+        "description": (
+            "Delay in milliseconds between starting each upload slot when queue is active. "
+            "Staggers upload starts to smooth out server load. Default: 500 ms."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "enable_text_quality_check": {
         "category": "Processing",
         "description": (

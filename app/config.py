@@ -232,6 +232,22 @@ class Settings(BaseSettings):
         description="Delay in seconds between each task submission when throttling in /processall",
     )
 
+    # Client-side upload throttling settings (applied when uploading files via the web UI)
+    upload_concurrency: int = Field(
+        default=3,
+        description=(
+            "Maximum number of files uploaded simultaneously from the browser. "
+            "Limits parallel uploads to prevent API overload when dragging directories. Default: 3."
+        ),
+    )
+    upload_queue_delay_ms: int = Field(
+        default=500,
+        description=(
+            "Delay in milliseconds between starting each upload slot when queue is active. "
+            "Staggers upload starts to smooth out server load. Default: 500 ms."
+        ),
+    )
+
     # Notification settings
     notification_urls: Union[List[str], str] = Field(
         default_factory=list,

@@ -99,7 +99,16 @@ async def serve_imprint(request: Request):
 @require_login
 async def serve_upload(request: Request):
     """Serve the upload page."""
-    return templates.TemplateResponse("upload.html", {"request": request})
+    from app.config import settings
+
+    return templates.TemplateResponse(
+        "upload.html",
+        {
+            "request": request,
+            "upload_concurrency": settings.upload_concurrency,
+            "upload_queue_delay_ms": settings.upload_queue_delay_ms,
+        },
+    )
 
 
 @router.get("/favicon.ico", include_in_schema=False)

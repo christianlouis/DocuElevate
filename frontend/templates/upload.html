@@ -12,12 +12,11 @@
       <div
         id="dropZone"
         class="border-4 border-dashed border-gray-300 rounded-lg p-6 sm:p-8 bg-white text-center w-full"
-        ondrop="handleDrop(event)"
         ondragover="handleDragOver(event)"
         ondragleave="handleDragLeave(event)"
       >
         <p class="text-gray-500 mb-4 hidden sm:block">
-          Drag &amp; drop files here, or click to select files.
+          Drag &amp; drop files or folders here, or click to select files.
         </p>
         <p class="text-gray-500 mb-4 sm:hidden">
           Tap to select files or use the camera button below.
@@ -42,7 +41,7 @@
         </button>
         <div class="text-sm text-gray-500 mt-2">
           <p>Allowed types: PDF, Office documents (Word, Excel, PowerPoint, etc.), Images</p>
-          <p>Maximum size: 500MB per file</p>
+          <p>Maximum size: 500MB per file &bull; Directories are uploaded recursively</p>
         </div>
       </div>
 
@@ -122,6 +121,13 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+  // Expose server-side upload throttling configuration to upload.js
+  window.uploadConfig = {
+    concurrency: {{ upload_concurrency }},
+    queueDelayMs: {{ upload_queue_delay_ms }}
+  };
+</script>
 <script src="/static/js/upload.js"></script>
 <script>
   // Drag-and-drop / file input logic
@@ -143,10 +149,12 @@
     dropZone.classList.remove("bg-gray-100");
   }
 
-  function handleDrop(e) {
+  dropZone.addEventListener("drop", async (e) => {
     e.preventDefault();
     dropZone.classList.remove("bg-gray-100");
-    if (e.dataTransfer.files.length) {
+
+    const files = await getFilesFromDataTransfer(e.dataTransfer);
+    if (files.length) {
       // Clear previous upload progress
       uploadProgress.innerHTML = "";
 
@@ -155,10 +163,10 @@
       progressContainer.className = "space-y-2";
       uploadProgress.appendChild(progressContainer);
 
-      // Use the shared processFiles function
-      processFiles(e.dataTransfer.files, progressContainer, statusMessage);
+      // Use the shared processFiles function (queue-based)
+      processFiles(files, progressContainer, statusMessage);
     }
-  }
+  });
 
   function handleFileSelect(e) {
     if (e.target.files.length) {
@@ -171,7 +179,7 @@
       uploadProgress.appendChild(progressContainer);
 
       // Use the shared processFiles function
-      processFiles(e.target.files, progressContainer, statusMessage);
+      processFiles(Array.from(e.target.files), progressContainer, statusMessage);
     }
   }
 
