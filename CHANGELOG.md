@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.57.4 (2026-02-26)
+
+### Bug Fixes
+
+- **tests**: Fix OAuth integration tests failing due to Docker registry timeout
+  ([`36b6680`](https://github.com/christianlouis/DocuElevate/commit/36b668020bfe32531250d390b3b69f2934c0bcad))
+
+- **tests**: Fix test_save_settings_outer_exception in OneDrive coverage tests
+  ([`b4e93c0`](https://github.com/christianlouis/DocuElevate/commit/b4e93c00b47f085b6c86c8de2c8dfe8774789ea1))
+
+- **tests**: Fix TestGetFullConfigException using PropertyMock on module-level settings
+  ([`44dcabd`](https://github.com/christianlouis/DocuElevate/commit/44dcabd1f3781dfe363884314a4f4c25b1173e1a))
+
+
 ## v0.57.3 (2026-02-26)
 
 ### Bug Fixes
