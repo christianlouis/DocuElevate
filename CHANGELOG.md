@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.57.2 (2026-02-26)
+
+### Bug Fixes
+
+- **ui**: Prevent search input from clearing on each keystroke and add dedicated /search page
+  ([`09a6337`](https://github.com/christianlouis/DocuElevate/commit/09a6337c6f6957f49a0b72be50d660f6119a81e3))
+
+- **ui**: Sanitize Meilisearch HTML output, use event delegation, improve error messages
+  ([`483a5b7`](https://github.com/christianlouis/DocuElevate/commit/483a5b71a1303acec165b971105e4a76dfbcfdfa))
+
+### Documentation
+
+- **search**: Update UserGuide with search page documentation and fix import order
+  ([`e9dd3ef`](https://github.com/christianlouis/DocuElevate/commit/e9dd3ef1c283dd9d8c626b285313f0cece5909e2))
+
+
 ## v0.57.1 (2026-02-26)
 
 ### Bug Fixes
