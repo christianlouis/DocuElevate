@@ -5,7 +5,7 @@ Focuses on uncovered lines: 98-99, 121-143, 160-161, 170-171,
 324-326, 400-402, 436-438.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -296,7 +296,7 @@ class TestSaveSettingsException:
 
     def test_save_settings_outer_exception(self, client: TestClient):
         """Trigger the outer exception handler in save_onedrive_settings."""
-        with patch("app.api.onedrive.os.path.join", side_effect=Exception("Unexpected boom")):
+        with patch("app.api.onedrive.notify_settings_updated", side_effect=Exception("Unexpected boom")):
             response = client.post(
                 "/api/onedrive/save-settings",
                 data={
@@ -332,11 +332,10 @@ class TestGetFullConfigException:
 
     def test_get_full_config_exception(self, client: TestClient):
         """Trigger the exception handler in get_onedrive_full_config."""
-        from app.config import settings
+        mock_settings = MagicMock()
+        type(mock_settings).onedrive_client_id = PropertyMock(side_effect=Exception("boom"))
 
-        with patch.object(
-            type(settings), "onedrive_client_id", property(fget=lambda self: (_ for _ in ()).throw(Exception("boom")))
-        ):
+        with patch("app.api.onedrive.settings", mock_settings):
             response = client.get("/api/onedrive/get-full-config")
 
         assert response.status_code == 200
