@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.59.0 (2026-02-26)
+
+### Bug Fixes
+
+- **test**: Update drop overlay text assertion to match new directory-upload message
+  ([`4a251fd`](https://github.com/christianlouis/DocuElevate/commit/4a251fd3ca11100df21f6ace5ffb3496c7125d71))
+
+### Features
+
+- **upload**: Adaptive 429 backoff, full Gotenberg file types, directory traversal
+  ([`a05690b`](https://github.com/christianlouis/DocuElevate/commit/a05690bd5fb6f79818ccf88079e96ae44b5b99d9))
+
+- **upload**: Add directory traversal, queue throttling, and upload config settings
+  ([`35d2ed0`](https://github.com/christianlouis/DocuElevate/commit/35d2ed05e9ed589cc70ced4d1b76dc3b9a85ca41))
+
+
 ## v0.58.0 (2026-02-26)
 
 ### Bug Fixes
