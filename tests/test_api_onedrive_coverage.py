@@ -296,7 +296,7 @@ class TestSaveSettingsException:
 
     def test_save_settings_outer_exception(self, client: TestClient):
         """Trigger the outer exception handler in save_onedrive_settings."""
-        with patch("app.api.onedrive.os.path.join", side_effect=Exception("Unexpected boom")):
+        with patch("app.api.onedrive.notify_settings_updated", side_effect=Exception("Unexpected boom")):
             response = client.post(
                 "/api/onedrive/save-settings",
                 data={
