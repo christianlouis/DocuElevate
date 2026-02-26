@@ -1,0 +1,415 @@
+{% extends "base.html" %}
+{% block title %}{{ file.document_title or file.original_filename or 'Document' }} - DocuElevate{% endblock %}
+
+{% block head_extra %}
+  <script src="/static/js/common.js"></script>
+  <style>
+    .doc-container { max-width: 1200px; margin: 0 auto; }
+
+    /* ── header ── */
+    .doc-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;
+    }
+    .doc-title { font-size: 1.75rem; font-weight: 700; color: #1f2937; line-height: 1.25; }
+    .doc-subtitle { font-size: 0.9rem; color: #6b7280; margin-top: 0.25rem; font-family: monospace; }
+
+    /* ── status pill ── */
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.35rem 0.85rem; border-radius: 9999px;
+      font-size: 0.8rem; font-weight: 600; white-space: nowrap;
+    }
+    .pill-completed  { background: #d1fae5; color: #065f46; }
+    .pill-failed     { background: #fee2e2; color: #991b1b; }
+    .pill-processing { background: #dbeafe; color: #1e3a8a; }
+    .pill-pending    { background: #fef3c7; color: #92400e; }
+    .pill-duplicate  { background: #e5e7eb; color: #374151; }
+
+    /* ── cards ── */
+    .doc-card {
+      background: white; border-radius: 0.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      padding: 1.5rem; margin-bottom: 1.25rem;
+    }
+    .doc-card-title {
+      font-size: 1rem; font-weight: 700; color: #374151;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      margin-bottom: 1rem;
+    }
+
+    /* ── two-column layout ── */
+    .doc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+    @media (max-width: 768px) { .doc-grid { grid-template-columns: 1fr; } }
+
+    /* ── metadata table ── */
+    .meta-row { display: flex; gap: 0.5rem; padding: 0.5rem 0; border-bottom: 1px solid #f3f4f6; align-items: baseline; }
+    .meta-row:last-child { border-bottom: none; }
+    .meta-label { font-size: 0.75rem; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; min-width: 110px; flex-shrink: 0; }
+    .meta-value { font-size: 0.9rem; color: #1f2937; word-break: break-word; }
+
+    /* ── tags ── */
+    .tag-pill { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; background: #f0fdf4; color: #15803d; margin: 0.1rem; }
+
+    /* ── preview iframe ── */
+    .preview-frame { width: 100%; height: 600px; border: none; border-radius: 0.375rem; background: #f1f5f9; display: block; }
+
+    /* ── text box ── */
+    .ocr-text {
+      background: #1a202c; color: #e2e8f0; padding: 1rem 1.25rem;
+      border-radius: 0.375rem; font-size: 0.8rem; font-family: monospace;
+      line-height: 1.6; max-height: 400px; overflow-y: auto;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .text-toggle {
+      cursor: pointer; color: #3b82f6; font-size: 0.875rem;
+      font-weight: 600; display: inline-flex; align-items: center; gap: 0.4rem;
+      background: none; border: none; padding: 0;
+    }
+    .text-toggle:hover { color: #2563eb; }
+
+    /* ── action buttons ── */
+    .action-btn {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.5rem 1.1rem; border-radius: 0.375rem;
+      font-size: 0.875rem; font-weight: 600; text-decoration: none;
+      cursor: pointer; border: none; transition: filter 0.1s;
+    }
+    .action-btn:hover { filter: brightness(0.92); }
+    .btn-primary   { background: #3b82f6; color: white; }
+    .btn-secondary { background: #f3f4f6; color: #374151; }
+    .btn-green     { background: #10b981; color: white; }
+    .btn-process   { background: #6366f1; color: white; }
+
+    /* ── detail rows ── */
+    .info-row { display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid #f3f4f6; font-size: 0.875rem; }
+    .info-row:last-child { border-bottom: none; }
+    .info-key { color: #6b7280; }
+    .info-val { color: #1f2937; font-family: monospace; text-align: right; word-break: break-all; max-width: 60%; }
+
+    /* ── error ── */
+    .error-box { background: #fee2e2; border: 1px solid #f87171; color: #b91c1c; padding: 1rem; border-radius: 0.375rem; margin-bottom: 1rem; }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="doc-container">
+
+  {% if error %}
+  <div class="error-box"><strong>Error:</strong> {{ error }}</div>
+  {% elif file %}
+
+  <!-- ── Back + header ── -->
+  <a href="/files" style="display:inline-flex;align-items:center;gap:0.4rem;color:#3b82f6;font-weight:600;text-decoration:none;margin-bottom:1.25rem;">
+    <i class="fas fa-arrow-left"></i> Back to Files
+  </a>
+
+  <div class="doc-header">
+    <div>
+      <div class="doc-title">
+        {% if gpt_metadata and gpt_metadata.filename %}
+          {{ gpt_metadata.filename | replace('.pdf','') | replace('_',' ') }}
+        {% elif file.document_title %}
+          {{ file.document_title }}
+        {% else %}
+          {{ file.original_filename or '(untitled)' }}
+        {% endif %}
+      </div>
+      <div class="doc-subtitle">{{ file.original_filename }}</div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+      <!-- Status pill -->
+      {% if file.is_duplicate %}
+        <span class="status-pill pill-duplicate"><i class="fas fa-copy"></i> Duplicate</span>
+      {% elif step_summary %}
+        {% set main_completed = step_summary.main.success + step_summary.main.skipped %}
+        {% if step_summary.main.failure > 0 or step_summary.uploads.failure > 0 %}
+          <span class="status-pill pill-failed"><i class="fas fa-times-circle"></i> Failed</span>
+        {% elif step_summary.main["in_progress"] > 0 or step_summary.uploads["in_progress"] > 0 %}
+          <span class="status-pill pill-processing"><i class="fas fa-circle-notch fa-spin"></i> Processing</span>
+        {% elif step_summary.total_main_steps > 0 and main_completed == step_summary.total_main_steps and step_summary.main.failure == 0 %}
+          <span class="status-pill pill-completed"><i class="fas fa-check-circle"></i> Completed</span>
+        {% else %}
+          <span class="status-pill pill-pending"><i class="fas fa-pause-circle"></i> Pending</span>
+        {% endif %}
+      {% endif %}
+
+      <!-- Process detail link -->
+      <a href="/files/{{ file.id }}/detail" class="action-btn btn-process">
+        <i class="fas fa-cogs"></i> Processing Details
+      </a>
+    </div>
+  </div>
+
+  <!-- ── Main two-column grid ── -->
+  <div class="doc-grid">
+
+    <!-- LEFT: Metadata -->
+    <div>
+      {% if gpt_metadata %}
+      <div class="doc-card">
+        <div class="doc-card-title"><i class="fas fa-tags" style="color:#3b82f6;margin-right:0.4rem;"></i>Document Metadata</div>
+
+        {% if gpt_metadata.document_type %}
+        <div class="meta-row">
+          <span class="meta-label">Type</span>
+          <span class="meta-value">{{ gpt_metadata.document_type }}</span>
+        </div>
+        {% endif %}
+
+        {% if gpt_metadata.date %}
+        <div class="meta-row">
+          <span class="meta-label">Date</span>
+          <span class="meta-value">{{ gpt_metadata.date }}</span>
+        </div>
+        {% endif %}
+
+        {% if gpt_metadata.absender %}
+        <div class="meta-row">
+          <span class="meta-label">Sender</span>
+          <span class="meta-value">{{ gpt_metadata.absender }}</span>
+        </div>
+        {% endif %}
+
+        {% if gpt_metadata.empfaenger %}
+        <div class="meta-row">
+          <span class="meta-label">Recipient</span>
+          <span class="meta-value">{{ gpt_metadata.empfaenger }}</span>
+        </div>
+        {% endif %}
+
+        {% if gpt_metadata.betrag %}
+        <div class="meta-row">
+          <span class="meta-label">Amount</span>
+          <span class="meta-value">{{ gpt_metadata.betrag }}</span>
+        </div>
+        {% endif %}
+
+        {% if gpt_metadata.kontonummer %}
+        <div class="meta-row">
+          <span class="meta-label">Account</span>
+          <span class="meta-value" style="font-family:monospace;">{{ gpt_metadata.kontonummer }}</span>
+        </div>
+        {% endif %}
+
+        {% if gpt_metadata.tags %}
+        <div class="meta-row" style="align-items:flex-start;">
+          <span class="meta-label" style="margin-top:0.2rem;">Tags</span>
+          <span class="meta-value">
+            {% if gpt_metadata.tags is string %}
+              {% for t in gpt_metadata.tags.split(',') %}
+                <span class="tag-pill">{{ t.strip() }}</span>
+              {% endfor %}
+            {% else %}
+              {% for t in gpt_metadata.tags %}
+                <span class="tag-pill">{{ t }}</span>
+              {% endfor %}
+            {% endif %}
+          </span>
+        </div>
+        {% endif %}
+
+        {% if gpt_metadata.filename %}
+        <div class="meta-row">
+          <span class="meta-label">Suggested name</span>
+          <span class="meta-value" style="font-family:monospace;font-size:0.8rem;">{{ gpt_metadata.filename }}</span>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <!-- File info -->
+      <div class="doc-card">
+        <div class="doc-card-title"><i class="fas fa-info-circle" style="color:#6b7280;margin-right:0.4rem;"></i>File Info</div>
+        <div class="info-row">
+          <span class="info-key">Uploaded</span>
+          <span class="info-val">{{ file.created_at.strftime('%Y-%m-%d %H:%M') if file.created_at else 'N/A' }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Size</span>
+          <span class="info-val">{{ (file.file_size / 1024) | round(1) }} KB</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">MIME type</span>
+          <span class="info-val">{{ file.mime_type or 'N/A' }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">ID</span>
+          <span class="info-val">{{ file.id }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Hash</span>
+          <span class="info-val" style="font-size:0.7rem;">{{ file.filehash[:32] }}…</span>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="doc-card">
+        <div class="doc-card-title"><i class="fas fa-bolt" style="color:#f59e0b;margin-right:0.4rem;"></i>Actions</div>
+        <div style="display:flex;flex-wrap:wrap;gap:0.6rem;">
+          {% if processed_file_exists %}
+          <a href="/api/files/{{ file.id }}/download?version=processed" class="action-btn btn-primary">
+            <i class="fas fa-download"></i> Download (processed)
+          </a>
+          {% endif %}
+          {% if original_file_exists %}
+          <a href="/api/files/{{ file.id }}/download?version=original" class="action-btn btn-secondary">
+            <i class="fas fa-download"></i> Download (original)
+          </a>
+          {% endif %}
+          {% if processed_file_exists %}
+          <a href="/api/files/{{ file.id }}/preview?version=processed" target="_blank" class="action-btn btn-secondary">
+            <i class="fas fa-external-link-alt"></i> Open processed
+          </a>
+          {% elif original_file_exists %}
+          <a href="/api/files/{{ file.id }}/preview?version=original" target="_blank" class="action-btn btn-secondary">
+            <i class="fas fa-external-link-alt"></i> Open original
+          </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: PDF preview -->
+    <div>
+      <div class="doc-card" style="padding:1rem;">
+        <div class="doc-card-title"><i class="fas fa-file-pdf" style="color:#ef4444;margin-right:0.4rem;"></i>Preview</div>
+        {% if processed_file_exists %}
+          <iframe
+            src="/api/files/{{ file.id }}/preview?version=processed"
+            class="preview-frame"
+            title="Processed document preview">
+          </iframe>
+          <div style="font-size:0.75rem;color:#9ca3af;margin-top:0.4rem;text-align:right;">Processed version</div>
+        {% elif original_file_exists %}
+          <iframe
+            src="/api/files/{{ file.id }}/preview?version=original"
+            class="preview-frame"
+            title="Original document preview">
+          </iframe>
+          <div style="font-size:0.75rem;color:#9ca3af;margin-top:0.4rem;text-align:right;">Original version</div>
+        {% else %}
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;background:#f9fafb;border-radius:0.375rem;color:#9ca3af;">
+            <i class="fas fa-file-pdf" style="font-size:3rem;margin-bottom:1rem;opacity:0.4;"></i>
+            <p>No file available for preview</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Extracted text ── -->
+  {% if file.ocr_text %}
+  <div class="doc-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+      <div class="doc-card-title" style="margin:0;"><i class="fas fa-align-left" style="color:#8b5cf6;margin-right:0.4rem;"></i>Extracted Text</div>
+      <div style="display:flex;gap:0.5rem;">
+        <button class="text-toggle" onclick="toggleOcrText()">
+          <i id="ocr-toggle-icon" class="fas fa-chevron-down"></i>
+          <span id="ocr-toggle-label">Show text</span>
+        </button>
+        <button class="text-toggle" onclick="copyOcrText()" id="ocr-copy-btn" style="color:#10b981;">
+          <i class="fas fa-copy"></i> Copy
+        </button>
+      </div>
+    </div>
+    <div id="ocr-text-block" style="display:none;">
+      <pre class="ocr-text" id="ocr-text-content">{{ file.ocr_text }}</pre>
+    </div>
+  </div>
+  {% elif processed_file_exists or original_file_exists %}
+  <div class="doc-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div class="doc-card-title" style="margin:0;"><i class="fas fa-align-left" style="color:#8b5cf6;margin-right:0.4rem;"></i>Extracted Text</div>
+      <button class="action-btn btn-secondary" onclick="loadText({{ file.id }})">
+        <i class="fas fa-file-alt"></i> Extract &amp; show text
+      </button>
+    </div>
+    <div id="text-load-area" style="margin-top:0.75rem;"></div>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <!-- file is None without error -->
+  <div class="error-box">Document not found.</div>
+  {% endif %}
+
+</div>
+
+<script>
+  // Toggle inline OCR text visibility
+  function toggleOcrText() {
+    var block = document.getElementById('ocr-text-block');
+    var icon  = document.getElementById('ocr-toggle-icon');
+    var label = document.getElementById('ocr-toggle-label');
+    if (block.style.display === 'none') {
+      block.style.display = 'block';
+      icon.className = 'fas fa-chevron-up';
+      label.textContent = 'Hide text';
+    } else {
+      block.style.display = 'none';
+      icon.className = 'fas fa-chevron-down';
+      label.textContent = 'Show text';
+    }
+  }
+
+  // Copy OCR text to clipboard
+  function copyOcrText() {
+    var content = document.getElementById('ocr-text-content');
+    if (!content) return;
+    var text = content.textContent;
+    var btn = document.getElementById('ocr-copy-btn');
+    var orig = btn.innerHTML;
+
+    navigator.clipboard.writeText(text).then(function() {
+      btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+      setTimeout(function() { btn.innerHTML = orig; }, 2000);
+    }).catch(function() {
+      // Legacy clipboard fallback for browsers without Secure Context / navigator.clipboard
+      // (pre-2018 environments, e.g. HTTP-only or older Safari). Retained for maximum compatibility.
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;opacity:0;';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+        setTimeout(function() { btn.innerHTML = orig; }, 2000);
+      } catch(e) {}
+    });
+  }
+
+  // On-demand text extraction (when ocr_text not in DB)
+  var _textCache = null;
+  function loadText(fileId) {
+    var area = document.getElementById('text-load-area');
+    if (_textCache) {
+      renderText(area, _textCache);
+      return;
+    }
+    area.innerHTML = '<div style="text-align:center;padding:1.5rem;color:#6b7280;"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top:0.5rem;">Extracting text…</p></div>';
+
+    var url = {% if processed_file_exists %}'/files/' + fileId + '/text/processed'{% else %}'/files/' + fileId + '/text/original'{% endif %};
+    fetch(url)
+      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(data) {
+        _textCache = data.text;
+        renderText(area, data.text);
+      })
+      .catch(function(err) {
+        area.innerHTML = '<div style="color:#dc2626;padding:0.75rem;background:#fee2e2;border-radius:0.375rem;font-size:0.875rem;"><i class="fas fa-exclamation-triangle"></i> Failed to extract text: ' + err.message + '</div>';
+      });
+  }
+
+  function renderText(container, text) {
+    container.innerHTML = '';
+    var pre = document.createElement('pre');
+    pre.className = 'ocr-text';
+    pre.textContent = text;
+    container.appendChild(pre);
+  }
+</script>
+{% endblock %}

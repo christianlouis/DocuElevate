@@ -128,6 +128,88 @@ def files_page(
         )
 
 
+@router.get("/files/{file_id}")
+@require_login
+def file_view_page(request: Request, file_id: int, db: Session = Depends(get_db)):
+    """
+    Return the document view page — document-centric view with metadata, preview, and extracted text.
+    Process-oriented details are available via /files/{file_id}/detail.
+    """
+    try:
+        import json
+        import os
+
+        from app.models import FileRecord
+
+        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+
+        if not file_record:
+            return templates.TemplateResponse(
+                "file_view.html",
+                {"request": request, "file": None, "error": f"File with ID {file_id} not found"},
+            )
+
+        from app.config import settings
+
+        # Resolve the expected base directory to guard against path traversal in DB values.
+        workdir = os.path.realpath(settings.workdir)
+
+        def _safe_exists(path: str | None) -> bool:
+            """Return True only when *path* exists and resides within workdir."""
+            if not path:
+                return False
+            resolved = os.path.realpath(path)
+            try:
+                common = os.path.commonpath([resolved, workdir])
+            except ValueError:
+                return False
+            return common == workdir and os.path.exists(resolved)
+
+        # Check whether the backing files exist on disk
+        original_file_exists = _safe_exists(file_record.original_file_path)
+        processed_file_exists = _safe_exists(file_record.processed_file_path)
+
+        # Load AI metadata — JSON sidecar file first, then DB column
+        gpt_metadata = None
+        if file_record.processed_file_path:
+            metadata_path = os.path.splitext(os.path.realpath(file_record.processed_file_path))[0] + ".json"
+            if _safe_exists(metadata_path):
+                try:
+                    with open(metadata_path, "r", encoding="utf-8") as f:
+                        gpt_metadata = json.load(f)
+                except Exception as e:
+                    logger.warning(f"Failed to load metadata sidecar for file {file_id}: {e}")
+
+        if gpt_metadata is None and file_record.ai_metadata:
+            try:
+                gpt_metadata = json.loads(file_record.ai_metadata)
+            except Exception as e:
+                logger.warning(f"Failed to parse ai_metadata for file {file_id}: {e}")
+
+        # Quick processing status (no logs needed)
+        try:
+            from app.utils.step_manager import get_step_summary as _get_step_summary
+
+            step_summary = _get_step_summary(db, file_id)
+        except Exception:
+            step_summary = None
+
+        return templates.TemplateResponse(
+            "file_view.html",
+            {
+                "request": request,
+                "file": file_record,
+                "gpt_metadata": gpt_metadata,
+                "original_file_exists": original_file_exists,
+                "processed_file_exists": processed_file_exists,
+                "step_summary": step_summary,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving file view {file_id}: {str(e)}")
+        return templates.TemplateResponse("file_view.html", {"request": request, "file": None, "error": str(e)})
+
+
 @router.get("/files/{file_id}/detail")
 @require_login
 def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_db)):

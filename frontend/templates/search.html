@@ -196,7 +196,7 @@
       var tags = Array.isArray(hit.tags) ? hit.tags : (hit.tags ? [hit.tags] : []);
       var docType = hit.document_type || '';
       var sender = hit.sender || hit.absender || '';
-      var fileUrl = '/files/' + hit.file_id + '/detail';
+      var fileUrl = '/files/' + hit.file_id;
 
       // Build badges
       var badges = '';
