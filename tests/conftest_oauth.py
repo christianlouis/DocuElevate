@@ -7,6 +7,7 @@ Provides fixtures for:
 - OAuth test helpers
 """
 
+import logging
 import os
 from typing import Dict, Generator, Optional
 
@@ -22,6 +23,13 @@ _REAL_OAUTH_AVAILABLE = all(
         os.environ.get("AUTHENTIK_CONFIG_URL") not in {"", "NOT_SET", "test-key", None},
     ]
 )
+
+# Static fallback OAuth endpoint constants used when Docker is unavailable
+_STATIC_OAUTH_AUTHORIZE_URL = "http://mock-oauth.test/default/authorize"
+_STATIC_OAUTH_TOKEN_URL = "http://mock-oauth.test/default/token"
+_STATIC_OAUTH_USERINFO_URL = "http://mock-oauth.test/default/userinfo"
+_STATIC_OAUTH_JWKS_URL = "http://mock-oauth.test/default/jwks"
+_STATIC_OAUTH_ISSUER = "http://mock-oauth.test/default"
 
 
 @pytest.fixture(scope="session")
@@ -45,7 +53,7 @@ def use_real_oauth() -> bool:
 
 
 @pytest.fixture(scope="session")
-def mock_oauth_server() -> Generator[MockOAuth2ServerContainer, None, None]:
+def mock_oauth_server() -> Generator[Optional[MockOAuth2ServerContainer], None, None]:
     """
     Provide a mock OAuth2/OIDC server for testing.
 
@@ -53,16 +61,31 @@ def mock_oauth_server() -> Generator[MockOAuth2ServerContainer, None, None]:
     a complete OIDC provider with all necessary endpoints.
 
     Yields:
-        MockOAuth2ServerContainer: Running mock OAuth server
+        MockOAuth2ServerContainer: Running mock OAuth server, or None if Docker is unavailable
     """
     # Only start if we're not using real OAuth
     if not _REAL_OAUTH_AVAILABLE or os.environ.get("USE_MOCK_OAUTH", "").lower() in ("true", "1", "yes"):
-        container = MockOAuth2ServerContainer()
-        container.start()
-
+        container = None
         try:
+            container = MockOAuth2ServerContainer()
+            container.start()
             # Wait for the server to be ready
             container.wait_for_ready()
+        except Exception as exc:
+            # Docker not accessible or image pull failed – fall back to static mock config.
+            # Attempt cleanup in case the container was partially started.
+            if container is not None:
+                try:
+                    container.stop()
+                except Exception:  # noqa: BLE001
+                    pass
+            logging.getLogger(__name__).warning(
+                "Mock OAuth2 server unavailable (Docker inaccessible): %s – using static fallback config", exc
+            )
+            yield None
+            return
+
+        try:
             yield container
         finally:
             container.stop()
@@ -78,7 +101,7 @@ def oauth_config(mock_oauth_server: Optional[MockOAuth2ServerContainer], use_rea
     Returns either mock OAuth config or real OAuth config based on availability.
 
     Args:
-        mock_oauth_server: Mock OAuth server fixture (may be None if using real)
+        mock_oauth_server: Mock OAuth server fixture (None if Docker unavailable)
         use_real_oauth: Whether to use real OAuth credentials
 
     Returns:
@@ -93,11 +116,22 @@ def oauth_config(mock_oauth_server: Optional[MockOAuth2ServerContainer], use_rea
             "issuer": os.environ["AUTHENTIK_CONFIG_URL"].replace("/.well-known/openid-configuration", ""),
             "mode": "real",
         }
+    elif mock_oauth_server is None:
+        # Docker unavailable – use a static in-process mock configuration so
+        # tests that mock the OAuth token exchange still work without a container.
+        return {
+            "client_id": "test-client-id",
+            "client_secret": "test-client-secret",
+            "server_metadata_url": f"{_STATIC_OAUTH_ISSUER}/.well-known/openid-configuration",
+            "authorization_endpoint": _STATIC_OAUTH_AUTHORIZE_URL,
+            "token_endpoint": _STATIC_OAUTH_TOKEN_URL,
+            "userinfo_endpoint": _STATIC_OAUTH_USERINFO_URL,
+            "jwks_uri": _STATIC_OAUTH_JWKS_URL,
+            "issuer": _STATIC_OAUTH_ISSUER,
+            "mode": "static",
+        }
     else:
         # Use mock OAuth server
-        if mock_oauth_server is None:
-            pytest.fail("Mock OAuth server not available and real credentials not configured")
-
         config = mock_oauth_server.get_config()
         return {
             "client_id": "test-client-id",
@@ -200,12 +234,19 @@ def oauth_enabled_app(oauth_config: Dict[str, str]):
         auth_module.OAUTH_CONFIGURED = True
         auth_module.OAUTH_PROVIDER_NAME = oauth_config.get("provider_name", "Test SSO")
 
-        # Register OAuth client
+        # Clear any previously cached client so the new params take effect.
+        # authlib caches created clients in _clients; we must evict before re-registering.
+        auth_module.oauth._clients.pop("authentik", None)
+        auth_module.oauth._registry.pop("authentik", None)
+
+        # Register OAuth client using direct endpoint URLs to avoid HTTP metadata
+        # discovery – this allows tests to work without a running OAuth server.
         auth_module.oauth.register(
             name="authentik",
             client_id=oauth_config["client_id"],
             client_secret=oauth_config["client_secret"],
-            server_metadata_url=oauth_config["server_metadata_url"],
+            authorize_url=oauth_config.get("authorization_endpoint", _STATIC_OAUTH_AUTHORIZE_URL),
+            access_token_url=oauth_config.get("token_endpoint", _STATIC_OAUTH_TOKEN_URL),
             client_kwargs={"scope": "openid profile email"},
         )
 
@@ -232,3 +273,7 @@ def oauth_enabled_app(oauth_config: Dict[str, str]):
 
         # Remove added routes
         app.router.routes = app.router.routes[:original_route_count]
+
+        # Clean up OAuth registration to avoid cross-test contamination
+        auth_module.oauth._clients.pop("authentik", None)
+        auth_module.oauth._registry.pop("authentik", None)
