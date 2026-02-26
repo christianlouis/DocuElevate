@@ -936,7 +936,10 @@
     function debounceSearch(value) {
       clearTimeout(_searchDebounceTimer);
       if (!value || value.trim().length < 2) {
-        clearFullTextSearch();
+        // Only hide the results panel; do NOT clear the input value so the
+        // user can continue typing characters until the query is long enough.
+        var _p = document.getElementById('search-results-panel');
+        if (_p) _p.style.display = 'none';
         return;
       }
       _searchDebounceTimer = setTimeout(() => {
