@@ -10,6 +10,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.57.1 (2026-02-26)
+
+### Bug Fixes
+
+- Regenerate logo PNGs from SVG to fix DocuNova → DocuElevate branding
+  ([`d83dfb1`](https://github.com/christianlouis/DocuElevate/commit/d83dfb12c69b56c2fb7d37c11588a13bbdc82441))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`69cb16c`](https://github.com/christianlouis/DocuElevate/commit/69cb16c522f4571f6171a7352aff3fa7efe94de4))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`d86dda9`](https://github.com/christianlouis/DocuElevate/commit/d86dda94317d09d285a4da1c7a1cffc34288beab))
+
+- **changelog**: Update changelog [skip ci]
+  ([`62e4521`](https://github.com/christianlouis/DocuElevate/commit/62e4521f3cc90d09c8977ce77d78e5978b0eaa71))
+
+### Testing
+
+- Improve coverage for process_with_ocr, api/settings, and settings_service to 90%+
+  ([`d9abbc1`](https://github.com/christianlouis/DocuElevate/commit/d9abbc1c998668ffae485493f27e82aed4fd1527))
+
+- **coverage**: Add coverage tests for app/api/onedrive.py and app/api/google_drive.py
+  ([`e3cd687`](https://github.com/christianlouis/DocuElevate/commit/e3cd687757bfa97f688880787ff33960259146cd))
+
+- **coverage**: Add tests to push coverage above 95% for 11 target files
+  ([`759647f`](https://github.com/christianlouis/DocuElevate/commit/759647f9577e9afd57313cefe8731b6502bcca77))
+
+
 ## Unreleased
 
 ### Code Style
