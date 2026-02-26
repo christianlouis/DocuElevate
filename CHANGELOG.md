@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.58.0 (2026-02-26)
+
+### Bug Fixes
+
+- **search**: Correct file detail page URL in search results
+  ([`da865b5`](https://github.com/christianlouis/DocuElevate/commit/da865b5f7aa5f51b69432c060d04018381970a23))
+
+### Features
+
+- **views**: Add document-centric view at /files/{id}
+  ([`c540dd4`](https://github.com/christianlouis/DocuElevate/commit/c540dd4f5209644b4d450c006c78e85c4c5d422e))
+
+
 ## v0.57.4 (2026-02-26)
 
 ### Bug Fixes
