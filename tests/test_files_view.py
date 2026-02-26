@@ -90,4 +90,4 @@ class TestFilesView:
 
         # Check for drag-and-drop event handlers
         assert "dragenter" in content or "drag" in content, "Drag event handlers should be present"
-        assert "Drop files anywhere to upload" in content, "Drop message should be present"
+        assert "Drop files or folders anywhere to upload" in content, "Drop message should be present"
