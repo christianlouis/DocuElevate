@@ -17,6 +17,7 @@ from pydantic import BaseModel, HttpUrl, field_validator
 from app.auth import require_login
 from app.config import settings
 from app.tasks.process_document import process_document
+from app.utils.allowed_types import ALLOWED_MIME_TYPES
 from app.utils.filename_utils import sanitize_filename
 
 # Set up logging
@@ -108,7 +109,7 @@ def validate_url_safety(url: str) -> None:
 
 def validate_file_type(content_type: str, filename: str) -> bool:
     """
-    Validate that the file type is supported.
+    Validate that the file type is supported (i.e. processable by Gotenberg).
 
     Args:
         content_type: MIME type from response headers
@@ -117,44 +118,18 @@ def validate_file_type(content_type: str, filename: str) -> bool:
     Returns:
         True if file type is allowed
     """
-    # Same allowed types as regular upload
-    ALLOWED_MIME_TYPES = {
-        "application/pdf",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.ms-excel",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/vnd.ms-powerpoint",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "text/plain",
-        "text/csv",
-        "application/rtf",
-        "text/rtf",
-    }
-
-    IMAGE_MIME_TYPES = {
-        "image/jpeg",
-        "image/jpg",
-        "image/png",
-        "image/gif",
-        "image/bmp",
-        "image/tiff",
-        "image/webp",
-        "image/svg+xml",
-    }
-
     # Check content type from header
     if content_type:
         # Handle content-type with charset (e.g., "application/pdf; charset=utf-8")
         base_content_type = content_type.split(";", maxsplit=1)[0].strip().lower()
-        if base_content_type in ALLOWED_MIME_TYPES or base_content_type in IMAGE_MIME_TYPES:
+        if base_content_type in ALLOWED_MIME_TYPES:
             return True
 
     # Also check by extension as fallback
     _, ext = os.path.splitext(filename)
     if ext:
         guessed_type, _ = mimetypes.guess_type(filename)
-        if guessed_type and (guessed_type in ALLOWED_MIME_TYPES or guessed_type in IMAGE_MIME_TYPES):
+        if guessed_type and guessed_type in ALLOWED_MIME_TYPES:
             return True
 
     return False

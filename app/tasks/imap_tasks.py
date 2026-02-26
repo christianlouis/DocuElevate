@@ -13,6 +13,7 @@ from celery import shared_task
 from app.config import settings
 from app.tasks.convert_to_pdf import convert_to_pdf  # new conversion task
 from app.tasks.process_document import process_document  # Updated import
+from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -268,20 +269,6 @@ def fetch_attachments_and_enqueue(email_message):
 
     Returns True if at least one allowed attachment was processed.
     """
-    ALLOWED_MIME_TYPES = {
-        "application/pdf",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.ms-excel",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/vnd.ms-powerpoint",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "text/plain",
-        "text/csv",
-        "application/rtf",
-        "text/rtf",
-    }
-
     has_attachment = False
     for part in email_message.walk():
         if part.get_content_maintype() == "multipart":
@@ -295,8 +282,9 @@ def fetch_attachments_and_enqueue(email_message):
         is_pdf_by_extension = filename.lower().endswith(".pdf")
 
         mime_type = part.get_content_type()
-        # Accept file if it has an allowed MIME type OR it's a PDF by extension
-        if mime_type not in ALLOWED_MIME_TYPES and not is_pdf_by_extension:
+        file_ext = os.path.splitext(filename)[1].lower()
+        # Accept file if it has an allowed MIME type, an allowed extension, OR is a PDF by extension
+        if mime_type not in ALLOWED_MIME_TYPES and file_ext not in ALLOWED_EXTENSIONS and not is_pdf_by_extension:
             logger.info("Skipping attachment %s with MIME type %s", filename, mime_type)
             continue
 

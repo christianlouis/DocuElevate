@@ -33,6 +33,8 @@ def files_page(
     """
     Return the 'files.html' template with server-side pagination, sorting, and filtering
     """
+    from app.config import settings
+
     try:
         # Import the model here to avoid circular imports
         from sqlalchemy import asc, desc
@@ -111,6 +113,8 @@ def files_page(
                 "mime_type": mime_type or "",
                 "status": status or "",
                 "mime_types": mime_types,
+                "upload_concurrency": settings.upload_concurrency,
+                "upload_queue_delay_ms": settings.upload_queue_delay_ms,
             },
         )
     except Exception as e:
@@ -124,6 +128,8 @@ def files_page(
                 "files": [],
                 "pagination": {"page": 1, "per_page": per_page, "total_items": 0, "total_pages": 0},
                 "error": str(e),
+                "upload_concurrency": settings.upload_concurrency,
+                "upload_queue_delay_ms": settings.upload_queue_delay_ms,
             },
         )
 

@@ -3,6 +3,12 @@
 
 {% block head_extra %}
   <script src="/static/js/common.js"></script>
+  <script>
+    window.uploadConfig = {
+      concurrency: {{ upload_concurrency }},
+      queueDelayMs: {{ upload_queue_delay_ms }}
+    };
+  </script>
   <script src="/static/js/upload.js"></script>
   <style>
     /* Drop overlay styles - covers entire page for drag-and-drop anywhere */
@@ -342,8 +348,8 @@
 <div id="dropOverlay" class="drop-overlay">
   <div class="drop-message">
     <i class="fas fa-cloud-upload-alt"></i>
-    <p>Drop files anywhere to upload</p>
-    <div class="drop-hint">Supports PDF, Office docs, images, and more</div>
+    <p>Drop files or folders anywhere to upload</p>
+    <div class="drop-hint">Supports PDF, Office docs, images, HTML, Markdown, and more – folders are processed recursively</div>
   </div>
 </div>
 
@@ -902,18 +908,19 @@
       e.dataTransfer.dropEffect = 'copy';
     });
 
-    window.addEventListener('drop', (e) => {
+    window.addEventListener('drop', async (e) => {
       e.preventDefault();
       dragCounter = 0;
       dropOverlay.classList.remove('active');
 
-      if (e.dataTransfer.files.length > 0) {
+      const files = await getFilesFromDataTransfer(e.dataTransfer);
+      if (files.length > 0) {
         // Show upload modal
         uploadModal.classList.add('active');
         uploadProgressContainer.innerHTML = '';
 
-        // Process the dropped files
-        processFiles(e.dataTransfer.files, uploadProgressContainer, uploadStatusMessage);
+        // Process the dropped files (queue-based, with adaptive throttling)
+        processFiles(files, uploadProgressContainer, uploadStatusMessage);
       }
     });
 
