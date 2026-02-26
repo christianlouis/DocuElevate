@@ -18,6 +18,7 @@ from app.database import get_db
 from app.models import FileRecord, ProcessingLog
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document
+from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES, IMAGE_MIME_TYPES
 from app.utils.file_queries import apply_status_filter
 from app.utils.file_status import get_files_processing_status
 from app.utils.filename_utils import sanitize_filename
@@ -1034,33 +1035,6 @@ async def ui_upload(request: Request, file: UploadFile = File(...)):
     logger.info(f"Saved uploaded file '{safe_filename}' as '{target_filename}'")
     file_size = written_size
 
-    # Same set of allowed file types as in the IMAP task
-    ALLOWED_MIME_TYPES = {
-        "application/pdf",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.ms-excel",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/vnd.ms-powerpoint",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "text/plain",
-        "text/csv",
-        "application/rtf",
-        "text/rtf",
-    }
-
-    # Image MIME types that need conversion
-    IMAGE_MIME_TYPES = {
-        "image/jpeg",
-        "image/jpg",
-        "image/png",
-        "image/gif",
-        "image/bmp",
-        "image/tiff",
-        "image/webp",
-        "image/svg+xml",
-    }
-
     # Determine if the file is a PDF or needs conversion
     mime_type, _ = mimetypes.guess_type(target_path)
     file_ext = os.path.splitext(target_path)[1].lower()
@@ -1114,32 +1088,24 @@ async def ui_upload(request: Request, file: UploadFile = File(...)):
         # If it's a PDF, process directly
         task = process_document.delay(target_path, original_filename=safe_filename)
         logger.info(f"Enqueued PDF for processing: {target_path}")
-    elif mime_type in IMAGE_MIME_TYPES or any(
-        file_ext.endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp", ".svg"]
-    ):
+    elif mime_type in IMAGE_MIME_TYPES or file_ext in {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".gif",
+        ".bmp",
+        ".tiff",
+        ".tif",
+        ".webp",
+        ".svg",
+    }:
         # If it's an image, convert to PDF first
         task = convert_to_pdf.delay(target_path, original_filename=safe_filename)
         logger.info(f"Enqueued image for PDF conversion: {target_path}")
-    elif mime_type in ALLOWED_MIME_TYPES or any(
-        file_ext.endswith(ext)
-        for ext in [
-            ".doc",
-            ".docx",
-            ".xls",
-            ".xlsx",
-            ".ppt",
-            ".pptx",
-            ".odt",
-            ".ods",
-            ".odp",
-            ".rtf",
-            ".txt",
-            ".csv",
-        ]
-    ):
-        # If it's an office document, convert to PDF first
+    elif mime_type in ALLOWED_MIME_TYPES or file_ext in ALLOWED_EXTENSIONS:
+        # Office document, HTML, Markdown, or other Gotenberg-supported format
         task = convert_to_pdf.delay(target_path, original_filename=safe_filename)
-        logger.info(f"Enqueued office document for PDF conversion: {target_path}")
+        logger.info(f"Enqueued document for PDF conversion: {target_path}")
     else:
         # For any other file type, attempt conversion but log a warning
         logger.warning(f"Unsupported MIME type {mime_type} for {target_path}, attempting conversion")

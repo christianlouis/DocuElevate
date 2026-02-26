@@ -31,6 +31,19 @@ Control how the `/processall` endpoint handles large batches of files to prevent
 - Total queue time: (25-1) × 3 = 72 seconds
 - Prevents API rate limit issues and ensures smooth processing
 
+### Client-Side Upload Throttling
+
+Control how the web UI queues and paces file uploads to avoid overwhelming the backend, especially when dragging large directories (potentially thousands of files) onto the upload area.
+
+| **Variable**               | **Description**                                                                                                               | **Default** |
+|----------------------------|-------------------------------------------------------------------------------------------------------------------------------|-------------|
+| `UPLOAD_CONCURRENCY`       | Maximum number of files uploaded simultaneously from the browser.                                                            | `3`         |
+| `UPLOAD_QUEUE_DELAY_MS`    | Delay in milliseconds between starting each upload slot. Staggers upload starts to smooth out server load.                   | `500`       |
+
+**Adaptive back-off**: The browser automatically slows down if the server responds with HTTP 429 (Too Many Requests). It reads the `Retry-After` header, pauses the queue for the indicated time, doubles the inter-slot delay (exponential back-off, capped at 30 s), and reduces concurrency to 1. After 5 consecutive successes it gradually recovers toward the configured values.
+
+**Example**: With `UPLOAD_CONCURRENCY=3` and `UPLOAD_QUEUE_DELAY_MS=500`, a directory of 5,000 files is uploaded ≈ 3 at a time with 500 ms pacing – the backend processes files at its own rate while the queue drains in the background without triggering API rate limits.
+
 ### File Upload Size Limits
 
 **Security Feature**: Control file upload sizes to prevent resource exhaustion attacks. See [SECURITY_AUDIT.md](../SECURITY_AUDIT.md#5-file-upload-size-limits) for security details.
