@@ -251,19 +251,32 @@ def get_file_overall_status(db: Session, file_id: int) -> Dict:
     has_errors = failed_steps > 0
 
     # Determine overall status
+    #
+    # The processing pipeline is not strictly linear: steps may be skipped,
+    # repeated, or dynamically added depending on the file (e.g. OCR is
+    # skipped when embedded text is found, local extraction is skipped for
+    # non-PDF files, dedup check may not record its result).  Because of
+    # this, we use the terminal step as the authoritative signal that the
+    # pipeline finished successfully, rather than requiring every single
+    # intermediate step to be explicitly marked as success/skipped.
+    terminal_step_obj = next((s for s in steps if s.step_name == TERMINAL_STEP), None)
+
     if has_errors:
         status = "failed"
     elif in_progress_steps > 0:
         status = "processing"
     elif completed_steps + skipped_steps == total_steps:
-        # Only mark as completed if the terminal processing step has been recorded.
-        # Without this guard, files where later pipeline steps have not yet started
-        # would be falsely marked as "completed" (e.g. only the first 3 steps ran).
-        existing_step_names = {s.step_name for s in steps}
-        if TERMINAL_STEP in existing_step_names:
+        # All steps resolved – completed only if terminal step was recorded.
+        if terminal_step_obj is not None:
             status = "completed"
         else:
             status = "pending"
+    elif terminal_step_obj is not None and terminal_step_obj.status in ("success", "skipped"):
+        # The terminal step succeeded but some intermediate steps are still
+        # "pending" (e.g. check_for_duplicates logged without file_id, or
+        # extract_text not marked when OCR path was taken).  The pipeline
+        # is effectively complete.
+        status = "completed"
     else:
         status = "pending"
 

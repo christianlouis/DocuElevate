@@ -474,3 +474,54 @@ class TestFileStatusMissingCoverage:
             result = get_files_processing_status(db_session, [file_record.id])
 
         assert result[file_record.id]["status"] == "completed"
+
+    def test_get_files_processing_status_completed_with_pending_intermediate(self, db_session):
+        """Test that terminal step success marks file completed even with pending intermediate steps.
+
+        This tests the dynamic pipeline scenario where check_for_duplicates or
+        extract_text might remain pending because the pipeline skipped them.
+        """
+        from datetime import datetime
+        from unittest.mock import patch
+
+        from app.models import FileProcessingStep
+        from app.utils.file_status import get_files_processing_status
+
+        file_record = FileRecord(
+            filehash="terminal_fallback",
+            original_filename="fallback.pdf",
+            local_filename="/tmp/fallback.pdf",
+            file_size=100,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        now = datetime.now()
+        # Simulate: check_for_duplicates pending, rest succeeded, OCR skipped
+        for step_name, step_status in [
+            ("check_for_duplicates", "pending"),
+            ("create_file_record", "success"),
+            ("check_text", "success"),
+            ("extract_text", "success"),
+            ("process_with_ocr", "skipped"),
+            ("extract_metadata_with_gpt", "success"),
+            ("embed_metadata_into_pdf", "success"),
+            ("finalize_document_storage", "success"),
+            ("send_to_all_destinations", "success"),
+        ]:
+            step = FileProcessingStep(
+                file_id=file_record.id,
+                step_name=step_name,
+                status=step_status,
+                created_at=now,
+                updated_at=now,
+            )
+            db_session.add(step)
+        db_session.commit()
+
+        with patch("app.config.settings") as ms:
+            ms.enable_deduplication = True
+            result = get_files_processing_status(db_session, [file_record.id])
+
+        # Terminal step succeeded → file should be completed despite pending dedup step
+        assert result[file_record.id]["status"] == "completed"
