@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.60.1 (2026-02-27)
+
+### Bug Fixes
+
+- **status**: Prevent false Completed status when mandatory pipeline steps have not run
+  ([`e6dd39c`](https://github.com/christianlouis/DocuElevate/commit/e6dd39c27d4b8e77a9c546c911eace2783b47068))
+
+- **status**: Simplify terminal step guard condition in get_step_summary
+  ([`baa412b`](https://github.com/christianlouis/DocuElevate/commit/baa412b172b5fb19292481fb4155442bf6f4296e))
+
+### Testing
+
+- Add send_to_all_destinations step to test_status_filter_completed
+  ([`aba47af`](https://github.com/christianlouis/DocuElevate/commit/aba47af30a180126035752f7026f1b33ff07e72d))
+
+- Update 3 tests broken by terminal-step completed guard
+  ([`9795ca0`](https://github.com/christianlouis/DocuElevate/commit/9795ca0d52675c15ef7c7ff8f6a93421dc89c6c4))
+
+
 ## v0.60.0 (2026-02-27)
 
 ### Features
