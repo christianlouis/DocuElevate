@@ -358,7 +358,7 @@ def get_step_summary(db: Session, file_id: int) -> Dict:
     # Note: if TERMINAL_STEP already appears in `steps`, the loop above has
     # already incremented `main_steps_count` for it, so we only add here when
     # the step is absent from the DB entirely.
-    if not any(step.step_name == TERMINAL_STEP for step in steps if step.step_name in REAL_MAIN_STEPS):
+    if not any(step.step_name == TERMINAL_STEP for step in steps):
         main_steps_count += 1
         main_counts["queued"] += 1
 
