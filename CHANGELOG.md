@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.60.0 (2026-02-27)
+
+### Features
+
+- **queue**: Add queue monitoring dashboard and pending banner on files page
+  ([`c7c5718`](https://github.com/christianlouis/DocuElevate/commit/c7c5718f78ce89466fffdc9ce2f1fdbe88f7ab9e))
+
+### Refactoring
+
+- **queue**: Address code review feedback — extract constants and sync refresh interval
+  ([`4dd018f`](https://github.com/christianlouis/DocuElevate/commit/4dd018f21011b16be66b22b35a877e6f97959eae))
+
+
 ## v0.59.1 (2026-02-27)
 
 ### Bug Fixes
