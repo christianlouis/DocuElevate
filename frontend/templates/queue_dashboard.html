@@ -189,6 +189,7 @@
 <script>
 (function () {
   const REFRESH_SECONDS = 10;
+  document.getElementById('refreshInterval').textContent = REFRESH_SECONDS;
   let timer = null;
 
   function escapeHtml(str) {

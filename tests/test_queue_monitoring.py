@@ -46,7 +46,12 @@ class TestGetCeleryInspectStats:
             "worker1": [{"id": "task-2", "name": "app.tasks.upload_to_s3.upload_to_s3", "args": [2]}]
         }
         mock_inspector.scheduled.return_value = {
-            "worker1": [{"request": {"id": "task-3", "name": "app.tasks.check_credentials.check_credentials"}, "eta": "2026-01-01"}]
+            "worker1": [
+                {
+                    "request": {"id": "task-3", "name": "app.tasks.check_credentials.check_credentials"},
+                    "eta": "2026-01-01",
+                }
+            ]
         }
         mock_celery_mod.control.inspect.return_value = mock_inspector
 

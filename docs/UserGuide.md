@@ -92,6 +92,23 @@ The **Files** page provides access to all processed documents:
 3. Click on any file to view its details
 4. Sort the list by any column by clicking on the column header
 
+> **Tip:** When documents are being processed, a blue banner appears at the top of the Files page showing how many items are queued or currently processing. Files will appear in the list once their processing completes. Admins can click "View Queue" in the banner to open the Queue Monitor dashboard.
+
+## Queue Monitor (Admin)
+
+The **Queue Monitor** dashboard provides real-time visibility into the document processing pipeline. It is available to admin users under **Admin → Queue Monitor** in the navigation bar.
+
+The dashboard shows:
+- **Queued Tasks** — number of tasks waiting in Redis-backed Celery queues
+- **Active Tasks** — tasks currently being executed by Celery workers
+- **Files Processing** — files with at least one in-progress processing step
+- **Workers Online** — number of connected Celery worker processes
+- **Redis Queues** — per-queue breakdown of pending task counts
+- **Processing Pipeline** — database-level summary of file states (completed, processing, pending, failed)
+- **Recently Processing Files** — the most recent files being actively processed, with links to their detail pages
+
+The dashboard auto-refreshes every 10 seconds.
+
 ## Searching Documents
 
 DocuElevate provides two ways to search your documents:

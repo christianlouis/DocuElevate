@@ -15,9 +15,9 @@ from app.api.logs import router as logs_router
 from app.api.onedrive import router as onedrive_router
 from app.api.openai import router as openai_router
 from app.api.process import router as process_router
+from app.api.queue import router as queue_router
 from app.api.search import router as search_router
 from app.api.settings import router as settings_router
-from app.api.queue import router as queue_router
 from app.api.url_upload import router as url_upload_router
 
 # Import all the individual routers

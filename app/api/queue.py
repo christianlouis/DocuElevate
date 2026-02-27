@@ -20,6 +20,10 @@ from app.models import FileProcessingStep, FileRecord
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/queue", tags=["queue"])
 
+# Constants
+CELERY_INSPECT_TIMEOUT = 2.0
+MAX_ARGS_DISPLAY_LENGTH = 200
+
 
 def _get_redis_queue_length(redis_client: redis.Redis, queue_name: str) -> int:
     """Get the number of messages in a Redis-backed Celery queue.
@@ -54,7 +58,7 @@ def _get_celery_inspect_stats() -> dict[str, Any]:
     }
 
     try:
-        inspector = celery.control.inspect(timeout=2.0)
+        inspector = celery.control.inspect(timeout=CELERY_INSPECT_TIMEOUT)
 
         active = inspector.active() or {}
         reserved = inspector.reserved() or {}
@@ -68,7 +72,7 @@ def _get_celery_inspect_stats() -> dict[str, Any]:
                     {
                         "id": task.get("id", ""),
                         "name": task.get("name", "unknown"),
-                        "args": str(task.get("args", []))[:200],
+                        "args": str(task.get("args", []))[:MAX_ARGS_DISPLAY_LENGTH],
                         "started": task.get("time_start"),
                     }
                 )
@@ -79,7 +83,7 @@ def _get_celery_inspect_stats() -> dict[str, Any]:
                     {
                         "id": task.get("id", ""),
                         "name": task.get("name", "unknown"),
-                        "args": str(task.get("args", []))[:200],
+                        "args": str(task.get("args", []))[:MAX_ARGS_DISPLAY_LENGTH],
                     }
                 )
 
