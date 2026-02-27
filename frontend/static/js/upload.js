@@ -214,21 +214,39 @@ async function traverseFileEntry(entry, files) {
  * Extract all File objects from a DataTransfer, recursively expanding any
  * dropped directories.  Falls back gracefully to dataTransfer.files when the
  * FileSystem Entry API is unavailable (Safari < 11.1, some mobile browsers).
+ *
+ * IMPORTANT: DataTransferItemList is only accessible synchronously during the
+ * drop event handler.  All entries and fallback File objects must be collected
+ * in a single synchronous pass before any `await`, otherwise the browser clears
+ * the list after the first yield — causing only the first file to be captured
+ * when multiple files are dropped.
+ *
  * @param {DataTransfer} dataTransfer
  * @returns {Promise<File[]>}
  */
 async function getFilesFromDataTransfer(dataTransfer) {
   if (dataTransfer.items && dataTransfer.items.length > 0) {
-    const files = [];
+    // ── Synchronous pass ───────────────────────────────────────────────────
+    // Collect all FileSystemEntry objects and any plain File fallbacks NOW,
+    // before the first `await`, while the DataTransferItemList is still valid.
+    const entries = [];
+    const fallbackFiles = [];
     for (let i = 0; i < dataTransfer.items.length; i++) {
       const item = dataTransfer.items[i];
       const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
       if (entry) {
-        await traverseFileEntry(entry, files);
+        entries.push(entry);
       } else if (item.kind === 'file') {
         const file = item.getAsFile();
-        if (file) files.push(file);
+        if (file) fallbackFiles.push(file);
       }
+    }
+    // ── Asynchronous traversal ─────────────────────────────────────────────
+    // DataTransferItemList is no longer needed here; we work only with the
+    // already-captured FileSystemEntry objects and File objects.
+    const files = [...fallbackFiles];
+    for (const entry of entries) {
+      await traverseFileEntry(entry, files);
     }
     return files;
   }
