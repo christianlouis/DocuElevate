@@ -477,12 +477,13 @@ class TestFileQueriesDeduplicationEnabled:
         db_session.add(file1)
         db_session.flush()
 
-        step = FileProcessingStep(
-            file_id=file1.id,
-            step_name="check_for_duplicates",
-            status="success",
-        )
-        db_session.add(step)
+        for step_name in ("check_for_duplicates", "send_to_all_destinations"):
+            step = FileProcessingStep(
+                file_id=file1.id,
+                step_name=step_name,
+                status="success",
+            )
+            db_session.add(step)
         db_session.commit()
 
         query = db_session.query(FileRecord)

@@ -187,13 +187,14 @@ class TestFileListingPagination:
         db_session.add(file_record)
         db_session.commit()
 
-        # Add a processing step (used for status determination)
-        step = FileProcessingStep(
-            file_id=file_record.id,
-            step_name="extract_text",
-            status="success",
-        )
-        db_session.add(step)
+        # Add processing steps (used for status determination)
+        for step_name in ("extract_text", "send_to_all_destinations"):
+            step = FileProcessingStep(
+                file_id=file_record.id,
+                step_name=step_name,
+                status="success",
+            )
+            db_session.add(step)
         db_session.commit()
 
         response = client.get("/api/files")
@@ -287,13 +288,14 @@ class TestFileDetailEndpoint:
         assert response.status_code == 200
         assert response.json()["processing_status"]["status"] == "pending"
 
-        # Test 2: Success step = completed
-        step = FileProcessingStep(
-            file_id=file_record.id,
-            step_name="extract_text",
-            status="success",
-        )
-        db_session.add(step)
+        # Test 2: Success step including terminal step = completed
+        for step_name in ("extract_text", "send_to_all_destinations"):
+            step = FileProcessingStep(
+                file_id=file_record.id,
+                step_name=step_name,
+                status="success",
+            )
+            db_session.add(step)
         db_session.commit()
 
         response = client.get(f"/api/files/{file_record.id}")
