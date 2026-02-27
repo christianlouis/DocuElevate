@@ -841,20 +841,25 @@ def get_file_preview(
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
 
         if version == "original":
-            # Return the original file from tmp
-            if not file_record.local_filename or not os.path.exists(file_record.local_filename):
+            # Use the stored original_file_path first (persisted copy), then fall back to local_filename (tmp)
+            file_path = None
+            for path in [file_record.original_file_path, file_record.local_filename]:
+                if path and os.path.exists(path):
+                    file_path = path
+                    break
+
+            if not file_path:
                 raise HTTPException(status_code=404, detail="Original file not found on disk")
 
-            file_path = file_record.local_filename
-
         elif version == "processed":
-            # Look for processed file in /workdir/processed/
+            # Use the stored processed_file_path first, then fall back to guessing
             workdir = settings.workdir
             processed_dir = os.path.join(workdir, "processed")
 
-            # Try to find the processed file (same hash or UUID-based naming)
+            # Try to find the processed file (stored path first, then hash or UUID-based naming)
             base_filename = os.path.splitext(file_record.original_filename)[0]
             potential_paths = [
+                file_record.processed_file_path,
                 os.path.join(processed_dir, f"{file_record.filehash}.pdf"),
                 os.path.join(processed_dir, f"{base_filename}_processed.pdf"),
                 os.path.join(processed_dir, file_record.original_filename),
@@ -862,7 +867,7 @@ def get_file_preview(
 
             file_path = None
             for path in potential_paths:
-                if os.path.exists(path):
+                if path and os.path.exists(path):
                     file_path = path
                     break
 
@@ -916,20 +921,25 @@ def download_file(
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
 
         if version == "original":
-            # Return the original file from tmp
-            if not file_record.local_filename or not os.path.exists(file_record.local_filename):
+            # Use the stored original_file_path first (persisted copy), then fall back to local_filename (tmp)
+            file_path = None
+            for path in [file_record.original_file_path, file_record.local_filename]:
+                if path and os.path.exists(path):
+                    file_path = path
+                    break
+
+            if not file_path:
                 raise HTTPException(status_code=404, detail="Original file not found on disk")
 
-            file_path = file_record.local_filename
-
         elif version == "processed":
-            # Look for processed file in /workdir/processed/
+            # Use the stored processed_file_path first, then fall back to guessing
             workdir = settings.workdir
             processed_dir = os.path.join(workdir, "processed")
 
-            # Try to find the processed file (same hash or UUID-based naming)
+            # Try to find the processed file (stored path first, then hash or UUID-based naming)
             base_filename = os.path.splitext(file_record.original_filename)[0]
             potential_paths = [
+                file_record.processed_file_path,
                 os.path.join(processed_dir, f"{file_record.filehash}.pdf"),
                 os.path.join(processed_dir, f"{base_filename}_processed.pdf"),
                 os.path.join(processed_dir, file_record.original_filename),
@@ -937,7 +947,7 @@ def download_file(
 
             file_path = None
             for path in potential_paths:
-                if os.path.exists(path):
+                if path and os.path.exists(path):
                     file_path = path
                     break
 
