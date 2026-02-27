@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+{% block title %}Queue Monitor — DocuElevate{% endblock %}
+
+{% block head_extra %}
+<script src="/static/js/common.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+
+  <!-- Header -->
+  <div class="mb-6">
+    <h1 class="text-3xl font-bold mb-2">
+      <i class="fas fa-stream mr-2 text-blue-500"></i>Queue Monitor
+    </h1>
+    <p class="text-gray-600">Real-time view of the document processing pipeline and Celery task queues.</p>
+  </div>
+
+  <!-- Loading state -->
+  <div id="queueLoading" class="text-center py-12">
+    <i class="fas fa-spinner fa-spin fa-2x text-blue-400"></i>
+    <p class="mt-2 text-gray-500">Loading queue statistics&hellip;</p>
+  </div>
+
+  <!-- Error state -->
+  <div id="queueError" class="hidden bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
+    <p><strong>Error:</strong> <span id="queueErrorMsg"></span></p>
+  </div>
+
+  <!-- Dashboard content (hidden until loaded) -->
+  <div id="queueContent" class="hidden">
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <!-- Queued -->
+      <div class="bg-white rounded-lg shadow p-5">
+        <div class="flex items-center">
+          <div class="flex-shrink-0 bg-yellow-100 rounded-full p-3">
+            <i class="fas fa-inbox text-yellow-600 text-xl"></i>
+          </div>
+          <div class="ml-4">
+            <p class="text-sm font-medium text-gray-500">Queued Tasks</p>
+            <p id="totalQueued" class="text-2xl font-bold text-gray-900">0</p>
+          </div>
+        </div>
+      </div>
+      <!-- Active / Running -->
+      <div class="bg-white rounded-lg shadow p-5">
+        <div class="flex items-center">
+          <div class="flex-shrink-0 bg-blue-100 rounded-full p-3">
+            <i class="fas fa-cogs text-blue-600 text-xl"></i>
+          </div>
+          <div class="ml-4">
+            <p class="text-sm font-medium text-gray-500">Active Tasks</p>
+            <p id="activeTasks" class="text-2xl font-bold text-gray-900">0</p>
+          </div>
+        </div>
+      </div>
+      <!-- Processing Files -->
+      <div class="bg-white rounded-lg shadow p-5">
+        <div class="flex items-center">
+          <div class="flex-shrink-0 bg-indigo-100 rounded-full p-3">
+            <i class="fas fa-file-alt text-indigo-600 text-xl"></i>
+          </div>
+          <div class="ml-4">
+            <p class="text-sm font-medium text-gray-500">Files Processing</p>
+            <p id="filesProcessing" class="text-2xl font-bold text-gray-900">0</p>
+          </div>
+        </div>
+      </div>
+      <!-- Workers Online -->
+      <div class="bg-white rounded-lg shadow p-5">
+        <div class="flex items-center">
+          <div class="flex-shrink-0 bg-green-100 rounded-full p-3">
+            <i class="fas fa-server text-green-600 text-xl"></i>
+          </div>
+          <div class="ml-4">
+            <p class="text-sm font-medium text-gray-500">Workers Online</p>
+            <p id="workersOnline" class="text-2xl font-bold text-gray-900">0</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline Summary -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+
+      <!-- Queue Breakdown -->
+      <div class="bg-white rounded-lg shadow">
+        <div class="px-5 py-4 border-b border-gray-200">
+          <h2 class="text-lg font-semibold text-gray-900">
+            <i class="fas fa-list-ol mr-2 text-gray-500"></i>Redis Queues
+          </h2>
+        </div>
+        <div class="p-5">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-gray-500 border-b">
+                <th class="pb-2">Queue</th>
+                <th class="pb-2 text-right">Pending</th>
+              </tr>
+            </thead>
+            <tbody id="queueRows">
+              <tr><td colspan="2" class="py-3 text-gray-400 text-center">No data</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- DB Processing Summary -->
+      <div class="bg-white rounded-lg shadow">
+        <div class="px-5 py-4 border-b border-gray-200">
+          <h2 class="text-lg font-semibold text-gray-900">
+            <i class="fas fa-database mr-2 text-gray-500"></i>Processing Pipeline
+          </h2>
+        </div>
+        <div class="p-5">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-gray-500 border-b">
+                <th class="pb-2">State</th>
+                <th class="pb-2 text-right">Files</th>
+              </tr>
+            </thead>
+            <tbody id="dbSummaryRows">
+              <tr><td colspan="2" class="py-3 text-gray-400 text-center">No data</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Tasks -->
+    <div class="bg-white rounded-lg shadow mb-8">
+      <div class="px-5 py-4 border-b border-gray-200">
+        <h2 class="text-lg font-semibold text-gray-900">
+          <i class="fas fa-play-circle mr-2 text-blue-500"></i>Active Tasks
+          <span id="activeCount" class="ml-1 text-sm font-normal text-gray-500">(0)</span>
+        </h2>
+      </div>
+      <div class="p-5 overflow-x-auto">
+        <table class="w-full text-sm" id="activeTable">
+          <thead>
+            <tr class="text-left text-gray-500 border-b">
+              <th class="pb-2">Task</th>
+              <th class="pb-2">Arguments</th>
+              <th class="pb-2">Task ID</th>
+            </tr>
+          </thead>
+          <tbody id="activeRows">
+            <tr><td colspan="3" class="py-3 text-gray-400 text-center">No active tasks</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Recently Processing Files -->
+    <div class="bg-white rounded-lg shadow mb-8">
+      <div class="px-5 py-4 border-b border-gray-200">
+        <h2 class="text-lg font-semibold text-gray-900">
+          <i class="fas fa-file-medical-alt mr-2 text-indigo-500"></i>Recently Processing Files
+        </h2>
+      </div>
+      <div class="p-5 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-gray-500 border-b">
+              <th class="pb-2">File</th>
+              <th class="pb-2">Current Step</th>
+              <th class="pb-2 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="recentRows">
+            <tr><td colspan="3" class="py-3 text-gray-400 text-center">No files currently processing</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Auto-refresh info -->
+    <div class="text-center text-gray-400 text-xs mb-4">
+      <i class="fas fa-sync-alt mr-1"></i>
+      Auto-refreshes every <span id="refreshInterval">10</span> seconds &mdash;
+      Last updated: <span id="lastUpdated">—</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const REFRESH_SECONDS = 10;
+  document.getElementById('refreshInterval').textContent = REFRESH_SECONDS;
+  let timer = null;
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function shortName(taskName) {
+    // Show only the last part of the dotted task name
+    const parts = (taskName || 'unknown').split('.');
+    return parts[parts.length - 1];
+  }
+
+  function renderQueues(queues) {
+    const tbody = document.getElementById('queueRows');
+    if (!queues || Object.keys(queues).length === 0) {
+      tbody.innerHTML = '<tr><td colspan="2" class="py-3 text-gray-400 text-center">No queues found</td></tr>';
+      return;
+    }
+    tbody.innerHTML = Object.entries(queues).map(([name, count]) => `
+      <tr class="border-b border-gray-100">
+        <td class="py-2 font-mono text-gray-700">${escapeHtml(name)}</td>
+        <td class="py-2 text-right">
+          <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${count > 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-500'}">${count}</span>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function renderDbSummary(summary) {
+    const tbody = document.getElementById('dbSummaryRows');
+    if (!summary) {
+      tbody.innerHTML = '<tr><td colspan="2" class="py-3 text-gray-400 text-center">No data</td></tr>';
+      return;
+    }
+    const rows = [
+      { label: 'Completed', value: summary.completed, color: 'bg-green-100 text-green-800', icon: 'fa-check-circle text-green-500' },
+      { label: 'Processing', value: summary.processing, color: 'bg-blue-100 text-blue-800', icon: 'fa-spinner text-blue-500' },
+      { label: 'Pending', value: summary.pending, color: 'bg-yellow-100 text-yellow-800', icon: 'fa-clock text-yellow-500' },
+      { label: 'Failed', value: summary.failed, color: 'bg-red-100 text-red-800', icon: 'fa-times-circle text-red-500' },
+      { label: 'Total Files', value: summary.total_files, color: 'bg-gray-100 text-gray-700', icon: 'fa-folder text-gray-500' },
+    ];
+    tbody.innerHTML = rows.map(r => `
+      <tr class="border-b border-gray-100">
+        <td class="py-2"><i class="fas ${r.icon} mr-2"></i>${r.label}</td>
+        <td class="py-2 text-right">
+          <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${r.color}">${r.value}</span>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function renderActiveTasks(tasks) {
+    const tbody = document.getElementById('activeRows');
+    document.getElementById('activeCount').textContent = `(${tasks.length})`;
+    if (tasks.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3" class="py-3 text-gray-400 text-center">No active tasks</td></tr>';
+      return;
+    }
+    tbody.innerHTML = tasks.map(t => `
+      <tr class="border-b border-gray-100">
+        <td class="py-2 font-medium text-gray-800">${escapeHtml(shortName(t.name))}</td>
+        <td class="py-2 text-gray-500 truncate max-w-xs" title="${escapeHtml(t.args)}">${escapeHtml(t.args)}</td>
+        <td class="py-2 font-mono text-xs text-gray-400">${escapeHtml((t.id || '').substring(0, 8))}</td>
+      </tr>
+    `).join('');
+  }
+
+  function renderRecentFiles(files) {
+    const tbody = document.getElementById('recentRows');
+    if (!files || files.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3" class="py-3 text-gray-400 text-center">No files currently processing</td></tr>';
+      return;
+    }
+    tbody.innerHTML = files.map(f => `
+      <tr class="border-b border-gray-100">
+        <td class="py-2 text-gray-800">${escapeHtml(f.filename)}</td>
+        <td class="py-2"><span class="inline-block px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-xs font-mono">${escapeHtml(f.current_step)}</span></td>
+        <td class="py-2 text-right">
+          <a href="/files/${f.file_id}" class="text-blue-500 hover:text-blue-700 text-xs"><i class="fas fa-external-link-alt mr-1"></i>View</a>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  async function fetchStats() {
+    try {
+      const resp = await fetch('/api/queue/stats');
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+
+      // Hide loading, show content
+      document.getElementById('queueLoading').classList.add('hidden');
+      document.getElementById('queueError').classList.add('hidden');
+      document.getElementById('queueContent').classList.remove('hidden');
+
+      // Summary cards
+      document.getElementById('totalQueued').textContent = data.total_queued || 0;
+      document.getElementById('activeTasks').textContent = (data.celery && data.celery.active) ? data.celery.active.length : 0;
+      document.getElementById('filesProcessing').textContent = (data.db_summary && data.db_summary.processing) || 0;
+      document.getElementById('workersOnline').textContent = (data.celery && data.celery.workers_online) || 0;
+
+      // Sections
+      renderQueues(data.queues);
+      renderDbSummary(data.db_summary);
+      renderActiveTasks(data.celery ? data.celery.active || [] : []);
+      renderRecentFiles(data.db_summary ? data.db_summary.recent_processing || [] : []);
+
+      document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString();
+    } catch (err) {
+      document.getElementById('queueLoading').classList.add('hidden');
+      document.getElementById('queueError').classList.remove('hidden');
+      document.getElementById('queueErrorMsg').textContent = err.message || 'Failed to load queue data';
+    }
+  }
+
+  // Initial fetch and auto-refresh
+  fetchStats();
+  timer = setInterval(fetchStats, REFRESH_SECONDS * 1000);
+
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', function () {
+    if (timer) clearInterval(timer);
+  });
+})();
+</script>
+{% endblock %}

@@ -437,6 +437,57 @@ Errors follow standard HTTP status codes with descriptive messages:
 }
 ```
 
+## Queue Monitoring
+
+### GET /api/queue/stats
+
+Get comprehensive queue and processing statistics, including Redis queue lengths, Celery worker inspection data, and database-level processing summaries.
+
+**Authentication:** Required
+
+**Response (200 OK):**
+```json
+{
+  "queues": {
+    "document_processor": 12,
+    "default": 0,
+    "celery": 0
+  },
+  "total_queued": 12,
+  "celery": {
+    "active": [
+      {"id": "abc123", "name": "process_document", "args": "[42]", "started": 1700000000}
+    ],
+    "reserved": [],
+    "scheduled": [],
+    "workers_online": 1
+  },
+  "db_summary": {
+    "total_files": 5000,
+    "processing": 3,
+    "failed": 1,
+    "completed": 4900,
+    "pending": 96,
+    "recent_processing": [
+      {"file_id": 42, "filename": "invoice.pdf", "current_step": "extract_metadata_with_gpt"}
+    ]
+  }
+}
+```
+
+### GET /api/queue/pending-count
+
+Lightweight endpoint returning the total number of queued + in-progress items. Designed for the files page banner indicator.
+
+**Authentication:** Required
+
+**Response (200 OK):**
+```json
+{
+  "total_pending": 15
+}
+```
+
 ## Rate Limiting
 
 The API implements rate limiting to ensure system stability. If you exceed the limits, you'll receive a `429 Too Many Requests` response.

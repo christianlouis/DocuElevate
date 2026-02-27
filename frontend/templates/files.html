@@ -370,6 +370,23 @@
 <div class="container mx-auto px-4 py-8">
   <h2 class="text-3xl font-bold mb-6">File Records</h2>
 
+  <!-- Queue pending banner (populated via JS) -->
+  <div id="queueBanner" class="hidden bg-blue-50 border-l-4 border-blue-400 text-blue-800 p-4 mb-6 rounded-r-lg" role="status">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center">
+        <i class="fas fa-spinner fa-spin mr-3 text-blue-500"></i>
+        <span>
+          <strong id="queueBannerCount">0</strong> item(s) are currently queued or being processed.
+          Files will appear here once processing completes.
+        </span>
+      </div>
+      <a href="/admin/queue" class="text-blue-600 hover:text-blue-800 text-sm font-medium whitespace-nowrap ml-4"
+         id="queueBannerLink" style="display:none;">
+        <i class="fas fa-external-link-alt mr-1"></i>View Queue
+      </a>
+    </div>
+  </div>
+
   {% if error %}
   <div class="error-message">
     <p><strong>Error:</strong> {{ error }}</p>
@@ -1049,6 +1066,36 @@
       if (input) input.value = '';
       _searchCurrentPage = 1;
     }
+  </script>
+
+  <!-- Queue banner updater -->
+  <script>
+  (function () {
+    function updateQueueBanner() {
+      fetch('/api/queue/pending-count')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data) return;
+          var banner = document.getElementById('queueBanner');
+          var count = data.total_pending || 0;
+          if (count > 0) {
+            document.getElementById('queueBannerCount').textContent = count;
+            banner.classList.remove('hidden');
+            // Show admin link if user is admin (adminMenuContainer visible)
+            var adminMenu = document.getElementById('adminMenuContainer');
+            if (adminMenu && !adminMenu.classList.contains('hidden')) {
+              var link = document.getElementById('queueBannerLink');
+              if (link) link.style.display = '';
+            }
+          } else {
+            banner.classList.add('hidden');
+          }
+        })
+        .catch(function () { /* silently ignore */ });
+    }
+    updateQueueBanner();
+    setInterval(updateQueueBanner, 15000);
+  })();
   </script>
 </div>
 {% endblock %}
