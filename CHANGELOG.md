@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.59.1 (2026-02-27)
+
+### Bug Fixes
+
+- **api**: Use stored file paths for preview and download endpoints
+  ([`cded734`](https://github.com/christianlouis/DocuElevate/commit/cded73481efcdce3359b71ec474cf7105ebef717))
+
+
 ## v0.59.0 (2026-02-26)
 
 ### Bug Fixes
