@@ -11,6 +11,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Query, Session
 
 from app.models import FileProcessingStep, FileRecord
+from app.utils.step_manager import TERMINAL_STEP
 
 
 def apply_status_filter(query: Query, db: Session, status: Optional[str]) -> Query:
@@ -98,6 +99,9 @@ def apply_status_filter(query: Query, db: Session, status: Optional[str]) -> Que
         query = query.filter(FileRecord.id.in_(db.query(subq.c.file_id)))
     elif status == "completed":
         # Files where all real steps are either success or skipped (no failures or in_progress)
+        # and the terminal send_to_all_destinations step has been recorded.
+        # Excluding the terminal-step requirement allows files that only completed the
+        # first few pipeline stages to be falsely labelled as "completed".
         # Exclude duplicates from completed
         query = query.filter(FileRecord.is_duplicate.is_(False))
 
@@ -113,9 +117,19 @@ def apply_status_filter(query: Query, db: Session, status: Optional[str]) -> Que
             .subquery()
         )
 
-        # Select files with real steps that don't have issues
-        query = query.filter(FileRecord.id.in_(db.query(files_with_real_steps.c.file_id))).filter(
-            ~FileRecord.id.in_(db.query(files_with_issues.c.file_id))
+        # Get files that have the terminal processing step recorded
+        files_with_terminal_step = (
+            db.query(FileProcessingStep.file_id)
+            .filter(FileProcessingStep.step_name == TERMINAL_STEP)
+            .distinct()
+            .subquery()
+        )
+
+        # Select files with real steps, no issues, and terminal step present
+        query = (
+            query.filter(FileRecord.id.in_(db.query(files_with_real_steps.c.file_id)))
+            .filter(~FileRecord.id.in_(db.query(files_with_issues.c.file_id)))
+            .filter(FileRecord.id.in_(db.query(files_with_terminal_step.c.file_id)))
         )
     elif status == "duplicate":
         # Files marked as duplicates

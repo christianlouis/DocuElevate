@@ -7,7 +7,7 @@ from typing import Dict, List
 from sqlalchemy.orm import Session
 
 from app.models import FileProcessingStep, FileRecord, ProcessingLog
-from app.utils.step_manager import get_file_overall_status
+from app.utils.step_manager import TERMINAL_STEP, get_file_overall_status
 
 
 def get_file_processing_status(db: Session, file_id: int) -> Dict:
@@ -150,7 +150,14 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
             elif in_progress_steps > 0:
                 status = "processing"
             elif completed_steps + skipped_steps == total_steps:
-                status = "completed"
+                # Only mark as completed if the terminal processing step has been
+                # recorded. Without this guard, files where later pipeline steps
+                # have not yet started would be falsely marked as "completed".
+                existing_step_names = {s.step_name for s in file_steps}
+                if TERMINAL_STEP in existing_step_names:
+                    status = "completed"
+                else:
+                    status = "pending"
             else:
                 status = "pending"
 

@@ -743,3 +743,102 @@ startxref
         # Verify that retry was triggered
         # The retry method raises a special exception
         assert exc_info.value is not None
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_process_document_initializes_file_steps_for_new_file(db_session, tmp_path):
+    """
+    Test that process_document calls initialize_file_steps for new file records
+    so that all mandatory pipeline steps are pre-created as "pending".
+
+    This ensures status tracking reflects the complete expected pipeline from
+    the start and prevents incomplete files from being falsely marked as
+    "completed" just because the steps that *did* run all succeeded.
+    """
+    # Create a test PDF file with embedded text
+    test_pdf = tmp_path / "test.pdf"
+    pdf_content = b"""%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Resources <<
+/Font <<
+/F1 <<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
+>>
+>>
+>>
+/Contents 4 0 R
+>>
+endobj
+4 0 obj
+<<
+/Length 44
+>>
+stream
+BT
+/F1 12 Tf
+100 700 Td
+(Test content) Tj
+ET
+endstream
+endobj
+xref
+0 5
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000306 00000 n
+trailer
+<<
+/Size 5
+/Root 1 0 R
+>>
+startxref
+399
+%%EOF
+"""
+    test_pdf.write_bytes(pdf_content)
+
+    with (
+        patch("app.tasks.process_document.SessionLocal") as mock_session_local,
+        patch("app.tasks.process_document.settings") as mock_settings,
+        patch("app.tasks.process_document.log_task_progress"),
+        patch("app.tasks.process_document.extract_metadata_with_gpt") as mock_extract,
+        patch("app.tasks.process_document.initialize_file_steps") as mock_init_steps,
+    ):
+        mock_settings.workdir = str(tmp_path)
+        mock_settings.enable_deduplication = False
+        mock_settings.enable_text_quality_check = False
+        mock_session_local.return_value.__enter__.return_value = db_session
+        mock_session_local.return_value.__exit__.return_value = None
+        mock_extract.delay = MagicMock()
+
+        result = process_document.run(str(test_pdf))
+
+        assert result["status"] == "Text extracted locally"
+        assert "file_id" in result
+
+        # initialize_file_steps must have been called exactly once with the new file's ID
+        mock_init_steps.assert_called_once()
+        called_file_id = mock_init_steps.call_args[0][1]
+        assert called_file_id == result["file_id"]
