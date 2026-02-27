@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.60.2 (2026-02-27)
+
+### Bug Fixes
+
+- **upload**: Fix multi-file drag-and-drop only uploading one file
+  ([`dc9aec2`](https://github.com/christianlouis/DocuElevate/commit/dc9aec2bab43e7b6ef2f85205a1d9742109aa78d))
+
+
 ## v0.60.1 (2026-02-27)
 
 ### Bug Fixes
