@@ -339,6 +339,8 @@ class TestStepManager:
 
         # Terminal step hasn't run yet, so file should remain pending
         assert status["status"] == "pending"
+        assert status["has_errors"] is False
+        assert status["completed_steps"] == 3
 
     def test_get_file_overall_status_failed(self, db_session: Session):
         """Test overall status for a file with failed steps."""

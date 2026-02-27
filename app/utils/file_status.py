@@ -160,7 +160,7 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
                     status = "completed"
                 else:
                     status = "pending"
-            elif terminal_step is not None and terminal_step.status in ("success", "skipped"):
+            elif terminal_step is not None and terminal_step.status == "success":
                 # Terminal step succeeded but some intermediate steps are
                 # still "pending" (dynamic pipeline artifacts). The file
                 # is effectively complete.

@@ -271,7 +271,7 @@ def get_file_overall_status(db: Session, file_id: int) -> Dict:
             status = "completed"
         else:
             status = "pending"
-    elif terminal_step_obj is not None and terminal_step_obj.status in ("success", "skipped"):
+    elif terminal_step_obj is not None and terminal_step_obj.status == "success":
         # The terminal step succeeded but some intermediate steps are still
         # "pending" (e.g. check_for_duplicates logged without file_id, or
         # extract_text not marked when OCR path was taken).  The pipeline
