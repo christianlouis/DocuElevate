@@ -253,12 +253,13 @@ class TestStatusFilter:
         db_session.add(file_record)
         db_session.flush()
 
-        step = FileProcessingStep(
-            file_id=file_record.id,
-            step_name="extract_text",
-            status="success",
-        )
-        db_session.add(step)
+        for step_name in ("extract_text", "send_to_all_destinations"):
+            step = FileProcessingStep(
+                file_id=file_record.id,
+                step_name=step_name,
+                status="success",
+            )
+            db_session.add(step)
         db_session.commit()
 
         # Test completed filter
