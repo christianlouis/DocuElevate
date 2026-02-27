@@ -17,6 +17,7 @@ from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.tasks.process_with_ocr import process_with_ocr
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils import get_unique_filepath_with_counter, hash_file, log_task_progress
+from app.utils.step_manager import initialize_file_steps
 from app.utils.text_quality import check_text_quality, detect_pdf_text_source
 
 logger = logging.getLogger(__name__)
@@ -202,6 +203,9 @@ def process_document(
             db.commit()
             db.refresh(new_record)
             logger.info(f"[{task_id}] File record created with ID: {new_record.id}")
+            # Pre-initialize all expected processing steps as "pending" so that
+            # status tracking reflects the complete pipeline from the start.
+            initialize_file_steps(db, new_record.id)
             log_task_progress(
                 task_id,
                 "create_file_record",

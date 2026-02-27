@@ -29,6 +29,10 @@ OPTIONAL_PROCESSING_STEPS = {
     "check_for_duplicates": settings.enable_deduplication,  # Only if deduplication is enabled
 }
 
+# The terminal step is the last mandatory step in the processing pipeline.
+# A file is only considered "completed" once this step has been recorded.
+TERMINAL_STEP = "send_to_all_destinations"
+
 # Combine steps based on configuration
 MAIN_PROCESSING_STEPS = []
 if settings.enable_deduplication:
@@ -252,7 +256,14 @@ def get_file_overall_status(db: Session, file_id: int) -> Dict:
     elif in_progress_steps > 0:
         status = "processing"
     elif completed_steps + skipped_steps == total_steps:
-        status = "completed"
+        # Only mark as completed if the terminal processing step has been recorded.
+        # Without this guard, files where later pipeline steps have not yet started
+        # would be falsely marked as "completed" (e.g. only the first 3 steps ran).
+        existing_step_names = {s.step_name for s in steps}
+        if TERMINAL_STEP in existing_step_names:
+            status = "completed"
+        else:
+            status = "pending"
     else:
         status = "pending"
 
@@ -339,6 +350,17 @@ def get_step_summary(db: Session, file_id: int) -> Dict:
             if status in main_counts:
                 main_counts[status] += 1
             main_steps_count += 1
+
+    # Ensure the terminal step is always counted in total_main_steps.
+    # If the terminal step has not been recorded yet, the pipeline is not
+    # complete; counting it as "queued" prevents the status banner from
+    # showing "Completed" before the full pipeline has run.
+    # Note: if TERMINAL_STEP already appears in `steps`, the loop above has
+    # already incremented `main_steps_count` for it, so we only add here when
+    # the step is absent from the DB entirely.
+    if not any(step.step_name == TERMINAL_STEP for step in steps if step.step_name in REAL_MAIN_STEPS):
+        main_steps_count += 1
+        main_counts["queued"] += 1
 
     return {
         "main": main_counts,

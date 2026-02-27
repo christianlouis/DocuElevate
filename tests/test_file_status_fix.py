@@ -437,7 +437,7 @@ class TestFileStatusMissingCoverage:
         assert result["has_errors"] is False
 
     def test_get_files_processing_status_with_completed_steps(self, db_session):
-        """Covers line 189->188: completed + skipped == total_steps → completed status."""
+        """Covers completed + skipped == total_steps with terminal step → completed status."""
         from datetime import datetime
         from unittest.mock import patch
 
@@ -457,6 +457,7 @@ class TestFileStatusMissingCoverage:
         for step_name, step_status in [
             ("create_file_record", "success"),
             ("finalize_document_storage", "skipped"),
+            ("send_to_all_destinations", "success"),
         ]:
             step = FileProcessingStep(
                 file_id=file_record.id,

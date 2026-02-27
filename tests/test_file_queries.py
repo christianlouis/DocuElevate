@@ -76,7 +76,7 @@ def sample_files(db_session):
     )
     db_session.add(step3)
 
-    # File 4: completed (has success step, no failures)
+    # File 4: completed (has success step including terminal step)
     file4 = FileRecord(
         filehash="hash4",
         original_filename="completed.pdf",
@@ -87,10 +87,11 @@ def sample_files(db_session):
     db_session.add(file4)
     db_session.flush()
 
-    step4 = FileProcessingStep(file_id=file4.id, step_name="extract_text", status="success")
-    db_session.add(step4)
+    step4a = FileProcessingStep(file_id=file4.id, step_name="extract_text", status="success")
+    step4b = FileProcessingStep(file_id=file4.id, step_name="send_to_all_destinations", status="success")
+    db_session.add_all([step4a, step4b])
 
-    # File 5: completed with multiple success steps
+    # File 5: completed with multiple success steps including terminal step
     file5 = FileRecord(
         filehash="hash5",
         original_filename="completed2.pdf",
@@ -111,7 +112,12 @@ def sample_files(db_session):
         step_name="extract_metadata_with_gpt",
         status="success",
     )
-    db_session.add_all([step5a, step5b])
+    step5c = FileProcessingStep(
+        file_id=file5.id,
+        step_name="send_to_all_destinations",
+        status="success",
+    )
+    db_session.add_all([step5a, step5b, step5c])
 
     # File 6: has success but also failure (should be filtered out from completed)
     file6 = FileRecord(
