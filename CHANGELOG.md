@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.60.3 (2026-02-28)
+
+### Bug Fixes
+
+- Address code review feedback - restrict terminal step check to success only, add test assertions
+  ([`4fdb1b8`](https://github.com/christianlouis/DocuElevate/commit/4fdb1b8d85c43d51d7a703675e199fba4e121626))
+
+- **tasks**: Resolve files stuck in Pending status despite completed processing
+  ([`2c55f07`](https://github.com/christianlouis/DocuElevate/commit/2c55f076be6ffe167f54d1e660bb2448385f090b))
+
+
 ## v0.60.2 (2026-02-27)
 
 ### Bug Fixes
