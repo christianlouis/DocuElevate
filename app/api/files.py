@@ -763,28 +763,44 @@ def retry_subtask(
         logger.info(
             f"Retrying upload task {subtask_name} for file {file_id}: "
             f"original_filename={file_record.original_filename!r}, "
-            f"filehash={file_record.filehash!r}"
+            f"filehash={file_record.filehash!r}, "
+            f"processed_file_path={file_record.processed_file_path!r}"
         )
-        workdir = settings.workdir
-        processed_dir = os.path.join(workdir, "processed")
 
-        # Try to find the processed file
-        base_filename = os.path.splitext(file_record.original_filename)[0]
-        potential_paths = [
-            os.path.join(processed_dir, f"{file_record.filehash}.pdf"),
-            os.path.join(processed_dir, f"{base_filename}_processed.pdf"),
-            os.path.join(processed_dir, file_record.original_filename),
-        ]
-
+        # Try to find the processed file using multiple strategies:
+        # 1. DB-stored processed_file_path (most reliable - set during finalization)
+        # 2. Hash-based path in processed dir
+        # 3. Original filename with _processed suffix
+        # 4. Original filename in processed dir
         file_path = None
         checked_paths = []
-        for path in potential_paths:
-            exists = os.path.exists(path)
-            checked_paths.append(f"{path!r} (exists={exists})")
-            logger.info(f"Checking processed file path: {path!r}, exists={exists}")
+
+        # Check 1: processed_file_path from DB
+        if file_record.processed_file_path:
+            exists = os.path.exists(file_record.processed_file_path)
+            checked_paths.append(f"processed_file_path={file_record.processed_file_path!r} (exists={exists})")
+            logger.info(f"Checking processed_file_path: {file_record.processed_file_path!r}, exists={exists}")
             if exists:
-                file_path = path
-                break
+                file_path = file_record.processed_file_path
+
+        # Check 2-4: Legacy path patterns in processed directory
+        if not file_path:
+            workdir = settings.workdir
+            processed_dir = os.path.join(workdir, "processed")
+            base_filename = os.path.splitext(file_record.original_filename)[0]
+            legacy_paths = [
+                os.path.join(processed_dir, f"{file_record.filehash}.pdf"),
+                os.path.join(processed_dir, f"{base_filename}_processed.pdf"),
+                os.path.join(processed_dir, file_record.original_filename),
+            ]
+
+            for path in legacy_paths:
+                exists = os.path.exists(path)
+                checked_paths.append(f"{path!r} (exists={exists})")
+                logger.info(f"Checking processed file path: {path!r}, exists={exists}")
+                if exists:
+                    file_path = path
+                    break
 
         if not file_path:
             paths_detail = "; ".join(checked_paths)
