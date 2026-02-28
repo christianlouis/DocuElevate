@@ -2,6 +2,7 @@
 Tests for enhanced logging and original_file_path fallback in retry-subtask endpoint.
 """
 
+import os
 import shutil
 from unittest.mock import MagicMock, patch
 
@@ -212,6 +213,15 @@ class TestRetrySubtaskEnhancedLogging:
         db_session.commit()
         db_session.refresh(file_record)
 
+        # Verify the legacy paths do NOT exist (ensures test validates DB-path behavior)
+        from app.config import settings
+
+        workdir = settings.workdir
+        legacy_hash_path = os.path.join(workdir, "processed", f"{file_record.filehash}.pdf")
+        legacy_original_path = os.path.join(workdir, "processed", file_record.original_filename)
+        assert not os.path.exists(legacy_hash_path)
+        assert not os.path.exists(legacy_original_path)
+
         with patch("app.tasks.upload_to_onedrive.upload_to_onedrive") as mock_upload:
             mock_upload.delay.return_value = mock_task
             response = client.post(f"/api/files/{file_record.id}/retry-subtask?subtask_name=upload_to_onedrive")
@@ -237,6 +247,15 @@ class TestRetrySubtaskEnhancedLogging:
         processed_file = tmp_path / "2024-01-01_Invoice.pdf"
         shutil.copy(sample_pdf_path, processed_file)
 
+        # Also create a competing legacy hash-based file in the workdir/processed/ directory
+        from app.config import settings
+
+        workdir = settings.workdir
+        processed_dir = os.path.join(workdir, "processed")
+        os.makedirs(processed_dir, exist_ok=True)
+        legacy_hash_file = os.path.join(processed_dir, "upload_priority_test.pdf")
+        shutil.copy(sample_pdf_path, legacy_hash_file)
+
         file_record = FileRecord(
             filehash="upload_priority_test",
             original_filename="scan001.pdf",
@@ -256,6 +275,7 @@ class TestRetrySubtaskEnhancedLogging:
         assert response.status_code == 200
 
         # Verify the task was called with the processed_file_path (first priority for uploads)
+        # even though a legacy hash-based file also exists
         mock_upload.delay.assert_called_once()
         call_args = mock_upload.delay.call_args
         assert call_args[0][0] == str(processed_file)
