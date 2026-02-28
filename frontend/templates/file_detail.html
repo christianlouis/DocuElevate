@@ -958,8 +958,8 @@
 
 {% block content %}
 <div class="detail-container">
-  <a href="/files" class="back-button">
-    <i class="fas fa-arrow-left"></i>
+  <a href="/files" class="back-button" aria-label="Back to File List">
+    <i class="fas fa-arrow-left" aria-hidden="true"></i>
     Back to File List
   </a>
 
@@ -979,15 +979,15 @@
           {% set main_completed = step_summary.main.success + step_summary.main.skipped %}
           {% set uploads_completed = step_summary.uploads.success + step_summary.uploads.skipped %}
           {% if file.is_duplicate %}
-            <i class="fas fa-copy" style="color: #6b7280; margin-right: 0.5rem;"></i>Duplicate
+            <i class="fas fa-copy" aria-hidden="true" style="color: #6b7280; margin-right: 0.5rem;"></i>Duplicate
           {% elif step_summary.main.failure > 0 or step_summary.uploads.failure > 0 %}
-            <i class="fas fa-times-circle" style="color: #dc2626; margin-right: 0.5rem;"></i>Failed
+            <i class="fas fa-times-circle" aria-hidden="true" style="color: #dc2626; margin-right: 0.5rem;"></i>Failed
           {% elif step_summary.main["in_progress"] > 0 or step_summary.uploads["in_progress"] > 0 %}
-            <i class="fas fa-circle-notch" style="color: #f59e0b; margin-right: 0.5rem; animation: spin 1s linear infinite;"></i>Processing
+            <i class="fas fa-circle-notch" aria-hidden="true" style="color: #f59e0b; margin-right: 0.5rem; animation: spin 1s linear infinite;"></i>Processing
           {% elif step_summary.total_main_steps > 0 and main_completed == step_summary.total_main_steps and step_summary.main.failure == 0 %}
-            <i class="fas fa-check-circle" style="color: #059669; margin-right: 0.5rem;"></i>Completed
+            <i class="fas fa-check-circle" aria-hidden="true" style="color: #059669; margin-right: 0.5rem;"></i>Completed
           {% else %}
-            <i class="fas fa-pause-circle" style="color: #f59e0b; margin-right: 0.5rem;"></i>Pending
+            <i class="fas fa-pause-circle" aria-hidden="true" style="color: #f59e0b; margin-right: 0.5rem;"></i>Pending
           {% endif %}
         </div>
       </div>
@@ -1066,11 +1066,11 @@
         <span class="detail-value">
           {% if original_file_exists %}
           <span class="file-status-indicator exists">
-            <i class="fas fa-check-circle"></i> File exists
+            <i class="fas fa-check-circle" aria-hidden="true"></i> File exists
           </span>
           {% else %}
           <span class="file-status-indicator missing">
-            <i class="fas fa-times-circle"></i> File not found
+            <i class="fas fa-times-circle" aria-hidden="true"></i> File not found
           </span>
           {% endif %}
         </span>
@@ -1086,11 +1086,11 @@
         <span class="detail-value">
           {% if processed_file_exists %}
           <span class="file-status-indicator exists">
-            <i class="fas fa-check-circle"></i> File exists
+            <i class="fas fa-check-circle" aria-hidden="true"></i> File exists
           </span>
           {% else %}
           <span class="file-status-indicator missing">
-            <i class="fas fa-times-circle"></i> File not found
+            <i class="fas fa-times-circle" aria-hidden="true"></i> File not found
           </span>
           {% endif %}
         </span>
@@ -1196,7 +1196,7 @@
           </div>
           <div class="pdf-canvas-wrapper" id="original-canvas-wrapper">
             <div class="pdf-loading">
-              <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+              <i class="fas fa-spinner fa-spin" aria-hidden="true" style="font-size: 2rem; margin-bottom: 1rem;"></i>
               <p>Loading PDF...</p>
             </div>
           </div>
@@ -1205,11 +1205,11 @@
           onclick="loadAndShowText('original', {{ file.id }})"
           style="margin-top: 0.5rem; background-color: #4299e1; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600; width: 100%;"
         >
-          <i class="fas fa-file-alt"></i> View Extracted Text
+          <i class="fas fa-file-alt" aria-hidden="true"></i> View Extracted Text
         </button>
         {% else %}
         <div style="text-align: center; padding: 3rem; background-color: #f7fafc; border-radius: 0.5rem; color: #718096;">
-          <i class="fas fa-file-pdf" style="font-size: 3rem; opacity: 0.5; margin-bottom: 1rem;"></i>
+          <i class="fas fa-file-pdf" aria-hidden="true" style="font-size: 3rem; opacity: 0.5; margin-bottom: 1rem;"></i>
           <p>Original file not available</p>
         </div>
         {% endif %}
@@ -1227,7 +1227,7 @@
           </div>
           <div class="pdf-canvas-wrapper" id="processed-canvas-wrapper">
             <div class="pdf-loading">
-              <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+              <i class="fas fa-spinner fa-spin" aria-hidden="true" style="font-size: 2rem; margin-bottom: 1rem;"></i>
               <p>Loading PDF...</p>
             </div>
           </div>
@@ -1236,11 +1236,11 @@
           onclick="loadAndShowText('processed', {{ file.id }})"
           style="margin-top: 0.5rem; background-color: #48bb78; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600; width: 100%;"
         >
-          <i class="fas fa-file-alt"></i> View Extracted Text
+          <i class="fas fa-file-alt" aria-hidden="true"></i> View Extracted Text
         </button>
         {% else %}
         <div style="text-align: center; padding: 3rem; background-color: #f7fafc; border-radius: 0.5rem; color: #718096;">
-          <i class="fas fa-file-pdf" style="font-size: 3rem; opacity: 0.5; margin-bottom: 1rem;"></i>
+          <i class="fas fa-file-pdf" aria-hidden="true" style="font-size: 3rem; opacity: 0.5; margin-bottom: 1rem;"></i>
           <p>Processed file not available yet</p>
         </div>
         {% endif %}
@@ -1259,14 +1259,16 @@
             id="original-copy-btn"
             onclick="copyTextToClipboard('original')"
             style="background-color: #4299e1; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;"
+            aria-label="Copy extracted text"
           >
-            <i class="fas fa-copy"></i> Copy
+            <i class="fas fa-copy" aria-hidden="true"></i> Copy
           </button>
           <button
             onclick="toggleTextModal('original-text-modal')"
             style="background-color: #f56565; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;"
+            aria-label="Close modal"
           >
-            <i class="fas fa-times"></i> Close
+            <i class="fas fa-times" aria-hidden="true"></i> Close
           </button>
         </div>
       </div>
@@ -1288,14 +1290,16 @@
             id="processed-copy-btn"
             onclick="copyTextToClipboard('processed')"
             style="background-color: #4299e1; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;"
+            aria-label="Copy extracted text"
           >
-            <i class="fas fa-copy"></i> Copy
+            <i class="fas fa-copy" aria-hidden="true"></i> Copy
           </button>
           <button
             onclick="toggleTextModal('processed-text-modal')"
             style="background-color: #f56565; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600;"
+            aria-label="Close modal"
           >
-            <i class="fas fa-times"></i> Close
+            <i class="fas fa-times" aria-hidden="true"></i> Close
           </button>
         </div>
       </div>
