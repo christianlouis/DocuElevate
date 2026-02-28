@@ -2,6 +2,7 @@
 Tests for enhanced logging and original_file_path fallback in retry-subtask endpoint.
 """
 
+import os
 import shutil
 from unittest.mock import MagicMock, patch
 
@@ -168,6 +169,7 @@ class TestRetrySubtaskEnhancedLogging:
             filehash="upload_error_test",
             original_filename="missing.pdf",
             local_filename="/nonexistent/tmp/missing.pdf",
+            processed_file_path="/nonexistent/processed/missing_gpt.pdf",
             file_size=1024,
             mime_type="application/pdf",
         )
@@ -183,7 +185,100 @@ class TestRetrySubtaskEnhancedLogging:
         # Verify the error message contains diagnostic information
         assert "Cannot retry upload" in error_detail
         assert "Paths checked:" in error_detail
+        assert "processed_file_path" in error_detail
         assert "exists=False" in error_detail
+
+    def test_upload_retry_uses_processed_file_path_from_db(
+        self, client: TestClient, db_session, sample_pdf_path, tmp_path
+    ):
+        """Test that upload retry uses processed_file_path from DB when legacy paths don't exist."""
+        mock_task = MagicMock()
+        mock_task.id = "upload-processed-path-task"
+
+        # Create processed file at the DB-stored path (GPT-suggested filename)
+        processed_file = tmp_path / "2023-10-01_Unknown.pdf"
+        shutil.copy(sample_pdf_path, processed_file)
+
+        # Create file record where only processed_file_path exists
+        # (simulates the real scenario: original filename != GPT-suggested filename)
+        file_record = FileRecord(
+            filehash="upload_db_path_test",
+            original_filename="cable_graphic.pdf",
+            local_filename="/nonexistent/tmp/uuid.pdf",
+            processed_file_path=str(processed_file),
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+        db_session.refresh(file_record)
+
+        # Verify the legacy paths do NOT exist (ensures test validates DB-path behavior)
+        from app.config import settings
+
+        workdir = settings.workdir
+        legacy_hash_path = os.path.join(workdir, "processed", f"{file_record.filehash}.pdf")
+        legacy_original_path = os.path.join(workdir, "processed", file_record.original_filename)
+        assert not os.path.exists(legacy_hash_path)
+        assert not os.path.exists(legacy_original_path)
+
+        with patch("app.tasks.upload_to_onedrive.upload_to_onedrive") as mock_upload:
+            mock_upload.delay.return_value = mock_task
+            response = client.post(f"/api/files/{file_record.id}/retry-subtask?subtask_name=upload_to_onedrive")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert data["subtask_name"] == "upload_to_onedrive"
+
+        # Verify the task was called with the processed_file_path from DB
+        mock_upload.delay.assert_called_once()
+        call_args = mock_upload.delay.call_args
+        assert call_args[0][0] == str(processed_file)
+
+    def test_upload_retry_processed_file_path_takes_priority(
+        self, client: TestClient, db_session, sample_pdf_path, tmp_path
+    ):
+        """Test that processed_file_path from DB takes priority over legacy hash-based paths."""
+        mock_task = MagicMock()
+        mock_task.id = "upload-priority-task"
+
+        # Create the DB-stored processed file
+        processed_file = tmp_path / "2024-01-01_Invoice.pdf"
+        shutil.copy(sample_pdf_path, processed_file)
+
+        # Also create a competing legacy hash-based file in the workdir/processed/ directory
+        from app.config import settings
+
+        workdir = settings.workdir
+        processed_dir = os.path.join(workdir, "processed")
+        os.makedirs(processed_dir, exist_ok=True)
+        legacy_hash_file = os.path.join(processed_dir, "upload_priority_test.pdf")
+        shutil.copy(sample_pdf_path, legacy_hash_file)
+
+        file_record = FileRecord(
+            filehash="upload_priority_test",
+            original_filename="scan001.pdf",
+            local_filename="/nonexistent/tmp/uuid.pdf",
+            processed_file_path=str(processed_file),
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+        db_session.refresh(file_record)
+
+        with patch("app.tasks.upload_to_dropbox.upload_to_dropbox") as mock_upload:
+            mock_upload.delay.return_value = mock_task
+            response = client.post(f"/api/files/{file_record.id}/retry-subtask?subtask_name=upload_to_dropbox")
+
+        assert response.status_code == 200
+
+        # Verify the task was called with the processed_file_path (first priority for uploads)
+        # even though a legacy hash-based file also exists
+        mock_upload.delay.assert_called_once()
+        call_args = mock_upload.delay.call_args
+        assert call_args[0][0] == str(processed_file)
 
     def test_embed_metadata_path_order(self, client: TestClient, db_session, sample_pdf_path, tmp_path):
         """Test that embed_metadata_into_pdf checks paths in the correct order."""
