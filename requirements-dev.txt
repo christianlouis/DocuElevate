@@ -16,6 +16,7 @@ boto3>=1.26.0  # For S3 integration tests
 # Code quality
 ruff>=0.3.0
 mypy>=1.8.0
+djlint>=1.36.0  # HTML template linter for accessibility and best practices
 
 # Type stubs for mypy
 types-requests>=2.31.0

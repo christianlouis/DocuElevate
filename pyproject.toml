@@ -225,3 +225,14 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "@abstractmethod",
 ]
+
+# djLint configuration — HTML template linter for Jinja2 templates
+# Enforces accessibility (WCAG 2.1 AA) and HTML best practices in CI.
+# Run: djlint frontend/templates/ --profile jinja --lint
+[tool.djlint]
+profile = "jinja"
+# Include only accessibility-critical and correctness rules for CI enforcement
+include = "H005,H013,H016,H025,H026"
+# Ignore rules that conflict with project patterns or produce excessive noise
+ignore = "H006,H021,H023,H030,H031,H029,H036,T003,J018,J004,T028,H014,T001"
+max_line_length = 120

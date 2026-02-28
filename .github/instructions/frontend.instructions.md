@@ -86,12 +86,57 @@ These instructions apply to all files in the `frontend/` directory (templates, C
 </form>
 ```
 
-### Accessibility
-- Use semantic HTML elements (`nav`, `main`, `article`, `section`)
-- Include `alt` text for images
-- Use proper heading hierarchy (h1 → h2 → h3)
-- Add ARIA labels when needed
-- Ensure keyboard navigation works
+### Accessibility (WCAG 2.1 Level AA Required)
+
+DocuElevate targets **WCAG 2.1 Level AA** compliance. Every template change **must** follow these rules.
+For the full guide with examples, see `docs/AccessibilityGuide.md`.
+
+#### Semantic HTML (WCAG 1.3.1)
+- Use semantic elements: `<nav>`, `<main>`, `<article>`, `<section>`, `<header>`, `<footer>`
+- Use proper heading hierarchy: one `<h1>` per page, then `<h2>` → `<h3>` (never skip levels)
+- Use `<button>` for actions (not `<a>` or `<div>`) and `<a>` for navigation
+- Use `<table>` with `<caption>` or `aria-label`, `<thead>`/`<tbody>`, and `scope="col"`/`scope="row"` on headers
+
+#### Images & Icons (WCAG 1.1.1)
+- All `<img>` elements **must** have an `alt` attribute — descriptive for content images, `alt=""` for purely decorative ones
+- Decorative Font Awesome `<i>` icons **must** have `aria-hidden="true"` when adjacent text already conveys meaning
+- Icon-only buttons **must** have `aria-label` describing the action (e.g., `aria-label="Delete file"`)
+
+#### Keyboard Navigation (WCAG 2.1.1, 2.4.1, 2.4.7)
+- All interactive elements must be keyboard-reachable (native `<a>`, `<button>`, `<input>`, or add `tabindex="0"` + key handlers)
+- `base.html` provides a **skip-to-content** link (`<a href="#main-content" class="skip-link">`) — do not remove it
+- Never suppress focus indicators — the global `focus-visible` outline in `styles.css` is required
+- Custom interactive widgets (dropdowns, modals) must trap focus correctly
+
+#### ARIA Attributes
+- `aria-label` — use on elements whose purpose isn't clear from visible text (icon-only buttons, unlabelled inputs)
+- `aria-hidden="true"` — use on purely decorative icons and elements that duplicate adjacent text
+- `aria-live="polite"` — add to any container whose content updates dynamically (status messages, search results, upload progress)
+- `aria-expanded` — add to buttons that toggle visibility of content (menus, accordions)
+- `aria-current="page"` — mark the current page's navigation link
+- `aria-sort` — use on sortable table column headers
+
+#### Forms (WCAG 1.3.1, 3.3.2)
+- Every `<input>`, `<select>`, and `<textarea>` **must** have an associated `<label>` (via `for`/`id`) or `aria-label`
+- Error messages must be linked via `aria-describedby` or announced with `role="alert"`
+- Use `role="search"` on search form containers
+
+#### Modals / Dialogs (WCAG 4.1.2)
+- Add `role="dialog"`, `aria-modal="true"`, and `aria-labelledby` pointing to the dialog title
+- Focus must move into the dialog when opened and return to the trigger when closed
+
+#### Color & Contrast (WCAG 1.4.3, 1.4.1)
+- Text must meet 4.5:1 contrast ratio against its background (3:1 for large text)
+- Never rely on color alone to convey information — pair color with icons, text labels, or patterns
+- Dark-mode overrides in `styles.css` are WCAG AA-verified; maintain this when adding new colors
+
+#### Touch Targets (WCAG 2.5.8)
+- All clickable/tappable elements must be at least 44×44 CSS pixels (`min-height:44px; min-width:44px`)
+
+#### Automated Checks
+- The CI pipeline runs `djlint` on every PR to catch common accessibility regressions
+- Run locally: `djlint frontend/templates/ --lint`
+- Configuration is in `pyproject.toml` under `[tool.djlint]`
 
 ### Error Handling
 - Display user-friendly error messages
