@@ -281,6 +281,67 @@ class TestStepManager:
         assert status["completed_steps"] == len(MAIN_PROCESSING_STEPS)
         assert status["in_progress_steps"] == 0
 
+    def test_get_file_overall_status_completed_with_pending_intermediate_steps(self, db_session: Session):
+        """Test that a file is 'completed' when the terminal step succeeds even if some intermediate steps are pending.
+
+        This covers the scenario where steps like check_for_duplicates or
+        extract_text are left in 'pending' because the dynamic pipeline
+        skipped them without explicitly marking them (e.g. dedup log written
+        before file_id was available, or extract_text not marked for non-PDF).
+        """
+        file_record = FileRecord(
+            filehash="test_terminal_complete",
+            original_filename="terminal.pdf",
+            local_filename="/tmp/terminal.pdf",
+            file_size=1024,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        initialize_file_steps(db_session, file_record.id)
+
+        # Simulate a pipeline where most steps succeed but check_for_duplicates
+        # stays pending (the exact scenario from the bug report).
+        for step_name in MAIN_PROCESSING_STEPS:
+            if step_name == "check_for_duplicates":
+                continue  # Leave this as "pending"
+            update_step_status(db_session, file_record.id, step_name, "success")
+
+        # Also add a dynamically created OCR step as "skipped"
+        update_step_status(db_session, file_record.id, "process_with_ocr", "skipped")
+
+        status = get_file_overall_status(db_session, file_record.id)
+
+        # The terminal step (send_to_all_destinations) succeeded, so the
+        # file should be "completed" despite check_for_duplicates being pending.
+        assert status["status"] == "completed"
+        assert status["has_errors"] is False
+
+    def test_get_file_overall_status_pending_without_terminal_step(self, db_session: Session):
+        """Test that a file stays 'pending' when the terminal step hasn't been recorded."""
+        file_record = FileRecord(
+            filehash="test_no_terminal",
+            original_filename="no_terminal.pdf",
+            local_filename="/tmp/no_terminal.pdf",
+            file_size=1024,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        initialize_file_steps(db_session, file_record.id)
+
+        # Only first few steps completed - terminal step is still pending
+        update_step_status(db_session, file_record.id, "create_file_record", "success")
+        update_step_status(db_session, file_record.id, "check_text", "success")
+        update_step_status(db_session, file_record.id, "extract_text", "success")
+
+        status = get_file_overall_status(db_session, file_record.id)
+
+        # Terminal step hasn't run yet, so file should remain pending
+        assert status["status"] == "pending"
+        assert status["has_errors"] is False
+        assert status["completed_steps"] == 3
+
     def test_get_file_overall_status_failed(self, db_session: Session):
         """Test overall status for a file with failed steps."""
         file_record = FileRecord(

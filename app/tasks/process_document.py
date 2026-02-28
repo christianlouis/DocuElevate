@@ -183,13 +183,6 @@ def process_document(
 
             # Not a duplicate (or deduplication disabled) -> insert a new record
             logger.info(f"[{task_id}] Creating new file record in database")
-            if settings.enable_deduplication and settings.show_deduplication_step:
-                log_task_progress(
-                    task_id,
-                    "check_for_duplicates",
-                    "success",
-                    "New file - no duplicates found",
-                )
             log_task_progress(task_id, "create_file_record", "in_progress", "Creating file record")
             new_record = FileRecord(
                 filehash=filehash,
@@ -213,6 +206,17 @@ def process_document(
                 f"File record ID: {new_record.id}",
                 file_id=new_record.id,
             )
+            # Update the check_for_duplicates step now that file_id is available.
+            # This must happen after initialize_file_steps() which creates the
+            # step as "pending".  The dedup check already passed at this point.
+            if settings.enable_deduplication:
+                log_task_progress(
+                    task_id,
+                    "check_for_duplicates",
+                    "success",
+                    "New file - no duplicates found",
+                    file_id=new_record.id,
+                )
 
         # 1. Generate a UUID-based filename for storage
         file_ext = os.path.splitext(original_local_file)[1]
@@ -328,6 +332,14 @@ def process_document(
             "check_text",
             "skipped",
             "Non-PDF file detected, converting to PDF",
+            file_id=file_id,
+        )
+        # Mark local text extraction as skipped since the file needs PDF conversion first
+        log_task_progress(
+            task_id,
+            "extract_text",
+            "skipped",
+            "Non-PDF file, text extraction deferred to OCR after conversion",
             file_id=file_id,
         )
         log_task_progress(

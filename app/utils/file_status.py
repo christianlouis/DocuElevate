@@ -145,19 +145,26 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
             has_errors = failed_steps > 0
 
             # Determine overall status
+            #
+            # The pipeline is dynamic: steps may be skipped, added, or
+            # left "pending" depending on the file type and processing path.
+            # The terminal step is the authoritative completion signal.
+            terminal_step = next((s for s in file_steps if s.step_name == TERMINAL_STEP), None)
+
             if has_errors:
                 status = "failed"
             elif in_progress_steps > 0:
                 status = "processing"
             elif completed_steps + skipped_steps == total_steps:
-                # Only mark as completed if the terminal processing step has been
-                # recorded. Without this guard, files where later pipeline steps
-                # have not yet started would be falsely marked as "completed".
-                existing_step_names = {s.step_name for s in file_steps}
-                if TERMINAL_STEP in existing_step_names:
+                if terminal_step is not None:
                     status = "completed"
                 else:
                     status = "pending"
+            elif terminal_step is not None and terminal_step.status == "success":
+                # Terminal step succeeded but some intermediate steps are
+                # still "pending" (dynamic pipeline artifacts). The file
+                # is effectively complete.
+                status = "completed"
             else:
                 status = "pending"
 
