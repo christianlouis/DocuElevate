@@ -10,6 +10,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.61.0 (2026-02-28)
+
+### Continuous Integration
+
+- **a11y**: Add djlint HTML accessibility lint to CI pipeline
+  ([`1968a0e`](https://github.com/christianlouis/DocuElevate/commit/1968a0e481635c6dc91cae6fc76247291b18dee5))
+
+### Documentation
+
+- **a11y**: Add comprehensive AccessibilityGuide.md
+  ([`1f48503`](https://github.com/christianlouis/DocuElevate/commit/1f48503217ca7d5108c4f5409553a4226b372493))
+
+### Features
+
+- **ui**: Add accessibility foundations to base.html and styles.css
+  ([`364ff93`](https://github.com/christianlouis/DocuElevate/commit/364ff9375a90f4f5f719cb5a931a4c15efc090e3))
+
+- **ui**: Add ARIA attributes for accessibility improvements
+  ([`0969436`](https://github.com/christianlouis/DocuElevate/commit/0969436abda8edd691f759e9cf00cce257571357))
+
+- **ui**: Fix accessibility in upload, search, files, and login templates
+  ([`bf6bbe3`](https://github.com/christianlouis/DocuElevate/commit/bf6bbe35126266fb8375b3098d86d7df15692573))
+
+
 ## v0.60.4 (2026-02-28)
 
 ### Bug Fixes
