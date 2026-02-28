@@ -10,7 +10,7 @@
           crossorigin="anonymous" referrerpolicy="no-referrer" />
 </head>
 <body class="bg-gray-100 h-screen flex items-center justify-center">
-    <div class="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
+    <main class="bg-white rounded-lg shadow-lg p-8 max-w-md w-full" role="main">
         <div class="flex justify-center mb-6">
             <img src="/static/images/logo_writing.svg" alt="DocuElevate Logo" class="h-16">
         </div>
@@ -67,7 +67,7 @@
             <a href="/oauth-login"
                class="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                 <span class="sr-only">Sign in with SSO</span>
-                <i class="fas fa-lock mr-2"></i>
+                <i class="fas fa-lock mr-2" aria-hidden="true"></i>
                 {{ oauth_provider_name }}
             </a>
         </div>
@@ -78,9 +78,7 @@
                 Return to Home
             </a>
         </div>
-    </div>
-
-    <!-- Optional footer with version info -->
+    </main>
     <div class="fixed bottom-4 text-center w-full text-xs text-gray-500">
         DocuElevate {{ app_version|default('', true) }}
     </div>

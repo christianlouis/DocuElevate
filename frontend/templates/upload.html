@@ -12,6 +12,9 @@
       <div
         id="dropZone"
         class="border-4 border-dashed border-gray-300 rounded-lg p-6 sm:p-8 bg-white text-center w-full"
+        role="button"
+        tabindex="0"
+        aria-label="File upload area. Drag and drop files here, or press Enter to browse files."
         ondragover="handleDragOver(event)"
         ondragleave="handleDragLeave(event)"
       >
@@ -28,6 +31,7 @@
           onchange="handleFileSelect(event)"
           name="files"
           multiple
+          aria-label="Select files to upload"
           accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/*"
         />
         <!-- Browse Files button (all devices) -->
@@ -37,7 +41,7 @@
           class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 mb-4"
           style="min-height:44px;"
         >
-          <i class="fas fa-folder-open mr-2"></i> Browse Files
+          <i class="fas fa-folder-open mr-2" aria-hidden="true"></i> Browse Files
         </button>
         <div class="text-sm text-gray-500 mt-2">
           <p>Allowed types: PDF, Office documents (Word, Excel, PowerPoint, etc.), Images</p>
@@ -51,7 +55,7 @@
           class="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 cursor-pointer"
           style="min-height:44px;"
         >
-          <i class="fas fa-camera"></i> Take Photo / Scan Document
+          <i class="fas fa-camera" aria-hidden="true"></i> Take Photo / Scan Document
           <input
             id="cameraInput"
             type="file"
@@ -59,6 +63,7 @@
             onchange="handleFileSelect(event)"
             accept="image/*"
             capture="environment"
+            aria-label="Take photo or scan document"
           />
         </label>
       </div>
@@ -111,12 +116,12 @@
           Download and Process
         </button>
       </form>
-      <div id="urlStatusMessage" class="mt-4"></div>
+      <div id="urlStatusMessage" class="mt-4" aria-live="polite"></div>
     </div>
   </div>
 
-  <div id="statusMessage" class="mt-4 text-gray-700"></div>
-  <div id="uploadProgress" class="mt-4 w-full max-w-2xl"></div>
+  <div id="statusMessage" class="mt-4 text-gray-700" aria-live="polite"></div>
+  <div id="uploadProgress" class="mt-4 w-full max-w-2xl" role="status" aria-live="polite"></div>
 </div>
 {% endblock %}
 
