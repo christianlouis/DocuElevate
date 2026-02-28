@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.60.4 (2026-02-28)
+
+### Bug Fixes
+
+- **api**: Use processed_file_path from DB in upload retry path resolution
+  ([`bb98afa`](https://github.com/christianlouis/DocuElevate/commit/bb98afac826a955770744c93141e22a671f08d94))
+
+### Testing
+
+- Improve upload retry tests with legacy path assertions and priority verification
+  ([`2f442b0`](https://github.com/christianlouis/DocuElevate/commit/2f442b0906b4f2befed18795f798789228eac8d3))
+
+
 ## v0.60.3 (2026-02-28)
 
 ### Bug Fixes
