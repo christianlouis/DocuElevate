@@ -13,10 +13,10 @@
       </div>
       <div class="flex flex-wrap gap-3">
         <a href="/upload" class="bg-white text-blue-700 hover:bg-blue-50 font-semibold py-2 px-5 rounded-lg transition duration-200 flex items-center shadow-sm">
-          <i class="fas fa-upload mr-2"></i> Upload
+          <i class="fas fa-upload mr-2" aria-hidden="true"></i> Upload
         </a>
         <a href="/files" class="bg-transparent border border-white text-white hover:bg-white hover:text-blue-700 font-semibold py-2 px-5 rounded-lg transition duration-200 flex items-center">
-          <i class="fas fa-list mr-2"></i> Browse Files
+          <i class="fas fa-list mr-2" aria-hidden="true"></i> Browse Files
         </a>
       </div>
     </div>
@@ -26,7 +26,7 @@
   <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
     <div class="bg-white rounded-xl shadow p-6 flex items-center gap-4">
       <div class="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-        <i class="fas fa-file-alt text-blue-600 text-xl"></i>
+        <i class="fas fa-file-alt text-blue-600 text-xl" aria-hidden="true"></i>
       </div>
       <div>
         <p class="text-3xl font-bold text-blue-600">{{ stats.processed_files | default(0) }}</p>
@@ -35,7 +35,7 @@
     </div>
     <div class="bg-white rounded-xl shadow p-6 flex items-center gap-4">
       <div class="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-        <i class="fas fa-plug text-green-600 text-xl"></i>
+        <i class="fas fa-plug text-green-600 text-xl" aria-hidden="true"></i>
       </div>
       <div>
         <p class="text-3xl font-bold text-green-600">{{ stats.active_integrations | default(0) }}</p>
@@ -44,7 +44,7 @@
     </div>
     <div class="bg-white rounded-xl shadow p-6 flex items-center gap-4">
       <div class="h-12 w-12 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
-        <i class="fas fa-database text-indigo-600 text-xl"></i>
+        <i class="fas fa-database text-indigo-600 text-xl" aria-hidden="true"></i>
       </div>
       <div>
         <p class="text-3xl font-bold text-indigo-600">{{ stats.storage_targets | default(0) }}</p>
@@ -59,13 +59,13 @@
     <!-- Quick Actions Widget -->
     <div class="bg-white rounded-xl shadow p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-        <i class="fas fa-bolt text-yellow-500"></i> Quick Actions
+        <i class="fas fa-bolt text-yellow-500" aria-hidden="true"></i> Quick Actions
       </h2>
       <ul class="space-y-2">
         <li>
           <a href="/upload" class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition group">
             <span class="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-200">
-              <i class="fas fa-upload text-blue-600 text-sm"></i>
+              <i class="fas fa-upload text-blue-600 text-sm" aria-hidden="true"></i>
             </span>
             <div>
               <p class="text-sm font-medium text-gray-800">Upload Document</p>
@@ -76,7 +76,7 @@
         <li>
           <a href="/files" class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition group">
             <span class="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-200">
-              <i class="fas fa-list text-indigo-600 text-sm"></i>
+              <i class="fas fa-list text-indigo-600 text-sm" aria-hidden="true"></i>
             </span>
             <div>
               <p class="text-sm font-medium text-gray-800">View All Files</p>
@@ -87,7 +87,7 @@
         <li>
           <a href="/status" class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition group">
             <span class="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 group-hover:bg-green-200">
-              <i class="fas fa-heartbeat text-green-600 text-sm"></i>
+              <i class="fas fa-heartbeat text-green-600 text-sm" aria-hidden="true"></i>
             </span>
             <div>
               <p class="text-sm font-medium text-gray-800">System Status</p>
@@ -101,27 +101,27 @@
     <!-- Capabilities Widget -->
     <div class="bg-white rounded-xl shadow p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-        <i class="fas fa-cubes text-blue-500"></i> Capabilities
+        <i class="fas fa-cubes text-blue-500" aria-hidden="true"></i> Capabilities
       </h2>
       <ul class="space-y-3 text-sm text-gray-600">
         <li class="flex items-start gap-2">
-          <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0"></i>
+          <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
           <span>OCR &amp; metadata extraction with AI</span>
         </li>
         <li class="flex items-start gap-2">
-          <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0"></i>
+          <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
           <span>Cloud storage: Dropbox, OneDrive, Google Drive, NextCloud</span>
         </li>
         <li class="flex items-start gap-2">
-          <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0"></i>
+          <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
           <span>Paperless-ngx integration for document management</span>
         </li>
         <li class="flex items-start gap-2">
-          <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0"></i>
+          <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
           <span>Email &amp; URL-based document ingestion</span>
         </li>
         <li class="flex items-start gap-2">
-          <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0"></i>
+          <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
           <span>Automated classification &amp; routing workflows</span>
         </li>
       </ul>
@@ -131,7 +131,7 @@
     <div class="bg-white rounded-xl shadow p-6 flex flex-col justify-between">
       <div>
         <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <i class="fas fa-compass text-indigo-500"></i> Getting Started
+          <i class="fas fa-compass text-indigo-500" aria-hidden="true"></i> Getting Started
         </h2>
         <ol class="space-y-3 text-sm text-gray-600 list-none">
           <li class="flex items-start gap-2">
@@ -149,7 +149,7 @@
         </ol>
       </div>
       <a href="/about" class="mt-6 inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 font-medium">
-        Learn more about DocuElevate <i class="fas fa-arrow-right ml-1 text-xs"></i>
+        Learn more about DocuElevate <i class="fas fa-arrow-right ml-1 text-xs" aria-hidden="true"></i>
       </a>
     </div>
   </div>

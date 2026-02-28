@@ -84,27 +84,28 @@
 {% block content %}
 <div class="container mx-auto px-4 py-8">
   <div class="search-container">
-    <h1 class="text-3xl font-bold mb-6"><i class="fas fa-search text-blue-500"></i> Document Search</h1>
+    <h1 class="text-3xl font-bold mb-6"><i class="fas fa-search text-blue-500" aria-hidden="true"></i> Document Search</h1>
 
     <!-- Search box -->
-    <div class="search-box">
+    <div class="search-box" role="search">
+      <label for="search-input" class="sr-only">Search documents</label>
       <input
-        type="text"
+        type="search"
         id="search-input"
         placeholder="Search documents by content, sender, tags, type..."
         value="{{ query }}"
         autofocus
       >
-      <button type="button" id="search-btn">
-        <i class="fas fa-search"></i> Search
+      <button type="button" id="search-btn" aria-label="Search documents">
+        <i class="fas fa-search" aria-hidden="true"></i> Search
       </button>
     </div>
 
     <!-- Summary -->
-    <div id="search-summary" class="search-summary" style="display:none;"></div>
+    <div id="search-summary" class="search-summary" style="display:none;" aria-live="polite"></div>
 
     <!-- Results -->
-    <div id="search-results"></div>
+    <div id="search-results" aria-live="polite" aria-relevant="additions removals"></div>
 
     <!-- Pagination -->
     <div id="search-pagination" class="search-pagination" style="display:none;"></div>

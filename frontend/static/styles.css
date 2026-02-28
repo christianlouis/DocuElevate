@@ -1,5 +1,62 @@
 /* frontend/static/styles.css */
 /* Example overrides or additional styling */
+
+/* =============================================================
+   ACCESSIBILITY
+   Skip-to-content link, focus indicators, and screen-reader-only
+   utility class following WCAG 2.1 Level AA requirements.
+   ============================================================= */
+
+/* Skip-to-content link: visible only on keyboard focus */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  z-index: 9999;
+  padding: 0.75rem 1.5rem;
+  background-color: #1d4ed8;
+  color: #ffffff;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 0 0 0.375rem 0;
+}
+.skip-link:focus {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: auto;
+  height: auto;
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* Enhanced focus-visible indicators for keyboard navigation (WCAG 2.4.7) */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* Screen-reader-only utility (visually hidden, accessible to AT) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 body {
     /* Your global overrides can go here if needed */
   }
@@ -158,6 +215,20 @@ html.dark code { background-color: #111827; color: #d1d5db; }
 /* ---- Dark-mode toggle button icon colour ---- */
 html.dark #darkModeToggle { color: #fbbf24; }
 html.dark #darkModeToggle:hover { background-color: #374151; }
+
+/* ---- Dark-mode skip-link ---- */
+html.dark .skip-link { background-color: #2563eb; }
+html.dark .skip-link:focus { outline-color: #60a5fa; }
+
+/* ---- Dark-mode focus-visible indicators ---- */
+html.dark a:focus-visible,
+html.dark button:focus-visible,
+html.dark input:focus-visible,
+html.dark select:focus-visible,
+html.dark textarea:focus-visible,
+html.dark [tabindex]:focus-visible {
+  outline-color: #60a5fa;
+}
 
 /* ---- Scrollbar (WebKit browsers) ---- */
 html.dark ::-webkit-scrollbar { width: 8px; height: 8px; }

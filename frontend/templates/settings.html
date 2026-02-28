@@ -23,31 +23,31 @@
       <div class="flex items-center gap-2">
         <a href="/setup?step=1"
            class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-          <i class="fas fa-magic mr-2"></i> Setup Wizard
+          <i class="fas fa-magic mr-2" aria-hidden="true"></i> Setup Wizard
         </a>
         <div class="relative" x-data="{ exportOpen: false }">
           <button @click="exportOpen = !exportOpen"
                   class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-            <i class="fas fa-download mr-2"></i> Export .env
-            <i class="fas fa-chevron-down ml-1 text-xs"></i>
+            <i class="fas fa-download mr-2" aria-hidden="true"></i> Export .env
+            <i class="fas fa-chevron-down ml-1 text-xs" aria-hidden="true"></i>
           </button>
           <div x-show="exportOpen" @click.outside="exportOpen = false" x-transition
                class="absolute right-0 mt-1 w-52 bg-white border border-gray-200 rounded-md shadow-lg z-10">
             <a href="/api/settings/export-env?source=db"
                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                @click="exportOpen = false">
-              <i class="fas fa-database mr-2 text-green-600"></i>DB settings only
+              <i class="fas fa-database mr-2 text-green-600" aria-hidden="true"></i>DB settings only
             </a>
             <a href="/api/settings/export-env?source=effective"
                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                @click="exportOpen = false">
-              <i class="fas fa-layer-group mr-2 text-blue-600"></i>Full effective config
+              <i class="fas fa-layer-group mr-2 text-blue-600" aria-hidden="true"></i>Full effective config
             </a>
           </div>
         </div>
         <a href="/admin/settings/audit-log"
            class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-          <i class="fas fa-history mr-2"></i> Audit Log
+          <i class="fas fa-history mr-2" aria-hidden="true"></i> Audit Log
         </a>
       </div>
     </div>
@@ -179,7 +179,7 @@
                   {% endfor %}
                 </datalist>
                 <p class="text-xs text-gray-400 mt-1">
-                  <i class="fas fa-info-circle mr-1"></i>
+                  <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
                   Pick from the list or type any model name supported by your provider.
                 </p>
               </div>
@@ -222,6 +222,7 @@
                       @click="togglePassword('{{ setting.key }}')"
                       class="text-gray-400 hover:text-gray-600 focus:outline-none"
                       title="Show/hide value"
+                      aria-label="Toggle password visibility"
                     >
                       <i :class="showPassword['{{ setting.key }}'] ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
                     </button>
@@ -253,7 +254,7 @@
                 class="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 title="Remove DB override and revert to environment variable or default"
               >
-                <span x-show="revertingKey !== '{{ setting.key }}'"><i class="fas fa-trash-alt mr-1"></i>Remove from DB</span>
+                <span x-show="revertingKey !== '{{ setting.key }}'"><i class="fas fa-trash-alt mr-1" aria-hidden="true"></i>Remove from DB</span>
                 <span x-show="revertingKey === '{{ setting.key }}'">Reverting…</span>
               </button>
               <button
@@ -265,7 +266,7 @@
                 class="px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 title="Save this setting"
               >
-                <span x-show="savingKey !== '{{ setting.key }}'"><i class="fas fa-save mr-1"></i>Save</span>
+                <span x-show="savingKey !== '{{ setting.key }}'"><i class="fas fa-save mr-1" aria-hidden="true"></i>Save</span>
                 <span x-show="savingKey === '{{ setting.key }}'">Saving…</span>
               </button>
             </div>

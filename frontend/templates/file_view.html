@@ -100,8 +100,8 @@
   {% elif file %}
 
   <!-- ── Back + header ── -->
-  <a href="/files" style="display:inline-flex;align-items:center;gap:0.4rem;color:#3b82f6;font-weight:600;text-decoration:none;margin-bottom:1.25rem;">
-    <i class="fas fa-arrow-left"></i> Back to Files
+  <a href="/files" style="display:inline-flex;align-items:center;gap:0.4rem;color:#3b82f6;font-weight:600;text-decoration:none;margin-bottom:1.25rem;" aria-label="Back to Files">
+    <i class="fas fa-arrow-left" aria-hidden="true"></i> Back to Files
   </a>
 
   <div class="doc-header">
@@ -121,23 +121,23 @@
     <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
       <!-- Status pill -->
       {% if file.is_duplicate %}
-        <span class="status-pill pill-duplicate"><i class="fas fa-copy"></i> Duplicate</span>
+        <span class="status-pill pill-duplicate"><i class="fas fa-copy" aria-hidden="true"></i> Duplicate</span>
       {% elif step_summary %}
         {% set main_completed = step_summary.main.success + step_summary.main.skipped %}
         {% if step_summary.main.failure > 0 or step_summary.uploads.failure > 0 %}
-          <span class="status-pill pill-failed"><i class="fas fa-times-circle"></i> Failed</span>
+          <span class="status-pill pill-failed"><i class="fas fa-times-circle" aria-hidden="true"></i> Failed</span>
         {% elif step_summary.main["in_progress"] > 0 or step_summary.uploads["in_progress"] > 0 %}
-          <span class="status-pill pill-processing"><i class="fas fa-circle-notch fa-spin"></i> Processing</span>
+          <span class="status-pill pill-processing"><i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i> Processing</span>
         {% elif step_summary.total_main_steps > 0 and main_completed == step_summary.total_main_steps and step_summary.main.failure == 0 %}
-          <span class="status-pill pill-completed"><i class="fas fa-check-circle"></i> Completed</span>
+          <span class="status-pill pill-completed"><i class="fas fa-check-circle" aria-hidden="true"></i> Completed</span>
         {% else %}
-          <span class="status-pill pill-pending"><i class="fas fa-pause-circle"></i> Pending</span>
+          <span class="status-pill pill-pending"><i class="fas fa-pause-circle" aria-hidden="true"></i> Pending</span>
         {% endif %}
       {% endif %}
 
       <!-- Process detail link -->
       <a href="/files/{{ file.id }}/detail" class="action-btn btn-process">
-        <i class="fas fa-cogs"></i> Processing Details
+        <i class="fas fa-cogs" aria-hidden="true"></i> Processing Details
       </a>
     </div>
   </div>
@@ -149,7 +149,7 @@
     <div>
       {% if gpt_metadata %}
       <div class="doc-card">
-        <div class="doc-card-title"><i class="fas fa-tags" style="color:#3b82f6;margin-right:0.4rem;"></i>Document Metadata</div>
+        <div class="doc-card-title"><i class="fas fa-tags" aria-hidden="true" style="color:#3b82f6;margin-right:0.4rem;"></i>Document Metadata</div>
 
         {% if gpt_metadata.document_type %}
         <div class="meta-row">
@@ -221,7 +221,7 @@
 
       <!-- File info -->
       <div class="doc-card">
-        <div class="doc-card-title"><i class="fas fa-info-circle" style="color:#6b7280;margin-right:0.4rem;"></i>File Info</div>
+        <div class="doc-card-title"><i class="fas fa-info-circle" aria-hidden="true" style="color:#6b7280;margin-right:0.4rem;"></i>File Info</div>
         <div class="info-row">
           <span class="info-key">Uploaded</span>
           <span class="info-val">{{ file.created_at.strftime('%Y-%m-%d %H:%M') if file.created_at else 'N/A' }}</span>
@@ -246,25 +246,25 @@
 
       <!-- Actions -->
       <div class="doc-card">
-        <div class="doc-card-title"><i class="fas fa-bolt" style="color:#f59e0b;margin-right:0.4rem;"></i>Actions</div>
+        <div class="doc-card-title"><i class="fas fa-bolt" aria-hidden="true" style="color:#f59e0b;margin-right:0.4rem;"></i>Actions</div>
         <div style="display:flex;flex-wrap:wrap;gap:0.6rem;">
           {% if processed_file_exists %}
           <a href="/api/files/{{ file.id }}/download?version=processed" class="action-btn btn-primary">
-            <i class="fas fa-download"></i> Download (processed)
+            <i class="fas fa-download" aria-hidden="true"></i> Download (processed)
           </a>
           {% endif %}
           {% if original_file_exists %}
           <a href="/api/files/{{ file.id }}/download?version=original" class="action-btn btn-secondary">
-            <i class="fas fa-download"></i> Download (original)
+            <i class="fas fa-download" aria-hidden="true"></i> Download (original)
           </a>
           {% endif %}
           {% if processed_file_exists %}
           <a href="/api/files/{{ file.id }}/preview?version=processed" target="_blank" class="action-btn btn-secondary">
-            <i class="fas fa-external-link-alt"></i> Open processed
+            <i class="fas fa-external-link-alt" aria-hidden="true"></i> Open processed
           </a>
           {% elif original_file_exists %}
           <a href="/api/files/{{ file.id }}/preview?version=original" target="_blank" class="action-btn btn-secondary">
-            <i class="fas fa-external-link-alt"></i> Open original
+            <i class="fas fa-external-link-alt" aria-hidden="true"></i> Open original
           </a>
           {% endif %}
         </div>
@@ -274,7 +274,7 @@
     <!-- RIGHT: PDF preview -->
     <div>
       <div class="doc-card" style="padding:1rem;">
-        <div class="doc-card-title"><i class="fas fa-file-pdf" style="color:#ef4444;margin-right:0.4rem;"></i>Preview</div>
+        <div class="doc-card-title"><i class="fas fa-file-pdf" aria-hidden="true" style="color:#ef4444;margin-right:0.4rem;"></i>Preview</div>
         {% if processed_file_exists %}
           <iframe
             src="/api/files/{{ file.id }}/preview?version=processed"
@@ -303,14 +303,14 @@
   {% if file.ocr_text %}
   <div class="doc-card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
-      <div class="doc-card-title" style="margin:0;"><i class="fas fa-align-left" style="color:#8b5cf6;margin-right:0.4rem;"></i>Extracted Text</div>
+      <div class="doc-card-title" style="margin:0;"><i class="fas fa-align-left" aria-hidden="true" style="color:#8b5cf6;margin-right:0.4rem;"></i>Extracted Text</div>
       <div style="display:flex;gap:0.5rem;">
-        <button class="text-toggle" onclick="toggleOcrText()">
-          <i id="ocr-toggle-icon" class="fas fa-chevron-down"></i>
+        <button class="text-toggle" onclick="toggleOcrText()" aria-expanded="false" aria-controls="ocr-text-block">
+          <i id="ocr-toggle-icon" class="fas fa-chevron-down" aria-hidden="true"></i>
           <span id="ocr-toggle-label">Show text</span>
         </button>
-        <button class="text-toggle" onclick="copyOcrText()" id="ocr-copy-btn" style="color:#10b981;">
-          <i class="fas fa-copy"></i> Copy
+        <button class="text-toggle" onclick="copyOcrText()" id="ocr-copy-btn" style="color:#10b981;" aria-label="Copy extracted text">
+          <i class="fas fa-copy" aria-hidden="true"></i> Copy
         </button>
       </div>
     </div>
@@ -321,9 +321,9 @@
   {% elif processed_file_exists or original_file_exists %}
   <div class="doc-card">
     <div style="display:flex;justify-content:space-between;align-items:center;">
-      <div class="doc-card-title" style="margin:0;"><i class="fas fa-align-left" style="color:#8b5cf6;margin-right:0.4rem;"></i>Extracted Text</div>
+      <div class="doc-card-title" style="margin:0;"><i class="fas fa-align-left" aria-hidden="true" style="color:#8b5cf6;margin-right:0.4rem;"></i>Extracted Text</div>
       <button class="action-btn btn-secondary" onclick="loadText({{ file.id }})">
-        <i class="fas fa-file-alt"></i> Extract &amp; show text
+        <i class="fas fa-file-alt" aria-hidden="true"></i> Extract &amp; show text
       </button>
     </div>
     <div id="text-load-area" style="margin-top:0.75rem;"></div>
@@ -343,14 +343,17 @@
     var block = document.getElementById('ocr-text-block');
     var icon  = document.getElementById('ocr-toggle-icon');
     var label = document.getElementById('ocr-toggle-label');
+    var btn   = icon.closest('button');
     if (block.style.display === 'none') {
       block.style.display = 'block';
       icon.className = 'fas fa-chevron-up';
       label.textContent = 'Hide text';
+      if (btn) btn.setAttribute('aria-expanded', 'true');
     } else {
       block.style.display = 'none';
       icon.className = 'fas fa-chevron-down';
       label.textContent = 'Show text';
+      if (btn) btn.setAttribute('aria-expanded', 'false');
     }
   }
 
