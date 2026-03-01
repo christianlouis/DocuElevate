@@ -10,6 +10,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.67.2 (2026-03-01)
+
+### Bug Fixes
+
+- Address code review feedback - use specific exceptions, dynamic revision IDs in tests
+  ([`8d81ed6`](https://github.com/christianlouis/DocuElevate/commit/8d81ed6c745a7eefe890c5dbfa5ba826a8357cee))
+
+- **ci**: Add pytest-timeout, fix hanging test, split CI into quick + integration stages
+  ([`6c643e9`](https://github.com/christianlouis/DocuElevate/commit/6c643e99624b113a040f92d2f2881736e496f287))
+
+- **ci**: Increase quick test job timeout to 15 minutes for CI runner headroom
+  ([`6a21adc`](https://github.com/christianlouis/DocuElevate/commit/6a21adcdd47c38e0b1e9a9cc67a0b730de75936c))
+
+### Documentation
+
+- Update CI workflow and integration test documentation for two-stage pipeline
+  ([`c100250`](https://github.com/christianlouis/DocuElevate/commit/c100250b23390e9f85ab8231ff5cfa6eac9274f6))
+
+### Refactoring
+
+- **database**: Enforce Alembic-only database migrations, deprecate manual schema migrations
+  ([`87d1b9d`](https://github.com/christianlouis/DocuElevate/commit/87d1b9d93503b4f8b54f7556fa4e01fd58a92be5))
+
+
 ## v0.67.1 (2026-03-01)
 
 ### Bug Fixes
