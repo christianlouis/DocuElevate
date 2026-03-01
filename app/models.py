@@ -146,3 +146,18 @@ class SavedSearch(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (UniqueConstraint("user_id", "name", name="unique_user_search_name"),)
+
+
+class WebhookConfig(Base):
+    """Webhook configuration for notifying external systems of document events."""
+
+    __tablename__ = "webhook_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    url = Column(String, nullable=False)  # Target URL for webhook delivery
+    secret = Column(String, nullable=True)  # Shared secret for HMAC-SHA256 signature
+    events = Column(Text, nullable=False)  # JSON list of subscribed events
+    is_active = Column(Boolean, default=True, nullable=False)  # Whether the webhook is active
+    description = Column(String, nullable=True)  # Optional human-readable description
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

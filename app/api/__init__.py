@@ -24,6 +24,7 @@ from app.api.url_upload import router as url_upload_router
 
 # Import all the individual routers
 from app.api.user import router as user_router
+from app.api.webhooks import router as webhooks_router
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -48,3 +49,4 @@ router.include_router(search_router)
 router.include_router(queue_router)
 router.include_router(saved_searches_router)
 router.include_router(similarity_router)
+router.include_router(webhooks_router)
