@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.64.1 (2026-03-01)
+
+### Bug Fixes
+
+- Append new drops to upload queue instead of overwriting it
+  ([`81c08ed`](https://github.com/christianlouis/DocuElevate/commit/81c08ed9d0c016f4fe9603c74c969c0c85468d82))
+
+
 ## v0.64.0 (2026-03-01)
 
 ### Features
