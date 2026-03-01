@@ -274,6 +274,12 @@ class Settings(BaseSettings):
         description="Send notifications when files are successfully processed",
     )
 
+    # Webhook settings
+    webhook_enabled: bool = Field(
+        default=True,
+        description="Enable webhook delivery for document events",
+    )
+
     # File upload size limits (for security - see SECURITY_AUDIT.md)
     max_upload_size: int = Field(
         default=1073741824,  # 1GB in bytes (1024 * 1024 * 1024)
