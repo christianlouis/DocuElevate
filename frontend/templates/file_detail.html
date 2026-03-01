@@ -951,7 +951,76 @@
       {% if processed_file_exists %}
       loadPDF('processed', fileId);
       {% endif %}
+
+      // Load similar documents
+      loadSimilarDocuments(fileId);
     });
+
+    // Similar documents loading
+    async function loadSimilarDocuments(fileId) {
+      const loadingDiv = document.getElementById('similar-documents-loading');
+      const contentDiv = document.getElementById('similar-documents-content');
+      const emptyDiv = document.getElementById('similar-documents-empty');
+      const errorDiv = document.getElementById('similar-documents-error');
+
+      try {
+        const response = await fetch(`/api/files/${fileId}/similar?limit=5&threshold=0.3`);
+        if (!response.ok) {
+          throw new Error(response.statusText || 'Request failed');
+        }
+
+        const data = await response.json();
+        loadingDiv.style.display = 'none';
+
+        if (!data.similar_documents || data.similar_documents.length === 0) {
+          emptyDiv.style.display = 'block';
+          if (data.message) {
+            emptyDiv.querySelector('p').textContent = data.message;
+          }
+          return;
+        }
+
+        // Build the results HTML
+        let html = '<div style="display: grid; gap: 0.75rem;">';
+        for (const doc of data.similar_documents) {
+          const scorePercent = Math.round(doc.similarity_score * 100);
+          const title = doc.document_title || doc.original_filename || 'Untitled';
+          const filename = doc.original_filename || 'Unknown';
+          const createdAt = doc.created_at ? new Date(doc.created_at).toLocaleDateString() : '';
+
+          html += `
+            <a href="/files/${doc.file_id}/detail" style="text-decoration: none; color: inherit;">
+              <div style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1rem; background-color: #f7fafc; border-radius: 0.5rem; border: 1px solid #e2e8f0; transition: border-color 0.2s;">
+                <div style="flex-shrink: 0; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.875rem; color: white; background-color: ${scorePercent >= 80 ? '#48bb78' : scorePercent >= 50 ? '#ecc94b' : '#a0aec0'};">
+                  ${scorePercent}%
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                  <div style="font-weight: 600; color: #2d3748; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${title}">
+                    ${title}
+                  </div>
+                  <div style="font-size: 0.75rem; color: #718096; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    ${filename}${createdAt ? ' · ' + createdAt : ''}
+                  </div>
+                </div>
+                <div style="flex-shrink: 0; color: #a0aec0;">
+                  <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                </div>
+              </div>
+            </a>
+          `;
+        }
+        html += '</div>';
+
+        contentDiv.innerHTML = html;
+        contentDiv.style.display = 'block';
+      } catch (error) {
+        console.error('Error loading similar documents:', error);
+        loadingDiv.style.display = 'none';
+        errorDiv.style.display = 'block';
+        document.getElementById('similar-documents-error-msg').textContent =
+          'Failed to load similar documents: ' + error.message;
+      }
+    }
   </script>
   {% endif %}
 {% endblock %}
@@ -1526,6 +1595,24 @@
     </div>
   </div>
   {% endif %}
+
+  <!-- Similar Documents Card -->
+  <div class="detail-card" id="similar-documents-card">
+    <h3><i class="fas fa-copy" aria-hidden="true"></i> Similar Documents</h3>
+    <div id="similar-documents-loading" style="text-align: center; padding: 2rem; color: #718096;">
+      <i class="fas fa-spinner fa-spin" aria-hidden="true" style="font-size: 1.5rem; margin-bottom: 0.5rem;"></i>
+      <p>Searching for similar documents…</p>
+    </div>
+    <div id="similar-documents-content" style="display: none;"></div>
+    <div id="similar-documents-empty" style="display: none; text-align: center; padding: 2rem; color: #718096;">
+      <i class="fas fa-search" aria-hidden="true" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;"></i>
+      <p>No similar documents found.</p>
+    </div>
+    <div id="similar-documents-error" style="display: none; text-align: center; padding: 2rem; color: #991B1B;">
+      <i class="fas fa-exclamation-triangle" aria-hidden="true" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
+      <p id="similar-documents-error-msg">Failed to load similar documents.</p>
+    </div>
+  </div>
 
   <!-- File Preview Card -->
   {% if original_file_exists or processed_file_exists %}

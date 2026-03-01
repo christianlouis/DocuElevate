@@ -67,6 +67,9 @@ class FileRecord(Base):
     # Human-readable document title from AI metadata
     document_title = Column(String, nullable=True)
 
+    # Pre-computed text embedding vector stored as JSON array of floats
+    embedding = Column(Text, nullable=True)
+
     # Timestamp when we inserted this record
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
