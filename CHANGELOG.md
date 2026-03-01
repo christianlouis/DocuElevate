@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.70.0 (2026-03-01)
+
+### Features
+
+- **release**: Add named release anchors with codenames and roadmap integration
+  ([`d18c109`](https://github.com/christianlouis/DocuElevate/commit/d18c10996aa922d12d1bc1807ec18ca7974a4e5e))
+
+### Refactoring
+
+- **test**: Simplify test patches per code review feedback
+  ([`61d7639`](https://github.com/christianlouis/DocuElevate/commit/61d7639129e1db8416226fc3a5b41c83299489ee))
+
+
 ## v0.69.0 (2026-03-01)
 
 ### Documentation
