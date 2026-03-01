@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.65.0 (2026-03-01)
+
+### Features
+
+- Add bulk download, cloud OCR, and basic OCR quality filter
+  ([`705b970`](https://github.com/christianlouis/DocuElevate/commit/705b9705222e37c28a0ae235c23e9f0ac80ccf38))
+
+- Persist ocr_quality_score and use it for numeric filtering
+  ([`83c3405`](https://github.com/christianlouis/DocuElevate/commit/83c3405c986700b079a1f8167ebbebfe23e7aa7f))
+
+
 ## v0.64.1 (2026-03-01)
 
 ### Bug Fixes
