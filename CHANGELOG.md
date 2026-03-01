@@ -10,6 +10,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.67.1 (2026-03-01)
+
+### Bug Fixes
+
+- Add type: ignore for redis.scan() mypy false positive in cache.py
+  ([`d45d0a4`](https://github.com/christianlouis/DocuElevate/commit/d45d0a424e01297c5eb2f9f40b262081f40c7876))
+
+- **db**: Check column existence before creating performance indexes
+  ([`febdf41`](https://github.com/christianlouis/DocuElevate/commit/febdf414694e65080b51feac0aecfb48ec8023df))
+
+### Code Style
+
+- Fix spelling (British to American English)
+  ([`ce87b53`](https://github.com/christianlouis/DocuElevate/commit/ce87b533314a73297195652ff0d6bc01ec3b880b))
+
+### Documentation
+
+- Add Performance & Caching section to ConfigurationGuide
+  ([`d5a95e9`](https://github.com/christianlouis/DocuElevate/commit/d5a95e92704cc86e10318cb6cd33c8641b8aa553))
+
+### Performance Improvements
+
+- **db**: Add indexes on query-hot columns and Redis caching layer
+  ([`b79ba81`](https://github.com/christianlouis/DocuElevate/commit/b79ba81e050df79d6df39390f63120deffe499de))
+
+
 ## v0.67.0 (2026-03-01)
 
 ### Features
