@@ -218,20 +218,23 @@ def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_afte
             # We call the function without assigning its return value since it is not used.
             fetch_attachments_and_enqueue(email_message)
 
-            if is_gmail_host:
-                mark_as_processed_with_star(mail, num)
-                mark_as_processed_with_label(mail, num, label="Ingested")
+            if settings.imap_readonly_mode:
+                logger.info("Readonly mode: skipping mailbox modifications for %s in %s", msg_id, mailbox_key)
+            else:
+                if is_gmail_host:
+                    mark_as_processed_with_star(mail, num)
+                    mark_as_processed_with_label(mail, num, label="Ingested")
+
+                if delete_after_process:
+                    logger.info("Deleting message %s from %s", num.decode(), mailbox_key)
+                    mail.store(num, "+FLAGS", "\\Deleted")
+                else:
+                    mail.store(num, "-FLAGS", "\\Seen")
 
             processed_emails[msg_id] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
             save_processed_emails(processed_emails)
 
-            if delete_after_process:
-                logger.info("Deleting message %s from %s", num.decode(), mailbox_key)
-                mail.store(num, "+FLAGS", "\\Deleted")
-            else:
-                mail.store(num, "-FLAGS", "\\Seen")
-
-        if delete_after_process:
+        if not settings.imap_readonly_mode and delete_after_process:
             mail.expunge()
 
         mail.close()

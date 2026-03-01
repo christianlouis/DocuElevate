@@ -566,6 +566,7 @@ class TestPullInbox:
     ):
         """Test processing messages and marking them as read."""
         mock_settings.workdir = "/tmp"
+        mock_settings.imap_readonly_mode = False
         mock_load.return_value = {}
         mock_mail = MagicMock()
         mock_imap_class.return_value = mock_mail
@@ -605,6 +606,7 @@ class TestPullInbox:
     def test_delete_after_process(self, mock_settings, mock_save, mock_load, mock_imap_class, mock_fetch):
         """Test deleting messages after processing."""
         mock_settings.workdir = "/tmp"
+        mock_settings.imap_readonly_mode = False
         mock_load.return_value = {}
         mock_mail = MagicMock()
         mock_imap_class.return_value = mock_mail
@@ -655,6 +657,7 @@ class TestPullInbox:
     ):
         """Test that Gmail messages are starred and labeled."""
         mock_settings.workdir = "/tmp"
+        mock_settings.imap_readonly_mode = False
         mock_load.return_value = {}
         mock_has_label.return_value = False
         mock_mail = MagicMock()
@@ -829,6 +832,142 @@ class TestPullInbox:
             use_ssl=True,
             delete_after_process=False,
         )
+
+    @patch("app.tasks.imap_tasks.email_already_has_label")
+    @patch("app.tasks.imap_tasks.mark_as_processed_with_label")
+    @patch("app.tasks.imap_tasks.mark_as_processed_with_star")
+    @patch("app.tasks.imap_tasks.fetch_attachments_and_enqueue")
+    @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
+    @patch("app.tasks.imap_tasks.load_processed_emails")
+    @patch("app.tasks.imap_tasks.save_processed_emails")
+    @patch("app.tasks.imap_tasks.settings")
+    def test_readonly_mode_skips_gmail_modifications(
+        self,
+        mock_settings,
+        mock_save,
+        mock_load,
+        mock_imap_class,
+        mock_fetch,
+        mock_star,
+        mock_label,
+        mock_has_label,
+    ):
+        """Test that readonly mode skips starring and labeling Gmail messages."""
+        mock_settings.workdir = "/tmp"
+        mock_settings.imap_readonly_mode = True
+        mock_load.return_value = {}
+        mock_has_label.return_value = False
+        mock_mail = MagicMock()
+        mock_imap_class.return_value = mock_mail
+
+        import email
+
+        msg = email.message.EmailMessage()
+        msg["Message-ID"] = "<test@gmail.com>"
+        raw_email = msg.as_bytes()
+
+        mock_mail.login.return_value = ("OK", [])
+        mock_mail.select.return_value = ("OK", [])
+        mock_mail.search.return_value = ("OK", [b"1"])
+        mock_mail.fetch.return_value = ("OK", [[None, raw_email]])
+
+        pull_inbox(
+            mailbox_key="imap2",
+            host="imap.gmail.com",
+            port=993,
+            username="user@gmail.com",
+            password=_TEST_CREDENTIAL,
+            use_ssl=True,
+            delete_after_process=False,
+        )
+
+        # Attachments should still be processed
+        mock_fetch.assert_called_once()
+        # But no mailbox modifications
+        mock_star.assert_not_called()
+        mock_label.assert_not_called()
+        mock_mail.store.assert_not_called()
+        # Processed emails cache should still be updated
+        mock_save.assert_called()
+
+    @patch("app.tasks.imap_tasks.fetch_attachments_and_enqueue")
+    @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
+    @patch("app.tasks.imap_tasks.load_processed_emails")
+    @patch("app.tasks.imap_tasks.save_processed_emails")
+    @patch("app.tasks.imap_tasks.settings")
+    def test_readonly_mode_skips_delete(self, mock_settings, mock_save, mock_load, mock_imap_class, mock_fetch):
+        """Test that readonly mode skips deletion even when delete_after_process is True."""
+        mock_settings.workdir = "/tmp"
+        mock_settings.imap_readonly_mode = True
+        mock_load.return_value = {}
+        mock_mail = MagicMock()
+        mock_imap_class.return_value = mock_mail
+
+        import email
+
+        msg = email.message.EmailMessage()
+        msg["Message-ID"] = "<test@example.com>"
+        raw_email = msg.as_bytes()
+
+        mock_mail.login.return_value = ("OK", [])
+        mock_mail.select.return_value = ("OK", [])
+        mock_mail.search.return_value = ("OK", [b"1"])
+        mock_mail.fetch.return_value = ("OK", [[None, raw_email]])
+
+        pull_inbox(
+            mailbox_key="imap1",
+            host="imap.example.com",
+            port=993,
+            username="user",
+            password=_TEST_CREDENTIAL,
+            use_ssl=True,
+            delete_after_process=True,
+        )
+
+        # Attachments should still be processed
+        mock_fetch.assert_called_once()
+        # But no mailbox modifications (no delete, no flag changes)
+        mock_mail.store.assert_not_called()
+        mock_mail.expunge.assert_not_called()
+        # Processed emails cache should still be updated
+        mock_save.assert_called()
+
+    @patch("app.tasks.imap_tasks.fetch_attachments_and_enqueue")
+    @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
+    @patch("app.tasks.imap_tasks.load_processed_emails")
+    @patch("app.tasks.imap_tasks.save_processed_emails")
+    @patch("app.tasks.imap_tasks.settings")
+    def test_readonly_mode_skips_unseen_flag(self, mock_settings, mock_save, mock_load, mock_imap_class, mock_fetch):
+        """Test that readonly mode skips removing Seen flag on non-Gmail."""
+        mock_settings.workdir = "/tmp"
+        mock_settings.imap_readonly_mode = True
+        mock_load.return_value = {}
+        mock_mail = MagicMock()
+        mock_imap_class.return_value = mock_mail
+
+        import email
+
+        msg = email.message.EmailMessage()
+        msg["Message-ID"] = "<test@example.com>"
+        raw_email = msg.as_bytes()
+
+        mock_mail.login.return_value = ("OK", [])
+        mock_mail.select.return_value = ("OK", [])
+        mock_mail.search.return_value = ("OK", [b"1"])
+        mock_mail.fetch.return_value = ("OK", [[None, raw_email]])
+
+        pull_inbox(
+            mailbox_key="imap1",
+            host="imap.example.com",
+            port=993,
+            username="user",
+            password=_TEST_CREDENTIAL,
+            use_ssl=True,
+            delete_after_process=False,
+        )
+
+        # No flag changes in readonly mode
+        mock_mail.store.assert_not_called()
 
 
 @pytest.mark.unit
