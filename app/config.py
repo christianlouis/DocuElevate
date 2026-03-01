@@ -221,6 +221,15 @@ class Settings(BaseSettings):
 
     # Feature flags
     allow_file_delete: bool = True  # Default to allowing file deletion from database
+    imap_readonly_mode: bool = Field(
+        default=False,
+        description=(
+            "When enabled, IMAP processing will fetch and process attachments but will NOT modify "
+            "the mailbox state (no starring, labeling, deleting, or flag changes). "
+            "Use this for pre-production instances that share a mailbox with production to prevent "
+            "preprod from interfering with production email processing."
+        ),
+    )
 
     # Batch processing settings
     processall_throttle_threshold: int = Field(

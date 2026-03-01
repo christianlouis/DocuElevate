@@ -121,6 +121,7 @@ def get_settings_for_display(show_values: bool = False) -> dict[str, list[dict[s
             "imap2_ssl",
             "imap2_poll_interval_minutes",
             "imap2_delete_after_process",
+            "imap_readonly_mode",
         ],
         "Dropbox": ["dropbox_app_key", "dropbox_app_secret", "dropbox_folder", "dropbox_refresh_token"],
         "NextCloud": ["nextcloud_upload_url", "nextcloud_username", "nextcloud_password", "nextcloud_folder"],

@@ -1015,6 +1015,18 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "imap_readonly_mode": {
+        "category": "IMAP",
+        "description": (
+            "When enabled, IMAP processing fetches and processes attachments but does NOT modify "
+            "the mailbox (no starring, labeling, deleting, or flag changes). "
+            "Use for preprod instances sharing a mailbox with production."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Monitoring - Uptime Kuma
     "uptime_kuma_url": {
         "category": "Monitoring",

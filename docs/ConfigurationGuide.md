@@ -99,6 +99,7 @@ DocuElevate can monitor multiple IMAP mailboxes for document attachments. Each m
 | `IMAP1_PASSWORD`              | IMAP password (first mailbox).                              | `*******`         |
 | `IMAP1_SSL`                   | Use SSL (`true`/`false`).                                   | `true`            |
 | `IMAP1_POLL_INTERVAL_MINUTES` | Frequency in minutes to poll for new mail.                  | `5`               |
+| `IMAP_READONLY_MODE`          | When `true`, fetches and processes attachments but does **not** modify the mailbox (no starring, labeling, deleting, or flag changes). Use for pre-production instances sharing a mailbox with production. Default: `false`. | `false` |
 
 ### Authentication
 
