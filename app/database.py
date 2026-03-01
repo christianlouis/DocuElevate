@@ -188,10 +188,14 @@ def _ensure_indexes(engine: Any, inspector: Any) -> None:
     ]
 
     table_names = inspector.get_table_names()
+    columns_by_table: dict[str, set[str]] = {}
     with engine.begin() as conn:
         for idx_name, table, column in _PERF_INDEXES:
             if table in table_names:
-                conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} ({column})"))
+                if table not in columns_by_table:
+                    columns_by_table[table] = {col["name"] for col in inspector.get_columns(table)}
+                if column in columns_by_table[table]:
+                    conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} ({column})"))
 
     logger.info("Performance indexes ensured")
 
