@@ -2,7 +2,9 @@
 
 import logging
 import os
+import warnings
 from collections.abc import Generator
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import create_engine, exc
@@ -24,8 +26,8 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def init_db() -> None:
     """
     Ensures the SQLite database file and its parent directory exist (if using sqlite).
-    Then runs Base.metadata.create_all(bind=engine) to initialize tables.
-    Logs a message if a new SQLite DB file is created.
+    Then runs Base.metadata.create_all(bind=engine) to initialize tables and
+    applies any pending Alembic migrations.
     """
     # 1. Parse the DB URL to see if it's sqlite
     url = make_url(DB_URL)
@@ -50,18 +52,76 @@ def init_db() -> None:
         Base.metadata.create_all(bind=engine)
         logger.info("Database initialization complete (tables created if not exist).")
 
-        # 6. Run lightweight schema migrations for existing databases
-        _run_schema_migrations(engine)
+        # 6. Run Alembic migrations for existing databases
+        _run_alembic_upgrade(engine)
     except exc.SQLAlchemyError as e:
         logger.error(f"Error initializing database: {e}")
         raise
 
 
-def _run_schema_migrations(engine: Any) -> None:
+def _run_alembic_upgrade(engine: Any) -> None:
+    """Run Alembic migrations programmatically to apply pending schema changes.
+
+    For fresh databases (created via ``Base.metadata.create_all()``), the
+    Alembic version is stamped to ``head`` because all tables already exist.
+    For existing databases with Alembic tracking, any pending migrations are
+    applied via ``alembic upgrade head``.
+
+    Args:
+        engine: The SQLAlchemy engine connected to the target database.
     """
-    Apply lightweight schema migrations for columns added after the initial release.
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import inspect
+
+    inspector = inspect(engine)
+    table_names = inspector.get_table_names()
+
+    # Locate the migrations directory relative to this file
+    migrations_dir = str(Path(__file__).resolve().parent.parent / "migrations")
+
+    # Build an Alembic Config that points at our migration scripts.
+    # The sqlalchemy.url is intentionally left empty because we pass the
+    # live connection via config.attributes["connection"] below.
+    alembic_cfg = Config()
+    alembic_cfg.set_main_option("script_location", migrations_dir)
+    alembic_cfg.set_main_option("sqlalchemy.url", "")
+
+    with engine.begin() as connection:
+        alembic_cfg.attributes["connection"] = connection
+
+        if "alembic_version" not in table_names:
+            # Fresh database or one that predates Alembic tracking.
+            # Base.metadata.create_all() already created everything, so
+            # stamp the current version to head (no migrations need to run).
+            logger.info("No Alembic version table found — stamping database to latest revision.")
+            command.stamp(alembic_cfg, "head")
+        else:
+            # Existing database with Alembic version tracking — apply pending migrations.
+            logger.info("Running pending Alembic migrations…")
+            command.upgrade(alembic_cfg, "head")
+            logger.info("Alembic migration check complete.")
+
+
+def _run_schema_migrations(engine: Any) -> None:
+    """Apply lightweight schema migrations for columns added after the initial release.
+
+    .. deprecated::
+        This function is deprecated and will be removed in a future release.
+        All schema migrations are now managed exclusively through Alembic.
+        Run ``alembic upgrade head`` (or let ``init_db()`` handle it
+        automatically) instead of calling this function directly.
+
     Each migration is idempotent and safe to run multiple times.
     """
+    warnings.warn(
+        "_run_schema_migrations() is deprecated. "
+        "All schema changes are now managed by Alembic migrations. "
+        "Use 'alembic upgrade head' or init_db() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     from sqlalchemy import inspect, text
 
     inspector = inspect(engine)
