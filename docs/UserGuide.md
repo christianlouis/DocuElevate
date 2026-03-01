@@ -119,16 +119,35 @@ The **Files** page includes a full-text search bar (labelled "Full-Text Search")
 
 ### Dedicated Search Page
 
-For a more focused search experience, use the **Search** page accessible from the main navigation:
+For a more focused content-finding experience, use the **Search** page accessible from the main navigation:
 
 1. Navigate to the **Search** page
 2. Type your query into the search box — results appear automatically as you type (or press Enter)
-3. Results are displayed in a Google-style format showing:
+3. Use the **content-finding filters** to narrow results:
+   - **Document Type** — e.g. Invoice, Contract
+   - **Tags** — filter by a specific tag
+   - **Sender** — filter by sender / absender
+   - **Language** — filter by ISO language code (e.g. `de`, `en`)
+   - **Text Quality** — filter by OCR text quality (High, Medium, Low, No text)
+   - **Date From / Date To** — restrict results to a date range
+4. Results are displayed in a Google-style format showing:
    - **Document title** (linked to the file detail page)
    - **Filename**
    - **Document type**, **sender**, and **tag** badges
    - **Content preview** with highlighted matching terms
-4. Use pagination to browse through large result sets
+5. Use pagination to browse through large result sets
+
+### Saved Searches
+
+Both the **Files** and **Search** pages support **saved searches** — named filter presets you can create and reuse:
+
+1. Apply your desired filters (and optionally a search query on the Search page)
+2. Click **Save Current** in the saved searches bar
+3. Enter a name for the saved search
+4. Your saved search appears as a clickable tag — click it to instantly re-apply those filters
+5. Click the **×** button next to a saved search to delete it
+
+On the **Search** page, saved searches store the full-text query (`q`) along with all active content-finding filters. On the **Files** page, saved searches store the file management filters (filename search, MIME type, status, etc.).
 
 The search page is also accessible via URL with a pre-filled query: `/search?q=invoice`
 

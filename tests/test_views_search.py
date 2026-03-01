@@ -39,3 +39,33 @@ class TestSearchPage:
         long_query = "a" * 600
         response = client.get(f"/search?q={long_query}")
         assert response.status_code == 422
+
+    def test_search_page_contains_filter_elements(self, client):
+        """GET /search contains content-finding filter UI elements."""
+        response = client.get("/search")
+        assert response.status_code == 200
+        assert 'id="filter-document-type"' in response.text
+        assert 'id="filter-tags"' in response.text
+        assert 'id="filter-sender"' in response.text
+        assert 'id="filter-language"' in response.text
+        assert 'id="filter-text-quality"' in response.text
+        assert 'id="filter-date-from"' in response.text
+        assert 'id="filter-date-to"' in response.text
+
+    def test_search_page_contains_saved_searches(self, client):
+        """GET /search contains saved searches UI elements."""
+        response = client.get("/search")
+        assert response.status_code == 200
+        assert 'id="saved-searches-list"' in response.text
+        assert 'id="save-search-btn"' in response.text
+        assert "/api/saved-searches" in response.text
+
+    def test_search_page_text_quality_options(self, client):
+        """GET /search contains text quality filter with expected options."""
+        response = client.get("/search")
+        assert response.status_code == 200
+        text = response.text
+        assert 'value="high"' in text
+        assert 'value="medium"' in text
+        assert 'value="low"' in text
+        assert 'value="no_text"' in text

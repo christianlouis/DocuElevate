@@ -348,3 +348,36 @@ class TestSavedSearchesCRUD:
         assert len(data["filters"]) == 8
         assert data["filters"]["search"] == "invoice"
         assert data["filters"]["tags"] == "invoice,amazon"
+
+    def test_saved_search_with_fulltext_query(self, client: TestClient):
+        """Saved search can include full-text query (q) for the search view."""
+        payload = {
+            "name": "Invoice Search",
+            "filters": {"q": "invoice total amount", "document_type": "Invoice"},
+        }
+        response = client.post("/api/saved-searches", json=payload)
+        assert response.status_code == 201
+        data = response.json()
+        assert data["filters"]["q"] == "invoice total amount"
+        assert data["filters"]["document_type"] == "Invoice"
+
+    def test_saved_search_content_finding_filters(self, client: TestClient):
+        """Saved search accepts content-finding filter keys (language, sender, text_quality)."""
+        payload = {
+            "name": "German Invoices",
+            "filters": {
+                "q": "rechnung",
+                "language": "de",
+                "sender": "ACME GmbH",
+                "text_quality": "high",
+                "tags": "invoice",
+            },
+        }
+        response = client.post("/api/saved-searches", json=payload)
+        assert response.status_code == 201
+        data = response.json()
+        assert data["filters"]["q"] == "rechnung"
+        assert data["filters"]["language"] == "de"
+        assert data["filters"]["sender"] == "ACME GmbH"
+        assert data["filters"]["text_quality"] == "high"
+        assert data["filters"]["tags"] == "invoice"
