@@ -981,32 +981,35 @@
         }
 
         // Build the results HTML
-        let html = '<div style="display: grid; gap: 0.75rem;">';
+        let html = '<div style="display: grid; gap: 0.75rem;" role="list" aria-label="Similar documents">';
         for (const doc of data.similar_documents) {
           const scorePercent = Math.round(doc.similarity_score * 100);
           const title = doc.document_title || doc.original_filename || 'Untitled';
           const filename = doc.original_filename || 'Unknown';
           const createdAt = doc.created_at ? new Date(doc.created_at).toLocaleDateString() : '';
+          const scoreLabel = scorePercent >= 80 ? 'High' : scorePercent >= 50 ? 'Medium' : 'Low';
 
           html += `
-            <a href="/files/${doc.file_id}/detail" style="text-decoration: none; color: inherit;">
-              <div style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1rem; background-color: #f7fafc; border-radius: 0.5rem; border: 1px solid #e2e8f0; transition: border-color 0.2s;">
-                <div style="flex-shrink: 0; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.875rem; color: white; background-color: ${scorePercent >= 80 ? '#48bb78' : scorePercent >= 50 ? '#ecc94b' : '#a0aec0'};">
+            <div role="listitem">
+            <a href="/files/${doc.file_id}/detail" aria-label="${title} — ${scorePercent}% similarity (${scoreLabel})" style="text-decoration: none; color: inherit; display: block;">
+              <div style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1rem; background-color: #f7fafc; border-radius: 0.5rem; border: 1px solid #e2e8f0; transition: border-color 0.2s; cursor: pointer;" onmouseover="this.style.borderColor='#4299e1'" onmouseout="this.style.borderColor='#e2e8f0'">
+                <div style="flex-shrink: 0; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.875rem; color: white; background-color: ${scorePercent >= 80 ? '#48bb78' : scorePercent >= 50 ? '#ecc94b' : '#718096'};" aria-hidden="true">
                   ${scorePercent}%
                 </div>
                 <div style="flex: 1; min-width: 0;">
                   <div style="font-weight: 600; color: #2d3748; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${title}">
                     ${title}
                   </div>
-                  <div style="font-size: 0.75rem; color: #718096; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    ${filename}${createdAt ? ' · ' + createdAt : ''}
+                  <div style="font-size: 0.75rem; color: #4a5568; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    ${scorePercent}% match (${scoreLabel}) · ${filename}${createdAt ? ' · ' + createdAt : ''}
                   </div>
                 </div>
-                <div style="flex-shrink: 0; color: #a0aec0;">
+                <div style="flex-shrink: 0; color: #4a5568;">
                   <i class="fas fa-chevron-right" aria-hidden="true"></i>
                 </div>
               </div>
             </a>
+            </div>
           `;
         }
         html += '</div>';
