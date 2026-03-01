@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.67.3 (2026-03-01)
+
+### Bug Fixes
+
+- **docker**: Copy migrations directory and alembic.ini into Docker image
+  ([`3d71d2b`](https://github.com/christianlouis/DocuElevate/commit/3d71d2b36275386f60edba1d132da1d73a18756d))
+
+
 ## v0.67.2 (2026-03-01)
 
 ### Bug Fixes
