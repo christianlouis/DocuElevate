@@ -34,6 +34,7 @@ def files_page(
     date_to: Optional[str] = Query(None),
     storage_provider: Optional[str] = Query(None),
     tags: Optional[str] = Query(None),
+    ocr_quality: Optional[str] = Query(None),
 ):
     """
     Return the 'files.html' template with server-side pagination, sorting, and filtering
@@ -93,6 +94,15 @@ def files_page(
                 # Escape SQL LIKE wildcards to prevent unintended pattern matching
                 escaped_tag = tag.replace("%", r"\%").replace("_", r"\_")
                 query = query.filter(FileRecord.ai_metadata.ilike(f"%{escaped_tag}%"))
+
+        # Apply OCR quality filter
+        if ocr_quality == "no_ocr":
+            query = query.filter((FileRecord.ocr_text.is_(None)) | (FileRecord.ocr_text == ""))
+        elif ocr_quality == "has_ocr":
+            query = query.filter(
+                FileRecord.ocr_text.isnot(None),
+                FileRecord.ocr_text != "",
+            )
 
         # Apply status filter (before pagination for correct counts)
         query = apply_status_filter(query, db, status)
@@ -158,6 +168,7 @@ def files_page(
                 "date_to": date_to or "",
                 "storage_provider": storage_provider or "",
                 "tags": tags or "",
+                "ocr_quality": ocr_quality or "",
                 "mime_types": mime_types,
                 "upload_concurrency": settings.upload_concurrency,
                 "upload_queue_delay_ms": settings.upload_queue_delay_ms,
