@@ -113,7 +113,7 @@ def cache_delete_pattern(pattern: str) -> None:
         full_pattern = f"{_KEY_PREFIX}{pattern}"
         cursor = 0
         while True:
-            cursor, keys = client.scan(cursor, match=full_pattern, count=100)
+            cursor, keys = client.scan(cursor, match=full_pattern, count=100)  # type: ignore[misc]  # sync Redis returns tuple
             if keys:
                 client.delete(*keys)
             if cursor == 0:
