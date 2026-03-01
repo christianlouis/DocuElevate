@@ -800,7 +800,7 @@ UI_DEFAULT_COLOR_SCHEME=dark
 
 ## Performance & Caching
 
-DocuElevate automatically optimises database access and uses Redis as a
+DocuElevate automatically optimizes database access and uses Redis as a
 caching layer for frequently accessed data.
 
 ### Database Indexes

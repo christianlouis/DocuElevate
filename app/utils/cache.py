@@ -1,7 +1,7 @@
 """
 Lightweight Redis caching layer for frequently accessed data.
 
-Provides a thin wrapper around Redis GET/SET with JSON serialisation and
+Provides a thin wrapper around Redis GET/SET with JSON serialization and
 configurable TTLs.  All operations are **fail-open**: if Redis is
 unavailable the caller simply gets a cache miss and falls back to the
 database or other source of truth.

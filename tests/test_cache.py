@@ -50,7 +50,7 @@ def test_cache_get_returns_none_on_miss():
 
 @pytest.mark.unit
 def test_cache_get_returns_deserialized_value():
-    """cache_get should deserialise the stored JSON string."""
+    """cache_get should deserialize the stored JSON string."""
     mock_client = MagicMock()
     mock_client.get.return_value = json.dumps(["application/pdf", "image/png"])
     with patch("app.utils.cache._get_redis", return_value=mock_client):
