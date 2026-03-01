@@ -147,6 +147,7 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-branch",
+    "--timeout=120",
 ]
 markers = [
     "unit: Unit tests for individual functions/methods",

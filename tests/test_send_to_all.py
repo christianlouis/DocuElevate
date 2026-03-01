@@ -580,10 +580,36 @@ class TestSendToAllDestinations:
         # Error should be recorded in results
         assert "dropbox_error" in result.result["tasks"]
 
+    @patch("app.tasks.send_to_all._should_upload_to_s3")
+    @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_email")
+    @patch("app.tasks.send_to_all._should_upload_to_sftp")
+    @patch("app.tasks.send_to_all._should_upload_to_ftp")
+    @patch("app.tasks.send_to_all._should_upload_to_webdav")
+    @patch("app.tasks.send_to_all._should_upload_to_google_drive")
+    @patch("app.tasks.send_to_all._should_upload_to_paperless")
+    @patch("app.tasks.send_to_all._should_upload_to_nextcloud")
+    @patch("app.tasks.send_to_all._should_upload_to_dropbox")
     @patch("app.tasks.send_to_all.log_task_progress")
     @patch("app.tasks.send_to_all.SessionLocal")
     @patch("app.tasks.send_to_all.settings")
-    def test_fallback_file_id_lookup(self, mock_settings, mock_session_local, mock_log, tmp_path):
+    def test_fallback_file_id_lookup(
+        self,
+        mock_settings,
+        mock_session_local,
+        mock_log,
+        mock_dropbox,
+        mock_nextcloud,
+        mock_paperless,
+        mock_google,
+        mock_webdav,
+        mock_ftp,
+        mock_sftp,
+        mock_email,
+        mock_onedrive,
+        mock_s3,
+        tmp_path,
+    ):
         """Test file_id lookup fallback when not provided."""
         from app.models import FileRecord
 
@@ -591,6 +617,18 @@ class TestSendToAllDestinations:
         test_file.write_text("test")
 
         mock_settings.workdir = str(tmp_path)
+
+        # Disable all upload services — this test only checks the DB lookup fallback
+        mock_dropbox.return_value = False
+        mock_nextcloud.return_value = False
+        mock_paperless.return_value = False
+        mock_google.return_value = False
+        mock_webdav.return_value = False
+        mock_ftp.return_value = False
+        mock_sftp.return_value = False
+        mock_email.return_value = False
+        mock_onedrive.return_value = False
+        mock_s3.return_value = False
 
         # Mock database session
         mock_db = MagicMock()

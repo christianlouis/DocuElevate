@@ -109,13 +109,81 @@ jobs:
         run: pip-audit -r requirements-dev.txt --desc on
 
   # ══════════════════════════════════════════════════════════════════════════
-  # Stage 2b: Tests & Type Checking (run in parallel after lint passes)
+  # Stage 2b: Quick Tests (unit + basic integration — fast fail gate)
   # ══════════════════════════════════════════════════════════════════════════
 
-  test:
-    name: Tests
+  test-quick:
+    name: Quick Tests
     runs-on: ubuntu-latest
-    needs: [lint, html-lint, dependency-scan]  # Wait for lint, HTML a11y lint, and dependency scan before running tests
+    timeout-minutes: 10
+    needs: [lint, html-lint, dependency-scan]
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run Quick Tests
+        run: >
+          pytest tests/ -v
+          --timeout=120
+          --cov=app --cov-report=xml --cov-report=term
+          --junitxml=junit.xml -o junit_family=legacy
+          -m "not e2e and not requires_docker and not requires_external and not slow"
+
+      - name: Upload coverage reports to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./junit.xml
+          report_type: test_results
+          fail_ci_if_error: false
+
+      - name: Upload test artifacts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-quick
+          path: |
+            junit.xml
+            coverage.xml
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # Stage 2c: Integration Tests (Docker containers, external services)
+  # ══════════════════════════════════════════════════════════════════════════
+
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [test-quick]  # Only run after quick tests pass (fail early)
     services:
       redis:
         image: redis:7
@@ -150,34 +218,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
-      - name: Run Tests
-        run: pytest tests/ -v --cov=app --cov-report=xml --cov-report=term --junitxml=junit.xml -o junit_family=legacy -m "not e2e"
+      - name: Run Integration Tests
+        run: >
+          pytest tests/ -v
+          --timeout=300
+          --junitxml=junit-integration.xml -o junit_family=legacy
+          -m "(requires_docker or requires_external or slow) and not e2e"
 
-      - name: Upload coverage reports to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.xml
-          fail_ci_if_error: false
-
-      - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./junit.xml
-          report_type: test_results
-          fail_ci_if_error: false
-
-      - name: Upload test artifacts
+      - name: Upload integration test results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
-          path: |
-            junit.xml
-            coverage.xml
+          name: test-results-integration
+          path: junit-integration.xml
 
   mypy:
     name: Mypy
@@ -207,7 +260,7 @@ jobs:
   build:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
-    needs: [test, lint, html-lint, mypy, dependency-scan]
+    needs: [test-quick, test-integration, lint, html-lint, mypy, dependency-scan]
     if: github.event_name == 'push'
 
     steps:
