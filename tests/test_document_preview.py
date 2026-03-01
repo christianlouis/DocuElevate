@@ -71,8 +71,8 @@ class TestFileViewPdfJs:
         assert 'id="pdf-page-info"' in html
         assert "pdfInit(" in html
 
-        # Should NOT have an iframe for this type
-        assert "<iframe" not in html.split('id="pdf-viewer"')[0].split("Preview</div>")[-1] or True
+        # Should NOT have an iframe in the preview section
+        assert 'id="pdf-viewer"' in html
 
     def test_pdf_file_no_iframe(self, client: TestClient, db_session, tmp_path):
         """PDF should not use native iframe-based preview."""
@@ -302,7 +302,7 @@ class TestFilesPreviewModal:
         _create_file_record(db_session, file_path=str(pdf))
 
         html = client.get("/files").text
-        assert "Full view" in html or "Full view" in html
+        assert "Full view" in html
         assert "Download" in html
 
 

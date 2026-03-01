@@ -655,7 +655,19 @@
     navigator.clipboard.writeText(text.join('\n')).then(function() {
       btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
       setTimeout(function() { btn.innerHTML = orig; }, 2000);
-    }).catch(function() {});
+    }).catch(function() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text.join('\n');
+        ta.style.cssText = 'position:fixed;opacity:0;';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+        setTimeout(function() { btn.innerHTML = orig; }, 2000);
+      } catch(e) {}
+    });
   }
 
   // ── Initialise on load ──
