@@ -204,42 +204,42 @@
 </div>
 
 <script>
-  var searchInput  = document.getElementById('search-input');
-  var searchBtn    = document.getElementById('search-btn');
-  var resultsDiv   = document.getElementById('search-results');
-  var summaryDiv   = document.getElementById('search-summary');
-  var paginationDiv = document.getElementById('search-pagination');
+  const searchInput  = document.getElementById('search-input');
+  const searchBtn    = document.getElementById('search-btn');
+  const resultsDiv   = document.getElementById('search-results');
+  const summaryDiv   = document.getElementById('search-summary');
+  const paginationDiv = document.getElementById('search-pagination');
 
   // Filter elements
-  var filterDocType    = document.getElementById('filter-document-type');
-  var filterTags       = document.getElementById('filter-tags');
-  var filterSender     = document.getElementById('filter-sender');
-  var filterLanguage   = document.getElementById('filter-language');
-  var filterTextQuality = document.getElementById('filter-text-quality');
-  var filterDateFrom   = document.getElementById('filter-date-from');
-  var filterDateTo     = document.getElementById('filter-date-to');
+  const filterDocType    = document.getElementById('filter-document-type');
+  const filterTags       = document.getElementById('filter-tags');
+  const filterSender     = document.getElementById('filter-sender');
+  const filterLanguage   = document.getElementById('filter-language');
+  const filterTextQuality = document.getElementById('filter-text-quality');
+  const filterDateFrom   = document.getElementById('filter-date-from');
+  const filterDateTo     = document.getElementById('filter-date-to');
 
-  var _debounce = null;
-  var _currentPage = 1;
-  var PER_PAGE = 20;
+  let _debounce = null;
+  let _currentPage = 1;
+  const PER_PAGE = 20;
 
   /** Collect active filter values into an object. */
   function getActiveFilters() {
-    var filters = {};
-    var dt = filterDocType.value.trim();
+    const filters = {};
+    const dt = filterDocType.value.trim();
     if (dt) filters.document_type = dt;
-    var tg = filterTags.value.trim();
+    const tg = filterTags.value.trim();
     if (tg) filters.tags = tg;
-    var sn = filterSender.value.trim();
+    const sn = filterSender.value.trim();
     if (sn) filters.sender = sn;
-    var ln = filterLanguage.value.trim();
+    const ln = filterLanguage.value.trim();
     if (ln) filters.language = ln;
-    var tq = filterTextQuality.value;
+    const tq = filterTextQuality.value;
     if (tq) filters.text_quality = tq;
-    var df = filterDateFrom.value;
-    if (df) filters.date_from = Math.floor(new Date(df + 'T00:00:00').getTime() / 1000);
-    var dTo = filterDateTo.value;
-    if (dTo) filters.date_to = Math.floor(new Date(dTo + 'T23:59:59').getTime() / 1000);
+    const df = filterDateFrom.value;
+    if (df) filters.date_from = Math.floor(new Date(df + 'T00:00:00Z').getTime() / 1000);
+    const dTo = filterDateTo.value;
+    if (dTo) filters.date_to = Math.floor(new Date(dTo + 'T23:59:59Z').getTime() / 1000);
     return filters;
   }
 
@@ -255,7 +255,7 @@
   }
 
   function doSearch(page) {
-    var q = searchInput.value.trim();
+    const q = searchInput.value.trim();
     if (!q) {
       resultsDiv.innerHTML = '';
       summaryDiv.style.display = 'none';
@@ -265,17 +265,16 @@
     _currentPage = page || 1;
 
     // Update URL without reload
-    var url = new URL(window.location);
+    const url = new URL(window.location);
     url.searchParams.set('q', q);
     // Sync filter params to URL
-    var activeFilters = getActiveFilters();
-    var filterKeys = ['document_type', 'tags', 'sender', 'language', 'text_quality', 'date_from', 'date_to'];
-    filterKeys.forEach(function(key) {
-      if (activeFilters[key]) {
-        url.searchParams.set(key, activeFilters[key]);
-      } else {
-        url.searchParams.delete(key);
-      }
+    const activeFilters = getActiveFilters();
+    Object.keys(activeFilters).forEach(function(key) {
+      url.searchParams.set(key, activeFilters[key]);
+    });
+    // Remove filter keys not in activeFilters
+    ['document_type', 'tags', 'sender', 'language', 'text_quality', 'date_from', 'date_to'].forEach(function(key) {
+      if (!activeFilters[key]) url.searchParams.delete(key);
     });
     window.history.replaceState({}, '', url);
 
@@ -284,7 +283,7 @@
     summaryDiv.style.display = 'none';
     paginationDiv.style.display = 'none';
 
-    var params = new URLSearchParams({ q: q, page: _currentPage, per_page: PER_PAGE });
+    const params = new URLSearchParams({ q: q, page: _currentPage, per_page: PER_PAGE });
     // Append filter params (date_from/date_to already converted to timestamps)
     Object.keys(activeFilters).forEach(function(key) {
       params.set(key, activeFilters[key]);
@@ -299,7 +298,7 @@
   }
 
   function escapeHtml(str) {
-    var d = document.createElement('div');
+    const d = document.createElement('div');
     d.textContent = str;
     return d.innerHTML;
   }
@@ -309,7 +308,7 @@
    * escape everything else to prevent XSS from indexed content.
    */
   function sanitizeHighlight(html) {
-    var safe = html
+    let safe = html
       .replace(/<mark>/gi,  '\x00MARK_OPEN\x00')
       .replace(/<\/mark>/gi, '\x00MARK_CLOSE\x00');
     safe = escapeHtml(safe);
@@ -320,10 +319,10 @@
   }
 
   function renderResults(data, q) {
-    var results = data.results;
-    var total = data.total;
-    var page = data.page;
-    var pages = data.pages;
+    const results = data.results;
+    const total = data.total;
+    const page = data.page;
+    const pages = data.pages;
 
     summaryDiv.textContent = total + ' result' + (total !== 1 ? 's' : '') + ' for "' + q + '"';
     summaryDiv.style.display = 'block';
@@ -335,27 +334,27 @@
     }
 
     resultsDiv.innerHTML = results.map(function(hit) {
-      var fmt = hit._formatted || {};
-      var title = fmt.document_title || hit.document_title || hit.original_filename || '(untitled)';
-      var filename = hit.original_filename || '';
-      var snippet = fmt.ocr_text || '';
-      var tags = Array.isArray(hit.tags) ? hit.tags : (hit.tags ? [hit.tags] : []);
-      var docType = hit.document_type || '';
-      var sender = hit.sender || hit.absender || '';
-      var fileUrl = '/files/' + hit.file_id;
+      const fmt = hit._formatted || {};
+      const title = fmt.document_title || hit.document_title || hit.original_filename || '(untitled)';
+      const filename = hit.original_filename || '';
+      const snippet = fmt.ocr_text || '';
+      const tags = Array.isArray(hit.tags) ? hit.tags : (hit.tags ? [hit.tags] : []);
+      const docType = hit.document_type || '';
+      const sender = hit.sender || hit.absender || '';
+      const fileUrl = '/files/' + hit.file_id;
 
-      var badges = '';
+      let badges = '';
       if (docType) badges += '<span class="search-result-badge badge-type">' + escapeHtml(docType) + '</span>';
       if (sender)  badges += '<span class="search-result-badge badge-sender"><i class="fas fa-user" aria-hidden="true"></i> ' + escapeHtml(sender) + '</span>';
       tags.forEach(function(t) { badges += '<span class="search-result-badge badge-tag">' + escapeHtml(t) + '</span>'; });
 
-      var snippetHtml = '';
+      let snippetHtml = '';
       if (snippet) {
-        var trimmed = snippet.length > 500 ? snippet.substring(0, 500) + '…' : snippet;
+        const trimmed = snippet.length > 500 ? snippet.substring(0, 500) + '…' : snippet;
         snippetHtml = '<div class="search-result-snippet">…' + sanitizeHighlight(trimmed) + '…</div>';
       }
 
-      var safeTitle = (fmt.document_title) ? sanitizeHighlight(title) : escapeHtml(title);
+      const safeTitle = (fmt.document_title) ? sanitizeHighlight(title) : escapeHtml(title);
 
       return '<div class="search-result">' +
         '<div class="search-result-title"><a href="' + escapeHtml(fileUrl) + '">' + safeTitle + '</a></div>' +
@@ -366,7 +365,7 @@
     }).join('');
 
     if (pages > 1) {
-      var btns = [];
+      const btns = [];
       if (page > 1) btns.push('<button data-page="' + (page - 1) + '">« Previous</button>');
       btns.push('<span>Page ' + page + ' of ' + pages + '</span>');
       if (page < pages) btns.push('<button data-page="' + (page + 1) + '">Next »</button>');
@@ -379,7 +378,7 @@
 
   // Event delegation for pagination buttons
   paginationDiv.addEventListener('click', function(e) {
-    var btn = e.target.closest('button[data-page]');
+    const btn = e.target.closest('button[data-page]');
     if (btn) doSearch(parseInt(btn.getAttribute('data-page'), 10));
   });
 
@@ -390,7 +389,7 @@
   });
   searchInput.addEventListener('input', function() {
     clearTimeout(_debounce);
-    var val = searchInput.value.trim();
+    const val = searchInput.value.trim();
     if (val.length < 2) {
       resultsDiv.innerHTML = '';
       summaryDiv.style.display = 'none';
@@ -407,7 +406,7 @@
   });
 
   // Re-run search when filters change
-  var filterInputs = [filterDocType, filterTags, filterSender, filterLanguage, filterTextQuality, filterDateFrom, filterDateTo];
+  const filterInputs = [filterDocType, filterTags, filterSender, filterLanguage, filterTextQuality, filterDateFrom, filterDateTo];
   filterInputs.forEach(function(el) {
     el.addEventListener('change', function() {
       if (searchInput.value.trim().length >= 2) doSearch(1);
@@ -419,14 +418,14 @@
     fetch('/api/saved-searches')
       .then(function(response) { return response.json(); })
       .then(function(searches) {
-        var container = document.getElementById('saved-searches-list');
+        const container = document.getElementById('saved-searches-list');
         if (!container) return;
         if (!searches || searches.length === 0) {
           container.innerHTML = '<span style="color: #9ca3af; font-size: 0.85rem;">No saved searches yet</span>';
           return;
         }
         container.innerHTML = searches.map(function(s) {
-          var params = new URLSearchParams(s.filters);
+          const params = new URLSearchParams(s.filters);
           return '<span class="saved-search-tag">' +
             '<a href="/search?' + escapeHtml(params.toString()) + '">' + escapeHtml(s.name) + '</a>' +
             '<button type="button" onclick="deleteSavedSearch(' + s.id + ')" aria-label="Delete saved search ' + escapeHtml(s.name) + '">' +
@@ -436,14 +435,14 @@
         }).join('');
       })
       .catch(function() {
-        var container = document.getElementById('saved-searches-list');
+        const container = document.getElementById('saved-searches-list');
         if (container) container.innerHTML = '<span style="color: #9ca3af; font-size: 0.85rem;">Could not load saved searches</span>';
       });
   }
 
   document.getElementById('save-search-btn').addEventListener('click', function() {
-    var filters = getActiveFilters();
-    var q = searchInput.value.trim();
+    const filters = getActiveFilters();
+    const q = searchInput.value.trim();
     // For saved searches on this page, store date_from/date_to as ISO strings
     // instead of timestamps so the URL params are human-readable.
     if (filterDateFrom.value) filters.date_from = filterDateFrom.value;
@@ -454,7 +453,7 @@
       alert('No search query or filters to save. Please enter a query or set at least one filter.');
       return;
     }
-    var name = prompt('Enter a name for this saved search:');
+    const name = prompt('Enter a name for this saved search:');
     if (!name || !name.trim()) return;
     fetch('/api/saved-searches', {
       method: 'POST',
@@ -481,7 +480,7 @@
 
   // ---- Initialize from URL params ----
   (function() {
-    var urlParams = new URLSearchParams(window.location.search);
+    const urlParams = new URLSearchParams(window.location.search);
     // Populate filters from URL params (for saved search links)
     if (urlParams.get('document_type')) filterDocType.value = urlParams.get('document_type');
     if (urlParams.get('tags')) filterTags.value = urlParams.get('tags');
