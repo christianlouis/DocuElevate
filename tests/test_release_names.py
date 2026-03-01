@@ -21,23 +21,17 @@ class TestReleaseNameProperty:
         release_file = tmp_path / "release_names.json"
         release_file.write_text(json.dumps(release_data))
 
+        from app.config import Settings
+
+        s = Settings.__new__(Settings)
         with (
-            patch("app.config.Settings.version", new_callable=lambda: property(lambda self: "0.5.3")),
+            patch.object(type(s), "version", new_callable=lambda: property(lambda self: "0.5.3")),
+            patch("app.config.os.path.dirname"),
             patch("app.config.os.path.join", return_value=str(release_file)),
             patch("app.config.os.path.exists", return_value=True),
         ):
-            from app.config import Settings
-
-            s = Settings.__new__(Settings)
-            # Directly call the property with mocked file path
-            with (
-                patch.object(type(s), "version", new_callable=lambda: property(lambda self: "0.5.3")),
-                patch("app.config.os.path.dirname"),
-                patch("app.config.os.path.join", return_value=str(release_file)),
-                patch("app.config.os.path.exists", return_value=True),
-            ):
-                result = s.release_name
-                assert result == "Foundation"
+            result = s.release_name
+            assert result == "Foundation"
 
     def test_release_name_returns_codename_for_exact_match(self, tmp_path):
         """Test release_name returns codename for exact version match."""
