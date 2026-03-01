@@ -35,7 +35,7 @@ The pipeline follows a **fail-early** strategy: fast linters and quick tests run
 
 ### Quick Tests (`test-quick`)
 
-- **Timeout:** 10 minutes (job), 120 seconds (per test via `pytest-timeout`)
+- **Timeout:** 15 minutes (job), 120 seconds (per test via `pytest-timeout`)
 - Runs the majority of tests (~2,790 unit + basic integration tests)
 - Excludes tests marked `e2e`, `requires_docker`, `requires_external`, or `slow`
 - Uses a Redis service container for tests that need it

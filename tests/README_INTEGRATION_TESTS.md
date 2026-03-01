@@ -368,7 +368,7 @@ The DocuElevate CI pipeline (`.github/workflows/ci.yml`) uses a **two-stage test
 2. **Integration Tests** (`test-integration`) — Runs ~28 Docker-based and external service tests. Only starts after quick tests pass. Uses testcontainers for WebDAV, OAuth, etc.
 
 Both stages use `pytest-timeout` to prevent individual tests from hanging:
-- Quick tests: 120 seconds per test, 10-minute job timeout
+- Quick tests: 120 seconds per test, 15-minute job timeout
 - Integration tests: 300 seconds per test, 20-minute job timeout
 
 ```yaml

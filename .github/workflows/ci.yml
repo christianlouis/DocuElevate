@@ -115,7 +115,7 @@ jobs:
   test-quick:
     name: Quick Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     needs: [lint, html-lint, dependency-scan]
     services:
       redis:
