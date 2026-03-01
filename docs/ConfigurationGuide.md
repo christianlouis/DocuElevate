@@ -800,6 +800,17 @@ For detailed setup instructions, see the [Amazon S3 Setup Guide](AmazonS3Setup.m
 
 For detailed setup instructions, see the [Notifications Setup Guide](NotificationsSetup.md).
 
+### Webhooks
+
+Webhooks notify external systems via HTTP POST when document events occur.
+Configurations are stored in the database and managed through the API (see [API docs](API.md#webhooks)).
+
+| **Variable**        | **Description**                                                  | **Default** |
+|---------------------|------------------------------------------------------------------|-------------|
+| `WEBHOOK_ENABLED`   | Enable or disable webhook delivery globally (`True`/`False`)    | `True`      |
+
+Webhook URLs, secrets, and subscribed events are configured per-webhook via the `/api/webhooks/` endpoints (admin access required). Each delivery includes an optional HMAC-SHA256 signature for verification and is retried with exponential backoff on failure.
+
 ### Uptime Kuma
 
 | **Variable**                | **Description**                                                |
