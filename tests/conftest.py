@@ -59,7 +59,7 @@ from app.database import Base  # noqa: E402
 from app.main import app as fastapi_app  # noqa: E402
 
 # Import models to register them with SQLAlchemy Base
-from app.models import DocumentMetadata, FileRecord, ProcessingLog  # noqa: F401, E402
+from app.models import DocumentMetadata, FileRecord, ProcessingLog, SavedSearch  # noqa: F401, E402
 
 
 @pytest.fixture(scope="session")

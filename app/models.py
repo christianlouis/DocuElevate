@@ -125,3 +125,18 @@ class SettingsAuditLog(Base):
     changed_by = Column(String, nullable=False)  # Username of the admin who made the change
     changed_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     action = Column(String, nullable=False)  # "update" or "delete"
+
+
+class SavedSearch(Base):
+    """User-defined saved search filters for quick access to frequently used filter combinations."""
+
+    __tablename__ = "saved_searches"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, nullable=False, index=True)  # Username or user identifier from session
+    name = Column(String, nullable=False)  # Human-readable name for the saved search
+    filters = Column(Text, nullable=False)  # JSON-encoded filter parameters
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (UniqueConstraint("user_id", "name", name="unique_user_search_name"),)

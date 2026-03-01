@@ -2,9 +2,10 @@
 File management views for displaying and managing files.
 """
 
+from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import Depends, Query, Request
+from fastapi import Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.utils.file_queries import apply_status_filter
@@ -29,6 +30,10 @@ def files_page(
     search: Optional[str] = Query(None),
     mime_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    storage_provider: Optional[str] = Query(None),
+    tags: Optional[str] = Query(None),
 ):
     """
     Return the 'files.html' template with server-side pagination, sorting, and filtering
@@ -39,7 +44,7 @@ def files_page(
         # Import the model here to avoid circular imports
         from sqlalchemy import asc, desc
 
-        from app.models import FileRecord
+        from app.models import FileProcessingStep, FileRecord
 
         # Start with base query
         query = db.query(FileRecord)
@@ -51,6 +56,43 @@ def files_page(
         # Apply MIME type filter
         if mime_type:
             query = query.filter(FileRecord.mime_type == mime_type)
+
+        # Apply date range filters
+        if date_from:
+            try:
+                dt_from = datetime.fromisoformat(date_from).replace(tzinfo=timezone.utc)
+                query = query.filter(FileRecord.created_at >= dt_from)
+            except ValueError:
+                pass  # Silently ignore invalid dates in view
+
+        if date_to:
+            try:
+                dt_to = datetime.fromisoformat(date_to).replace(tzinfo=timezone.utc)
+                query = query.filter(FileRecord.created_at <= dt_to)
+            except ValueError:
+                pass
+
+        # Apply storage provider filter
+        if storage_provider:
+            step_name = f"upload_to_{storage_provider}"
+            uploaded_file_ids = (
+                db.query(FileProcessingStep.file_id)
+                .filter(
+                    FileProcessingStep.step_name == step_name,
+                    FileProcessingStep.status == "success",
+                )
+                .distinct()
+                .subquery()
+            )
+            query = query.filter(FileRecord.id.in_(db.query(uploaded_file_ids.c.file_id)))
+
+        # Apply tags filter (AND logic)
+        if tags:
+            tag_list = [t.strip().lower() for t in tags.split(",") if t.strip()]
+            for tag in tag_list:
+                # Escape SQL LIKE wildcards to prevent unintended pattern matching
+                escaped_tag = tag.replace("%", r"\%").replace("_", r"\_")
+                query = query.filter(FileRecord.ai_metadata.ilike(f"%{escaped_tag}%"))
 
         # Apply status filter (before pagination for correct counts)
         query = apply_status_filter(query, db, status)
@@ -112,6 +154,10 @@ def files_page(
                 "search": search or "",
                 "mime_type": mime_type or "",
                 "status": status or "",
+                "date_from": date_from or "",
+                "date_to": date_to or "",
+                "storage_provider": storage_provider or "",
+                "tags": tags or "",
                 "mime_types": mime_types,
                 "upload_concurrency": settings.upload_concurrency,
                 "upload_queue_delay_ms": settings.upload_queue_delay_ms,
@@ -524,7 +570,7 @@ def preview_original_file(request: Request, file_id: int, db: Session = Depends(
     """
     import os
 
-    from fastapi import HTTPException, status
+    from fastapi import status
     from fastapi.responses import FileResponse
 
     from app.models import FileRecord
@@ -551,7 +597,7 @@ def preview_processed_file(request: Request, file_id: int, db: Session = Depends
     """
     import os
 
-    from fastapi import HTTPException, status
+    from fastapi import status
     from fastapi.responses import FileResponse
 
     from app.models import FileRecord
@@ -578,7 +624,7 @@ def get_original_text(request: Request, file_id: int, db: Session = Depends(get_
     """
     import os
 
-    from fastapi import HTTPException, status
+    from fastapi import status
     from fastapi.responses import JSONResponse
 
     from app.models import FileRecord
@@ -618,7 +664,7 @@ def get_processed_text(request: Request, file_id: int, db: Session = Depends(get
     """
     import os
 
-    from fastapi import HTTPException, status
+    from fastapi import status
     from fastapi.responses import JSONResponse
 
     from app.models import FileRecord

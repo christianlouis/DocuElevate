@@ -137,6 +137,28 @@ def _run_schema_migrations(engine: Any) -> None:
         except Exception as exc:
             logger.warning(f"Skipping filehash unique index drop: {exc}")
 
+    # Migration: Create saved_searches table for user-defined filter combinations
+    if "saved_searches" not in inspector.get_table_names():
+        logger.info("Migrating: creating 'saved_searches' table")
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE saved_searches (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id VARCHAR NOT NULL,
+                        name VARCHAR NOT NULL,
+                        filters TEXT NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE (user_id, name)
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_saved_searches_user_id ON saved_searches (user_id)"))
+        logger.info("Migration complete: 'saved_searches' table created")
+
 
 def get_db() -> Generator[Session, None, None]:
     """

@@ -16,6 +16,7 @@ from app.api.onedrive import router as onedrive_router
 from app.api.openai import router as openai_router
 from app.api.process import router as process_router
 from app.api.queue import router as queue_router
+from app.api.saved_searches import router as saved_searches_router
 from app.api.search import router as search_router
 from app.api.settings import router as settings_router
 from app.api.url_upload import router as url_upload_router
@@ -44,3 +45,4 @@ router.include_router(settings_router)
 router.include_router(url_upload_router)
 router.include_router(search_router)
 router.include_router(queue_router)
+router.include_router(saved_searches_router)
