@@ -33,6 +33,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy application code
 COPY ./app /app/app
 COPY ./frontend /app/frontend
+COPY ./migrations /app/migrations
+COPY ./alembic.ini /app/alembic.ini
 COPY ./LICENSE /app/LICENSE
 
 # Copy build metadata files (generated at build time)
