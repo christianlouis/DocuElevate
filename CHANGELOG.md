@@ -10,6 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.62.0 (2026-03-01)
+
+### Bug Fixes
+
+- Address code review feedback on tests and placeholder messages
+  ([`d095e30`](https://github.com/christianlouis/DocuElevate/commit/d095e3046768ba908775b4d09c9b957fd89ccd42))
+
+- **ui**: Preview modal falls back to original version when processed unavailable
+  ([`c814af1`](https://github.com/christianlouis/DocuElevate/commit/c814af11450d880ea4b6ce634dfde099b74664ca))
+
+### Features
+
+- **ui**: Add pdf.js viewer, image zoom/pan, text preview, and preview modal
+  ([`372e8cd`](https://github.com/christianlouis/DocuElevate/commit/372e8cdff1a43892e82b485e6e4e7a6248010a1f))
+
+### Testing
+
+- **preview**: Add 23 tests for document preview features
+  ([`7a8ccba`](https://github.com/christianlouis/DocuElevate/commit/7a8ccba9be7bc119ec10169737f0b37767bcbf68))
+
+
 ## v0.61.0 (2026-02-28)
 
 ### Continuous Integration
