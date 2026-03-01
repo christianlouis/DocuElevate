@@ -29,11 +29,11 @@ def upgrade() -> None:
     # The filehash column retains a non-unique index for lookups.
     try:
         op.drop_index("ix_files_filehash", table_name="files")
-    except Exception as exc:
+    except sa.exc.OperationalError as exc:
         logger.debug("Could not drop ix_files_filehash (may not exist): %s", exc)
     try:
         op.create_index("ix_files_filehash", "files", ["filehash"], unique=False)
-    except Exception as exc:
+    except sa.exc.OperationalError as exc:
         logger.debug("Could not create ix_files_filehash (may already exist): %s", exc)
 
 

@@ -29,9 +29,7 @@ def upgrade() -> None:
     conn.execute(text("CREATE INDEX IF NOT EXISTS ix_files_mime_type ON files (mime_type)"))
     conn.execute(text("CREATE INDEX IF NOT EXISTS ix_processing_logs_file_id ON processing_logs (file_id)"))
     conn.execute(text("CREATE INDEX IF NOT EXISTS ix_processing_logs_timestamp ON processing_logs (timestamp)"))
-    conn.execute(
-        text("CREATE INDEX IF NOT EXISTS ix_file_processing_steps_status ON file_processing_steps (status)")
-    )
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_file_processing_steps_status ON file_processing_steps (status)"))
 
 
 def downgrade() -> None:

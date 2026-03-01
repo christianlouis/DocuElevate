@@ -543,9 +543,20 @@ class TestAlembicUpgrade:
 
     def test_alembic_upgrade_stamps_fresh_database(self, tmp_path):
         """Test that _run_alembic_upgrade stamps a fresh database to head."""
+        from pathlib import Path
+
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
         from sqlalchemy import create_engine, inspect, text
 
         from app.database import Base, _run_alembic_upgrade
+
+        # Determine the expected head revision dynamically
+        migrations_dir = str(Path(__file__).resolve().parent.parent / "migrations")
+        alembic_cfg = Config()
+        alembic_cfg.set_main_option("script_location", migrations_dir)
+        script = ScriptDirectory.from_config(alembic_cfg)
+        expected_head = script.get_heads()[0]
 
         db_path = str(tmp_path / "fresh_alembic.db")
         engine = create_engine(f"sqlite:///{db_path}")
@@ -565,43 +576,122 @@ class TestAlembicUpgrade:
             row = result.fetchone()
             assert row is not None
             # Should be stamped to the latest revision
-            assert row[0] == "008_add_performance_indexes"
+            assert row[0] == expected_head
 
         engine.dispose()
 
     def test_alembic_upgrade_applies_pending_migrations(self, tmp_path):
         """Test that _run_alembic_upgrade applies pending migrations to a tracked DB."""
-        from sqlalchemy import create_engine, text
+        from pathlib import Path
 
-        from app.database import Base, _run_alembic_upgrade
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+        from sqlalchemy import create_engine, inspect, text
+
+        from app.database import _run_alembic_upgrade
+
+        # Determine the expected head revision dynamically
+        migrations_dir = str(Path(__file__).resolve().parent.parent / "migrations")
+        alembic_cfg = Config()
+        alembic_cfg.set_main_option("script_location", migrations_dir)
+        script = ScriptDirectory.from_config(alembic_cfg)
+        expected_head = script.get_heads()[0]
 
         db_path = str(tmp_path / "tracked_alembic.db")
         engine = create_engine(f"sqlite:///{db_path}")
 
-        # Create all tables
-        Base.metadata.create_all(bind=engine)
-
-        # Manually create alembic_version table and set to an earlier revision
+        # Create a database that represents the schema at revision 006:
+        # - files table WITH detail, file_paths, dedup, search fields, but WITHOUT ocr_quality_score
+        # - processing_logs WITH detail column
+        # - alembic_version table pointing to 006
         with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "CREATE TABLE files ("
+                    "id INTEGER PRIMARY KEY, "
+                    "filehash VARCHAR NOT NULL, "
+                    "original_filename VARCHAR, "
+                    "local_filename VARCHAR NOT NULL, "
+                    "original_file_path VARCHAR, "
+                    "processed_file_path VARCHAR, "
+                    "file_size INTEGER NOT NULL, "
+                    "mime_type VARCHAR, "
+                    "is_duplicate BOOLEAN DEFAULT 0 NOT NULL, "
+                    "duplicate_of_id INTEGER, "
+                    "ocr_text TEXT, "
+                    "ai_metadata TEXT, "
+                    "document_title VARCHAR, "
+                    "created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE TABLE processing_logs ("
+                    "id INTEGER PRIMARY KEY, "
+                    "file_id INTEGER, "
+                    "task_id VARCHAR, "
+                    "step_name VARCHAR, "
+                    "status VARCHAR, "
+                    "message VARCHAR, "
+                    "detail TEXT, "
+                    "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE TABLE file_processing_steps ("
+                    "id INTEGER PRIMARY KEY, "
+                    "file_id INTEGER NOT NULL, "
+                    "step_name VARCHAR NOT NULL, "
+                    "status VARCHAR NOT NULL, "
+                    "started_at DATETIME, "
+                    "completed_at DATETIME, "
+                    "error_message TEXT, "
+                    "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                    "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
+                )
+            )
             conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
-            conn.execute(text("INSERT INTO alembic_version (version_num) VALUES ('008_add_performance_indexes')"))
+            conn.execute(text("INSERT INTO alembic_version (version_num) VALUES ('006_add_detail_column')"))
 
-        # Run Alembic upgrade — should run pending migrations (none in this case)
+        # Verify ocr_quality_score does NOT exist yet
+        inspector = inspect(engine)
+        columns_before = {col["name"] for col in inspector.get_columns("files")}
+        assert "ocr_quality_score" not in columns_before
+
+        # Run Alembic upgrade — should apply 007 (adds ocr_quality_score) and 008 (indexes)
         _run_alembic_upgrade(engine)
 
-        # Verify alembic_version table still has the head revision
+        # Verify ocr_quality_score was added by migration 007
+        inspector = inspect(engine)
+        columns_after = {col["name"] for col in inspector.get_columns("files")}
+        assert "ocr_quality_score" in columns_after
+
+        # Verify alembic_version was updated to head
         with engine.connect() as conn:
             result = conn.execute(text("SELECT version_num FROM alembic_version"))
             row = result.fetchone()
             assert row is not None
+            assert row[0] == expected_head
 
         engine.dispose()
 
     def test_alembic_upgrade_idempotent(self, tmp_path):
         """Test that calling _run_alembic_upgrade multiple times is safe."""
+        from pathlib import Path
+
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
         from sqlalchemy import create_engine, text
 
         from app.database import Base, _run_alembic_upgrade
+
+        # Determine the expected head revision dynamically
+        migrations_dir = str(Path(__file__).resolve().parent.parent / "migrations")
+        alembic_cfg = Config()
+        alembic_cfg.set_main_option("script_location", migrations_dir)
+        script = ScriptDirectory.from_config(alembic_cfg)
+        expected_head = script.get_heads()[0]
 
         db_path = str(tmp_path / "idempotent_alembic.db")
         engine = create_engine(f"sqlite:///{db_path}")
@@ -617,7 +707,7 @@ class TestAlembicUpgrade:
             result = conn.execute(text("SELECT version_num FROM alembic_version"))
             row = result.fetchone()
             assert row is not None
-            assert row[0] == "008_add_performance_indexes"
+            assert row[0] == expected_head
 
         engine.dispose()
 
@@ -658,8 +748,14 @@ class TestAlembicUpgrade:
 
         # Walk the chain from base to head — should not raise
         revisions = list(script.walk_revisions())
-        assert len(revisions) == 8  # 001 through 008
+        # At least 8 migrations should exist (001 through 008)
+        assert len(revisions) >= 8
 
-        # Verify head is the performance indexes migration
+        # Count migration files to verify consistency
+        versions_dir = Path(migrations_dir) / "versions"
+        migration_files = [f for f in versions_dir.glob("*.py") if not f.name.startswith("__")]
+        assert len(revisions) == len(migration_files)
+
+        # Verify head is reachable
         heads = script.get_heads()
-        assert "008_add_performance_indexes" in heads
+        assert len(heads) == 1  # Should be a single linear chain
