@@ -25,7 +25,7 @@ def files_page(
     request: Request,
     db: Session = Depends(get_db),
     page: int = Query(1, ge=1),
-    per_page: int = Query(50, ge=1, le=200),
+    per_page: int = Query(25, ge=1, le=200),
     sort_by: str = Query("created_at"),
     sort_order: str = Query("desc"),
     search: Optional[str] = Query(None),
@@ -168,8 +168,8 @@ def files_page(
                 "pagination": {
                     "page": page,
                     "per_page": per_page,
-                    "total_items": total_items,
-                    "total_pages": total_pages,
+                    "total": total_items,
+                    "pages": total_pages,
                 },
                 "sort_by": sort_by,
                 "sort_order": sort_order,
@@ -196,7 +196,7 @@ def files_page(
             {
                 "request": request,
                 "files": [],
-                "pagination": {"page": 1, "per_page": per_page, "total_items": 0, "total_pages": 0},
+                "pagination": {"page": 1, "per_page": per_page, "total": 0, "pages": 0},
                 "error": str(e),
                 "upload_concurrency": settings.upload_concurrency,
                 "upload_queue_delay_ms": settings.upload_queue_delay_ms,

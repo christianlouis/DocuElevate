@@ -783,12 +783,12 @@
   </div>
 
   <!-- Pagination -->
-  {% if pagination.total_pages > 1 %}
+  {% if pagination.pages > 1 %}
   <nav class="pagination flex-wrap gap-2" aria-label="File list pagination">
     <div class="pagination-info" aria-live="polite">
       Showing {{ ((pagination.page - 1) * pagination.per_page + 1) }} -
-      {{ min(pagination.page * pagination.per_page, pagination.total_items) }}
-      of {{ pagination.total_items }} files
+      {{ min(pagination.page * pagination.per_page, pagination.total) }}
+      of {{ pagination.total }} files
     </div>
     <div class="pagination-buttons flex-wrap">
       {% if pagination.page > 1 %}
@@ -796,15 +796,15 @@
       <button class="pagination-button" onclick="goToPage({{ pagination.page - 1 }})" aria-label="Go to previous page" style="min-height:44px;">Previous</button>
       {% endif %}
 
-      {% for p in range(max(1, pagination.page - 2), min(pagination.total_pages + 1, pagination.page + 3)) %}
+      {% for p in range(max(1, pagination.page - 2), min(pagination.pages + 1, pagination.page + 3)) %}
       <button class="pagination-button {% if p == pagination.page %}active{% endif %}" onclick="goToPage({{ p }})" aria-label="Page {{ p }}" {% if p == pagination.page %}aria-current="page"{% endif %} style="min-height:44px;">
         {{ p }}
       </button>
       {% endfor %}
 
-      {% if pagination.page < pagination.total_pages %}
+      {% if pagination.page < pagination.pages %}
       <button class="pagination-button" onclick="goToPage({{ pagination.page + 1 }})" aria-label="Go to next page" style="min-height:44px;">Next</button>
-      <button class="pagination-button" onclick="goToPage({{ pagination.total_pages }})" aria-label="Go to last page" style="min-height:44px;">Last</button>
+      <button class="pagination-button" onclick="goToPage({{ pagination.pages }})" aria-label="Go to last page" style="min-height:44px;">Last</button>
       {% endif %}
     </div>
   </nav>

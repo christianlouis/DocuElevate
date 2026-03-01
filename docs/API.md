@@ -285,7 +285,7 @@ Retrieve a paginated list of processed files with advanced filtering and sorting
 
 **Query Parameters**:
 - `page` (optional, default: 1): Page number
-- `per_page` (optional, default: 50, max: 200): Items per page
+- `per_page` (optional, default: 25, max: 200): Items per page
 - `sort_by` (optional, default: created_at): Sort field (`id`, `original_filename`, `file_size`, `mime_type`, `created_at`)
 - `sort_order` (optional, default: desc): Sort order (`asc` or `desc`)
 - `search` (optional): Search in filename (partial match)
@@ -324,9 +324,11 @@ GET /api/files?status=completed&mime_type=application/pdf&tags=invoice&date_from
   ],
   "pagination": {
     "page": 1,
-    "per_page": 50,
-    "total_items": 150,
-    "total_pages": 3
+    "per_page": 25,
+    "total": 150,
+    "pages": 6,
+    "next": "http://host/api/files?page=2",
+    "previous": null
   }
 }
 ```

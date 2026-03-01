@@ -27,7 +27,7 @@ class TestListFilesAPI:
         assert "files" in data
         assert "pagination" in data
         assert len(data["files"]) == 0
-        assert data["pagination"]["total_items"] == 0
+        assert data["pagination"]["total"] == 0
 
     def test_list_files_with_data(self, client: TestClient, db_session):
         """Test listing files with existing data."""
@@ -54,7 +54,7 @@ class TestListFilesAPI:
         assert response.status_code == 200
         data = response.json()
         assert len(data["files"]) == 2
-        assert data["pagination"]["total_items"] == 2
+        assert data["pagination"]["total"] == 2
 
     def test_list_files_with_pagination(self, client: TestClient, db_session):
         """Test pagination parameters."""
@@ -77,7 +77,7 @@ class TestListFilesAPI:
         assert len(data["files"]) == 5
         assert data["pagination"]["page"] == 1
         assert data["pagination"]["per_page"] == 5
-        assert data["pagination"]["total_pages"] == 2
+        assert data["pagination"]["pages"] == 2
 
         # Request page 2
         response = client.get("/api/files?page=2&per_page=5")

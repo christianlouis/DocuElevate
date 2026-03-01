@@ -22,7 +22,7 @@ class TestFileListingPagination:
         assert "pagination" in data
         assert isinstance(data["files"], list)
         assert len(data["files"]) == 0
-        assert data["pagination"]["total_items"] == 0
+        assert data["pagination"]["total"] == 0
 
     def test_list_files_with_data(self, client: TestClient, db_session):
         """Test listing files with sample data."""
@@ -42,7 +42,7 @@ class TestFileListingPagination:
         assert response.status_code == 200
         data = response.json()
         assert len(data["files"]) == 5
-        assert data["pagination"]["total_items"] == 5
+        assert data["pagination"]["total"] == 5
         assert data["pagination"]["page"] == 1
 
     def test_pagination_works(self, client: TestClient, db_session):
@@ -65,7 +65,7 @@ class TestFileListingPagination:
         data = response.json()
         assert len(data["files"]) == 5
         assert data["pagination"]["page"] == 1
-        assert data["pagination"]["total_pages"] == 2
+        assert data["pagination"]["pages"] == 2
 
         # Get second page
         response = client.get("/api/files?page=2&per_page=5")

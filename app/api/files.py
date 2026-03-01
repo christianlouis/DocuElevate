@@ -49,7 +49,7 @@ def list_files_api(
     request: Request,
     db: DbSession,
     page: int = Query(1, ge=1, description="Page number"),
-    per_page: int = Query(50, ge=1, le=200, description="Items per page"),
+    per_page: int = Query(25, ge=1, le=200, description="Items per page"),
     sort_by: str = Query(
         "created_at",
         description="Sort field: id, original_filename, file_size, mime_type, created_at, status",
@@ -69,7 +69,7 @@ def list_files_api(
 
     Query Parameters:
     - page: Page number (default: 1)
-    - per_page: Items per page (default: 50, max: 200)
+    - per_page: Items per page (default: 25, max: 200)
     - sort_by: Field to sort by (default: created_at)
     - sort_order: asc or desc (default: desc)
     - search: Search in filename
@@ -85,9 +85,11 @@ def list_files_api(
       "files": [...],
       "pagination": {
         "page": 1,
-        "per_page": 50,
-        "total_items": 150,
-        "total_pages": 3
+        "per_page": 25,
+        "total": 150,
+        "pages": 6,
+        "next": "http://host/api/files?page=2",
+        "previous": null
       }
     }
     """
@@ -205,13 +207,19 @@ def list_files_api(
     # Calculate pagination info
     total_pages = (total_items + per_page - 1) // per_page
 
+    # Build next / previous page URLs by replacing the page query parameter
+    next_url = str(request.url.include_query_params(page=page + 1)) if page < total_pages else None
+    previous_url = str(request.url.include_query_params(page=page - 1)) if page > 1 else None
+
     return {
         "files": result,
         "pagination": {
             "page": page,
             "per_page": per_page,
-            "total_items": total_items,
-            "total_pages": total_pages,
+            "total": total_items,
+            "pages": total_pages,
+            "next": next_url,
+            "previous": previous_url,
         },
     }
 
