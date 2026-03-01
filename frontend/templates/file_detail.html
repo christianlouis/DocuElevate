@@ -1528,11 +1528,11 @@
   {% endif %}
 
   <!-- File Preview Card -->
-  {% if file_exists or processed_exists %}
+  {% if original_file_exists or processed_file_exists %}
   <div class="detail-card">
     <h3>File Previews</h3>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 2rem;">
-      {% if file_exists %}
+      {% if original_file_exists %}
       <div>
         <h4 style="font-weight: 600; color: #2d3748; margin-bottom: 1rem;">Original File</h4>
         <div style="border: 2px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; background-color: #f7fafc;">
@@ -1541,36 +1541,46 @@
           <img src="/api/files/{{ file.id }}/preview?version=original" alt="{{ file.original_filename }}" style="width: 100%; height: auto; display: block;">
           {% elif file.mime_type and file.mime_type.startswith('text/') %}
           <!-- Text file preview -->
-          <iframe src="/api/files/{{ file.id }}/preview?version=original" style="width: 100%; height: 600px; border: none;"></iframe>
+          <iframe src="/api/files/{{ file.id }}/preview?version=original" title="Original text file preview" style="width: 100%; height: 600px; border: none;"></iframe>
           {% else %}
-          <!-- PDF and other documents -->
-          <iframe src="/api/files/{{ file.id }}/preview?version=original" style="width: 100%; height: 600px; border: none;"></iframe>
+          <!-- PDF via pdf.js (rendered by loadPDF above) — fallback canvas container -->
+          <div id="detail-original-canvas" class="pdf-canvas-wrapper" style="min-height: 400px; display: flex; justify-content: center; align-items: center; padding: 0.5rem;">
+            <div class="pdf-loading">
+              <i class="fas fa-spinner fa-spin" aria-hidden="true" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+              <p>See PDF viewer above</p>
+            </div>
+          </div>
           {% endif %}
         </div>
         <div style="margin-top: 0.5rem; text-align: center; display: flex; gap: 1rem; justify-content: center;">
           <a href="/api/files/{{ file.id }}/preview?version=original" target="_blank" style="color: #3182ce; text-decoration: none; font-size: 0.875rem;">
-            <i class="fas fa-external-link-alt"></i> Open in new tab
+            <i class="fas fa-external-link-alt" aria-hidden="true"></i> Open in new tab
           </a>
           <a href="/api/files/{{ file.id }}/download?version=original" style="color: #3182ce; text-decoration: none; font-size: 0.875rem;">
-            <i class="fas fa-download"></i> Download
+            <i class="fas fa-download" aria-hidden="true"></i> Download
           </a>
         </div>
       </div>
       {% endif %}
 
-      {% if processed_exists %}
+      {% if processed_file_exists %}
       <div>
         <h4 style="font-weight: 600; color: #2d3748; margin-bottom: 1rem;">Processed File</h4>
         <div style="border: 2px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; background-color: #f7fafc;">
-          <!-- Processed files are typically PDFs -->
-          <iframe src="/api/files/{{ file.id }}/preview?version=processed" style="width: 100%; height: 600px; border: none;"></iframe>
+          <!-- Processed files are typically PDFs — rendered by pdf.js above -->
+          <div style="min-height: 400px; display: flex; justify-content: center; align-items: center; padding: 0.5rem;">
+            <div class="pdf-loading">
+              <i class="fas fa-spinner fa-spin" aria-hidden="true" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+              <p>See PDF viewer above</p>
+            </div>
+          </div>
         </div>
         <div style="margin-top: 0.5rem; text-align: center; display: flex; gap: 1rem; justify-content: center;">
           <a href="/api/files/{{ file.id }}/preview?version=processed" target="_blank" style="color: #3182ce; text-decoration: none; font-size: 0.875rem;">
-            <i class="fas fa-external-link-alt"></i> Open in new tab
+            <i class="fas fa-external-link-alt" aria-hidden="true"></i> Open in new tab
           </a>
           <a href="/api/files/{{ file.id }}/download?version=processed" style="color: #3182ce; text-decoration: none; font-size: 0.875rem;">
-            <i class="fas fa-download"></i> Download
+            <i class="fas fa-download" aria-hidden="true"></i> Download
           </a>
         </div>
       </div>

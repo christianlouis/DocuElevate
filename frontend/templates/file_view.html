@@ -3,6 +3,11 @@
 
 {% block head_extra %}
   <script src="/static/js/common.js"></script>
+  <!-- PDF.js library (Apache 2.0 License - compatible) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
   <style>
     .doc-container { max-width: 1200px; margin: 0 auto; }
 
@@ -51,7 +56,61 @@
     /* ── tags ── */
     .tag-pill { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; background: #f0fdf4; color: #15803d; margin: 0.1rem; }
 
-    /* ── preview iframe ── */
+    /* ── pdf.js viewer ── */
+    .pdf-viewer { position: relative; background: #525659; border-radius: 0.375rem; overflow: hidden; }
+    .pdf-controls {
+      display: flex; align-items: center; justify-content: center; gap: 0.75rem;
+      padding: 0.5rem; background: #f1f5f9; border-radius: 0.375rem 0.375rem 0 0;
+    }
+    .pdf-nav-btn {
+      padding: 0.35rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 0.25rem;
+      background: white; color: #374151; font-size: 0.8rem; cursor: pointer;
+      min-height: 36px; min-width: 36px;
+    }
+    .pdf-nav-btn:disabled { opacity: 0.4; cursor: default; }
+    .pdf-nav-btn:hover:not(:disabled) { background: #e2e8f0; }
+    .pdf-page-info { font-size: 0.8rem; color: #374151; font-weight: 600; min-width: 100px; text-align: center; }
+    .pdf-canvas-wrap { display: flex; justify-content: center; padding: 0.75rem; min-height: 400px; max-height: 700px; overflow: auto; }
+    .pdf-canvas-wrap canvas { max-width: 100%; height: auto; }
+
+    /* ── image viewer with zoom/pan ── */
+    .img-viewer { position: relative; background: #f1f5f9; border-radius: 0.375rem; overflow: hidden; }
+    .img-controls {
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+      padding: 0.5rem; background: #f1f5f9; border-radius: 0.375rem 0.375rem 0 0;
+    }
+    .img-controls button {
+      padding: 0.35rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 0.25rem;
+      background: white; color: #374151; font-size: 0.85rem; cursor: pointer;
+      min-height: 36px; min-width: 36px;
+    }
+    .img-controls button:hover { background: #e2e8f0; }
+    .img-wrap {
+      display: flex; justify-content: center; align-items: center;
+      overflow: auto; max-height: 650px; min-height: 300px; cursor: grab;
+      padding: 0.5rem; background: #525659;
+    }
+    .img-wrap.dragging { cursor: grabbing; }
+    .img-wrap img { transition: transform 0.15s ease; transform-origin: center center; }
+
+    /* ── text viewer ── */
+    .text-viewer { border-radius: 0.375rem; overflow: hidden; }
+    .text-viewer-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.5rem 0.75rem; background: #f1f5f9; border-radius: 0.375rem 0.375rem 0 0;
+    }
+    .text-viewer-header span { font-size: 0.8rem; color: #374151; font-weight: 600; }
+    .text-content {
+      background: #1e293b; color: #e2e8f0; padding: 1rem; font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 0.82rem; line-height: 1.65; max-height: 600px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+      tab-size: 4;
+    }
+    .text-content .line-number {
+      display: inline-block; width: 3.5em; color: #64748b; text-align: right;
+      margin-right: 1em; user-select: none; font-size: 0.75rem;
+    }
+
+    /* ── preview iframe fallback ── */
     .preview-frame { width: 100%; height: 600px; border: none; border-radius: 0.375rem; background: #f1f5f9; display: block; }
 
     /* ── text box ── */
@@ -271,27 +330,75 @@
       </div>
     </div>
 
-    <!-- RIGHT: PDF preview -->
+    <!-- RIGHT: Document preview -->
     <div>
       <div class="doc-card" style="padding:1rem;">
+        {% set preview_mime = file.mime_type or 'application/pdf' %}
+        {% set preview_version = 'processed' if processed_file_exists else 'original' %}
+        {% set has_preview = processed_file_exists or original_file_exists %}
+
+        {% if preview_mime.startswith('image/') %}
+        <div class="doc-card-title"><i class="fas fa-image" aria-hidden="true" style="color:#8b5cf6;margin-right:0.4rem;"></i>Preview</div>
+        {% elif preview_mime.startswith('text/') %}
+        <div class="doc-card-title"><i class="fas fa-file-code" aria-hidden="true" style="color:#059669;margin-right:0.4rem;"></i>Preview</div>
+        {% else %}
         <div class="doc-card-title"><i class="fas fa-file-pdf" aria-hidden="true" style="color:#ef4444;margin-right:0.4rem;"></i>Preview</div>
-        {% if processed_file_exists %}
-          <iframe
-            src="/api/files/{{ file.id }}/preview?version=processed"
-            class="preview-frame"
-            title="Processed document preview">
-          </iframe>
-          <div style="font-size:0.75rem;color:#9ca3af;margin-top:0.4rem;text-align:right;">Processed version</div>
-        {% elif original_file_exists %}
-          <iframe
-            src="/api/files/{{ file.id }}/preview?version=original"
-            class="preview-frame"
-            title="Original document preview">
-          </iframe>
-          <div style="font-size:0.75rem;color:#9ca3af;margin-top:0.4rem;text-align:right;">Original version</div>
+        {% endif %}
+
+        {% if has_preview %}
+          {% if preview_mime.startswith('image/') %}
+          <!-- ── Image viewer with zoom / pan ── -->
+          <div class="img-viewer" id="img-viewer">
+            <div class="img-controls">
+              <button onclick="imgZoom(1.25)" title="Zoom in" aria-label="Zoom in"><i class="fas fa-search-plus" aria-hidden="true"></i></button>
+              <button onclick="imgZoom(0.8)" title="Zoom out" aria-label="Zoom out"><i class="fas fa-search-minus" aria-hidden="true"></i></button>
+              <button onclick="imgReset()" title="Reset zoom" aria-label="Reset zoom"><i class="fas fa-expand" aria-hidden="true"></i></button>
+              <span id="img-zoom-level" style="font-size:0.8rem;color:#6b7280;min-width:3em;text-align:center;">100%</span>
+            </div>
+            <div class="img-wrap" id="img-wrap">
+              <img
+                id="preview-img"
+                src="/api/files/{{ file.id }}/preview?version={{ preview_version }}"
+                alt="{{ file.original_filename }}"
+                draggable="false"
+                style="max-width:100%;height:auto;">
+            </div>
+          </div>
+
+          {% elif preview_mime.startswith('text/') %}
+          <!-- ── Text file viewer with line numbers ── -->
+          <div class="text-viewer" id="text-viewer">
+            <div class="text-viewer-header">
+              <span><i class="fas fa-file-code" aria-hidden="true" style="margin-right:0.3rem;"></i>{{ file.original_filename }}</span>
+              <button class="text-toggle" onclick="copyTextPreview()" id="text-copy-btn" aria-label="Copy file text">
+                <i class="fas fa-copy" aria-hidden="true"></i> Copy
+              </button>
+            </div>
+            <div class="text-content" id="text-preview-content" aria-live="polite">
+              <div style="text-align:center;padding:2rem;color:#94a3b8;"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Loading…</div>
+            </div>
+          </div>
+
+          {% else %}
+          <!-- ── PDF viewer (pdf.js) ── -->
+          <div class="pdf-viewer" id="pdf-viewer">
+            <div class="pdf-controls">
+              <button class="pdf-nav-btn" onclick="pdfChangePage(-1)" id="pdf-prev-btn" aria-label="Previous page"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>
+              <span class="pdf-page-info" id="pdf-page-info" aria-live="polite">Loading…</span>
+              <button class="pdf-nav-btn" onclick="pdfChangePage(1)" id="pdf-next-btn" aria-label="Next page"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
+            </div>
+            <div class="pdf-canvas-wrap" id="pdf-canvas-wrap">
+              <div style="text-align:center;padding:3rem;color:#94a3b8;">
+                <i class="fas fa-spinner fa-spin" aria-hidden="true" style="font-size:2rem;margin-bottom:0.75rem;"></i>
+                <p>Loading PDF…</p>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+          <div style="font-size:0.75rem;color:#9ca3af;margin-top:0.4rem;text-align:right;">{{ 'Processed' if processed_file_exists else 'Original' }} version</div>
         {% else %}
           <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;background:#f9fafb;border-radius:0.375rem;color:#9ca3af;">
-            <i class="fas fa-file-pdf" style="font-size:3rem;margin-bottom:1rem;opacity:0.4;"></i>
+            <i class="fas fa-file" aria-hidden="true" style="font-size:3rem;margin-bottom:1rem;opacity:0.4;"></i>
             <p>No file available for preview</p>
           </div>
         {% endif %}
@@ -338,7 +445,7 @@
 </div>
 
 <script>
-  // Toggle inline OCR text visibility
+  // ── Toggle inline OCR text visibility ──
   function toggleOcrText() {
     var block = document.getElementById('ocr-text-block');
     var icon  = document.getElementById('ocr-toggle-icon');
@@ -357,7 +464,7 @@
     }
   }
 
-  // Copy OCR text to clipboard
+  // ── Copy OCR text to clipboard ──
   function copyOcrText() {
     var content = document.getElementById('ocr-text-content');
     if (!content) return;
@@ -369,8 +476,6 @@
       btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
       setTimeout(function() { btn.innerHTML = orig; }, 2000);
     }).catch(function() {
-      // Legacy clipboard fallback for browsers without Secure Context / navigator.clipboard
-      // (pre-2018 environments, e.g. HTTP-only or older Safari). Retained for maximum compatibility.
       try {
         var ta = document.createElement('textarea');
         ta.value = text;
@@ -385,7 +490,7 @@
     });
   }
 
-  // On-demand text extraction (when ocr_text not in DB)
+  // ── On-demand text extraction (when ocr_text not in DB) ──
   var _textCache = null;
   function loadText(fileId) {
     var area = document.getElementById('text-load-area');
@@ -414,5 +519,156 @@
     pre.textContent = text;
     container.appendChild(pre);
   }
+
+  // ── PDF.js viewer ──
+  var _pdfState = { doc: null, page: 1, total: 0 };
+
+  function pdfInit(url) {
+    var wrap = document.getElementById('pdf-canvas-wrap');
+    if (!wrap) return;
+    pdfjsLib.getDocument(url).promise.then(function(pdf) {
+      _pdfState.doc = pdf;
+      _pdfState.total = pdf.numPages;
+      _pdfState.page = 1;
+      pdfRenderPage();
+    }).catch(function() {
+      wrap.innerHTML = '<div style="text-align:center;padding:2rem;color:#f87171;"><i class="fas fa-exclamation-triangle" style="font-size:2rem;margin-bottom:0.5rem;"></i><p>Failed to load PDF</p></div>';
+    });
+  }
+
+  function pdfRenderPage() {
+    var wrap = document.getElementById('pdf-canvas-wrap');
+    if (!_pdfState.doc || !wrap) return;
+    _pdfState.doc.getPage(_pdfState.page).then(function(page) {
+      var vp = page.getViewport({ scale: 1.0 });
+      var scale = Math.min(wrap.clientWidth / vp.width, 2.0);
+      var svp = page.getViewport({ scale: scale });
+      var canvas = document.createElement('canvas');
+      canvas.width = svp.width;
+      canvas.height = svp.height;
+      canvas.style.maxWidth = '100%';
+      canvas.style.height = 'auto';
+      wrap.innerHTML = '';
+      wrap.appendChild(canvas);
+      page.render({ canvasContext: canvas.getContext('2d'), viewport: svp });
+      pdfUpdateInfo();
+    });
+  }
+
+  function pdfChangePage(delta) {
+    var np = _pdfState.page + delta;
+    if (np >= 1 && np <= _pdfState.total) {
+      _pdfState.page = np;
+      pdfRenderPage();
+    }
+  }
+
+  function pdfUpdateInfo() {
+    var info = document.getElementById('pdf-page-info');
+    if (info) info.textContent = 'Page ' + _pdfState.page + ' of ' + _pdfState.total;
+    var prev = document.getElementById('pdf-prev-btn');
+    var next = document.getElementById('pdf-next-btn');
+    if (prev) prev.disabled = _pdfState.page <= 1;
+    if (next) next.disabled = _pdfState.page >= _pdfState.total;
+  }
+
+  // ── Image viewer with zoom / pan ──
+  var _imgScale = 1;
+
+  function imgZoom(factor) {
+    _imgScale = Math.max(0.25, Math.min(5, _imgScale * factor));
+    var img = document.getElementById('preview-img');
+    if (img) img.style.transform = 'scale(' + _imgScale + ')';
+    var label = document.getElementById('img-zoom-level');
+    if (label) label.textContent = Math.round(_imgScale * 100) + '%';
+  }
+
+  function imgReset() {
+    _imgScale = 1;
+    var img = document.getElementById('preview-img');
+    if (img) img.style.transform = 'scale(1)';
+    var label = document.getElementById('img-zoom-level');
+    if (label) label.textContent = '100%';
+  }
+
+  // Mouse-drag panning for image viewer
+  (function() {
+    var wrap = document.getElementById('img-wrap');
+    if (!wrap) return;
+    var dragging = false, startX, startY, scrollL, scrollT;
+    wrap.addEventListener('mousedown', function(e) {
+      dragging = true; wrap.classList.add('dragging');
+      startX = e.pageX - wrap.offsetLeft; startY = e.pageY - wrap.offsetTop;
+      scrollL = wrap.scrollLeft; scrollT = wrap.scrollTop;
+    });
+    wrap.addEventListener('mousemove', function(e) {
+      if (!dragging) return; e.preventDefault();
+      wrap.scrollLeft = scrollL - (e.pageX - wrap.offsetLeft - startX);
+      wrap.scrollTop  = scrollT - (e.pageY - wrap.offsetTop  - startY);
+    });
+    wrap.addEventListener('mouseup', function() { dragging = false; wrap.classList.remove('dragging'); });
+    wrap.addEventListener('mouseleave', function() { dragging = false; wrap.classList.remove('dragging'); });
+    // Mouse wheel zoom
+    wrap.addEventListener('wheel', function(e) {
+      e.preventDefault();
+      imgZoom(e.deltaY < 0 ? 1.1 : 0.9);
+    }, { passive: false });
+  })();
+
+  // ── Text file viewer ──
+  function loadTextPreview(url) {
+    var container = document.getElementById('text-preview-content');
+    if (!container) return;
+    fetch(url)
+      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(function(text) {
+        container.innerHTML = '';
+        var lines = text.split('\n');
+        for (var i = 0; i < lines.length; i++) {
+          var lineEl = document.createElement('div');
+          var numSpan = document.createElement('span');
+          numSpan.className = 'line-number';
+          numSpan.textContent = (i + 1) + '';
+          lineEl.appendChild(numSpan);
+          lineEl.appendChild(document.createTextNode(lines[i]));
+          container.appendChild(lineEl);
+        }
+      })
+      .catch(function() {
+        container.innerHTML = '<div style="color:#f87171;padding:1rem;">Failed to load file content</div>';
+      });
+  }
+
+  function copyTextPreview() {
+    var container = document.getElementById('text-preview-content');
+    if (!container) return;
+    var lines = container.querySelectorAll('div');
+    var text = [];
+    lines.forEach(function(line) {
+      var clone = line.cloneNode(true);
+      var num = clone.querySelector('.line-number');
+      if (num) num.remove();
+      text.push(clone.textContent);
+    });
+    var btn = document.getElementById('text-copy-btn');
+    var orig = btn.innerHTML;
+    navigator.clipboard.writeText(text.join('\n')).then(function() {
+      btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+      setTimeout(function() { btn.innerHTML = orig; }, 2000);
+    }).catch(function() {});
+  }
+
+  // ── Initialise on load ──
+  document.addEventListener('DOMContentLoaded', function() {
+    {% if (processed_file_exists or original_file_exists) and file %}
+      {% set pv = 'processed' if processed_file_exists else 'original' %}
+      {% set pm = file.mime_type or 'application/pdf' %}
+      {% if pm.startswith('text/') %}
+        loadTextPreview('/api/files/{{ file.id }}/preview?version={{ pv }}');
+      {% elif not pm.startswith('image/') %}
+        pdfInit('/api/files/{{ file.id }}/preview?version={{ pv }}');
+      {% endif %}
+    {% endif %}
+  });
 </script>
 {% endblock %}
