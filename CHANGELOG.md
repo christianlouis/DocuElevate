@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.66.0 (2026-03-01)
+
+### Code Style
+
+- **search**: Address code review - use const/let, fix date timezone, deduplicate filter keys
+  ([`68857c1`](https://github.com/christianlouis/DocuElevate/commit/68857c1785d068e3716ea40c18f54d8ada296c97))
+
+### Documentation
+
+- Update API and User Guide with search filters and saved searches
+  ([`de09dba`](https://github.com/christianlouis/DocuElevate/commit/de09dba28532af549b25dfdc35384a71aa1c223c))
+
+### Features
+
+- **search**: Add content-finding filters, saved searches, and text quality to Search view
+  ([`5bf0a4c`](https://github.com/christianlouis/DocuElevate/commit/5bf0a4c0b990c3c4915696ae01448bf1ca12f87b))
+
+
 ## v0.65.0 (2026-03-01)
 
 ### Features
