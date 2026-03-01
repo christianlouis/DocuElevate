@@ -46,7 +46,7 @@ class FileRecord(Base):
     file_size = Column(Integer, nullable=False)
 
     # MIME type or extension (optional)
-    mime_type = Column(String)
+    mime_type = Column(String, index=True)
 
     # Deduplication tracking: True if this file is a duplicate of another file
     # When a duplicate is detected, this file record is created but marked as duplicate
@@ -68,7 +68,7 @@ class FileRecord(Base):
     document_title = Column(String, nullable=True)
 
     # Timestamp when we inserted this record
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 
 class FileProcessingStep(Base):
@@ -82,7 +82,7 @@ class FileProcessingStep(Base):
     id = Column(Integer, primary_key=True, index=True)
     file_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=False, index=True)
     step_name = Column(String, nullable=False, index=True)  # e.g., "hash_file", "upload_to_dropbox"
-    status = Column(String, nullable=False)  # "pending", "in_progress", "success", "failure", "skipped"
+    status = Column(String, nullable=False, index=True)  # "pending", "in_progress", "success", "failure", "skipped"
     started_at = Column(DateTime(timezone=True), nullable=True)  # When step started
     completed_at = Column(DateTime(timezone=True), nullable=True)  # When step finished (success/failure)
     error_message = Column(Text, nullable=True)  # Error message if status is "failure"
@@ -95,13 +95,13 @@ class FileProcessingStep(Base):
 class ProcessingLog(Base):
     __tablename__ = "processing_logs"
     id = Column(Integer, primary_key=True, index=True)
-    file_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=True)  # Optional file association
+    file_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=True, index=True)  # Optional file association
     task_id = Column(String, index=True)  # Celery task ID
     step_name = Column(String)  # e.g., "OCR", "convert_to_pdf", "upload_s3"
     status = Column(String)  # "pending", "in_progress", "success", "failure"
     message = Column(String, nullable=True)  # Error text or success note
     detail = Column(Text, nullable=True)  # Verbose worker log output for diagnostics
-    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 
 class ApplicationSettings(Base):

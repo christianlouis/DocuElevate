@@ -106,9 +106,15 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
     if settings.enable_deduplication:
         REAL_STEPS.add("check_for_duplicates")
 
-    # Get all REAL steps for these files in one query
+    # Get all REAL steps for these files in one query (load only needed columns)
     steps = (
-        db.query(FileProcessingStep)
+        db.query(
+            FileProcessingStep.file_id,
+            FileProcessingStep.step_name,
+            FileProcessingStep.status,
+            FileProcessingStep.updated_at,
+            FileProcessingStep.created_at,
+        )
         .filter(FileProcessingStep.file_id.in_(file_ids), FileProcessingStep.step_name.in_(REAL_STEPS))
         .all()
     )

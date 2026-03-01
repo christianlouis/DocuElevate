@@ -165,6 +165,36 @@ def _run_schema_migrations(engine: Any) -> None:
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_saved_searches_user_id ON saved_searches (user_id)"))
         logger.info("Migration complete: 'saved_searches' table created")
 
+    # Migration: Add performance indexes for common query patterns
+    _ensure_indexes(engine, inspector)
+
+
+def _ensure_indexes(engine: Any, inspector: Any) -> None:
+    """
+    Create performance indexes for common query patterns.
+
+    Each ``CREATE INDEX IF NOT EXISTS`` is idempotent and safe to run
+    on every startup.  The indexes target the columns most frequently
+    used in file listing/filtering, status computation and log retrieval.
+    """
+    from sqlalchemy import text
+
+    _PERF_INDEXES = [
+        ("ix_files_created_at", "files", "created_at"),
+        ("ix_files_mime_type", "files", "mime_type"),
+        ("ix_processing_logs_file_id", "processing_logs", "file_id"),
+        ("ix_processing_logs_timestamp", "processing_logs", "timestamp"),
+        ("ix_file_processing_steps_status", "file_processing_steps", "status"),
+    ]
+
+    table_names = inspector.get_table_names()
+    with engine.begin() as conn:
+        for idx_name, table, column in _PERF_INDEXES:
+            if table in table_names:
+                conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} ({column})"))
+
+    logger.info("Performance indexes ensured")
+
 
 def get_db() -> Generator[Session, None, None]:
     """
