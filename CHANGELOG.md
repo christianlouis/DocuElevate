@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.64.0 (2026-03-01)
+
+### Features
+
+- **api**: Default download endpoint to processed file version
+  ([`7b5494b`](https://github.com/christianlouis/DocuElevate/commit/7b5494bafbb354eb457a393682d9686de4a6af98))
+
+
 ## v0.63.0 (2026-03-01)
 
 ### Bug Fixes
