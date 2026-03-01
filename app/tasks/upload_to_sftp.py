@@ -7,14 +7,14 @@ import paramiko
 
 from app.celery_app import celery
 from app.config import settings
-from app.tasks.retry_config import BaseTaskWithRetry
+from app.tasks.retry_config import UploadTaskWithRetry
 from app.utils import log_task_progress
 from app.utils.filename_utils import extract_remote_path, get_unique_filename, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
 
-@celery.task(base=BaseTaskWithRetry, bind=True)
+@celery.task(base=UploadTaskWithRetry, bind=True)
 def upload_to_sftp(self, file_path: str, file_id: int = None):
     """
     Upload a file to an SFTP server.

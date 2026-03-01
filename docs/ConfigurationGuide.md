@@ -31,6 +31,40 @@ Control how the `/processall` endpoint handles large batches of files to prevent
 - Total queue time: (25-1) × 3 = 72 seconds
 - Prevents API rate limit issues and ensures smooth processing
 
+### Task Retry Settings
+
+Failed Celery tasks are automatically retried with exponential backoff and optional jitter. Different task types use different default delays (OCR tasks wait longer than upload tasks to account for API rate limits).
+
+| **Variable**             | **Description**                                                                                                                                   | **Default**     |
+|--------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|-----------------|
+| `TASK_RETRY_MAX_RETRIES` | Maximum number of retry attempts for any failed task.                                                                                             | `3`             |
+| `TASK_RETRY_DELAYS`      | Comma-separated list of countdown values in seconds for each retry attempt. Values beyond the list double the last entry for subsequent retries. | `60,300,900`    |
+| `TASK_RETRY_JITTER`      | Apply ±20 % random jitter to countdowns to prevent thundering-herd problems when many tasks fail at the same time.                               | `true`          |
+
+**Per-task-type policies** (not overridable via environment variables; set in code):
+
+| Task type               | Default delays (s)     | Notes                                               |
+|-------------------------|------------------------|-----------------------------------------------------|
+| General tasks           | 60, 300, 900           | Controlled by `TASK_RETRY_DELAYS`                   |
+| OCR / AI tasks          | 120, 600, 1800         | Longer waits for API rate-limit windows to clear    |
+| Cloud-storage uploads   | 60, 300, 900           | Controlled by `TASK_RETRY_DELAYS`                   |
+
+**Example – aggressive retries for a high-availability setup:**
+
+```dotenv
+TASK_RETRY_MAX_RETRIES=5
+TASK_RETRY_DELAYS=30,120,600,1800,3600
+TASK_RETRY_JITTER=true
+```
+
+**Example – conservative retries with longer back-off:**
+
+```dotenv
+TASK_RETRY_MAX_RETRIES=3
+TASK_RETRY_DELAYS=300,900,3600
+TASK_RETRY_JITTER=true
+```
+
 ### Client-Side Upload Throttling
 
 Control how the web UI queues and paces file uploads to avoid overwhelming the backend, especially when dragging large directories (potentially thousands of files) onto the upload area.

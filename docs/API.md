@@ -766,6 +766,77 @@ Lightweight endpoint returning the total number of queued + in-progress items. D
 }
 ```
 
+## Diagnostic
+
+### GET /api/diagnostic/health
+
+System health endpoint designed for monitoring tools such as Grafana, Uptime Kuma, Prometheus blackbox exporter, or any HTTP-based health checker.
+
+Checks the database and Redis connectivity and returns a machine-readable JSON summary.
+
+**Authentication:** Required (bypassed when `AUTH_ENABLED=False`)
+
+**Response (200 OK) – all subsystems healthy:**
+```json
+{
+  "status": "healthy",
+  "version": "1.2.3",
+  "timestamp": "2024-01-15T10:30:00+00:00",
+  "checks": {
+    "database": {"status": "ok"},
+    "redis":    {"status": "ok"}
+  }
+}
+```
+
+**Response (200 OK) – one or more non-critical checks failed:**
+```json
+{
+  "status": "degraded",
+  "version": "1.2.3",
+  "timestamp": "2024-01-15T10:30:00+00:00",
+  "checks": {
+    "database": {"status": "ok"},
+    "redis":    {"status": "error", "detail": "Connection refused"}
+  }
+}
+```
+
+**Response (503 Service Unavailable) – critical check (database) failed:**
+```json
+{
+  "status": "unhealthy",
+  "version": "1.2.3",
+  "timestamp": "2024-01-15T10:30:00+00:00",
+  "checks": {
+    "database": {"status": "error", "detail": "..."},
+    "redis":    {"status": "ok"}
+  }
+}
+```
+
+The `status` field is always one of:
+- `"healthy"` – all checks passed
+- `"degraded"` – at least one non-critical check failed (Redis unavailable)
+- `"unhealthy"` – a critical check failed (database unavailable); HTTP 503 is returned
+
+**Grafana / Uptime Kuma integration:** point your health check at `GET /api/diagnostic/health` and check for HTTP 200 or the JSON `status` field.
+
+### POST /api/diagnostic/test-notification
+
+Send a test notification through all configured notification channels.
+
+**Authentication:** Required
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "message": "Test notification sent successfully to 2 service(s)",
+  "services_count": 2
+}
+```
+
 ## Rate Limiting
 
 The API implements rate limiting to ensure system stability. If you exceed the limits, you'll receive a `429 Too Many Requests` response.
