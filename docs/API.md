@@ -332,9 +332,61 @@ GET /api/files?status=completed&mime_type=application/pdf&tags=invoice&date_from
 
 > **Tip**: Filter state is reflected in query parameters, making URLs shareable as bookmarks or direct links.
 
+### Full-Text Search
+
+**GET** `/api/search`
+
+Search documents by full text across OCR content, titles, filenames, tags, sender, and document type. Powered by Meilisearch.
+
+**Query Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `q` | string | Yes | Full-text search query (1–512 chars) |
+| `mime_type` | string | No | Filter by MIME type (e.g. `application/pdf`) |
+| `document_type` | string | No | Filter by document type (e.g. `Invoice`) |
+| `language` | string | No | Filter by language code (e.g. `de`, `en`) |
+| `tags` | string | No | Filter by tag (exact match on a single tag) |
+| `sender` | string | No | Filter by sender/absender (exact match) |
+| `text_quality` | string | No | Filter by OCR text quality: `no_text`, `low`, `medium`, `high` |
+| `date_from` | int | No | Filter results created after this Unix timestamp |
+| `date_to` | int | No | Filter results created before this Unix timestamp |
+| `page` | int | No | Page number, default: 1 |
+| `per_page` | int | No | Results per page (1–100), default: 20 |
+
+**Example**:
+```
+GET /api/search?q=invoice&document_type=Invoice&tags=amazon&text_quality=high&page=1
+```
+
+**Response**:
+```json
+{
+  "results": [
+    {
+      "file_id": 42,
+      "original_filename": "2026-01-15_Invoice_Amazon.pdf",
+      "document_title": "Amazon Invoice January 2026",
+      "document_type": "Invoice",
+      "tags": ["amazon", "invoice"],
+      "_formatted": {
+        "document_title": "Amazon <mark>Invoice</mark> January 2026",
+        "ocr_text": "...total amount of the <mark>invoice</mark> is..."
+      }
+    }
+  ],
+  "total": 42,
+  "page": 1,
+  "pages": 3,
+  "query": "invoice"
+}
+```
+
 ### Saved Searches
 
 Saved searches allow users to save and reuse filter combinations. Each user can store up to 50 saved searches.
+
+Saved searches are used on both the **Files** page (for file management filters) and the **Search** page (for content-finding filters including full-text queries).
 
 #### List Saved Searches
 
@@ -349,8 +401,9 @@ Returns all saved searches for the current user.
     "id": 1,
     "name": "Recent Invoices",
     "filters": {
+      "q": "invoice total",
       "tags": "invoice",
-      "status": "completed",
+      "document_type": "Invoice",
       "date_from": "2026-01-01"
     },
     "created_at": "2026-03-01T10:00:00Z",
@@ -368,14 +421,21 @@ Returns all saved searches for the current user.
 {
   "name": "Recent Invoices",
   "filters": {
+    "q": "invoice total",
     "tags": "invoice",
-    "status": "completed",
+    "document_type": "Invoice",
     "date_from": "2026-01-01"
   }
 }
 ```
 
-**Allowed filter keys**: `search`, `mime_type`, `status`, `date_from`, `date_to`, `storage_provider`, `tags`, `sort_by`, `sort_order`
+**Allowed filter keys**:
+
+Files-view keys: `search`, `mime_type`, `status`, `storage_provider`, `sort_by`, `sort_order`
+
+Search-view keys: `q`, `document_type`, `language`, `sender`, `text_quality`
+
+Shared keys: `tags`, `date_from`, `date_to`
 
 **Response** (201 Created): The created saved search object.
 
