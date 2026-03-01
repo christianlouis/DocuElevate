@@ -15,7 +15,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.celery_app import celery
 from app.config import settings
-from app.tasks.retry_config import BaseTaskWithRetry
+from app.tasks.retry_config import UploadTaskWithRetry
 from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
@@ -166,7 +166,7 @@ def _send_email_with_smtp(msg, filename, recipients):
         return {"status": "Failed", "reason": error_msg, "error": str(e)}
 
 
-@celery.task(base=BaseTaskWithRetry, bind=True)
+@celery.task(base=UploadTaskWithRetry, bind=True)
 def upload_to_email(
     self,
     file_path: str,

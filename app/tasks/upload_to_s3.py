@@ -8,13 +8,13 @@ from botocore.exceptions import ClientError
 
 from app.celery_app import celery
 from app.config import settings
-from app.tasks.retry_config import BaseTaskWithRetry
+from app.tasks.retry_config import UploadTaskWithRetry
 from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
 
 
-@celery.task(base=BaseTaskWithRetry, bind=True)
+@celery.task(base=UploadTaskWithRetry, bind=True)
 def upload_to_s3(self, file_path: str, file_id: int = None):
     """
     Uploads a file to Amazon S3 in the configured bucket and folder.

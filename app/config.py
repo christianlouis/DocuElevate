@@ -339,6 +339,32 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ---------------------------------------------------------------------------
+    # Task retry settings (see app/tasks/retry_config.py)
+    # ---------------------------------------------------------------------------
+    task_retry_max_retries: int = Field(
+        default=3,
+        description=("Maximum number of automatic retry attempts for failed Celery tasks. Default: 3."),
+    )
+    task_retry_delays: Union[List[int], str] = Field(
+        default_factory=lambda: [60, 300, 900],
+        description=(
+            "Comma-separated list of retry countdown values in seconds. "
+            "Each value is the delay before the corresponding retry attempt. "
+            "If a task fails more times than entries in this list, the last delay "
+            "is doubled for each additional attempt. "
+            "Default: 60,300,900 (1 min, 5 min, 15 min)."
+        ),
+    )
+    task_retry_jitter: bool = Field(
+        default=True,
+        description=(
+            "Apply ±20 % random jitter to retry countdowns to prevent "
+            "thundering-herd problems when many tasks fail simultaneously. "
+            "Default: True (enabled)."
+        ),
+    )
+
     # Processing step timeout - prevents files from getting stuck in "in_progress" state
     step_timeout: int = Field(
         default=600,
@@ -526,6 +552,15 @@ class Settings(BaseSettings):
                 return [v.strip()]
             return []
         return v
+
+    @field_validator("task_retry_delays", mode="before")
+    @classmethod
+    def parse_task_retry_delays(cls, v: str | list) -> list[int]:
+        """Parse task retry delays from comma-separated string or list of ints."""
+        if isinstance(v, str):
+            parts = [p.strip() for p in v.split(",") if p.strip()]
+            return [int(p) for p in parts]
+        return [int(item) for item in v]
 
     @field_validator("session_secret")
     @classmethod

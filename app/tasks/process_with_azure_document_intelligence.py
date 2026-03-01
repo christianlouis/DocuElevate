@@ -9,7 +9,7 @@ from azure.core.credentials import AzureKeyCredential
 
 from app.celery_app import celery
 from app.config import settings
-from app.tasks.retry_config import BaseTaskWithRetry
+from app.tasks.retry_config import OcrTaskWithRetry
 from app.tasks.rotate_pdf_pages import rotate_pdf_pages
 from app.utils import log_task_progress
 
@@ -81,7 +81,7 @@ def check_page_rotation(result, filename, task_id=None):
     return rotation_data
 
 
-@celery.task(base=BaseTaskWithRetry, bind=True)
+@celery.task(base=OcrTaskWithRetry, bind=True)
 def process_with_azure_document_intelligence(self, filename: str, file_id: int = None):
     """
     Processes a PDF document using Azure Document Intelligence and overlays OCR text onto

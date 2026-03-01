@@ -6,13 +6,13 @@ import subprocess
 
 from app.celery_app import celery
 from app.config import settings
-from app.tasks.retry_config import BaseTaskWithRetry
+from app.tasks.retry_config import UploadTaskWithRetry
 from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
 
 
-@celery.task(base=BaseTaskWithRetry, bind=True)
+@celery.task(base=UploadTaskWithRetry, bind=True)
 def upload_with_rclone(self, file_path: str, destination: str):
     """
     Uploads a file using rclone to the specified destination.
@@ -107,7 +107,7 @@ def upload_with_rclone(self, file_path: str, destination: str):
         raise RuntimeError(error_msg) from e
 
 
-@celery.task(base=BaseTaskWithRetry, bind=True)
+@celery.task(base=UploadTaskWithRetry, bind=True)
 def send_to_all_rclone_destinations(self, file_path: str):
     """
     Uploads a file to all configured rclone destinations.

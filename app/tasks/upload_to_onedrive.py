@@ -10,7 +10,7 @@ import requests
 
 from app.celery_app import celery
 from app.config import settings
-from app.tasks.retry_config import BaseTaskWithRetry
+from app.tasks.retry_config import UploadTaskWithRetry
 from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
@@ -209,7 +209,7 @@ def upload_large_file(file_path, upload_url):
     return response.json()
 
 
-@celery.task(base=BaseTaskWithRetry, bind=True)
+@celery.task(base=UploadTaskWithRetry, bind=True)
 def upload_to_onedrive(self, file_path: str, file_id: int = None):
     """
     Uploads a file to OneDrive in the configured folder.

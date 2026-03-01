@@ -23,7 +23,7 @@ from app.celery_app import celery
 from app.config import settings
 from app.database import SessionLocal
 from app.models import FileRecord
-from app.tasks.retry_config import BaseTaskWithRetry
+from app.tasks.retry_config import OcrTaskWithRetry
 from app.tasks.rotate_pdf_pages import rotate_pdf_pages
 from app.utils import log_task_progress
 from app.utils.ocr_provider import OCRResult, embed_text_layer, get_ocr_providers, merge_ocr_results
@@ -32,7 +32,7 @@ from app.utils.text_quality import TextSource, check_text_quality, compare_text_
 logger = logging.getLogger(__name__)
 
 
-@celery.task(base=BaseTaskWithRetry, bind=True)
+@celery.task(base=OcrTaskWithRetry, bind=True)
 def process_with_ocr(self, filename: str, file_id: Optional[int] = None, original_text: Optional[str] = None):
     """Run the configured OCR providers on *filename* and continue the pipeline.
 

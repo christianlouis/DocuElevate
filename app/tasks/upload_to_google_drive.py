@@ -15,7 +15,7 @@ from googleapiclient.http import MediaFileUpload
 
 from app.celery_app import celery
 from app.config import settings
-from app.tasks.retry_config import BaseTaskWithRetry
+from app.tasks.retry_config import UploadTaskWithRetry
 from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
@@ -152,7 +152,7 @@ def truncate_property_value(key, value, max_bytes=100):
     return str_value
 
 
-@celery.task(base=BaseTaskWithRetry, bind=True)
+@celery.task(base=UploadTaskWithRetry, bind=True)
 def upload_to_google_drive(self, file_path: str, include_metadata=True, file_id: int = None):
     """
     Uploads a file to Google Drive in the configured folder with optional metadata.
