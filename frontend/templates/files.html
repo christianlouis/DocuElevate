@@ -3,6 +3,11 @@
 
 {% block head_extra %}
   <script src="/static/js/common.js"></script>
+  <!-- PDF.js library for in-browser PDF preview -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
   <script>
     window.uploadConfig = {
       concurrency: {{ upload_concurrency }},
@@ -340,6 +345,80 @@
       border-radius: 0.25rem;
       margin-bottom: 1rem;
     }
+
+    /* ── Preview modal (side panel) ── */
+    .preview-overlay {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,0.5); justify-content: flex-end;
+    }
+    .preview-overlay.active { display: flex; }
+    .preview-panel {
+      width: 55%; max-width: 720px; min-width: 340px; height: 100%;
+      background: white; box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+      display: flex; flex-direction: column; animation: slideIn 0.2s ease;
+    }
+    @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+    @media (max-width: 768px) { .preview-panel { width: 100%; max-width: 100%; } }
+    .preview-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.75rem 1rem; border-bottom: 1px solid #e5e7eb; flex-shrink: 0;
+    }
+    .preview-panel-header h3 { font-size: 1rem; font-weight: 600; color: #1f2937; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .preview-panel-close {
+      background: none; border: none; cursor: pointer; padding: 0.5rem;
+      color: #6b7280; font-size: 1.25rem; min-height: 44px; min-width: 44px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .preview-panel-close:hover { color: #1f2937; }
+    .preview-panel-body { flex: 1; overflow: auto; padding: 0; background: #f9fafb; }
+    .preview-panel-footer {
+      display: flex; align-items: center; justify-content: center; gap: 0.75rem;
+      padding: 0.75rem 1rem; border-top: 1px solid #e5e7eb; flex-shrink: 0;
+    }
+    .preview-panel-footer a, .preview-panel-footer button {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      padding: 0.4rem 0.9rem; border-radius: 0.25rem; font-size: 0.85rem; font-weight: 600;
+      text-decoration: none; cursor: pointer; border: 1px solid #d1d5db; background: white; color: #374151;
+      min-height: 40px;
+    }
+    .preview-panel-footer a:hover, .preview-panel-footer button:hover { background: #f3f4f6; }
+    /* PDF controls inside preview modal */
+    .pm-pdf-controls {
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+      padding: 0.5rem; background: #f1f5f9; border-bottom: 1px solid #e2e8f0;
+    }
+    .pm-pdf-controls button {
+      padding: 0.3rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 0.25rem;
+      background: white; cursor: pointer; font-size: 0.8rem; min-height: 36px; min-width: 36px;
+    }
+    .pm-pdf-controls button:disabled { opacity: 0.4; cursor: default; }
+    .pm-canvas-wrap { display: flex; justify-content: center; padding: 0.5rem; min-height: 300px; overflow: auto; }
+    .pm-canvas-wrap canvas { max-width: 100%; height: auto; }
+    /* Image in preview modal */
+    .pm-img-controls {
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+      padding: 0.5rem; background: #f1f5f9; border-bottom: 1px solid #e2e8f0;
+    }
+    .pm-img-controls button {
+      padding: 0.3rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 0.25rem;
+      background: white; cursor: pointer; font-size: 0.85rem; min-height: 36px; min-width: 36px;
+    }
+    .pm-img-wrap {
+      display: flex; justify-content: center; align-items: center;
+      overflow: auto; cursor: grab; flex: 1; padding: 0.5rem; background: #525659;
+    }
+    .pm-img-wrap.dragging { cursor: grabbing; }
+    .pm-img-wrap img { transition: transform 0.15s ease; max-width: 100%; height: auto; }
+    /* Text in preview modal */
+    .pm-text-content {
+      background: #1e293b; color: #e2e8f0; padding: 1rem; font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 0.82rem; line-height: 1.65; min-height: 300px; white-space: pre-wrap; word-break: break-word;
+      tab-size: 4;
+    }
+    .pm-line-number {
+      display: inline-block; width: 3.5em; color: #64748b; text-align: right;
+      margin-right: 1em; user-select: none; font-size: 0.75rem;
+    }
   </style>
 {% endblock %}
 
@@ -582,6 +661,9 @@
           <td>{{ file.created_at.strftime('%Y-%m-%d %H:%M:%S') if file.created_at else 'N/A' }}</td>
           <td>
             <div style="display: flex; align-items: center;">
+              <button onclick="openPreviewModal({{ file.id }}, '{{ file.mime_type or '' }}', '{{ file.original_filename | e }}', event)" class="action-btn" title="Quick preview" aria-label="Preview {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
+                <i class="fas fa-eye" aria-hidden="true"></i>
+              </button>
               <button onclick="viewFileDetail({{ file.id }}, event)" class="action-btn" title="View details" aria-label="View details for {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
                 <i class="fas fa-info-circle" aria-hidden="true"></i>
               </button>
@@ -621,6 +703,9 @@
         <div class="flex flex-col items-end gap-2 flex-shrink-0">
           <span class="status-badge status-{{ file.processing_status }}">{{ file.processing_status | title }}</span>
           <div class="flex gap-1" role="group" aria-label="File actions" onclick="event.stopPropagation();" onkeydown="event.stopPropagation();">
+            <button onclick="openPreviewModal({{ file.id }}, '{{ file.mime_type or '' }}', '{{ file.original_filename | e }}', event)" class="action-btn" title="Quick preview" aria-label="Preview {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
+              <i class="fas fa-eye" aria-hidden="true"></i>
+            </button>
             <button onclick="viewFileDetail({{ file.id }}, event)" class="action-btn" title="View details" aria-label="View details for {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
               <i class="fas fa-info-circle" aria-hidden="true"></i>
             </button>
@@ -676,6 +761,24 @@
     </div>
   </div>
 
+  <!-- Preview side-panel modal -->
+  <div id="previewOverlay" class="preview-overlay" role="dialog" aria-modal="true" aria-labelledby="previewTitle">
+    <div class="preview-panel">
+      <div class="preview-panel-header">
+        <h3 id="previewTitle">Preview</h3>
+        <button class="preview-panel-close" onclick="closePreviewModal()" aria-label="Close preview">
+          <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="preview-panel-body" id="previewBody" aria-live="polite">
+        <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#9ca3af;">
+          <i class="fas fa-spinner fa-spin" aria-hidden="true" style="font-size:2rem;"></i>
+        </div>
+      </div>
+      <div class="preview-panel-footer" id="previewFooter"></div>
+    </div>
+  </div>
+
   <script>
     // Modal functionality
     const deleteModal = document.getElementById('deleteModal');
@@ -693,6 +796,184 @@
       if (event) event.stopPropagation();
       window.location.href = `/files/${fileId}/detail`;
     }
+
+    // ── Preview modal ──
+    let _pmPdf = { doc: null, page: 1, total: 0 };
+    let _pmImgScale = 1;
+
+    function openPreviewModal(fileId, mime, filename, event) {
+      if (event) event.stopPropagation();
+      const overlay = document.getElementById('previewOverlay');
+      const title = document.getElementById('previewTitle');
+      const body = document.getElementById('previewBody');
+      const footer = document.getElementById('previewFooter');
+      title.textContent = filename || 'Preview';
+      body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:300px;color:#9ca3af;"><i class="fas fa-spinner fa-spin" style="font-size:2rem;"></i></div>';
+      footer.innerHTML = '';
+      _pmPdf = { doc: null, page: 1, total: 0 };
+      _pmImgScale = 1;
+      overlay.classList.add('active');
+      document.body.style.overflow = 'hidden';
+
+      footer.innerHTML =
+        `<a href="/files/${fileId}" aria-label="Open full view"><i class="fas fa-expand" aria-hidden="true"></i> Full view</a>` +
+        `<a href="/api/files/${fileId}/download?version=processed" aria-label="Download file"><i class="fas fa-download" aria-hidden="true"></i> Download</a>`;
+
+      // Try "processed" first; fall back to "original" on 404
+      _pmLoadPreview(body, fileId, mime, filename, 'processed');
+    }
+
+    function _pmLoadPreview(body, fileId, mime, filename, version) {
+      const previewUrl = `/api/files/${fileId}/preview?version=${version}`;
+      if (mime && mime.startsWith('image/')) {
+        _pmRenderImage(body, previewUrl, filename);
+      } else if (mime && mime.startsWith('text/')) {
+        _pmRenderText(body, previewUrl, function() {
+          if (version === 'processed') _pmLoadPreview(body, fileId, mime, filename, 'original');
+        });
+      } else {
+        _pmRenderPdf(body, previewUrl, function() {
+          if (version === 'processed') _pmLoadPreview(body, fileId, mime, filename, 'original');
+        });
+      }
+    }
+
+    function closePreviewModal() {
+      const overlay = document.getElementById('previewOverlay');
+      overlay.classList.remove('active');
+      document.body.style.overflow = '';
+      _pmPdf = { doc: null, page: 1, total: 0 };
+    }
+
+    // PDF rendering inside preview modal
+    function _pmRenderPdf(body, url, onError) {
+      body.innerHTML =
+        '<div class="pm-pdf-controls">' +
+          '<button onclick="_pmPdfPage(-1)" id="pm-prev" aria-label="Previous page"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>' +
+          '<span id="pm-page-info" style="font-size:0.8rem;min-width:100px;text-align:center;">Loading…</span>' +
+          '<button onclick="_pmPdfPage(1)" id="pm-next" aria-label="Next page"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>' +
+        '</div>' +
+        '<div class="pm-canvas-wrap" id="pm-canvas-wrap"><div style="text-align:center;padding:3rem;color:#94a3b8;"><i class="fas fa-spinner fa-spin" style="font-size:2rem;"></i></div></div>';
+
+      pdfjsLib.getDocument(url).promise.then(function(pdf) {
+        _pmPdf.doc = pdf;
+        _pmPdf.total = pdf.numPages;
+        _pmPdf.page = 1;
+        _pmPdfRender();
+      }).catch(function() {
+        if (onError) { onError(); return; }
+        document.getElementById('pm-canvas-wrap').innerHTML = '<div style="text-align:center;padding:2rem;color:#f87171;"><i class="fas fa-exclamation-triangle" style="font-size:2rem;margin-bottom:0.5rem;"></i><p>Failed to load PDF</p></div>';
+      });
+    }
+
+    function _pmPdfRender() {
+      var wrap = document.getElementById('pm-canvas-wrap');
+      if (!_pmPdf.doc || !wrap) return;
+      _pmPdf.doc.getPage(_pmPdf.page).then(function(page) {
+        var vp = page.getViewport({ scale: 1.0 });
+        var scale = Math.min((wrap.clientWidth - 16) / vp.width, 2.0);
+        var svp = page.getViewport({ scale: scale });
+        var canvas = document.createElement('canvas');
+        canvas.width = svp.width;
+        canvas.height = svp.height;
+        canvas.style.maxWidth = '100%';
+        canvas.style.height = 'auto';
+        wrap.innerHTML = '';
+        wrap.appendChild(canvas);
+        page.render({ canvasContext: canvas.getContext('2d'), viewport: svp });
+        _pmPdfUpdateInfo();
+      });
+    }
+
+    function _pmPdfPage(delta) {
+      var np = _pmPdf.page + delta;
+      if (np >= 1 && np <= _pmPdf.total) { _pmPdf.page = np; _pmPdfRender(); }
+    }
+
+    function _pmPdfUpdateInfo() {
+      var info = document.getElementById('pm-page-info');
+      if (info) info.textContent = 'Page ' + _pmPdf.page + ' of ' + _pmPdf.total;
+      var prev = document.getElementById('pm-prev');
+      var next = document.getElementById('pm-next');
+      if (prev) prev.disabled = _pmPdf.page <= 1;
+      if (next) next.disabled = _pmPdf.page >= _pmPdf.total;
+    }
+
+    // Image rendering inside preview modal
+    function _pmRenderImage(body, url, alt) {
+      body.innerHTML =
+        '<div class="pm-img-controls">' +
+          '<button onclick="_pmImgZoom(1.25)" title="Zoom in" aria-label="Zoom in"><i class="fas fa-search-plus" aria-hidden="true"></i></button>' +
+          '<button onclick="_pmImgZoom(0.8)" title="Zoom out" aria-label="Zoom out"><i class="fas fa-search-minus" aria-hidden="true"></i></button>' +
+          '<button onclick="_pmImgReset()" title="Reset" aria-label="Reset zoom"><i class="fas fa-expand" aria-hidden="true"></i></button>' +
+          '<span id="pm-zoom-level" style="font-size:0.8rem;color:#6b7280;">100%</span>' +
+        '</div>' +
+        '<div class="pm-img-wrap" id="pm-img-wrap"><img id="pm-preview-img" src="' + url + '" alt="' + (alt || 'Preview') + '" draggable="false" style="max-width:100%;height:auto;"></div>';
+      // Drag-pan
+      var wrap = document.getElementById('pm-img-wrap');
+      if (wrap) {
+        var dragging = false, sX, sY, sL, sT;
+        wrap.addEventListener('mousedown', function(e){ dragging=true; wrap.classList.add('dragging'); sX=e.pageX-wrap.offsetLeft; sY=e.pageY-wrap.offsetTop; sL=wrap.scrollLeft; sT=wrap.scrollTop; });
+        wrap.addEventListener('mousemove', function(e){ if(!dragging) return; e.preventDefault(); wrap.scrollLeft=sL-(e.pageX-wrap.offsetLeft-sX); wrap.scrollTop=sT-(e.pageY-wrap.offsetTop-sY); });
+        wrap.addEventListener('mouseup', function(){ dragging=false; wrap.classList.remove('dragging'); });
+        wrap.addEventListener('mouseleave', function(){ dragging=false; wrap.classList.remove('dragging'); });
+        wrap.addEventListener('wheel', function(e){ e.preventDefault(); _pmImgZoom(e.deltaY<0?1.1:0.9); }, {passive:false});
+      }
+    }
+
+    function _pmImgZoom(factor) {
+      _pmImgScale = Math.max(0.25, Math.min(5, _pmImgScale * factor));
+      var img = document.getElementById('pm-preview-img');
+      if (img) img.style.transform = 'scale(' + _pmImgScale + ')';
+      var lbl = document.getElementById('pm-zoom-level');
+      if (lbl) lbl.textContent = Math.round(_pmImgScale * 100) + '%';
+    }
+
+    function _pmImgReset() {
+      _pmImgScale = 1;
+      var img = document.getElementById('pm-preview-img');
+      if (img) img.style.transform = 'scale(1)';
+      var lbl = document.getElementById('pm-zoom-level');
+      if (lbl) lbl.textContent = '100%';
+    }
+
+    // Text rendering inside preview modal
+    function _pmRenderText(body, url, onError) {
+      body.innerHTML = '<div class="pm-text-content" id="pm-text-content"><div style="text-align:center;padding:2rem;color:#94a3b8;"><i class="fas fa-spinner fa-spin"></i> Loading…</div></div>';
+      fetch(url)
+        .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+        .then(function(text) {
+          var container = document.getElementById('pm-text-content');
+          if (!container) return;
+          container.innerHTML = '';
+          var lines = text.split('\n');
+          for (var i = 0; i < lines.length; i++) {
+            var div = document.createElement('div');
+            var num = document.createElement('span');
+            num.className = 'pm-line-number';
+            num.textContent = (i + 1) + '';
+            div.appendChild(num);
+            div.appendChild(document.createTextNode(lines[i]));
+            container.appendChild(div);
+          }
+        })
+        .catch(function() {
+          if (onError) { onError(); return; }
+          var c = document.getElementById('pm-text-content');
+          if (c) c.innerHTML = '<div style="color:#f87171;padding:1rem;">Failed to load file</div>';
+        });
+    }
+
+    // Close preview on overlay click or Escape
+    document.getElementById('previewOverlay').addEventListener('click', function(e) {
+      if (e.target === this) closePreviewModal();
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var overlay = document.getElementById('previewOverlay');
+        if (overlay && overlay.classList.contains('active')) closePreviewModal();
+      }
+    });
 
     cancelDelete.addEventListener('click', () => {
       deleteModal.style.display = 'none';

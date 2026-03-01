@@ -165,15 +165,30 @@ If metadata has been extracted by GPT, this section displays structured informat
 - Understanding the complete data structure
 
 #### Document Previews
-View your documents side-by-side in embedded PDF viewers:
+View your documents with type-specific viewers:
 - **Original Document**: The immutable original file as first ingested, before any processing
 - **Processed Document**: The final file with embedded metadata
 
-**Features**:
-- In-browser PDF rendering for immediate viewing
-- Side-by-side comparison of original vs processed versions
-- Full 600px height previews for detailed review
-- **View Extracted Text** buttons below each preview to see the full text content
+**PDF Preview (pdf.js)**:
+- In-browser PDF rendering via pdf.js — no native browser PDF plugin required
+- Page navigation controls (previous / next) with page counter
+- High-quality canvas-based rendering that works consistently across browsers
+- Side-by-side comparison of original vs processed versions on the detail page
+
+**Image Preview (JPEG, PNG, TIFF, WebP)**:
+- In-browser image display with zoom and pan controls
+- Zoom in / out buttons and mouse-wheel zoom
+- Click-and-drag panning for large or zoomed images
+- Reset button to return to the original size
+- Zoom percentage indicator
+
+**Text File Preview**:
+- Syntax-highlighted display with line numbers
+- Monospace font for readable code and data
+- Copy-to-clipboard button for the full text content
+- Supports plain text, CSV, source code, and other text MIME types
+
+**View Extracted Text** buttons below each preview to see the full text content
 
 **Text Extraction Modals**: Click "View Extracted Text" to open a fullscreen modal showing:
 - Complete extracted text from OCR or PDF text layer
@@ -218,9 +233,17 @@ If your file is still available on disk, you can preview it directly in the brow
 - **Processed File**: The file after metadata has been embedded (if processing completed)
 
 Both previews support:
-- In-browser PDF viewing with embedded viewer
+- In-browser PDF viewing with pdf.js (canvas-based, no browser plugin needed)
+- Image viewing with zoom/pan for JPEG, PNG, TIFF, and WebP
+- Text file viewing with line numbers for plain text, CSV, and source code
 - Side-by-side comparison of original and processed versions
 - Full text extraction viewing via modal overlays
+
+**Quick Preview from File List**: On the main Files page, each file row includes an eye icon button that opens a slide-out side panel with a quick preview. This lets you:
+- Preview PDFs, images, and text files without leaving the file list
+- Navigate PDF pages within the panel
+- Zoom and pan images
+- Open the full document view or download the file from the panel footer
 
 **View Extracted Text**: Each preview includes a button to view the complete extracted text in a fullscreen modal. When you click this button:
 - The system extracts text from the PDF file on-demand using pypdf
