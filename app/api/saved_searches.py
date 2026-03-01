@@ -23,10 +23,14 @@ router = APIRouter(prefix="/saved-searches", tags=["saved-searches"])
 
 DbSession = Annotated[Session, Depends(get_db)]
 
-# Allowed filter keys that can be saved
+# Allowed filter keys that can be saved.
+# Files-view keys: search, mime_type, status, storage_provider, sort_by, sort_order
+# Search-view keys: q, document_type, language, sender, text_quality
+# Shared keys: tags, date_from, date_to
 ALLOWED_FILTER_KEYS = frozenset(
     {
         "search",
+        "q",
         "mime_type",
         "status",
         "date_from",
@@ -35,6 +39,10 @@ ALLOWED_FILTER_KEYS = frozenset(
         "tags",
         "sort_by",
         "sort_order",
+        "document_type",
+        "language",
+        "sender",
+        "text_quality",
     }
 )
 

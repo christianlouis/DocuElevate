@@ -29,6 +29,12 @@ def search_api(
     mime_type: Optional[str] = Query(None, description="Filter by MIME type (e.g. application/pdf)"),
     document_type: Optional[str] = Query(None, description="Filter by document type (e.g. Invoice)"),
     language: Optional[str] = Query(None, description="Filter by language code (e.g. de, en)"),
+    tags: Optional[str] = Query(None, description="Filter by tag (exact match)"),
+    sender: Optional[str] = Query(None, description="Filter by sender/absender (exact match)"),
+    text_quality: Optional[str] = Query(
+        None,
+        description="Filter by OCR text quality: no_text, low, medium, high",
+    ),
     date_from: Optional[int] = Query(None, description="Filter results created after this Unix timestamp"),
     date_to: Optional[int] = Query(None, description="Filter results created before this Unix timestamp"),
     page: int = Query(1, ge=1, description="Page number (1-based)"),
@@ -50,6 +56,9 @@ def search_api(
     - mime_type: Filter by MIME type
     - document_type: Filter by document type
     - language: Filter by language code
+    - tags: Filter by tag (exact match on a single tag)
+    - sender: Filter by sender/absender (exact match)
+    - text_quality: Filter by OCR text quality (no_text, low, medium, high)
     - date_from: Unix timestamp lower bound
     - date_to: Unix timestamp upper bound
     - page: Page number (default: 1)
@@ -57,7 +66,7 @@ def search_api(
 
     Example:
     ```
-    GET /api/search?q=invoice&document_type=Invoice&date_from=1704067200&page=1&per_page=20
+    GET /api/search?q=invoice&document_type=Invoice&tags=amazon&date_from=1704067200&page=1&per_page=20
     ```
 
     Response:
@@ -90,6 +99,9 @@ def search_api(
         mime_type=mime_type,
         document_type=document_type,
         language=language,
+        tags=tags,
+        sender=sender,
+        text_quality=text_quality,
         date_from=date_from,
         date_to=date_to,
         page=page,

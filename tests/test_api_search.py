@@ -97,6 +97,7 @@ class TestMeilisearchIndexDocument:
             assert doc["file_id"] == 1
             assert doc["document_title"] == "Invoice January 2026"
             assert "invoice" in doc["tags"]
+            assert doc["ocr_text_length"] == len("This is an invoice for services rendered")
 
     def test_index_document_meilisearch_error(self):
         """index_document returns False on Meilisearch exception."""
@@ -178,6 +179,62 @@ class TestMeilisearchSearchDocuments:
         assert "filter" in search_params
         assert 'mime_type = "application/pdf"' in search_params["filter"]
         assert 'language = "de"' in search_params["filter"]
+
+    def test_search_with_tags_filter(self):
+        """search_documents passes tags filter to Meilisearch."""
+        mock_client, mock_index = self._make_mock_client(hits=[], total=0)
+
+        with patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client):
+            from app.utils.meilisearch_client import search_documents
+
+            search_documents("test", tags="invoice", page=1, per_page=10)
+
+        call_kwargs = mock_index.search.call_args
+        search_params = call_kwargs[0][1]
+        assert "filter" in search_params
+        assert 'tags = "invoice"' in search_params["filter"]
+
+    def test_search_with_sender_filter(self):
+        """search_documents passes sender filter to Meilisearch."""
+        mock_client, mock_index = self._make_mock_client(hits=[], total=0)
+
+        with patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client):
+            from app.utils.meilisearch_client import search_documents
+
+            search_documents("test", sender="ACME Corp", page=1, per_page=10)
+
+        call_kwargs = mock_index.search.call_args
+        search_params = call_kwargs[0][1]
+        assert "filter" in search_params
+        assert 'sender = "ACME Corp"' in search_params["filter"]
+
+    def test_search_with_text_quality_high(self):
+        """search_documents translates text_quality=high to ocr_text_length filter."""
+        mock_client, mock_index = self._make_mock_client(hits=[], total=0)
+
+        with patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client):
+            from app.utils.meilisearch_client import search_documents
+
+            search_documents("test", text_quality="high", page=1, per_page=10)
+
+        call_kwargs = mock_index.search.call_args
+        search_params = call_kwargs[0][1]
+        assert "filter" in search_params
+        assert "ocr_text_length >= 2000" in search_params["filter"]
+
+    def test_search_with_text_quality_no_text(self):
+        """search_documents translates text_quality=no_text to ocr_text_length filter."""
+        mock_client, mock_index = self._make_mock_client(hits=[], total=0)
+
+        with patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client):
+            from app.utils.meilisearch_client import search_documents
+
+            search_documents("test", text_quality="no_text", page=1, per_page=10)
+
+        call_kwargs = mock_index.search.call_args
+        search_params = call_kwargs[0][1]
+        assert "filter" in search_params
+        assert "ocr_text_length = 0" in search_params["filter"]
 
     def test_search_pagination(self):
         """search_documents applies correct offset for page 2."""
@@ -271,6 +328,9 @@ class TestSearchAPIEndpoint:
             mime_type="application/pdf",
             document_type=None,
             language="en",
+            tags=None,
+            sender=None,
+            text_quality=None,
             date_from=None,
             date_to=None,
             page=2,
@@ -294,6 +354,9 @@ class TestSearchAPIEndpoint:
             mime_type=None,
             document_type=None,
             language=None,
+            tags=None,
+            sender=None,
+            text_quality=None,
             date_from=None,
             date_to=None,
             page=1,
@@ -310,3 +373,30 @@ class TestSearchAPIEndpoint:
         call_kwargs = mock_search.call_args
         assert call_kwargs[1]["date_from"] == 1704067200
         assert call_kwargs[1]["date_to"] == 1735689600
+
+    def test_search_endpoint_tags_filter(self, client):
+        """GET /api/search?q=...&tags=invoice passes tags to search_documents."""
+        mock_result = {"results": [], "total": 0, "page": 1, "pages": 0, "query": "test"}
+        with patch("app.api.search.search_documents", return_value=mock_result) as mock_search:
+            response = client.get("/api/search?q=test&tags=invoice")
+
+        assert response.status_code == 200
+        assert mock_search.call_args[1]["tags"] == "invoice"
+
+    def test_search_endpoint_sender_filter(self, client):
+        """GET /api/search?q=...&sender=ACME passes sender to search_documents."""
+        mock_result = {"results": [], "total": 0, "page": 1, "pages": 0, "query": "test"}
+        with patch("app.api.search.search_documents", return_value=mock_result) as mock_search:
+            response = client.get("/api/search?q=test&sender=ACME")
+
+        assert response.status_code == 200
+        assert mock_search.call_args[1]["sender"] == "ACME"
+
+    def test_search_endpoint_text_quality_filter(self, client):
+        """GET /api/search?q=...&text_quality=high passes text_quality to search_documents."""
+        mock_result = {"results": [], "total": 0, "page": 1, "pages": 0, "query": "test"}
+        with patch("app.api.search.search_documents", return_value=mock_result) as mock_search:
+            response = client.get("/api/search?q=test&text_quality=high")
+
+        assert response.status_code == 200
+        assert mock_search.call_args[1]["text_quality"] == "high"

@@ -33,8 +33,10 @@ _INDEX_SETTINGS = {
         "document_type",
         "language",
         "tags",
+        "sender",
         "created_at_ts",
         "file_id",
+        "ocr_text_length",
     ],
     "sortableAttributes": [
         "created_at_ts",
@@ -55,6 +57,7 @@ _INDEX_SETTINGS = {
         "file_size",
         "created_at_ts",
         "ocr_text",
+        "ocr_text_length",
     ],
     "rankingRules": [
         "words",
@@ -142,6 +145,7 @@ def _build_document(file_record: "FileRecord", text: str, metadata: dict) -> dic
         "file_size": file_record.file_size or 0,
         "created_at_ts": created_at_ts,
         "ocr_text": text or "",
+        "ocr_text_length": len(text) if text else 0,
     }
 
 
@@ -202,6 +206,9 @@ def search_documents(
     mime_type: Optional[str] = None,
     document_type: Optional[str] = None,
     language: Optional[str] = None,
+    tags: Optional[str] = None,
+    sender: Optional[str] = None,
+    text_quality: Optional[str] = None,
     date_from: Optional[int] = None,
     date_to: Optional[int] = None,
     page: int = 1,
@@ -214,6 +221,9 @@ def search_documents(
         mime_type: Optional MIME-type filter.
         document_type: Optional document type filter.
         language: Optional language filter (ISO 639-1, e.g. "de").
+        tags: Optional tag filter (exact match on a single tag).
+        sender: Optional sender/absender filter (exact match).
+        text_quality: Optional text quality filter: no_text, low, medium, high.
         date_from: Optional lower bound Unix timestamp for created_at.
         date_to: Optional upper bound Unix timestamp for created_at.
         page: 1-based page number.
@@ -240,6 +250,21 @@ def search_documents(
             filters.append(f'document_type = "{document_type}"')
         if language:
             filters.append(f'language = "{language}"')
+        if tags:
+            filters.append(f'tags = "{tags}"')
+        if sender:
+            filters.append(f'sender = "{sender}"')
+        if text_quality:
+            # Translate text_quality labels into ocr_text_length ranges
+            _tq_filters = {
+                "no_text": "ocr_text_length = 0",
+                "low": "ocr_text_length > 0 AND ocr_text_length < 500",
+                "medium": "ocr_text_length >= 500 AND ocr_text_length < 2000",
+                "high": "ocr_text_length >= 2000",
+            }
+            tq_expr = _tq_filters.get(text_quality)
+            if tq_expr:
+                filters.append(tq_expr)
         if date_from is not None:
             filters.append(f"created_at_ts >= {date_from}")
         if date_to is not None:
