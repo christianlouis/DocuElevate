@@ -10,6 +10,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.69.0 (2026-03-01)
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`32ea0c8`](https://github.com/christianlouis/DocuElevate/commit/32ea0c89494f9b558b513efda2f47505ebebce2b))
+
+- **changelog**: Update changelog [skip ci]
+  ([`1775c4e`](https://github.com/christianlouis/DocuElevate/commit/1775c4e0ddb678cabfd80d04acc4ad1b08761e17))
+
+### Features
+
+- **api**: Add GET /api/diagnostic/health endpoint for monitoring
+  ([`85da309`](https://github.com/christianlouis/DocuElevate/commit/85da30974020efabcd2bab525e74bc846ddd7edd))
+
+- **tasks**: Add retry logic with exponential backoff and jitter
+  ([`5ff7b72`](https://github.com/christianlouis/DocuElevate/commit/5ff7b72a800011bb3ea676994ac0326a3acf93e3))
+
+### Testing
+
+- Increase code coverage for app/views/wizard.py to 100%
+  ([`bf337a1`](https://github.com/christianlouis/DocuElevate/commit/bf337a15609d7aac008d68de7ca7398554b954ab))
+
+- **status**: Increase code coverage for app/views/status.py to 100%
+  ([`1095b41`](https://github.com/christianlouis/DocuElevate/commit/1095b415797583f52fd49c94c9d6b652e173f5ef))
+
+
 ## Unreleased
 
 ### Documentation
