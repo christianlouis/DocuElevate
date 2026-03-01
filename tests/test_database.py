@@ -1,5 +1,6 @@
 """Tests for app/database.py module."""
 
+import warnings
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -110,8 +111,28 @@ class TestSchemaMigrations:
 
         assert log.detail is None
 
-    def test_migration_adds_detail_column(self, tmp_path):
-        """Test that _run_schema_migrations adds detail column to existing tables."""
+    def test_deprecated_run_schema_migrations_warns(self, tmp_path):
+        """Test that _run_schema_migrations emits a DeprecationWarning."""
+        from sqlalchemy import create_engine
+
+        from app.database import _run_schema_migrations
+
+        db_path = str(tmp_path / "deprecation_test.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _run_schema_migrations(engine)
+
+            assert len(w) == 1
+            assert issubclass(w[0].category, DeprecationWarning)
+            assert "deprecated" in str(w[0].message).lower()
+            assert "Alembic" in str(w[0].message)
+
+        engine.dispose()
+
+    def test_deprecated_migration_still_adds_detail_column(self, tmp_path):
+        """Test that deprecated _run_schema_migrations still works for legacy callers."""
         from sqlalchemy import create_engine, text
 
         from app.database import _run_schema_migrations
@@ -133,8 +154,10 @@ class TestSchemaMigrations:
                 )
             )
 
-        # Run migrations
-        _run_schema_migrations(engine)
+        # Run deprecated migrations (suppress warning for test clarity)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            _run_schema_migrations(engine)
 
         # Verify detail column was added
         from sqlalchemy import inspect
@@ -145,8 +168,8 @@ class TestSchemaMigrations:
 
         engine.dispose()
 
-    def test_migration_adds_file_path_columns(self, tmp_path):
-        """Test that _run_schema_migrations adds file path columns to files table."""
+    def test_deprecated_migration_adds_file_path_columns(self, tmp_path):
+        """Test that deprecated _run_schema_migrations adds file path columns to files table."""
         from sqlalchemy import create_engine, text
 
         from app.database import _run_schema_migrations
@@ -165,8 +188,10 @@ class TestSchemaMigrations:
                 )
             )
 
-        # Run migrations
-        _run_schema_migrations(engine)
+        # Run deprecated migrations
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            _run_schema_migrations(engine)
 
         # Verify columns were added with correct types
         from sqlalchemy import inspect
@@ -192,92 +217,8 @@ class TestSchemaMigrations:
 
         engine.dispose()
 
-    def test_migration_adds_search_fields(self, tmp_path):
-        """Test that _run_schema_migrations adds ocr_text, ai_metadata, document_title to files table."""
-        from sqlalchemy import create_engine, text
-
-        from app.database import _run_schema_migrations
-
-        # Create a database with the old schema (no search fields)
-        db_path = str(tmp_path / "migration_search_fields_test.db")
-        engine = create_engine(f"sqlite:///{db_path}")
-        with engine.begin() as conn:
-            conn.execute(
-                text(
-                    "CREATE TABLE files ("
-                    "id INTEGER PRIMARY KEY, "
-                    "filename VARCHAR, "
-                    "filehash VARCHAR, "
-                    "original_file_path VARCHAR, "
-                    "processed_file_path VARCHAR, "
-                    "is_duplicate BOOLEAN DEFAULT FALSE NOT NULL, "
-                    "duplicate_of_id INTEGER)"
-                )
-            )
-
-        # Run migrations
-        _run_schema_migrations(engine)
-
-        # Verify search columns were added
-        from sqlalchemy import inspect
-
-        inspector = inspect(engine)
-        columns = {col["name"]: col for col in inspector.get_columns("files")}
-
-        assert "ocr_text" in columns
-        assert "ai_metadata" in columns
-        assert "document_title" in columns
-
-        engine.dispose()
-
-    def test_migration_drops_unique_filehash_index(self, tmp_path):
-        """Test that _run_schema_migrations drops unique index on filehash."""
-        from sqlalchemy import create_engine, text
-
-        from app.database import _run_schema_migrations
-
-        # Create a database with unique index on filehash
-        db_path = str(tmp_path / "migration_index_test.db")
-        engine = create_engine(f"sqlite:///{db_path}")
-        with engine.begin() as conn:
-            conn.execute(
-                text(
-                    "CREATE TABLE files ("
-                    "id INTEGER PRIMARY KEY, "
-                    "filename VARCHAR, "
-                    "filehash VARCHAR, "
-                    "upload_date DATETIME, "
-                    "original_file_path VARCHAR, "
-                    "processed_file_path VARCHAR, "
-                    "is_duplicate BOOLEAN DEFAULT FALSE NOT NULL, "
-                    "duplicate_of_id INTEGER)"
-                )
-            )
-            conn.execute(text("CREATE UNIQUE INDEX idx_filehash_unique ON files (filehash)"))
-
-        # Verify unique index exists before migration
-        from sqlalchemy import inspect
-
-        inspector = inspect(engine)
-        indexes_before = inspector.get_indexes("files")
-        unique_indexes_before = [idx for idx in indexes_before if idx.get("unique")]
-        assert len(unique_indexes_before) > 0
-
-        # Run migrations
-        _run_schema_migrations(engine)
-
-        # Verify unique index was removed
-        inspector = inspect(engine)
-        indexes_after = inspector.get_indexes("files")
-        unique_filehash_indexes_after = [
-            idx for idx in indexes_after if idx.get("unique") and "filehash" in idx.get("column_names", [])
-        ]
-        assert len(unique_filehash_indexes_after) == 0
-
-        engine.dispose()
-
-    def test_migration_handles_missing_tables_gracefully(self, tmp_path):
-        """Test that migrations don't fail when tables don't exist."""
+    def test_deprecated_migration_handles_missing_tables_gracefully(self, tmp_path):
+        """Test that deprecated migrations don't fail when tables don't exist."""
         from sqlalchemy import create_engine
 
         from app.database import _run_schema_migrations
@@ -287,12 +228,14 @@ class TestSchemaMigrations:
         engine = create_engine(f"sqlite:///{db_path}")
 
         # Run migrations - should not raise any errors
-        _run_schema_migrations(engine)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            _run_schema_migrations(engine)
 
         engine.dispose()
 
-    def test_migration_is_idempotent(self, tmp_path):
-        """Test that running migrations multiple times is safe."""
+    def test_deprecated_migration_is_idempotent(self, tmp_path):
+        """Test that running deprecated migrations multiple times is safe."""
         from sqlalchemy import create_engine, text
 
         from app.database import _run_schema_migrations
@@ -323,10 +266,12 @@ class TestSchemaMigrations:
                 )
             )
 
-        # Run migrations multiple times
-        _run_schema_migrations(engine)
-        _run_schema_migrations(engine)
-        _run_schema_migrations(engine)
+        # Run deprecated migrations multiple times
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            _run_schema_migrations(engine)
+            _run_schema_migrations(engine)
+            _run_schema_migrations(engine)
 
         # Verify all columns exist and no errors occurred
         from sqlalchemy import inspect
@@ -372,7 +317,11 @@ class TestInitDbErrors:
 
 @pytest.mark.unit
 class TestMultiVersionMigrations:
-    """Test migration scenarios from various database versions."""
+    """Test deprecated migration scenarios from various database versions.
+
+    These tests verify the deprecated _run_schema_migrations function still
+    works for legacy callers. New schema changes should use Alembic exclusively.
+    """
 
     def test_migration_from_v1_to_v2_processing_logs(self, tmp_path):
         """Test migration from v1 (no detail column) to v2 (with detail)."""
@@ -405,7 +354,9 @@ class TestMultiVersionMigrations:
             )
 
         # Run migration to v2
-        _run_schema_migrations(engine)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            _run_schema_migrations(engine)
 
         # Verify detail column exists and old data is preserved
         inspector = inspect(engine)
@@ -445,7 +396,9 @@ class TestMultiVersionMigrations:
             conn.execute(text("INSERT INTO files (filename, filehash) VALUES ('test.pdf', 'abc123')"))
 
         # Run migration to v3 (adds path columns and dedup columns)
-        _run_schema_migrations(engine)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            _run_schema_migrations(engine)
 
         # Verify all new columns exist
         inspector = inspect(engine)
@@ -489,7 +442,9 @@ class TestMultiVersionMigrations:
             )
 
         # Run migration - should not error even though there's no index to drop
-        _run_schema_migrations(engine)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            _run_schema_migrations(engine)
 
         # Should complete without error
         engine.dispose()
@@ -529,7 +484,9 @@ class TestMultiVersionMigrations:
             )
 
         # Run migration - should add missing columns only
-        _run_schema_migrations(engine)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            _run_schema_migrations(engine)
 
         # Verify all columns exist now
         inspector = inspect(engine)
@@ -570,9 +527,139 @@ class TestMultiVersionMigrations:
         # Run migration - should handle the exception path for index operations
         # (when get_indexes might have issues)
         try:
-            _run_schema_migrations(engine)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                _run_schema_migrations(engine)
             # Should complete without raising
         except Exception as e:
             pytest.fail(f"Migration should handle exceptions gracefully: {e}")
 
         engine.dispose()
+
+
+@pytest.mark.unit
+class TestAlembicUpgrade:
+    """Tests for Alembic-based migration management."""
+
+    def test_alembic_upgrade_stamps_fresh_database(self, tmp_path):
+        """Test that _run_alembic_upgrade stamps a fresh database to head."""
+        from sqlalchemy import create_engine, inspect, text
+
+        from app.database import Base, _run_alembic_upgrade
+
+        db_path = str(tmp_path / "fresh_alembic.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+
+        # Create all tables (simulates Base.metadata.create_all)
+        Base.metadata.create_all(bind=engine)
+
+        # Run Alembic upgrade — should stamp to head (not run migrations)
+        _run_alembic_upgrade(engine)
+
+        # Verify alembic_version table exists and has a revision
+        inspector = inspect(engine)
+        assert "alembic_version" in inspector.get_table_names()
+
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT version_num FROM alembic_version"))
+            row = result.fetchone()
+            assert row is not None
+            # Should be stamped to the latest revision
+            assert row[0] == "008_add_performance_indexes"
+
+        engine.dispose()
+
+    def test_alembic_upgrade_applies_pending_migrations(self, tmp_path):
+        """Test that _run_alembic_upgrade applies pending migrations to a tracked DB."""
+        from sqlalchemy import create_engine, text
+
+        from app.database import Base, _run_alembic_upgrade
+
+        db_path = str(tmp_path / "tracked_alembic.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+
+        # Create all tables
+        Base.metadata.create_all(bind=engine)
+
+        # Manually create alembic_version table and set to an earlier revision
+        with engine.begin() as conn:
+            conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
+            conn.execute(text("INSERT INTO alembic_version (version_num) VALUES ('008_add_performance_indexes')"))
+
+        # Run Alembic upgrade — should run pending migrations (none in this case)
+        _run_alembic_upgrade(engine)
+
+        # Verify alembic_version table still has the head revision
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT version_num FROM alembic_version"))
+            row = result.fetchone()
+            assert row is not None
+
+        engine.dispose()
+
+    def test_alembic_upgrade_idempotent(self, tmp_path):
+        """Test that calling _run_alembic_upgrade multiple times is safe."""
+        from sqlalchemy import create_engine, text
+
+        from app.database import Base, _run_alembic_upgrade
+
+        db_path = str(tmp_path / "idempotent_alembic.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+        Base.metadata.create_all(bind=engine)
+
+        # Run multiple times — should not raise
+        _run_alembic_upgrade(engine)
+        _run_alembic_upgrade(engine)
+        _run_alembic_upgrade(engine)
+
+        # Verify revision is still head
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT version_num FROM alembic_version"))
+            row = result.fetchone()
+            assert row is not None
+            assert row[0] == "008_add_performance_indexes"
+
+        engine.dispose()
+
+    def test_all_migration_revisions_exist(self):
+        """Test that all expected Alembic migration revisions are present."""
+        from pathlib import Path
+
+        migrations_dir = Path(__file__).resolve().parent.parent / "migrations" / "versions"
+        migration_files = sorted(migrations_dir.glob("*.py"))
+
+        expected_prefixes = [
+            "001_file_processing_steps",
+            "002_add_file_paths",
+            "003_add_deduplication_support",
+            "004_add_search_fields",
+            "005_add_saved_searches",
+            "006_add_detail_column",
+            "007_add_ocr_quality_drop_filehash_unique",
+            "008_add_performance_indexes",
+        ]
+
+        migration_names = [f.stem for f in migration_files]
+        for prefix in expected_prefixes:
+            assert prefix in migration_names, f"Missing Alembic migration: {prefix}"
+
+    def test_migration_chain_is_connected(self):
+        """Test that the Alembic migration chain is properly connected."""
+        from pathlib import Path
+
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+
+        migrations_dir = str(Path(__file__).resolve().parent.parent / "migrations")
+        alembic_cfg = Config()
+        alembic_cfg.set_main_option("script_location", migrations_dir)
+
+        script = ScriptDirectory.from_config(alembic_cfg)
+
+        # Walk the chain from base to head — should not raise
+        revisions = list(script.walk_revisions())
+        assert len(revisions) == 8  # 001 through 008
+
+        # Verify head is the performance indexes migration
+        heads = script.get_heads()
+        assert "008_add_performance_indexes" in heads

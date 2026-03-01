@@ -163,7 +163,15 @@ DATABASE_URL=mysql+pymysql://user:password@host:3306/docuelevate?charset=utf8mb4
 
 ## Schema Migrations with Alembic
 
-DocuElevate uses Alembic to manage all database schema changes.
+DocuElevate uses Alembic **exclusively** to manage all database schema changes.  On application startup, `init_db()` automatically applies any pending Alembic migrations, so the database schema is always kept in sync with the running code.
+
+> **Note:** Prior to this change, a manual `_run_schema_migrations()` helper in `app/database.py` applied schema changes outside of Alembic.  That function is now **deprecated** and will be removed in a future release.  All schema changes are tracked as Alembic revisions in `migrations/versions/`.
+
+### How It Works
+
+1. **Fresh databases** — `Base.metadata.create_all()` creates all tables from the SQLAlchemy models, then Alembic stamps the version to `head` (no migrations need to run).
+2. **Existing databases** — `alembic upgrade head` applies any pending migration scripts.
+3. **CLI usage** — You can still run `alembic upgrade head` manually or in CI/CD before the application starts.
 
 ### Apply Migrations
 
