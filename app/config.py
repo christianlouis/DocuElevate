@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import os
 from typing import Any, List, Optional, Union
 
@@ -598,6 +599,52 @@ class Settings(BaseSettings):
 
         # Return basic info if file not found
         return f"Version: {self.version}\nBuild Date: {self.build_date}\nGit SHA: {self.git_sha}"
+
+    @property
+    def release_name(self) -> str | None:
+        """Get the release codename for the current version from release_names.json.
+
+        Looks up the current version's minor version prefix (e.g., '0.5' for '0.5.3')
+        in release_names.json to find the associated codename. Returns None if no
+        codename is defined for the current version.
+
+        Returns:
+            The release codename string, or None if not found.
+        """
+        version = self.version
+        if not version or version == "unknown":
+            return None
+
+        release_names_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "release_names.json")
+        if not os.path.exists(release_names_file):
+            return None
+
+        try:
+            with open(release_names_file, "r") as f:
+                data = json.load(f)
+
+            releases = data.get("releases", {})
+
+            # Try exact version match first (e.g., "0.5.0")
+            if version in releases:
+                return releases[version].get("codename")
+
+            # Try minor version prefix (e.g., "0.5" for "0.5.3")
+            parts = version.split(".")
+            if len(parts) >= 2:
+                minor_prefix = f"{parts[0]}.{parts[1]}"
+                if minor_prefix in releases:
+                    return releases[minor_prefix].get("codename")
+
+            # Try major version prefix (e.g., "1" for "1.0.0")
+            if len(parts) >= 1:
+                major_prefix = parts[0]
+                if major_prefix in releases:
+                    return releases[major_prefix].get("codename")
+
+            return None
+        except (json.JSONDecodeError, KeyError, IndexError):
+            return None
 
 
 settings = Settings()

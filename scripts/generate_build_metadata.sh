@@ -68,19 +68,54 @@ else
     VERSION="unknown"
 fi
 
+# Look up release codename from release_names.json
+RELEASE_NAME=""
+if [ -f "release_names.json" ] && command -v python3 > /dev/null 2>&1; then
+    MINOR_PREFIX=$(echo "${VERSION}" | cut -d. -f1-2)
+    RELEASE_NAME=$(python3 -c "
+import json, sys
+try:
+    with open('release_names.json') as f:
+        data = json.load(f)
+    releases = data.get('releases', {})
+    version = '${VERSION}'
+    minor = '${MINOR_PREFIX}'
+    codename = None
+    if version in releases:
+        codename = releases[version].get('codename')
+    elif minor in releases:
+        codename = releases[minor].get('codename')
+    if codename:
+        print(codename)
+except Exception:
+    pass
+" 2>/dev/null || true)
+fi
+
+if [ -n "${RELEASE_NAME}" ]; then
+    echo "✓ Release Name: ${RELEASE_NAME}"
+fi
+
 # Generate RUNTIME_INFO with combined metadata
-cat > RUNTIME_INFO << EOF
-DocuElevate Build Information
+RUNTIME_INFO_CONTENT="DocuElevate Build Information
 ==============================
 Version: ${VERSION}
 Build Date: ${BUILD_DATE}
 Git Commit: ${GIT_FULL_SHA}
 Git Short SHA: ${GIT_SHA}
 Git Branch: ${GIT_BRANCH}
-Commit Date: ${GIT_COMMIT_DATE}
+Commit Date: ${GIT_COMMIT_DATE}"
+
+if [ -n "${RELEASE_NAME}" ]; then
+    RUNTIME_INFO_CONTENT="${RUNTIME_INFO_CONTENT}
+Release Name: ${RELEASE_NAME}"
+fi
+
+RUNTIME_INFO_CONTENT="${RUNTIME_INFO_CONTENT}
 Build Timestamp: $(date -u '+%Y-%m-%dT%H:%M:%SZ')
-==============================
-EOF
+=============================="
+
+echo "${RUNTIME_INFO_CONTENT}" > RUNTIME_INFO
 
 echo "✓ RUNTIME_INFO generated"
 echo ""

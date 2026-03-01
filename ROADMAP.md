@@ -7,7 +7,20 @@
 
 DocuElevate aims to be the premier open-source intelligent document processing platform, providing seamless integration with cloud storage providers, advanced AI-powered metadata extraction, and enterprise-grade security and scalability.
 
-## Current Status (v0.5.0)
+## Release Naming
+
+Each major milestone release carries a codename to anchor key project moments. These names appear in the status dashboard, build metadata, and changelog. For details, see [docs/ReleaseNaming.md](docs/ReleaseNaming.md).
+
+| Version Range | Codename      | Theme                                           |
+|---------------|---------------|--------------------------------------------------|
+| 0.5.x         | **Foundation** | Core platform, multi-provider storage, AI, UI   |
+| 0.6.x         | **Clarity**    | Enhanced search, filtering, UI/UX improvements  |
+| 0.7.x         | **Conductor**  | Workflow automation, pipelines, rule-based logic |
+| 1.0.x         | **Summit**     | Enterprise features, multi-tenancy, RBAC        |
+| 1.1.x         | **Bridge**     | Collaboration, sharing, analytics                |
+| 2.0.x         | **Horizon**    | On-premise AI, platform expansion               |
+
+## Current Status (v0.5.0 "Foundation")
 
 ### Core Features ✅
 - Multi-provider document storage (Dropbox, Google Drive, OneDrive, Nextcloud, S3, etc.)
@@ -23,7 +36,7 @@ DocuElevate aims to be the premier open-source intelligent document processing p
 - Celery-based async task processing
 - OAuth2 authentication via Authentik with admin group support
 
-## Short-term Goals (Q1-Q2 2026) - v0.4.x to v0.5.x
+## Short-term Goals (Q1-Q2 2026) - v0.4.x to v0.5.x "Foundation"
 
 ### Quality & Stability 🎯
 - **Test Coverage** (High Priority)
@@ -53,7 +66,7 @@ DocuElevate aims to be the premier open-source intelligent document processing p
   - [x] Integrate Docker builds with releases
 
 ### Features - v0.4.0
-- **Enhanced Search & Filtering**
+- **Enhanced Search & Filtering** → _preparing for v0.6.0 "Clarity"_
   - [ ] Full-text search across documents
   - [ ] Advanced filtering by metadata, tags, date ranges
   - [ ] Saved search queries
@@ -67,8 +80,8 @@ DocuElevate aims to be the premier open-source intelligent document processing p
   - [ ] Progress indicators for long-running tasks
   - [ ] Real-time notifications via WebSocket
 
-### Features - v0.5.0
-- **Workflow Automation**
+### Features - v0.5.0 "Foundation"
+- **Workflow Automation** → _evolving into v0.7.0 "Conductor"_
   - [ ] Custom processing pipelines
   - [ ] Conditional routing based on document type
   - [ ] Scheduled batch processing
@@ -82,9 +95,9 @@ DocuElevate aims to be the premier open-source intelligent document processing p
   - [ ] Automatic duplicate detection
   - [ ] Intelligent document splitting
 
-## Medium-term Goals (Q3-Q4 2026) - v1.0.x
+## Medium-term Goals (Q3-Q4 2026) - v1.0.x "Summit"
 
-### Enterprise Features - v1.0.0
+### Enterprise Features - v1.0.0 "Summit"
 - **Multi-tenancy**
   - [ ] Organization/team management
   - [ ] Role-based access control (RBAC)
@@ -106,7 +119,7 @@ DocuElevate aims to be the premier open-source intelligent document processing p
   - [ ] Custom webhook receivers
   - [ ] GraphQL API
 
-### Features - v1.1.0
+### Features - v1.1.0 "Bridge"
 - **Collaboration**
   - [ ] Document sharing with expiring links
   - [ ] Comments and annotations
@@ -121,7 +134,7 @@ DocuElevate aims to be the premier open-source intelligent document processing p
   - [ ] Cost analysis per provider
   - [ ] Export reports (PDF, CSV, Excel)
 
-## Long-term Goals (2027+) - v2.0+
+## Long-term Goals (2027+) - v2.0+ "Horizon"
 
 ### Strategic Initiatives
 - **On-Premise AI Models**

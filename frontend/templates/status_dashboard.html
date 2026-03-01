@@ -13,7 +13,7 @@
       This dashboard shows the status of all configured integrations and targets.
     </p>
     <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 my-4" role="alert">
-      <p><strong>App Version:</strong> {{ app_version }}</p>
+      <p><strong>App Version:</strong> {{ app_version }}{% if release_name %} <span class="italic">"{{ release_name }}"</span>{% endif %}</p>
       <p><strong>Build Date:</strong> {{ build_date }}</p>
       <p><strong>Debug Mode:</strong> {{ "Enabled" if debug_enabled else "Disabled" }}</p>
       {% if last_check %}

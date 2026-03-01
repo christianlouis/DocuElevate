@@ -73,12 +73,16 @@ async def status_dashboard(request: Request):
     # Get notification URLs for the notification box
     notification_urls = getattr(settings, "notification_urls", [])
 
+    # Get release codename if available
+    release_name = getattr(settings, "release_name", None)
+
     return templates.TemplateResponse(
         "status_dashboard.html",
         {
             "request": request,
             "providers": providers,
             "app_version": settings.version,
+            "release_name": release_name,
             "build_date": build_date,
             "debug_enabled": getattr(settings, "debug", False),
             "last_check": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
