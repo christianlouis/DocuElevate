@@ -6,6 +6,7 @@ import logging
 import mimetypes
 import os
 import uuid
+from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
@@ -15,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.auth import require_login
 from app.config import settings
 from app.database import get_db
-from app.models import FileRecord, ProcessingLog
+from app.models import FileProcessingStep, FileRecord, ProcessingLog
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document
 from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES, IMAGE_MIME_TYPES
@@ -54,6 +55,10 @@ def list_files_api(
     search: Optional[str] = Query(None, description="Search in filename"),
     mime_type: Optional[str] = Query(None, description="Filter by MIME type"),
     status: Optional[str] = Query(None, description="Filter by processing status"),
+    date_from: Optional[str] = Query(None, description="Filter files created on or after this date (ISO 8601)"),
+    date_to: Optional[str] = Query(None, description="Filter files created on or before this date (ISO 8601)"),
+    storage_provider: Optional[str] = Query(None, description="Filter by storage provider (e.g. dropbox, s3)"),
+    tags: Optional[str] = Query(None, description="Filter by tag (comma-separated for multiple, AND logic)"),
 ):
     """
     Returns a paginated JSON list of FileRecord entries with processing status.
@@ -67,6 +72,10 @@ def list_files_api(
     - search: Search in filename
     - mime_type: Filter by MIME type
     - status: Filter by processing status (pending, processing, completed, failed)
+    - date_from: Filter files created on or after this date (ISO 8601, e.g. 2026-01-01)
+    - date_to: Filter files created on or before this date (ISO 8601, e.g. 2026-12-31)
+    - storage_provider: Filter by storage provider (e.g. dropbox, s3, google_drive)
+    - tags: Filter by tags (comma-separated, AND logic)
 
     Example response:
     {
@@ -94,6 +103,47 @@ def list_files_api(
     # Apply MIME type filter
     if mime_type:
         query = query.filter(FileRecord.mime_type == mime_type)
+
+    # Apply date range filters
+    if date_from:
+        try:
+            dt_from = datetime.fromisoformat(date_from).replace(tzinfo=timezone.utc)
+            query = query.filter(FileRecord.created_at >= dt_from)
+        except ValueError:
+            raise HTTPException(
+                status_code=422,
+                detail="Invalid date_from format. Use ISO 8601 (e.g. 2026-01-01)",
+            )
+
+    if date_to:
+        try:
+            dt_to = datetime.fromisoformat(date_to).replace(tzinfo=timezone.utc)
+            query = query.filter(FileRecord.created_at <= dt_to)
+        except ValueError:
+            raise HTTPException(
+                status_code=422,
+                detail="Invalid date_to format. Use ISO 8601 (e.g. 2026-12-31)",
+            )
+
+    # Apply storage provider filter (files that have a successful upload_to_{provider} step)
+    if storage_provider:
+        step_name = f"upload_to_{storage_provider}"
+        uploaded_file_ids = (
+            db.query(FileProcessingStep.file_id)
+            .filter(
+                FileProcessingStep.step_name == step_name,
+                FileProcessingStep.status == "success",
+            )
+            .distinct()
+            .subquery()
+        )
+        query = query.filter(FileRecord.id.in_(db.query(uploaded_file_ids.c.file_id)))
+
+    # Apply tags filter (AND logic: all specified tags must be present in ai_metadata)
+    if tags:
+        tag_list = [t.strip().lower() for t in tags.split(",") if t.strip()]
+        for tag in tag_list:
+            query = query.filter(FileRecord.ai_metadata.ilike(f"%{tag}%"))
 
     # Apply status filter (before pagination for correct counts)
     query = apply_status_filter(query, db, status)

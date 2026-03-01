@@ -475,7 +475,7 @@
 
   <!-- Filters Section -->
   <div class="filters-section">
-    <form method="get" action="/files" class="filter-group">
+    <form method="get" action="/files" class="filter-group" role="search" aria-label="Filter files">
       <div class="filter-item">
         <label for="search">Search Filename</label>
         <input type="text" id="search" name="search" value="{{ search }}" placeholder="Enter filename...">
@@ -504,6 +504,36 @@
       </div>
 
       <div class="filter-item">
+        <label for="date_from">Date From</label>
+        <input type="date" id="date_from" name="date_from" value="{{ date_from }}" aria-label="Filter from date">
+      </div>
+
+      <div class="filter-item">
+        <label for="date_to">Date To</label>
+        <input type="date" id="date_to" name="date_to" value="{{ date_to }}" aria-label="Filter to date">
+      </div>
+
+      <div class="filter-item">
+        <label for="storage_provider">Storage Provider</label>
+        <select id="storage_provider" name="storage_provider">
+          <option value="">All Providers</option>
+          <option value="dropbox" {% if storage_provider == "dropbox" %}selected{% endif %}>Dropbox</option>
+          <option value="google_drive" {% if storage_provider == "google_drive" %}selected{% endif %}>Google Drive</option>
+          <option value="onedrive" {% if storage_provider == "onedrive" %}selected{% endif %}>OneDrive</option>
+          <option value="s3" {% if storage_provider == "s3" %}selected{% endif %}>S3</option>
+          <option value="nextcloud" {% if storage_provider == "nextcloud" %}selected{% endif %}>Nextcloud</option>
+          <option value="webdav" {% if storage_provider == "webdav" %}selected{% endif %}>WebDAV</option>
+          <option value="ftp" {% if storage_provider == "ftp" %}selected{% endif %}>FTP</option>
+          <option value="sftp" {% if storage_provider == "sftp" %}selected{% endif %}>SFTP</option>
+        </select>
+      </div>
+
+      <div class="filter-item">
+        <label for="tags">Tags</label>
+        <input type="text" id="tags" name="tags" value="{{ tags }}" placeholder="e.g. invoice,amazon" aria-label="Filter by tags (comma-separated)">
+      </div>
+
+      <div class="filter-item">
         <label>&nbsp;</label>
         <button type="submit">Apply Filters</button>
       </div>
@@ -518,6 +548,21 @@
       <input type="hidden" name="sort_order" value="{{ sort_order }}">
       <input type="hidden" name="per_page" value="{{ pagination.per_page }}">
     </form>
+  </div>
+
+  <!-- Saved Searches Section -->
+  <div class="filters-section" style="margin-top: 0.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; width: 100%;">
+      <label style="font-weight: 600; font-size: 0.85rem; white-space: nowrap;">
+        <i class="fas fa-bookmark" aria-hidden="true"></i> Saved Searches:
+      </label>
+      <div id="saved-searches-list" style="display: flex; gap: 0.25rem; flex-wrap: wrap;" aria-live="polite">
+        <span style="color: var(--text-muted); font-size: 0.85rem;">Loading...</span>
+      </div>
+      <button type="button" onclick="saveCurrentFilters()" class="btn-save-search" style="margin-left: auto; font-size: 0.8rem; padding: 0.25rem 0.5rem; cursor: pointer;" aria-label="Save current filters as a saved search">
+        <i class="fas fa-plus" aria-hidden="true"></i> Save Current
+      </button>
+    </div>
   </div>
 
   <!-- Full-Text Search Section -->
@@ -1054,6 +1099,73 @@
     function clearFilters() {
       window.location.href = '/files';
     }
+
+    // Saved searches functionality
+    function loadSavedSearches() {
+      fetch('/api/saved-searches')
+        .then(response => response.json())
+        .then(searches => {
+          const container = document.getElementById('saved-searches-list');
+          if (!container) return;
+          if (!searches || searches.length === 0) {
+            container.innerHTML = '<span style="color: var(--text-muted); font-size: 0.85rem;">No saved searches yet</span>';
+            return;
+          }
+          container.innerHTML = searches.map(s => {
+            const params = new URLSearchParams(s.filters);
+            return `<span class="saved-search-tag" style="display: inline-flex; align-items: center; gap: 0.25rem; background: var(--bg-tertiary, #e5e7eb); padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-size: 0.8rem;">
+              <a href="/files?${params.toString()}" style="text-decoration: none; color: inherit;">${s.name}</a>
+              <button type="button" onclick="deleteSavedSearch(${s.id})" style="border: none; background: none; cursor: pointer; color: var(--text-muted); padding: 0; line-height: 1;" aria-label="Delete saved search ${s.name}">
+                <i class="fas fa-times" aria-hidden="true"></i>
+              </button>
+            </span>`;
+          }).join('');
+        })
+        .catch(() => {
+          const container = document.getElementById('saved-searches-list');
+          if (container) container.innerHTML = '<span style="color: var(--text-muted); font-size: 0.85rem;">Could not load saved searches</span>';
+        });
+    }
+
+    function saveCurrentFilters() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const filters = {};
+      const filterKeys = ['search', 'mime_type', 'status', 'date_from', 'date_to', 'storage_provider', 'tags', 'sort_by', 'sort_order'];
+      filterKeys.forEach(key => {
+        const val = urlParams.get(key);
+        if (val) filters[key] = val;
+      });
+      if (Object.keys(filters).length === 0) {
+        alert('No filters to save. Apply some filters first.');
+        return;
+      }
+      const name = prompt('Enter a name for this saved search:');
+      if (!name || !name.trim()) return;
+      fetch('/api/saved-searches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), filters: filters })
+      })
+      .then(response => {
+        if (!response.ok) return response.json().then(d => { throw new Error(d.detail || 'Failed to save'); });
+        return response.json();
+      })
+      .then(() => loadSavedSearches())
+      .catch(error => alert(error.message));
+    }
+
+    function deleteSavedSearch(id) {
+      if (!confirm('Delete this saved search?')) return;
+      fetch(`/api/saved-searches/${id}`, { method: 'DELETE' })
+        .then(response => {
+          if (!response.ok) throw new Error('Failed to delete');
+          loadSavedSearches();
+        })
+        .catch(error => alert(error.message));
+    }
+
+    // Load saved searches on page load
+    document.addEventListener('DOMContentLoaded', loadSavedSearches);
 
     // Bulk selection functionality
     function toggleSelectAll() {
