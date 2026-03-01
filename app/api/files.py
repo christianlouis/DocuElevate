@@ -916,14 +916,14 @@ def download_file(
     request: Request,
     file_id: int,
     db: DbSession,
-    version: str = Query("original", description="original or processed"),
+    version: str = Query("processed", description="'processed' (default) or 'original'"),
 ):
     """
-    Download file (original or processed version) as attachment.
+    Download file (processed or original version) as attachment.
 
     Args:
         file_id: ID of the file
-        version: "original" for tmp file, "processed" for processed file
+        version: "processed" (default) for the post-processing file, "original" for the raw upload
 
     Returns:
         File content as attachment download

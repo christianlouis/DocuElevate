@@ -388,6 +388,32 @@ curl "http://<your-instance>/api/files/123/preview?version=processed"
 - `404`: File not found in database or on disk
 - `400`: Invalid version parameter
 
+### File Download
+
+**GET** `/api/files/{file_id}/download`
+
+Download a file as an attachment. The `Content-Disposition` header is set to `attachment` with the original filename so the browser prompts a save dialog.
+
+**Parameters**:
+- `version` (optional, default: `processed`): Either `processed` or `original`
+  - `processed` *(default)*: Downloads the post-processing file (with embedded metadata)
+  - `original`: Downloads the raw file as originally uploaded
+
+**Response**: File content with `Content-Disposition: attachment; filename="<original_filename>"`.
+
+**Example**:
+```bash
+# Download processed file (default)
+curl -OJ "http://<your-instance>/api/files/123/download"
+
+# Download original upload
+curl -OJ "http://<your-instance>/api/files/123/download?version=original"
+```
+
+**Error Responses**:
+- `404`: File not found in database or on disk
+- `400`: Invalid `version` parameter (must be `processed` or `original`)
+
 ### Batch Processing
 
 **POST** `/api/processall`
