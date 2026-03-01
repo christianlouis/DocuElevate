@@ -281,26 +281,125 @@ The endpoint blocks access to:
 
 **GET** `/api/files`
 
-Retrieve a list of processed files.
+Retrieve a paginated list of processed files with advanced filtering and sorting.
 
-**Parameters**:
-- `limit` (optional): Maximum number of files to return
-- `offset` (optional): Pagination offset
-- `search` (optional): Search term
+**Query Parameters**:
+- `page` (optional, default: 1): Page number
+- `per_page` (optional, default: 50, max: 200): Items per page
+- `sort_by` (optional, default: created_at): Sort field (`id`, `original_filename`, `file_size`, `mime_type`, `created_at`)
+- `sort_order` (optional, default: desc): Sort order (`asc` or `desc`)
+- `search` (optional): Search in filename (partial match)
+- `mime_type` (optional): Filter by exact MIME type (e.g. `application/pdf`)
+- `status` (optional): Filter by processing status (`pending`, `processing`, `completed`, `failed`, `duplicate`)
+- `date_from` (optional): Filter files created on or after this date (ISO 8601, e.g. `2026-01-01`)
+- `date_to` (optional): Filter files created on or before this date (ISO 8601, e.g. `2026-12-31`)
+- `storage_provider` (optional): Filter by storage provider (e.g. `dropbox`, `s3`, `google_drive`, `onedrive`, `nextcloud`)
+- `tags` (optional): Filter by tags in AI metadata (comma-separated, AND logic, e.g. `invoice,amazon`)
+
+All filters are combinable using AND logic.
+
+**Example**:
+```
+GET /api/files?status=completed&mime_type=application/pdf&tags=invoice&date_from=2026-01-01&sort_by=created_at&sort_order=desc
+```
+
+**Response**:
+```json
+{
+  "files": [
+    {
+      "id": 123,
+      "original_filename": "invoice.pdf",
+      "file_size": 1024000,
+      "mime_type": "application/pdf",
+      "created_at": "2026-04-15T12:30:45Z",
+      "processing_status": {
+        "status": "completed",
+        "last_step": "send_to_all_destinations",
+        "has_errors": false,
+        "total_steps": 8
+      }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "per_page": 50,
+    "total_items": 150,
+    "total_pages": 3
+  }
+}
+```
+
+> **Tip**: Filter state is reflected in query parameters, making URLs shareable as bookmarks or direct links.
+
+### Saved Searches
+
+Saved searches allow users to save and reuse filter combinations. Each user can store up to 50 saved searches.
+
+#### List Saved Searches
+
+**GET** `/api/saved-searches`
+
+Returns all saved searches for the current user.
 
 **Response**:
 ```json
 [
   {
-    "id": 123,
-    "original_filename": "invoice.pdf",
-    "file_size": 1024000,
-    "mime_type": "application/pdf",
-    "created_at": "2023-04-15T12:30:45Z"
-  },
-  ...
+    "id": 1,
+    "name": "Recent Invoices",
+    "filters": {
+      "tags": "invoice",
+      "status": "completed",
+      "date_from": "2026-01-01"
+    },
+    "created_at": "2026-03-01T10:00:00Z",
+    "updated_at": "2026-03-01T10:00:00Z"
+  }
 ]
 ```
+
+#### Create Saved Search
+
+**POST** `/api/saved-searches`
+
+**Request Body**:
+```json
+{
+  "name": "Recent Invoices",
+  "filters": {
+    "tags": "invoice",
+    "status": "completed",
+    "date_from": "2026-01-01"
+  }
+}
+```
+
+**Allowed filter keys**: `search`, `mime_type`, `status`, `date_from`, `date_to`, `storage_provider`, `tags`, `sort_by`, `sort_order`
+
+**Response** (201 Created): The created saved search object.
+
+#### Update Saved Search
+
+**PUT** `/api/saved-searches/{id}`
+
+**Request Body** (all fields optional):
+```json
+{
+  "name": "Updated Name",
+  "filters": {
+    "tags": "invoice,amazon"
+  }
+}
+```
+
+**Response**: The updated saved search object.
+
+#### Delete Saved Search
+
+**DELETE** `/api/saved-searches/{id}`
+
+**Response**: 204 No Content
 
 ### File Metadata
 
