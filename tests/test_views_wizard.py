@@ -39,6 +39,13 @@ class TestWizardViews:
         response = client.get("/setup/skip", follow_redirects=False)
         assert response.status_code in (200, 303)
 
+    @patch("app.utils.settings_service.get_setting_from_db")
+    def test_setup_wizard_step_with_db_value(self, mock_get_setting, client):
+        """Test GET /setup when settings have a stored DB value (covers lines 56-57)."""
+        mock_get_setting.return_value = "stored_db_value"
+        response = client.get("/setup?step=1")
+        assert response.status_code == 200
+
 
 @pytest.mark.integration
 class TestWizardViewsPost:
@@ -143,6 +150,25 @@ class TestWizardViewsPost:
         assert response.status_code == 303
 
     @patch("app.views.wizard.save_setting_to_db")
+    def test_setup_wizard_save_returns_false_for_valid_key(self, mock_save, client):
+        """Test branch when save_setting_to_db returns False for a real wizard key (covers branch 111->99)."""
+        mock_save.return_value = False
+
+        response = client.post(
+            "/setup",
+            data={
+                "step": "1",
+                "database_url": "sqlite:///test.db",
+            },
+            follow_redirects=False,
+        )
+
+        # Should proceed to next step even when save returns False
+        assert response.status_code == 303
+        assert "/setup?step=2" in response.headers["location"]
+        mock_save.assert_called()
+
+    @patch("app.views.wizard.save_setting_to_db")
     def test_setup_wizard_save_exception_handling(self, mock_save, client):
         """Test exception handling in setup_wizard_save."""
         mock_save.side_effect = Exception("Database error")
@@ -189,3 +215,31 @@ class TestWizardSkip:
         # Should still redirect to home even on error
         assert response.status_code == 303
         assert response.headers["location"] == "/"
+
+
+@pytest.mark.integration
+class TestWizardUndoSkip:
+    """Tests for wizard undo-skip functionality."""
+
+    @patch("app.utils.settings_service.delete_setting_from_db")
+    def test_setup_wizard_undo_skip_success(self, mock_delete, client):
+        """Test successful undo of wizard skip (covers lines 166-171)."""
+        mock_delete.return_value = True
+
+        response = client.get("/setup/undo-skip", follow_redirects=False)
+
+        assert response.status_code == 303
+        assert "/setup?step=1" in response.headers["location"]
+        mock_delete.assert_called_once()
+        call_args = mock_delete.call_args[0]
+        assert call_args[1] == "_setup_wizard_skipped"
+
+    @patch("app.utils.settings_service.delete_setting_from_db")
+    def test_setup_wizard_undo_skip_exception_handling(self, mock_delete, client):
+        """Test exception handling when undoing wizard skip (covers lines 172-174)."""
+        mock_delete.side_effect = Exception("Database error")
+
+        response = client.get("/setup/undo-skip", follow_redirects=False)
+
+        assert response.status_code == 303
+        assert response.headers["location"] == "/settings"
