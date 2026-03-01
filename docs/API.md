@@ -704,6 +704,129 @@ Send a processed file to Google Drive.
 }
 ```
 
+## Webhooks
+
+Manage webhook configurations for notifying external systems when document events occur. All webhook endpoints require admin access.
+
+### Supported Events
+
+| Event | Description |
+|-------|-------------|
+| `document.uploaded` | A new document has been ingested |
+| `document.processed` | A document finished processing successfully |
+| `document.failed` | Document processing failed |
+
+### GET /api/webhooks/events/
+
+List all valid webhook event types.
+
+**Response (200):**
+```json
+["document.failed", "document.processed", "document.uploaded"]
+```
+
+### GET /api/webhooks/
+
+List all webhook configurations. Secrets are never included in responses.
+
+**Response (200):**
+```json
+[
+  {
+    "id": 1,
+    "url": "https://example.com/webhook",
+    "events": ["document.processed", "document.uploaded"],
+    "is_active": true,
+    "description": "Production webhook",
+    "has_secret": true
+  }
+]
+```
+
+### POST /api/webhooks/
+
+Create a new webhook configuration.
+
+**Request:**
+```json
+{
+  "url": "https://example.com/webhook",
+  "secret": "my-shared-secret",
+  "events": ["document.uploaded", "document.processed", "document.failed"],
+  "is_active": true,
+  "description": "My integration"
+}
+```
+
+**Response (201):**
+```json
+{
+  "id": 1,
+  "url": "https://example.com/webhook",
+  "events": ["document.failed", "document.processed", "document.uploaded"],
+  "is_active": true,
+  "description": "My integration",
+  "has_secret": true
+}
+```
+
+### GET /api/webhooks/{webhook_id}
+
+Get a single webhook configuration.
+
+**Response (200):** Same shape as list items above.
+
+### PUT /api/webhooks/{webhook_id}
+
+Update an existing webhook. Only supplied fields are changed.
+
+**Request:**
+```json
+{
+  "url": "https://new-url.example.com/webhook",
+  "is_active": false
+}
+```
+
+### DELETE /api/webhooks/{webhook_id}
+
+Delete a webhook configuration. Returns `204 No Content` on success.
+
+### Webhook Payload Format
+
+When a subscribed event occurs, a JSON POST request is sent to the configured URL:
+
+```json
+{
+  "event": "document.processed",
+  "timestamp": 1709322559.123456,
+  "data": {
+    "file_id": 42,
+    "filename": "invoice.pdf"
+  }
+}
+```
+
+### HMAC Signature
+
+If a secret is configured, an `X-Webhook-Signature` header is included with each request. The signature is computed as `sha256=<hex-digest>` using HMAC-SHA256 over the raw JSON body.
+
+To verify in Python:
+
+```python
+import hashlib, hmac
+
+def verify_signature(body: bytes, secret: str, signature: str) -> bool:
+    expected = "sha256=" + hmac.new(
+        secret.encode(), body, hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+```
+
+### Retry Behavior
+
+Failed deliveries (non-2xx responses or network errors) are automatically retried with exponential backoff: 60 s, 300 s, then 900 s (up to 3 retries with ±20 % jitter).
+
 ## Error Handling
 
 Errors follow standard HTTP status codes with descriptive messages:
