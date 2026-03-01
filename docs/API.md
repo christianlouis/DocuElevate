@@ -295,6 +295,7 @@ Retrieve a paginated list of processed files with advanced filtering and sorting
 - `date_to` (optional): Filter files created on or before this date (ISO 8601, e.g. `2026-12-31`)
 - `storage_provider` (optional): Filter by storage provider (e.g. `dropbox`, `s3`, `google_drive`, `onedrive`, `nextcloud`)
 - `tags` (optional): Filter by tags in AI metadata (comma-separated, AND logic, e.g. `invoice,amazon`)
+- `ocr_quality` (optional): Filter by AI-assessed OCR quality score (`poor` = score below threshold, `good` = score at or above threshold, `unchecked` = not yet assessed). The threshold is configured via `TEXT_QUALITY_THRESHOLD` (default: 85).
 
 All filters are combinable using AND logic.
 
@@ -460,6 +461,96 @@ Reprocess a specific file with forced Cloud OCR, regardless of embedded text qua
 - `400`: Neither original nor local file found on disk (cannot reprocess)
 
 **Note**: This endpoint forces Azure Document Intelligence OCR processing even if the PDF contains embedded text. The original file (if available) is used for reprocessing to ensure the highest quality result.
+
+### Bulk Operations
+
+**POST** `/api/files/bulk-delete`
+
+Delete multiple file records in a single request.
+
+**Request body**: JSON array of file IDs
+
+```bash
+curl -X POST "http://<your-instance>/api/files/bulk-delete" \
+  -H "Content-Type: application/json" \
+  -d '[1, 2, 3]'
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "message": "Successfully deleted 3 file records",
+  "deleted_ids": [1, 2, 3]
+}
+```
+
+**Error Responses**:
+- `403`: File deletion is disabled in configuration
+- `404`: No files found with the provided IDs
+
+---
+
+**POST** `/api/files/bulk-reprocess`
+
+Queue multiple files for full reprocessing.
+
+**Request body**: JSON array of file IDs
+
+**Response**:
+```json
+{
+  "status": "success",
+  "message": "Successfully queued 2 files for reprocessing",
+  "processed_files": [
+    {"file_id": 1, "filename": "a.pdf", "task_id": "abc123"},
+    {"file_id": 2, "filename": "b.pdf", "task_id": "def456"}
+  ],
+  "errors": [],
+  "task_ids": ["abc123", "def456"]
+}
+```
+
+---
+
+**POST** `/api/files/bulk-reprocess-cloud-ocr`
+
+Queue multiple files for reprocessing with forced Cloud OCR (Azure Document Intelligence). Useful for files that have missing or low-quality OCR text.
+
+**Request body**: JSON array of file IDs
+
+**Response**:
+```json
+{
+  "status": "success",
+  "message": "Successfully queued 2 files for Cloud OCR reprocessing",
+  "processed_files": [
+    {"file_id": 1, "filename": "a.pdf", "task_id": "abc123"}
+  ],
+  "errors": [],
+  "task_ids": ["abc123"]
+}
+```
+
+---
+
+**POST** `/api/files/bulk-download`
+
+Download multiple files as a single ZIP archive. For each file, the processed version is preferred; falls back to the original. Files not found on disk are silently skipped.
+
+**Request body**: JSON array of file IDs
+
+**Response**: `application/zip` stream with `Content-Disposition: attachment; filename="docuelevate_bulk_<timestamp>.zip"`
+
+```bash
+curl -X POST "http://<your-instance>/api/files/bulk-download" \
+  -H "Content-Type: application/json" \
+  -d '[1, 2, 3]' \
+  --output bulk_download.zip
+```
+
+**Error Responses**:
+- `404`: No files found with the provided IDs, or none of the selected files exist on disk
 
 ### File Preview
 

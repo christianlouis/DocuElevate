@@ -21,11 +21,13 @@ from typing import Optional
 
 from app.celery_app import celery
 from app.config import settings
+from app.database import SessionLocal
+from app.models import FileRecord
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.tasks.rotate_pdf_pages import rotate_pdf_pages
 from app.utils import log_task_progress
 from app.utils.ocr_provider import OCRResult, embed_text_layer, get_ocr_providers, merge_ocr_results
-from app.utils.text_quality import compare_text_quality
+from app.utils.text_quality import TextSource, check_text_quality, compare_text_quality
 
 logger = logging.getLogger(__name__)
 
@@ -240,6 +242,29 @@ def process_with_ocr(self, filename: str, file_id: Optional[int] = None, origina
             detail=f"Extracted {len(extracted_text)} chars using {len(results)} provider(s); "
             f"final text length: {len(final_text)} chars",
         )
+
+        # Score the final embedded text — the text that will land in ocr_text.
+        # We always call check_text_quality() on final_text because:
+        #   - merge_ocr_results() may have AI-merged output from several engines
+        #   - compare_text_quality() scores are relative (not the same scale)
+        #   - The original may have been preferred, reversing the OCR output
+        # OCR-produced (or AI-merged) text is treated as TextSource.OCR_PREVIOUS
+        # so the quality AI call is always made.
+        if file_id is not None:
+            try:
+                quality_result = check_text_quality(final_text, TextSource.OCR_PREVIOUS)
+                logger.info(
+                    f"[{task_id}] Final text quality: score={quality_result.quality_score}/100, "
+                    f"good={quality_result.is_good_quality}, feedback={quality_result.feedback!r}"
+                )
+                with SessionLocal() as _db:
+                    _rec = _db.query(FileRecord).filter_by(id=file_id).first()
+                    if _rec:
+                        _rec.ocr_quality_score = quality_result.quality_score
+                        _db.commit()
+                logger.info(f"[{task_id}] Saved ocr_quality_score={quality_result.quality_score} for file_id={file_id}")
+            except Exception as _score_exc:
+                logger.warning(f"[{task_id}] Could not persist ocr_quality_score: {_score_exc}")
 
         # Continue pipeline: rotate pages (if needed), then extract metadata
         rotate_pdf_pages.delay(filename, final_text, rotation_data, file_id)

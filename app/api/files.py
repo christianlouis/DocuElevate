@@ -2,14 +2,17 @@
 File-related API endpoints
 """
 
+import io
 import logging
 import mimetypes
 import os
 import uuid
+import zipfile
 from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 
@@ -427,6 +430,163 @@ def bulk_reprocess_files(request: Request, file_ids: List[int], db: DbSession):
     except Exception as e:
         logger.exception(f"Error bulk reprocessing files: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error bulk reprocessing files: {str(e)}")
+
+
+@router.post("/files/bulk-reprocess-cloud-ocr")
+@require_login
+def bulk_reprocess_files_cloud_ocr(request: Request, file_ids: List[int], db: DbSession):
+    """
+    Reprocess multiple files with forced Cloud OCR (Azure Document Intelligence).
+
+    Useful for re-running OCR on files with poor text quality or missing OCR text.
+    """
+    try:
+        file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+
+        if not file_records:
+            raise HTTPException(status_code=404, detail="No files found with the provided IDs")
+
+        task_ids = []
+        processed_files = []
+        errors = []
+
+        for file_record in file_records:
+            try:
+                source_file = None
+                for path in [file_record.original_file_path, file_record.local_filename]:
+                    if path and os.path.exists(path):
+                        source_file = path
+                        break
+
+                if not source_file:
+                    errors.append(
+                        {
+                            "file_id": file_record.id,
+                            "filename": file_record.original_filename,
+                            "error": "File not found on disk",
+                        }
+                    )
+                    continue
+
+                task = process_document.delay(
+                    source_file,
+                    original_filename=file_record.original_filename,
+                    file_id=file_record.id,
+                    force_cloud_ocr=True,
+                )
+                task_ids.append(task.id)
+                processed_files.append(
+                    {
+                        "file_id": file_record.id,
+                        "filename": file_record.original_filename,
+                        "task_id": task.id,
+                    }
+                )
+                logger.info(
+                    f"Bulk Cloud OCR reprocessing: ID={file_record.id}, "
+                    f"Filename={file_record.original_filename}, TaskID={task.id}"
+                )
+            except Exception as e:
+                logger.exception(f"Error queuing Cloud OCR for file {file_record.id}: {str(e)}")
+                errors.append(
+                    {
+                        "file_id": file_record.id,
+                        "filename": file_record.original_filename,
+                        "error": str(e),
+                    }
+                )
+
+        return {
+            "status": "success" if processed_files else "error",
+            "message": f"Successfully queued {len(processed_files)} files for Cloud OCR reprocessing",
+            "processed_files": processed_files,
+            "errors": errors,
+            "task_ids": task_ids,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error bulk reprocessing files with Cloud OCR: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error bulk reprocessing files with Cloud OCR: {str(e)}")
+
+
+@router.post("/files/bulk-download")
+@require_login
+def bulk_download_files(request: Request, file_ids: List[int], db: DbSession):
+    """
+    Download multiple files as a single ZIP archive.
+
+    For each file, the processed version is preferred; falls back to the original.
+    Files not found on disk are silently skipped.
+    """
+    try:
+        file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+
+        if not file_records:
+            raise HTTPException(status_code=404, detail="No files found with the provided IDs")
+
+        zip_buffer = io.BytesIO()
+        added = 0
+        seen_names: dict[str, int] = {}
+
+        with zipfile.ZipFile(zip_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            workdir = settings.workdir
+            processed_dir = os.path.join(workdir, "processed")
+
+            for file_record in file_records:
+                # Resolve file path: processed first, then original/local
+                base_filename = os.path.splitext(file_record.original_filename or "file")[0]
+                candidate_paths = [
+                    file_record.processed_file_path,
+                    file_record.original_file_path,
+                    file_record.local_filename,
+                    os.path.join(processed_dir, f"{file_record.filehash}.pdf"),
+                    os.path.join(processed_dir, f"{base_filename}_processed.pdf"),
+                ]
+
+                file_path = None
+                for path in candidate_paths:
+                    if path and os.path.exists(path):
+                        file_path = path
+                        break
+
+                if not file_path:
+                    logger.warning(f"Skipping file {file_record.id}: no file found on disk")
+                    continue
+
+                # Build a unique archive name to avoid collisions
+                archive_name = file_record.original_filename or os.path.basename(file_path)
+                if archive_name in seen_names:
+                    seen_names[archive_name] += 1
+                    stem, ext = os.path.splitext(archive_name)
+                    archive_name = f"{stem}_{seen_names[archive_name]}{ext}"
+                else:
+                    seen_names[archive_name] = 0
+
+                zf.write(file_path, archive_name)
+                added += 1
+
+        if added == 0:
+            raise HTTPException(status_code=404, detail="None of the selected files could be found on disk")
+
+        zip_buffer.seek(0)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        zip_filename = f"docuelevate_bulk_{timestamp}.zip"
+
+        logger.info(f"Bulk download: packed {added} file(s) into {zip_filename}")
+
+        return StreamingResponse(
+            zip_buffer,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'},
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error creating bulk download ZIP: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error creating bulk download ZIP: {str(e)}")
 
 
 @router.post("/files/{file_id}/reprocess")

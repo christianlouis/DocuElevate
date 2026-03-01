@@ -534,6 +534,16 @@
       </div>
 
       <div class="filter-item">
+        <label for="ocr_quality">OCR Quality</label>
+        <select id="ocr_quality" name="ocr_quality" aria-label="Filter by OCR quality score">
+          <option value="">All Files</option>
+          <option value="poor" {% if ocr_quality == "poor" %}selected{% endif %} aria-label="Poor quality, score less than {{ ocr_quality_threshold }}">Poor (score &lt; {{ ocr_quality_threshold }})</option>
+          <option value="good" {% if ocr_quality == "good" %}selected{% endif %} aria-label="Good quality, score at least {{ ocr_quality_threshold }}">Good (score &ge; {{ ocr_quality_threshold }})</option>
+          <option value="unchecked" {% if ocr_quality == "unchecked" %}selected{% endif %} aria-label="Not yet assessed">Not yet assessed</option>
+        </select>
+      </div>
+
+      <div class="filter-item">
         <label>&nbsp;</label>
         <button type="submit">Apply Filters</button>
       </div>
@@ -615,6 +625,12 @@
       <div class="flex flex-wrap gap-2">
         <button type="button" onclick="bulkReprocess()" style="padding: 0.5rem 1rem; background-color: #3182ce; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600; min-height: 44px;">
           <i class="fas fa-sync" aria-hidden="true"></i> Reprocess Selected
+        </button>
+        <button type="button" onclick="bulkReprocessCloudOcr()" style="padding: 0.5rem 1rem; background-color: #805ad5; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600; min-height: 44px;">
+          <i class="fas fa-cloud" aria-hidden="true"></i> Re-run Cloud OCR
+        </button>
+        <button type="button" onclick="bulkDownload()" style="padding: 0.5rem 1rem; background-color: #38a169; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600; min-height: 44px;">
+          <i class="fas fa-file-archive" aria-hidden="true"></i> Download as ZIP
         </button>
         <button type="button" onclick="bulkDelete()" style="padding: 0.5rem 1rem; background-color: #e53e3e; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600; min-height: 44px;">
           <i class="fas fa-trash" aria-hidden="true"></i> Delete Selected
@@ -1282,6 +1298,86 @@
       .catch(error => {
         console.error('Error:', error);
         alert(`Error reprocessing files: ${error.message}`);
+      });
+    }
+
+    function bulkReprocessCloudOcr() {
+      const fileIds = getSelectedFileIds();
+      if (fileIds.length === 0) {
+        alert('Please select files to re-run Cloud OCR on');
+        return;
+      }
+
+      if (!confirm(`Are you sure you want to re-run Cloud OCR on ${fileIds.length} file(s)?`)) {
+        return;
+      }
+
+      fetch('/api/files/bulk-reprocess-cloud-ocr', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(fileIds)
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.json().then(err => {
+            throw new Error(err.detail || 'Failed to queue Cloud OCR');
+          });
+        }
+        return response.json();
+      })
+      .then(data => {
+        if (data.errors && data.errors.length > 0) {
+          const errorMsg = data.errors.map(e => `${e.filename}: ${e.error}`).join('\n');
+          alert(`${data.message}\n\nErrors:\n${errorMsg}`);
+        } else {
+          alert(data.message);
+        }
+        clearSelection();
+        window.location.reload();
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert(`Error queuing Cloud OCR: ${error.message}`);
+      });
+    }
+
+    function bulkDownload() {
+      const fileIds = getSelectedFileIds();
+      if (fileIds.length === 0) {
+        alert('Please select files to download');
+        return;
+      }
+
+      fetch('/api/files/bulk-download', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(fileIds)
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.json().then(err => {
+            throw new Error(err.detail || 'Failed to create ZIP download');
+          });
+        }
+        return response.blob();
+      })
+      .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `docuelevate_bulk_${Date.now()}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert(`Error downloading files: ${error.message}`);
       });
     }
 
