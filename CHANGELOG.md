@@ -12,6 +12,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`1775c4e`](https://github.com/christianlouis/DocuElevate/commit/1775c4e0ddb678cabfd80d04acc4ad1b08761e17))
+
+### Testing
+
+- Increase code coverage for app/views/wizard.py to 100%
+  ([`bf337a1`](https://github.com/christianlouis/DocuElevate/commit/bf337a15609d7aac008d68de7ca7398554b954ab))
+
+- **status**: Increase code coverage for app/views/status.py to 100%
+  ([`1095b41`](https://github.com/christianlouis/DocuElevate/commit/1095b415797583f52fd49c94c9d6b652e173f5ef))
+
+
+## Unreleased
+
 
 ## v0.68.0 (2026-03-01)
 
