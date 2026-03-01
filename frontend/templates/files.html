@@ -815,18 +815,26 @@
       overlay.classList.add('active');
       document.body.style.overflow = 'hidden';
 
-      const previewUrl = `/api/files/${fileId}/preview?version=processed`;
-
       footer.innerHTML =
         `<a href="/files/${fileId}" aria-label="Open full view"><i class="fas fa-expand" aria-hidden="true"></i> Full view</a>` +
         `<a href="/api/files/${fileId}/download?version=processed" aria-label="Download file"><i class="fas fa-download" aria-hidden="true"></i> Download</a>`;
 
+      // Try "processed" first; fall back to "original" on 404
+      _pmLoadPreview(body, fileId, mime, filename, 'processed');
+    }
+
+    function _pmLoadPreview(body, fileId, mime, filename, version) {
+      const previewUrl = `/api/files/${fileId}/preview?version=${version}`;
       if (mime && mime.startsWith('image/')) {
         _pmRenderImage(body, previewUrl, filename);
       } else if (mime && mime.startsWith('text/')) {
-        _pmRenderText(body, previewUrl);
+        _pmRenderText(body, previewUrl, function() {
+          if (version === 'processed') _pmLoadPreview(body, fileId, mime, filename, 'original');
+        });
       } else {
-        _pmRenderPdf(body, previewUrl);
+        _pmRenderPdf(body, previewUrl, function() {
+          if (version === 'processed') _pmLoadPreview(body, fileId, mime, filename, 'original');
+        });
       }
     }
 
@@ -838,7 +846,7 @@
     }
 
     // PDF rendering inside preview modal
-    function _pmRenderPdf(body, url) {
+    function _pmRenderPdf(body, url, onError) {
       body.innerHTML =
         '<div class="pm-pdf-controls">' +
           '<button onclick="_pmPdfPage(-1)" id="pm-prev" aria-label="Previous page"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>' +
@@ -853,6 +861,7 @@
         _pmPdf.page = 1;
         _pmPdfRender();
       }).catch(function() {
+        if (onError) { onError(); return; }
         document.getElementById('pm-canvas-wrap').innerHTML = '<div style="text-align:center;padding:2rem;color:#f87171;"><i class="fas fa-exclamation-triangle" style="font-size:2rem;margin-bottom:0.5rem;"></i><p>Failed to load PDF</p></div>';
       });
     }
@@ -929,7 +938,7 @@
     }
 
     // Text rendering inside preview modal
-    function _pmRenderText(body, url) {
+    function _pmRenderText(body, url, onError) {
       body.innerHTML = '<div class="pm-text-content" id="pm-text-content"><div style="text-align:center;padding:2rem;color:#94a3b8;"><i class="fas fa-spinner fa-spin"></i> Loading…</div></div>';
       fetch(url)
         .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
@@ -949,6 +958,7 @@
           }
         })
         .catch(function() {
+          if (onError) { onError(); return; }
           var c = document.getElementById('pm-text-content');
           if (c) c.innerHTML = '<div style="color:#f87171;padding:1rem;">Failed to load file</div>';
         });
