@@ -823,7 +823,7 @@ def verify_signature(body: bytes, secret: str, signature: str) -> bool:
     return hmac.compare_digest(expected, signature)
 ```
 
-### Retry Behaviour
+### Retry Behavior
 
 Failed deliveries (non-2xx responses or network errors) are automatically retried with exponential backoff: 60 s, 300 s, then 900 s (up to 3 retries with ±20 % jitter).
 
