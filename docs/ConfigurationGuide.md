@@ -799,6 +799,39 @@ Administrators can set the **site-wide default** colour scheme that is applied w
 UI_DEFAULT_COLOR_SCHEME=dark
 ```
 
+## Performance & Caching
+
+DocuElevate automatically optimizes database access and uses Redis as a
+caching layer for frequently accessed data.
+
+### Database Indexes
+
+On startup the application creates indexes on columns used for filtering,
+sorting, and joining in the file listing and status computation queries:
+
+| Table | Column | Purpose |
+|---|---|---|
+| `files` | `created_at` | Default sort order |
+| `files` | `mime_type` | MIME type filter & dropdown |
+| `processing_logs` | `file_id` | Log retrieval by file |
+| `processing_logs` | `timestamp` | Log ordering |
+| `file_processing_steps` | `status` | Status filter sub-queries |
+
+These indexes are created idempotently on every startup so no manual
+migration step is required.
+
+### Redis Query Cache
+
+When Redis is available (configured via `REDIS_URL`), DocuElevate caches
+selected query results to avoid redundant database round-trips:
+
+| Cache Key | TTL | Description |
+|---|---|---|
+| `mime_types` | 120 s | Distinct MIME types shown in the file-list filter dropdown |
+
+The cache is **fail-open**: if Redis is unreachable the application falls
+back to querying the database directly with no user-visible impact.
+
 ## Configuration Examples
 
 ### Minimal Configuration

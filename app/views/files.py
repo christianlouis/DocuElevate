@@ -8,6 +8,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
+from app.utils.cache import cache_get, cache_set
 from app.utils.file_queries import apply_status_filter
 from app.utils.file_status import get_files_processing_status
 from app.views.base import APIRouter, get_db, logger, require_login, templates
@@ -149,9 +150,12 @@ def files_page(
         # Calculate pagination info
         total_pages = (total_items + per_page - 1) // per_page
 
-        # Get unique MIME types for filter dropdown
-        mime_types = db.query(FileRecord.mime_type).distinct().filter(FileRecord.mime_type.isnot(None)).all()
-        mime_types = [mt[0] for mt in mime_types if mt[0]]
+        # Get unique MIME types for filter dropdown (cached)
+        mime_types = cache_get("mime_types")
+        if mime_types is None:
+            raw = db.query(FileRecord.mime_type).distinct().filter(FileRecord.mime_type.isnot(None)).all()
+            mime_types = [mt[0] for mt in raw if mt[0]]
+            cache_set("mime_types", mime_types, ttl=120)
 
         # Debug output
         logger.info(f"Retrieved {len(files_with_status)} files from database (page {page}/{total_pages})")
