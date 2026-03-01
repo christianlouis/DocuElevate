@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.68.0 (2026-03-01)
+
+### Features
+
+- **api**: Implement proper pagination for file list API
+  ([`af34ce8`](https://github.com/christianlouis/DocuElevate/commit/af34ce88dfadb0c288120995356605a3e70d3ec4))
+
+
 ## v0.67.3 (2026-03-01)
 
 ### Bug Fixes
