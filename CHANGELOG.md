@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.67.0 (2026-03-01)
+
+### Features
+
+- **imap**: Add IMAP_READONLY_MODE feature flag to safeguard shared mailboxes
+  ([`f8c5dd5`](https://github.com/christianlouis/DocuElevate/commit/f8c5dd539d627569231bbed828acab96be9aa485))
+
+
 ## v0.66.0 (2026-03-01)
 
 ### Code Style
