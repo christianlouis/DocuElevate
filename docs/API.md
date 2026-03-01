@@ -295,7 +295,7 @@ Retrieve a paginated list of processed files with advanced filtering and sorting
 - `date_to` (optional): Filter files created on or before this date (ISO 8601, e.g. `2026-12-31`)
 - `storage_provider` (optional): Filter by storage provider (e.g. `dropbox`, `s3`, `google_drive`, `onedrive`, `nextcloud`)
 - `tags` (optional): Filter by tags in AI metadata (comma-separated, AND logic, e.g. `invoice,amazon`)
-- `ocr_quality` (optional): Filter by OCR text availability (`no_ocr` = files without OCR text, `has_ocr` = files with OCR text)
+- `ocr_quality` (optional): Filter by AI-assessed OCR quality score (`poor` = score below threshold, `good` = score at or above threshold, `unchecked` = not yet assessed). The threshold is configured via `TEXT_QUALITY_THRESHOLD` (default: 85).
 
 All filters are combinable using AND logic.
 

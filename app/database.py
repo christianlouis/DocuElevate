@@ -122,6 +122,12 @@ def _run_schema_migrations(engine: Any) -> None:
                 conn.execute(text("ALTER TABLE files ADD COLUMN document_title VARCHAR"))
             logger.info("Migration complete: 'document_title' column added to files")
 
+        if "ocr_quality_score" not in columns:
+            logger.info("Migrating files: adding 'ocr_quality_score' column")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE files ADD COLUMN ocr_quality_score INTEGER"))
+            logger.info("Migration complete: 'ocr_quality_score' column added to files")
+
         # Migration: Drop unique index on filehash to allow duplicate records
         try:
             indexes = inspector.get_indexes("files")

@@ -464,57 +464,83 @@ class TestBulkReprocessCloudOcr:
 class TestOcrQualityFilter:
     """Tests for the ocr_quality filter on the /files view."""
 
-    def test_ocr_quality_no_ocr_filter(self, client: TestClient, db_session):
-        """Files without OCR text appear when filtering no_ocr."""
-        rec_no_ocr = FileRecord(
-            filehash="hash_noocr1",
-            original_filename="no_ocr.pdf",
-            local_filename="/tmp/no_ocr.pdf",
+    def test_ocr_quality_poor_filter(self, client: TestClient, db_session):
+        """Files with a low ocr_quality_score appear when filtering poor."""
+        rec_poor = FileRecord(
+            filehash="hash_poor1",
+            original_filename="poor_quality.pdf",
+            local_filename="/tmp/poor_quality.pdf",
             file_size=1024,
             mime_type="application/pdf",
-            ocr_text=None,
+            ocr_quality_score=40,
         )
-        rec_has_ocr = FileRecord(
-            filehash="hash_hasocr1",
-            original_filename="has_ocr.pdf",
-            local_filename="/tmp/has_ocr.pdf",
+        rec_good = FileRecord(
+            filehash="hash_good1",
+            original_filename="good_quality.pdf",
+            local_filename="/tmp/good_quality.pdf",
             file_size=1024,
             mime_type="application/pdf",
-            ocr_text="Some extracted text",
+            ocr_quality_score=95,
         )
-        db_session.add_all([rec_no_ocr, rec_has_ocr])
+        db_session.add_all([rec_poor, rec_good])
         db_session.commit()
 
-        response = client.get("/files?ocr_quality=no_ocr")
+        response = client.get("/files?ocr_quality=poor")
         assert response.status_code == 200
-        assert "no_ocr.pdf" in response.text
-        assert "has_ocr.pdf" not in response.text
+        assert "poor_quality.pdf" in response.text
+        assert "good_quality.pdf" not in response.text
 
-    def test_ocr_quality_has_ocr_filter(self, client: TestClient, db_session):
-        """Files with OCR text appear when filtering has_ocr."""
-        rec_no_ocr = FileRecord(
-            filehash="hash_noocr2",
-            original_filename="no_ocr2.pdf",
-            local_filename="/tmp/no_ocr2.pdf",
+    def test_ocr_quality_good_filter(self, client: TestClient, db_session):
+        """Files with a high ocr_quality_score appear when filtering good."""
+        rec_poor = FileRecord(
+            filehash="hash_poor2",
+            original_filename="poor_quality2.pdf",
+            local_filename="/tmp/poor_quality2.pdf",
             file_size=1024,
             mime_type="application/pdf",
-            ocr_text=None,
+            ocr_quality_score=40,
         )
-        rec_has_ocr = FileRecord(
-            filehash="hash_hasocr2",
-            original_filename="has_ocr2.pdf",
-            local_filename="/tmp/has_ocr2.pdf",
+        rec_good = FileRecord(
+            filehash="hash_good2",
+            original_filename="good_quality2.pdf",
+            local_filename="/tmp/good_quality2.pdf",
             file_size=1024,
             mime_type="application/pdf",
-            ocr_text="Meaningful extracted text",
+            ocr_quality_score=95,
         )
-        db_session.add_all([rec_no_ocr, rec_has_ocr])
+        db_session.add_all([rec_poor, rec_good])
         db_session.commit()
 
-        response = client.get("/files?ocr_quality=has_ocr")
+        response = client.get("/files?ocr_quality=good")
         assert response.status_code == 200
-        assert "has_ocr2.pdf" in response.text
-        assert "no_ocr2.pdf" not in response.text
+        assert "good_quality2.pdf" in response.text
+        assert "poor_quality2.pdf" not in response.text
+
+    def test_ocr_quality_unchecked_filter(self, client: TestClient, db_session):
+        """Files with no score appear when filtering unchecked."""
+        rec_unchecked = FileRecord(
+            filehash="hash_unch1",
+            original_filename="unchecked.pdf",
+            local_filename="/tmp/unchecked.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+            ocr_quality_score=None,
+        )
+        rec_scored = FileRecord(
+            filehash="hash_scored1",
+            original_filename="scored.pdf",
+            local_filename="/tmp/scored.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+            ocr_quality_score=90,
+        )
+        db_session.add_all([rec_unchecked, rec_scored])
+        db_session.commit()
+
+        response = client.get("/files?ocr_quality=unchecked")
+        assert response.status_code == 200
+        assert "unchecked.pdf" in response.text
+        assert "scored.pdf" not in response.text
 
     def test_ocr_quality_no_filter(self, client: TestClient, db_session):
         """All files appear when no ocr_quality filter is applied."""

@@ -58,6 +58,9 @@ class FileRecord(Base):
     # Full OCR/extracted text for full-text search and RAG
     ocr_text = Column(Text, nullable=True)
 
+    # AI-assessed quality score for the OCR/extracted text (0–100; NULL = not yet assessed)
+    ocr_quality_score = Column(Integer, nullable=True)
+
     # AI-extracted metadata stored as JSON string (filename, tags, title, sender, etc.)
     ai_metadata = Column(Text, nullable=True)
 

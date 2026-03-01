@@ -96,13 +96,21 @@ def files_page(
                 query = query.filter(FileRecord.ai_metadata.ilike(f"%{escaped_tag}%"))
 
         # Apply OCR quality filter
-        if ocr_quality == "no_ocr":
-            query = query.filter((FileRecord.ocr_text.is_(None)) | (FileRecord.ocr_text == ""))
-        elif ocr_quality == "has_ocr":
+        if ocr_quality == "poor":
+            # Files scored below the configured threshold
+            threshold = settings.text_quality_threshold
             query = query.filter(
-                FileRecord.ocr_text.isnot(None),
-                FileRecord.ocr_text != "",
+                FileRecord.ocr_quality_score.isnot(None),
+                FileRecord.ocr_quality_score < threshold,
             )
+        elif ocr_quality == "good":
+            threshold = settings.text_quality_threshold
+            query = query.filter(
+                FileRecord.ocr_quality_score.isnot(None),
+                FileRecord.ocr_quality_score >= threshold,
+            )
+        elif ocr_quality == "unchecked":
+            query = query.filter(FileRecord.ocr_quality_score.is_(None))
 
         # Apply status filter (before pagination for correct counts)
         query = apply_status_filter(query, db, status)
@@ -169,6 +177,7 @@ def files_page(
                 "storage_provider": storage_provider or "",
                 "tags": tags or "",
                 "ocr_quality": ocr_quality or "",
+                "ocr_quality_threshold": settings.text_quality_threshold,
                 "mime_types": mime_types,
                 "upload_concurrency": settings.upload_concurrency,
                 "upload_queue_delay_ms": settings.upload_queue_delay_ms,

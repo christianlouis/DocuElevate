@@ -442,6 +442,14 @@ def process_document(
                 f"source={quality_result.text_source.value}, feedback={quality_result.feedback!r}"
             )
 
+            # Persist the quality score immediately so it's available for filtering
+            # even if the file is later sent to OCR for re-processing.
+            with SessionLocal() as _db:
+                _rec = _db.query(FileRecord).filter_by(id=file_id).first()
+                if _rec:
+                    _rec.ocr_quality_score = quality_result.quality_score
+                    _db.commit()
+
             if not quality_result.is_good_quality:
                 # Poor quality: discard embedded text and re-OCR instead.
                 # Pass the original embedded text so the OCR task can compare
