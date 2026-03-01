@@ -663,6 +663,66 @@ class TestFileDownload:
         response = client.get("/api/files/99999/download?version=original")
         assert response.status_code == 404
 
+    def test_download_processed_file_success(self, client: TestClient, db_session, tmp_path):
+        """Test downloading processed file via ?version=processed."""
+        processed_dir = tmp_path / "processed"
+        processed_dir.mkdir()
+        processed_file = processed_dir / "test.pdf"
+        processed_file.write_bytes(b"%PDF-1.4 processed")
+
+        file = FileRecord(
+            filehash="hashproc",
+            original_filename="test.pdf",
+            local_filename=str(tmp_path / "test.pdf"),
+            processed_file_path=str(processed_file),
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.get(f"/api/files/{file.id}/download?version=processed")
+        assert response.status_code == 200
+        assert "attachment" in response.headers["content-disposition"]
+        assert "test.pdf" in response.headers["content-disposition"]
+
+    def test_download_default_returns_processed(self, client: TestClient, db_session, tmp_path):
+        """Test that GET /download without ?version defaults to the processed file."""
+        processed_dir = tmp_path / "processed"
+        processed_dir.mkdir()
+        processed_file = processed_dir / "default.pdf"
+        processed_file.write_bytes(b"%PDF-1.4 default")
+
+        file = FileRecord(
+            filehash="hashdefault",
+            original_filename="default.pdf",
+            local_filename=str(tmp_path / "default.pdf"),
+            processed_file_path=str(processed_file),
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.get(f"/api/files/{file.id}/download")
+        assert response.status_code == 200
+        assert "attachment" in response.headers["content-disposition"]
+
+    def test_download_invalid_version_returns_400(self, client: TestClient, db_session):
+        """Test that an invalid ?version value returns HTTP 400."""
+        file = FileRecord(
+            filehash="hashinv",
+            original_filename="test.pdf",
+            local_filename="/nonexistent/test.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.get(f"/api/files/{file.id}/download?version=invalid")
+        assert response.status_code == 400
+
 
 @pytest.mark.unit
 class TestUIUpload:
@@ -1149,6 +1209,6 @@ class TestAdditionalFileOperations:
         db_session.add(file)
         db_session.commit()
 
-        response = client.get(f"/api/files/{file.id}/download")
+        response = client.get(f"/api/files/{file.id}/download?version=original")
         assert response.status_code == 200
         # Should default to application/pdf
