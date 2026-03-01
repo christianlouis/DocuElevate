@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.71.0 (2026-03-01)
+
+### Documentation
+
+- **webhooks**: Add webhook API and configuration documentation
+  ([`a953b72`](https://github.com/christianlouis/DocuElevate/commit/a953b726fcd9da1738e6b90fdd913556457c37a7))
+
+- **webhooks**: Fix spelling - Behaviour to Behavior
+  ([`a85992e`](https://github.com/christianlouis/DocuElevate/commit/a85992ee79e2bbe3177fe0126b49e99b932508fc))
+
+### Features
+
+- **webhooks**: Add webhook support for external integrations
+  ([`e609141`](https://github.com/christianlouis/DocuElevate/commit/e60914127c62dfb294c3cda968492893f5051228))
+
+
 ## v0.70.0 (2026-03-01)
 
 ### Features
