@@ -2,17 +2,110 @@
 Diagnostic API endpoints
 """
 
+import datetime
 import logging
 
+import redis as redis_lib
 from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from app.auth import require_login
 from app.config import settings
+from app.database import engine
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
+_DEFAULT_REDIS_URL = "redis://localhost:6379/0"
+
 router = APIRouter()
+
+
+@router.get("/diagnostic/health")
+@require_login
+async def health_check(request: Request):
+    """
+    System health endpoint for monitoring tools (Grafana, Uptime Kuma, etc.).
+
+    Checks database connectivity and Redis availability and returns a
+    machine-readable summary that monitoring systems can scrape.
+
+    **Authentication:** Required (no-op when AUTH_ENABLED=False)
+
+    **Response (200 OK) – all subsystems healthy:**
+    ```json
+    {
+      "status": "healthy",
+      "version": "1.2.3",
+      "timestamp": "2024-01-15T10:30:00+00:00",
+      "checks": {
+        "database": {"status": "ok"},
+        "redis":    {"status": "ok"}
+      }
+    }
+    ```
+
+    **Response (200 OK) – one or more subsystems degraded:**
+    ```json
+    {
+      "status": "degraded",
+      "version": "1.2.3",
+      "timestamp": "2024-01-15T10:30:00+00:00",
+      "checks": {
+        "database": {"status": "ok"},
+        "redis":    {"status": "error", "detail": "Connection refused"}
+      }
+    }
+    ```
+
+    The outer ``status`` field is always one of:
+    - ``"healthy"``  – all checks passed
+    - ``"degraded"`` – at least one non-critical check failed
+    - ``"unhealthy"`` – a critical check failed (currently: database)
+    """
+    timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    checks: dict[str, dict[str, str]] = {}
+
+    # ── Database check ─────────────────────────────────────────────────────
+    db_ok = False
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        checks["database"] = {"status": "ok"}
+        db_ok = True
+    except Exception as exc:
+        logger.warning("Health check: database probe failed: %s", exc)
+        checks["database"] = {"status": "error", "detail": str(exc)}
+
+    # ── Redis check ────────────────────────────────────────────────────────
+    try:
+        redis_url = settings.redis_url or _DEFAULT_REDIS_URL
+        r = redis_lib.from_url(redis_url, socket_connect_timeout=2, socket_timeout=2)
+        r.ping()
+        checks["redis"] = {"status": "ok"}
+    except Exception as exc:
+        logger.warning("Health check: Redis probe failed: %s", exc)
+        checks["redis"] = {"status": "error", "detail": str(exc)}
+
+    # ── Overall status ─────────────────────────────────────────────────────
+    if not db_ok:
+        overall = "unhealthy"
+    elif any(v.get("status") != "ok" for v in checks.values()):
+        overall = "degraded"
+    else:
+        overall = "healthy"
+
+    http_status = 503 if overall == "unhealthy" else 200
+
+    payload = {
+        "status": overall,
+        "version": settings.version,
+        "timestamp": timestamp,
+        "checks": checks,
+    }
+
+    return JSONResponse(content=payload, status_code=http_status)
 
 
 @router.post("/diagnostic/test-notification")
