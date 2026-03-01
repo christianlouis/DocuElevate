@@ -10,6 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.63.0 (2026-03-01)
+
+### Bug Fixes
+
+- **api**: Address code review feedback - logging, wildcard escaping, UX
+  ([`d5884f6`](https://github.com/christianlouis/DocuElevate/commit/d5884f6d2cf98b6419fcc38e7fcdec7988195ec8))
+
+- **db**: Add saved_searches table to runtime schema migrations
+  ([`82f7113`](https://github.com/christianlouis/DocuElevate/commit/82f7113d39986e773afd66184af4001491d2b05d))
+
+### Documentation
+
+- **api**: Document advanced filtering and saved searches endpoints
+  ([`cc9fd1a`](https://github.com/christianlouis/DocuElevate/commit/cc9fd1a7fe78d05f6effb324f8bcc5377e11fe9f))
+
+### Features
+
+- **api**: Add advanced filtering and saved searches
+  ([`e5a4c6c`](https://github.com/christianlouis/DocuElevate/commit/e5a4c6c64ada140f64980b74cabb3bd5ed0bb895))
+
+
 ## v0.62.0 (2026-03-01)
 
 ### Bug Fixes
