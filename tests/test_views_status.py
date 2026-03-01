@@ -288,6 +288,83 @@ class TestContainerInfoDetection:
         # Should handle None and set to Unknown
         assert context["container_info"]["git_sha"] == "Unknown"
 
+    @patch("app.views.status.get_provider_status")
+    @patch("app.views.status.templates")
+    @patch("app.views.status.os.path.exists")
+    @patch("builtins.open", new_callable=mock_open, read_data="12:docker:/abc123456789")
+    @pytest.mark.asyncio
+    async def test_handles_git_sha_exception_in_docker(self, mock_file, mock_exists, mock_templates, mock_providers):
+        """Test handles exception when reading git_sha in Docker environment (lines 53-54)."""
+        import types
+
+        from app.views.status import status_dashboard
+
+        mock_exists.return_value = True
+        mock_providers.return_value = {}
+        # SimpleNamespace without git_sha causes AttributeError on access → triggers except block
+        fake_settings = types.SimpleNamespace(version="1.0.0")
+
+        with patch("app.views.status.settings", fake_settings):
+            mock_request = Mock()
+            await status_dashboard(mock_request)
+
+        call_args = mock_templates.TemplateResponse.call_args
+        context = call_args[0][1]
+        assert context["container_info"]["is_docker"] is True
+        assert context["container_info"]["git_sha"] == "Unknown"
+
+    @patch("app.views.status.get_provider_status")
+    @patch("app.views.status.templates")
+    @patch("app.views.status.os.path.exists")
+    @patch("builtins.open", new_callable=mock_open, read_data="12:docker:/abc123456789")
+    @pytest.mark.asyncio
+    async def test_handles_runtime_info_exception_in_docker(
+        self, mock_file, mock_exists, mock_templates, mock_providers
+    ):
+        """Test handles exception when reading runtime_info in Docker environment (lines 59-60)."""
+        import types
+
+        from app.views.status import status_dashboard
+
+        mock_exists.return_value = True
+        mock_providers.return_value = {}
+        # SimpleNamespace has git_sha but not runtime_info → triggers except block at line 59-60
+        fake_settings = types.SimpleNamespace(version="1.0.0", git_sha="abc1234567890")
+
+        with patch("app.views.status.settings", fake_settings):
+            mock_request = Mock()
+            await status_dashboard(mock_request)
+
+        call_args = mock_templates.TemplateResponse.call_args
+        context = call_args[0][1]
+        assert context["container_info"]["is_docker"] is True
+        # runtime_info should not be in container_info when it raises an exception
+        assert "runtime_info" not in context["container_info"]
+
+    @patch("app.views.status.get_provider_status")
+    @patch("app.views.status.templates")
+    @patch("app.views.status.os.path.exists")
+    @pytest.mark.asyncio
+    async def test_handles_git_sha_exception_in_non_docker(self, mock_exists, mock_templates, mock_providers):
+        """Test handles exception when reading git_sha in non-Docker environment (lines 68-69)."""
+        import types
+
+        from app.views.status import status_dashboard
+
+        mock_exists.return_value = False  # Not in Docker
+        mock_providers.return_value = {}
+        # SimpleNamespace without git_sha causes AttributeError on access → triggers except block
+        fake_settings = types.SimpleNamespace(version="1.0.0")
+
+        with patch("app.views.status.settings", fake_settings):
+            mock_request = Mock()
+            await status_dashboard(mock_request)
+
+        call_args = mock_templates.TemplateResponse.call_args
+        context = call_args[0][1]
+        assert context["container_info"]["is_docker"] is False
+        assert context["container_info"]["git_sha"] == "Unknown"
+
 
 @pytest.mark.integration
 class TestStatusEndpointsRequireAuth:
