@@ -273,7 +273,6 @@ function processFiles(files, progressContainer, statusMessage) {
   if (statusMessage) {
     statusMessage.textContent = `Queued ${fileArray.length} file(s) for upload…`;
   }
-  if (progressContainer) progressContainer.innerHTML = '';
 
   // Pre-create one progress row per file.
   const queueItems = fileArray.map((file) => {

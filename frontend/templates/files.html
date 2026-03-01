@@ -1327,7 +1327,6 @@
       if (files.length > 0) {
         // Show upload modal
         uploadModal.classList.add('active');
-        uploadProgressContainer.innerHTML = '';
 
         // Process the dropped files (queue-based, with adaptive throttling)
         processFiles(files, uploadProgressContainer, uploadStatusMessage);
