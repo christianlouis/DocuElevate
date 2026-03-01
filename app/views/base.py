@@ -30,6 +30,7 @@ def template_response_with_version(*args, **kwargs):
     # If context dict is provided, add version to it
     if len(args) >= 2 and isinstance(args[1], dict):
         args[1].setdefault("version", settings.version)
+        args[1].setdefault("release_name", getattr(settings, "release_name", None))
         # Inject CSRF token from request state when available
         req = args[1].get("request")
         if req is not None and hasattr(req.state, "csrf_token"):
@@ -38,6 +39,7 @@ def template_response_with_version(*args, **kwargs):
         args[1].setdefault("ui_default_color_scheme", getattr(settings, "ui_default_color_scheme", "system"))
     elif "context" in kwargs and isinstance(kwargs["context"], dict):
         kwargs["context"].setdefault("version", settings.version)
+        kwargs["context"].setdefault("release_name", getattr(settings, "release_name", None))
         req = kwargs["context"].get("request")
         if req is not None and hasattr(req.state, "csrf_token"):
             kwargs["context"].setdefault("csrf_token", req.state.csrf_token)

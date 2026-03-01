@@ -1,0 +1,36 @@
+{
+  "_description": "Maps version patterns to release codenames. Used by the application at runtime and in build metadata.",
+  "_format": "Each key is a version string (e.g., '0.5.0') or a minor version prefix (e.g., '0.5'). The value is an object with 'codename' and optionally 'description' and 'milestone'.",
+  "releases": {
+    "0.5": {
+      "codename": "Foundation",
+      "description": "Core platform with multi-provider storage, AI extraction, and web UI",
+      "milestone": "v0.5.0 - Core Platform"
+    },
+    "0.6": {
+      "codename": "Clarity",
+      "description": "Enhanced search, filtering, and improved UI/UX",
+      "milestone": "v0.6.0 - Search & UX"
+    },
+    "0.7": {
+      "codename": "Conductor",
+      "description": "Workflow automation, custom pipelines, and rule-based processing",
+      "milestone": "v0.7.0 - Workflow Automation"
+    },
+    "1.0": {
+      "codename": "Summit",
+      "description": "Enterprise-ready with multi-tenancy, RBAC, and horizontal scaling",
+      "milestone": "v1.0.0 - Enterprise"
+    },
+    "1.1": {
+      "codename": "Bridge",
+      "description": "Collaboration features, document sharing, and analytics",
+      "milestone": "v1.1.0 - Collaboration"
+    },
+    "2.0": {
+      "codename": "Horizon",
+      "description": "On-premise AI, advanced document management, and platform expansion",
+      "milestone": "v2.0.0 - Next Generation"
+    }
+  }
+}

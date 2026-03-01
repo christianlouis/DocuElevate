@@ -230,7 +230,7 @@
         <a href="/license" class="text-blue-500 hover:underline">License</a> -
         <a href="/attribution" class="text-blue-500 hover:underline">Attributions</a>
         </nav> -
-        <span class="text-xs">Version {{ app_version|default(version, true) }}</span>
+        <span class="text-xs">Version {{ app_version|default(version, true) }}{% if release_name %} "{{ release_name }}"{% endif %}</span>
       </div>
     </footer>
 
