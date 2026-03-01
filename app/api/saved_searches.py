@@ -182,8 +182,9 @@ def create_saved_search(
         db.add(saved_search)
         db.commit()
         db.refresh(saved_search)
-    except Exception:
+    except Exception as exc:
         db.rollback()
+        logger.exception(f"Failed to create saved search for user={user_id}: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to save search",
@@ -254,8 +255,9 @@ def update_saved_search(
     try:
         db.commit()
         db.refresh(saved_search)
-    except Exception:
+    except Exception as exc:
         db.rollback()
+        logger.exception(f"Failed to update saved search id={search_id}, user={user_id}: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update saved search",
@@ -284,8 +286,9 @@ def delete_saved_search(search_id: int, request: Request, db: DbSession):
     try:
         db.delete(saved_search)
         db.commit()
-    except Exception:
+    except Exception as exc:
         db.rollback()
+        logger.exception(f"Failed to delete saved search id={search_id}, user={user_id}: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete saved search",

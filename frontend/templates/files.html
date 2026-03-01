@@ -1136,7 +1136,7 @@
         if (val) filters[key] = val;
       });
       if (Object.keys(filters).length === 0) {
-        alert('No filters to save. Apply some filters first.');
+        alert('No filters to save. Please apply at least one filter (search, date, status, tags, etc.) before saving.');
         return;
       }
       const name = prompt('Enter a name for this saved search:');

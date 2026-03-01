@@ -143,7 +143,9 @@ def list_files_api(
     if tags:
         tag_list = [t.strip().lower() for t in tags.split(",") if t.strip()]
         for tag in tag_list:
-            query = query.filter(FileRecord.ai_metadata.ilike(f"%{tag}%"))
+            # Escape SQL LIKE wildcards to prevent unintended pattern matching
+            escaped_tag = tag.replace("%", r"\%").replace("_", r"\_")
+            query = query.filter(FileRecord.ai_metadata.ilike(f"%{escaped_tag}%"))
 
     # Apply status filter (before pagination for correct counts)
     query = apply_status_filter(query, db, status)
