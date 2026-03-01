@@ -160,9 +160,6 @@
 
     const files = await getFilesFromDataTransfer(e.dataTransfer);
     if (files.length) {
-      // Clear previous upload progress
-      uploadProgress.innerHTML = "";
-
       // Create progress container
       const progressContainer = document.createElement("div");
       progressContainer.className = "space-y-2";
@@ -175,9 +172,6 @@
 
   function handleFileSelect(e) {
     if (e.target.files.length) {
-      // Clear previous upload progress
-      uploadProgress.innerHTML = "";
-
       // Create progress container
       const progressContainer = document.createElement("div");
       progressContainer.className = "space-y-2";
