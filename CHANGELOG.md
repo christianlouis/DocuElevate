@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.77.2 (2026-03-02)
+
+### Bug Fixes
+
+- **upload**: Fix upload progress counter showing done count always as 0
+  ([`3be1fa5`](https://github.com/christianlouis/DocuElevate/commit/3be1fa504023e15b38cdfe60da2b1c99b35bef42))
+
+
 ## v0.77.1 (2026-03-02)
 
 ### Bug Fixes
