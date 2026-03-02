@@ -107,6 +107,7 @@ class TestFinalizeDocumentStorage:
                     ):
                         with patch("app.tasks.finalize_document_storage.settings") as mock_settings:
                             mock_settings.workdir = "/tmp"
+                            mock_settings.enable_pdfa_conversion = False
 
                             finalize_document_storage.request.id = "test-task-id"
 

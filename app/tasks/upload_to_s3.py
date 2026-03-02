@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @celery.task(base=UploadTaskWithRetry, bind=True)
-def upload_to_s3(self, file_path: str, file_id: int = None):
+def upload_to_s3(self, file_path: str, file_id: int = None, folder_override: str = None):
     """
     Uploads a file to Amazon S3 in the configured bucket and folder.
 
@@ -61,9 +61,10 @@ def upload_to_s3(self, file_path: str, file_id: int = None):
         )
 
         # Construct the S3 key (path within the bucket)
-        if settings.s3_folder_prefix:
+        s3_folder = folder_override if folder_override is not None else settings.s3_folder_prefix
+        if s3_folder:
             # Ensure folder prefix ends with a slash
-            folder_prefix = settings.s3_folder_prefix
+            folder_prefix = s3_folder
             if not folder_prefix.endswith("/"):
                 folder_prefix += "/"
             s3_key = f"{folder_prefix}{filename}"

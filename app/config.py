@@ -222,6 +222,69 @@ class Settings(BaseSettings):
 
     # Feature flags
     allow_file_delete: bool = True  # Default to allowing file deletion from database
+
+    # PDF/A archival conversion settings
+    enable_pdfa_conversion: bool = Field(
+        default=False,
+        description=(
+            "Enable PDF/A archival variant generation. When enabled, PDF/A copies of both the "
+            "original ingested file and the processed file are created and saved alongside the "
+            "standard copies. Uses ocrmypdf with Ghostscript for the conversion. "
+            "This may double or triple storage but provides better legal coverage. Default: False."
+        ),
+    )
+    pdfa_format: str = Field(
+        default="2",
+        description=(
+            "PDF/A format variant to produce. Passed to ocrmypdf --output-type pdfa-N. "
+            "Valid values: '1' (PDF/A-1b), '2' (PDF/A-2b), '3' (PDF/A-3b). Default: '2'."
+        ),
+    )
+    pdfa_upload_original: bool = Field(
+        default=False,
+        description=(
+            "Upload the original-file PDF/A variant to all configured storage providers. "
+            "Files are placed in the provider's folder + PDFA_UPLOAD_FOLDER subfolder. Default: False."
+        ),
+    )
+    pdfa_upload_processed: bool = Field(
+        default=False,
+        description=(
+            "Upload the processed-file PDF/A variant to all configured storage providers. "
+            "Files are placed in the provider's folder + PDFA_UPLOAD_FOLDER subfolder. Default: False."
+        ),
+    )
+    pdfa_upload_folder: str = Field(
+        default="pdfa",
+        description=(
+            "Subfolder name appended to each storage provider's configured folder for PDF/A uploads. "
+            "For example if Dropbox folder is '/Documents' and this is 'pdfa', PDF/A files go to "
+            "'/Documents/pdfa'. Set to empty string to upload into the same folder. Default: 'pdfa'."
+        ),
+    )
+    google_drive_pdfa_folder_id: str = Field(
+        default="",
+        description=(
+            "Google Drive folder ID for PDF/A uploads. Since Google Drive uses IDs not paths, "
+            "this must be set separately. If empty, uses the standard google_drive_folder_id."
+        ),
+    )
+    pdfa_timestamp_enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable RFC 3161 timestamping of PDF/A files via a Timestamp Authority (TSA). "
+            "Creates a .tsr file alongside each PDF/A file for legal proof of existence. "
+            "Requires openssl binary on PATH. Default: False."
+        ),
+    )
+    pdfa_timestamp_url: str = Field(
+        default="https://freetsa.org/tsr",
+        description=(
+            "URL of the RFC 3161 Timestamp Authority. Default: FreeTSA (https://freetsa.org/tsr). "
+            "Other options: GlobalSign, DigiStamp, or any RFC 3161-compliant TSA."
+        ),
+    )
+
     imap_readonly_mode: bool = Field(
         default=False,
         description=(

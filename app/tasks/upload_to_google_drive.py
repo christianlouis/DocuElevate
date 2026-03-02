@@ -153,7 +153,9 @@ def truncate_property_value(key, value, max_bytes=100):
 
 
 @celery.task(base=UploadTaskWithRetry, bind=True)
-def upload_to_google_drive(self, file_path: str, include_metadata=True, file_id: int = None):
+def upload_to_google_drive(
+    self, file_path: str, include_metadata=True, file_id: int = None, folder_override: str = None
+):
     """
     Uploads a file to Google Drive in the configured folder with optional metadata.
 
@@ -201,8 +203,9 @@ def upload_to_google_drive(self, file_path: str, include_metadata=True, file_id:
         }
 
         # If folder ID is specified, set parent folder
-        if settings.google_drive_folder_id:
-            file_metadata["parents"] = [settings.google_drive_folder_id]
+        gdrive_folder_id = folder_override if folder_override is not None else settings.google_drive_folder_id
+        if gdrive_folder_id:
+            file_metadata["parents"] = [gdrive_folder_id]
 
         # Add custom properties if metadata exists
         if metadata:

@@ -106,7 +106,7 @@ def get_configured_services_from_validator():
 
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
-def send_to_all_destinations(self, file_path: str, use_validator=True, file_id: int = None):
+def send_to_all_destinations(self, file_path: str, use_validator=True, file_id: int = None, folder_overrides=None):
     """
     Distribute a file to all configured storage destinations.
 
@@ -115,6 +115,10 @@ def send_to_all_destinations(self, file_path: str, use_validator=True, file_id: 
         use_validator: Whether to use the config validator to determine enabled services
                        (if False, falls back to individual checks)
         file_id: Optional file ID to associate with logs
+        folder_overrides: Optional dict mapping provider names to folder override strings.
+                          When set, the override is passed to the upload task which uses it
+                          instead of the provider's default folder.  Example:
+                          {"dropbox": "/Documents/pdfa", "s3": "docs/pdfa/"}
     """
     task_id = self.request.id
 
@@ -236,7 +240,10 @@ def send_to_all_destinations(self, file_path: str, use_validator=True, file_id: 
                 task_id, f"queue_{service_name}", "in_progress", f"Queueing upload to {service_name}", file_id=file_id
             )
             try:
-                task = service["upload_func"].delay(file_path, file_id=file_id)
+                kwargs = {"file_id": file_id}
+                if folder_overrides and service_name in folder_overrides:
+                    kwargs["folder_override"] = folder_overrides[service_name]
+                task = service["upload_func"].delay(file_path, **kwargs)
                 results[f"{service_name}_task_id"] = task.id
                 queued_count += 1
                 log_task_progress(
