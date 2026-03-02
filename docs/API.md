@@ -670,7 +670,7 @@ curl -OJ "http://<your-instance>/api/files/123/download?version=original"
 
 **GET** `/api/files/{file_id}/similar`
 
-Find documents similar to the specified file using text embeddings and cosine similarity. Similarity scores range from 0 (completely different) to 1 (identical content). Embeddings are generated from OCR-extracted text and cached for subsequent requests.
+Find documents similar to the specified file using pre-computed text embeddings and cosine similarity. Similarity scores range from 0 (completely different) to 1 (identical content). Embeddings are computed automatically during document ingestion and cached in the database.
 
 **Parameters**:
 - `limit` (optional, default: `5`, max: `20`): Maximum number of similar documents to return
@@ -706,9 +706,94 @@ curl "http://<your-instance>/api/files/42/similar?limit=10&threshold=0.5"
 **Error Responses**:
 - `404`: File not found
 - `422`: Invalid query parameters (limit or threshold out of range)
-- `500`: Embedding generation failed
+- `500`: Internal error
 
-> **Note:** Documents without OCR text are excluded from similarity comparisons. The response includes a `message` field when the target file has no OCR text available.
+> **Note:** Only pre-computed embeddings are used — no API calls are made during the query. If a file's embedding has not been computed yet, the response includes a `message` field explaining this. Documents without OCR text are excluded from similarity comparisons.
+
+### Similarity Pairs (Corpus-Wide)
+
+**GET** `/api/similarity/pairs`
+
+Scan the entire document corpus for pairs of highly similar documents, ranked by score. Unlike the per-file `/files/{id}/similar` endpoint, this discovers all matching pairs across all files.
+
+**Parameters**:
+- `threshold` (optional, default: `0.7`, range: `0.0–1.0`): Minimum similarity score for a pair
+- `limit` (optional, default: `50`, max: `200`): Maximum pairs per page
+- `page` (optional, default: `1`): Page number
+
+**Response**:
+```json
+{
+  "pairs": [
+    {
+      "file_a": {
+        "file_id": 1,
+        "original_filename": "invoice_jan.pdf",
+        "document_title": "January Invoice",
+        "mime_type": "application/pdf",
+        "created_at": "2026-01-15T10:30:00+00:00"
+      },
+      "file_b": {
+        "file_id": 5,
+        "original_filename": "invoice_feb.pdf",
+        "document_title": "February Invoice",
+        "mime_type": "application/pdf",
+        "created_at": "2026-02-15T10:30:00+00:00"
+      },
+      "similarity_score": 0.94
+    }
+  ],
+  "total_pairs": 12,
+  "threshold": 0.7,
+  "page": 1,
+  "pages": 1,
+  "per_page": 50,
+  "embedding_coverage": {
+    "total_files": 120,
+    "files_with_embedding": 95
+  }
+}
+```
+
+**Example**:
+```bash
+# Find all document pairs above 90% similarity
+curl "http://<your-instance>/api/similarity/pairs?threshold=0.9"
+```
+
+### Embedding Diagnostics
+
+**GET** `/api/files/{file_id}/embedding-status`
+
+Check the embedding status for a specific file: whether OCR text is available, whether an embedding has been computed, and how many dimensions it has.
+
+```bash
+curl "http://<your-instance>/api/files/42/embedding-status"
+```
+
+**POST** `/api/files/{file_id}/compute-embedding`
+
+Manually trigger embedding computation for a single file. Useful for debugging or re-computing after configuration changes. Requires OCR text to be available.
+
+```bash
+curl -X POST "http://<your-instance>/api/files/42/compute-embedding"
+```
+
+**GET** `/api/diagnostic/embeddings`
+
+Get an overview of embedding coverage across all files: total files, how many have OCR text, how many have embeddings, and per-file status.
+
+```bash
+curl "http://<your-instance>/api/diagnostic/embeddings"
+```
+
+**POST** `/api/diagnostic/compute-all-embeddings`
+
+Queue embedding computation for all files that have OCR text but no embedding yet. Each file is processed as a separate background task.
+
+```bash
+curl -X POST "http://<your-instance>/api/diagnostic/compute-all-embeddings"
+```
 
 ### Batch Processing
 

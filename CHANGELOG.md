@@ -10,6 +10,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.74.0 (2026-03-02)
+
+### Bug Fixes
+
+- **similarity**: Address code review - column-only queries, configurable batch size, WCAG touch
+  targets
+  ([`55543be`](https://github.com/christianlouis/DocuElevate/commit/55543be3b0918160ec437d5ddae760af7f074c8a))
+
+- **similarity**: Truncate text to fit embedding model context window, fix step tracking
+  ([`8e955f3`](https://github.com/christianlouis/DocuElevate/commit/8e955f3c81764708053f34a57557664f8b356c2a))
+
+### Features
+
+- **similarity**: Add embedding pipeline, debug endpoints, backfill task, and scalable similarity
+  search
+  ([`8d7c8e7`](https://github.com/christianlouis/DocuElevate/commit/8d7c8e7c4ebeb6bb233d681e31f9bfb08ac32775))
+
+- **similarity**: Add similarity pairs dashboard, step tracking, and fix tests for pre-computed
+  embeddings
+  ([`c724b8d`](https://github.com/christianlouis/DocuElevate/commit/c724b8d83a063619aaa0af50156e872b3a205a28))
+
+
 ## v0.73.0 (2026-03-02)
 
 ### Features

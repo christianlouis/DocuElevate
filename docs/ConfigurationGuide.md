@@ -868,10 +868,15 @@ After OCR processes a document, its extracted text is converted to a vector embe
 | Variable | Description | Default |
 |---|---|---|
 | `NEAR_DUPLICATE_THRESHOLD` | Minimum cosine similarity (0–1) for two documents to be considered near-duplicates. `0.85` means ≥ 85 % semantic overlap. | `0.85` |
+| `EMBEDDING_MODEL` | Model name for generating text embeddings via the OpenAI-compatible API.  Must be supported by the endpoint configured with `OPENAI_BASE_URL`. | `text-embedding-3-small` |
+| `EMBEDDING_MAX_TOKENS` | Maximum tokens to send to the embedding model.  Text is truncated to approximately this many tokens before calling the API.  Set below the model's context window (e.g. 8 000 for an 8 192-token model). | `8000` |
 
 Near-duplicate detection:
-- Is performed **on demand** via `GET /api/files/{id}/duplicates` — not automatically during ingest (OCR text is required).
-- Is exposed in the **Duplicates** management page (`/duplicates` → "Near-Duplicate Finder" tab).
+- Embeddings are computed **automatically during document ingestion** as a processing step ("Compute Embedding").
+- A periodic **backfill task** (every 5 minutes) picks up any files that were processed before the embedding pipeline was enabled.
+- The **Similarity dashboard** (`/similarity`) shows all pairs of documents above the threshold, ranked by score.
+- The **Duplicates** management page (`/duplicates` → "Near-Duplicate Finder" tab) allows per-file lookup.
+- Debug endpoints are available to inspect embedding status and trigger recomputation (see API docs).
 - Documents without OCR text cannot be compared and are excluded from results.
 
 A score of **≥ 0.90** reliably identifies the same document scanned twice. A score of **0.70–0.90** suggests partial content overlap. Adjust `NEAR_DUPLICATE_THRESHOLD` to tune sensitivity.

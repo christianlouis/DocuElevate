@@ -952,9 +952,74 @@
       loadPDF('processed', fileId);
       {% endif %}
 
-      // Load similar documents
+      // Load similar documents and embedding status
       loadSimilarDocuments(fileId);
+      loadEmbeddingStatus(fileId);
     });
+
+    // Fetch and display embedding debug info
+    async function loadEmbeddingStatus(fileId) {
+      const statusDiv = document.getElementById('embedding-status');
+      const actionsDiv = document.getElementById('embedding-actions');
+      try {
+        const response = await fetch(`/api/files/${fileId}/embedding-status`);
+        if (!response.ok) return;
+        const data = await response.json();
+
+        let html = '';
+        if (data.has_embedding) {
+          html = `<i class="fas fa-check-circle" aria-hidden="true"></i> Embedding: <strong>${data.embedding_dimensions} dimensions</strong> (model: ${data.embedding_model})`;
+          statusDiv.style.backgroundColor = '#f0fff4';
+          statusDiv.style.color = '#276749';
+          statusDiv.style.border = '1px solid #c6f6d5';
+        } else if (data.has_ocr_text) {
+          html = `<i class="fas fa-exclamation-circle" aria-hidden="true"></i> Embedding: <strong>not yet computed</strong> — OCR text available (${data.ocr_text_length} chars). Click "Recompute Embedding" to generate.`;
+          statusDiv.style.backgroundColor = '#fffff0';
+          statusDiv.style.color = '#975a16';
+          statusDiv.style.border = '1px solid #fefcbf';
+        } else {
+          html = `<i class="fas fa-times-circle" aria-hidden="true"></i> Embedding: <strong>unavailable</strong> — no OCR text extracted for this file.`;
+          statusDiv.style.backgroundColor = '#fff5f5';
+          statusDiv.style.color = '#9b2c2c';
+          statusDiv.style.border = '1px solid #fed7d7';
+        }
+        statusDiv.innerHTML = html;
+        statusDiv.style.display = 'block';
+        actionsDiv.style.display = data.has_ocr_text ? 'block' : 'none';
+      } catch (error) {
+        console.error('Error loading embedding status:', error);
+      }
+    }
+
+    // Trigger embedding recomputation
+    async function recomputeEmbedding(fileId) {
+      const btn = document.getElementById('recompute-embedding-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Computing…';
+
+      try {
+        const response = await fetch(`/api/files/${fileId}/compute-embedding`, { method: 'POST' });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.detail || 'Request failed');
+        }
+        btn.innerHTML = '<i class="fas fa-check" aria-hidden="true"></i> Done';
+        btn.style.backgroundColor = '#48bb78';
+        // Refresh both embedding status and similar documents
+        loadEmbeddingStatus(fileId);
+        loadSimilarDocuments(fileId);
+      } catch (error) {
+        btn.innerHTML = '<i class="fas fa-times" aria-hidden="true"></i> Failed';
+        btn.style.backgroundColor = '#e53e3e';
+        console.error('Recompute embedding failed:', error);
+      } finally {
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-redo" aria-hidden="true"></i> Recompute Embedding';
+          btn.style.backgroundColor = '#4299e1';
+        }, 3000);
+      }
+    }
 
     // Similar documents loading
     async function loadSimilarDocuments(fileId) {
@@ -1602,6 +1667,8 @@
   <!-- Similar Documents Card -->
   <div class="detail-card" id="similar-documents-card">
     <h3><i class="fas fa-copy" aria-hidden="true"></i> Similar Documents</h3>
+    <!-- Embedding debug info -->
+    <div id="embedding-status" style="display: none; padding: 0.5rem 1rem; margin-bottom: 0.75rem; border-radius: 0.375rem; font-size: 0.8rem;"></div>
     <div id="similar-documents-loading" style="text-align: center; padding: 2rem; color: #718096;">
       <i class="fas fa-spinner fa-spin" aria-hidden="true" style="font-size: 1.5rem; margin-bottom: 0.5rem;"></i>
       <p>Searching for similar documents…</p>
@@ -1614,6 +1681,12 @@
     <div id="similar-documents-error" style="display: none; text-align: center; padding: 2rem; color: #991B1B;">
       <i class="fas fa-exclamation-triangle" aria-hidden="true" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
       <p id="similar-documents-error-msg">Failed to load similar documents.</p>
+    </div>
+    <!-- Recompute embedding button -->
+    <div id="embedding-actions" style="display: none; text-align: right; margin-top: 0.75rem;">
+      <button id="recompute-embedding-btn" onclick="recomputeEmbedding({{ file.id | tojson }})" style="background-color: #4299e1; color: white; border: none; padding: 0.4rem 0.75rem; border-radius: 0.375rem; font-size: 0.8rem; cursor: pointer;" aria-label="Recompute document embedding for similarity analysis">
+        <i class="fas fa-redo" aria-hidden="true"></i> Recompute Embedding
+      </button>
     </div>
   </div>
 

@@ -32,7 +32,7 @@ def finalize_document_storage(self, original_file: str, processed_file: str, met
     task_id = self.request.id
     logger.info(f"[{task_id}] Finalizing document storage for {processed_file}")
 
-    # 1. Update Database Status (From Main)
+    # 1. Update Database Status
     log_task_progress(
         task_id,
         "finalize_document_storage",
@@ -41,7 +41,7 @@ def finalize_document_storage(self, original_file: str, processed_file: str, met
         file_id=file_id,
     )
 
-    # Get file_id from database if not provided (fallback logic from Main)
+    # Get file_id from database if not provided (fallback logic)
     if file_id is None:
         with SessionLocal() as db:
             # Only as a last resort, try to find by exact match on local_filename
@@ -50,7 +50,7 @@ def finalize_document_storage(self, original_file: str, processed_file: str, met
             if file_record:
                 file_id = file_record.id
 
-    # 2. Determine Configured Destinations (From Copilot)
+    # 2. Determine Configured Destinations
     # This is needed for the notification message later
     configured_destinations = []
     try:
@@ -65,41 +65,51 @@ def finalize_document_storage(self, original_file: str, processed_file: str, met
         logger.warning(f"[WARNING] Could not determine configured destinations: {e}")
         configured_destinations = ["configured destinations"]
 
-    # 3. Queue Uploads (Merged)
-    # Uses Main branch signature to ensure file_id is passed, but keeps logic structure
+    # 3. Queue Uploads
     logger.info(f"[{task_id}] Queueing uploads to all destinations")
     log_task_progress(
         task_id, "finalize_document_storage", "success", "Queuing uploads to destinations", file_id=file_id
     )
 
     # Note: send_to_all_destinations is asynchronous and queues upload tasks
-    # We pass 'True' (delete_after) and 'file_id' as per Main branch requirements
     send_to_all_destinations.delay(processed_file, True, file_id)
 
-    # 3a. Trigger PDF/A archival conversion if enabled
+    # 3a. Trigger PDF/A archival conversion if enabled (from feature branch)
     if settings.enable_pdfa_conversion:
-        from app.tasks.convert_to_pdfa import convert_to_pdfa
+        try:
+            from app.tasks.convert_to_pdfa import convert_to_pdfa
+            logger.info(f"[{task_id}] PDF/A conversion enabled, queueing archival conversion")
+            log_task_progress(
+                task_id,
+                "finalize_document_storage",
+                "in_progress",
+                "Queueing PDF/A archival conversion",
+                file_id=file_id,
+            )
+            convert_to_pdfa.delay(file_id)
+        except Exception as e:
+            logger.warning(f"[{task_id}] Could not queue PDF/A conversion: {e}")
 
-        logger.info(f"[{task_id}] PDF/A conversion enabled, queueing archival conversion")
-        log_task_progress(
-            task_id,
-            "finalize_document_storage",
-            "in_progress",
-            "Queueing PDF/A archival conversion",
-            file_id=file_id,
-        )
-        convert_to_pdfa.delay(file_id)
+    # 3b. Queue embedding computation (from main branch)
+    if file_id is not None:
+        try:
+            from app.tasks.compute_embedding import compute_document_embedding
+            compute_document_embedding.delay(file_id)
+            logger.info(f"[{task_id}] Queued embedding computation for file {file_id}")
+        except Exception as e:
+            logger.warning(f"[{task_id}] Could not queue embedding task: {e}")
 
-    # 4. Send Notification (From Copilot)
-    # Note: This notification is sent after processing is complete but while uploads
-    # are being queued.
+    # 4. Send Notification
     try:
         # Get file information
         file_size = os.path.getsize(processed_file) if os.path.exists(processed_file) else 0
         filename = os.path.basename(processed_file)
 
         notify_file_processed(
-            filename=filename, file_size=file_size, metadata=metadata, destinations=configured_destinations
+            filename=filename, 
+            file_size=file_size, 
+            metadata=metadata, 
+            destinations=configured_destinations
         )
     except Exception as e:
         logger.warning(f"[WARNING] Failed to send file processed notification: {e}")
