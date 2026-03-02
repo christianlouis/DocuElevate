@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.77.1 (2026-03-02)
+
+### Bug Fixes
+
+- **tasks**: Register missing Celery tasks in celery_worker.py
+  ([`14adbee`](https://github.com/christianlouis/DocuElevate/commit/14adbeeabb2e37937fe2b46c71a6cfb75cce4320))
+
+
 ## v0.77.0 (2026-03-02)
 
 ### Bug Fixes
