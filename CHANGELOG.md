@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.75.0 (2026-03-02)
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`fea8f5c`](https://github.com/christianlouis/DocuElevate/commit/fea8f5c0de6fcc6a050bbcd5c9bfb3f6b1268e64))
+
+
 ## v0.74.0 (2026-03-02)
 
 ### Bug Fixes
