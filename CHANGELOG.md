@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.76.0 (2026-03-02)
+
+### Documentation
+
+- **settings**: Update SettingsManagement.md with new categories and setting types
+  ([`3080e37`](https://github.com/christianlouis/DocuElevate/commit/3080e37ddf3d93f75584f488fa84e87d7028797c))
+
+### Features
+
+- **settings**: Add all missing config settings to settings page with enhanced UX
+  ([`a259262`](https://github.com/christianlouis/DocuElevate/commit/a2592629dbe07226097a34f4c1794554c7ce3f23))
+
+
 ## v0.75.0 (2026-03-02)
 
 ### Code Style
