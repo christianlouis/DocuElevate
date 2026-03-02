@@ -876,6 +876,56 @@ Near-duplicate detection:
 
 A score of **≥ 0.90** reliably identifies the same document scanned twice. A score of **0.70–0.90** suggests partial content overlap. Adjust `NEAR_DUPLICATE_THRESHOLD` to tune sensitivity.
 
+## PDF/A Archival Conversion
+
+DocuElevate can optionally generate **PDF/A** archival copies of both the
+original ingested file and the processed file.  PDF/A copies are saved as
+parallel variants alongside the standard files—they do **not** replace the
+originals.  This provides better legal coverage by producing time-stamped,
+self-contained archival documents suitable for long-term storage and
+compliance.
+
+The conversion uses **ocrmypdf** (backed by Ghostscript), which is already
+bundled in the Docker images.
+
+> **Note:** PDF/A conversion may alter font rendering, especially for OCR text
+> overlays produced by Microsoft Azure Document Intelligence.  This is expected
+> and is why PDF/A copies are kept as parallel variants rather than
+> replacements.
+
+| Variable                    | Description                                                                                          | Default |
+|-----------------------------|------------------------------------------------------------------------------------------------------|---------|
+| `ENABLE_PDFA_CONVERSION`   | Enable PDF/A archival variant generation for both original and processed files.                       | `false` |
+| `PDFA_FORMAT`              | PDF/A format variant: `1` (PDF/A-1b), `2` (PDF/A-2b), `3` (PDF/A-3b).                               | `2`     |
+| `PDFA_UPLOAD_TO_PROVIDERS` | Also upload the processed PDF/A variant to all configured storage providers (with `-PDFA` suffix).   | `false` |
+
+### Storage Layout
+
+When enabled, PDF/A copies are stored under `workdir/pdfa/`:
+
+```
+workdir/
+├── original/          # Immutable copy of ingested file
+├── processed/         # Processed file with embedded metadata
+├── pdfa/
+│   ├── original/      # PDF/A copy of the ingested file
+│   └── processed/     # PDF/A copy of the processed file (with -PDFA suffix)
+└── tmp/               # Temporary processing area
+```
+
+### Configuration Example
+
+```bash
+# Enable PDF/A archival copies
+ENABLE_PDFA_CONVERSION=true
+
+# Use PDF/A-2b format (default, recommended for most use cases)
+PDFA_FORMAT=2
+
+# Also upload PDF/A copies to configured storage providers
+PDFA_UPLOAD_TO_PROVIDERS=true
+```
+
 ## Performance & Caching
 
 DocuElevate automatically optimizes database access and uses Redis as a

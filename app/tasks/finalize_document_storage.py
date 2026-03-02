@@ -76,6 +76,20 @@ def finalize_document_storage(self, original_file: str, processed_file: str, met
     # We pass 'True' (delete_after) and 'file_id' as per Main branch requirements
     send_to_all_destinations.delay(processed_file, True, file_id)
 
+    # 3a. Trigger PDF/A archival conversion if enabled
+    if settings.enable_pdfa_conversion:
+        from app.tasks.convert_to_pdfa import convert_to_pdfa
+
+        logger.info(f"[{task_id}] PDF/A conversion enabled, queueing archival conversion")
+        log_task_progress(
+            task_id,
+            "finalize_document_storage",
+            "in_progress",
+            "Queueing PDF/A archival conversion",
+            file_id=file_id,
+        )
+        convert_to_pdfa.delay(file_id)
+
     # 4. Send Notification (From Copilot)
     # Note: This notification is sent after processing is complete but while uploads
     # are being queued.

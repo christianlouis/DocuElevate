@@ -67,6 +67,10 @@ class FileRecord(Base):
     # Human-readable document title from AI metadata
     document_title = Column(String, nullable=True)
 
+    # PDF/A archival variant paths (generated when ENABLE_PDFA_CONVERSION is True)
+    original_pdfa_path = Column(String, nullable=True)  # PDF/A copy of the original ingested file
+    processed_pdfa_path = Column(String, nullable=True)  # PDF/A copy of the processed file
+
     # Pre-computed text embedding vector stored as JSON array of floats
     embedding = Column(Text, nullable=True)
 

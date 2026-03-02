@@ -222,6 +222,33 @@ class Settings(BaseSettings):
 
     # Feature flags
     allow_file_delete: bool = True  # Default to allowing file deletion from database
+
+    # PDF/A archival conversion settings
+    enable_pdfa_conversion: bool = Field(
+        default=False,
+        description=(
+            "Enable PDF/A archival variant generation. When enabled, PDF/A copies of both the "
+            "original ingested file and the processed file are created and saved alongside the "
+            "standard copies. Uses ocrmypdf with Ghostscript for the conversion. "
+            "This may double or triple storage but provides better legal coverage. Default: False."
+        ),
+    )
+    pdfa_format: str = Field(
+        default="2",
+        description=(
+            "PDF/A format variant to produce. Passed to ocrmypdf --output-type pdfa-N. "
+            "Valid values: '1' (PDF/A-1b), '2' (PDF/A-2b), '3' (PDF/A-3b). Default: '2'."
+        ),
+    )
+    pdfa_upload_to_providers: bool = Field(
+        default=False,
+        description=(
+            "When enabled and PDF/A conversion is active, also upload the PDF/A variants "
+            "to all configured storage providers in addition to the standard processed file. "
+            "PDF/A files are uploaded with a '-PDFA' suffix in their filename. Default: False."
+        ),
+    )
+
     imap_readonly_mode: bool = Field(
         default=False,
         description=(
