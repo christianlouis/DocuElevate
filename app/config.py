@@ -323,6 +323,29 @@ class Settings(BaseSettings):
             "them near-duplicates.  Higher values require closer content matches.  Default: 0.85."
         ),
     )
+    embedding_model: str = Field(
+        default="text-embedding-3-small",
+        description=(
+            "Model name used for generating text embeddings via the OpenAI-compatible API.  "
+            "Embeddings drive the document similarity feature.  Default: text-embedding-3-small."
+        ),
+    )
+    embedding_max_tokens: int = Field(
+        default=8000,
+        description=(
+            "Maximum number of tokens to send to the embedding model.  "
+            "Text is truncated to approximately this many tokens (using a "
+            "conservative 3-chars-per-token estimate) before calling the API.  "
+            "Set this below the model's context window (e.g. 8000 for an 8192-token model)."
+        ),
+    )
+    embedding_backfill_batch_size: int = Field(
+        default=50,
+        description=(
+            "Maximum number of files to queue for embedding computation per "
+            "backfill run.  Keeps the worker and embedding API load bounded."
+        ),
+    )
 
     # Text quality check - AI-based assessment of embedded PDF text
     enable_text_quality_check: bool = Field(

@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+{% block title %}Document Similarity - DocuElevate{% endblock %}
+
+{% block head_extra %}
+<style>
+  .sim-container { max-width: 1100px; margin: 0 auto; }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;
+  }
+  .stat-card {
+    flex: 1; min-width: 140px; background: white; border-radius: 0.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1rem 1.25rem;
+    text-align: center;
+  }
+  .stat-value { font-size: 1.5rem; font-weight: 700; }
+  .stat-label { font-size: 0.8rem; color: #6b7280; margin-top: 0.25rem; }
+
+  /* Pair cards */
+  .pair-card {
+    background: white; border-radius: 0.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin-bottom: 1rem; overflow: hidden;
+  }
+  .pair-header {
+    padding: 0.75rem 1.25rem; border-bottom: 1px solid #e5e7eb;
+    display: flex; align-items: center; gap: 0.75rem;
+    background: #f9fafb;
+  }
+  .pair-body {
+    display: grid; grid-template-columns: 1fr auto 1fr; gap: 0;
+  }
+  .pair-file {
+    padding: 0.75rem 1.25rem;
+  }
+  .pair-file:first-child { border-right: 1px solid #f3f4f6; }
+  .pair-connector {
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 0.5rem; color: #9ca3af; font-size: 1.25rem;
+  }
+  .pair-filename {
+    font-weight: 600; color: #1f2937; word-break: break-all;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .pair-meta { font-size: 0.8rem; color: #6b7280; }
+  .score-badge {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    font-size: 0.85rem; font-weight: 700; padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+  }
+  .score-high   { background: #fee2e2; color: #991b1b; }
+  .score-medium { background: #fef3c7; color: #92400e; }
+  .score-low    { background: #e5e7eb; color: #374151; }
+
+  /* Controls */
+  .controls {
+    background: white; border-radius: 0.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    padding: 1rem 1.25rem; margin-bottom: 1.5rem;
+  }
+  .controls-form {
+    display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end;
+  }
+  .controls-form label { font-size: 0.8rem; font-weight: 600; color: #374151; }
+  .controls-form input, .controls-form select {
+    padding: 0.4rem 0.6rem; border: 1px solid #d1d5db;
+    border-radius: 0.375rem; font-size: 0.85rem;
+  }
+  .controls-form input[type=number] { width: 90px; }
+
+  /* Pagination */
+  .pagination { display: flex; gap: 0.5rem; justify-content: center; margin-top: 1.5rem; }
+  .page-btn {
+    padding: 0.4rem 0.75rem; border: 1px solid #d1d5db;
+    border-radius: 0.375rem; font-size: 0.85rem; cursor: pointer;
+    background: white; color: #374151;
+  }
+  .page-btn:hover:not(:disabled) { background: #f3f4f6; }
+  .page-btn:disabled { opacity: 0.4; cursor: default; }
+  .page-btn.current { background: #2563eb; color: white; border-color: #2563eb; }
+
+  .empty-state {
+    text-align: center; padding: 3rem; color: #6b7280;
+  }
+  .empty-state i { font-size: 3rem; margin-bottom: 0.75rem; display: block; }
+
+  @media (max-width: 640px) {
+    .pair-body { grid-template-columns: 1fr; }
+    .pair-file:first-child { border-right: none; border-bottom: 1px solid #f3f4f6; }
+    .pair-connector { padding: 0.25rem 0; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<main id="main-content" class="sim-container px-4 py-8">
+  <h1 class="text-2xl font-bold mb-2">
+    <i class="fas fa-project-diagram text-blue-500" aria-hidden="true"></i>
+    Document Similarity
+  </h1>
+  <p class="text-gray-500 mb-6 text-sm">
+    Pairs of documents with high semantic similarity, ranked by score.
+    Embeddings are computed during document ingestion; a background task
+    also backfills any files that were processed before this feature was enabled.
+  </p>
+
+  <!-- Embedding coverage stats -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-value">{{ total_files }}</div>
+      <div class="stat-label">Total Files</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="color: #2563eb;">{{ files_with_embedding }}</div>
+      <div class="stat-label">With Embedding</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="color: {% if files_missing_embedding > 0 %}#d97706{% else %}#059669{% endif %};">
+        {{ files_missing_embedding }}
+      </div>
+      <div class="stat-label">Missing Embedding</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value text-sm" style="word-break: break-all;">{{ embedding_model }}</div>
+      <div class="stat-label">Embedding Model</div>
+    </div>
+  </div>
+
+  {% if files_missing_embedding > 0 %}
+  <div style="background: #fffff0; border: 1px solid #fefcbf; border-radius: 0.5rem; padding: 0.75rem 1rem; margin-bottom: 1.5rem; font-size: 0.85rem; color: #975a16;">
+    <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+    <strong>{{ files_missing_embedding }}</strong> file(s) have OCR text but no embedding yet.
+    The background task will compute them automatically every 5 minutes, or you can
+    <button onclick="triggerBackfill()" id="backfill-btn"
+            style="background: #d97706; color: white; border: none; padding: 0.2rem 0.6rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.8rem; min-height: 44px; min-width: 44px;"
+            aria-label="Trigger embedding computation for all files missing embeddings">
+      trigger it now
+    </button>.
+  </div>
+  {% endif %}
+
+  <!-- Controls -->
+  <div class="controls">
+    <form id="pairsForm" onsubmit="loadPairs(event)" class="controls-form">
+      <div class="flex flex-col gap-1">
+        <label for="pairThreshold">Min. similarity</label>
+        <input type="number" id="pairThreshold" min="0" max="1" step="0.05"
+               value="{{ default_threshold }}" style="min-height:44px;">
+      </div>
+      <div class="flex flex-col gap-1">
+        <label for="pairLimit">Per page</label>
+        <select id="pairLimit" style="min-height:44px;">
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+      <button type="submit"
+              style="min-height:44px; background-color: #2563eb; color: white; font-weight: 700;
+                     padding: 0 1.25rem; border: none; border-radius: 0.5rem; cursor: pointer;">
+        <i class="fas fa-search" aria-hidden="true"></i> Find Pairs
+      </button>
+    </form>
+  </div>
+
+  <!-- Results area -->
+  <div id="pairs-loading" style="text-align: center; padding: 2rem; color: #718096;">
+    <i class="fas fa-spinner fa-spin" aria-hidden="true" style="font-size: 1.5rem; margin-bottom: 0.5rem;"></i>
+    <p>Scanning for similar document pairs…</p>
+  </div>
+  <div id="pairs-content" style="display: none;" aria-live="polite"></div>
+  <div id="pairs-empty" style="display: none;" class="empty-state">
+    <i class="fas fa-check-circle text-green-400" aria-hidden="true"></i>
+    <p class="font-semibold text-lg text-gray-700">No similar pairs found</p>
+    <p class="text-sm mt-1" id="pairs-empty-detail">
+      No document pairs exceed the similarity threshold.
+    </p>
+  </div>
+  <div id="pairs-error" style="display: none;" class="empty-state">
+    <i class="fas fa-exclamation-triangle text-red-400" aria-hidden="true"></i>
+    <p class="font-semibold text-lg text-gray-700" id="pairs-error-msg">Failed to load pairs.</p>
+  </div>
+
+  <!-- Pagination -->
+  <nav id="pairs-pagination" class="pagination" style="display: none;" aria-label="Similarity pairs pagination"></nav>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let currentPage = 1;
+
+  function getThreshold() {
+    return parseFloat(document.getElementById('pairThreshold').value) || 0.7;
+  }
+  function getLimit() {
+    return parseInt(document.getElementById('pairLimit').value) || 50;
+  }
+
+  function loadPairs(e) {
+    if (e) e.preventDefault();
+    fetchPairs(1);
+  }
+
+  async function fetchPairs(page) {
+    currentPage = page;
+    const threshold = getThreshold();
+    const limit = getLimit();
+
+    const loadingDiv = document.getElementById('pairs-loading');
+    const contentDiv = document.getElementById('pairs-content');
+    const emptyDiv = document.getElementById('pairs-empty');
+    const errorDiv = document.getElementById('pairs-error');
+    const pagDiv = document.getElementById('pairs-pagination');
+
+    loadingDiv.style.display = 'block';
+    contentDiv.style.display = 'none';
+    emptyDiv.style.display = 'none';
+    errorDiv.style.display = 'none';
+    pagDiv.style.display = 'none';
+
+    try {
+      const url = `/api/similarity/pairs?threshold=${threshold}&limit=${limit}&page=${page}`;
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || resp.statusText);
+      }
+
+      const data = await resp.json();
+      loadingDiv.style.display = 'none';
+
+      if (!data.pairs || data.pairs.length === 0) {
+        emptyDiv.style.display = 'block';
+        const detail = document.getElementById('pairs-empty-detail');
+        if (data.embedding_coverage && data.embedding_coverage.files_with_embedding === 0) {
+          detail.textContent = 'No files have embeddings yet. Wait for the background task or trigger it manually.';
+        } else {
+          detail.textContent = `No document pairs exceed the ${(threshold * 100).toFixed(0)}% similarity threshold.`;
+        }
+        return;
+      }
+
+      renderPairs(data);
+      contentDiv.style.display = 'block';
+      renderPagination(data);
+    } catch (err) {
+      loadingDiv.style.display = 'none';
+      errorDiv.style.display = 'block';
+      document.getElementById('pairs-error-msg').textContent = 'Failed to load pairs: ' + err.message;
+    }
+  }
+
+  function renderPairs(data) {
+    const container = document.getElementById('pairs-content');
+    let html = `<p class="text-sm text-gray-500 mb-3">
+      Found <strong>${data.total_pairs}</strong> pair(s) above
+      ${(data.threshold * 100).toFixed(0)}% similarity
+      (${data.embedding_coverage.files_with_embedding} of ${data.embedding_coverage.total_files} files have embeddings).
+    </p>`;
+
+    for (const pair of data.pairs) {
+      const pct = Math.round(pair.similarity_score * 100);
+      const scoreClass = pct >= 90 ? 'score-high' : pct >= 75 ? 'score-medium' : 'score-low';
+      const titleA = pair.file_a.document_title || pair.file_a.original_filename || 'Untitled';
+      const titleB = pair.file_b.document_title || pair.file_b.original_filename || 'Untitled';
+      const fnA = pair.file_a.original_filename || '(unnamed)';
+      const fnB = pair.file_b.original_filename || '(unnamed)';
+      const dateA = pair.file_a.created_at ? pair.file_a.created_at.substring(0, 10) : '';
+      const dateB = pair.file_b.created_at ? pair.file_b.created_at.substring(0, 10) : '';
+
+      html += `
+      <div class="pair-card">
+        <div class="pair-header">
+          <i class="fas fa-link text-blue-400" aria-hidden="true"></i>
+          <span class="score-badge ${scoreClass}">${pct}% match</span>
+        </div>
+        <div class="pair-body">
+          <div class="pair-file">
+            <div class="pair-filename" title="${escapeAttr(titleA)}">
+              <a href="/files/${pair.file_a.file_id}/detail" class="hover:text-blue-600">
+                ${escapeHtml(titleA)}
+              </a>
+            </div>
+            <div class="pair-meta">
+              #${pair.file_a.file_id} · ${escapeHtml(fnA)}${dateA ? ' · ' + dateA : ''}
+            </div>
+          </div>
+          <div class="pair-connector" aria-hidden="true">
+            <i class="fas fa-arrows-alt-h"></i>
+          </div>
+          <div class="pair-file">
+            <div class="pair-filename" title="${escapeAttr(titleB)}">
+              <a href="/files/${pair.file_b.file_id}/detail" class="hover:text-blue-600">
+                ${escapeHtml(titleB)}
+              </a>
+            </div>
+            <div class="pair-meta">
+              #${pair.file_b.file_id} · ${escapeHtml(fnB)}${dateB ? ' · ' + dateB : ''}
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    container.innerHTML = html;
+  }
+
+  function renderPagination(data) {
+    const nav = document.getElementById('pairs-pagination');
+    if (data.pages <= 1) { nav.style.display = 'none'; return; }
+    nav.style.display = 'flex';
+
+    let html = `<button class="page-btn" onclick="fetchPairs(${data.page - 1})"
+                  ${data.page <= 1 ? 'disabled' : ''} aria-label="Previous page">
+                  <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                </button>`;
+
+    for (let p = 1; p <= data.pages; p++) {
+      html += `<button class="page-btn ${p === data.page ? 'current' : ''}"
+                onclick="fetchPairs(${p})" aria-label="Page ${p}"
+                ${p === data.page ? 'aria-current="page"' : ''}>${p}</button>`;
+    }
+
+    html += `<button class="page-btn" onclick="fetchPairs(${data.page + 1})"
+               ${data.page >= data.pages ? 'disabled' : ''} aria-label="Next page">
+               <i class="fas fa-chevron-right" aria-hidden="true"></i>
+             </button>`;
+
+    nav.innerHTML = html;
+  }
+
+  async function triggerBackfill() {
+    const btn = document.getElementById('backfill-btn');
+    btn.disabled = true;
+    btn.textContent = 'Queuing…';
+    try {
+      const resp = await fetch('/api/diagnostic/compute-all-embeddings', { method: 'POST' });
+      const data = await resp.json();
+      btn.textContent = `Queued ${data.files_queued} file(s)`;
+      btn.style.backgroundColor = '#059669';
+    } catch (err) {
+      btn.textContent = 'Failed';
+      btn.style.backgroundColor = '#dc2626';
+    }
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.textContent = 'trigger it now';
+      btn.style.backgroundColor = '#d97706';
+    }, 5000);
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function escapeAttr(str) {
+    return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // Load pairs on page load
+  document.addEventListener('DOMContentLoaded', function() {
+    fetchPairs(1);
+  });
+</script>
+{% endblock %}
