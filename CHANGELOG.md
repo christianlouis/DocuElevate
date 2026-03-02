@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.73.0 (2026-03-02)
+
+### Features
+
+- **duplicates**: Add duplicate document detection and management
+  ([`ebea83a`](https://github.com/christianlouis/DocuElevate/commit/ebea83a750022f9722e548ba8a6ecea179ac2d8b))
+
+
 ## v0.72.1 (2026-03-02)
 
 ### Bug Fixes
