@@ -20,7 +20,7 @@ env:
 
 jobs:
   # ══════════════════════════════════════════════════════════════════════════
-  # Stage 1: Static Analysis (The "Immediate" Gate)
+  # Stage 1: Static Analysis (Fast Fail Gates)
   # ══════════════════════════════════════════════════════════════════════════
   lint:
     name: Ruff Lint & Format
@@ -31,7 +31,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: 'pip' # Caching enabled
+          cache: 'pip'
       - name: Install Ruff
         run: pip install ruff
       - name: Check for merge conflict markers
@@ -57,14 +57,14 @@ jobs:
       - run: djlint frontend/templates/ --lint
 
   # ══════════════════════════════════════════════════════════════════════════
-  # Stage 2: Parallel Heavy Lifters (Tests & Mypy)
-  # All 3 of these now run at the same time as soon as Linting passes.
+  # Stage 2: Parallel Heavy Lifters (Feedback within ~3-4 mins)
+  # All 4 of these now run simultaneously after Linting passes.
   # ══════════════════════════════════════════════════════════════════════════
   
   mypy:
     name: Mypy Type Check
     runs-on: ubuntu-latest
-    needs: [lint] # Blocks only on fast linting
+    needs: [lint]
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -79,7 +79,7 @@ jobs:
   test-quick:
     name: Quick Tests
     runs-on: ubuntu-latest
-    needs: [lint] # Parallel with Mypy
+    needs: [lint]
     services:
       redis:
         image: redis:7
@@ -96,18 +96,20 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Run Quick Tests
         run: >
-          pytest tests/ -v --timeout=120 --cov=app --cov-report=xml 
+          pytest tests/ -v --timeout=120 --cov=app --cov-report=xml --cov-report=term
+          --junitxml=junit.xml -o junit_family=legacy
           -m "not e2e and not requires_docker and not requires_external and not slow"
-      - name: Upload coverage
+      - name: Upload coverage to Codecov
         if: always()
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
 
   test-integration:
     name: Integration Tests
     runs-on: ubuntu-latest
-    needs: [lint] # NOW PARALLEL (No longer waits for test-quick)
+    needs: [lint]
     services:
       redis:
         image: redis:7
@@ -128,10 +130,11 @@ jobs:
       - name: Run Integration Tests
         run: >
           pytest tests/ -v --timeout=300 
+          --junitxml=junit-integration.xml -o junit_family=legacy
           -m "(requires_docker or requires_external or slow) and not e2e"
 
   dependency-scan:
-    name: Security Scan
+    name: Dependency Scan
     runs-on: ubuntu-latest
     needs: [lint]
     steps:
@@ -145,58 +148,104 @@ jobs:
       - run: pip-audit -r requirements.txt --desc on
 
   # ══════════════════════════════════════════════════════════════════════════
-  # Stage 3: Build & Deploy (Final Quality Gate)
+  # Stage 3: Build & Push (The Quality Gate)
   # ══════════════════════════════════════════════════════════════════════════
   build:
-    name: Build & Push
+    name: Build & Push Docker Image
     runs-on: ubuntu-latest
-    # This job only runs if EVERYTHING above passed
     needs: [test-quick, test-integration, mypy, dependency-scan, html-lint]
     if: github.event_name == 'push'
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
       - name: Generate Build Metadata
         run: |
           chmod +x scripts/generate_build_metadata.sh
           ./scripts/generate_build_metadata.sh
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Log in to Registries
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and Push
+
+      - name: Extract metadata for tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.IMAGE_NAME }}
+            ghcr.io/${{ github.repository_owner }}/docuelevate
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and Push Docker Image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ${{ env.IMAGE_NAME }}:latest
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          sbom: true
+          provenance: mode=max
 
+  # ══════════════════════════════════════════════════════════════════════════
+  # Stage 4: GitOps Update
+  # ══════════════════════════════════════════════════════════════════════════
   update-k8s-manifest:
-    name: Update Preprod
+    name: Update Preprod K8s Manifest
     runs-on: ubuntu-latest
     needs: [build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
+      - name: Compute image tag
+        id: tag
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "tag=main-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${{ github.repository_owner }}/docuelevate:main-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout k8s-cluster-state
         uses: actions/checkout@v4
         with:
           repository: christianlouis/k8s-cluster-state
           token: ${{ secrets.GH_PAT }}
           path: k8s-cluster-state
-      - name: Update image tag
+
+      - name: Update image tag in preprod manifest
         uses: mikefarah/yq@v4.44.6
+        env:
+          IMAGE: ${{ steps.tag.outputs.image }}
         with:
-          cmd: yq -i '.images[0].newTag = "${{ github.sha }}"' k8s-cluster-state/apps/docuelevate/preprod/docuelevate-stack.yaml
-      - name: Push changes
+          cmd: |
+            yq -i '(.. | select(tag == "!!str") | select(test("^(ghcr\\.io/christianlouis/docuelevate|christianlouis/docuelevate):"))) = strenv(IMAGE)' \
+              k8s-cluster-state/apps/docuelevate/preprod/docuelevate-stack.yaml
+
+      - name: Commit and push
         run: |
           cd k8s-cluster-state
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add .
-          git commit -m "chore: update image to ${{ github.sha }}"
-          git push
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add apps/docuelevate/preprod/docuelevate-stack.yaml
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore(preprod): update docuelevate image to ${{ steps.tag.outputs.tag }}"
+            git push
+          fi
