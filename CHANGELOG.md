@@ -10,6 +10,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.72.0 (2026-03-02)
+
+### Bug Fixes
+
+- **migrations**: Resolve multiple Alembic heads causing CI test crash
+  ([`f7cf7e2`](https://github.com/christianlouis/DocuElevate/commit/f7cf7e2a4c47e02658831e84acd20ce659c209d6))
+
+### Continuous Integration
+
+- Optimize pipeline for fail-fast feedback loop
+  ([`ea0f7fb`](https://github.com/christianlouis/DocuElevate/commit/ea0f7fb54fd081d2e2a8e0b97a2a82accfe1bc52))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`744a433`](https://github.com/christianlouis/DocuElevate/commit/744a433cc97a341cd431fd79def7e7ba2e62ca75))
+
+- **changelog**: Update changelog [skip ci]
+  ([`fe9f84a`](https://github.com/christianlouis/DocuElevate/commit/fe9f84ac05da73f764c6972ff1b32b8b4d0b5c5f))
+
+- **changelog**: Update changelog [skip ci]
+  ([`3d38813`](https://github.com/christianlouis/DocuElevate/commit/3d38813da5c2c911e379303aa8e58449479962f8))
+
+- **changelog**: Update changelog [skip ci]
+  ([`ed85797`](https://github.com/christianlouis/DocuElevate/commit/ed8579757cf17b696e70505fefb543ee26837aaa))
+
+- **similarity**: Add API documentation and fix template accessibility
+  ([`b7c7817`](https://github.com/christianlouis/DocuElevate/commit/b7c78177e9d02714a46c328ca99f8820dcb27b18))
+
+### Features
+
+- **similarity**: Add document similarity detection with embeddings and cosine similarity
+  ([`9748103`](https://github.com/christianlouis/DocuElevate/commit/974810378251a8ca33aa2d43c34e7567cdf1a574))
+
+
 ## Unreleased
 
 ### Continuous Integration
