@@ -666,6 +666,50 @@ curl -OJ "http://<your-instance>/api/files/123/download?version=original"
 - `404`: File not found in database or on disk
 - `400`: Invalid `version` parameter (must be `processed` or `original`)
 
+### Similar Documents
+
+**GET** `/api/files/{file_id}/similar`
+
+Find documents similar to the specified file using text embeddings and cosine similarity. Similarity scores range from 0 (completely different) to 1 (identical content). Embeddings are generated from OCR-extracted text and cached for subsequent requests.
+
+**Parameters**:
+- `limit` (optional, default: `5`, max: `20`): Maximum number of similar documents to return
+- `threshold` (optional, default: `0.3`, range: `0.0–1.0`): Minimum similarity score to include
+
+**Response**:
+```json
+{
+  "file_id": 42,
+  "similar_documents": [
+    {
+      "file_id": 15,
+      "original_filename": "Invoice_2026-01.pdf",
+      "document_title": "January Invoice",
+      "similarity_score": 0.8934,
+      "mime_type": "application/pdf",
+      "created_at": "2026-01-15T10:30:00+00:00"
+    }
+  ],
+  "count": 1
+}
+```
+
+**Example**:
+```bash
+# Find top 5 similar documents
+curl "http://<your-instance>/api/files/42/similar"
+
+# Find top 10 documents with at least 50% similarity
+curl "http://<your-instance>/api/files/42/similar?limit=10&threshold=0.5"
+```
+
+**Error Responses**:
+- `404`: File not found
+- `422`: Invalid query parameters (limit or threshold out of range)
+- `500`: Embedding generation failed
+
+> **Note:** Documents without OCR text are excluded from similarity comparisons. The response includes a `message` field when the target file has no OCR text available.
+
 ### Batch Processing
 
 **POST** `/api/processall`
