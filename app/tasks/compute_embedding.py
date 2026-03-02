@@ -9,6 +9,7 @@ import logging
 from datetime import datetime, timezone
 
 from app.celery_app import celery
+from app.config import settings
 from app.database import SessionLocal
 from app.models import FileRecord
 from app.tasks.retry_config import BaseTaskWithRetry
@@ -145,7 +146,7 @@ def backfill_missing_embeddings(self) -> dict:
     Returns:
         A dict with the number of tasks ``queued``.
     """
-    batch_size = 50  # max files to queue per run
+    batch_size = settings.embedding_backfill_batch_size
     task_id = self.request.id
     logger.info("[%s] Backfill: scanning for files missing embeddings (batch_size=%d)", task_id, batch_size)
 

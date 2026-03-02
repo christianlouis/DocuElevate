@@ -257,7 +257,17 @@ def get_embeddings_overview(
     }
     ```
     """
-    all_files = db.query(FileRecord).order_by(FileRecord.id.desc()).all()
+    # Use column-only query to avoid loading full ORM objects into memory
+    all_files = (
+        db.query(
+            FileRecord.id,
+            FileRecord.original_filename,
+            FileRecord.ocr_text,
+            FileRecord.embedding,
+        )
+        .order_by(FileRecord.id.desc())
+        .all()
+    )
 
     files_info = []
     total_with_ocr = 0

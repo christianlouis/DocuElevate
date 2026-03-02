@@ -59,8 +59,8 @@ def generate_embedding(text: str, model: str | None = None) -> list[float]:
         model = settings.embedding_model
 
     # Truncate to stay within the model's context window.
-    # Use a conservative estimate of ~3 characters per token so that the
-    # resulting text fits comfortably within ``embedding_max_tokens``.
+    # Conservative 3 chars/token estimate (actual ratio varies by language;
+    # English averages ~4 chars/token but 3 gives a safety margin).
     max_chars = settings.embedding_max_tokens * 3
     if len(text) > max_chars:
         logger.debug(
