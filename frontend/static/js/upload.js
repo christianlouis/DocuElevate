@@ -274,6 +274,25 @@ function processFiles(files, progressContainer, statusMessage) {
     statusMessage.textContent = `Queued ${fileArray.length} file(s) for upload…`;
   }
 
+  // Per-batch counters tracked in closure variables (avoids fragile DOM queries).
+  const total = fileArray.length;
+  let done = 0;
+
+  function updateStatus() {
+    if (!statusMessage) return;
+    if (done === total) {
+      statusMessage.textContent = `All uploads completed (${done}/${total})`;
+      window.dispatchEvent(new CustomEvent('allUploadsComplete', { detail: { total, completed: done } }));
+    } else {
+      statusMessage.textContent = `Uploading files (${done}/${total})`;
+    }
+  }
+
+  function markDone() {
+    done++;
+    updateStatus();
+  }
+
   // Pre-create one progress row per file.
   const queueItems = fileArray.map((file) => {
     const row = document.createElement('div');
@@ -319,7 +338,7 @@ function processFiles(files, progressContainer, statusMessage) {
         item.statusEl.textContent = 'Unsupported file type';
         item.statusEl.className = 'text-xs text-red-500 mt-1';
         active--;
-        updateOverallStatus(statusMessage);
+        markDone();
         // No HTTP request – skip straight to next without adding delay.
         scheduleNext();
         continue;
@@ -330,12 +349,12 @@ function processFiles(files, progressContainer, statusMessage) {
         item.statusEl.textContent = 'Exceeds 500 MB limit';
         item.statusEl.className = 'text-xs text-red-500 mt-1';
         active--;
-        updateOverallStatus(statusMessage);
+        markDone();
         scheduleNext();
         continue;
       }
 
-      _uploadSingleFile(item.file, item.progressBar, item.statusEl, statusMessage)
+      _uploadSingleFile(item.file, item.progressBar, item.statusEl, markDone)
         .then((result) => {
           active--;
           if (result.rateLimited) {
@@ -348,7 +367,7 @@ function processFiles(files, progressContainer, statusMessage) {
               item.progressBar.className = 'file-progress-bar bg-red-500 h-2 rounded-full';
               item.statusEl.textContent = 'Failed: rate limit retries exhausted';
               item.statusEl.className = 'text-xs text-red-500 mt-1';
-              updateOverallStatus(statusMessage);
+              markDone();
             }
             // Resume after the backoff window.
             const wait = Math.max(_adaptiveState.pauseUntil - Date.now() + 50, 0);
@@ -383,10 +402,10 @@ function _isAcceptedFile(file) {
  * @param {File} file
  * @param {HTMLElement} progressBar
  * @param {HTMLElement} statusEl
- * @param {HTMLElement} statusMessage
+ * @param {Function} onTerminal - Called when the file reaches a terminal state (success or permanent error).
  * @returns {Promise<{rateLimited: boolean, retryAfterSeconds: number}>}
  */
-function _uploadSingleFile(file, progressBar, statusEl, statusMessage) {
+function _uploadSingleFile(file, progressBar, statusEl, onTerminal) {
   statusEl.textContent = 'Uploading…';
   statusEl.className = 'text-xs text-gray-600 mt-1';
   progressBar.style.width = '0%';
@@ -418,7 +437,7 @@ function _uploadSingleFile(file, progressBar, statusEl, statusMessage) {
         statusEl.textContent = `Success: Task ID: ${result.task_id}`;
         statusEl.className = 'text-xs text-green-600 mt-1';
         _onUploadSuccess();
-        updateOverallStatus(statusMessage);
+        onTerminal();
         resolve({ rateLimited: false, retryAfterSeconds: 0 });
 
       } else if (xhr.status === 429) {
@@ -438,7 +457,7 @@ function _uploadSingleFile(file, progressBar, statusEl, statusMessage) {
         progressBar.className = 'file-progress-bar bg-red-500 h-2 rounded-full';
         statusEl.textContent = `Error: HTTP ${xhr.status}`;
         statusEl.className = 'text-xs text-red-500 mt-1';
-        updateOverallStatus(statusMessage);
+        onTerminal();
         resolve({ rateLimited: false, retryAfterSeconds: 0 });
       }
     };
@@ -447,7 +466,7 @@ function _uploadSingleFile(file, progressBar, statusEl, statusMessage) {
       progressBar.className = 'file-progress-bar bg-red-500 h-2 rounded-full';
       statusEl.textContent = 'Error: Network error';
       statusEl.className = 'text-xs text-red-500 mt-1';
-      updateOverallStatus(statusMessage);
+      onTerminal();
       resolve({ rateLimited: false, retryAfterSeconds: 0 });
     };
 
@@ -465,39 +484,6 @@ function _uploadSingleFile(file, progressBar, statusEl, statusMessage) {
  */
 function validateAndUpload(file, progressContainer, statusMessage) {
   processFiles([file], progressContainer, statusMessage);
-}
-
-// ── Status helpers ────────────────────────────────────────────────────────────
-
-/**
- * Re-calculate and display the overall upload status.
- * Fires 'allUploadsComplete' when every item has a terminal status.
- * @param {HTMLElement} statusMessage
- */
-function updateOverallStatus(statusMessage) {
-  if (!statusMessage) return;
-
-  const fileStatuses = document.querySelectorAll('.file-status');
-  let done = 0;
-  const total = fileStatuses.length;
-
-  fileStatuses.forEach((s) => {
-    const t = s.textContent;
-    if (
-      t.startsWith('Success') ||
-      t.startsWith('Error') ||
-      t.startsWith('Unsupported') ||
-      t.startsWith('Exceeds') ||
-      t.startsWith('Failed:')
-    ) done++;
-  });
-
-  if (done === total && total > 0) {
-    statusMessage.textContent = `All uploads completed (${done}/${total})`;
-    window.dispatchEvent(new CustomEvent('allUploadsComplete', { detail: { total, completed: done } }));
-  } else {
-    statusMessage.textContent = `Uploading files (${done}/${total})`;
-  }
 }
 
 /**
