@@ -82,6 +82,19 @@ def get_similar_documents(
             "message": "No OCR text available for similarity comparison",
         }
 
+    # Check whether an embedding has been computed yet
+    if not file_record.embedding:
+        return {
+            "file_id": file_id,
+            "similar_documents": [],
+            "count": 0,
+            "message": (
+                "Embedding not yet computed for this file. "
+                "It will be generated automatically during processing or via the backfill task. "
+                "You can also trigger it manually with POST /api/files/{file_id}/compute-embedding."
+            ),
+        }
+
     try:
         from app.utils.similarity import find_similar_documents
 
@@ -330,4 +343,121 @@ def trigger_compute_all_embeddings(
     return {
         "status": "queued",
         "files_queued": queued,
+    }
+
+
+@router.get("/similarity/pairs")
+@require_login
+def get_similarity_pairs(
+    request: Request,
+    db: DbSession,
+    threshold: float = Query(0.7, ge=0.0, le=1.0, description="Minimum similarity score for a pair"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of pairs to return"),
+    page: int = Query(1, ge=1, description="Page number"),
+):
+    """Return pairs of documents with high similarity across the entire corpus.
+
+    Unlike the per-file ``/files/{id}/similar`` endpoint, this scans every
+    document that has a pre-computed embedding and returns **all** pairs
+    whose cosine similarity exceeds ``threshold``, sorted by descending
+    score.
+
+    To keep memory bounded the query loads only the columns needed for
+    scoring and streams results in chunks.
+
+    Response:
+    ```json
+    {
+      "pairs": [
+        {
+          "file_a": {"file_id": 1, "original_filename": "invoice_jan.pdf", ...},
+          "file_b": {"file_id": 5, "original_filename": "invoice_feb.pdf", ...},
+          "similarity_score": 0.94
+        }
+      ],
+      "total_pairs": 12,
+      "threshold": 0.7,
+      "page": 1,
+      "pages": 1,
+      "embedding_coverage": {"total_files": 120, "files_with_embedding": 95}
+    }
+    ```
+    """
+    from app.utils.similarity import cosine_similarity
+
+    # Load all files that have embeddings (columns only for efficiency)
+    rows = (
+        db.query(
+            FileRecord.id,
+            FileRecord.original_filename,
+            FileRecord.document_title,
+            FileRecord.mime_type,
+            FileRecord.created_at,
+            FileRecord.embedding,
+        )
+        .filter(
+            FileRecord.embedding.isnot(None),
+            FileRecord.embedding != "",
+        )
+        .order_by(FileRecord.id)
+        .all()
+    )
+
+    # Parse embeddings upfront
+    parsed: list[tuple] = []
+    for row in rows:
+        try:
+            vec = json.loads(row.embedding)
+            parsed.append((row, vec))
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+    # Pairwise comparison (triangle: i < j avoids duplicating A↔B / B↔A)
+    all_pairs: list[dict] = []
+    for i in range(len(parsed)):
+        row_a, vec_a = parsed[i]
+        for j in range(i + 1, len(parsed)):
+            row_b, vec_b = parsed[j]
+            score = cosine_similarity(vec_a, vec_b)
+            if score >= threshold:
+                all_pairs.append(
+                    {
+                        "file_a": _row_to_dict(row_a),
+                        "file_b": _row_to_dict(row_b),
+                        "similarity_score": round(score, 4),
+                    }
+                )
+
+    # Sort by score descending
+    all_pairs.sort(key=lambda p: p["similarity_score"], reverse=True)
+
+    total_pairs = len(all_pairs)
+    total_pages = max(1, (total_pairs + limit - 1) // limit)
+    offset = (page - 1) * limit
+    page_pairs = all_pairs[offset : offset + limit]
+
+    total_files = db.query(FileRecord).count()
+
+    return {
+        "pairs": page_pairs,
+        "total_pairs": total_pairs,
+        "threshold": threshold,
+        "page": page,
+        "pages": total_pages,
+        "per_page": limit,
+        "embedding_coverage": {
+            "total_files": total_files,
+            "files_with_embedding": len(parsed),
+        },
+    }
+
+
+def _row_to_dict(row) -> dict:
+    """Serialise a column-only query row to a dict for JSON responses."""
+    return {
+        "file_id": row.id,
+        "original_filename": row.original_filename,
+        "document_title": row.document_title,
+        "mime_type": row.mime_type,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
     }

@@ -108,18 +108,23 @@ class TestFindSimilarDocuments:
         assert result == []
 
     @pytest.mark.unit
-    @patch("app.utils.similarity.generate_embedding")
-    def test_finds_similar_documents(self, mock_embed, db_session):
-        """Should find similar documents based on embedding similarity."""
-        # Create a target file with OCR text
+    def test_finds_similar_documents(self, db_session):
+        """Should find similar documents based on pre-computed embedding similarity."""
+        # Pre-computed embeddings that reflect similarity
+        target_embedding = [1.0, 0.0, 0.0]
+        similar_embedding = [0.95, 0.05, 0.0]
+        different_embedding = [0.0, 0.0, 1.0]
+
+        # Create a target file with pre-computed embedding
         target = FileRecord(
             filehash="hash1",
             local_filename="/tmp/target.pdf",
             file_size=1024,
             original_filename="target.pdf",
             ocr_text="This is an invoice from Amazon for January 2026",
+            embedding=json.dumps(target_embedding),
         )
-        # Create a similar file
+        # Create a similar file with pre-computed embedding
         similar = FileRecord(
             filehash="hash2",
             local_filename="/tmp/similar.pdf",
@@ -128,8 +133,9 @@ class TestFindSimilarDocuments:
             ocr_text="This is an invoice from Amazon for February 2026",
             document_title="Amazon Invoice Feb",
             mime_type="application/pdf",
+            embedding=json.dumps(similar_embedding),
         )
-        # Create a different file
+        # Create a different file with pre-computed embedding
         different = FileRecord(
             filehash="hash3",
             local_filename="/tmp/different.pdf",
@@ -138,25 +144,11 @@ class TestFindSimilarDocuments:
             ocr_text="Recipe for chocolate cake with detailed instructions",
             document_title="Chocolate Cake Recipe",
             mime_type="application/pdf",
+            embedding=json.dumps(different_embedding),
         )
 
         db_session.add_all([target, similar, different])
         db_session.commit()
-
-        # Mock embeddings that reflect similarity
-        target_embedding = [1.0, 0.0, 0.0]
-        similar_embedding = [0.95, 0.05, 0.0]
-        different_embedding = [0.0, 0.0, 1.0]
-
-        def mock_embed_side_effect(text):
-            if "January" in text or "invoice" in text.lower()[:30]:
-                return target_embedding
-            elif "February" in text:
-                return similar_embedding
-            else:
-                return different_embedding
-
-        mock_embed.side_effect = mock_embed_side_effect
 
         result = find_similar_documents(db_session, file_id=target.id, threshold=0.3)
 
@@ -166,8 +158,7 @@ class TestFindSimilarDocuments:
         assert result[0]["original_filename"] == "similar.pdf"
 
     @pytest.mark.unit
-    @patch("app.utils.similarity.generate_embedding")
-    def test_respects_threshold(self, mock_embed, db_session):
+    def test_respects_threshold(self, db_session):
         """Should filter out documents below the threshold."""
         target = FileRecord(
             filehash="hash1",
@@ -175,6 +166,7 @@ class TestFindSimilarDocuments:
             file_size=100,
             original_filename="target.pdf",
             ocr_text="target text",
+            embedding=json.dumps([1.0, 0.0]),
         )
         candidate = FileRecord(
             filehash="hash2",
@@ -182,26 +174,25 @@ class TestFindSimilarDocuments:
             file_size=100,
             original_filename="candidate.pdf",
             ocr_text="different text",
+            embedding=json.dumps([0.1, 0.99]),
         )
         db_session.add_all([target, candidate])
         db_session.commit()
-
-        # Return nearly orthogonal vectors -> low similarity
-        mock_embed.side_effect = lambda text: [1.0, 0.0] if "target" in text else [0.1, 0.99]
 
         result = find_similar_documents(db_session, file_id=target.id, threshold=0.9)
         assert len(result) == 0
 
     @pytest.mark.unit
-    @patch("app.utils.similarity.generate_embedding")
-    def test_respects_limit(self, mock_embed, db_session):
+    def test_respects_limit(self, db_session):
         """Should respect the limit parameter."""
+        embedding = [1.0, 0.0, 0.0]
         target = FileRecord(
             filehash="hash0",
             local_filename="/tmp/t.pdf",
             file_size=100,
             original_filename="target.pdf",
             ocr_text="target text",
+            embedding=json.dumps(embedding),
         )
         db_session.add(target)
 
@@ -212,11 +203,10 @@ class TestFindSimilarDocuments:
                 file_size=100,
                 original_filename=f"candidate_{i}.pdf",
                 ocr_text=f"similar text {i}",
+                embedding=json.dumps(embedding),
             )
             db_session.add(f)
         db_session.commit()
-
-        mock_embed.return_value = [1.0, 0.0, 0.0]
 
         result = find_similar_documents(db_session, file_id=target.id, limit=2, threshold=0.0)
         assert len(result) <= 2
@@ -286,15 +276,16 @@ class TestSimilarDocumentsAPI:
         assert "message" in data
 
     @pytest.mark.integration
-    @patch("app.utils.similarity.generate_embedding")
-    def test_returns_similar_documents(self, mock_embed, client: TestClient, db_session):
+    def test_returns_similar_documents(self, client: TestClient, db_session):
         """Should return similar documents with scores."""
+        embedding = [1.0, 0.0, 0.0]
         target = FileRecord(
             filehash="hash1",
             local_filename="/tmp/target.pdf",
             file_size=1024,
             original_filename="target.pdf",
             ocr_text="Invoice from Amazon January 2026",
+            embedding=json.dumps(embedding),
         )
         similar = FileRecord(
             filehash="hash2",
@@ -304,11 +295,10 @@ class TestSimilarDocumentsAPI:
             ocr_text="Invoice from Amazon February 2026",
             document_title="Amazon Invoice",
             mime_type="application/pdf",
+            embedding=json.dumps(embedding),
         )
         db_session.add_all([target, similar])
         db_session.commit()
-
-        mock_embed.return_value = [1.0, 0.0, 0.0]
 
         response = client.get(f"/api/files/{target.id}/similar")
         assert response.status_code == 200
@@ -324,15 +314,16 @@ class TestSimilarDocumentsAPI:
         assert "original_filename" in doc
 
     @pytest.mark.integration
-    @patch("app.utils.similarity.generate_embedding")
-    def test_query_parameters(self, mock_embed, client: TestClient, db_session):
+    def test_query_parameters(self, client: TestClient, db_session):
         """Should respect limit and threshold query parameters."""
+        embedding = [1.0, 0.0]
         target = FileRecord(
             filehash="hash1",
             local_filename="/tmp/t.pdf",
             file_size=100,
             original_filename="t.pdf",
             ocr_text="test",
+            embedding=json.dumps(embedding),
         )
         db_session.add(target)
 
@@ -343,11 +334,10 @@ class TestSimilarDocumentsAPI:
                 file_size=100,
                 original_filename=f"c{i}.pdf",
                 ocr_text=f"text {i}",
+                embedding=json.dumps(embedding),
             )
             db_session.add(f)
         db_session.commit()
-
-        mock_embed.return_value = [1.0, 0.0]
 
         response = client.get(f"/api/files/{target.id}/similar?limit=2&threshold=0.0")
         assert response.status_code == 200
@@ -403,15 +393,36 @@ class TestSimilarDocumentsAPI:
         assert data["count"] == 0
 
     @pytest.mark.integration
-    @patch("app.utils.similarity.generate_embedding")
-    def test_response_structure(self, mock_embed, client: TestClient, db_session):
+    def test_embedding_not_computed_message(self, client: TestClient, db_session):
+        """Should return a message when OCR text exists but no embedding yet."""
+        file_record = FileRecord(
+            filehash="noembhash",
+            local_filename="/tmp/noemb.pdf",
+            file_size=100,
+            original_filename="noemb.pdf",
+            ocr_text="Some OCR text content",
+            embedding=None,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        response = client.get(f"/api/files/{file_record.id}/similar")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 0
+        assert "message" in data
+        assert "not yet computed" in data["message"].lower()
+
+    def test_response_structure(self, client: TestClient, db_session):
         """Should return proper response structure for each similar document."""
+        embedding = [1.0, 0.0]
         target = FileRecord(
             filehash="h1",
             local_filename="/tmp/t.pdf",
             file_size=100,
             original_filename="target.pdf",
             ocr_text="Some text content here",
+            embedding=json.dumps(embedding),
         )
         other = FileRecord(
             filehash="h2",
@@ -421,11 +432,10 @@ class TestSimilarDocumentsAPI:
             ocr_text="Some similar text content",
             document_title="Other Doc",
             mime_type="application/pdf",
+            embedding=json.dumps(embedding),
         )
         db_session.add_all([target, other])
         db_session.commit()
-
-        mock_embed.return_value = [1.0, 0.0]
 
         response = client.get(f"/api/files/{target.id}/similar")
         assert response.status_code == 200
@@ -829,3 +839,176 @@ class TestComputeDocumentEmbeddingTask:
 
         assert result["status"] == "skipped"
         assert "already cached" in result["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Tests for similarity pairs endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestSimilarityPairsAPI:
+    """Integration tests for GET /api/similarity/pairs."""
+
+    @pytest.mark.integration
+    def test_empty_database(self, client: TestClient):
+        """Should return zero pairs on empty database."""
+        response = client.get("/api/similarity/pairs")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_pairs"] == 0
+        assert data["pairs"] == []
+        assert "embedding_coverage" in data
+
+    @pytest.mark.integration
+    def test_finds_similar_pairs(self, client: TestClient, db_session):
+        """Should find and return pairs of similar files."""
+        emb_a = [1.0, 0.0, 0.0]
+        emb_b = [0.98, 0.02, 0.0]  # Very similar to A
+        emb_c = [0.0, 0.0, 1.0]  # Different from A and B
+
+        f1 = FileRecord(
+            filehash="pairA",
+            local_filename="/tmp/pA.pdf",
+            file_size=100,
+            original_filename="fileA.pdf",
+            ocr_text="text A",
+            embedding=json.dumps(emb_a),
+        )
+        f2 = FileRecord(
+            filehash="pairB",
+            local_filename="/tmp/pB.pdf",
+            file_size=100,
+            original_filename="fileB.pdf",
+            ocr_text="text B",
+            embedding=json.dumps(emb_b),
+        )
+        f3 = FileRecord(
+            filehash="pairC",
+            local_filename="/tmp/pC.pdf",
+            file_size=100,
+            original_filename="fileC.pdf",
+            ocr_text="text C",
+            embedding=json.dumps(emb_c),
+        )
+        db_session.add_all([f1, f2, f3])
+        db_session.commit()
+
+        response = client.get("/api/similarity/pairs?threshold=0.9")
+        assert response.status_code == 200
+        data = response.json()
+
+        # Only A-B pair should be above 0.9
+        assert data["total_pairs"] == 1
+        pair = data["pairs"][0]
+        assert pair["similarity_score"] > 0.9
+        pair_ids = {pair["file_a"]["file_id"], pair["file_b"]["file_id"]}
+        assert pair_ids == {f1.id, f2.id}
+
+    @pytest.mark.integration
+    def test_respects_threshold(self, client: TestClient, db_session):
+        """Should filter pairs below threshold."""
+        emb = [1.0, 0.0]
+        different_emb = [0.0, 1.0]
+
+        f1 = FileRecord(
+            filehash="thA",
+            local_filename="/tmp/thA.pdf",
+            file_size=100,
+            original_filename="thA.pdf",
+            ocr_text="a",
+            embedding=json.dumps(emb),
+        )
+        f2 = FileRecord(
+            filehash="thB",
+            local_filename="/tmp/thB.pdf",
+            file_size=100,
+            original_filename="thB.pdf",
+            ocr_text="b",
+            embedding=json.dumps(different_emb),
+        )
+        db_session.add_all([f1, f2])
+        db_session.commit()
+
+        response = client.get("/api/similarity/pairs?threshold=0.9")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_pairs"] == 0
+
+    @pytest.mark.integration
+    def test_pagination(self, client: TestClient, db_session):
+        """Should respect pagination parameters."""
+        emb = [1.0, 0.0, 0.0]
+        for i in range(5):
+            f = FileRecord(
+                filehash=f"pg{i}",
+                local_filename=f"/tmp/pg{i}.pdf",
+                file_size=100,
+                original_filename=f"pg{i}.pdf",
+                ocr_text=f"text {i}",
+                embedding=json.dumps(emb),
+            )
+            db_session.add(f)
+        db_session.commit()
+
+        response = client.get("/api/similarity/pairs?threshold=0.0&limit=2&page=1")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["pairs"]) <= 2
+        assert data["per_page"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Tests for backfill_missing_embeddings task
+# ---------------------------------------------------------------------------
+
+
+class TestBackfillMissingEmbeddingsTask:
+    """Unit tests for the backfill_missing_embeddings Celery task."""
+
+    @pytest.mark.unit
+    @patch("app.tasks.compute_embedding.compute_document_embedding.delay")
+    def test_queues_files_without_embeddings(self, mock_delay, db_session):
+        """Should queue tasks for files with OCR text but no embedding."""
+        f1 = FileRecord(
+            filehash="bf1",
+            local_filename="/tmp/bf1.pdf",
+            file_size=100,
+            original_filename="bf1.pdf",
+            ocr_text="Some text",
+        )
+        f2 = FileRecord(
+            filehash="bf2",
+            local_filename="/tmp/bf2.pdf",
+            file_size=100,
+            original_filename="bf2.pdf",
+            ocr_text="More text",
+            embedding=json.dumps([0.1]),
+        )
+        db_session.add_all([f1, f2])
+        db_session.commit()
+
+        from app.tasks.compute_embedding import backfill_missing_embeddings
+
+        with patch("app.tasks.compute_embedding.SessionLocal") as mock_session_local:
+            mock_session_local.return_value.__enter__ = lambda self: db_session
+            mock_session_local.return_value.__exit__ = lambda self, *args: None
+
+            result = backfill_missing_embeddings()
+
+        assert result["queued"] == 1
+        mock_delay.assert_called_once_with(f1.id)
+
+    @pytest.mark.unit
+    @patch("app.tasks.compute_embedding.compute_document_embedding.delay")
+    def test_empty_database(self, mock_delay, db_session):
+        """Should queue nothing when no files need embeddings."""
+        from app.tasks.compute_embedding import backfill_missing_embeddings
+
+        with patch("app.tasks.compute_embedding.SessionLocal") as mock_session_local:
+            mock_session_local.return_value.__enter__ = lambda self: db_session
+            mock_session_local.return_value.__exit__ = lambda self, *args: None
+
+            result = backfill_missing_embeddings()
+
+        assert result["queued"] == 0
+        mock_delay.assert_not_called()

@@ -23,6 +23,7 @@ BASE_MAIN_PROCESSING_STEPS = [
     "embed_metadata_into_pdf",
     "finalize_document_storage",
     "send_to_all_destinations",
+    "compute_embedding",
 ]
 
 OPTIONAL_PROCESSING_STEPS = {

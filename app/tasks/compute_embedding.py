@@ -6,12 +6,14 @@ access.
 """
 
 import logging
+from datetime import datetime, timezone
 
 from app.celery_app import celery
 from app.database import SessionLocal
 from app.models import FileRecord
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils import log_task_progress
+from app.utils.step_manager import update_step_status
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +49,9 @@ def compute_document_embedding(self, file_id: int) -> dict:
             logger.warning("[%s] File %s not found, skipping embedding", task_id, file_id)
             return {"status": "skipped", "detail": "File not found"}
 
+        now = datetime.now(timezone.utc)
+        update_step_status(db, file_id, "compute_embedding", "in_progress", started_at=now)
+
         # Already has a cached embedding – nothing to do
         if file_record.embedding:
             logger.info("[%s] File %s already has a cached embedding", task_id, file_id)
@@ -57,6 +62,7 @@ def compute_document_embedding(self, file_id: int) -> dict:
                 "Embedding already cached",
                 file_id=file_id,
             )
+            update_step_status(db, file_id, "compute_embedding", "success", completed_at=now)
             return {"status": "skipped", "detail": "Embedding already cached"}
 
         if not file_record.ocr_text or not file_record.ocr_text.strip():
@@ -68,12 +74,14 @@ def compute_document_embedding(self, file_id: int) -> dict:
                 "No OCR text available",
                 file_id=file_id,
             )
+            update_step_status(db, file_id, "compute_embedding", "skipped", completed_at=now)
             return {"status": "skipped", "detail": "No OCR text available"}
 
         try:
             from app.utils.similarity import compute_and_store_embedding
 
             embedding = compute_and_store_embedding(db, file_record)
+            completed = datetime.now(timezone.utc)
             if embedding:
                 log_task_progress(
                     task_id,
@@ -82,6 +90,7 @@ def compute_document_embedding(self, file_id: int) -> dict:
                     f"Embedding computed ({len(embedding)} dimensions)",
                     file_id=file_id,
                 )
+                update_step_status(db, file_id, "compute_embedding", "success", completed_at=completed)
                 return {
                     "status": "success",
                     "detail": f"Embedding computed ({len(embedding)} dimensions)",
@@ -94,6 +103,14 @@ def compute_document_embedding(self, file_id: int) -> dict:
                     "Embedding computation returned None",
                     file_id=file_id,
                 )
+                update_step_status(
+                    db,
+                    file_id,
+                    "compute_embedding",
+                    "failure",
+                    error_message="Embedding computation returned None",
+                    completed_at=completed,
+                )
                 return {"status": "error", "detail": "Embedding computation returned None"}
         except Exception as exc:
             logger.exception("[%s] Embedding computation failed for file %s: %s", task_id, file_id, exc)
@@ -103,6 +120,14 @@ def compute_document_embedding(self, file_id: int) -> dict:
                 "failure",
                 f"Exception: {exc}",
                 file_id=file_id,
+            )
+            update_step_status(
+                db,
+                file_id,
+                "compute_embedding",
+                "failure",
+                error_message=str(exc),
+                completed_at=datetime.now(timezone.utc),
             )
             return {"status": "error", "detail": str(exc)}
 

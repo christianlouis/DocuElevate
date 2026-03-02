@@ -389,8 +389,12 @@ def _compute_processing_flow(logs):
         },
         "extract_metadata_with_gpt": {"label": "Extract Metadata (GPT)", "next": ["embed_metadata_into_pdf"]},
         "embed_metadata_into_pdf": {"label": "Embed Metadata into PDF", "next": ["finalize_document_storage"]},
-        "finalize_document_storage": {"label": "Finalize & Queue Distribution", "next": ["send_to_all_destinations"]},
+        "finalize_document_storage": {
+            "label": "Finalize & Queue Distribution",
+            "next": ["send_to_all_destinations", "compute_embedding"],
+        },
         "send_to_all_destinations": {"label": "Upload to Destinations", "next": [], "has_branches": True},
+        "compute_embedding": {"label": "Compute Embedding", "next": []},
     }
 
     # Filter out deduplication step if not enabled or if not showing it
@@ -812,6 +816,57 @@ def duplicates_page(
                 "total_duplicate_files": 0,
                 "pagination": {"page": 1, "per_page": per_page, "total": 0, "pages": 1},
                 "near_duplicate_threshold": 0.85,
+                "error": str(e),
+            },
+        )
+
+
+@router.get("/similarity")
+@require_login
+def similarity_dashboard_page(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Render the corpus-wide similarity dashboard.
+
+    Passes the configured threshold and embedding coverage stats so the
+    template can display them immediately while the JS fetches the actual
+    pairs from the API asynchronously.
+    """
+    from app.config import settings
+    from app.models import FileRecord
+
+    try:
+        total_files = db.query(FileRecord).count()
+        files_with_embedding = (
+            db.query(FileRecord).filter(FileRecord.embedding.isnot(None), FileRecord.embedding != "").count()
+        )
+        files_with_ocr = db.query(FileRecord).filter(FileRecord.ocr_text.isnot(None), FileRecord.ocr_text != "").count()
+
+        return templates.TemplateResponse(
+            "similarity_dashboard.html",
+            {
+                "request": request,
+                "default_threshold": settings.near_duplicate_threshold,
+                "embedding_model": settings.embedding_model,
+                "total_files": total_files,
+                "files_with_embedding": files_with_embedding,
+                "files_with_ocr": files_with_ocr,
+                "files_missing_embedding": files_with_ocr - files_with_embedding,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error rendering similarity dashboard: {e}")
+        return templates.TemplateResponse(
+            "similarity_dashboard.html",
+            {
+                "request": request,
+                "default_threshold": 0.85,
+                "embedding_model": "text-embedding-3-small",
+                "total_files": 0,
+                "files_with_embedding": 0,
+                "files_with_ocr": 0,
+                "files_missing_embedding": 0,
                 "error": str(e),
             },
         )
