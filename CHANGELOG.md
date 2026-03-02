@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.77.0 (2026-03-02)
+
+### Bug Fixes
+
+- **ui**: Address code review feedback for settings page
+  ([`b8bd049`](https://github.com/christianlouis/DocuElevate/commit/b8bd049dffdf49495c76d1cda45d74a8f8be6f12))
+
+### Features
+
+- **ui**: Redesign settings page with modern UX improvements
+  ([`6ff1da2`](https://github.com/christianlouis/DocuElevate/commit/6ff1da2496e3448b3ba1644d3edc71251b3d3e6b))
+
+
 ## v0.76.0 (2026-03-02)
 
 ### Documentation
