@@ -20,6 +20,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - **changelog**: Update changelog [skip ci]
+  ([`3d38813`](https://github.com/christianlouis/DocuElevate/commit/3d38813da5c2c911e379303aa8e58449479962f8))
+
+- **changelog**: Update changelog [skip ci]
+  ([`ed85797`](https://github.com/christianlouis/DocuElevate/commit/ed8579757cf17b696e70505fefb543ee26837aaa))
+
+
+## Unreleased
+
+### Continuous Integration
+
+- Optimize pipeline for fail-fast feedback loop
+  ([`ea0f7fb`](https://github.com/christianlouis/DocuElevate/commit/ea0f7fb54fd081d2e2a8e0b97a2a82accfe1bc52))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
   ([`ed85797`](https://github.com/christianlouis/DocuElevate/commit/ed8579757cf17b696e70505fefb543ee26837aaa))
 
 
