@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @celery.task(base=UploadTaskWithRetry, bind=True)
-def upload_to_sftp(self, file_path: str, file_id: int = None):
+def upload_to_sftp(self, file_path: str, file_id: int = None, folder_override: str = None):
     """
     Upload a file to an SFTP server.
 
@@ -95,7 +95,7 @@ def upload_to_sftp(self, file_path: str, file_id: int = None):
         sftp = ssh.open_sftp()
 
         # Calculate remote path based on local file structure
-        remote_base = settings.sftp_folder or ""
+        remote_base = folder_override if folder_override is not None else (settings.sftp_folder or "")
         remote_path = extract_remote_path(file_path, settings.workdir, remote_base)
 
         # Ensure the remote path starts with a slash if the base folder does

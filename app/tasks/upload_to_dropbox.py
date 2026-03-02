@@ -103,7 +103,7 @@ def get_dropbox_client():
 
 
 @celery.task(base=UploadTaskWithRetry, bind=True)
-def upload_to_dropbox(self, file_path: str, file_id: int = None):
+def upload_to_dropbox(self, file_path: str, file_id: int = None, folder_override: str = None):
     """
     Upload a file to Dropbox.
 
@@ -147,7 +147,7 @@ def upload_to_dropbox(self, file_path: str, file_id: int = None):
         dbx = get_dropbox_client()
 
         # Calculate remote path based on local file structure
-        remote_base = settings.dropbox_folder or ""
+        remote_base = folder_override if folder_override is not None else (settings.dropbox_folder or "")
         remote_path = extract_remote_path(file_path, settings.workdir, remote_base)
 
         # Function to check if file exists in Dropbox

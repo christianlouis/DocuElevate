@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @celery.task(base=UploadTaskWithRetry, bind=True)
-def upload_to_ftp(self, file_path: str, file_id: int = None):
+def upload_to_ftp(self, file_path: str, file_id: int = None, folder_override: str = None):
     """
     Uploads a file to an FTP server in the configured folder.
 
@@ -97,10 +97,11 @@ def upload_to_ftp(self, file_path: str, file_id: int = None):
             ftp.login(user=settings.ftp_username, passwd=settings.ftp_password)
 
         # Change to target directory if specified
-        if settings.ftp_folder:
+        ftp_folder_setting = folder_override if folder_override is not None else settings.ftp_folder
+        if ftp_folder_setting:
             try:
                 # Try to navigate to the directory, create if it doesn't exist
-                ftp_folder = settings.ftp_folder
+                ftp_folder = ftp_folder_setting
                 # Remove leading slash if present
                 if ftp_folder.startswith("/"):
                     ftp_folder = ftp_folder[1:]
@@ -138,7 +139,7 @@ def upload_to_ftp(self, file_path: str, file_id: int = None):
             "status": "Completed",
             "file": file_path,
             "ftp_host": settings.ftp_host,
-            "ftp_path": f"{settings.ftp_folder}/{filename}" if settings.ftp_folder else filename,
+            "ftp_path": f"{ftp_folder_setting}/{filename}" if ftp_folder_setting else filename,
             "used_tls": used_tls,
         }
 

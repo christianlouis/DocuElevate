@@ -240,12 +240,48 @@ class Settings(BaseSettings):
             "Valid values: '1' (PDF/A-1b), '2' (PDF/A-2b), '3' (PDF/A-3b). Default: '2'."
         ),
     )
-    pdfa_upload_to_providers: bool = Field(
+    pdfa_upload_original: bool = Field(
         default=False,
         description=(
-            "When enabled and PDF/A conversion is active, also upload the PDF/A variants "
-            "to all configured storage providers in addition to the standard processed file. "
-            "PDF/A files are uploaded with a '-PDFA' suffix in their filename. Default: False."
+            "Upload the original-file PDF/A variant to all configured storage providers. "
+            "Files are placed in the provider's folder + PDFA_UPLOAD_FOLDER subfolder. Default: False."
+        ),
+    )
+    pdfa_upload_processed: bool = Field(
+        default=False,
+        description=(
+            "Upload the processed-file PDF/A variant to all configured storage providers. "
+            "Files are placed in the provider's folder + PDFA_UPLOAD_FOLDER subfolder. Default: False."
+        ),
+    )
+    pdfa_upload_folder: str = Field(
+        default="pdfa",
+        description=(
+            "Subfolder name appended to each storage provider's configured folder for PDF/A uploads. "
+            "For example if Dropbox folder is '/Documents' and this is 'pdfa', PDF/A files go to "
+            "'/Documents/pdfa'. Set to empty string to upload into the same folder. Default: 'pdfa'."
+        ),
+    )
+    google_drive_pdfa_folder_id: str = Field(
+        default="",
+        description=(
+            "Google Drive folder ID for PDF/A uploads. Since Google Drive uses IDs not paths, "
+            "this must be set separately. If empty, uses the standard google_drive_folder_id."
+        ),
+    )
+    pdfa_timestamp_enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable RFC 3161 timestamping of PDF/A files via a Timestamp Authority (TSA). "
+            "Creates a .tsr file alongside each PDF/A file for legal proof of existence. "
+            "Requires openssl binary on PATH. Default: False."
+        ),
+    )
+    pdfa_timestamp_url: str = Field(
+        default="https://freetsa.org/tsr",
+        description=(
+            "URL of the RFC 3161 Timestamp Authority. Default: FreeTSA (https://freetsa.org/tsr). "
+            "Other options: GlobalSign, DigiStamp, or any RFC 3161-compliant TSA."
         ),
     )
 

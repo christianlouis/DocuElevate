@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @celery.task(base=UploadTaskWithRetry, bind=True)
-def upload_to_webdav(self, file_path: str, file_id: int = None):
+def upload_to_webdav(self, file_path: str, file_id: int = None, folder_override: str = None):
     """
     Uploads a file to a WebDAV server in the configured folder.
 
@@ -50,7 +50,7 @@ def upload_to_webdav(self, file_path: str, file_id: int = None):
         raise ValueError(error_msg)
 
     # Construct the full upload URL
-    webdav_folder = settings.webdav_folder or ""
+    webdav_folder = folder_override if folder_override is not None else (settings.webdav_folder or "")
     # Ensure folder doesn't have leading slash if we're joining it to the base URL
     if webdav_folder and webdav_folder.startswith("/"):
         webdav_folder = webdav_folder[1:]

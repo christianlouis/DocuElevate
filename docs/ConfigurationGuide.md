@@ -893,11 +893,16 @@ bundled in the Docker images.
 > and is why PDF/A copies are kept as parallel variants rather than
 > replacements.
 
-| Variable                    | Description                                                                                          | Default |
-|-----------------------------|------------------------------------------------------------------------------------------------------|---------|
-| `ENABLE_PDFA_CONVERSION`   | Enable PDF/A archival variant generation for both original and processed files.                       | `false` |
-| `PDFA_FORMAT`              | PDF/A format variant: `1` (PDF/A-1b), `2` (PDF/A-2b), `3` (PDF/A-3b).                               | `2`     |
-| `PDFA_UPLOAD_TO_PROVIDERS` | Also upload the processed PDF/A variant to all configured storage providers (with `-PDFA` suffix).   | `false` |
+| Variable                      | Description                                                                                                       | Default                    |
+|-------------------------------|-------------------------------------------------------------------------------------------------------------------|----------------------------|
+| `ENABLE_PDFA_CONVERSION`     | Enable PDF/A archival variant generation for both original and processed files.                                     | `false`                    |
+| `PDFA_FORMAT`                | PDF/A format variant: `1` (PDF/A-1b), `2` (PDF/A-2b), `3` (PDF/A-3b).                                             | `2`                        |
+| `PDFA_UPLOAD_ORIGINAL`       | Upload the original-file PDF/A variant to all configured storage providers.                                        | `false`                    |
+| `PDFA_UPLOAD_PROCESSED`      | Upload the processed-file PDF/A variant to all configured storage providers.                                       | `false`                    |
+| `PDFA_UPLOAD_FOLDER`         | Subfolder name appended to each provider's folder for PDF/A uploads.                                               | `pdfa`                     |
+| `GOOGLE_DRIVE_PDFA_FOLDER_ID`| Google Drive folder ID for PDF/A uploads (uses folder IDs, not paths). Empty = use default folder.                 | *(empty)*                  |
+| `PDFA_TIMESTAMP_ENABLED`     | Enable RFC 3161 timestamping of PDF/A files (creates `.tsr` proof-of-existence files).                             | `false`                    |
+| `PDFA_TIMESTAMP_URL`         | URL of the RFC 3161 Timestamp Authority.                                                                           | `https://freetsa.org/tsr`  |
 
 ### Storage Layout
 
@@ -909,9 +914,42 @@ workdir/
 ├── processed/         # Processed file with embedded metadata
 ├── pdfa/
 │   ├── original/      # PDF/A copy of the ingested file
+│   │   └── *.pdf.tsr  # RFC 3161 timestamps (when timestamping enabled)
 │   └── processed/     # PDF/A copy of the processed file (with -PDFA suffix)
+│       └── *.pdf.tsr  # RFC 3161 timestamps (when timestamping enabled)
 └── tmp/               # Temporary processing area
 ```
+
+### Per-Provider Folder Overrides
+
+When uploading PDF/A files to storage providers, DocuElevate appends the
+`PDFA_UPLOAD_FOLDER` value as a subfolder to each provider's configured folder.
+For example:
+
+| Provider     | Regular Folder              | PDF/A Upload Folder              |
+|--------------|-----------------------------|----------------------------------|
+| Dropbox      | `/Documents`                | `/Documents/pdfa`                |
+| S3           | `docs/uploads/`             | `docs/uploads/pdfa/`             |
+| Nextcloud    | `/Files`                    | `/Files/pdfa`                    |
+| OneDrive     | `Documents/Uploads`         | `Documents/Uploads/pdfa`         |
+| Google Drive | *(folder ID)*               | `GOOGLE_DRIVE_PDFA_FOLDER_ID`    |
+
+Set `PDFA_UPLOAD_FOLDER` to an empty string to upload PDF/A files into the
+same folder as regular uploads.
+
+### RFC 3161 Timestamping
+
+When `PDFA_TIMESTAMP_ENABLED=true`, each PDF/A file is timestamped using
+the configured TSA (default: [FreeTSA](https://freetsa.org)).  This creates
+a `.tsr` file alongside each PDF/A file, providing cryptographic proof that
+the document existed at a specific point in time.
+
+Requires `openssl` on the PATH (included in Docker images).
+
+**Other TSA options:**
+- **GlobalSign** – enterprise, eIDAS qualified
+- **DigiStamp** – high assurance, legal
+- **IdenTrust** – legal, free with certificate purchase
 
 ### Configuration Example
 
@@ -922,8 +960,16 @@ ENABLE_PDFA_CONVERSION=true
 # Use PDF/A-2b format (default, recommended for most use cases)
 PDFA_FORMAT=2
 
-# Also upload PDF/A copies to configured storage providers
-PDFA_UPLOAD_TO_PROVIDERS=true
+# Upload both original and processed PDF/A to providers
+PDFA_UPLOAD_ORIGINAL=true
+PDFA_UPLOAD_PROCESSED=true
+
+# PDF/A files go into a 'pdfa' subfolder on each provider
+PDFA_UPLOAD_FOLDER=pdfa
+
+# Enable RFC 3161 timestamping via FreeTSA
+PDFA_TIMESTAMP_ENABLED=true
+PDFA_TIMESTAMP_URL=https://freetsa.org/tsr
 ```
 
 ## Performance & Caching

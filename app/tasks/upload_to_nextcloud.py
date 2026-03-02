@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 @celery.task(base=UploadTaskWithRetry, bind=True)
-def upload_to_nextcloud(self, file_path: str, file_id: int = None):
+def upload_to_nextcloud(self, file_path: str, file_id: int = None, folder_override: str = None):
     """
     Upload a file to Nextcloud WebDAV.
 
@@ -60,7 +60,9 @@ def upload_to_nextcloud(self, file_path: str, file_id: int = None):
             webdav_url += "/"
 
         # Calculate remote path based on local file structure
-        remote_base = getattr(settings, "nextcloud_folder", "") or ""
+        remote_base = (
+            folder_override if folder_override is not None else (getattr(settings, "nextcloud_folder", "") or "")
+        )
         remote_path = extract_remote_path(file_path, settings.workdir, remote_base)
         full_url = f"{webdav_url}/{remote_path}"
 

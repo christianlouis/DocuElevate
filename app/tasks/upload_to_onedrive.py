@@ -210,7 +210,7 @@ def upload_large_file(file_path, upload_url):
 
 
 @celery.task(base=UploadTaskWithRetry, bind=True)
-def upload_to_onedrive(self, file_path: str, file_id: int = None):
+def upload_to_onedrive(self, file_path: str, file_id: int = None, folder_override: str = None):
     """
     Uploads a file to OneDrive in the configured folder.
 
@@ -248,15 +248,17 @@ def upload_to_onedrive(self, file_path: str, file_id: int = None):
         # Get access token
         access_token = get_onedrive_token()
 
+        onedrive_folder = folder_override if folder_override is not None else settings.onedrive_folder_path
+
         # Create upload session
-        upload_url = create_upload_session(filename, settings.onedrive_folder_path, access_token)
+        upload_url = create_upload_session(filename, onedrive_folder, access_token)
 
         # Upload the file
         result = upload_large_file(file_path, upload_url)
 
         # Log success
         web_url = result.get("webUrl", "Not available")
-        logger.info(f"[{task_id}] Successfully uploaded {filename} to OneDrive at path {settings.onedrive_folder_path}")
+        logger.info(f"[{task_id}] Successfully uploaded {filename} to OneDrive at path {onedrive_folder}")
         logger.info(f"[{task_id}] File accessible at: {web_url}")
         log_task_progress(
             task_id, "upload_to_onedrive", "success", f"Uploaded to OneDrive: {filename}", file_id=file_id
@@ -265,7 +267,7 @@ def upload_to_onedrive(self, file_path: str, file_id: int = None):
         return {
             "status": "Completed",
             "file_path": file_path,
-            "onedrive_path": f"{settings.onedrive_folder_path}/{filename}",
+            "onedrive_path": f"{onedrive_folder}/{filename}",
             "web_url": web_url,
         }
 
