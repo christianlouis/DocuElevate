@@ -235,3 +235,6 @@ html.dark ::-webkit-scrollbar { width: 8px; height: 8px; }
 html.dark ::-webkit-scrollbar-track { background: #1f2937; }
 html.dark ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
 html.dark ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+/* ---- Settings page: sidebar active state (dark) ---- */
+html.dark .bg-blue-50 { background-color: #1e3a5f; }
