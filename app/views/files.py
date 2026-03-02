@@ -718,3 +718,100 @@ def get_processed_text(request: Request, file_id: int, db: Session = Depends(get
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to extract text: {str(e)}"
         )
+
+
+@router.get("/duplicates")
+@require_login
+def duplicates_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(25, ge=1, le=200),
+):
+    """Render the duplicate-document management page.
+
+    Passes exact-duplicate group data (server-side) plus the configured
+    near-duplicate threshold so the JS finder can pre-populate the form.
+    """
+    from app.config import settings
+    from app.models import FileRecord
+
+    try:
+        # Find hashes that have at least one is_duplicate=True record
+        dup_hashes_query = db.query(FileRecord.filehash).filter(FileRecord.is_duplicate.is_(True)).distinct()
+        total_groups = dup_hashes_query.count()
+
+        offset = (page - 1) * per_page
+        dup_hashes = [row.filehash for row in dup_hashes_query.offset(offset).limit(per_page).all()]
+
+        groups = []
+        total_duplicate_files = 0
+
+        for filehash in dup_hashes:
+            original = (
+                db.query(FileRecord)
+                .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False))
+                .order_by(FileRecord.id.asc())
+                .first()
+            )
+            duplicates = (
+                db.query(FileRecord)
+                .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(True))
+                .order_by(FileRecord.id.asc())
+                .all()
+            )
+            total_duplicate_files += len(duplicates)
+
+            def _to_dict(f: FileRecord) -> dict:
+                return {
+                    "id": f.id,
+                    "original_filename": f.original_filename,
+                    "filehash": f.filehash,
+                    "file_size": f.file_size,
+                    "mime_type": f.mime_type,
+                    "is_duplicate": f.is_duplicate,
+                    "duplicate_of_id": f.duplicate_of_id,
+                    "created_at": f.created_at.isoformat() if f.created_at else None,
+                }
+
+            groups.append(
+                {
+                    "filehash": filehash,
+                    "original": _to_dict(original) if original else None,
+                    "duplicates": [_to_dict(d) for d in duplicates],
+                    "duplicate_count": len(duplicates),
+                }
+            )
+
+        total_pages = max(1, (total_groups + per_page - 1) // per_page)
+
+        return templates.TemplateResponse(
+            "duplicates.html",
+            {
+                "request": request,
+                "groups": groups,
+                "total_groups": total_groups,
+                "total_duplicate_files": total_duplicate_files,
+                "pagination": {
+                    "page": page,
+                    "per_page": per_page,
+                    "total": total_groups,
+                    "pages": total_pages,
+                },
+                "near_duplicate_threshold": settings.near_duplicate_threshold,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error rendering duplicates page: {e}")
+        return templates.TemplateResponse(
+            "duplicates.html",
+            {
+                "request": request,
+                "groups": [],
+                "total_groups": 0,
+                "total_duplicate_files": 0,
+                "pagination": {"page": 1, "per_page": per_page, "total": 0, "pages": 1},
+                "near_duplicate_threshold": 0.85,
+                "error": str(e),
+            },
+        )
