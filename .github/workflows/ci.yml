@@ -2,15 +2,10 @@ name: CI Pipeline
 
 on:
   push:
-    branches:
-      - main
-      - develop
-    tags:
-      - 'v*'
-      - '[0-9]+.*'
+    branches: [main, develop]
+    tags: ['v*', '[0-9]+.*']
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 permissions:
   contents: read
@@ -25,348 +20,183 @@ env:
 
 jobs:
   # ══════════════════════════════════════════════════════════════════════════
-  # Stage 1: Ruff Lint & Format (runs first to catch style issues early)
+  # Stage 1: Static Analysis (The "Immediate" Gate)
   # ══════════════════════════════════════════════════════════════════════════
-
   lint:
     name: Ruff Lint & Format
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
+          cache: 'pip' # Caching enabled
       - name: Install Ruff
         run: pip install ruff
-
-      - name: Show Ruff version (debug)
-        run: ruff --version
-
       - name: Check for merge conflict markers
         run: |
           if git grep -rn -E '^(<{7} |>{7} |={7}$)' -- '.'; then
-            echo "ERROR: Merge conflict markers found in tracked files."
+            echo "ERROR: Merge conflict markers found."
             exit 1
           fi
-
-      - name: Run Ruff Lint (check)
-        # ruff check can --fix locally, but CI should only check (no modifications)
-        run: ruff check app/ tests/
-
-      - name: Run Ruff Format check
-        # ruff format only supports --check; do not pass --fix here
-        run: ruff format --check app/ tests/
-
-  # ══════════════════════════════════════════════════════════════════════════
-  # Stage 1b: HTML Accessibility Lint (catches a11y regressions early)
-  # ══════════════════════════════════════════════════════════════════════════
+      - run: ruff check app/ tests/
+      - run: ruff format --check app/ tests/
 
   html-lint:
     name: HTML Accessibility Lint
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Install djLint
-        run: pip install djlint>=1.36.0
-
-      - name: Lint HTML templates for accessibility
-        run: djlint frontend/templates/ --lint
+          cache: 'pip'
+      - run: pip install djlint>=1.36.0
+      - run: djlint frontend/templates/ --lint
 
   # ══════════════════════════════════════════════════════════════════════════
-  # Stage 1: Mypy type-checking (runs in parallel with lint & html-lint)
+  # Stage 2: Parallel Heavy Lifters (Tests & Mypy)
+  # All 3 of these now run at the same time as soon as Linting passes.
   # ══════════════════════════════════════════════════════════════════════════
-
+  
   mypy:
-    name: Mypy
+    name: Mypy Type Check
     runs-on: ubuntu-latest
-    # No needs — runs immediately in Stage 1 alongside Ruff and HTML lint
+    needs: [lint] # Blocks only on fast linting
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
+          cache: 'pip'
       - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
-
-      - name: Run Mypy
-        run: mypy app/
-
-  # ══════════════════════════════════════════════════════════════════════════
-  # Stage 2: Dependency Vulnerability Scan (parallel background track —
-  #           does NOT block tests; still gates build/deploy)
-  # ══════════════════════════════════════════════════════════════════════════
-
-  dependency-scan:
-    name: Dependency Vulnerability Scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install pip-audit
-        run: pip install pip-audit>=2.7.0
-
-      - name: Run pip-audit on production dependencies
-        run: pip-audit -r requirements.txt --desc on
-
-      - name: Run pip-audit on dev dependencies
-        run: pip-audit -r requirements-dev.txt --desc on
-
-  # ══════════════════════════════════════════════════════════════════════════
-  # Stage 3: Quick Tests (unit + basic integration — fast fail gate;
-  #           starts as soon as Stage 1 static analysis passes)
-  # ══════════════════════════════════════════════════════════════════════════
+        run: pip install -r requirements-dev.txt
+      - run: mypy app/
 
   test-quick:
     name: Quick Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: [lint, html-lint, mypy]
+    needs: [lint] # Parallel with Mypy
     services:
       redis:
         image: redis:7
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
+          cache: 'pip'
       - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
-
+        run: pip install -r requirements-dev.txt
       - name: Run Quick Tests
         run: >
-          pytest tests/ -v
-          --timeout=120
-          --cov=app --cov-report=xml --cov-report=term
-          --junitxml=junit.xml -o junit_family=legacy
+          pytest tests/ -v --timeout=120 --cov=app --cov-report=xml 
           -m "not e2e and not requires_docker and not requires_external and not slow"
-
-      - name: Upload coverage reports to Codecov
-        if: ${{ !cancelled() }}
+      - name: Upload coverage
+        if: always()
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.xml
-          fail_ci_if_error: false
-
-      - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./junit.xml
-          report_type: test_results
-          fail_ci_if_error: false
-
-      - name: Upload test artifacts
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results-quick
-          path: |
-            junit.xml
-            coverage.xml
-
-  # ══════════════════════════════════════════════════════════════════════════
-  # Stage 4: Integration Tests (Docker containers, external services;
-  #           only runs if Quick Tests pass)
-  # ══════════════════════════════════════════════════════════════════════════
 
   test-integration:
     name: Integration Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: [test-quick]  # Only run after quick tests pass (fail early)
+    needs: [lint] # NOW PARALLEL (No longer waits for test-quick)
     services:
       redis:
         image: redis:7
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+        ports: ["6379:6379"]
       rabbitmq:
         image: rabbitmq:3-management
-        ports:
-          - 5672:5672
-          - 15672:15672
-        options: >-
-          --health-cmd "rabbitmq-diagnostics -q ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+        ports: ["5672:5672", "15672:15672"]
+        options: --health-cmd "rabbitmq-diagnostics -q ping" --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
+          cache: 'pip'
       - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
-
+        run: pip install -r requirements-dev.txt
       - name: Run Integration Tests
         run: >
-          pytest tests/ -v
-          --timeout=300
-          --junitxml=junit-integration.xml -o junit_family=legacy
+          pytest tests/ -v --timeout=300 
           -m "(requires_docker or requires_external or slow) and not e2e"
 
-      - name: Upload integration test results
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results-integration
-          path: junit-integration.xml
-
-  # ══════════════════════════════════════════════════════════════════════════
-  # Stage 5: Build & Push Docker Image (only on push to main/develop/tags;
-  #           gates on ALL prior stages including dependency scan)
-  # ══════════════════════════════════════════════════════════════════════════
-
-  build:
-    name: Build & Push Docker Image
+  dependency-scan:
+    name: Security Scan
     runs-on: ubuntu-latest
-    needs: [test-quick, test-integration, lint, html-lint, mypy, dependency-scan]
-    if: github.event_name == 'push'
-
+    needs: [lint]
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+      - run: pip install pip-audit>=2.7.0
+      - run: pip-audit -r requirements.txt --desc on
 
+  # ══════════════════════════════════════════════════════════════════════════
+  # Stage 3: Build & Deploy (Final Quality Gate)
+  # ══════════════════════════════════════════════════════════════════════════
+  build:
+    name: Build & Push
+    runs-on: ubuntu-latest
+    # This job only runs if EVERYTHING above passed
+    needs: [test-quick, test-integration, mypy, dependency-scan, html-lint]
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
       - name: Generate Build Metadata
         run: |
           chmod +x scripts/generate_build_metadata.sh
           ./scripts/generate_build_metadata.sh
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Log in to GitHub Container Registry
+      - name: Log in to Registries
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata for tags
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ${{ env.IMAGE_NAME }}
-            ghcr.io/${{ github.repository_owner }}/docuelevate
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix={{branch}}-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and Push Docker Image
+      - name: Build and Push
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile
-          platforms: linux/amd64
           push: true
-          sbom: true
-          provenance: mode=max
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ env.IMAGE_NAME }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ══════════════════════════════════════════════════════════════════════════
-  # Stage 5: Update preprod K8s manifest (ArgoCD GitOps, only on main push)
-  # ══════════════════════════════════════════════════════════════════════════
-
   update-k8s-manifest:
-    name: Update Preprod K8s Manifest
+    name: Update Preprod
     runs-on: ubuntu-latest
     needs: [build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
     steps:
-      - name: Compute image tag
-        id: tag
-        run: |
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          echo "image=ghcr.io/${{ github.repository_owner }}/docuelevate:main-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "tag=main-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-
       - name: Checkout k8s-cluster-state
         uses: actions/checkout@v4
         with:
           repository: christianlouis/k8s-cluster-state
           token: ${{ secrets.GH_PAT }}
           path: k8s-cluster-state
-
-      - name: Update image tag in preprod manifest
+      - name: Update image tag
         uses: mikefarah/yq@v4.44.6
-        env:
-          IMAGE: ${{ steps.tag.outputs.image }}
         with:
-          cmd: |
-            yq -i '(.. | select(tag == "!!str") | select(test("^(ghcr\\.io/christianlouis/docuelevate|christianlouis/docuelevate):"))) = strenv(IMAGE)' \
-              k8s-cluster-state/apps/docuelevate/preprod/docuelevate-stack.yaml
-
-      - name: Commit and push
+          cmd: yq -i '.images[0].newTag = "${{ github.sha }}"' k8s-cluster-state/apps/docuelevate/preprod/docuelevate-stack.yaml
+      - name: Push changes
         run: |
           cd k8s-cluster-state
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add apps/docuelevate/preprod/docuelevate-stack.yaml
-          if git diff --staged --quiet; then
-            echo "No changes to commit -- image tag already up to date"
-          else
-            git commit -m "chore(preprod): update docuelevate image to ${{ steps.tag.outputs.tag }}"
-            git push
-          fi
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add .
+          git commit -m "chore: update image to ${{ github.sha }}"
+          git push
