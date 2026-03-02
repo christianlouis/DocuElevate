@@ -76,6 +76,16 @@ def finalize_document_storage(self, original_file: str, processed_file: str, met
     # We pass 'True' (delete_after) and 'file_id' as per Main branch requirements
     send_to_all_destinations.delay(processed_file, True, file_id)
 
+    # 3a. Queue embedding computation so similarity scores are ready for queries
+    if file_id is not None:
+        try:
+            from app.tasks.compute_embedding import compute_document_embedding
+
+            compute_document_embedding.delay(file_id)
+            logger.info(f"[{task_id}] Queued embedding computation for file {file_id}")
+        except Exception as e:
+            logger.warning(f"[{task_id}] Could not queue embedding task: {e}")
+
     # 4. Send Notification (From Copilot)
     # Note: This notification is sent after processing is complete but while uploads
     # are being queued.

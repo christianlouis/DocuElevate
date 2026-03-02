@@ -9,6 +9,7 @@ from app import tasks  # noqa: F401 - Imports app/tasks.py so Celery can registe
 from app.celery_app import celery
 from app.config import settings
 from app.tasks.check_credentials import check_credentials
+from app.tasks.compute_embedding import backfill_missing_embeddings, compute_document_embedding  # noqa: F401
 from app.tasks.convert_to_pdf import convert_to_pdf  # noqa: F401
 from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf  # noqa: F401
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt  # noqa: F401
@@ -90,6 +91,13 @@ celery.conf.beat_schedule = {
         "task": "app.tasks.monitor_stalled_steps.monitor_stalled_steps",
         "schedule": crontab(minute="*/1"),  # Every minute
         "options": {"expires": 55},  # Must complete within 55 seconds
+    },
+    # Backfill embeddings for files that were processed before the
+    # embedding pipeline was enabled, or where the embedding task failed.
+    "backfill-missing-embeddings": {
+        "task": "backfill_missing_embeddings",
+        "schedule": crontab(minute="*/5"),  # Every 5 minutes
+        "options": {"expires": 240},  # 4 minutes expiry
     },
 }
 

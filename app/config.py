@@ -323,6 +323,13 @@ class Settings(BaseSettings):
             "them near-duplicates.  Higher values require closer content matches.  Default: 0.85."
         ),
     )
+    embedding_model: str = Field(
+        default="text-embedding-3-small",
+        description=(
+            "Model name used for generating text embeddings via the OpenAI-compatible API.  "
+            "Embeddings drive the document similarity feature.  Default: text-embedding-3-small."
+        ),
+    )
 
     # Text quality check - AI-based assessment of embedded PDF text
     enable_text_quality_check: bool = Field(

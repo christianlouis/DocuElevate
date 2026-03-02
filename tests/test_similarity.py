@@ -443,3 +443,389 @@ class TestSimilarDocumentsAPI:
             assert "similarity_score" in doc
             assert "mime_type" in doc
             assert "created_at" in doc
+
+
+# ---------------------------------------------------------------------------
+# Tests for embedding status endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestEmbeddingStatusAPI:
+    """Integration tests for GET /api/files/{file_id}/embedding-status."""
+
+    @pytest.mark.integration
+    def test_file_not_found(self, client: TestClient):
+        """Should return 404 for non-existent file."""
+        response = client.get("/api/files/9999/embedding-status")
+        assert response.status_code == 404
+
+    @pytest.mark.integration
+    def test_file_without_embedding_or_ocr(self, client: TestClient, db_session):
+        """Should report no embedding and no OCR text."""
+        file_record = FileRecord(
+            filehash="abc1",
+            local_filename="/tmp/test.pdf",
+            file_size=100,
+            original_filename="test.pdf",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        response = client.get(f"/api/files/{file_record.id}/embedding-status")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["file_id"] == file_record.id
+        assert data["has_embedding"] is False
+        assert data["embedding_dimensions"] is None
+        assert data["has_ocr_text"] is False
+        assert data["ocr_text_length"] == 0
+        assert "embedding_model" in data
+
+    @pytest.mark.integration
+    def test_file_with_ocr_text_no_embedding(self, client: TestClient, db_session):
+        """Should report OCR text present but no embedding."""
+        file_record = FileRecord(
+            filehash="abc2",
+            local_filename="/tmp/test2.pdf",
+            file_size=100,
+            original_filename="test2.pdf",
+            ocr_text="Some OCR text content",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        response = client.get(f"/api/files/{file_record.id}/embedding-status")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["has_embedding"] is False
+        assert data["has_ocr_text"] is True
+        assert data["ocr_text_length"] == 21
+
+    @pytest.mark.integration
+    def test_file_with_cached_embedding(self, client: TestClient, db_session):
+        """Should report embedding present with correct dimensions."""
+        embedding = [0.1, 0.2, 0.3, 0.4, 0.5]
+        file_record = FileRecord(
+            filehash="abc3",
+            local_filename="/tmp/test3.pdf",
+            file_size=100,
+            original_filename="test3.pdf",
+            ocr_text="Some text",
+            embedding=json.dumps(embedding),
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        response = client.get(f"/api/files/{file_record.id}/embedding-status")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["has_embedding"] is True
+        assert data["embedding_dimensions"] == 5
+        assert data["has_ocr_text"] is True
+
+
+# ---------------------------------------------------------------------------
+# Tests for compute-embedding endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestComputeEmbeddingAPI:
+    """Integration tests for POST /api/files/{file_id}/compute-embedding."""
+
+    @pytest.mark.integration
+    def test_file_not_found(self, client: TestClient):
+        """Should return 404 for non-existent file."""
+        response = client.post("/api/files/9999/compute-embedding")
+        assert response.status_code == 404
+
+    @pytest.mark.integration
+    def test_no_ocr_text(self, client: TestClient, db_session):
+        """Should return 400 when file has no OCR text."""
+        file_record = FileRecord(
+            filehash="emb1",
+            local_filename="/tmp/emb1.pdf",
+            file_size=100,
+            original_filename="emb1.pdf",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        response = client.post(f"/api/files/{file_record.id}/compute-embedding")
+        assert response.status_code == 400
+
+    @pytest.mark.integration
+    @patch("app.utils.similarity.generate_embedding")
+    def test_computes_embedding(self, mock_embed, client: TestClient, db_session):
+        """Should compute and store an embedding."""
+        mock_embed.return_value = [0.1, 0.2, 0.3]
+
+        file_record = FileRecord(
+            filehash="emb2",
+            local_filename="/tmp/emb2.pdf",
+            file_size=100,
+            original_filename="emb2.pdf",
+            ocr_text="Some document text",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        response = client.post(f"/api/files/{file_record.id}/compute-embedding")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert data["embedding_dimensions"] == 3
+
+        # Verify embedding is stored
+        db_session.refresh(file_record)
+        assert file_record.embedding is not None
+        stored = json.loads(file_record.embedding)
+        assert len(stored) == 3
+
+    @pytest.mark.integration
+    @patch("app.utils.similarity.generate_embedding")
+    def test_recomputes_existing_embedding(self, mock_embed, client: TestClient, db_session):
+        """Should overwrite existing embedding when recomputing."""
+        mock_embed.return_value = [0.9, 0.8, 0.7]
+
+        file_record = FileRecord(
+            filehash="emb3",
+            local_filename="/tmp/emb3.pdf",
+            file_size=100,
+            original_filename="emb3.pdf",
+            ocr_text="Some text",
+            embedding=json.dumps([0.1, 0.2, 0.3]),
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        response = client.post(f"/api/files/{file_record.id}/compute-embedding")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+
+        db_session.refresh(file_record)
+        stored = json.loads(file_record.embedding)
+        assert stored == [0.9, 0.8, 0.7]
+
+
+# ---------------------------------------------------------------------------
+# Tests for diagnostic embeddings overview endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestEmbeddingsOverviewAPI:
+    """Integration tests for GET /api/diagnostic/embeddings."""
+
+    @pytest.mark.integration
+    def test_empty_database(self, client: TestClient):
+        """Should return zero counts on empty database."""
+        response = client.get("/api/diagnostic/embeddings")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_files"] == 0
+        assert data["files_with_ocr_text"] == 0
+        assert data["files_with_embedding"] == 0
+        assert data["files_missing_embedding"] == 0
+        assert "embedding_model" in data
+        assert data["files"] == []
+
+    @pytest.mark.integration
+    def test_mixed_files(self, client: TestClient, db_session):
+        """Should report correct counts for mixed embedding states."""
+        # File with both OCR text and embedding
+        f1 = FileRecord(
+            filehash="diag1",
+            local_filename="/tmp/d1.pdf",
+            file_size=100,
+            original_filename="d1.pdf",
+            ocr_text="Some text",
+            embedding=json.dumps([0.1, 0.2]),
+        )
+        # File with OCR text but no embedding
+        f2 = FileRecord(
+            filehash="diag2",
+            local_filename="/tmp/d2.pdf",
+            file_size=100,
+            original_filename="d2.pdf",
+            ocr_text="More text",
+        )
+        # File with no OCR text
+        f3 = FileRecord(
+            filehash="diag3",
+            local_filename="/tmp/d3.pdf",
+            file_size=100,
+            original_filename="d3.pdf",
+        )
+        db_session.add_all([f1, f2, f3])
+        db_session.commit()
+
+        response = client.get("/api/diagnostic/embeddings")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_files"] == 3
+        assert data["files_with_ocr_text"] == 2
+        assert data["files_with_embedding"] == 1
+        assert data["files_missing_embedding"] == 1
+        assert len(data["files"]) == 3
+
+        # Check per-file info
+        files_by_id = {f["file_id"]: f for f in data["files"]}
+        assert files_by_id[f1.id]["has_embedding"] is True
+        assert files_by_id[f1.id]["embedding_dimensions"] == 2
+        assert files_by_id[f2.id]["has_embedding"] is False
+        assert files_by_id[f2.id]["has_ocr_text"] is True
+        assert files_by_id[f3.id]["has_ocr_text"] is False
+
+
+# ---------------------------------------------------------------------------
+# Tests for compute-all-embeddings endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestComputeAllEmbeddingsAPI:
+    """Integration tests for POST /api/diagnostic/compute-all-embeddings."""
+
+    @pytest.mark.integration
+    @patch("app.tasks.compute_embedding.compute_document_embedding.delay")
+    def test_queues_tasks_for_files_missing_embeddings(self, mock_delay, client: TestClient, db_session):
+        """Should queue embedding tasks for files with OCR text but no embedding."""
+        # File with OCR text but no embedding -> should be queued
+        f1 = FileRecord(
+            filehash="all1",
+            local_filename="/tmp/a1.pdf",
+            file_size=100,
+            original_filename="a1.pdf",
+            ocr_text="Text for embedding",
+        )
+        # File already with embedding -> should NOT be queued
+        f2 = FileRecord(
+            filehash="all2",
+            local_filename="/tmp/a2.pdf",
+            file_size=100,
+            original_filename="a2.pdf",
+            ocr_text="More text",
+            embedding=json.dumps([0.1, 0.2]),
+        )
+        # File without OCR text -> should NOT be queued
+        f3 = FileRecord(
+            filehash="all3",
+            local_filename="/tmp/a3.pdf",
+            file_size=100,
+            original_filename="a3.pdf",
+        )
+        db_session.add_all([f1, f2, f3])
+        db_session.commit()
+
+        response = client.post("/api/diagnostic/compute-all-embeddings")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "queued"
+        assert data["files_queued"] == 1
+        mock_delay.assert_called_once_with(f1.id)
+
+    @pytest.mark.integration
+    @patch("app.tasks.compute_embedding.compute_document_embedding.delay")
+    def test_empty_database_queues_nothing(self, mock_delay, client: TestClient):
+        """Should queue nothing when database is empty."""
+        response = client.post("/api/diagnostic/compute-all-embeddings")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["files_queued"] == 0
+        mock_delay.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Tests for compute_document_embedding Celery task
+# ---------------------------------------------------------------------------
+
+
+class TestComputeDocumentEmbeddingTask:
+    """Unit tests for the compute_document_embedding Celery task."""
+
+    @pytest.mark.unit
+    @patch("app.utils.similarity.generate_embedding")
+    def test_computes_embedding_for_file(self, mock_embed, db_session):
+        """Should compute and store embedding when file has OCR text."""
+        mock_embed.return_value = [0.1, 0.2, 0.3]
+
+        file_record = FileRecord(
+            filehash="task1",
+            local_filename="/tmp/task1.pdf",
+            file_size=100,
+            original_filename="task1.pdf",
+            ocr_text="Some document text",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        from app.tasks.compute_embedding import compute_document_embedding
+
+        # Patch SessionLocal to return our test session
+        with patch("app.tasks.compute_embedding.SessionLocal") as mock_session_local:
+            mock_session_local.return_value.__enter__ = lambda self: db_session
+            mock_session_local.return_value.__exit__ = lambda self, *args: None
+
+            result = compute_document_embedding(file_record.id)
+
+        assert result["status"] == "success"
+        assert "dimensions" in result["detail"]
+
+    @pytest.mark.unit
+    def test_skips_missing_file(self, db_session):
+        """Should skip when file ID does not exist."""
+        from app.tasks.compute_embedding import compute_document_embedding
+
+        with patch("app.tasks.compute_embedding.SessionLocal") as mock_session_local:
+            mock_session_local.return_value.__enter__ = lambda self: db_session
+            mock_session_local.return_value.__exit__ = lambda self, *args: None
+
+            result = compute_document_embedding(9999)
+
+        assert result["status"] == "skipped"
+
+    @pytest.mark.unit
+    def test_skips_file_without_ocr_text(self, db_session):
+        """Should skip when file has no OCR text."""
+        file_record = FileRecord(
+            filehash="task2",
+            local_filename="/tmp/task2.pdf",
+            file_size=100,
+            original_filename="task2.pdf",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        from app.tasks.compute_embedding import compute_document_embedding
+
+        with patch("app.tasks.compute_embedding.SessionLocal") as mock_session_local:
+            mock_session_local.return_value.__enter__ = lambda self: db_session
+            mock_session_local.return_value.__exit__ = lambda self, *args: None
+
+            result = compute_document_embedding(file_record.id)
+
+        assert result["status"] == "skipped"
+
+    @pytest.mark.unit
+    def test_skips_file_with_existing_embedding(self, db_session):
+        """Should skip when file already has a cached embedding."""
+        file_record = FileRecord(
+            filehash="task3",
+            local_filename="/tmp/task3.pdf",
+            file_size=100,
+            original_filename="task3.pdf",
+            ocr_text="Some text",
+            embedding=json.dumps([0.1, 0.2]),
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        from app.tasks.compute_embedding import compute_document_embedding
+
+        with patch("app.tasks.compute_embedding.SessionLocal") as mock_session_local:
+            mock_session_local.return_value.__enter__ = lambda self: db_session
+            mock_session_local.return_value.__exit__ = lambda self, *args: None
+
+            result = compute_document_embedding(file_record.id)
+
+        assert result["status"] == "skipped"
+        assert "already cached" in result["detail"]
