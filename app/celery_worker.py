@@ -11,14 +11,17 @@ from app.config import settings
 from app.tasks.check_credentials import check_credentials
 from app.tasks.compute_embedding import backfill_missing_embeddings, compute_document_embedding  # noqa: F401
 from app.tasks.convert_to_pdf import convert_to_pdf  # noqa: F401
+from app.tasks.convert_to_pdfa import convert_to_pdfa  # noqa: F401
 from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf  # noqa: F401
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt  # noqa: F401
+from app.tasks.finalize_document_storage import finalize_document_storage  # noqa: F401
 from app.tasks.imap_tasks import pull_all_inboxes  # noqa: F401
 from app.tasks.monitor_stalled_steps import monitor_stalled_steps  # noqa: F401
 
 # **Ensure all tasks are imported before Celery starts**
 from app.tasks.process_document import process_document  # noqa: F401
 from app.tasks.process_with_azure_document_intelligence import process_with_azure_document_intelligence  # noqa: F401
+from app.tasks.process_with_ocr import process_with_ocr  # noqa: F401
 from app.tasks.refine_text_with_gpt import refine_text_with_gpt  # noqa: F401
 from app.tasks.rotate_pdf_pages import rotate_pdf_pages  # noqa: F401
 from app.tasks.send_to_all import send_to_all_destinations  # noqa: F401
@@ -34,7 +37,9 @@ from app.tasks.upload_to_paperless import upload_to_paperless  # noqa: F401
 from app.tasks.upload_to_s3 import upload_to_s3  # noqa: F401
 from app.tasks.upload_to_sftp import upload_to_sftp  # noqa: F401
 from app.tasks.upload_to_webdav import upload_to_webdav  # noqa: F401
+from app.tasks.upload_with_rclone import send_to_all_rclone_destinations, upload_with_rclone  # noqa: F401
 from app.tasks.uptime_kuma_tasks import ping_uptime_kuma  # noqa: F401
+from app.tasks.webhook_tasks import deliver_webhook_task  # noqa: F401
 
 # Register the settings reload signal handler so workers pick up config changes
 from app.utils.settings_sync import register_settings_reload_signal
