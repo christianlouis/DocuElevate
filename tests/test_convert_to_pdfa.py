@@ -73,6 +73,11 @@ class TestConvertPdfToPdfa:
             cmd = mock_run.call_args[0][0]
             assert f"pdfa-{fmt}" in cmd
 
+    def test_invalid_pdfa_format_rejected(self):
+        """Test that invalid PDF/A format values are rejected."""
+        result = _convert_pdf_to_pdfa("/input.pdf", "/output.pdf", "invalid")
+        assert result is False
+
     @patch("app.tasks.convert_to_pdfa.subprocess.run")
     @patch("app.tasks.convert_to_pdfa.shutil.which", return_value="/usr/bin/ocrmypdf")
     def test_conversion_failure_empty_stderr(self, mock_which, mock_run):

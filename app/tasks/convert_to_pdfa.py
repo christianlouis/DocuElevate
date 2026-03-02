@@ -59,6 +59,11 @@ def _convert_pdf_to_pdfa(input_path: str, output_path: str, pdfa_format: str = "
     Returns:
         True if conversion succeeded, False otherwise.
     """
+    # Validate format to prevent argument injection via output-type
+    if pdfa_format not in ("1", "2", "3"):
+        logger.error(f"[convert_to_pdfa] Invalid pdfa_format: {pdfa_format}")
+        return False
+
     ocrmypdf_bin = shutil.which("ocrmypdf")
     if not ocrmypdf_bin:
         logger.error("[convert_to_pdfa] ocrmypdf binary not found on PATH")
@@ -186,7 +191,8 @@ def _compute_pdfa_folder_overrides() -> dict[str, str]:
         base = getattr(settings, folder_attr, "") or ""
         overrides[provider] = f"{base.rstrip('/')}/{subfolder}" if base else subfolder
 
-    # S3: append subfolder to prefix
+    # S3: append subfolder to prefix (trailing slash is required by S3 convention
+    # where "folder" paths are key prefixes, unlike path-based providers above)
     s3_prefix = getattr(settings, "s3_folder_prefix", "") or ""
     overrides["s3"] = f"{s3_prefix.rstrip('/')}/{subfolder}/"
 
