@@ -55,6 +55,51 @@ class TestCeleryWorkerConfig:
         mod = _reload_celery_worker()
         assert mod is not None
 
+    def test_all_task_modules_registered(self):
+        """Test that every task module in app/tasks/ is imported in celery_worker.
+
+        Dynamically discovers all task files in app/tasks/ and verifies that
+        celery_worker imports from each one. This prevents new task modules
+        from being accidentally left unregistered.
+        """
+        import ast
+        from pathlib import Path
+
+        tasks_dir = Path("app/tasks")
+        # Discover all task modules (excluding __init__.py and non-task helpers)
+        task_modules = set()
+        for py_file in sorted(tasks_dir.glob("*.py")):
+            if py_file.name.startswith("_"):
+                continue
+            # Only include modules that define Celery tasks (use @celery.task decorator)
+            source = py_file.read_text()
+            tree = ast.parse(source)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef):
+                    for decorator in node.decorator_list:
+                        decorator_src = ast.dump(decorator)
+                        if "celery" in decorator_src and "task" in decorator_src:
+                            task_modules.add(py_file.stem)
+                            break
+
+        assert task_modules, "Should discover at least one task module"
+
+        # Read celery_worker.py source and collect all 'from app.tasks.X import ...'
+        worker_source = Path("app/celery_worker.py").read_text()
+        worker_tree = ast.parse(worker_source)
+        imported_modules = set()
+        for node in ast.walk(worker_tree):
+            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("app.tasks."):
+                # e.g. "app.tasks.convert_to_pdfa" -> "convert_to_pdfa"
+                mod_name = node.module.split(".")[-1]
+                imported_modules.add(mod_name)
+
+        missing = task_modules - imported_modules
+        assert not missing, (
+            f"Task modules not imported in celery_worker.py: {sorted(missing)}. "
+            f"Add 'from app.tasks.<module> import <task>  # noqa: F401' for each."
+        )
+
     def test_register_settings_reload_signal_called(self):
         """Test that register_settings_reload_signal is called at module load."""
         with (
