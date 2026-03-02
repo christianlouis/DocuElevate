@@ -1,38 +1,73 @@
 {% extends "base.html" %}
 {% block title %}Settings - DocuElevate{% endblock %}
 
+{# Category icon mapping #}
+{% set category_icons = {
+  'Core': 'fas fa-server',
+  'Authentication': 'fas fa-shield-alt',
+  'AI Services': 'fas fa-robot',
+  'OCR Engines': 'fas fa-file-alt',
+  'Storage Providers': 'fas fa-cloud-upload-alt',
+  'Email': 'fas fa-envelope',
+  'IMAP': 'fas fa-inbox',
+  'Monitoring': 'fas fa-chart-line',
+  'Processing': 'fas fa-cogs',
+  'Notifications': 'fas fa-bell',
+  'Feature Flags': 'fas fa-toggle-on',
+  'UI': 'fas fa-palette',
+  'PDF/A Archival': 'fas fa-archive',
+  'Deduplication': 'fas fa-clone',
+  'Security': 'fas fa-lock',
+  'Other': 'fas fa-ellipsis-h'
+} %}
+
 {% block head_extra %}
 <style>
-  .setting-input {
-    font-family: 'Courier New', monospace;
-  }
+  .setting-input { font-family: 'Courier New', monospace; }
+  /* Sidebar navigation */
+  .settings-sidebar { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; }
+  .settings-sidebar::-webkit-scrollbar { width: 4px; }
+  .settings-sidebar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+  /* Category section transitions */
+  .category-chevron { transition: transform 0.2s ease; }
+  .category-chevron.rotate-180 { transform: rotate(180deg); }
+  /* Search highlight */
+  .settings-match-highlight { background-color: #fef08a; border-radius: 2px; padding: 0 2px; }
+  html.dark .settings-match-highlight { background-color: #854d0e; }
+  /* Smooth scroll – respect reduced-motion preference (WCAG) */
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+  /* No-results state */
+  .settings-no-results { text-align: center; padding: 3rem 1rem; color: #9ca3af; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8" x-data="settingsApp()">
+<div class="container mx-auto px-4 py-6" x-data="settingsApp()">
   <!-- Header -->
-  <div class="mb-8">
-    <div class="flex justify-between items-start">
+  <div class="mb-6">
+    <div class="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
       <div>
-        <h1 class="text-3xl font-bold mb-2">Application Settings</h1>
-        <p class="text-gray-600">
-          This is a convenience feature to view and edit application settings through the web interface.
+        <h1 class="text-3xl font-bold mb-1">Application Settings</h1>
+        <p class="text-gray-500 text-sm">
+          Manage configuration. Priority: <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">DB</span> &gt;
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 ml-1">ENV</span> &gt;
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 ml-1">DEFAULT</span>
+          <span class="mx-1.5">·</span> <span class="text-red-600">*</span> = restart required <span class="mx-1.5">·</span> <i class="fas fa-lock text-xs" aria-hidden="true"></i> = encrypted at rest
         </p>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 flex-shrink-0">
         <a href="/setup?step=1"
-           class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-          <i class="fas fa-magic mr-2" aria-hidden="true"></i> Setup Wizard
+           class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+          <i class="fas fa-magic mr-1.5" aria-hidden="true"></i> Wizard
         </a>
         <div class="relative" x-data="{ exportOpen: false }">
           <button @click="exportOpen = !exportOpen"
-                  class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-            <i class="fas fa-download mr-2" aria-hidden="true"></i> Export .env
+                  class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+            <i class="fas fa-download mr-1.5" aria-hidden="true"></i> Export
             <i class="fas fa-chevron-down ml-1 text-xs" aria-hidden="true"></i>
           </button>
           <div x-show="exportOpen" @click.outside="exportOpen = false" x-transition
-               class="absolute right-0 mt-1 w-52 bg-white border border-gray-200 rounded-md shadow-lg z-10">
+               class="absolute right-0 mt-1 w-52 bg-white border border-gray-200 rounded-md shadow-lg z-20">
             <a href="/api/settings/export-env?source=db"
                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                @click="exportOpen = false">
@@ -46,279 +81,350 @@
           </div>
         </div>
         <a href="/admin/settings/audit-log"
-           class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-          <i class="fas fa-history mr-2" aria-hidden="true"></i> Audit Log
+           class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+          <i class="fas fa-history mr-1.5" aria-hidden="true"></i> Audit Log
         </a>
       </div>
     </div>
-    <div class="bg-blue-50 border-l-4 border-blue-500 text-blue-700 p-4 my-4" role="alert">
-      <p class="font-bold">📋 Settings Precedence Order:</p>
-      <ul class="list-disc list-inside ml-4 mt-2">
-        <li><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">DB</span> Database settings (highest priority) - explicitly saved via this UI</li>
-        <li><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">ENV</span> Environment variables - from .env file or system environment</li>
-        <li><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">DEFAULT</span> Default values - built-in application defaults</li>
-      </ul>
-    </div>
-    <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 my-4" role="alert">
-      <p class="font-bold">⚠️ Important Notes:</p>
-      <ul class="list-disc list-inside ml-4 mt-2">
-        <li>Settings marked with <span class="text-red-600">*</span> require an application restart to take effect.</li>
-        <li>Sensitive values (passwords, API keys) are <strong>encrypted at rest</strong> in the database <i class="fas fa-lock text-xs"></i>.</li>
-        <li>Use the <i class="fas fa-eye"></i> icon to temporarily show/hide sensitive values.</li>
-        <li>Saving a setting here stores it in the database and overrides environment variables.</li>
-        <li>Only administrators can access and modify these settings.</li>
-        <li>All fields are optional - you can save just the settings you want to override.</li>
-      </ul>
+
+    <!-- Search Bar -->
+    <div class="relative">
+      <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true"></i>
+      <input
+        type="search"
+        x-model="searchQuery"
+        @input="filterSettings()"
+        placeholder="Search settings by name, key, or description…"
+        class="w-full pl-10 pr-20 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+        aria-label="Search settings"
+      />
+      <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+        <span x-show="searchQuery" x-text="matchCount + ' found'" x-transition class="text-xs text-gray-400"></span>
+        <button x-show="searchQuery" @click="searchQuery = ''; filterSettings()" type="button"
+                class="text-gray-400 hover:text-gray-600" aria-label="Clear search">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
     </div>
   </div>
 
   <!-- Alert Messages -->
   <div x-show="showAlert" x-transition class="mb-4">
     <div :class="alertType === 'success' ? 'bg-green-100 border-green-500 text-green-700' : 'bg-red-100 border-red-500 text-red-700'"
-         class="border-l-4 p-4" role="alert">
+         class="border-l-4 p-4 rounded-r-md" role="alert">
       <p class="font-bold" x-text="alertTitle"></p>
       <p x-text="alertMessage"></p>
     </div>
   </div>
 
-  <!-- Form -->
-  <form @submit.prevent="saveSettings">
-    {% for category, settings_list in settings_data.items() %}
-    <div class="bg-white shadow rounded-lg mb-6">
-      <!-- Category Header -->
-      <div class="bg-gray-100 px-6 py-4 border-b border-gray-200">
-        <h2 class="text-xl font-semibold text-gray-800">{{ category }}</h2>
+  <!-- Two-column layout -->
+  <div class="flex gap-6">
+    <!-- Sidebar Navigation (hidden on small screens) -->
+    <aside class="hidden lg:block w-56 flex-shrink-0" aria-label="Settings categories">
+      <nav class="settings-sidebar space-y-0.5 bg-white rounded-lg border border-gray-200 p-2 shadow-sm">
+        <p class="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">Categories</p>
+        {% for category, settings_list in settings_data.items() %}
+        <button
+          type="button"
+          @click="scrollToCategory('{{ category|e }}')"
+          class="w-full text-left px-3 py-2 rounded-md text-sm flex items-center gap-2 transition-colors hover:bg-gray-100"
+          :class="activeCategory === '{{ category|e }}' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600'"
+          data-sidebar-category="{{ category }}"
+          x-show="isCategoryVisible('{{ category|e }}')"
+        >
+          <i class="{{ category_icons.get(category, 'fas fa-cog') }} w-4 text-center text-xs" aria-hidden="true"></i>
+          <span class="truncate flex-1">{{ category }}</span>
+          <span class="text-xs text-gray-400 tabular-nums" x-text="visibleCount['{{ category|e }}'] ?? {{ settings_list|length }}"></span>
+        </button>
+        {% endfor %}
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="flex-1 min-w-0">
+      <!-- Mobile category jump (visible on small screens only) -->
+      <div class="lg:hidden mb-4">
+        <label for="mobile-category-select" class="sr-only">Jump to category</label>
+        <select id="mobile-category-select"
+                @change="scrollToCategory($event.target.value)"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm shadow-sm">
+          <option value="">Jump to category…</option>
+          {% for category in settings_data.keys() %}
+          <option value="{{ category }}">{{ category }} ({{ settings_data[category]|length }})</option>
+          {% endfor %}
+        </select>
       </div>
 
-      <!-- Settings in this category -->
-      <div class="px-6 py-4 space-y-6">
-        {% for setting in settings_list %}
-        <div class="border-b border-gray-200 pb-6 last:border-b-0">
-          <div class="flex justify-between items-start">
-            <div class="flex-1">
-              <div class="flex items-center gap-2 mb-1">
-                <label for="{{ setting.key }}" class="block text-sm font-medium text-gray-700">
-                  {{ setting.key.replace('_', ' ').title() }}
-                  {% if setting.metadata.restart_required %}
-                  <span class="text-red-600">*</span>
-                  {% endif %}
-                  {% if setting.metadata.required %}
-                  <span class="text-red-600 text-xs">(required)</span>
-                  {% endif %}
-                </label>
-                <!-- Source Indicator Badge -->
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
-                  {% if setting.source == 'database' %}
-                    bg-green-100 text-green-800
-                  {% elif setting.source == 'environment' %}
-                    bg-blue-100 text-blue-800
-                  {% else %}
-                    bg-gray-100 text-gray-800
-                  {% endif %}
-                " title="Value source: {{ setting.source }}">
-                  {{ setting.source_label }}
-                </span>
-              </div>
+      <!-- No results state -->
+      <div x-show="searchQuery && matchCount === 0" class="settings-no-results bg-white rounded-lg border border-gray-200 shadow-sm">
+        <i class="fas fa-search text-4xl text-gray-300 mb-3"></i>
+        <p class="text-gray-500 text-lg font-medium">No settings found</p>
+        <p class="text-gray-400 text-sm mt-1">Try a different search term or <button type="button" @click="searchQuery = ''; filterSettings()" class="text-blue-500 hover:underline">clear the search</button></p>
+      </div>
 
-              <p class="text-xs text-gray-500 mb-2">
-                {{ setting.metadata.description }}
-              </p>
+      <form @submit.prevent="saveSettings">
+        {% for category, settings_list in settings_data.items() %}
+        <section
+          class="mb-4"
+          id="category-{{ category|lower|replace(' ', '-')|replace('/', '-') }}"
+          data-category="{{ category }}"
+          x-show="isCategoryVisible('{{ category|e }}')"
+        >
+          <!-- Category Header -->
+          <div
+            class="flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-t-lg cursor-pointer hover:bg-gray-50 select-none transition-colors"
+            @click="toggleCategory('{{ category|e }}')"
+            role="button"
+            tabindex="0"
+            @keydown.enter="toggleCategory('{{ category|e }}')"
+            @keydown.space.prevent="toggleCategory('{{ category|e }}')"
+            :aria-expanded="openCategories['{{ category|e }}']"
+            aria-controls="settings-{{ category|lower|replace(' ', '-')|replace('/', '-') }}"
+          >
+            <div class="flex items-center gap-3">
+              <i class="{{ category_icons.get(category, 'fas fa-cog') }} text-gray-500" aria-hidden="true"></i>
+              <h2 class="text-lg font-semibold text-gray-800">{{ category }}</h2>
+              <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full tabular-nums"
+                    x-text="(visibleCount['{{ category|e }}'] ?? {{ settings_list|length }}) + ' settings'">
+                {{ settings_list|length }} settings
+              </span>
+            </div>
+            <i class="fas fa-chevron-down text-gray-400 category-chevron"
+               :class="openCategories['{{ category|e }}'] ? 'rotate-180' : ''"
+               aria-hidden="true"></i>
+          </div>
 
-              {% if setting.metadata.type == 'boolean' %}
-              <!-- Boolean/Checkbox Input -->
-              <div class="flex items-center">
-                <input
-                  type="checkbox"
-                  id="{{ setting.key }}"
-                  name="{{ setting.key }}"
-                  :checked="formData['{{ setting.key }}'] === 'true' || formData['{{ setting.key }}'] === true"
-                  @change="formData['{{ setting.key }}'] = $event.target.checked ? 'true' : 'false'"
-                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label for="{{ setting.key }}" class="ml-2 text-sm text-gray-700">
-                  Enable {{ setting.key.replace('_', ' ').title() }}
-                </label>
-              </div>
-              {% elif setting.metadata.type == 'slider' %}
-              <!-- Slider Input -->
-              <div class="flex items-center gap-4">
-                <input
-                  type="range"
-                  id="{{ setting.key }}"
-                  name="{{ setting.key }}"
-                  min="{{ setting.metadata.get('min', 0) }}"
-                  max="{{ setting.metadata.get('max', 100) }}"
-                  step="{{ setting.metadata.get('step', 1) }}"
-                  x-model="formData['{{ setting.key }}']"
-                  class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                />
-                <input
-                  type="number"
-                  min="{{ setting.metadata.get('min', 0) }}"
-                  max="{{ setting.metadata.get('max', 100) }}"
-                  step="{{ setting.metadata.get('step', 1) }}"
-                  x-model="formData['{{ setting.key }}']"
-                  class="setting-input w-24 px-2 py-1 border border-gray-300 rounded-md shadow-sm text-center focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  aria-label="{{ setting.key.replace('_', ' ').title() }} value"
-                />
-              </div>
-              {% elif setting.metadata.type == 'multiselect' and setting.metadata.options %}
-              <!-- Multi-select checkboxes: stored as comma-separated string -->
-              <div class="flex flex-wrap gap-2 mt-1">
-                {% for opt in setting.metadata.options %}
-                <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border cursor-pointer select-none
-                              transition-colors
-                              bg-white border-gray-300 hover:border-blue-400"
-                       :class="isSelected('{{ setting.key }}', '{{ opt }}')
-                               ? 'bg-blue-100 border-blue-500 text-blue-800 font-medium'
-                               : 'text-gray-700'">
-                  <input type="checkbox"
-                         class="sr-only"
-                         :checked="isSelected('{{ setting.key }}', '{{ opt }}')"
-                         @change="toggleMultiselect('{{ setting.key }}', '{{ opt }}', $event.target.checked)"
-                  />
-                  <i :class="isSelected('{{ setting.key }}', '{{ opt }}') ? 'fas fa-check-circle text-blue-600' : 'far fa-circle text-gray-400'"></i>
-                  <span class="text-sm">{{ opt }}</span>
-                </label>
-                {% endfor %}
-              </div>
-              <p class="mt-1 text-xs text-gray-400">Effective value: <code x-text="formData['{{ setting.key }}'] || '(none)'"></code></p>
-              {% elif setting.metadata.type == 'model_picker' %}
-              <!-- Model Picker: free-text input with datalist of common models -->
-              <div class="relative">
-                <input
-                  type="text"
-                  id="{{ setting.key }}"
-                  name="{{ setting.key }}"
-                  list="{{ setting.key }}_models"
-                  x-model="formData['{{ setting.key }}']"
-                  class="setting-input w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Select a common model or type a custom name…"
-                  autocomplete="off"
-                />
-                <datalist id="{{ setting.key }}_models">
-                  {% for m in setting.metadata.suggested_models %}
-                  <option value="{{ m }}">{{ m }}</option>
-                  {% endfor %}
-                </datalist>
-                <p class="text-xs text-gray-400 mt-1">
-                  <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
-                  Pick from the list or type any model name supported by your provider.
-                </p>
-              </div>
-              {% elif setting.metadata.options %}
-              <!-- Dropdown Select for fields with a fixed list of values -->
-              <select
-                id="{{ setting.key }}"
-                name="{{ setting.key }}"
-                x-model="formData['{{ setting.key }}']"
-                class="setting-input w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+          <!-- Category Content -->
+          <div
+            x-show="openCategories['{{ category|e }}']"
+            x-transition:enter="transition ease-out duration-150"
+            x-transition:enter-start="opacity-0 -translate-y-1"
+            x-transition:enter-end="opacity-100 translate-y-0"
+            id="settings-{{ category|lower|replace(' ', '-')|replace('/', '-') }}"
+            class="bg-white border border-t-0 border-gray-200 rounded-b-lg shadow-sm"
+          >
+            <div class="divide-y divide-gray-100">
+              {% for setting in settings_list %}
+              <div
+                class="px-4 py-4 hover:bg-gray-50 transition-colors"
+                data-setting-key="{{ setting.key }}"
+                data-searchable="{{ setting.key }} {{ setting.key.replace('_', ' ') }} {{ setting.metadata.description|lower }}"
+                x-show="isSettingVisible('{{ setting.key }}')"
               >
-                <option value="">— select —</option>
-                {% for opt in setting.metadata.options %}
-                <option value="{{ opt }}">{{ opt }}</option>
-                {% endfor %}
-              </select>
-              {% else %}
-              <!-- Text / Password Input -->
-              <div class="relative">
-                {% if setting.metadata.sensitive %}
-                <!-- Sensitive Field with Show/Hide Toggle -->
-                <div class="relative">
-                  <input
-                    :type="showPassword['{{ setting.key }}'] ? 'text' : 'password'"
-                    id="{{ setting.key }}"
-                    name="{{ setting.key }}"
-                    x-model="formData['{{ setting.key }}']"
-                    class="setting-input w-full px-3 py-2 pr-24 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
-                    placeholder="{{ setting.metadata.description }}"
-                    autocomplete="off"
-                  />
-                  <div class="absolute inset-y-0 right-0 flex items-center pr-3 space-x-2">
-                    <!-- Encrypted indicator -->
-                    <span class="text-xs text-gray-400" title="Value is encrypted at rest in database">
-                      <i class="fas fa-lock"></i>
-                    </span>
-                    <!-- Show/Hide Toggle -->
+                <div class="flex justify-between items-start">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1 flex-wrap">
+                      <label for="{{ setting.key }}" class="text-sm font-medium text-gray-700">
+                        {{ setting.key.replace('_', ' ').title() }}
+                        {% if setting.metadata.restart_required %}
+                        <span class="text-red-600" title="Restart required">*</span>
+                        {% endif %}
+                        {% if setting.metadata.required %}
+                        <span class="text-red-600 text-xs">(required)</span>
+                        {% endif %}
+                      </label>
+                      <!-- Source Badge -->
+                      <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium
+                        {% if setting.source == 'database' %}bg-green-100 text-green-800
+                        {% elif setting.source == 'environment' %}bg-blue-100 text-blue-800
+                        {% else %}bg-gray-100 text-gray-800{% endif %}"
+                        title="Value source: {{ setting.source }}">
+                        {{ setting.source_label }}
+                      </span>
+                      <code class="text-xs text-gray-400 hidden sm:inline">{{ setting.key }}</code>
+                      <span class="sr-only sm:hidden">Key: {{ setting.key }}</span>
+                    </div>
+
+                    <p class="text-xs text-gray-500 mb-2">{{ setting.metadata.description }}</p>
+
+                    {% if setting.metadata.type == 'boolean' %}
+                    <!-- Boolean/Checkbox Input -->
+                    <div class="flex items-center">
+                      <input
+                        type="checkbox"
+                        id="{{ setting.key }}"
+                        name="{{ setting.key }}"
+                        :checked="formData['{{ setting.key }}'] === 'true' || formData['{{ setting.key }}'] === true"
+                        @change="formData['{{ setting.key }}'] = $event.target.checked ? 'true' : 'false'"
+                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <label for="{{ setting.key }}" class="ml-2 text-sm text-gray-700">
+                        Enable {{ setting.key.replace('_', ' ').title() }}
+                      </label>
+                    </div>
+                    {% elif setting.metadata.type == 'slider' %}
+                    <!-- Slider Input -->
+                    <div class="flex items-center gap-4">
+                      <input
+                        type="range"
+                        id="{{ setting.key }}"
+                        name="{{ setting.key }}"
+                        min="{{ setting.metadata.get('min', 0) }}"
+                        max="{{ setting.metadata.get('max', 100) }}"
+                        step="{{ setting.metadata.get('step', 1) }}"
+                        x-model="formData['{{ setting.key }}']"
+                        class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                      <input
+                        type="number"
+                        min="{{ setting.metadata.get('min', 0) }}"
+                        max="{{ setting.metadata.get('max', 100) }}"
+                        step="{{ setting.metadata.get('step', 1) }}"
+                        x-model="formData['{{ setting.key }}']"
+                        class="setting-input w-24 px-2 py-1 border border-gray-300 rounded-md shadow-sm text-center focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        aria-label="{{ setting.key.replace('_', ' ').title() }} value"
+                      />
+                    </div>
+                    {% elif setting.metadata.type == 'multiselect' and setting.metadata.options %}
+                    <!-- Multi-select checkboxes -->
+                    <div class="flex flex-wrap gap-2 mt-1">
+                      {% for opt in setting.metadata.options %}
+                      <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border cursor-pointer select-none transition-colors bg-white border-gray-300 hover:border-blue-400"
+                             :class="isSelected('{{ setting.key }}', '{{ opt }}') ? 'bg-blue-100 border-blue-500 text-blue-800 font-medium' : 'text-gray-700'">
+                        <input type="checkbox" class="sr-only"
+                               :checked="isSelected('{{ setting.key }}', '{{ opt }}')"
+                               @change="toggleMultiselect('{{ setting.key }}', '{{ opt }}', $event.target.checked)" />
+                        <i :class="isSelected('{{ setting.key }}', '{{ opt }}') ? 'fas fa-check-circle text-blue-600' : 'far fa-circle text-gray-400'"></i>
+                        <span class="text-sm">{{ opt }}</span>
+                      </label>
+                      {% endfor %}
+                    </div>
+                    <p class="mt-1 text-xs text-gray-400">Effective value: <code x-text="formData['{{ setting.key }}'] || '(none)'"></code></p>
+                    {% elif setting.metadata.type == 'model_picker' %}
+                    <!-- Model Picker -->
+                    <div class="relative">
+                      <input
+                        type="text"
+                        id="{{ setting.key }}"
+                        name="{{ setting.key }}"
+                        list="{{ setting.key }}_models"
+                        x-model="formData['{{ setting.key }}']"
+                        class="setting-input w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Select a common model or type a custom name…"
+                        autocomplete="off"
+                      />
+                      <datalist id="{{ setting.key }}_models">
+                        {% for m in setting.metadata.suggested_models %}
+                        <option value="{{ m }}">{{ m }}</option>
+                        {% endfor %}
+                      </datalist>
+                      <p class="text-xs text-gray-400 mt-1">
+                        <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
+                        Pick from the list or type any model name supported by your provider.
+                      </p>
+                    </div>
+                    {% elif setting.metadata.options %}
+                    <!-- Dropdown Select -->
+                    <select
+                      id="{{ setting.key }}"
+                      name="{{ setting.key }}"
+                      x-model="formData['{{ setting.key }}']"
+                      class="setting-input w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">— select —</option>
+                      {% for opt in setting.metadata.options %}
+                      <option value="{{ opt }}">{{ opt }}</option>
+                      {% endfor %}
+                    </select>
+                    {% else %}
+                    <!-- Text / Password Input -->
+                    <div class="relative">
+                      {% if setting.metadata.sensitive %}
+                      <div class="relative">
+                        <input
+                          :type="showPassword['{{ setting.key }}'] ? 'text' : 'password'"
+                          id="{{ setting.key }}"
+                          name="{{ setting.key }}"
+                          x-model="formData['{{ setting.key }}']"
+                          class="setting-input w-full px-3 py-2 pr-24 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                          placeholder="{{ setting.metadata.description }}"
+                          autocomplete="off"
+                        />
+                        <div class="absolute inset-y-0 right-0 flex items-center pr-3 space-x-2">
+                          <span class="text-xs text-gray-400" title="Value is encrypted at rest in database">
+                            <i class="fas fa-lock"></i>
+                          </span>
+                          <button
+                            type="button"
+                            @click="togglePassword('{{ setting.key }}')"
+                            class="text-gray-400 hover:text-gray-600 focus:outline-none"
+                            title="Show/hide value"
+                            aria-label="Toggle password visibility"
+                          >
+                            <i :class="showPassword['{{ setting.key }}'] ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                          </button>
+                        </div>
+                      </div>
+                      {% else %}
+                      <input
+                        type="text"
+                        id="{{ setting.key }}"
+                        name="{{ setting.key }}"
+                        x-model="formData['{{ setting.key }}']"
+                        class="setting-input w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="{{ setting.metadata.description }}"
+                      />
+                      {% endif %}
+                    </div>
+                    {% endif %}
+                  </div>
+
+                  <!-- Per-setting actions -->
+                  <div class="ml-4 flex-shrink-0 flex flex-row items-center gap-2 pt-1">
                     <button
                       type="button"
-                      @click="togglePassword('{{ setting.key }}')"
-                      class="text-gray-400 hover:text-gray-600 focus:outline-none"
-                      title="Show/hide value"
-                      aria-label="Toggle password visibility"
+                      x-show="isDbOverride['{{ setting.key }}']"
+                      x-transition
+                      @click="revertSetting('{{ setting.key }}')"
+                      :disabled="revertingKey === '{{ setting.key }}'"
+                      class="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      title="Remove DB override and revert to environment variable or default"
                     >
-                      <i :class="showPassword['{{ setting.key }}'] ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                      <span x-show="revertingKey !== '{{ setting.key }}'"><i class="fas fa-trash-alt mr-1" aria-hidden="true"></i>Remove from DB</span>
+                      <span x-show="revertingKey === '{{ setting.key }}'">Reverting…</span>
+                    </button>
+                    <button
+                      type="button"
+                      x-show="formData['{{ setting.key }}'] !== originalData['{{ setting.key }}']"
+                      x-transition
+                      @click="saveSetting('{{ setting.key }}')"
+                      :disabled="savingKey === '{{ setting.key }}'"
+                      class="px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      title="Save this setting"
+                    >
+                      <span x-show="savingKey !== '{{ setting.key }}'"><i class="fas fa-save mr-1" aria-hidden="true"></i>Save</span>
+                      <span x-show="savingKey === '{{ setting.key }}'">Saving…</span>
                     </button>
                   </div>
                 </div>
-                {% else %}
-                <!-- Non-Sensitive Field -->
-                <input
-                  type="text"
-                  id="{{ setting.key }}"
-                  name="{{ setting.key }}"
-                  x-model="formData['{{ setting.key }}']"
-                  class="setting-input w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="{{ setting.metadata.description }}"
-                />
-                {% endif %}
               </div>
-              {% endif %}
-            </div>
-
-            <!-- Per-setting Save / Back-to-ENV buttons -->
-            <div class="ml-4 flex-shrink-0 flex flex-row items-center gap-2 pt-1">
-              <button
-                type="button"
-                x-show="isDbOverride['{{ setting.key }}']"
-                x-transition
-                @click="revertSetting('{{ setting.key }}')"
-                :disabled="revertingKey === '{{ setting.key }}'"
-                class="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                title="Remove DB override and revert to environment variable or default"
-              >
-                <span x-show="revertingKey !== '{{ setting.key }}'"><i class="fas fa-trash-alt mr-1" aria-hidden="true"></i>Remove from DB</span>
-                <span x-show="revertingKey === '{{ setting.key }}'">Reverting…</span>
-              </button>
-              <button
-                type="button"
-                x-show="formData['{{ setting.key }}'] !== originalData['{{ setting.key }}']"
-                x-transition
-                @click="saveSetting('{{ setting.key }}')"
-                :disabled="savingKey === '{{ setting.key }}'"
-                class="px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                title="Save this setting"
-              >
-                <span x-show="savingKey !== '{{ setting.key }}'"><i class="fas fa-save mr-1" aria-hidden="true"></i>Save</span>
-                <span x-show="savingKey === '{{ setting.key }}'">Saving…</span>
-              </button>
+              {% endfor %}
             </div>
           </div>
-        </div>
+        </section>
         {% endfor %}
-      </div>
-    </div>
-    {% endfor %}
 
-    <!-- Action Buttons -->
-    <div class="flex justify-end space-x-4 mt-6">
-      <button
-        type="button"
-        @click="resetForm"
-        class="px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-      >
-        Reset
-      </button>
-      <button
-        type="submit"
-        :disabled="saving"
-        class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <span x-show="!saving">Save Settings</span>
-        <span x-show="saving">Saving...</span>
-      </button>
+        <!-- Bulk Action Buttons -->
+        <div class="flex justify-end space-x-4 mt-6" x-show="!searchQuery">
+          <button
+            type="button"
+            @click="resetForm"
+            class="px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Reset
+          </button>
+          <button
+            type="submit"
+            :disabled="saving"
+            class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span x-show="!saving">Save All Changes</span>
+            <span x-show="saving">Saving...</span>
+          </button>
+        </div>
+      </form>
     </div>
-  </form>
+  </div>
 </div>
 
 <script>
@@ -335,17 +441,115 @@ function settingsApp() {
     alertType: 'success',
     alertTitle: '',
     alertMessage: '',
+    searchQuery: '',
+    matchCount: 0,
+    activeCategory: '',
+    openCategories: {},
+    visibleSettings: {},
+    visibleCount: {},
+    allCategories: [],
+    settingSearchIndex: {},
 
     init() {
-      // Initialize form data from current settings
+      const categories = [];
       {% for category, settings_list in settings_data.items() %}
+        categories.push('{{ category|e }}');
+        this.openCategories['{{ category|e }}'] = true;
+        this.visibleCount['{{ category|e }}'] = {{ settings_list|length }};
         {% for setting in settings_list %}
           this.formData['{{ setting.key }}'] = {{ setting.display_value|tojson }};
           this.originalData['{{ setting.key }}'] = {{ setting.display_value|tojson }};
           this.isDbOverride['{{ setting.key }}'] = {{ (setting.source == 'database')|tojson }};
           this.showPassword['{{ setting.key }}'] = false;
+          this.visibleSettings['{{ setting.key }}'] = true;
+          this.settingSearchIndex['{{ setting.key }}'] = {
+            category: '{{ category|e }}',
+            searchText: {{ (setting.key ~ ' ' ~ setting.key.replace('_', ' ') ~ ' ' ~ setting.metadata.description)|lower|tojson }}
+          };
         {% endfor %}
       {% endfor %}
+      this.allCategories = categories;
+      if (categories.length > 0) this.activeCategory = categories[0];
+
+      // Set up intersection observer for active category tracking
+      this.$nextTick(() => {
+        const observer = new IntersectionObserver((entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              const cat = entry.target.getAttribute('data-category');
+              if (cat) this.activeCategory = cat;
+            }
+          }
+        }, { rootMargin: '-20% 0px -70% 0px' });
+
+        document.querySelectorAll('[data-category]').forEach(el => observer.observe(el));
+
+        // Clean up observer when component is destroyed
+        if (this.$cleanup) {
+          this.$cleanup(() => observer.disconnect());
+        }
+      });
+    },
+
+    /** Filter settings based on search query. */
+    filterSettings() {
+      const query = this.searchQuery.toLowerCase().trim();
+      let totalMatches = 0;
+
+      for (const cat of this.allCategories) {
+        this.visibleCount[cat] = 0;
+      }
+
+      for (const [key, index] of Object.entries(this.settingSearchIndex)) {
+        if (!query) {
+          this.visibleSettings[key] = true;
+          this.visibleCount[index.category]++;
+        } else {
+          const matches = index.searchText.includes(query);
+          this.visibleSettings[key] = matches;
+          if (matches) {
+            totalMatches++;
+            this.visibleCount[index.category]++;
+          }
+        }
+      }
+      this.matchCount = totalMatches;
+
+      // When searching, auto-expand categories with matches and collapse empty ones
+      if (query) {
+        for (const cat of this.allCategories) {
+          this.openCategories[cat] = this.visibleCount[cat] > 0;
+        }
+      }
+    },
+
+    /** Check if a category has any visible settings. */
+    isCategoryVisible(category) {
+      if (!this.searchQuery) return true;
+      return (this.visibleCount[category] || 0) > 0;
+    },
+
+    /** Check if a single setting is visible (matches search). */
+    isSettingVisible(key) {
+      if (!this.searchQuery) return true;
+      return this.visibleSettings[key] === true;
+    },
+
+    /** Toggle a category open/closed. */
+    toggleCategory(category) {
+      this.openCategories[category] = !this.openCategories[category];
+    },
+
+    /** Scroll to a category section. */
+    scrollToCategory(category) {
+      this.activeCategory = category;
+      // Open the category if closed
+      this.openCategories[category] = true;
+      const slug = category.toLowerCase().replace(/ /g, '-').replace(/\//g, '-');
+      const el = document.getElementById('category-' + slug);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     },
 
     /** Parse a comma-separated multiselect value into a trimmed array. */
@@ -446,7 +650,6 @@ function settingsApp() {
         });
 
         if (response.ok) {
-          // Reload the page so the ENV/default value and source badge refresh
           window.location.reload();
         } else {
           const result = await response.json();
@@ -465,10 +668,8 @@ function settingsApp() {
       this.hideAlert();
 
       try {
-        // Prepare updates array
         const updates = [];
         for (const [key, value] of Object.entries(this.formData)) {
-          // Only include changed settings
           if (value !== this.originalData[key]) {
             updates.push({ key, value });
           }
@@ -480,12 +681,9 @@ function settingsApp() {
           return;
         }
 
-        // Send bulk update request
         const response = await fetch('/api/settings/bulk-update', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updates),
         });
 
