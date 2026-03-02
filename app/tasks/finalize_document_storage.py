@@ -78,6 +78,7 @@ def finalize_document_storage(self, original_file: str, processed_file: str, met
     if settings.enable_pdfa_conversion:
         try:
             from app.tasks.convert_to_pdfa import convert_to_pdfa
+
             logger.info(f"[{task_id}] PDF/A conversion enabled, queueing archival conversion")
             log_task_progress(
                 task_id,
@@ -94,6 +95,7 @@ def finalize_document_storage(self, original_file: str, processed_file: str, met
     if file_id is not None:
         try:
             from app.tasks.compute_embedding import compute_document_embedding
+
             compute_document_embedding.delay(file_id)
             logger.info(f"[{task_id}] Queued embedding computation for file {file_id}")
         except Exception as e:
@@ -106,10 +108,7 @@ def finalize_document_storage(self, original_file: str, processed_file: str, met
         filename = os.path.basename(processed_file)
 
         notify_file_processed(
-            filename=filename, 
-            file_size=file_size, 
-            metadata=metadata, 
-            destinations=configured_destinations
+            filename=filename, file_size=file_size, metadata=metadata, destinations=configured_destinations
         )
     except Exception as e:
         logger.warning(f"[WARNING] Failed to send file processed notification: {e}")
