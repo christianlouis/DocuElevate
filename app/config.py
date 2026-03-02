@@ -330,6 +330,15 @@ class Settings(BaseSettings):
             "Embeddings drive the document similarity feature.  Default: text-embedding-3-small."
         ),
     )
+    embedding_max_tokens: int = Field(
+        default=8000,
+        description=(
+            "Maximum number of tokens to send to the embedding model.  "
+            "Text is truncated to approximately this many tokens (using a "
+            "conservative 3-chars-per-token estimate) before calling the API.  "
+            "Set this below the model's context window (e.g. 8000 for an 8192-token model)."
+        ),
+    )
 
     # Text quality check - AI-based assessment of embedded PDF text
     enable_text_quality_check: bool = Field(

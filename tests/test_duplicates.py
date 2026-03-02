@@ -7,6 +7,7 @@ Covers:
 - ``GET /duplicates``                — duplicate management UI page
 """
 
+import json
 from unittest.mock import patch
 
 import pytest
@@ -19,7 +20,7 @@ from app.models import FileRecord
 # ---------------------------------------------------------------------------
 
 
-def _make_file(db, *, filehash, filename, is_duplicate=False, duplicate_of_id=None, ocr_text=None):
+def _make_file(db, *, filehash, filename, is_duplicate=False, duplicate_of_id=None, ocr_text=None, embedding=None):
     """Insert a FileRecord and return it."""
     record = FileRecord(
         filehash=filehash,
@@ -30,6 +31,7 @@ def _make_file(db, *, filehash, filename, is_duplicate=False, duplicate_of_id=No
         is_duplicate=is_duplicate,
         duplicate_of_id=duplicate_of_id,
         ocr_text=ocr_text,
+        embedding=embedding,
     )
     db.add(record)
     db.commit()
@@ -195,24 +197,23 @@ class TestGetFileDuplicates:
         assert data["duplicate_of"]["id"] == orig.id
 
     @pytest.mark.integration
-    @patch("app.utils.similarity.generate_embedding")
-    def test_near_duplicates_returned(self, mock_embed, client: TestClient, db_session):
+    def test_near_duplicates_returned(self, client: TestClient, db_session):
         """Near-duplicates found via embedding similarity should appear in results."""
+        embedding = json.dumps([1.0, 0.0, 0.0])
         target = _make_file(
             db_session,
             filehash="th1",
             filename="target.pdf",
             ocr_text="Invoice from Acme Corp for January services rendered",
+            embedding=embedding,
         )
         similar = _make_file(
             db_session,
             filehash="th2",  # different hash — same content (re-scan)
             filename="rescan.pdf",
             ocr_text="Invoice from Acme Corp for January services rendered",
+            embedding=embedding,
         )
-
-        # Same embedding → cosine similarity = 1.0
-        mock_embed.return_value = [1.0, 0.0, 0.0]
 
         response = client.get(f"/api/files/{target.id}/duplicates?near_duplicate_threshold=0.8")
         assert response.status_code == 200

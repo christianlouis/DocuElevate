@@ -42,8 +42,9 @@ def generate_embedding(text: str, model: str | None = None) -> list[float]:
     """Generate a text embedding vector using the OpenAI-compatible API.
 
     Args:
-        text: The input text to embed.  Truncated to ~8000 tokens worth of
-            characters to stay within model limits.
+        text: The input text to embed.  Truncated to stay within the
+            model's context window based on ``settings.embedding_max_tokens``
+            (default 8 000 tokens ≈ 24 000 characters).
         model: The embedding model to use.  When ``None`` (the default), the
             value of ``settings.embedding_model`` is used.
 
@@ -57,9 +58,18 @@ def generate_embedding(text: str, model: str | None = None) -> list[float]:
     if model is None:
         model = settings.embedding_model
 
-    # Truncate very long texts to stay within token limits (~4 chars per token)
-    max_chars = 30000
+    # Truncate to stay within the model's context window.
+    # Use a conservative estimate of ~3 characters per token so that the
+    # resulting text fits comfortably within ``embedding_max_tokens``.
+    max_chars = settings.embedding_max_tokens * 3
     if len(text) > max_chars:
+        logger.debug(
+            "Truncating text from %d to %d chars (~%d tokens) for model %s",
+            len(text),
+            max_chars,
+            settings.embedding_max_tokens,
+            model,
+        )
         text = text[:max_chars]
 
     client = _get_embedding_client()

@@ -218,6 +218,7 @@ def get_file_overall_status(db: Session, file_id: int) -> Dict:
         "embed_metadata_into_pdf",
         "finalize_document_storage",
         "send_to_all_destinations",
+        "compute_embedding",
     }
 
     # Add check_for_duplicates if deduplication is enabled
@@ -326,6 +327,7 @@ def get_step_summary(db: Session, file_id: int) -> Dict:
         "embed_metadata_into_pdf",
         "finalize_document_storage",
         "send_to_all_destinations",
+        "compute_embedding",
     }
 
     # Add check_for_duplicates if deduplication is enabled
