@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.72.1 (2026-03-02)
+
+### Bug Fixes
+
+- **database**: Skip create_all for Alembic-tracked databases to prevent OperationalError on
+  webhook_configs
+  ([`b87dd60`](https://github.com/christianlouis/DocuElevate/commit/b87dd6083cdf43835e435cf6d2fa32f9ca7ca60d))
+
+
 ## v0.72.0 (2026-03-02)
 
 ### Bug Fixes
