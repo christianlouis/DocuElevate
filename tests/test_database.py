@@ -50,6 +50,80 @@ class TestInitDb:
 
         init_db()
 
+    def test_init_db_skips_create_all_for_tracked_database(self, tmp_path):
+        """Regression test: init_db must not call create_all for Alembic-tracked databases.
+
+        When a database already has alembic_version tracking (e.g. at migration 008),
+        calling Base.metadata.create_all() before Alembic migrations would create tables
+        that are also created by pending migrations (e.g. webhook_configs in migration 009),
+        causing OperationalError: table webhook_configs already exists.
+        """
+        from sqlalchemy import create_engine, text
+        from sqlalchemy import inspect as sa_inspect
+
+        db_path = str(tmp_path / "regression_tracked.db")
+        test_engine = create_engine(f"sqlite:///{db_path}")
+
+        # Set up a database at migration 008 state (webhook_configs does not yet exist)
+        with test_engine.begin() as conn:
+            conn.execute(
+                text(
+                    "CREATE TABLE files ("
+                    "id INTEGER PRIMARY KEY, filehash VARCHAR NOT NULL, "
+                    "original_filename VARCHAR, local_filename VARCHAR NOT NULL, "
+                    "original_file_path VARCHAR, processed_file_path VARCHAR, "
+                    "file_size INTEGER NOT NULL, mime_type VARCHAR, "
+                    "is_duplicate BOOLEAN DEFAULT 0 NOT NULL, duplicate_of_id INTEGER, "
+                    "ocr_text TEXT, ai_metadata TEXT, document_title VARCHAR, "
+                    "ocr_quality_score INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE TABLE processing_logs ("
+                    "id INTEGER PRIMARY KEY, file_id INTEGER, task_id VARCHAR, "
+                    "step_name VARCHAR, status VARCHAR, message VARCHAR, detail TEXT, "
+                    "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE TABLE file_processing_steps ("
+                    "id INTEGER PRIMARY KEY, file_id INTEGER NOT NULL, "
+                    "step_name VARCHAR NOT NULL, status VARCHAR NOT NULL, "
+                    "started_at DATETIME, completed_at DATETIME, error_message TEXT, "
+                    "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                    "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE TABLE saved_searches ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, user_id VARCHAR NOT NULL, "
+                    "name VARCHAR NOT NULL, filters TEXT NOT NULL, "
+                    "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                    "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                    "UNIQUE (user_id, name))"
+                )
+            )
+            conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
+            conn.execute(text("INSERT INTO alembic_version VALUES ('008_add_performance_indexes')"))
+
+        # Patch the module-level engine and DB_URL so init_db uses our test database
+        with patch("app.database.engine", test_engine), patch("app.database.DB_URL", f"sqlite:///{db_path}"):
+            # Must NOT raise OperationalError: table webhook_configs already exists
+            init_db()
+
+        inspector = sa_inspect(test_engine)
+        table_names = inspector.get_table_names()
+        # webhook_configs created by Alembic migration 009 (not by create_all)
+        assert "webhook_configs" in table_names
+        # embedding column added by Alembic migration 010
+        files_columns = {col["name"] for col in inspector.get_columns("files")}
+        assert "embedding" in files_columns
+
+        test_engine.dispose()
+
 
 @pytest.mark.unit
 class TestGetDb:
@@ -297,19 +371,20 @@ class TestSchemaMigrations:
 class TestInitDbErrors:
     """Tests for error handling in init_db function."""
 
-    @patch("app.database.Base")
+    @patch("app.database._run_alembic_upgrade")
     @patch("app.database.make_url")
-    def test_init_db_handles_sqlalchemy_error(self, mock_make_url, mock_base):
+    def test_init_db_handles_sqlalchemy_error(self, mock_make_url, mock_alembic_upgrade):
         """Test that init_db properly handles SQLAlchemy errors."""
         from sqlalchemy import exc
 
-        # Mock to raise SQLAlchemy error
         mock_url = MagicMock()
         mock_url.get_backend_name.return_value = "sqlite"
         mock_url.database = ":memory:"
         mock_make_url.return_value = mock_url
 
-        mock_base.metadata.create_all.side_effect = exc.SQLAlchemyError("Database error")
+        # Simulate a SQLAlchemy error during the Alembic upgrade step, which is
+        # always executed regardless of whether alembic_version already exists.
+        mock_alembic_upgrade.side_effect = exc.SQLAlchemyError("Database error")
 
         with pytest.raises(exc.SQLAlchemyError):
             init_db()
