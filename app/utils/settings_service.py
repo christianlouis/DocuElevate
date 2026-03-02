@@ -835,6 +835,16 @@ SETTING_METADATA = {
         "sensitive": False,
         "required": False,
         "restart_required": False,
+        "options": [
+            "STANDARD",
+            "REDUCED_REDUNDANCY",
+            "STANDARD_IA",
+            "ONEZONE_IA",
+            "INTELLIGENT_TIERING",
+            "GLACIER",
+            "DEEP_ARCHIVE",
+            "GLACIER_IR",
+        ],
     },
     "s3_acl": {
         "category": "Storage Providers",
@@ -843,6 +853,15 @@ SETTING_METADATA = {
         "sensitive": False,
         "required": False,
         "restart_required": False,
+        "options": [
+            "private",
+            "public-read",
+            "public-read-write",
+            "authenticated-read",
+            "aws-exec-read",
+            "bucket-owner-read",
+            "bucket-owner-full-control",
+        ],
     },
     # Email Settings
     "email_host": {
@@ -1111,10 +1130,13 @@ SETTING_METADATA = {
             "Text scoring below this threshold triggers a fresh OCR pass. "
             "Default: 85. Lower values are more permissive; higher values enforce stricter quality."
         ),
-        "type": "integer",
+        "type": "slider",
         "sensitive": False,
         "required": False,
         "restart_required": False,
+        "min": 0,
+        "max": 100,
+        "step": 1,
     },
     "text_quality_significant_issues": {
         "category": "Processing",
@@ -1187,6 +1209,22 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "enable_search": {
+        "category": "Feature Flags",
+        "description": "Enable Meilisearch full-text search integration. Default: True.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "webhook_enabled": {
+        "category": "Feature Flags",
+        "description": "Enable webhook delivery for document events. Default: True.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # UI / Appearance
     "ui_default_color_scheme": {
         "category": "UI",
@@ -1200,6 +1238,487 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
         "options": ["system", "light", "dark"],
+    },
+    # Authentication – additional
+    "admin_group_name": {
+        "category": "Authentication",
+        "description": "Name of the admin group in the OAuth provider (e.g. Authentik). Default: admin.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    # Storage Providers – S3 (additional)
+    # (s3_bucket_name, s3_folder_prefix, s3_storage_class, s3_acl already in Storage Providers above)
+    # Paperless – additional
+    "paperless_custom_field_absender": {
+        "category": "Storage Providers",
+        "description": "Name of the 'absender' (sender) custom field in Paperless-ngx.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "paperless_custom_fields_mapping": {
+        "category": "Storage Providers",
+        "description": (
+            "JSON mapping of metadata field names to Paperless custom field names. "
+            'Example: {"absender": "Sender", "empfaenger": "Recipient", "language": "Language"}.'
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # Meilisearch / Search
+    "meilisearch_url": {
+        "category": "Core",
+        "description": "URL of the Meilisearch search engine instance. Default: http://meilisearch:7700.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "meilisearch_api_key": {
+        "category": "Core",
+        "description": "Meilisearch API key (master key or search-only key). Optional for local development.",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "meilisearch_index_name": {
+        "category": "Core",
+        "description": "Name of the Meilisearch index for documents. Default: documents.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    # PDF/A Archival Conversion
+    "enable_pdfa_conversion": {
+        "category": "PDF/A Archival",
+        "description": (
+            "Master switch: enable PDF/A archival variant generation. "
+            "When enabled, PDF/A copies of both the original and processed files are created. "
+            "Uses ocrmypdf with Ghostscript for the conversion. Default: False."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "pdfa_format": {
+        "category": "PDF/A Archival",
+        "description": "PDF/A format variant to produce: 1 = PDF/A-1b, 2 = PDF/A-2b, 3 = PDF/A-3b. Default: 2.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "options": ["1", "2", "3"],
+    },
+    "pdfa_upload_original": {
+        "category": "PDF/A Archival",
+        "description": (
+            "Upload the original-file PDF/A variant to all configured storage providers. "
+            "Files are placed in the provider's folder + PDFA_UPLOAD_FOLDER subfolder. Default: False."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "pdfa_upload_processed": {
+        "category": "PDF/A Archival",
+        "description": (
+            "Upload the processed-file PDF/A variant to all configured storage providers. "
+            "Files are placed in the provider's folder + PDFA_UPLOAD_FOLDER subfolder. Default: False."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "pdfa_upload_folder": {
+        "category": "PDF/A Archival",
+        "description": (
+            "Subfolder name appended to each storage provider's configured folder for PDF/A uploads. "
+            "For example if Dropbox folder is '/Documents' and this is 'pdfa', files go to '/Documents/pdfa'. "
+            "Set to empty string to upload into the same folder. Default: pdfa."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "google_drive_pdfa_folder_id": {
+        "category": "PDF/A Archival",
+        "description": (
+            "Google Drive folder ID for PDF/A uploads (Drive uses IDs not paths). "
+            "If empty, uses the standard google_drive_folder_id."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "pdfa_timestamp_enabled": {
+        "category": "PDF/A Archival",
+        "description": (
+            "Enable RFC 3161 timestamping of PDF/A files via a Timestamp Authority (TSA). "
+            "Creates a .tsr file alongside each PDF/A file for legal proof of existence. "
+            "Requires openssl binary on PATH. Default: False."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "pdfa_timestamp_url": {
+        "category": "PDF/A Archival",
+        "description": (
+            "URL of the RFC 3161 Timestamp Authority (TSA). "
+            "Default: FreeTSA (https://freetsa.org/tsr). Other options: GlobalSign, DigiStamp, "
+            "or any RFC 3161-compliant TSA."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # Deduplication
+    "enable_deduplication": {
+        "category": "Processing",
+        "description": (
+            "Enable deduplication check before processing. Files with the same SHA-256 hash "
+            "as previously processed files will be skipped. Default: True."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "show_deduplication_step": {
+        "category": "Processing",
+        "description": (
+            "Show the 'Check for Duplicates' step in processing history. "
+            "If False, the check is still performed but not displayed. Default: True."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "near_duplicate_threshold": {
+        "category": "Processing",
+        "description": (
+            "Minimum cosine similarity score (0.0–1.0) between two documents' text embeddings "
+            "to consider them near-duplicates. Higher values require closer content matches. Default: 0.85."
+        ),
+        "type": "slider",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "min": 0,
+        "max": 1,
+        "step": 0.01,
+    },
+    # Embeddings
+    "embedding_model": {
+        "category": "AI Services",
+        "description": (
+            "Model name used for generating text embeddings via the OpenAI-compatible API. "
+            "Embeddings drive the document similarity feature. Default: text-embedding-3-small."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "embedding_max_tokens": {
+        "category": "AI Services",
+        "description": (
+            "Maximum number of tokens to send to the embedding model. "
+            "Text is truncated to approximately this many tokens before calling the API. Default: 8000."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "embedding_backfill_batch_size": {
+        "category": "AI Services",
+        "description": (
+            "Maximum number of files to queue for embedding computation per backfill run. "
+            "Keeps the worker and embedding API load bounded. Default: 50."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # File upload size limits
+    "max_upload_size": {
+        "category": "Core",
+        "description": (
+            "Maximum file upload size in bytes. Prevents resource exhaustion attacks. Default: 1073741824 (1 GB)."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "max_single_file_size": {
+        "category": "Core",
+        "description": (
+            "Maximum size for a single file chunk in bytes. If set and file exceeds this, "
+            "it will be split into smaller chunks for processing. Default: None (no splitting)."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "max_request_body_size": {
+        "category": "Core",
+        "description": (
+            "Maximum request body size in bytes for non-file-upload requests. "
+            "Prevents memory exhaustion via oversized JSON/form payloads. Default: 1048576 (1 MB)."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    # Task Retry Settings
+    "task_retry_max_retries": {
+        "category": "Processing",
+        "description": "Maximum number of automatic retry attempts for failed Celery tasks. Default: 3.",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "task_retry_delays": {
+        "category": "Processing",
+        "description": (
+            "Comma-separated list of retry countdown values in seconds. "
+            "Each value is the delay before the corresponding retry attempt. "
+            "Default: 60,300,900 (1 min, 5 min, 15 min)."
+        ),
+        "type": "list",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "task_retry_jitter": {
+        "category": "Processing",
+        "description": (
+            "Apply ±20% random jitter to retry countdowns to prevent thundering-herd problems. Default: True."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "step_timeout": {
+        "category": "Processing",
+        "description": (
+            "Timeout in seconds for processing steps. Steps stuck in 'in_progress' longer "
+            "than this are marked as failed. Default: 600 (10 minutes)."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # Security Headers
+    "security_headers_enabled": {
+        "category": "Security",
+        "description": (
+            "Enable security headers middleware. Set to True if deploying without a reverse proxy. "
+            "Default: False (most deployments use Traefik/Nginx which add headers)."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "security_header_hsts_enabled": {
+        "category": "Security",
+        "description": "Enable HTTP Strict Transport Security (HSTS) header. Only effective over HTTPS. Default: True.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "security_header_hsts_value": {
+        "category": "Security",
+        "description": "HSTS header value. Default: max-age=31536000; includeSubDomains.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "security_header_csp_enabled": {
+        "category": "Security",
+        "description": "Enable Content-Security-Policy (CSP) header. Default: True.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "security_header_csp_value": {
+        "category": "Security",
+        "description": (
+            "CSP header value. Customize based on your application's resource loading needs. "
+            "Default: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https:; font-src 'self' data:;"
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "security_header_x_frame_options_enabled": {
+        "category": "Security",
+        "description": "Enable X-Frame-Options header to prevent clickjacking. Default: True.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "security_header_x_frame_options_value": {
+        "category": "Security",
+        "description": "X-Frame-Options header value.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+        "options": ["DENY", "SAMEORIGIN"],
+    },
+    "security_header_x_content_type_options_enabled": {
+        "category": "Security",
+        "description": "Enable X-Content-Type-Options header (always set to 'nosniff'). Default: True.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    # Audit Logging
+    "audit_logging_enabled": {
+        "category": "Security",
+        "description": (
+            "Enable audit/request logging middleware. Logs every HTTP request with method, path, "
+            "status code, response time, and username. Sensitive query-parameter values are automatically masked. "
+            "Default: True."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "audit_log_include_client_ip": {
+        "category": "Security",
+        "description": (
+            "Include the client IP address in audit log entries. "
+            "Disable for privacy-sensitive deployments where IP logging is restricted. Default: True."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    # Rate Limiting
+    "rate_limiting_enabled": {
+        "category": "Security",
+        "description": "Enable rate limiting middleware. Recommended for production to prevent abuse. Default: True.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "rate_limit_default": {
+        "category": "Security",
+        "description": (
+            "Default rate limit for all endpoints (format: 'count/period', e.g. '100/minute'). Default: 100/minute."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "rate_limit_upload": {
+        "category": "Security",
+        "description": "Rate limit for file upload endpoints to prevent resource exhaustion. Default: 600/minute.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "rate_limit_auth": {
+        "category": "Security",
+        "description": (
+            "Stricter rate limit for authentication endpoints to prevent brute force attacks. Default: 10/minute."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    # CORS
+    "cors_enabled": {
+        "category": "Security",
+        "description": (
+            "Enable CORS middleware. Set to False if reverse proxy (Traefik, Nginx) handles CORS headers. "
+            "Default: False."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "cors_allowed_origins": {
+        "category": "Security",
+        "description": (
+            "Comma-separated list of allowed CORS origins. Use '*' to allow all origins "
+            "(not recommended with cors_allow_credentials=True). "
+            "Default: * (all origins)."
+        ),
+        "type": "list",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "cors_allow_credentials": {
+        "category": "Security",
+        "description": (
+            "Allow credentials (cookies, Authorization headers) in CORS requests. "
+            "Cannot be True when cors_allowed_origins is '*'. Default: False."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "cors_allowed_methods": {
+        "category": "Security",
+        "description": (
+            "Comma-separated list of allowed HTTP methods for CORS requests. "
+            "Default: GET,POST,PUT,DELETE,OPTIONS,PATCH."
+        ),
+        "type": "list",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "cors_allowed_headers": {
+        "category": "Security",
+        "description": "Comma-separated list of allowed request headers for CORS. Use '*' to allow all. Default: *.",
+        "type": "list",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
     },
 }
 
@@ -1457,6 +1976,18 @@ def validate_setting_value(key: str, value: str) -> Tuple[bool, Optional[str]]:
             int(value)
         except ValueError:
             return False, f"{key} must be an integer"
+
+    elif setting_type == "slider":
+        try:
+            num = float(value)
+            min_val = metadata.get("min")
+            max_val = metadata.get("max")
+            if min_val is not None and num < min_val:
+                return False, f"{key} must be >= {min_val}"
+            if max_val is not None and num > max_val:
+                return False, f"{key} must be <= {max_val}"
+        except ValueError:
+            return False, f"{key} must be a number"
 
     # Special validation for specific keys
     if key == "session_secret" and value and len(value) < 32:
