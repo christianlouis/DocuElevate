@@ -151,6 +151,89 @@ class TestSettingsService:
         for setting in critical_settings:
             assert setting in SETTING_METADATA, f"Missing metadata for {setting}"
 
+    def test_all_config_settings_have_metadata(self):
+        """Test that every setting in config.py's Settings class has a SETTING_METADATA entry."""
+        from app.config import Settings
+
+        # Get all annotated fields from the Settings class
+        settings_fields = set(Settings.model_fields.keys())
+
+        metadata_keys = set(SETTING_METADATA.keys())
+        missing = settings_fields - metadata_keys
+
+        assert not missing, (
+            f"The following config.py settings are missing from SETTING_METADATA "
+            f"and will not appear on the settings page: {sorted(missing)}"
+        )
+
+    def test_setting_metadata_has_required_fields(self):
+        """Test that every SETTING_METADATA entry has the required keys."""
+        required_keys = {"category", "description", "type", "sensitive", "required", "restart_required"}
+        for key, meta in SETTING_METADATA.items():
+            missing = required_keys - set(meta.keys())
+            assert not missing, f"SETTING_METADATA['{key}'] is missing keys: {missing}"
+
+    def test_pdfa_settings_in_metadata(self):
+        """Test that all 8 PDF/A settings from the issue are present in SETTING_METADATA."""
+        pdfa_settings = [
+            "enable_pdfa_conversion",
+            "pdfa_format",
+            "pdfa_upload_original",
+            "pdfa_upload_processed",
+            "pdfa_upload_folder",
+            "google_drive_pdfa_folder_id",
+            "pdfa_timestamp_enabled",
+            "pdfa_timestamp_url",
+        ]
+        for setting in pdfa_settings:
+            assert setting in SETTING_METADATA, f"PDF/A setting '{setting}' missing from SETTING_METADATA"
+
+    def test_pdfa_format_has_dropdown_options(self):
+        """Test that pdfa_format uses a dropdown with valid PDF/A format options."""
+        meta = SETTING_METADATA["pdfa_format"]
+        assert "options" in meta, "pdfa_format should have dropdown options"
+        assert set(meta["options"]) == {"1", "2", "3"}, "pdfa_format options should be 1, 2, 3"
+
+    def test_slider_type_settings_have_range(self):
+        """Test that slider-type settings have min, max, and step defined."""
+        for key, meta in SETTING_METADATA.items():
+            if meta.get("type") == "slider":
+                assert "min" in meta, f"Slider setting '{key}' missing 'min'"
+                assert "max" in meta, f"Slider setting '{key}' missing 'max'"
+                assert "step" in meta, f"Slider setting '{key}' missing 'step'"
+
+    def test_validate_slider_value(self):
+        """Test validation of slider type values."""
+        # near_duplicate_threshold is a slider (0-1)
+        is_valid, error = validate_setting_value("near_duplicate_threshold", "0.85")
+        assert is_valid is True
+
+        is_valid, error = validate_setting_value("near_duplicate_threshold", "1.5")
+        assert is_valid is False
+        assert "must be <= 1" in error
+
+        is_valid, error = validate_setting_value("near_duplicate_threshold", "-0.1")
+        assert is_valid is False
+        assert "must be >= 0" in error
+
+        is_valid, error = validate_setting_value("near_duplicate_threshold", "not_a_number")
+        assert is_valid is False
+        assert "must be a number" in error
+
+    def test_s3_storage_class_has_dropdown_options(self):
+        """Test that s3_storage_class uses a dropdown with valid options."""
+        meta = SETTING_METADATA["s3_storage_class"]
+        assert "options" in meta, "s3_storage_class should have dropdown options"
+        assert "STANDARD" in meta["options"]
+        assert "GLACIER" in meta["options"]
+
+    def test_s3_acl_has_dropdown_options(self):
+        """Test that s3_acl uses a dropdown with valid options."""
+        meta = SETTING_METADATA["s3_acl"]
+        assert "options" in meta, "s3_acl should have dropdown options"
+        assert "private" in meta["options"]
+        assert "public-read" in meta["options"]
+
 
 @pytest.mark.unit
 class TestConfigLoader:

@@ -24,23 +24,31 @@ Each setting in the UI shows a badge indicating its current source:
 
 Settings are organized into logical categories for easy navigation:
 
-- **Core**: Database, Redis, working directory, external hostname, debug mode
-- **Authentication**: Login settings, session secrets, OAuth configuration
-- **AI Services**: AI provider selection and credentials (OpenAI, Azure, Anthropic, Gemini, Ollama, OpenRouter, Portkey, LiteLLM)
+- **Core**: Database, Redis, working directory, external hostname, debug mode, Meilisearch, file size limits
+- **Authentication**: Login settings, session secrets, OAuth configuration, admin group
+- **AI Services**: AI provider selection, model configuration, embeddings, and credentials (OpenAI, Azure, Anthropic, Gemini, Ollama, OpenRouter, Portkey, LiteLLM)
+- **OCR Engines**: OCR provider selection and configuration (Tesseract, EasyOCR, Mistral, Google DocAI, AWS Textract)
 - **Storage Providers**: Dropbox, Google Drive, OneDrive, S3, FTP, SFTP, WebDAV, Nextcloud, Paperless
 - **Email**: SMTP configuration for sending emails
-- **IMAP**: Email ingestion configuration (supports multiple accounts)
+- **IMAP**: Email ingestion configuration (supports two mailbox accounts)
 - **Monitoring**: Uptime Kuma integration
 - **Notifications**: Apprise notification URLs and settings
-- **Processing**: Batch processing and HTTP timeout settings
-- **Feature Flags**: Enable/disable specific features
+- **Processing**: Batch processing, upload throttling, deduplication, text quality, task retry, timeouts
+- **Feature Flags**: Enable/disable specific features (file deletion, search, webhooks)
+- **PDF/A Archival**: PDF/A conversion, upload, and RFC 3161 timestamping settings
+- **Security**: Security headers, audit logging, rate limiting, CORS configuration
+- **UI**: Color scheme preferences
 
 ### Setting Types
 
 - **String**: Text values (API keys, URLs, paths)
 - **Boolean**: True/false toggles (enable/disable features)
 - **Integer**: Numeric values (ports, timeouts, thresholds)
-- **List**: Comma-separated values (notification URLs)
+- **Slider**: Numeric values with visual range controls (e.g., similarity threshold 0–1, quality threshold 0–100)
+- **Dropdown**: Predefined option lists (e.g., PDF/A format, S3 storage class, S3 ACL)
+- **Multi-select**: Comma-separated selections from a list (e.g., OCR providers)
+- **Model Picker**: Free-text with suggested model names (e.g., AI model selection)
+- **List**: Comma-separated values (notification URLs, CORS origins)
 
 ### Sensitive Data
 

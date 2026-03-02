@@ -139,6 +139,29 @@
                   Enable {{ setting.key.replace('_', ' ').title() }}
                 </label>
               </div>
+              {% elif setting.metadata.type == 'slider' %}
+              <!-- Slider Input -->
+              <div class="flex items-center gap-4">
+                <input
+                  type="range"
+                  id="{{ setting.key }}"
+                  name="{{ setting.key }}"
+                  min="{{ setting.metadata.get('min', 0) }}"
+                  max="{{ setting.metadata.get('max', 100) }}"
+                  step="{{ setting.metadata.get('step', 1) }}"
+                  x-model="formData['{{ setting.key }}']"
+                  class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                />
+                <input
+                  type="number"
+                  min="{{ setting.metadata.get('min', 0) }}"
+                  max="{{ setting.metadata.get('max', 100) }}"
+                  step="{{ setting.metadata.get('step', 1) }}"
+                  x-model="formData['{{ setting.key }}']"
+                  class="setting-input w-24 px-2 py-1 border border-gray-300 rounded-md shadow-sm text-center focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  aria-label="{{ setting.key.replace('_', ' ').title() }} value"
+                />
+              </div>
               {% elif setting.metadata.type == 'multiselect' and setting.metadata.options %}
               <!-- Multi-select checkboxes: stored as comma-separated string -->
               <div class="flex flex-wrap gap-2 mt-1">
