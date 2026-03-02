@@ -23,6 +23,7 @@ from app.models import FileProcessingStep, FileRecord, ProcessingLog
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document
 from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES, IMAGE_MIME_TYPES
+from app.utils.file_operations import hash_file
 from app.utils.file_queries import apply_status_filter
 from app.utils.file_status import get_files_processing_status
 from app.utils.filename_utils import sanitize_filename
@@ -1212,7 +1213,7 @@ def download_file(
 
 @router.post("/ui-upload")
 @require_login
-async def ui_upload(request: Request, file: UploadFile = File(...)):
+async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...)):
     """Endpoint to accept a user-uploaded file and enqueue it for processing."""
     workdir = settings.workdir
 
@@ -1357,9 +1358,39 @@ async def ui_upload(request: Request, file: UploadFile = File(...)):
         logger.warning(f"Unsupported MIME type {mime_type} for {target_path}, attempting conversion")
         task = convert_to_pdf.delay(target_path, original_filename=safe_filename)
 
-    return {
+    # Check for exact duplicates (same SHA-256 hash) before returning.
+    # This gives the caller an immediate warning without waiting for the pipeline.
+    # Only performed when deduplication is enabled in settings.
+    exact_duplicate_warning = None
+    if settings.enable_deduplication:
+        try:
+            filehash = hash_file(target_path)
+            existing = (
+                db.query(FileRecord)
+                .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False))
+                .order_by(FileRecord.id.asc())
+                .first()
+            )
+            if existing:
+                exact_duplicate_warning = {
+                    "duplicate_type": "exact",
+                    "original_file_id": existing.id,
+                    "original_filename": existing.original_filename,
+                    "message": (
+                        "This file appears to be an exact duplicate of an already-processed document. "
+                        "It will still be queued but will be flagged as a duplicate."
+                    ),
+                }
+                logger.info(f"Exact duplicate detected on upload: '{safe_filename}' matches file ID {existing.id}")
+        except Exception as e:
+            logger.warning(f"Duplicate check failed for uploaded file '{safe_filename}': {e}")
+
+    response: dict = {
         "task_id": task.id,
         "status": "queued",
         "original_filename": safe_filename,
         "stored_filename": target_filename,
     }
+    if exact_duplicate_warning:
+        response["duplicate_warning"] = exact_duplicate_warning
+    return response

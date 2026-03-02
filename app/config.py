@@ -316,6 +316,13 @@ class Settings(BaseSettings):
             " If False, the check is still performed but not displayed. Default: True."
         ),
     )
+    near_duplicate_threshold: float = Field(
+        default=0.85,
+        description=(
+            "Minimum cosine similarity score (0–1) between two documents' text embeddings to consider "
+            "them near-duplicates.  Higher values require closer content matches.  Default: 0.85."
+        ),
+    )
 
     # Text quality check - AI-based assessment of embedded PDF text
     enable_text_quality_check: bool = Field(

@@ -844,6 +844,38 @@ Administrators can set the **site-wide default** colour scheme that is applied w
 UI_DEFAULT_COLOR_SCHEME=dark
 ```
 
+## Duplicate Document Detection
+
+DocuElevate detects and flags documents that share the same content, even if they arrive as separate uploads.
+
+### Exact Duplicate Detection (SHA-256)
+
+When `ENABLE_DEDUPLICATION=True` (the default), each new document is hashed with SHA-256 before processing begins. If the hash matches an existing file record the new document is stored as a duplicate (`is_duplicate=True`, `duplicate_of_id=<original_id>`) and no further processing is performed.
+
+| Variable | Description | Default |
+|---|---|---|
+| `ENABLE_DEDUPLICATION` | Hash-based exact duplicate detection on ingest. | `True` |
+| `SHOW_DEDUPLICATION_STEP` | Show the "Check for Duplicates" step in the processing timeline UI. | `True` |
+
+An immediate duplicate warning is also included in the `/api/ui-upload` JSON response so the frontend can alert the user before the pipeline completes.
+
+### Near-Duplicate Detection (Content Similarity)
+
+Near-duplicate detection catches documents that contain the **same content but carry different SHA-256 hashes** — for example, the same letter scanned twice on different days.
+
+After OCR processes a document, its extracted text is converted to a vector embedding using the configured AI provider. The cosine similarity between two documents' embeddings reflects how semantically similar their content is.
+
+| Variable | Description | Default |
+|---|---|---|
+| `NEAR_DUPLICATE_THRESHOLD` | Minimum cosine similarity (0–1) for two documents to be considered near-duplicates. `0.85` means ≥ 85 % semantic overlap. | `0.85` |
+
+Near-duplicate detection:
+- Is performed **on demand** via `GET /api/files/{id}/duplicates` — not automatically during ingest (OCR text is required).
+- Is exposed in the **Duplicates** management page (`/duplicates` → "Near-Duplicate Finder" tab).
+- Documents without OCR text cannot be compared and are excluded from results.
+
+A score of **≥ 0.90** reliably identifies the same document scanned twice. A score of **0.70–0.90** suggests partial content overlap. Adjust `NEAR_DUPLICATE_THRESHOLD` to tune sensitivity.
+
 ## Performance & Caching
 
 DocuElevate automatically optimizes database access and uses Redis as a
