@@ -26,8 +26,14 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def init_db() -> None:
     """
     Ensures the SQLite database file and its parent directory exist (if using sqlite).
-    Then runs Base.metadata.create_all(bind=engine) to initialize tables and
-    applies any pending Alembic migrations.
+    Then initializes tables and applies any pending Alembic migrations:
+
+    - Fresh/legacy databases (no ``alembic_version`` table): creates all tables via
+      ``Base.metadata.create_all()``, then stamps the Alembic version to ``head``.
+    - Alembic-tracked databases (``alembic_version`` present): skips ``create_all()``
+      and applies pending migrations via ``alembic upgrade head``.  Skipping
+      ``create_all()`` prevents an ``OperationalError`` when the ORM model defines a
+      table (e.g. ``webhook_configs``) that a pending migration also tries to create.
     """
     # 1. Parse the DB URL to see if it's sqlite
     url = make_url(DB_URL)
@@ -47,12 +53,19 @@ def init_db() -> None:
                 logger.info(f"Creating new SQLite database file at {database_path}")
                 open(database_path, "a").close()
 
-    # 5. Now create tables if they don't exist yet
+    # 5. Create tables only for fresh/legacy databases not yet tracked by Alembic.
+    #    For Alembic-tracked databases, skip create_all to avoid conflicts where
+    #    the ORM model would create a table (e.g. webhook_configs) that a pending
+    #    Alembic migration also tries to create, causing an OperationalError.
     try:
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database initialization complete (tables created if not exist).")
+        from sqlalchemy import inspect
 
-        # 6. Run Alembic migrations for existing databases
+        table_names = inspect(engine).get_table_names()
+        if "alembic_version" not in table_names:
+            Base.metadata.create_all(bind=engine)
+            logger.info("Database initialization complete (tables created if not exist).")
+
+        # 6. Run Alembic migrations (stamps fresh/legacy DBs to head, upgrades tracked DBs)
         _run_alembic_upgrade(engine)
     except exc.SQLAlchemyError as e:
         logger.error(f"Error initializing database: {e}")
