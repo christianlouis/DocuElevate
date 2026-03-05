@@ -10,6 +10,7 @@ documents are visible to all users (single-user / shared mode).
 import logging
 
 from fastapi import Request
+from sqlalchemy import or_
 from sqlalchemy.orm import Query
 from sqlalchemy.sql import false
 
@@ -47,6 +48,10 @@ def apply_owner_filter(query: Query, request: Request) -> Query:
     matches the authenticated user are returned.  Admin users bypass
     the filter and see all documents.
 
+    When ``unowned_docs_visible_to_all`` is ``True`` (default), documents
+    with ``owner_id IS NULL`` (unclaimed) are also included for every
+    authenticated user so they can be discovered and claimed.
+
     When multi-user mode is disabled the query is returned unchanged.
 
     Args:
@@ -69,4 +74,11 @@ def apply_owner_filter(query: Query, request: Request) -> Query:
         # No authenticated user — return empty result set
         return query.filter(false())
 
-    return query.filter(FileRecord.owner_id == owner_id)
+    # Build filter: user's own documents
+    conditions = [FileRecord.owner_id == owner_id]
+
+    # Optionally include unclaimed (owner_id IS NULL) documents
+    if settings.unowned_docs_visible_to_all:
+        conditions.append(FileRecord.owner_id.is_(None))
+
+    return query.filter(or_(*conditions))

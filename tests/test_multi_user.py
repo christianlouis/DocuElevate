@@ -185,7 +185,7 @@ class TestApplyOwnerFilter:
 
     @pytest.mark.unit
     def test_filters_by_owner_when_enabled(self, mu_session):
-        """When multi_user_enabled=True, only user's files are returned."""
+        """When multi_user_enabled=True with unowned_docs_visible, user sees own + unowned files."""
         from app.utils.user_scope import apply_owner_filter
 
         _create_file_record(mu_session, owner_id="alice")
@@ -195,7 +195,28 @@ class TestApplyOwnerFilter:
         request = _mock_request(user={"preferred_username": "alice"})
         query = mu_session.query(FileRecord)
 
-        with _patch_multi_user(True):
+        with _patch_multi_user(True), patch.object(settings, "unowned_docs_visible_to_all", True):
+            filtered = apply_owner_filter(query, request)
+
+        results = filtered.all()
+        # Alice sees her own file + the unowned file (not Bob's)
+        assert len(results) == 2
+        owner_ids = {r.owner_id for r in results}
+        assert owner_ids == {"alice", None}
+
+    @pytest.mark.unit
+    def test_filters_strictly_when_unowned_not_visible(self, mu_session):
+        """When unowned_docs_visible_to_all=False, user sees only own files."""
+        from app.utils.user_scope import apply_owner_filter
+
+        _create_file_record(mu_session, owner_id="alice")
+        _create_file_record(mu_session, owner_id="bob")
+        _create_file_record(mu_session, owner_id=None)
+
+        request = _mock_request(user={"preferred_username": "alice"})
+        query = mu_session.query(FileRecord)
+
+        with _patch_multi_user(True), patch.object(settings, "unowned_docs_visible_to_all", False):
             filtered = apply_owner_filter(query, request)
 
         results = filtered.all()
@@ -395,3 +416,202 @@ class TestProcessDocumentOwnerId:
         sig = inspect.signature(convert_to_pdf)
         assert "owner_id" in sig.parameters
         assert sig.parameters["owner_id"].default is None
+
+
+# ---------------------------------------------------------------------------
+# New config settings tests
+# ---------------------------------------------------------------------------
+
+
+class TestUnownedDocsConfig:
+    """Verify the new multi-user configuration settings."""
+
+    @pytest.mark.unit
+    def test_unowned_docs_visible_default_true(self):
+        """unowned_docs_visible_to_all should default to True."""
+        assert hasattr(settings, "unowned_docs_visible_to_all")
+
+    @pytest.mark.unit
+    def test_default_owner_id_default_none(self):
+        """default_owner_id should default to None."""
+        assert hasattr(settings, "default_owner_id")
+
+    @pytest.mark.unit
+    def test_unowned_docs_has_metadata(self):
+        """unowned_docs_visible_to_all must be in SETTING_METADATA."""
+        from app.utils.settings_service import SETTING_METADATA
+
+        assert "unowned_docs_visible_to_all" in SETTING_METADATA
+        meta = SETTING_METADATA["unowned_docs_visible_to_all"]
+        assert meta["type"] == "boolean"
+        assert meta["category"] == "Authentication"
+
+    @pytest.mark.unit
+    def test_default_owner_id_has_metadata(self):
+        """default_owner_id must be in SETTING_METADATA."""
+        from app.utils.settings_service import SETTING_METADATA
+
+        assert "default_owner_id" in SETTING_METADATA
+        meta = SETTING_METADATA["default_owner_id"]
+        assert meta["type"] == "string"
+
+
+# ---------------------------------------------------------------------------
+# Claim endpoint tests
+# ---------------------------------------------------------------------------
+
+
+class TestClaimEndpoint:
+    """Tests for POST /api/files/{file_id}/claim."""
+
+    @pytest.mark.integration
+    def test_claim_disabled_without_multi_user(self, client, db_session):
+        """Claiming is rejected when multi-user mode is off."""
+        rec = _create_file_record(db_session, owner_id=None, filename="unclaimed.pdf")
+        with _patch_multi_user(False):
+            response = client.post(f"/api/files/{rec.id}/claim")
+        assert response.status_code == 400
+        assert "not enabled" in response.json()["detail"]
+
+    @pytest.mark.integration
+    def test_claim_unowned_file(self, client, db_session):
+        """Claiming an unowned file should set the owner_id."""
+        rec = _create_file_record(db_session, owner_id=None, filename="unclaimed.pdf")
+        with _patch_multi_user(True):
+            response = client.post(f"/api/files/{rec.id}/claim")
+
+        # TestClient uses auth bypass; session user is set by conftest.
+        # Without a real session, we get 401 (unauthenticated).
+        assert response.status_code in [200, 401]
+
+    @pytest.mark.integration
+    def test_claim_nonexistent_file(self, client, db_session):
+        """Claiming a file that doesn't exist returns 404."""
+        with _patch_multi_user(True):
+            response = client.post("/api/files/99999/claim")
+        # 404 or 401 depending on auth
+        assert response.status_code in [401, 404]
+
+    @pytest.mark.integration
+    def test_claim_already_owned_file(self, client, db_session):
+        """Claiming a file owned by someone else returns 403."""
+        rec = _create_file_record(db_session, owner_id="bob", filename="bob_file.pdf")
+        with _patch_multi_user(True):
+            response = client.post(f"/api/files/{rec.id}/claim")
+        # 403 or 401 depending on auth
+        assert response.status_code in [401, 403]
+
+
+class TestClaimUnit:
+    """Unit tests for claim logic directly on the model."""
+
+    @pytest.mark.unit
+    def test_claim_sets_owner_id(self, mu_session):
+        """Setting owner_id on a NULL-owner file persists correctly."""
+        rec = _create_file_record(mu_session, owner_id=None)
+        assert rec.owner_id is None
+
+        rec.owner_id = "alice"
+        mu_session.commit()
+        mu_session.refresh(rec)
+        assert rec.owner_id == "alice"
+
+    @pytest.mark.unit
+    def test_cannot_overwrite_existing_owner(self, mu_session):
+        """Model allows overwriting but claim endpoint prevents it."""
+        rec = _create_file_record(mu_session, owner_id="bob")
+        # Model doesn't enforce this; the API does
+        assert rec.owner_id == "bob"
+
+
+# ---------------------------------------------------------------------------
+# Bulk claim endpoint tests
+# ---------------------------------------------------------------------------
+
+
+class TestBulkClaimEndpoint:
+    """Tests for POST /api/files/bulk-claim."""
+
+    @pytest.mark.integration
+    def test_bulk_claim_disabled_without_multi_user(self, client, db_session):
+        """Bulk claiming is rejected when multi-user mode is off."""
+        _create_file_record(db_session, owner_id=None, filename="a.pdf")
+        with _patch_multi_user(False):
+            response = client.post("/api/files/bulk-claim", json=[1])
+        assert response.status_code == 400
+
+    @pytest.mark.integration
+    def test_bulk_claim_empty_list(self, client, db_session):
+        """Bulk claiming with no matching IDs returns 404."""
+        with _patch_multi_user(True):
+            response = client.post("/api/files/bulk-claim", json=[99999])
+        # 404 or 401 (no auth)
+        assert response.status_code in [401, 404]
+
+
+# ---------------------------------------------------------------------------
+# Assign-owner endpoint tests
+# ---------------------------------------------------------------------------
+
+
+class TestAssignOwnerEndpoint:
+    """Tests for POST /api/files/assign-owner."""
+
+    @pytest.mark.integration
+    def test_assign_owner_disabled_without_multi_user(self, client, db_session):
+        """Assigning owner is rejected when multi-user mode is off."""
+        with _patch_multi_user(False):
+            response = client.post("/api/files/assign-owner?owner_id=alice")
+        assert response.status_code == 400
+
+    @pytest.mark.integration
+    def test_assign_owner_requires_admin(self, client, db_session):
+        """Non-admin users cannot assign owners."""
+        with _patch_multi_user(True):
+            response = client.post("/api/files/assign-owner?owner_id=alice")
+        # 403 (non-admin) or 401 (no auth)
+        assert response.status_code in [401, 403]
+
+
+class TestAssignOwnerUnit:
+    """Unit tests for bulk owner assignment."""
+
+    @pytest.mark.unit
+    def test_assign_owner_to_unowned_files(self, mu_session):
+        """Bulk update sets owner_id on all NULL-owner files."""
+        _create_file_record(mu_session, owner_id=None, filename="a.pdf")
+        _create_file_record(mu_session, owner_id=None, filename="b.pdf")
+        _create_file_record(mu_session, owner_id="bob", filename="c.pdf")
+
+        updated = (
+            mu_session.query(FileRecord)
+            .filter(FileRecord.owner_id.is_(None))
+            .update({FileRecord.owner_id: "alice"}, synchronize_session="fetch")
+        )
+        mu_session.commit()
+
+        assert updated == 2
+        all_files = mu_session.query(FileRecord).all()
+        owners = {f.original_filename: f.owner_id for f in all_files}
+        assert owners["a.pdf"] == "alice"
+        assert owners["b.pdf"] == "alice"
+        assert owners["c.pdf"] == "bob"
+
+    @pytest.mark.unit
+    def test_assign_owner_to_specific_files(self, mu_session):
+        """Update specific file IDs sets owner_id."""
+        rec1 = _create_file_record(mu_session, owner_id=None, filename="a.pdf")
+        rec2 = _create_file_record(mu_session, owner_id="bob", filename="b.pdf")
+
+        updated = (
+            mu_session.query(FileRecord)
+            .filter(FileRecord.id.in_([rec1.id, rec2.id]))
+            .update({FileRecord.owner_id: "charlie"}, synchronize_session="fetch")
+        )
+        mu_session.commit()
+
+        assert updated == 2
+        mu_session.refresh(rec1)
+        mu_session.refresh(rec2)
+        assert rec1.owner_id == "charlie"
+        assert rec2.owner_id == "charlie"

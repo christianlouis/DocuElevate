@@ -55,6 +55,10 @@ def process_document(
          - Otherwise, queue Azure Document Intelligence processing
       3. If force_cloud_ocr is True, skip local text extraction and use cloud OCR
     """
+    # Fall back to the configured default_owner_id when no explicit owner was provided
+    if owner_id is None and settings.default_owner_id:
+        owner_id = settings.default_owner_id
+
     task_id = self.request.id
     logger.info(f"[{task_id}] Starting document processing: {original_local_file}")
     log_task_progress(

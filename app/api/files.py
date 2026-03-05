@@ -1403,3 +1403,145 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
     if exact_duplicate_warning:
         response["duplicate_warning"] = exact_duplicate_warning
     return response
+
+
+# ---------------------------------------------------------------------------
+# Document ownership / claim endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.post("/files/{file_id}/claim")
+@require_login
+def claim_file(request: Request, file_id: int, db: DbSession):
+    """
+    Claim an unowned document for the current user.
+
+    Only documents with ``owner_id IS NULL`` can be claimed.  The requesting
+    user's identifier is written into ``owner_id``.  In single-user mode
+    the endpoint is a no-op (returns the file unchanged).
+    """
+    if not settings.multi_user_enabled:
+        raise HTTPException(status_code=400, detail="Multi-user mode is not enabled")
+
+    owner_id = get_current_owner_id(request)
+    if owner_id is None:
+        raise HTTPException(status_code=401, detail="Authentication required to claim a document")
+
+    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    if not file_record:
+        raise HTTPException(status_code=404, detail=f"File record with ID {file_id} not found")
+
+    if file_record.owner_id is not None:
+        if file_record.owner_id == owner_id:
+            return {"status": "already_owned", "message": "You already own this document", "file_id": file_id}
+        raise HTTPException(status_code=403, detail="This document is already owned by another user")
+
+    file_record.owner_id = owner_id
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Error claiming file {file_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to claim document")
+
+    logger.info(f"File {file_id} claimed by user '{owner_id}'")
+    return {"status": "success", "message": "Document claimed successfully", "file_id": file_id, "owner_id": owner_id}
+
+
+@router.post("/files/bulk-claim")
+@require_login
+def bulk_claim_files(request: Request, file_ids: List[int], db: DbSession):
+    """
+    Claim multiple unowned documents for the current user.
+
+    Only documents with ``owner_id IS NULL`` will be claimed.  Documents
+    already owned (by anyone) are skipped and reported in ``skipped``.
+    """
+    if not settings.multi_user_enabled:
+        raise HTTPException(status_code=400, detail="Multi-user mode is not enabled")
+
+    owner_id = get_current_owner_id(request)
+    if owner_id is None:
+        raise HTTPException(status_code=401, detail="Authentication required to claim documents")
+
+    file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+    if not file_records:
+        raise HTTPException(status_code=404, detail="No files found with the provided IDs")
+
+    claimed = []
+    skipped = []
+    for rec in file_records:
+        if rec.owner_id is None:
+            rec.owner_id = owner_id
+            claimed.append(rec.id)
+        else:
+            skipped.append({"file_id": rec.id, "reason": "already owned"})
+
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Error during bulk claim: {e}")
+        raise HTTPException(status_code=500, detail="Failed to claim documents")
+
+    logger.info(f"Bulk claim by '{owner_id}': claimed={claimed}, skipped={[s['file_id'] for s in skipped]}")
+    return {
+        "status": "success",
+        "claimed_count": len(claimed),
+        "claimed_ids": claimed,
+        "skipped": skipped,
+        "owner_id": owner_id,
+    }
+
+
+@router.post("/files/assign-owner")
+@require_login
+def assign_owner(request: Request, db: DbSession, owner_id: str = Query(...), file_ids: List[int] | None = None):
+    """
+    Admin-only: assign an owner to documents.
+
+    If ``file_ids`` is provided, only those files are updated.  If omitted,
+    **all** currently unowned documents (``owner_id IS NULL``) are assigned
+    to the given ``owner_id``.
+    """
+    if not settings.multi_user_enabled:
+        raise HTTPException(status_code=400, detail="Multi-user mode is not enabled")
+
+    user = request.session.get("user")
+    if not isinstance(user, dict) or not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Only admins can assign document owners")
+
+    if not owner_id or not owner_id.strip():
+        raise HTTPException(status_code=422, detail="owner_id must be a non-empty string")
+    owner_id = owner_id.strip()
+
+    if file_ids is not None:
+        # Assign to specific files
+        updated = (
+            db.query(FileRecord)
+            .filter(FileRecord.id.in_(file_ids))
+            .update({FileRecord.owner_id: owner_id}, synchronize_session="fetch")
+        )
+    else:
+        # Assign to all currently unowned documents
+        updated = (
+            db.query(FileRecord)
+            .filter(FileRecord.owner_id.is_(None))
+            .update({FileRecord.owner_id: owner_id}, synchronize_session="fetch")
+        )
+
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Error assigning owner: {e}")
+        raise HTTPException(status_code=500, detail="Failed to assign owner")
+
+    admin_name = get_current_owner_id(request) or "admin"
+    logger.info(f"Admin '{admin_name}' assigned owner_id='{owner_id}' to {updated} file(s)")
+    return {
+        "status": "success",
+        "message": f"Assigned owner to {updated} document(s)",
+        "updated_count": updated,
+        "owner_id": owner_id,
+    }

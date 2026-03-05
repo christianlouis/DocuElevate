@@ -100,6 +100,29 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "unowned_docs_visible_to_all": {
+        "category": "Authentication",
+        "description": (
+            "In multi-user mode, controls whether documents without an owner are visible to all users. "
+            "When True, unowned documents appear alongside each user's own files. "
+            "When False, only admins can see unowned documents."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "default_owner_id": {
+        "category": "Authentication",
+        "description": (
+            "Automatically assigns this owner ID to newly ingested documents that would otherwise "
+            "have no owner. Leave empty to keep documents unowned until claimed."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "session_secret": {
         "category": "Authentication",
         "description": "Secret key for session encryption (min 32 characters)",
