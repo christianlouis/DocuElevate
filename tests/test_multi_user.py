@@ -47,7 +47,7 @@ def mu_session(mu_engine):
     session.close()
 
 
-def _make_file(session, owner_id=None, filename="test.pdf"):
+def _create_file_record(session, owner_id=None, filename="test.pdf"):
     """Helper to insert a minimal FileRecord."""
     rec = FileRecord(
         filehash="abc123",
@@ -87,21 +87,21 @@ class TestFileRecordOwnerField:
     @pytest.mark.unit
     def test_owner_id_defaults_to_none(self, mu_session):
         """FileRecord created without owner_id should have None."""
-        rec = _make_file(mu_session)
+        rec = _create_file_record(mu_session)
         assert rec.owner_id is None
 
     @pytest.mark.unit
     def test_owner_id_stores_value(self, mu_session):
         """FileRecord created with owner_id should persist it."""
-        rec = _make_file(mu_session, owner_id="user@example.com")
+        rec = _create_file_record(mu_session, owner_id="user@example.com")
         assert rec.owner_id == "user@example.com"
 
     @pytest.mark.unit
     def test_owner_id_filterable(self, mu_session):
         """Can query FileRecord by owner_id."""
-        _make_file(mu_session, owner_id="alice")
-        _make_file(mu_session, owner_id="bob")
-        _make_file(mu_session, owner_id=None)
+        _create_file_record(mu_session, owner_id="alice")
+        _create_file_record(mu_session, owner_id="bob")
+        _create_file_record(mu_session, owner_id=None)
 
         alice_files = mu_session.query(FileRecord).filter(FileRecord.owner_id == "alice").all()
         assert len(alice_files) == 1
@@ -171,9 +171,9 @@ class TestApplyOwnerFilter:
         """When multi_user_enabled=False, all files are returned."""
         from app.utils.user_scope import apply_owner_filter
 
-        _make_file(mu_session, owner_id="alice")
-        _make_file(mu_session, owner_id="bob")
-        _make_file(mu_session, owner_id=None)
+        _create_file_record(mu_session, owner_id="alice")
+        _create_file_record(mu_session, owner_id="bob")
+        _create_file_record(mu_session, owner_id=None)
 
         request = _mock_request(user={"preferred_username": "alice"})
         query = mu_session.query(FileRecord)
@@ -188,9 +188,9 @@ class TestApplyOwnerFilter:
         """When multi_user_enabled=True, only user's files are returned."""
         from app.utils.user_scope import apply_owner_filter
 
-        _make_file(mu_session, owner_id="alice")
-        _make_file(mu_session, owner_id="bob")
-        _make_file(mu_session, owner_id=None)
+        _create_file_record(mu_session, owner_id="alice")
+        _create_file_record(mu_session, owner_id="bob")
+        _create_file_record(mu_session, owner_id=None)
 
         request = _mock_request(user={"preferred_username": "alice"})
         query = mu_session.query(FileRecord)
@@ -207,9 +207,9 @@ class TestApplyOwnerFilter:
         """Admin users bypass the owner filter in multi-user mode."""
         from app.utils.user_scope import apply_owner_filter
 
-        _make_file(mu_session, owner_id="alice")
-        _make_file(mu_session, owner_id="bob")
-        _make_file(mu_session, owner_id=None)
+        _create_file_record(mu_session, owner_id="alice")
+        _create_file_record(mu_session, owner_id="bob")
+        _create_file_record(mu_session, owner_id=None)
 
         request = _mock_request(user={"preferred_username": "admin", "is_admin": True})
         query = mu_session.query(FileRecord)
@@ -224,7 +224,7 @@ class TestApplyOwnerFilter:
         """When no user is logged in and multi-user is enabled, return empty."""
         from app.utils.user_scope import apply_owner_filter
 
-        _make_file(mu_session, owner_id="alice")
+        _create_file_record(mu_session, owner_id="alice")
 
         request = _mock_request(user=None)
         query = mu_session.query(FileRecord)
@@ -319,8 +319,8 @@ class TestFilesAPIMultiUser:
     @pytest.mark.integration
     def test_list_files_unscoped_single_user(self, client, db_session):
         """In single-user mode all files are visible."""
-        _make_file(db_session, owner_id="alice", filename="a.pdf")
-        _make_file(db_session, owner_id="bob", filename="b.pdf")
+        _create_file_record(db_session, owner_id="alice", filename="a.pdf")
+        _create_file_record(db_session, owner_id="bob", filename="b.pdf")
 
         with _patch_multi_user(False):
             response = client.get("/api/files")
@@ -332,8 +332,8 @@ class TestFilesAPIMultiUser:
     @pytest.mark.integration
     def test_list_files_scoped_multi_user(self, client, db_session):
         """In multi-user mode only the user's files should be returned."""
-        _make_file(db_session, owner_id="alice", filename="a.pdf")
-        _make_file(db_session, owner_id="bob", filename="b.pdf")
+        _create_file_record(db_session, owner_id="alice", filename="a.pdf")
+        _create_file_record(db_session, owner_id="bob", filename="b.pdf")
 
         with _patch_multi_user(True):
             # Without a real session, the filter will return no results
@@ -347,7 +347,7 @@ class TestFilesAPIMultiUser:
     @pytest.mark.integration
     def test_get_file_detail_respects_scope(self, client, db_session):
         """File detail endpoint should return 404 for files owned by other users."""
-        rec = _make_file(db_session, owner_id="alice", filename="a.pdf")
+        rec = _create_file_record(db_session, owner_id="alice", filename="a.pdf")
 
         with _patch_multi_user(True):
             response = client.get(f"/api/files/{rec.id}")
@@ -357,7 +357,7 @@ class TestFilesAPIMultiUser:
     @pytest.mark.integration
     def test_get_file_detail_single_user_mode(self, client, db_session):
         """File detail endpoint should work normally in single-user mode."""
-        rec = _make_file(db_session, owner_id="alice", filename="a.pdf")
+        rec = _create_file_record(db_session, owner_id="alice", filename="a.pdf")
 
         with _patch_multi_user(False):
             response = client.get(f"/api/files/{rec.id}")

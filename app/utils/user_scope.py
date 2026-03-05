@@ -11,6 +11,7 @@ import logging
 
 from fastapi import Request
 from sqlalchemy.orm import Query
+from sqlalchemy.sql import false
 
 from app.config import settings
 from app.models import FileRecord
@@ -66,6 +67,6 @@ def apply_owner_filter(query: Query, request: Request) -> Query:
     owner_id = get_current_owner_id(request)
     if owner_id is None:
         # No authenticated user — return empty result set
-        return query.filter(FileRecord.id < 0)
+        return query.filter(false())
 
     return query.filter(FileRecord.owner_id == owner_id)

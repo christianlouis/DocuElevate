@@ -19,7 +19,7 @@ depends_on: Union[str, None] = None
 
 def upgrade() -> None:
     """Add owner_id column to files table for multi-user document isolation."""
-    op.add_column("files", sa.Column("owner_id", sa.String(), nullable=True))
+    op.add_column("files", sa.Column("owner_id", sa.String(255), nullable=True))
     op.create_index("ix_files_owner_id", "files", ["owner_id"])
 
 

@@ -28,6 +28,7 @@ from app.utils.file_queries import apply_status_filter
 from app.utils.file_status import get_files_processing_status
 from app.utils.filename_utils import sanitize_filename
 from app.utils.input_validation import validate_search_query, validate_sort_field, validate_sort_order
+from app.utils.user_scope import apply_owner_filter, get_current_owner_id
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -100,8 +101,6 @@ def list_files_api(
     search = validate_search_query(search)
 
     # Start with base query, scoped to the current user in multi-user mode
-    from app.utils.user_scope import apply_owner_filter
-
     query = db.query(FileRecord)
     query = apply_owner_filter(query, request)
 
@@ -245,8 +244,6 @@ def get_file_details(request: Request, file_id: int, db: DbSession):
     Get detailed information about a specific file including processing history.
     """
     # Find the file record, scoped to the current user in multi-user mode
-    from app.utils.user_scope import apply_owner_filter
-
     query = db.query(FileRecord).filter(FileRecord.id == file_id)
     query = apply_owner_filter(query, request)
     file_record = query.first()
@@ -308,8 +305,6 @@ def delete_file_record(request: Request, file_id: int, db: DbSession):
 
     try:
         # Find the file record, scoped to the current user in multi-user mode
-        from app.utils.user_scope import apply_owner_filter
-
         query = db.query(FileRecord).filter(FileRecord.id == file_id)
         query = apply_owner_filter(query, request)
         file_record = query.first()
@@ -1298,8 +1293,6 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
     file_ext = os.path.splitext(target_path)[1].lower()
 
     # Determine the owner_id for multi-user document isolation
-    from app.utils.user_scope import get_current_owner_id
-
     upload_owner_id = get_current_owner_id(request) if settings.multi_user_enabled else None
 
     # Check if it's a PDF by extension or MIME type
