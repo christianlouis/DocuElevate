@@ -290,6 +290,74 @@
                       {% endfor %}
                     </div>
                     <p class="mt-1 text-xs text-gray-400">Effective value: <code x-text="formData['{{ setting.key }}'] || '(none)'"></code></p>
+                    {% elif setting.metadata.type == 'user_autocomplete' %}
+                    <!-- User Autocomplete -->
+                    <div class="relative" x-data="userAutocomplete('{{ setting.key }}')" @click.away="showSuggestions = false">
+                      <div class="relative">
+                        <input
+                          type="text"
+                          id="{{ setting.key }}"
+                          name="{{ setting.key }}"
+                          x-model="formData['{{ setting.key }}']"
+                          @input.debounce.250ms="fetchSuggestions($event.target.value)"
+                          @focus="if (formData['{{ setting.key }}']) fetchSuggestions(formData['{{ setting.key }}']); else fetchSuggestions('')"
+                          @keydown.arrow-down.prevent="highlightNext()"
+                          @keydown.arrow-up.prevent="highlightPrev()"
+                          @keydown.enter.prevent="selectHighlighted()"
+                          @keydown.escape="showSuggestions = false"
+                          class="setting-input w-full px-3 py-2 pl-9 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="Start typing to search users…"
+                          autocomplete="off"
+                          role="combobox"
+                          aria-autocomplete="list"
+                          :aria-expanded="showSuggestions && suggestions.length > 0"
+                          aria-haspopup="listbox"
+                          :aria-activedescendant="highlightedIdx >= 0 ? '{{ setting.key }}_opt_' + highlightedIdx : ''"
+                        />
+                        <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                          <i class="fas fa-user text-gray-400 text-sm" aria-hidden="true"></i>
+                        </div>
+                        <div x-show="loading" class="absolute inset-y-0 right-0 flex items-center pr-3">
+                          <i class="fas fa-spinner fa-spin text-gray-400 text-sm" aria-hidden="true"></i>
+                        </div>
+                      </div>
+                      <!-- Suggestion dropdown -->
+                      <ul
+                        x-show="showSuggestions && suggestions.length > 0"
+                        x-transition:enter="transition ease-out duration-100"
+                        x-transition:enter-start="opacity-0 -translate-y-1"
+                        x-transition:enter-end="opacity-100 translate-y-0"
+                        class="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto"
+                        role="listbox"
+                        :id="'{{ setting.key }}_listbox'"
+                      >
+                        <template x-for="(user, idx) in suggestions" :key="user">
+                          <li
+                            :id="'{{ setting.key }}_opt_' + idx"
+                            role="option"
+                            :aria-selected="highlightedIdx === idx"
+                            @mouseenter="highlightedIdx = idx"
+                            @click="selectUser(user)"
+                            class="px-3 py-2 text-sm cursor-pointer flex items-center gap-2"
+                            :class="highlightedIdx === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'"
+                          >
+                            <i class="fas fa-user-circle text-gray-400" aria-hidden="true"></i>
+                            <span x-text="user"></span>
+                          </li>
+                        </template>
+                      </ul>
+                      <!-- Empty state -->
+                      <div
+                        x-show="showSuggestions && suggestions.length === 0 && !loading && searchDone"
+                        class="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg px-3 py-2 text-sm text-gray-500"
+                      >
+                        <i class="fas fa-info-circle mr-1" aria-hidden="true"></i> No matching users found
+                      </div>
+                      <p class="text-xs text-gray-400 mt-1">
+                        <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
+                        Type to search existing users by name, or enter any identifier manually.
+                      </p>
+                    </div>
                     {% elif setting.metadata.type == 'model_picker' %}
                     <!-- Model Picker -->
                     <div class="relative">
@@ -708,6 +776,64 @@ function settingsApp() {
         this.showErrorAlert('Error', 'Failed to save settings. Please try again.');
       } finally {
         this.saving = false;
+      }
+    }
+  };
+}
+
+/**
+ * Alpine.js component for the user-autocomplete setting widget.
+ * Fetches matching owner_id values from GET /api/users/search?q=<term>&limit=5
+ * and displays them in a dropdown list.
+ */
+function userAutocomplete(settingKey) {
+  return {
+    suggestions: [],
+    showSuggestions: false,
+    loading: false,
+    searchDone: false,
+    highlightedIdx: -1,
+
+    async fetchSuggestions(query) {
+      this.loading = true;
+      this.searchDone = false;
+      this.highlightedIdx = -1;
+      try {
+        const resp = await fetch('/api/users/search?q=' + encodeURIComponent(query || '') + '&limit=5');
+        if (resp.ok) {
+          const data = await resp.json();
+          this.suggestions = data.users || [];
+        } else {
+          this.suggestions = [];
+        }
+      } catch {
+        this.suggestions = [];
+      }
+      this.loading = false;
+      this.searchDone = true;
+      this.showSuggestions = true;
+    },
+
+    selectUser(user) {
+      this.formData[settingKey] = user;
+      this.showSuggestions = false;
+    },
+
+    highlightNext() {
+      if (this.suggestions.length === 0) return;
+      this.highlightedIdx = (this.highlightedIdx + 1) % this.suggestions.length;
+    },
+
+    highlightPrev() {
+      if (this.suggestions.length === 0) return;
+      this.highlightedIdx = this.highlightedIdx <= 0 ? this.suggestions.length - 1 : this.highlightedIdx - 1;
+    },
+
+    selectHighlighted() {
+      if (this.highlightedIdx >= 0 && this.highlightedIdx < this.suggestions.length) {
+        this.selectUser(this.suggestions[this.highlightedIdx]);
+      } else {
+        this.showSuggestions = false;
       }
     }
   };

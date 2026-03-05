@@ -48,6 +48,7 @@ Settings are organized into logical categories for easy navigation:
 - **Dropdown**: Predefined option lists (e.g., PDF/A format, S3 storage class, S3 ACL)
 - **Multi-select**: Comma-separated selections from a list (e.g., OCR providers)
 - **Model Picker**: Free-text with suggested model names (e.g., AI model selection)
+- **User Autocomplete**: Typeahead search for existing user identifiers (e.g., default owner assignment)
 - **List**: Comma-separated values (notification URLs, CORS origins)
 
 ### Sensitive Data

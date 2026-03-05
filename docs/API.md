@@ -614,6 +614,118 @@ curl -X POST "http://<your-instance>/api/files/bulk-download" \
 **Error Responses**:
 - `404`: No files found with the provided IDs, or none of the selected files exist on disk
 
+### Document Ownership (Multi-User Mode)
+
+These endpoints are available when `MULTI_USER_ENABLED=true`.
+
+---
+
+**POST** `/api/files/{file_id}/claim`
+
+Claim an unclaimed document (owner_id is NULL) for the current user.
+
+```bash
+curl -X POST "http://<your-instance>/api/files/42/claim"
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "message": "Document claimed successfully",
+  "file_id": 42,
+  "owner_id": "alice@example.com"
+}
+```
+
+**Error Responses**:
+- `400`: Multi-user mode is not enabled
+- `401`: Authentication required
+- `403`: Document is already owned by another user
+
+---
+
+**POST** `/api/files/bulk-claim`
+
+Claim multiple unclaimed documents at once. Already-owned documents are skipped.
+
+**Request body**: JSON array of file IDs
+
+```bash
+curl -X POST "http://<your-instance>/api/files/bulk-claim" \
+  -H "Content-Type: application/json" \
+  -d '[1, 2, 3]'
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "claimed_count": 2,
+  "claimed_ids": [1, 3],
+  "skipped": [{"file_id": 2, "reason": "already owned"}],
+  "owner_id": "alice@example.com"
+}
+```
+
+---
+
+**POST** `/api/files/assign-owner`
+
+**Admin only.** Assign an owner to documents. If `file_ids` body is omitted, assigns all
+currently unclaimed documents to the specified owner.
+
+**Query Parameters**:
+- `owner_id` (required): The user identifier to assign
+
+**Request body** (optional): JSON array of specific file IDs
+
+```bash
+# Assign all unclaimed documents to a user
+curl -X POST "http://<your-instance>/api/files/assign-owner?owner_id=alice@example.com"
+
+# Assign specific files
+curl -X POST "http://<your-instance>/api/files/assign-owner?owner_id=alice@example.com" \
+  -H "Content-Type: application/json" \
+  -d '[1, 2, 3]'
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "message": "Assigned owner to 5 document(s)",
+  "updated_count": 5,
+  "owner_id": "alice@example.com"
+}
+```
+
+**Error Responses**:
+- `400`: Multi-user mode is not enabled
+- `403`: Only admins can assign document owners
+
+---
+
+**GET** `/api/users/search`
+
+Search known user identifiers from existing documents. Powers the autocomplete widget
+in the settings page for the `DEFAULT_OWNER_ID` field.
+
+**Query Parameters**:
+- `q` (optional): Substring to match against known owner IDs (case-insensitive)
+- `limit` (optional): Maximum results to return (default: 5, max: 20)
+
+```bash
+curl "http://<your-instance>/api/users/search?q=risti&limit=5"
+```
+
+**Response**:
+```json
+{
+  "users": ["christianlouis"]
+}
+```
+
 ### File Preview
 
 **GET** `/api/files/{file_id}/preview`

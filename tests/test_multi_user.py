@@ -453,7 +453,7 @@ class TestUnownedDocsConfig:
 
         assert "default_owner_id" in SETTING_METADATA
         meta = SETTING_METADATA["default_owner_id"]
-        assert meta["type"] == "string"
+        assert meta["type"] == "user_autocomplete"
 
 
 # ---------------------------------------------------------------------------
@@ -615,3 +615,70 @@ class TestAssignOwnerUnit:
         mu_session.refresh(rec2)
         assert rec1.owner_id == "charlie"
         assert rec2.owner_id == "charlie"
+
+
+# ---------------------------------------------------------------------------
+# User search endpoint tests
+# ---------------------------------------------------------------------------
+
+
+class TestUserSearchEndpoint:
+    """Tests for GET /api/users/search."""
+
+    @pytest.mark.integration
+    def test_search_returns_known_users(self, client, db_session):
+        """Search should return distinct owner_ids from file records."""
+        _create_file_record(db_session, owner_id="alice", filename="a.pdf")
+        _create_file_record(db_session, owner_id="bob", filename="b.pdf")
+        _create_file_record(db_session, owner_id="alice", filename="a2.pdf")  # duplicate owner
+        _create_file_record(db_session, owner_id=None, filename="c.pdf")  # unowned
+
+        response = client.get("/api/users/search?q=")
+        assert response.status_code == 200
+        data = response.json()
+        assert "users" in data
+        # Should contain alice and bob (not None)
+        assert set(data["users"]) == {"alice", "bob"}
+
+    @pytest.mark.integration
+    def test_search_filters_by_substring(self, client, db_session):
+        """Search should filter by case-insensitive substring."""
+        _create_file_record(db_session, owner_id="christianlouis", filename="a.pdf")
+        _create_file_record(db_session, owner_id="bob", filename="b.pdf")
+        _create_file_record(db_session, owner_id="alice", filename="c.pdf")
+
+        response = client.get("/api/users/search?q=risti")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["users"] == ["christianlouis"]
+
+    @pytest.mark.integration
+    def test_search_respects_limit(self, client, db_session):
+        """Search should respect the limit parameter."""
+        for i in range(10):
+            _create_file_record(db_session, owner_id=f"user_{i:02d}", filename=f"file_{i}.pdf")
+
+        response = client.get("/api/users/search?q=user&limit=3")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["users"]) == 3
+
+    @pytest.mark.integration
+    def test_search_empty_when_no_matches(self, client, db_session):
+        """Search with no matches should return empty list."""
+        _create_file_record(db_session, owner_id="alice", filename="a.pdf")
+
+        response = client.get("/api/users/search?q=zzzzz")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["users"] == []
+
+    @pytest.mark.integration
+    def test_search_case_insensitive(self, client, db_session):
+        """Search should be case-insensitive."""
+        _create_file_record(db_session, owner_id="ChristianLouis", filename="a.pdf")
+
+        response = client.get("/api/users/search?q=CHRISTIAN")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["users"] == ["ChristianLouis"]

@@ -163,6 +163,37 @@ Requires `AUTH_ENABLED=true`.
 |-----------------------------|---------------------------------------------------------------------------------|-------------|
 | `MULTI_USER_ENABLED`        | Enable multi-user mode with individual document spaces per user.               | `false`     |
 | `DEFAULT_DAILY_UPLOAD_LIMIT`| Maximum document uploads allowed per user per day. `0` = unlimited.            | `0`         |
+| `UNOWNED_DOCS_VISIBLE_TO_ALL` | Show unclaimed documents (no owner) to all users. When `false`, only admins see them. | `true` |
+| `DEFAULT_OWNER_ID`          | Automatically assign this owner to newly ingested documents without a session (e.g. IMAP, API). Leave empty to keep unowned. | *(empty)* |
+
+#### Unclaimed Documents
+
+Documents ingested without a user session (e.g. via IMAP polling, API calls without authentication,
+or legacy imports) have `owner_id = NULL`. These are called **unclaimed** documents.
+
+- When `UNOWNED_DOCS_VISIBLE_TO_ALL=true` (default), every authenticated user sees unclaimed
+  documents alongside their own files. This allows users to discover and claim them.
+- When `UNOWNED_DOCS_VISIBLE_TO_ALL=false`, only admins can see unclaimed documents.
+
+#### Claiming Documents
+
+Users can claim unclaimed documents via the API:
+
+- **`POST /api/files/{file_id}/claim`** — Claim a single unclaimed document.
+- **`POST /api/files/bulk-claim`** — Claim multiple unclaimed documents at once.
+
+Only documents with `owner_id = NULL` can be claimed. Already-owned documents cannot be claimed
+by another user.
+
+#### Admin Owner Assignment
+
+Admins can assign ownership of documents to any user:
+
+- **`POST /api/files/assign-owner?owner_id=<user_id>`** — Assign all unclaimed documents to
+  the specified user, or pass a `file_ids` JSON body to assign specific files.
+
+The `DEFAULT_OWNER_ID` setting can also be configured via the Settings page, which provides an
+autocomplete field that searches existing users by substring.
 
 ### Security Headers
 

@@ -116,9 +116,10 @@ SETTING_METADATA = {
         "category": "Authentication",
         "description": (
             "Automatically assigns this owner ID to newly ingested documents that would otherwise "
-            "have no owner. Leave empty to keep documents unowned until claimed."
+            "have no owner. Start typing to search existing users, or leave empty to keep documents "
+            "unowned until claimed."
         ),
-        "type": "string",
+        "type": "user_autocomplete",
         "sensitive": False,
         "required": False,
         "restart_required": False,
