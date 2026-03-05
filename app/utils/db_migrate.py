@@ -82,6 +82,7 @@ def preview_migration(source_url: str) -> dict[str, Any]:
         total = 0
         with src_engine.connect() as conn:
             for table_name in tables:
+                # table_name is safe — sourced from inspect().get_table_names(), not user input
                 row = conn.execute(text(f'SELECT COUNT(*) FROM "{table_name}"')).fetchone()  # noqa: S608
                 count = row[0] if row else 0
                 result.append({"name": table_name, "row_count": count})
@@ -182,6 +183,8 @@ def migrate_data(
                 total_for_table = len(rows)
                 for i in range(0, total_for_table, batch_size):
                     batch = rows[i : i + batch_size]
+                    # strict=False: column count should always match, but tolerate
+                    # minor schema drift (e.g. extra columns) to avoid crashing mid-migration.
                     insert_data = [dict(zip(column_names, row, strict=False)) for row in batch]
                     tgt_session.execute(tgt_table.insert(), insert_data)
                     tgt_session.commit()

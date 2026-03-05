@@ -31,7 +31,7 @@ class TestDatabaseApiEndpoints:
     def test_build_url_sqlite(self, client):
         """Test building a SQLite URL as admin."""
         # Simulate admin session
-        with client.session_transaction() if hasattr(client, "session_transaction") else _noop():
+        with client.session_transaction() if hasattr(client, "session_transaction") else _NoOpContextManager():
             pass
         # Use the session cookie approach
         client.cookies.set("session", "test")
@@ -148,7 +148,9 @@ class TestDatabaseWizardView:
 
 
 # Context manager helper for tests that don't need session_transaction
-class _noop:
+class _NoOpContextManager:
+    """Dummy context manager for tests that don't need session_transaction."""
+
     def __enter__(self):
         return None
 

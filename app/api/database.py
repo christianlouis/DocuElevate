@@ -162,8 +162,9 @@ async def execute_migration(body: MigrateRequest, request: Request) -> dict:
 
     result = migrate_data(body.source_url, body.target_url)
     if not result["success"]:
+        error_summary = "; ".join(result.get("errors", ["Unknown error"]))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"message": "Migration completed with errors", **result},
+            detail=f"Migration completed with errors: {error_summary}",
         )
     return result

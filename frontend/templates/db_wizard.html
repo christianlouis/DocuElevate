@@ -411,7 +411,7 @@
 
           {# Migration progress / result #}
           <div x-show="migrateLoading" class="mt-4" role="status" aria-live="polite">
-            <div class="w-full bg-gray-200 rounded-full h-3">
+            <div class="w-full bg-gray-200 rounded-full h-3" role="progressbar" aria-label="Migration in progress" aria-valuetext="Migrating data">
               <div class="bg-indigo-600 h-3 rounded-full animate-pulse-bar" style="width:100%"></div>
             </div>
             <p class="text-sm text-gray-600 mt-2">Migration in progress — please do not close this page…</p>
