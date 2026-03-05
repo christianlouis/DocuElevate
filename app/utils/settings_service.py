@@ -360,7 +360,7 @@ SETTING_METADATA = {
     "azure_region": {
         "category": "AI Services",
         "description": "Azure region for Document Intelligence services (e.g., eastus)",
-        "type": "string",
+        "type": "autocomplete",
         "sensitive": False,
         "required": False,
         "restart_required": False,
@@ -412,8 +412,11 @@ SETTING_METADATA = {
     },
     "tesseract_language": {
         "category": "OCR Engines",
-        "description": "Tesseract language code(s), e.g. 'eng' or 'eng+deu'. Default: eng+deu (English + German).",
-        "type": "string",
+        "description": (
+            "Tesseract language code(s), e.g. 'eng' or 'eng+deu'. "
+            "Combine multiple with '+'. Default: eng+deu (English + German)."
+        ),
+        "type": "autocomplete",
         "sensitive": False,
         "required": False,
         "restart_required": False,
@@ -421,8 +424,8 @@ SETTING_METADATA = {
     # OCR – EasyOCR
     "easyocr_languages": {
         "category": "OCR Engines",
-        "description": "Comma-separated EasyOCR language codes, e.g. 'en,de,fr'. Default: en,de (English + German).",
-        "type": "string",
+        "description": ("Comma-separated EasyOCR language codes, e.g. 'en,de,fr'. Default: en,de (English + German)."),
+        "type": "autocomplete",
         "sensitive": False,
         "required": False,
         "restart_required": False,
@@ -853,7 +856,7 @@ SETTING_METADATA = {
     "aws_region": {
         "category": "Storage Providers",
         "description": "AWS region for S3 bucket (default: us-east-1)",
-        "type": "string",
+        "type": "autocomplete",
         "sensitive": False,
         "required": False,
         "restart_required": False,
@@ -1476,7 +1479,7 @@ SETTING_METADATA = {
             "Model name used for generating text embeddings via the OpenAI-compatible API. "
             "Embeddings drive the document similarity feature. Default: text-embedding-3-small."
         ),
-        "type": "string",
+        "type": "autocomplete",
         "sensitive": False,
         "required": False,
         "restart_required": False,

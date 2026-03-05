@@ -365,6 +365,80 @@
                         Type to search existing users by name, or enter any identifier manually.
                       </p>
                     </div>
+                    {% elif setting.metadata.type == 'autocomplete' %}
+                    <!-- Dynamic Autocomplete (WCAG 2.1 AA combobox pattern) -->
+                    <div class="relative" x-data="dynamicAutocomplete('{{ setting.key }}')" @click.away="showSuggestions = false">
+                      <div class="relative">
+                        <label for="{{ setting.key }}" class="sr-only">{{ setting.key.replace('_', ' ').title() }}</label>
+                        <input
+                          type="text"
+                          id="{{ setting.key }}"
+                          name="{{ setting.key }}"
+                          x-model="formData['{{ setting.key }}']"
+                          @input.debounce.200ms="fetchSuggestions($event.target.value)"
+                          @focus="fetchSuggestions(formData['{{ setting.key }}'] || '')"
+                          @keydown.arrow-down.prevent="highlightNext()"
+                          @keydown.arrow-up.prevent="highlightPrev()"
+                          @keydown.enter.prevent="selectHighlighted()"
+                          @keydown.escape="showSuggestions = false"
+                          class="setting-input w-full px-3 py-2 pl-9 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="Type to search or enter a value…"
+                          autocomplete="off"
+                          role="combobox"
+                          aria-autocomplete="list"
+                          aria-label="{{ setting.key.replace('_', ' ').title() }} — type to search suggestions"
+                          :aria-expanded="showSuggestions && filtered.length > 0"
+                          aria-haspopup="listbox"
+                          :aria-controls="'{{ setting.key }}_listbox'"
+                          :aria-activedescendant="highlightedIdx >= 0 ? '{{ setting.key }}_opt_' + highlightedIdx : ''"
+                        />
+                        <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                          <i class="fas fa-search text-gray-400 text-sm" aria-hidden="true"></i>
+                        </div>
+                        <div x-show="loading" class="absolute inset-y-0 right-0 flex items-center pr-3" aria-hidden="true">
+                          <i class="fas fa-spinner fa-spin text-gray-400 text-sm"></i>
+                        </div>
+                      </div>
+                      <!-- Live region for screen reader announcements -->
+                      <div class="sr-only" aria-live="polite" aria-atomic="true" x-text="statusText"></div>
+                      <!-- Suggestion dropdown -->
+                      <ul
+                        x-show="showSuggestions && filtered.length > 0"
+                        x-transition:enter="transition ease-out duration-100"
+                        x-transition:enter-start="opacity-0 -translate-y-1"
+                        x-transition:enter-end="opacity-100 translate-y-0"
+                        class="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto"
+                        role="listbox"
+                        :id="'{{ setting.key }}_listbox'"
+                        :aria-label="'{{ setting.key.replace('_', ' ').title() }} suggestions'"
+                      >
+                        <template x-for="(item, idx) in filtered" :key="item">
+                          <li
+                            :id="'{{ setting.key }}_opt_' + idx"
+                            role="option"
+                            :aria-selected="highlightedIdx === idx"
+                            @mouseenter="highlightedIdx = idx"
+                            @click="selectItem(item)"
+                            class="px-3 py-2.5 text-sm cursor-pointer min-h-[44px] flex items-center"
+                            :class="highlightedIdx === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'"
+                          >
+                            <span x-text="item"></span>
+                          </li>
+                        </template>
+                      </ul>
+                      <!-- Empty state -->
+                      <div
+                        x-show="showSuggestions && filtered.length === 0 && !loading && searchDone"
+                        class="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg px-3 py-2 text-sm text-gray-500"
+                        role="status"
+                      >
+                        <i class="fas fa-info-circle mr-1" aria-hidden="true"></i> No matches — you can still type a custom value
+                      </div>
+                      <p class="text-xs text-gray-400 mt-1">
+                        <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
+                        Type to search known values, or enter any custom value.
+                      </p>
+                    </div>
                     {% elif setting.metadata.type == 'model_picker' %}
                     <!-- Model Picker -->
                     <div class="relative">
@@ -853,6 +927,76 @@ function userAutocomplete(settingKey) {
     selectHighlighted() {
       if (this.highlightedIdx >= 0 && this.highlightedIdx < this.suggestions.length) {
         this.selectUser(this.suggestions[this.highlightedIdx]);
+      } else {
+        this.showSuggestions = false;
+      }
+    }
+  };
+}
+
+/**
+ * Alpine.js component for the generic dynamic autocomplete setting widget.
+ * Fetches suggestions from GET /api/settings/{key}/suggestions?q=<term>&limit=10
+ * using a debounced API call.  Implements the ARIA 1.1 combobox pattern.
+ */
+function dynamicAutocomplete(settingKey) {
+  return {
+    filtered: [],
+    showSuggestions: false,
+    loading: false,
+    searchDone: false,
+    highlightedIdx: -1,
+    statusText: '',
+
+    async fetchSuggestions(query) {
+      this.loading = true;
+      this.searchDone = false;
+      this.highlightedIdx = -1;
+      this.statusText = 'Searching…';
+      try {
+        const resp = await fetch('/api/settings/' + encodeURIComponent(settingKey) + '/suggestions?q=' + encodeURIComponent(query || '') + '&limit=10');
+        if (resp.ok) {
+          const data = await resp.json();
+          this.filtered = data.suggestions || [];
+        } else {
+          this.filtered = [];
+        }
+      } catch {
+        this.filtered = [];
+      }
+      this.loading = false;
+      this.searchDone = true;
+      this.showSuggestions = true;
+      if (this.filtered.length === 0) {
+        this.statusText = 'No matches found';
+      } else if (this.filtered.length === 1) {
+        this.statusText = '1 suggestion found';
+      } else {
+        this.statusText = this.filtered.length + ' suggestions found';
+      }
+    },
+
+    selectItem(item) {
+      this.formData[settingKey] = item;
+      this.showSuggestions = false;
+      this.statusText = item + ' selected';
+    },
+
+    highlightNext() {
+      if (this.filtered.length === 0) return;
+      this.highlightedIdx = (this.highlightedIdx + 1) % this.filtered.length;
+      this.statusText = this.filtered[this.highlightedIdx];
+    },
+
+    highlightPrev() {
+      if (this.filtered.length === 0) return;
+      this.highlightedIdx = this.highlightedIdx <= 0 ? this.filtered.length - 1 : this.highlightedIdx - 1;
+      this.statusText = this.filtered[this.highlightedIdx];
+    },
+
+    selectHighlighted() {
+      if (this.highlightedIdx >= 0 && this.highlightedIdx < this.filtered.length) {
+        this.selectItem(this.filtered[this.highlightedIdx]);
       } else {
         this.showSuggestions = false;
       }
