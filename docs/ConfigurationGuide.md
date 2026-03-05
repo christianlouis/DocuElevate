@@ -149,6 +149,21 @@ DocuElevate can monitor multiple IMAP mailboxes for document attachments. Each m
 | `AUTHENTIK_CONFIG_URL`  | Configuration URL for Authentik OpenID Connect.             |
 | `OAUTH_PROVIDER_NAME`   | Display name for the OAuth provider button.                  |
 
+### Multi-User Mode
+
+When multi-user mode is enabled, each authenticated user gets their own isolated document space.
+Uploads, search results, and file management are scoped to the individual user. Shared settings
+(AI configuration, OCR providers, storage destinations) remain global.
+
+Admin users (determined by `ADMIN_GROUP_NAME`) bypass the user filter and can see all documents.
+
+Requires `AUTH_ENABLED=true`.
+
+| **Variable**                | **Description**                                                                 | **Default** |
+|-----------------------------|---------------------------------------------------------------------------------|-------------|
+| `MULTI_USER_ENABLED`        | Enable multi-user mode with individual document spaces per user.               | `false`     |
+| `DEFAULT_DAILY_UPLOAD_LIMIT`| Maximum document uploads allowed per user per day. `0` = unlimited.            | `0`         |
+
 ### Security Headers
 
 DocuElevate supports HTTP security headers to improve browser-side security. **These headers are disabled by default** since most deployments use a reverse proxy (Traefik, Nginx, etc.) that already adds them. Enable only if deploying directly without a reverse proxy. See [Deployment Guide - Security Headers](DeploymentGuide.md#security-headers) for detailed configuration examples.
@@ -1058,6 +1073,10 @@ AUTHENTIK_CLIENT_ID=...
 AUTHENTIK_CLIENT_SECRET=...
 AUTHENTIK_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
 OAUTH_PROVIDER_NAME=Authentik SSO
+
+# Multi-user mode (requires AUTH_ENABLED=true)
+MULTI_USER_ENABLED=false
+DEFAULT_DAILY_UPLOAD_LIMIT=0
 
 # Storage services
 PAPERLESS_NGX_API_TOKEN=...

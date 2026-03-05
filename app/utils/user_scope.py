@@ -12,6 +12,7 @@ import logging
 from fastapi import Request
 from sqlalchemy.orm import Query
 
+from app.config import settings
 from app.models import FileRecord
 
 logger = logging.getLogger(__name__)
@@ -54,8 +55,6 @@ def apply_owner_filter(query: Query, request: Request) -> Query:
     Returns:
         The (possibly filtered) query.
     """
-    from app.config import settings
-
     if not settings.multi_user_enabled:
         return query
 
