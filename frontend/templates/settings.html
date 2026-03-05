@@ -291,9 +291,10 @@
                     </div>
                     <p class="mt-1 text-xs text-gray-400">Effective value: <code x-text="formData['{{ setting.key }}'] || '(none)'"></code></p>
                     {% elif setting.metadata.type == 'user_autocomplete' %}
-                    <!-- User Autocomplete -->
+                    <!-- User Autocomplete (WCAG 2.1 AA combobox pattern) -->
                     <div class="relative" x-data="userAutocomplete('{{ setting.key }}')" @click.away="showSuggestions = false">
                       <div class="relative">
+                        <label for="{{ setting.key }}" class="sr-only">{{ setting.key.replace('_', ' ').title() }}</label>
                         <input
                           type="text"
                           id="{{ setting.key }}"
@@ -310,17 +311,21 @@
                           autocomplete="off"
                           role="combobox"
                           aria-autocomplete="list"
+                          aria-label="{{ setting.key.replace('_', ' ').title() }} — search existing users"
                           :aria-expanded="showSuggestions && suggestions.length > 0"
                           aria-haspopup="listbox"
+                          :aria-controls="'{{ setting.key }}_listbox'"
                           :aria-activedescendant="highlightedIdx >= 0 ? '{{ setting.key }}_opt_' + highlightedIdx : ''"
                         />
                         <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                           <i class="fas fa-user text-gray-400 text-sm" aria-hidden="true"></i>
                         </div>
-                        <div x-show="loading" class="absolute inset-y-0 right-0 flex items-center pr-3">
-                          <i class="fas fa-spinner fa-spin text-gray-400 text-sm" aria-hidden="true"></i>
+                        <div x-show="loading" class="absolute inset-y-0 right-0 flex items-center pr-3" aria-hidden="true">
+                          <i class="fas fa-spinner fa-spin text-gray-400 text-sm"></i>
                         </div>
                       </div>
+                      <!-- Live region for screen reader announcements -->
+                      <div class="sr-only" aria-live="polite" aria-atomic="true" x-text="statusText"></div>
                       <!-- Suggestion dropdown -->
                       <ul
                         x-show="showSuggestions && suggestions.length > 0"
@@ -330,6 +335,7 @@
                         class="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto"
                         role="listbox"
                         :id="'{{ setting.key }}_listbox'"
+                        :aria-label="'{{ setting.key.replace('_', ' ').title() }} suggestions'"
                       >
                         <template x-for="(user, idx) in suggestions" :key="user">
                           <li
@@ -338,7 +344,7 @@
                             :aria-selected="highlightedIdx === idx"
                             @mouseenter="highlightedIdx = idx"
                             @click="selectUser(user)"
-                            class="px-3 py-2 text-sm cursor-pointer flex items-center gap-2"
+                            class="px-3 py-2.5 text-sm cursor-pointer flex items-center gap-2 min-h-[44px]"
                             :class="highlightedIdx === idx ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'"
                           >
                             <i class="fas fa-user-circle text-gray-400" aria-hidden="true"></i>
@@ -350,10 +356,11 @@
                       <div
                         x-show="showSuggestions && suggestions.length === 0 && !loading && searchDone"
                         class="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg px-3 py-2 text-sm text-gray-500"
+                        role="status"
                       >
                         <i class="fas fa-info-circle mr-1" aria-hidden="true"></i> No matching users found
                       </div>
-                      <p class="text-xs text-gray-400 mt-1">
+                      <p class="text-xs text-gray-400 mt-1" id="{{ setting.key }}_help">
                         <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
                         Type to search existing users by name, or enter any identifier manually.
                       </p>
@@ -783,6 +790,7 @@ function settingsApp() {
 
 /**
  * Alpine.js component for the user-autocomplete setting widget.
+ * Implements the ARIA 1.1 combobox pattern (WCAG 2.1 AA).
  * Fetches matching owner_id values from GET /api/users/search?q=<term>&limit=5
  * and displays them in a dropdown list.
  */
@@ -793,11 +801,13 @@ function userAutocomplete(settingKey) {
     loading: false,
     searchDone: false,
     highlightedIdx: -1,
+    statusText: '',
 
     async fetchSuggestions(query) {
       this.loading = true;
       this.searchDone = false;
       this.highlightedIdx = -1;
+      this.statusText = 'Searching…';
       try {
         const resp = await fetch('/api/users/search?q=' + encodeURIComponent(query || '') + '&limit=5');
         if (resp.ok) {
@@ -812,21 +822,32 @@ function userAutocomplete(settingKey) {
       this.loading = false;
       this.searchDone = true;
       this.showSuggestions = true;
+      // Announce result count to screen readers via live region
+      if (this.suggestions.length === 0) {
+        this.statusText = 'No matching users found';
+      } else if (this.suggestions.length === 1) {
+        this.statusText = '1 user found';
+      } else {
+        this.statusText = this.suggestions.length + ' users found';
+      }
     },
 
     selectUser(user) {
       this.formData[settingKey] = user;
       this.showSuggestions = false;
+      this.statusText = user + ' selected';
     },
 
     highlightNext() {
       if (this.suggestions.length === 0) return;
       this.highlightedIdx = (this.highlightedIdx + 1) % this.suggestions.length;
+      this.statusText = this.suggestions[this.highlightedIdx];
     },
 
     highlightPrev() {
       if (this.suggestions.length === 0) return;
       this.highlightedIdx = this.highlightedIdx <= 0 ? this.suggestions.length - 1 : this.highlightedIdx - 1;
+      this.statusText = this.suggestions[this.highlightedIdx];
     },
 
     selectHighlighted() {

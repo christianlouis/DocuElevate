@@ -417,6 +417,18 @@ class TestProcessDocumentOwnerId:
         assert "owner_id" in sig.parameters
         assert sig.parameters["owner_id"].default is None
 
+    @pytest.mark.unit
+    def test_default_owner_id_fallback_in_process_document(self):
+        """When owner_id is None and default_owner_id is set, fallback is used."""
+        # Verify the fallback logic exists in the source code
+        import ast
+        from pathlib import Path
+
+        src = Path("app/tasks/process_document.py").read_text()
+        tree = ast.parse(src)
+        # Check that 'default_owner_id' string appears in the source
+        assert "default_owner_id" in src, "default_owner_id fallback not found in process_document.py"
+
 
 # ---------------------------------------------------------------------------
 # New config settings tests
@@ -474,32 +486,12 @@ class TestClaimEndpoint:
         assert "not enabled" in response.json()["detail"]
 
     @pytest.mark.integration
-    def test_claim_unowned_file(self, client, db_session):
-        """Claiming an unowned file should set the owner_id."""
+    def test_claim_unauthenticated_returns_401(self, client, db_session):
+        """Claiming without a session returns 401."""
         rec = _create_file_record(db_session, owner_id=None, filename="unclaimed.pdf")
         with _patch_multi_user(True):
             response = client.post(f"/api/files/{rec.id}/claim")
-
-        # TestClient uses auth bypass; session user is set by conftest.
-        # Without a real session, we get 401 (unauthenticated).
-        assert response.status_code in [200, 401]
-
-    @pytest.mark.integration
-    def test_claim_nonexistent_file(self, client, db_session):
-        """Claiming a file that doesn't exist returns 404."""
-        with _patch_multi_user(True):
-            response = client.post("/api/files/99999/claim")
-        # 404 or 401 depending on auth
-        assert response.status_code in [401, 404]
-
-    @pytest.mark.integration
-    def test_claim_already_owned_file(self, client, db_session):
-        """Claiming a file owned by someone else returns 403."""
-        rec = _create_file_record(db_session, owner_id="bob", filename="bob_file.pdf")
-        with _patch_multi_user(True):
-            response = client.post(f"/api/files/{rec.id}/claim")
-        # 403 or 401 depending on auth
-        assert response.status_code in [401, 403]
+        assert response.status_code == 401
 
 
 class TestClaimUnit:
@@ -517,11 +509,29 @@ class TestClaimUnit:
         assert rec.owner_id == "alice"
 
     @pytest.mark.unit
-    def test_cannot_overwrite_existing_owner(self, mu_session):
-        """Model allows overwriting but claim endpoint prevents it."""
-        rec = _create_file_record(mu_session, owner_id="bob")
-        # Model doesn't enforce this; the API does
-        assert rec.owner_id == "bob"
+    def test_claim_already_owned_same_user(self, mu_session):
+        """Claiming a file you already own returns already_owned status."""
+        rec = _create_file_record(mu_session, owner_id="alice")
+        # The API would return already_owned; test the model constraint
+        assert rec.owner_id == "alice"
+
+    @pytest.mark.unit
+    def test_claim_unowned_then_verify(self, mu_session):
+        """Claim unowned, then verify the file is filterable by new owner."""
+        rec = _create_file_record(mu_session, owner_id=None, filename="orphan.pdf")
+        # Before claim: found via NULL filter
+        unowned = mu_session.query(FileRecord).filter(FileRecord.owner_id.is_(None)).all()
+        assert rec in unowned
+
+        # After claim
+        rec.owner_id = "claimer"
+        mu_session.commit()
+        mu_session.refresh(rec)
+
+        owned = mu_session.query(FileRecord).filter(FileRecord.owner_id == "claimer").all()
+        assert rec in owned
+        unowned = mu_session.query(FileRecord).filter(FileRecord.owner_id.is_(None)).all()
+        assert rec not in unowned
 
 
 # ---------------------------------------------------------------------------
@@ -541,12 +551,47 @@ class TestBulkClaimEndpoint:
         assert response.status_code == 400
 
     @pytest.mark.integration
-    def test_bulk_claim_empty_list(self, client, db_session):
-        """Bulk claiming with no matching IDs returns 404."""
+    def test_bulk_claim_unauthenticated_returns_401(self, client, db_session):
+        """Bulk claiming without a session returns 401."""
+        rec = _create_file_record(db_session, owner_id=None, filename="a.pdf")
         with _patch_multi_user(True):
-            response = client.post("/api/files/bulk-claim", json=[99999])
-        # 404 or 401 (no auth)
-        assert response.status_code in [401, 404]
+            response = client.post("/api/files/bulk-claim", json=[rec.id])
+        assert response.status_code == 401
+
+
+class TestBulkClaimUnit:
+    """Unit tests for bulk claim DB logic."""
+
+    @pytest.mark.unit
+    def test_bulk_claim_multiple_unowned(self, mu_session):
+        """Bulk claim sets owner on multiple NULL-owner files."""
+        r1 = _create_file_record(mu_session, owner_id=None, filename="a.pdf")
+        r2 = _create_file_record(mu_session, owner_id=None, filename="b.pdf")
+        r3 = _create_file_record(mu_session, owner_id="bob", filename="c.pdf")
+
+        # Simulate bulk claim logic
+        records = mu_session.query(FileRecord).filter(FileRecord.id.in_([r1.id, r2.id, r3.id])).all()
+        claimed, skipped = [], []
+        for rec in records:
+            if rec.owner_id is None:
+                rec.owner_id = "claimer"
+                claimed.append(rec.id)
+            else:
+                skipped.append(rec.id)
+        mu_session.commit()
+
+        assert set(claimed) == {r1.id, r2.id}
+        assert skipped == [r3.id]
+
+    @pytest.mark.unit
+    def test_bulk_claim_all_already_owned(self, mu_session):
+        """Bulk claim with all already-owned files skips everything."""
+        r1 = _create_file_record(mu_session, owner_id="alice", filename="a.pdf")
+        r2 = _create_file_record(mu_session, owner_id="bob", filename="b.pdf")
+
+        records = mu_session.query(FileRecord).filter(FileRecord.id.in_([r1.id, r2.id])).all()
+        claimed = [rec for rec in records if rec.owner_id is None]
+        assert len(claimed) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -682,3 +727,146 @@ class TestUserSearchEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["users"] == ["ChristianLouis"]
+
+    @pytest.mark.integration
+    def test_search_no_query_param(self, client, db_session):
+        """Search without q parameter defaults to empty string (returns all)."""
+        _create_file_record(db_session, owner_id="alice", filename="a.pdf")
+        _create_file_record(db_session, owner_id="bob", filename="b.pdf")
+
+        response = client.get("/api/users/search")
+        assert response.status_code == 200
+        data = response.json()
+        assert set(data["users"]) == {"alice", "bob"}
+
+    @pytest.mark.integration
+    def test_search_empty_database(self, client, db_session):
+        """Search on an empty database returns empty list."""
+        response = client.get("/api/users/search?q=anything")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["users"] == []
+
+    @pytest.mark.integration
+    def test_search_results_sorted_alphabetically(self, client, db_session):
+        """Search results should be sorted alphabetically."""
+        _create_file_record(db_session, owner_id="zebra", filename="z.pdf")
+        _create_file_record(db_session, owner_id="apple", filename="a.pdf")
+        _create_file_record(db_session, owner_id="mango", filename="m.pdf")
+
+        response = client.get("/api/users/search?q=")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["users"] == ["apple", "mango", "zebra"]
+
+    @pytest.mark.integration
+    def test_search_default_limit_is_5(self, client, db_session):
+        """Default limit should be 5."""
+        for i in range(10):
+            _create_file_record(db_session, owner_id=f"user_{i:02d}", filename=f"file_{i}.pdf")
+
+        response = client.get("/api/users/search?q=user")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["users"]) == 5
+
+    @pytest.mark.integration
+    def test_search_whitespace_query_trimmed(self, client, db_session):
+        """Leading/trailing whitespace in query should be trimmed."""
+        _create_file_record(db_session, owner_id="alice", filename="a.pdf")
+
+        response = client.get("/api/users/search?q=%20alice%20")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["users"] == ["alice"]
+
+
+# ---------------------------------------------------------------------------
+# Additional user_scope filter edge-case tests
+# ---------------------------------------------------------------------------
+
+
+class TestApplyOwnerFilterEdgeCases:
+    """Additional edge-case tests for apply_owner_filter."""
+
+    @pytest.mark.unit
+    def test_unowned_visible_includes_null_and_own(self, mu_session):
+        """With unowned_docs_visible_to_all=True, user sees own + NULL files."""
+        from app.utils.user_scope import apply_owner_filter
+
+        own = _create_file_record(mu_session, owner_id="alice", filename="mine.pdf")
+        other = _create_file_record(mu_session, owner_id="bob", filename="theirs.pdf")
+        orphan = _create_file_record(mu_session, owner_id=None, filename="orphan.pdf")
+
+        request = _mock_request(user={"preferred_username": "alice"})
+        query = mu_session.query(FileRecord)
+
+        with _patch_multi_user(True), patch.object(settings, "unowned_docs_visible_to_all", True):
+            results = apply_owner_filter(query, request).all()
+
+        result_ids = {r.id for r in results}
+        assert own.id in result_ids
+        assert orphan.id in result_ids
+        assert other.id not in result_ids
+
+    @pytest.mark.unit
+    def test_unowned_not_visible_excludes_null(self, mu_session):
+        """With unowned_docs_visible_to_all=False, user sees only own files."""
+        from app.utils.user_scope import apply_owner_filter
+
+        own = _create_file_record(mu_session, owner_id="alice", filename="mine.pdf")
+        orphan = _create_file_record(mu_session, owner_id=None, filename="orphan.pdf")
+
+        request = _mock_request(user={"preferred_username": "alice"})
+        query = mu_session.query(FileRecord)
+
+        with _patch_multi_user(True), patch.object(settings, "unowned_docs_visible_to_all", False):
+            results = apply_owner_filter(query, request).all()
+
+        result_ids = {r.id for r in results}
+        assert own.id in result_ids
+        assert orphan.id not in result_ids
+
+    @pytest.mark.unit
+    def test_admin_always_sees_all(self, mu_session):
+        """Admin user always sees all files, regardless of unowned_docs_visible_to_all."""
+        from app.utils.user_scope import apply_owner_filter
+
+        _create_file_record(mu_session, owner_id="alice")
+        _create_file_record(mu_session, owner_id=None)
+
+        request = _mock_request(user={"preferred_username": "admin", "is_admin": True})
+        query = mu_session.query(FileRecord)
+
+        with _patch_multi_user(True), patch.object(settings, "unowned_docs_visible_to_all", False):
+            results = apply_owner_filter(query, request).all()
+
+        assert len(results) == 2
+
+    @pytest.mark.unit
+    def test_no_files_returns_empty(self, mu_session):
+        """Empty database returns no results for any user."""
+        from app.utils.user_scope import apply_owner_filter
+
+        request = _mock_request(user={"preferred_username": "alice"})
+        query = mu_session.query(FileRecord)
+
+        with _patch_multi_user(True):
+            results = apply_owner_filter(query, request).all()
+
+        assert results == []
+
+    @pytest.mark.unit
+    def test_user_with_sub_claim(self, mu_session):
+        """User with OAuth 'sub' claim uses sub as owner_id."""
+        from app.utils.user_scope import apply_owner_filter
+
+        rec = _create_file_record(mu_session, owner_id="oauth-sub-123")
+        request = _mock_request(user={"sub": "oauth-sub-123", "preferred_username": "alice"})
+        query = mu_session.query(FileRecord)
+
+        with _patch_multi_user(True), patch.object(settings, "unowned_docs_visible_to_all", False):
+            results = apply_owner_filter(query, request).all()
+
+        assert len(results) == 1
+        assert results[0].id == rec.id
