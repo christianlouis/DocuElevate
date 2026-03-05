@@ -16,6 +16,7 @@ the bundled static list.
 
 import logging
 import subprocess  # noqa: S404 — only used with fixed args, no user input
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -407,7 +408,7 @@ def get_embedding_models() -> list[str]:
 # Registry — maps setting keys to their provider functions
 # ---------------------------------------------------------------------------
 
-SUGGESTION_PROVIDERS: dict[str, callable] = {
+SUGGESTION_PROVIDERS: dict[str, Callable[[], list[str]]] = {
     "aws_region": get_aws_regions,
     "azure_region": get_azure_regions,
     "tesseract_language": get_tesseract_languages,

@@ -1450,7 +1450,7 @@ def claim_file(request: Request, file_id: int, db: DbSession):
 
 @router.post("/files/bulk-claim")
 @require_login
-def bulk_claim_files(request: Request, file_ids: List[int], db: DbSession):
+def bulk_claim_files(request: Request, file_ids: list[int], db: DbSession):
     """
     Claim multiple unowned documents for the current user.
 
@@ -1496,7 +1496,7 @@ def bulk_claim_files(request: Request, file_ids: List[int], db: DbSession):
 
 @router.post("/files/assign-owner")
 @require_login
-def assign_owner(request: Request, db: DbSession, owner_id: str = Query(...), file_ids: List[int] | None = None):
+def assign_owner(request: Request, db: DbSession, owner_id: str = Query(...), file_ids: list[int] | None = None):
     """
     Admin-only: assign an owner to documents.
 

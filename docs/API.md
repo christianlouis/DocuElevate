@@ -726,6 +726,38 @@ curl "http://<your-instance>/api/users/search?q=risti&limit=5"
 }
 ```
 
+---
+
+### Settings Suggestions (Autocomplete)
+
+**GET** `/api/settings/{key}/suggestions`
+
+Return dynamic autocomplete suggestions for a setting. Providers attempt to
+resolve values from cloud SDKs or installed tools and fall back to curated
+static lists when unavailable.
+
+**Supported keys**: `aws_region`, `azure_region`, `tesseract_language`,
+`easyocr_languages`, `embedding_model`
+
+**Query Parameters**:
+- `q` (optional): Substring to filter suggestions (case-insensitive)
+- `limit` (optional): Maximum results to return (default: 10, max: 50)
+
+```bash
+curl "http://<your-instance>/api/settings/aws_region/suggestions?q=east&limit=5"
+```
+
+**Response**:
+```json
+{
+  "key": "aws_region",
+  "suggestions": ["ap-east-1", "ap-northeast-1", "ap-southeast-1", "us-east-1", "us-east-2"]
+}
+```
+
+**Error Responses**:
+- `404`: No suggestion provider registered for the given key
+
 ### File Preview
 
 **GET** `/api/files/{file_id}/preview`
