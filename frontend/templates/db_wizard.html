@@ -1,0 +1,606 @@
+{% extends "base.html" %}
+{% block title %}Database Configuration Wizard - DocuElevate{% endblock %}
+
+{% block head_extra %}
+<style>
+  .wizard-step { display: none; }
+  .wizard-step.active { display: block; }
+  .db-card { transition: all 0.2s ease; }
+  .db-card.selected { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.3); }
+  .db-card:hover { border-color: #6366f1; }
+  .mono-input { font-family: 'Courier New', monospace; }
+  .migration-table { border-collapse: collapse; }
+  .migration-table th, .migration-table td { padding: 0.5rem 1rem; text-align: left; }
+  @keyframes pulse-bar { 0%,100%{opacity:1} 50%{opacity:.5} }
+  .animate-pulse-bar { animation: pulse-bar 1.5s ease-in-out infinite; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8"
+     x-data="dbWizard()" x-init="init()">
+
+  <div class="max-w-4xl mx-auto">
+
+    {# ── Header ── #}
+    <div class="text-center mb-8">
+      <h1 class="text-4xl font-bold text-gray-900 mb-2">
+        <i class="fas fa-database text-indigo-600" aria-hidden="true"></i>
+        Database Configuration Wizard
+      </h1>
+      <p class="text-lg text-gray-600">
+        Configure a new database connection or migrate your data to an external database.
+      </p>
+    </div>
+
+    {# ── Tab Navigation ── #}
+    <div class="flex justify-center mb-8 space-x-4" role="tablist" aria-label="Wizard tabs">
+      <button @click="activeTab='configure'"
+              :class="activeTab==='configure' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'"
+              class="px-6 py-3 rounded-lg font-semibold shadow transition"
+              role="tab" :aria-selected="activeTab==='configure'" id="tab-configure" aria-controls="panel-configure">
+        <i class="fas fa-cog mr-2" aria-hidden="true"></i> Configure Database
+      </button>
+      <button @click="activeTab='migrate'"
+              :class="activeTab==='migrate' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'"
+              class="px-6 py-3 rounded-lg font-semibold shadow transition"
+              role="tab" :aria-selected="activeTab==='migrate'" id="tab-migrate" aria-controls="panel-migrate">
+        <i class="fas fa-exchange-alt mr-2" aria-hidden="true"></i> Migrate Data
+      </button>
+    </div>
+
+    {# ═══════════════════════════════════════════════════════════════════ #}
+    {# TAB 1 — Configure                                                  #}
+    {# ═══════════════════════════════════════════════════════════════════ #}
+    <div x-show="activeTab==='configure'" role="tabpanel" id="panel-configure" aria-labelledby="tab-configure">
+      <div class="bg-white rounded-lg shadow-xl overflow-hidden">
+
+        {# Step indicator #}
+        <div class="bg-indigo-600 px-6 py-4">
+          <h2 class="text-2xl font-bold text-white">
+            <span x-show="cfgStep===1"><i class="fas fa-server mr-2" aria-hidden="true"></i> Step 1: Choose Database Type</span>
+            <span x-show="cfgStep===2"><i class="fas fa-plug mr-2" aria-hidden="true"></i> Step 2: Connection Details</span>
+            <span x-show="cfgStep===3"><i class="fas fa-check-circle mr-2" aria-hidden="true"></i> Step 3: Test &amp; Apply</span>
+          </h2>
+          <div class="flex mt-3 space-x-2">
+            <template x-for="s in [1,2,3]" :key="s">
+              <div class="h-2 flex-1 rounded-full"
+                   :class="s <= cfgStep ? 'bg-white' : 'bg-indigo-400'"></div>
+            </template>
+          </div>
+        </div>
+
+        <div class="px-6 py-8">
+
+          {# ── Step 1: Choose backend ── #}
+          <div x-show="cfgStep===1">
+            <p class="text-gray-600 mb-6">Select the database engine you want to use.</p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+              <button type="button" @click="selectBackend('sqlite')"
+                      :class="form.backend==='sqlite' ? 'selected' : ''"
+                      class="db-card border-2 rounded-lg p-6 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      aria-label="Select SQLite">
+                <div class="text-3xl mb-2 text-yellow-600"><i class="fas fa-file-alt" aria-hidden="true"></i></div>
+                <h3 class="font-bold text-lg">SQLite</h3>
+                <p class="text-sm text-gray-500 mt-1">File-based. Best for development &amp; single-user setups.</p>
+              </button>
+
+              <button type="button" @click="selectBackend('postgresql')"
+                      :class="form.backend==='postgresql' ? 'selected' : ''"
+                      class="db-card border-2 rounded-lg p-6 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      aria-label="Select PostgreSQL">
+                <div class="text-3xl mb-2 text-blue-600"><i class="fas fa-elephant" aria-hidden="true"></i></div>
+                <h3 class="font-bold text-lg">PostgreSQL</h3>
+                <p class="text-sm text-gray-500 mt-1">Recommended for production. Full feature support.</p>
+                <span class="inline-block mt-2 px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded font-semibold">Recommended</span>
+              </button>
+
+              <button type="button" @click="selectBackend('mysql')"
+                      :class="form.backend==='mysql' ? 'selected' : ''"
+                      class="db-card border-2 rounded-lg p-6 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      aria-label="Select MySQL / MariaDB">
+                <div class="text-3xl mb-2 text-orange-600"><i class="fas fa-database" aria-hidden="true"></i></div>
+                <h3 class="font-bold text-lg">MySQL / MariaDB</h3>
+                <p class="text-sm text-gray-500 mt-1">Popular alternative. Requires pymysql driver.</p>
+              </button>
+
+            </div>
+
+            <div class="flex justify-end mt-8">
+              <button @click="cfgStep=2" :disabled="!form.backend"
+                      class="px-6 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Next <i class="fas fa-arrow-right ml-2" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+
+          {# ── Step 2: Connection details ── #}
+          <div x-show="cfgStep===2">
+
+            {# SQLite path #}
+            <template x-if="form.backend==='sqlite'">
+              <div class="space-y-4">
+                <label for="sqlite_path" class="block text-sm font-medium text-gray-700">Database File Path</label>
+                <input id="sqlite_path" x-model="form.sqlite_path" type="text"
+                       class="mono-input w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                       placeholder="./app/database.db" />
+                <p class="text-xs text-gray-500">Leave blank to use the default path <code>./app/database.db</code>.</p>
+              </div>
+            </template>
+
+            {# Host-based databases #}
+            <template x-if="form.backend!=='sqlite'">
+              <div class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label for="db_host" class="block text-sm font-medium text-gray-700">Host <span class="text-red-600">*</span></label>
+                    <input id="db_host" x-model="form.host" type="text"
+                           class="mono-input w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                           placeholder="localhost or my-db.rds.amazonaws.com" required />
+                  </div>
+                  <div>
+                    <label for="db_port" class="block text-sm font-medium text-gray-700">Port</label>
+                    <input id="db_port" x-model.number="form.port" type="number"
+                           class="mono-input w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                           :placeholder="form.backend==='postgresql' ? '5432' : '3306'" />
+                  </div>
+                </div>
+                <div>
+                  <label for="db_name" class="block text-sm font-medium text-gray-700">Database Name <span class="text-red-600">*</span></label>
+                  <input id="db_name" x-model="form.database" type="text"
+                         class="mono-input w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                         placeholder="docuelevate" required />
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label for="db_user" class="block text-sm font-medium text-gray-700">Username <span class="text-red-600">*</span></label>
+                    <input id="db_user" x-model="form.username" type="text"
+                           class="mono-input w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                           placeholder="docuelevate" required />
+                  </div>
+                  <div>
+                    <label for="db_pass" class="block text-sm font-medium text-gray-700">Password</label>
+                    <input id="db_pass" x-model="form.password" type="password"
+                           class="mono-input w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                           placeholder="••••••••" />
+                  </div>
+                </div>
+                <div x-show="form.backend==='postgresql'">
+                  <label for="ssl_mode" class="block text-sm font-medium text-gray-700">SSL Mode</label>
+                  <select id="ssl_mode" x-model="form.ssl_mode"
+                          class="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500">
+                    <option value="">None (disable)</option>
+                    <option value="require">require</option>
+                    <option value="verify-ca">verify-ca</option>
+                    <option value="verify-full">verify-full</option>
+                  </select>
+                  <p class="text-xs text-gray-500 mt-1">Use <code>require</code> for managed cloud databases (AWS RDS, Supabase, etc.).</p>
+                </div>
+              </div>
+            </template>
+
+            {# Live preview of the URL #}
+            <div class="mt-6 p-4 bg-gray-50 rounded-lg border">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Generated Connection String</label>
+              <code class="block text-sm break-all text-indigo-700" x-text="builtUrl || '(fill in details above)'"></code>
+            </div>
+
+            <div class="flex justify-between mt-8">
+              <button @click="cfgStep=1"
+                      class="px-6 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> Back
+              </button>
+              <button @click="cfgStep=3; buildUrl()"
+                      class="px-6 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Next <i class="fas fa-arrow-right ml-2" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+
+          {# ── Step 3: Test & Apply ── #}
+          <div x-show="cfgStep===3">
+
+            <div class="mb-6 p-4 bg-gray-50 rounded-lg border">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Connection String</label>
+              <code class="block text-sm break-all text-indigo-700" x-text="builtUrl"></code>
+            </div>
+
+            {# Test button #}
+            <div class="flex items-center space-x-4 mb-6">
+              <button @click="testConnection()"
+                      :disabled="testLoading"
+                      class="px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                <i class="fas fa-plug mr-2" aria-hidden="true"></i>
+                <span x-text="testLoading ? 'Testing…' : 'Test Connection'"></span>
+              </button>
+              <div x-show="testResult" class="flex-1">
+                <div x-show="testResult?.success" class="bg-green-100 border-l-4 border-green-500 text-green-800 p-3 rounded" role="status">
+                  <i class="fas fa-check-circle mr-1" aria-hidden="true"></i>
+                  <span x-text="testResult?.message"></span>
+                  <span x-show="testResult?.server_version" class="block text-xs mt-1" x-text="'Server: ' + testResult?.server_version"></span>
+                </div>
+                <div x-show="!testResult?.success" class="bg-red-100 border-l-4 border-red-500 text-red-800 p-3 rounded" role="alert">
+                  <i class="fas fa-times-circle mr-1" aria-hidden="true"></i>
+                  <span x-text="testResult?.message"></span>
+                </div>
+              </div>
+            </div>
+
+            {# Apply as DATABASE_URL #}
+            <div class="bg-amber-50 border-l-4 border-amber-400 p-4 mb-6">
+              <p class="text-sm text-amber-800">
+                <i class="fas fa-exclamation-triangle mr-1" aria-hidden="true"></i>
+                <strong>To use this database</strong>, set the <code>DATABASE_URL</code> environment variable
+                (in your <code>.env</code> file or Docker Compose config) to the connection string above,
+                then restart DocuElevate.
+              </p>
+            </div>
+
+            <div class="p-4 border rounded-lg bg-gray-50">
+              <label for="env_snippet" class="block text-sm font-medium text-gray-700 mb-2">
+                Copy this into your <code>.env</code> file:
+              </label>
+              <div class="flex items-center">
+                <input id="env_snippet" type="text" readonly
+                       :value="'DATABASE_URL=' + builtUrl"
+                       class="mono-input flex-1 px-4 py-3 border border-gray-300 rounded-l-md bg-white text-sm" />
+                <button @click="copyToClipboard('DATABASE_URL=' + builtUrl)"
+                        class="px-4 py-3 bg-indigo-600 text-white rounded-r-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        aria-label="Copy to clipboard">
+                  <i class="fas fa-copy" aria-hidden="true"></i>
+                </button>
+              </div>
+              <p x-show="copied" x-transition class="text-xs text-green-600 mt-1" role="status">
+                <i class="fas fa-check" aria-hidden="true"></i> Copied!
+              </p>
+            </div>
+
+            <div class="flex justify-between mt-8">
+              <button @click="cfgStep=2"
+                      class="px-6 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> Back
+              </button>
+              <a href="/settings"
+                 class="px-6 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center">
+                Go to Settings <i class="fas fa-arrow-right ml-2" aria-hidden="true"></i>
+              </a>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    {# ═══════════════════════════════════════════════════════════════════ #}
+    {# TAB 2 — Migrate                                                    #}
+    {# ═══════════════════════════════════════════════════════════════════ #}
+    <div x-show="activeTab==='migrate'" role="tabpanel" id="panel-migrate" aria-labelledby="tab-migrate">
+      <div class="bg-white rounded-lg shadow-xl overflow-hidden">
+
+        <div class="bg-indigo-600 px-6 py-4">
+          <h2 class="text-2xl font-bold text-white">
+            <i class="fas fa-exchange-alt mr-2" aria-hidden="true"></i>
+            Migrate Data Between Databases
+          </h2>
+          <p class="text-indigo-100 mt-1">
+            Copy all your data from one database to another (e.g. SQLite → PostgreSQL).
+          </p>
+        </div>
+
+        <div class="px-6 py-8 space-y-6">
+
+          {# Source URL #}
+          <div>
+            <label for="mig_source" class="block text-sm font-medium text-gray-700 mb-1">
+              Source Database URL
+            </label>
+            <input id="mig_source" x-model="migrate.source" type="text"
+                   class="mono-input w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                   :placeholder="currentDbUrl || 'sqlite:///./app/database.db'" />
+            <p class="text-xs text-gray-500 mt-1">
+              This is your current database. Pre-filled with the running configuration.
+            </p>
+            <button @click="migrate.source = currentDbUrl"
+                    class="mt-1 text-xs text-indigo-600 hover:underline focus:outline-none"
+                    type="button">
+              <i class="fas fa-sync-alt mr-1" aria-hidden="true"></i> Use current database
+            </button>
+          </div>
+
+          {# Target URL #}
+          <div>
+            <label for="mig_target" class="block text-sm font-medium text-gray-700 mb-1">
+              Target Database URL
+            </label>
+            <input id="mig_target" x-model="migrate.target" type="text"
+                   class="mono-input w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                   placeholder="postgresql://user:pass@host:5432/docuelevate" />
+            <p class="text-xs text-gray-500 mt-1">
+              The new database to copy data into. Must be empty (schema will be created automatically).
+            </p>
+            <button @click="if(builtUrl) migrate.target = builtUrl"
+                    x-show="builtUrl"
+                    class="mt-1 text-xs text-indigo-600 hover:underline focus:outline-none"
+                    type="button">
+              <i class="fas fa-magic mr-1" aria-hidden="true"></i> Use URL from Configure tab
+            </button>
+          </div>
+
+          {# Actions #}
+          <div class="flex space-x-4">
+            <button @click="testMigrateConnection('source')"
+                    :disabled="!migrate.source || migrateLoading"
+                    class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+              <i class="fas fa-plug mr-1" aria-hidden="true"></i> Test Source
+            </button>
+            <button @click="testMigrateConnection('target')"
+                    :disabled="!migrate.target || migrateLoading"
+                    class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+              <i class="fas fa-plug mr-1" aria-hidden="true"></i> Test Target
+            </button>
+            <button @click="previewMigration()"
+                    :disabled="!migrate.source || migrateLoading"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+              <i class="fas fa-search mr-1" aria-hidden="true"></i> Preview Migration
+            </button>
+          </div>
+
+          {# Connection test results #}
+          <div x-show="migrate.sourceTest" class="text-sm" role="status">
+            <span :class="migrate.sourceTest?.success ? 'text-green-700' : 'text-red-700'">
+              <i :class="migrate.sourceTest?.success ? 'fas fa-check-circle' : 'fas fa-times-circle'" aria-hidden="true"></i>
+              Source: <span x-text="migrate.sourceTest?.message"></span>
+            </span>
+          </div>
+          <div x-show="migrate.targetTest" class="text-sm" role="status">
+            <span :class="migrate.targetTest?.success ? 'text-green-700' : 'text-red-700'">
+              <i :class="migrate.targetTest?.success ? 'fas fa-check-circle' : 'fas fa-times-circle'" aria-hidden="true"></i>
+              Target: <span x-text="migrate.targetTest?.message"></span>
+            </span>
+          </div>
+
+          {# Preview table #}
+          <div x-show="migrate.preview" class="border rounded-lg overflow-hidden">
+            <table class="migration-table w-full text-sm">
+              <thead class="bg-gray-100">
+                <tr>
+                  <th scope="col">Table</th>
+                  <th scope="col" class="text-right">Rows</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="t in migrate.preview?.tables || []" :key="t.name">
+                  <tr class="border-t">
+                    <td x-text="t.name"></td>
+                    <td class="text-right" x-text="t.row_count.toLocaleString()"></td>
+                  </tr>
+                </template>
+                <tr class="border-t font-bold bg-gray-50">
+                  <td>Total</td>
+                  <td class="text-right" x-text="(migrate.preview?.total_rows || 0).toLocaleString()"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {# Migrate button #}
+          <div x-show="migrate.preview && migrate.preview.success" class="mt-4">
+            <div class="bg-amber-50 border-l-4 border-amber-400 p-4 mb-4">
+              <p class="text-sm text-amber-800">
+                <i class="fas fa-exclamation-triangle mr-1" aria-hidden="true"></i>
+                <strong>Warning:</strong> This will copy all data to the target database.
+                The target must be empty. This operation cannot be undone.
+              </p>
+            </div>
+
+            <label class="inline-flex items-center mb-4">
+              <input type="checkbox" x-model="migrate.confirmed" class="form-checkbox text-indigo-600 rounded" />
+              <span class="ml-2 text-sm">I understand and want to proceed with the migration</span>
+            </label>
+
+            <div>
+              <button @click="executeMigration()"
+                      :disabled="!migrate.confirmed || migrateLoading"
+                      class="px-6 py-3 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                <i class="fas fa-play mr-2" aria-hidden="true"></i>
+                <span x-text="migrateLoading ? 'Migrating…' : 'Start Migration'"></span>
+              </button>
+            </div>
+          </div>
+
+          {# Migration progress / result #}
+          <div x-show="migrateLoading" class="mt-4" role="status" aria-live="polite">
+            <div class="w-full bg-gray-200 rounded-full h-3">
+              <div class="bg-indigo-600 h-3 rounded-full animate-pulse-bar" style="width:100%"></div>
+            </div>
+            <p class="text-sm text-gray-600 mt-2">Migration in progress — please do not close this page…</p>
+          </div>
+
+          <div x-show="migrate.result" class="mt-4" role="status" aria-live="polite">
+            <div x-show="migrate.result?.success" class="bg-green-100 border-l-4 border-green-500 text-green-800 p-4 rounded">
+              <p class="font-bold"><i class="fas fa-check-circle mr-1" aria-hidden="true"></i> Migration Successful</p>
+              <p class="text-sm mt-1">
+                Copied <strong x-text="migrate.result?.rows_copied?.toLocaleString()"></strong> rows
+                across <strong x-text="migrate.result?.tables_copied"></strong> tables.
+              </p>
+              <p class="text-sm mt-2">
+                Update your <code>DATABASE_URL</code> environment variable to the target URL and restart DocuElevate.
+              </p>
+            </div>
+            <div x-show="!migrate.result?.success" class="bg-red-100 border-l-4 border-red-500 text-red-800 p-4 rounded">
+              <p class="font-bold"><i class="fas fa-times-circle mr-1" aria-hidden="true"></i> Migration Failed</p>
+              <template x-for="err in migrate.result?.errors || migrate.result?.detail?.errors || []" :key="err">
+                <p class="text-sm mt-1" x-text="err"></p>
+              </template>
+              <p x-show="migrate.result?.detail && typeof migrate.result.detail === 'string'" class="text-sm mt-1" x-text="migrate.result?.detail"></p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    {# ── Help text ── #}
+    <div class="mt-6 text-center">
+      <p class="text-sm text-gray-600">
+        <i class="fas fa-book mr-1" aria-hidden="true"></i>
+        See the <a href="/docs/DatabaseConfiguration" class="text-indigo-600 hover:underline">Database Configuration Guide</a> for more details.
+      </p>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function dbWizard() {
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+  return {
+    activeTab: 'configure',
+    cfgStep: 1,
+    currentDbUrl: '{{ current_database_url | default("", true) }}',
+
+    form: {
+      backend: '',
+      host: '',
+      port: null,
+      database: '',
+      username: '',
+      password: '',
+      ssl_mode: '',
+      sqlite_path: '',
+    },
+
+    builtUrl: '',
+    testLoading: false,
+    testResult: null,
+    copied: false,
+
+    migrate: {
+      source: '{{ current_database_url | default("", true) }}',
+      target: '',
+      sourceTest: null,
+      targetTest: null,
+      preview: null,
+      confirmed: false,
+      result: null,
+    },
+    migrateLoading: false,
+
+    init() {
+      this.$watch('form', () => this.buildUrlLocal(), {deep: true});
+    },
+
+    selectBackend(b) {
+      this.form.backend = b;
+      // Set sensible defaults
+      if (b === 'postgresql') { this.form.port = 5432; }
+      else if (b === 'mysql') { this.form.port = 3306; }
+      else { this.form.port = null; }
+    },
+
+    buildUrlLocal() {
+      const f = this.form;
+      if (f.backend === 'sqlite') {
+        this.builtUrl = 'sqlite:///' + (f.sqlite_path || './app/database.db');
+        return;
+      }
+      if (!f.backend || !f.host || !f.database || !f.username) {
+        this.builtUrl = '';
+        return;
+      }
+      let driver = f.backend === 'mysql' ? 'mysql+pymysql' : f.backend;
+      let auth = f.username;
+      if (f.password) auth += ':' + f.password;
+      let port = f.port || (f.backend === 'postgresql' ? 5432 : 3306);
+      let url = driver + '://' + auth + '@' + f.host + ':' + port + '/' + f.database;
+      let params = [];
+      if (f.ssl_mode) params.push('sslmode=' + f.ssl_mode);
+      if (f.backend === 'mysql') params.push('charset=utf8mb4');
+      if (params.length) url += '?' + params.join('&');
+      this.builtUrl = url;
+    },
+
+    async buildUrl() {
+      this.buildUrlLocal();
+    },
+
+    async testConnection() {
+      this.testLoading = true;
+      this.testResult = null;
+      try {
+        const res = await fetch('/api/database/test-connection', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
+          body: JSON.stringify({url: this.builtUrl})
+        });
+        this.testResult = await res.json();
+      } catch (e) {
+        this.testResult = {success: false, message: 'Request failed: ' + e.message};
+      }
+      this.testLoading = false;
+    },
+
+    async testMigrateConnection(which) {
+      this.migrateLoading = true;
+      const url = which === 'source' ? this.migrate.source : this.migrate.target;
+      try {
+        const res = await fetch('/api/database/test-connection', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
+          body: JSON.stringify({url})
+        });
+        const data = await res.json();
+        if (which === 'source') this.migrate.sourceTest = data;
+        else this.migrate.targetTest = data;
+      } catch (e) {
+        const err = {success: false, message: 'Request failed: ' + e.message};
+        if (which === 'source') this.migrate.sourceTest = err;
+        else this.migrate.targetTest = err;
+      }
+      this.migrateLoading = false;
+    },
+
+    async previewMigration() {
+      this.migrateLoading = true;
+      this.migrate.preview = null;
+      try {
+        const res = await fetch('/api/database/preview-migration', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
+          body: JSON.stringify({url: this.migrate.source})
+        });
+        this.migrate.preview = await res.json();
+      } catch (e) {
+        this.migrate.preview = {success: false, error: e.message, tables: [], total_rows: 0};
+      }
+      this.migrateLoading = false;
+    },
+
+    async executeMigration() {
+      this.migrateLoading = true;
+      this.migrate.result = null;
+      try {
+        const res = await fetch('/api/database/migrate', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
+          body: JSON.stringify({source_url: this.migrate.source, target_url: this.migrate.target})
+        });
+        this.migrate.result = await res.json();
+      } catch (e) {
+        this.migrate.result = {success: false, errors: ['Request failed: ' + e.message]};
+      }
+      this.migrateLoading = false;
+    },
+
+    copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        this.copied = true;
+        setTimeout(() => this.copied = false, 2000);
+      });
+    }
+  };
+}
+</script>
+{% endblock %}
