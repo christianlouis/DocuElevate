@@ -24,6 +24,11 @@ class FileRecord(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
+    # Owner identifier for multi-user mode.
+    # Stores the user's unique identifier (e.g. email or OAuth sub claim).
+    # NULL means the file belongs to the shared/global space (single-user mode).
+    owner_id = Column(String, nullable=True, index=True)
+
     # Hash of the file content (e.g. SHA-256)
     # Note: duplicates are allowed so filehash is not unique
     filehash = Column(String, index=True, nullable=False)

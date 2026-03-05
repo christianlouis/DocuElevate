@@ -124,7 +124,9 @@ def _build_filename(file_path: str, original_filename: Optional[str], file_ext: 
 
 
 @shared_task(bind=True)
-def convert_to_pdf(self, file_path: str, original_filename: Optional[str] = None) -> Optional[str]:
+def convert_to_pdf(
+    self, file_path: str, original_filename: Optional[str] = None, owner_id: Optional[str] = None
+) -> Optional[str]:
     """
     Converts a file to PDF using Gotenberg's API.
     Determines the appropriate Gotenberg endpoint based on the file's MIME type.
@@ -133,6 +135,7 @@ def convert_to_pdf(self, file_path: str, original_filename: Optional[str] = None
     Args:
         file_path: Path to the file to convert
         original_filename: Optional original filename (if different from path basename)
+        owner_id: Optional user identifier forwarded to process_document for multi-user mode.
     """
     task_id = self.request.id
     logger.info(f"[{task_id}] Starting PDF conversion: {file_path}")
@@ -332,9 +335,9 @@ def convert_to_pdf(self, file_path: str, original_filename: Optional[str] = None
                 # Change extension to .pdf for the original filename
                 original_base = os.path.splitext(original_filename)[0]
                 pdf_original_filename = f"{original_base}.pdf"
-                process_document.delay(converted_file_path, original_filename=pdf_original_filename)
+                process_document.delay(converted_file_path, original_filename=pdf_original_filename, owner_id=owner_id)
             else:
-                process_document.delay(converted_file_path)
+                process_document.delay(converted_file_path, owner_id=owner_id)
 
             return converted_file_path
         else:

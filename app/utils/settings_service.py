@@ -78,6 +78,28 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "multi_user_enabled": {
+        "category": "Authentication",
+        "description": (
+            "Enable multi-user mode with individual document spaces per user. "
+            "Each user sees only their own documents, uploads, and search results. "
+            "Requires auth_enabled=True."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "default_daily_upload_limit": {
+        "category": "Authentication",
+        "description": (
+            "Default maximum document uploads allowed per user per day in multi-user mode. Set to 0 for unlimited."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "session_secret": {
         "category": "Authentication",
         "description": "Secret key for session encryption (min 32 characters)",

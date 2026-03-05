@@ -99,8 +99,11 @@ def list_files_api(
     validate_sort_order(sort_order)
     search = validate_search_query(search)
 
-    # Start with base query
+    # Start with base query, scoped to the current user in multi-user mode
+    from app.utils.user_scope import apply_owner_filter
+
     query = db.query(FileRecord)
+    query = apply_owner_filter(query, request)
 
     # Apply search filter
     if search:
@@ -241,8 +244,12 @@ def get_file_details(request: Request, file_id: int, db: DbSession):
     """
     Get detailed information about a specific file including processing history.
     """
-    # Find the file record
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    # Find the file record, scoped to the current user in multi-user mode
+    from app.utils.user_scope import apply_owner_filter
+
+    query = db.query(FileRecord).filter(FileRecord.id == file_id)
+    query = apply_owner_filter(query, request)
+    file_record = query.first()
 
     if not file_record:
         raise HTTPException(status_code=404, detail=f"File record with ID {file_id} not found")
@@ -300,8 +307,12 @@ def delete_file_record(request: Request, file_id: int, db: DbSession):
         raise HTTPException(status_code=403, detail="File deletion is disabled in the configuration")
 
     try:
-        # Find the file record
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        # Find the file record, scoped to the current user in multi-user mode
+        from app.utils.user_scope import apply_owner_filter
+
+        query = db.query(FileRecord).filter(FileRecord.id == file_id)
+        query = apply_owner_filter(query, request)
+        file_record = query.first()
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File record with ID {file_id} not found")
@@ -1286,6 +1297,11 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
     mime_type, _ = mimetypes.guess_type(target_path)
     file_ext = os.path.splitext(target_path)[1].lower()
 
+    # Determine the owner_id for multi-user document isolation
+    from app.utils.user_scope import get_current_owner_id
+
+    upload_owner_id = get_current_owner_id(request) if settings.multi_user_enabled else None
+
     # Check if it's a PDF by extension or MIME type
     is_pdf = file_ext == ".pdf" or mime_type == "application/pdf"
 
@@ -1310,7 +1326,7 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
             task_ids = []
             for split_file in split_files:
                 split_filename = os.path.basename(split_file)
-                task = process_document.delay(split_file, original_filename=split_filename)
+                task = process_document.delay(split_file, original_filename=split_filename, owner_id=upload_owner_id)
                 task_ids.append(task.id)
                 logger.info(f"Enqueued split PDF part for processing: {split_file}")
 
@@ -1333,7 +1349,7 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
 
     if is_pdf and not should_split:
         # If it's a PDF, process directly
-        task = process_document.delay(target_path, original_filename=safe_filename)
+        task = process_document.delay(target_path, original_filename=safe_filename, owner_id=upload_owner_id)
         logger.info(f"Enqueued PDF for processing: {target_path}")
     elif mime_type in IMAGE_MIME_TYPES or file_ext in {
         ".jpg",
@@ -1347,16 +1363,16 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
         ".svg",
     }:
         # If it's an image, convert to PDF first
-        task = convert_to_pdf.delay(target_path, original_filename=safe_filename)
+        task = convert_to_pdf.delay(target_path, original_filename=safe_filename, owner_id=upload_owner_id)
         logger.info(f"Enqueued image for PDF conversion: {target_path}")
     elif mime_type in ALLOWED_MIME_TYPES or file_ext in ALLOWED_EXTENSIONS:
         # Office document, HTML, Markdown, or other Gotenberg-supported format
-        task = convert_to_pdf.delay(target_path, original_filename=safe_filename)
+        task = convert_to_pdf.delay(target_path, original_filename=safe_filename, owner_id=upload_owner_id)
         logger.info(f"Enqueued document for PDF conversion: {target_path}")
     else:
         # For any other file type, attempt conversion but log a warning
         logger.warning(f"Unsupported MIME type {mime_type} for {target_path}, attempting conversion")
-        task = convert_to_pdf.delay(target_path, original_filename=safe_filename)
+        task = convert_to_pdf.delay(target_path, original_filename=safe_filename, owner_id=upload_owner_id)
 
     # Check for exact duplicates (same SHA-256 hash) before returning.
     # This gives the caller an immediate warning without waiting for the pipeline.

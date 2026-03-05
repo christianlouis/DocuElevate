@@ -116,6 +116,25 @@ class Settings(BaseSettings):
     session_secret: Optional[str] = None
     admin_group_name: str = "admin"
 
+    # Multi-user settings
+    multi_user_enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable multi-user mode with individual document spaces per user. "
+            "When enabled, each authenticated user sees only their own documents, "
+            "uploads, and search results. Shared settings (AI, OCR) remain global. "
+            "Requires auth_enabled=True. Default: False (single-user/shared mode)."
+        ),
+    )
+    default_daily_upload_limit: int = Field(
+        default=0,
+        description=(
+            "Default maximum number of document uploads allowed per user per day "
+            "in multi-user mode. Set to 0 for unlimited. "
+            "Individual user limits can override this default. Default: 0 (unlimited)."
+        ),
+    )
+
     # Authentik
     authentik_client_id: Optional[str] = None
     authentik_client_secret: Optional[str] = None
