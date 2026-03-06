@@ -332,6 +332,94 @@ class TestExtractMetadataWithGpt:
                     # Verify database was queried
                     mock_db.query.assert_called_once()
 
+    @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
+    @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
+    @patch("app.tasks.extract_metadata_with_gpt.get_ai_provider")
+    @patch("app.tasks.extract_metadata_with_gpt.SessionLocal")
+    def test_file_id_lookup_with_absolute_path_filename(
+        self, mock_session_local, mock_get_provider, mock_log_progress, mock_embed_task
+    ):
+        """Test file_id lookup when file_id is None and filename is an absolute path (covers line 64)."""
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.return_value = '{"filename": "test.pdf", "document_type": "Unknown"}'
+        mock_get_provider.return_value = mock_provider
+
+        mock_db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = mock_db
+        mock_file_record = MagicMock()
+        mock_file_record.id = 777
+        mock_db.query.return_value.filter_by.return_value.first.return_value = mock_file_record
+
+        with patch("app.tasks.extract_metadata_with_gpt.os.path.exists", return_value=True):
+            extract_metadata_with_gpt.request.id = "test-task-id"
+
+            result = extract_metadata_with_gpt.__wrapped__(
+                filename="/absolute/path/to/test.pdf",
+                cleaned_text="Sample text",
+                file_id=None,
+            )
+
+        assert "metadata" in result
+        # Absolute path used as-is for the DB lookup
+        mock_db.query.return_value.filter_by.assert_called_once_with(local_filename="/absolute/path/to/test.pdf")
+
+    @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
+    @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
+    @patch("app.tasks.extract_metadata_with_gpt.get_ai_provider")
+    @patch("app.tasks.extract_metadata_with_gpt.SessionLocal")
+    def test_file_id_lookup_skipped_when_file_not_on_disk(
+        self, mock_session_local, mock_get_provider, mock_log_progress, mock_embed_task
+    ):
+        """Test that DB lookup is skipped when file does not exist on disk (covers branch 67→73)."""
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.return_value = '{"filename": "test.pdf", "document_type": "Unknown"}'
+        mock_get_provider.return_value = mock_provider
+
+        with patch("app.tasks.extract_metadata_with_gpt.os.path.exists", return_value=False):
+            with patch("app.tasks.extract_metadata_with_gpt.settings.workdir", "/tmp"):
+                extract_metadata_with_gpt.request.id = "test-task-id"
+
+                result = extract_metadata_with_gpt.__wrapped__(
+                    filename="missing_file.pdf",
+                    cleaned_text="Sample text",
+                    file_id=None,
+                )
+
+        # Task still succeeds; DB was never touched
+        assert "metadata" in result
+        mock_session_local.assert_not_called()
+
+    @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
+    @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
+    @patch("app.tasks.extract_metadata_with_gpt.get_ai_provider")
+    @patch("app.tasks.extract_metadata_with_gpt.SessionLocal")
+    def test_file_id_remains_none_when_db_record_not_found(
+        self, mock_session_local, mock_get_provider, mock_log_progress, mock_embed_task
+    ):
+        """Test that file_id stays None when DB query returns no matching record (covers branch 70→73)."""
+        mock_provider = MagicMock()
+        mock_provider.chat_completion.return_value = '{"filename": "test.pdf", "document_type": "Unknown"}'
+        mock_get_provider.return_value = mock_provider
+
+        mock_db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = mock_db
+        # Simulate no matching record in DB
+        mock_db.query.return_value.filter_by.return_value.first.return_value = None
+
+        with patch("app.tasks.extract_metadata_with_gpt.os.path.exists", return_value=True):
+            with patch("app.tasks.extract_metadata_with_gpt.settings.workdir", "/tmp"):
+                extract_metadata_with_gpt.request.id = "test-task-id"
+
+                result = extract_metadata_with_gpt.__wrapped__(
+                    filename="unknown.pdf",
+                    cleaned_text="Sample text",
+                    file_id=None,
+                )
+
+        # Task still succeeds; file_id stays None throughout
+        assert "metadata" in result
+        mock_db.query.assert_called_once()
+
 
 @pytest.mark.unit
 class TestModuleImports:
