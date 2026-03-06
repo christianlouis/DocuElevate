@@ -95,6 +95,10 @@ startxref
     ):
         # Setup mocks
         mock_settings.workdir = str(tmp_path)
+        mock_settings.default_owner_id = ""
+        mock_settings.enable_deduplication = False
+        mock_settings.show_deduplication_step = False
+        mock_settings.enable_text_quality_check = False
         mock_session_local.return_value.__enter__.return_value = db_session
         mock_session_local.return_value.__exit__.return_value = None
         mock_extract.delay = MagicMock()
@@ -195,6 +199,10 @@ startxref
     ):
         # Setup mocks
         mock_settings.workdir = str(tmp_path)
+        mock_settings.default_owner_id = ""
+        mock_settings.enable_deduplication = False
+        mock_settings.show_deduplication_step = False
+        mock_settings.enable_text_quality_check = False
         mock_session_local.return_value.__enter__.return_value = db_session
         mock_session_local.return_value.__exit__.return_value = None
         mock_extract.delay = MagicMock()
