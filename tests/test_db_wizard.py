@@ -6,8 +6,10 @@ from app.utils.db_wizard import (
     build_connection_string,
     get_supported_backends,
     parse_connection_string,
-    test_connection as db_test_connection,
     validate_url_format,
+)
+from app.utils.db_wizard import (
+    test_connection as db_test_connection,
 )
 
 
