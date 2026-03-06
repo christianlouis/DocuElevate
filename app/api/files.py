@@ -1303,7 +1303,8 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
         try:
             check_upload_allowed(db, upload_owner_id, tier_id)
         except QuotaExceeded as qe:
-            # Clean up the already-saved file before rejecting
+            # Clean up the temporarily written file before returning the error
+            # to avoid consuming disk space for a rejected upload.
             if os.path.exists(target_path):
                 os.remove(target_path)
             raise HTTPException(

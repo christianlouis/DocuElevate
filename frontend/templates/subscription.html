@@ -68,7 +68,7 @@
           {% if tier.lifetime_file_limit > 0 %}
           <div class="mt-2">
             {% set lifetime_pct = ((usage.lifetime / tier.lifetime_file_limit) * 100) | int %}
-            <div class="w-full bg-gray-200 rounded-full h-1.5" role="progressbar"
+            <div class="w-full bg-gray-200 rounded-full h-1.5" role="progressbar" aria-valuemin="0"
                  aria-valuenow="{{ usage.lifetime }}" aria-valuemax="{{ tier.lifetime_file_limit }}">
               <div class="h-1.5 rounded-full
                 {% if lifetime_pct >= 90 %}bg-red-500{% elif lifetime_pct >= 70 %}bg-yellow-500{% else %}bg-green-500{% endif %}"
@@ -88,7 +88,7 @@
           {% if tier.daily_upload_limit > 0 %}
           <div class="mt-2">
             {% set today_pct = ((usage.today / tier.daily_upload_limit) * 100) | int %}
-            <div class="w-full bg-gray-200 rounded-full h-1.5" role="progressbar"
+            <div class="w-full bg-gray-200 rounded-full h-1.5" role="progressbar" aria-valuemin="0"
                  aria-valuenow="{{ usage.today }}" aria-valuemax="{{ tier.daily_upload_limit }}">
               <div class="h-1.5 rounded-full
                 {% if today_pct >= 90 %}bg-red-500{% elif today_pct >= 70 %}bg-yellow-500{% else %}bg-blue-500{% endif %}"
@@ -108,7 +108,7 @@
           {% if tier.monthly_upload_limit > 0 %}
           <div class="mt-2">
             {% set month_pct = ((usage.month / tier.monthly_upload_limit) * 100) | int %}
-            <div class="w-full bg-gray-200 rounded-full h-1.5" role="progressbar"
+            <div class="w-full bg-gray-200 rounded-full h-1.5" role="progressbar" aria-valuemin="0"
                  aria-valuenow="{{ usage.month }}" aria-valuemax="{{ tier.monthly_upload_limit }}">
               <div class="h-1.5 rounded-full
                 {% if month_pct >= 90 %}bg-red-500{% elif month_pct >= 70 %}bg-yellow-500{% else %}bg-indigo-500{% endif %}"

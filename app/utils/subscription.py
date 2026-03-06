@@ -170,15 +170,17 @@ def _today_utc() -> date:
     return datetime.now(timezone.utc).date()
 
 
+def _scalar_count(query) -> int:
+    """Execute a count query and return an int, defaulting to 0 for NULL."""
+    return query.scalar() or 0
+
+
 def get_lifetime_file_count(db: Session, owner_id: str) -> int:
     """Total files ever processed by this user (not counting duplicates)."""
     from app.models import FileRecord
 
-    return (
-        db.query(func.count(FileRecord.id))
-        .filter(FileRecord.owner_id == owner_id, FileRecord.is_duplicate.is_(False))
-        .scalar()
-        or 0
+    return _scalar_count(
+        db.query(func.count(FileRecord.id)).filter(FileRecord.owner_id == owner_id, FileRecord.is_duplicate.is_(False))
     )
 
 
@@ -187,15 +189,12 @@ def get_today_file_count(db: Session, owner_id: str) -> int:
     from app.models import FileRecord
 
     today = _today_utc()
-    return (
-        db.query(func.count(FileRecord.id))
-        .filter(
+    return _scalar_count(
+        db.query(func.count(FileRecord.id)).filter(
             FileRecord.owner_id == owner_id,
             FileRecord.is_duplicate.is_(False),
             func.date(FileRecord.created_at) == today,
         )
-        .scalar()
-        or 0
     )
 
 
@@ -204,15 +203,12 @@ def get_month_file_count(db: Session, owner_id: str) -> int:
     from app.models import FileRecord
 
     today = _today_utc()
-    return (
-        db.query(func.count(FileRecord.id))
-        .filter(
+    return _scalar_count(
+        db.query(func.count(FileRecord.id)).filter(
             FileRecord.owner_id == owner_id,
             FileRecord.is_duplicate.is_(False),
             func.strftime("%Y-%m", FileRecord.created_at) == today.strftime("%Y-%m"),
         )
-        .scalar()
-        or 0
     )
 
 

@@ -31,9 +31,6 @@
         >
           Annual <span class="ml-1 text-xs bg-green-400 text-green-900 rounded-full px-2 py-0.5 font-bold">Save ~17%</span>
         </button>
-
-        <!-- Tier cards — responsive 4-column grid -->
-        <div class="hidden" x-effect="$el.classList.remove('hidden')"></div>
       </div>
     </div>
   </div>
@@ -221,7 +218,7 @@
                 {% if tier.max_ocr_pages_monthly == 0 %}
                 <span class="font-semibold text-green-600">Unlimited</span>
                 {% else %}
-                <span class="font-medium text-gray-800">{{ tier.max_ocr_pages_monthly | int | string | replace("2500", "2 500") }}</span>
+                <span class="font-medium text-gray-800">{{ "{:,}".format(tier.max_ocr_pages_monthly) }}</span>
                 {% endif %}
               </td>
               {% endfor %}

@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.api.admin_users import _require_admin
 from app.database import get_db
 from app.utils.subscription import (
     TIER_ORDER,
@@ -29,22 +30,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
 DbSession = Annotated[Session, Depends(get_db)]
-
-
-# ---------------------------------------------------------------------------
-# Auth helpers
-# ---------------------------------------------------------------------------
-
-
-def _get_current_user(request: Request) -> dict | None:
-    return request.session.get("user")
-
-
-def _require_admin(request: Request) -> dict:
-    user = request.session.get("user")
-    if not user or not user.get("is_admin"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
-    return user
+AdminUser = Annotated[dict, Depends(_require_admin)]
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +53,7 @@ def my_subscription(request: Request, db: DbSession) -> dict[str, Any]:
     """Return the authenticated user's subscription tier and current usage counts."""
     from app.config import settings
 
-    user = _get_current_user(request)
+    user = request.session.get("user")
 
     if not settings.multi_user_enabled:
         # In single-user mode there is no concept of a subscription plan
@@ -94,10 +80,8 @@ def my_subscription(request: Request, db: DbSession) -> dict[str, Any]:
 
 
 @router.get("/platform", summary="Platform-wide usage statistics (admin only)")
-def platform_stats(request: Request, db: DbSession) -> dict[str, Any]:
+def platform_stats(request: Request, db: DbSession, _admin: AdminUser) -> dict[str, Any]:
     """Return aggregate statistics across all users and tiers (admin only)."""
-    _require_admin(request)
-
     from app.models import FileRecord, UserProfile
 
     today = datetime.now(timezone.utc).date()
