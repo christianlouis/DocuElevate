@@ -10,6 +10,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.78.0 (2026-03-06)
+
+### Bug Fixes
+
+- Address code review feedback
+  ([`507c333`](https://github.com/christianlouis/DocuElevate/commit/507c333c15daa6e2bc5c1cce10d916dc82894b8e))
+
+- Address code review — use modern type hints and Callable annotation
+  ([`c8bc4af`](https://github.com/christianlouis/DocuElevate/commit/c8bc4afc9381a4d49455da5eefaf49d84c02ed3d))
+
+- **tests**: Add missing mock settings attrs in test_original_filename_preservation
+  ([`f4b793e`](https://github.com/christianlouis/DocuElevate/commit/f4b793e9b8eae37f5917ed8a057e90ad0a36ade2))
+
+### Chores
+
+- Plan general autocomplete widget for settings
+  ([`3fd2bb3`](https://github.com/christianlouis/DocuElevate/commit/3fd2bb3c5f50148a5e668c9c648dd272c5167e1f))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`330c3ae`](https://github.com/christianlouis/DocuElevate/commit/330c3aedb6c2207c717415be86b3544d12c94d01))
+
+### Documentation
+
+- **database**: Add wizard and migration tool documentation
+  ([`cb3bf80`](https://github.com/christianlouis/DocuElevate/commit/cb3bf809ccf75b77d9db9295b6a33c16af9a3e78))
+
+- **database**: Update configuration guides with wizard cross-references, clean up review feedback
+  ([`7dae15f`](https://github.com/christianlouis/DocuElevate/commit/7dae15fd29823a9d2a1843613c14d81cf1eedebd))
+
+### Features
+
+- **database**: Add database configuration wizard and migration tool
+  ([`f6fcaae`](https://github.com/christianlouis/DocuElevate/commit/f6fcaaecccf885203ef76add850de424233de9b4))
+
+- **database**: Integrate wizard into settings page, improve accessibility and test coverage
+  ([`174e489`](https://github.com/christianlouis/DocuElevate/commit/174e4890dd22b69ef39cfeeaf2421c409e096878))
+
+- **multi-user**: Add multi-user feature flag, owner_id model field, and user-scoped queries
+  ([`71f437e`](https://github.com/christianlouis/DocuElevate/commit/71f437e43aa95788d2dc8c57725fa3842816ad96))
+
+- **multi-user**: Add unclaimed doc visibility, claim/assign-owner endpoints, default_owner_id
+  ([`5722252`](https://github.com/christianlouis/DocuElevate/commit/5722252dcb46b498f402bef17361f4741a9698ef))
+
+- **settings**: Add dynamic autocomplete for AWS/Azure regions, OCR langs, and embedding models
+  ([`62d7ad7`](https://github.com/christianlouis/DocuElevate/commit/62d7ad7e9ec8ff6f8239199bc5b69a737cfba49a))
+
+- **ui**: Add user autocomplete widget for default_owner_id, user search API, and documentation
+  ([`3601e2c`](https://github.com/christianlouis/DocuElevate/commit/3601e2ca5ccb475b47aa5a18fd9c0a6b8de012bc))
+
+### Refactoring
+
+- **multi-user**: Address code review - module imports, explicit false(), string length
+  ([`a8d44b1`](https://github.com/christianlouis/DocuElevate/commit/a8d44b189c4212144fe5f772f89e2a6f8f05501c))
+
+### Testing
+
+- **multi-user**: Add comprehensive tests for multi-user isolation and feature flag
+  ([`d7b7f14`](https://github.com/christianlouis/DocuElevate/commit/d7b7f1478f971c25e795e4beaa291042bea5a592))
+
+
 ## v0.77.2 (2026-03-02)
 
 ### Bug Fixes
