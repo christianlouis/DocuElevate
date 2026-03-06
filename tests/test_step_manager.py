@@ -5,15 +5,18 @@ This test module verifies the new explicit status tracking approach.
 """
 
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.config import settings
 from app.database import Base
 from app.models import FileProcessingStep, FileRecord
 from app.utils.step_manager import (
     MAIN_PROCESSING_STEPS,
+    TERMINAL_STEP,
     add_upload_steps,
     get_file_overall_status,
     get_file_step_status,
@@ -397,3 +400,225 @@ class TestStepManager:
 
         assert summary["total_main_steps"] == len(MAIN_PROCESSING_STEPS)
         assert summary["total_upload_tasks"] == 3  # 3 upload_to_* steps counted
+
+    def test_get_file_overall_status_duplicate_file(self, db_session: Session):
+        """Test overall status returns 'duplicate' immediately for duplicate files."""
+        file_record = FileRecord(
+            filehash="test_dup01",
+            original_filename="dup.pdf",
+            local_filename="/tmp/dup.pdf",
+            file_size=1024,
+            is_duplicate=True,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        status = get_file_overall_status(db_session, file_record.id)
+
+        assert status["status"] == "duplicate"
+        assert status["has_errors"] is False
+        assert status["total_steps"] == 0
+        assert status["completed_steps"] == 0
+        assert status["failed_steps"] == 0
+        assert status["in_progress_steps"] == 0
+        assert status["skipped_steps"] == 0
+
+    def test_get_file_overall_status_no_steps_initialized(self, db_session: Session):
+        """Test overall status returns 'pending' with zero counts when no steps exist."""
+        file_record = FileRecord(
+            filehash="test_nosteps",
+            original_filename="nosteps.pdf",
+            local_filename="/tmp/nosteps.pdf",
+            file_size=1024,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        # Do NOT initialize any steps
+        status = get_file_overall_status(db_session, file_record.id)
+
+        assert status["status"] == "pending"
+        assert status["has_errors"] is False
+        assert status["total_steps"] == 0
+        assert status["completed_steps"] == 0
+
+    def test_get_file_overall_status_all_success_without_terminal_step(self, db_session: Session):
+        """Test overall status stays 'pending' when all steps succeed but terminal step is absent."""
+        file_record = FileRecord(
+            filehash="test_no_terminal2",
+            original_filename="no_terminal2.pdf",
+            local_filename="/tmp/no_terminal2.pdf",
+            file_size=1024,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        # Add only non-terminal steps as success (no TERMINAL_STEP = send_to_all_destinations)
+        for step_name in ["create_file_record", "check_text", "extract_text"]:
+            step = FileProcessingStep(file_id=file_record.id, step_name=step_name, status="success")
+            db_session.add(step)
+        db_session.commit()
+
+        status = get_file_overall_status(db_session, file_record.id)
+
+        # All counted steps are success/skipped, but terminal step missing → pending
+        assert status["status"] == "pending"
+        assert status["has_errors"] is False
+        assert status["completed_steps"] == 3
+
+    def test_get_file_overall_status_dedup_disabled(self, db_session: Session):
+        """Test that check_for_duplicates is excluded from real steps when dedup is disabled."""
+        file_record = FileRecord(
+            filehash="test_dedup_off",
+            original_filename="dedup_off.pdf",
+            local_filename="/tmp/dedup_off.pdf",
+            file_size=1024,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        # Add check_for_duplicates step as success and terminal step as success
+        db_session.add(FileProcessingStep(file_id=file_record.id, step_name="check_for_duplicates", status="success"))
+        db_session.add(FileProcessingStep(file_id=file_record.id, step_name=TERMINAL_STEP, status="success"))
+        db_session.commit()
+
+        with patch.object(settings, "enable_deduplication", False):
+            status = get_file_overall_status(db_session, file_record.id)
+
+        # check_for_duplicates should not be counted; only send_to_all_destinations counts
+        assert status["status"] == "completed"
+        assert status["total_steps"] == 1  # Only the terminal step
+        assert status["completed_steps"] == 1
+
+    def test_get_step_summary_dedup_disabled(self, db_session: Session):
+        """Test that get_step_summary excludes check_for_duplicates when dedup is disabled."""
+        file_record = FileRecord(
+            filehash="test_sum_dedup_off",
+            original_filename="sum_dedup_off.pdf",
+            local_filename="/tmp/sum_dedup_off.pdf",
+            file_size=1024,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        db_session.add(FileProcessingStep(file_id=file_record.id, step_name="check_for_duplicates", status="success"))
+        db_session.add(FileProcessingStep(file_id=file_record.id, step_name=TERMINAL_STEP, status="success"))
+        db_session.commit()
+
+        with patch.object(settings, "enable_deduplication", False):
+            summary = get_step_summary(db_session, file_record.id)
+
+        # check_for_duplicates should not be counted; only terminal step as a main step
+        assert summary["main"]["success"] == 1
+        assert summary["total_main_steps"] == 1
+
+    def test_add_upload_steps_idempotent(self, db_session: Session):
+        """Test that add_upload_steps does not create duplicate steps if called twice."""
+        file_record = FileRecord(
+            filehash="test_idem01",
+            original_filename="idem.pdf",
+            local_filename="/tmp/idem.pdf",
+            file_size=1024,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        destinations = ["dropbox", "s3"]
+        add_upload_steps(db_session, file_record.id, destinations)
+        add_upload_steps(db_session, file_record.id, destinations)  # Second call should be a no-op
+
+        steps = db_session.query(FileProcessingStep).filter(FileProcessingStep.file_id == file_record.id).all()
+
+        # Only 2 steps per destination (queue_ and upload_to_), NOT 4
+        assert len(steps) == len(destinations) * 2
+
+    def test_get_step_summary_internal_step_filtered(self, db_session: Session):
+        """Test that non-real internal steps (e.g. poll_task) are ignored in get_step_summary."""
+        file_record = FileRecord(
+            filehash="test_internal01",
+            original_filename="internal.pdf",
+            local_filename="/tmp/internal.pdf",
+            file_size=1024,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        # Add a real step and an internal/diagnostic step
+        db_session.add(FileProcessingStep(file_id=file_record.id, step_name=TERMINAL_STEP, status="success"))
+        db_session.add(FileProcessingStep(file_id=file_record.id, step_name="poll_task", status="success"))
+        db_session.commit()
+
+        summary = get_step_summary(db_session, file_record.id)
+
+        # poll_task is not a real step and must be filtered out
+        assert summary["total_main_steps"] == 1  # Only TERMINAL_STEP
+        assert summary["main"]["success"] == 1
+
+    def test_get_step_summary_unusual_upload_status(self, db_session: Session):
+        """Test get_step_summary with an upload step whose status is not in the counts dict."""
+        file_record = FileRecord(
+            filehash="test_unk_upload",
+            original_filename="unk_upload.pdf",
+            local_filename="/tmp/unk_upload.pdf",
+            file_size=1024,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        db_session.add(FileProcessingStep(file_id=file_record.id, step_name=TERMINAL_STEP, status="success"))
+        # "cancelled" is not in the upload_counts dict keys
+        db_session.add(FileProcessingStep(file_id=file_record.id, step_name="upload_to_dropbox", status="cancelled"))
+        db_session.commit()
+
+        summary = get_step_summary(db_session, file_record.id)
+
+        # The upload step is still counted in total_upload_tasks even with an unusual status
+        assert summary["total_upload_tasks"] == 1
+        # "cancelled" not in counts, so no key incremented
+        assert summary["uploads"]["success"] == 0
+        assert summary["uploads"]["failure"] == 0
+
+    def test_get_step_summary_unusual_main_status(self, db_session: Session):
+        """Test get_step_summary with a main step whose status is not in the counts dict."""
+        file_record = FileRecord(
+            filehash="test_unk_main",
+            original_filename="unk_main.pdf",
+            local_filename="/tmp/unk_main.pdf",
+            file_size=1024,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        db_session.add(FileProcessingStep(file_id=file_record.id, step_name=TERMINAL_STEP, status="success"))
+        # "cancelled" is not in the main_counts dict keys
+        db_session.add(FileProcessingStep(file_id=file_record.id, step_name="create_file_record", status="cancelled"))
+        db_session.commit()
+
+        summary = get_step_summary(db_session, file_record.id)
+
+        # The main step is still counted in total_main_steps even with an unusual status
+        assert summary["total_main_steps"] == 2  # terminal + create_file_record
+        # "cancelled" not in counts, so no key incremented beyond terminal step's success
+        assert summary["main"]["success"] == 1
+        assert summary["main"]["queued"] == 0
+
+    def test_get_step_summary_no_terminal_step_in_db(self, db_session: Session):
+        """Test that get_step_summary adds terminal step as queued when it is absent from DB."""
+        file_record = FileRecord(
+            filehash="test_no_term_sum",
+            original_filename="no_term_sum.pdf",
+            local_filename="/tmp/no_term_sum.pdf",
+            file_size=1024,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        # Add only non-terminal main steps
+        db_session.add(FileProcessingStep(file_id=file_record.id, step_name="create_file_record", status="success"))
+        db_session.commit()
+
+        summary = get_step_summary(db_session, file_record.id)
+
+        # Terminal step absent → automatically added as queued (exactly one queued, two total)
+        assert summary["main"]["queued"] == 1
+        assert summary["total_main_steps"] == 2  # create_file_record + virtual terminal step
