@@ -5,13 +5,20 @@ Tests the similarity utility functions and the API endpoint
 """
 
 import json
-from unittest.mock import patch
+import sys
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.models import FileRecord
-from app.utils.similarity import cosine_similarity, find_similar_documents
+from app.utils.similarity import (
+    _get_cached_embedding,
+    compute_and_store_embedding,
+    cosine_similarity,
+    find_similar_documents,
+    generate_embedding,
+)
 
 # ---------------------------------------------------------------------------
 # Unit tests for cosine_similarity
@@ -1012,3 +1019,320 @@ class TestBackfillMissingEmbeddingsTask:
 
         assert result["queued"] == 0
         mock_delay.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for _get_embedding_client
+# ---------------------------------------------------------------------------
+
+
+class TestGetEmbeddingClient:
+    """Unit tests for the _get_embedding_client function."""
+
+    @pytest.mark.unit
+    def test_raises_runtime_error_when_openai_not_installed(self):
+        """Should raise RuntimeError when openai package is not available."""
+        from app.utils import similarity
+
+        # Temporarily hide the openai module
+        real_openai = sys.modules.get("openai")
+        sys.modules["openai"] = None  # type: ignore[assignment]
+        try:
+            with pytest.raises(RuntimeError, match="'openai' package is required"):
+                similarity._get_embedding_client()
+        finally:
+            if real_openai is None:
+                del sys.modules["openai"]
+            else:
+                sys.modules["openai"] = real_openai
+
+    @pytest.mark.unit
+    @patch("app.utils.similarity.settings")
+    def test_returns_openai_client(self, mock_settings):
+        """Should return an OpenAI client when openai is installed."""
+        mock_settings.openai_api_key = "test-key"
+        mock_settings.openai_base_url = "https://api.openai.com/v1"
+
+        mock_client = MagicMock()
+        mock_openai_class = MagicMock(return_value=mock_client)
+
+        with patch.dict(sys.modules, {"openai": MagicMock(OpenAI=mock_openai_class)}):
+            # Force re-import to pick up the patched module
+            import importlib
+
+            from app.utils import similarity
+
+            importlib.reload(similarity)
+            result = similarity._get_embedding_client()
+
+        assert result is not None
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for generate_embedding
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateEmbedding:
+    """Unit tests for the generate_embedding function."""
+
+    @pytest.mark.unit
+    @patch("app.utils.similarity._get_embedding_client")
+    @patch("app.utils.similarity.settings")
+    def test_uses_default_model_when_none(self, mock_settings, mock_get_client):
+        """Should use settings.embedding_model when model=None is passed."""
+        mock_settings.embedding_model = "text-embedding-3-small"
+        mock_settings.embedding_max_tokens = 8000
+
+        mock_response = MagicMock()
+        mock_response.data = [MagicMock(embedding=[0.1, 0.2, 0.3])]
+        mock_client = MagicMock()
+        mock_client.embeddings.create.return_value = mock_response
+        mock_get_client.return_value = mock_client
+
+        result = generate_embedding("hello world", model=None)
+
+        assert result == [0.1, 0.2, 0.3]
+        mock_client.embeddings.create.assert_called_once_with(input="hello world", model="text-embedding-3-small")
+
+    @pytest.mark.unit
+    @patch("app.utils.similarity._get_embedding_client")
+    @patch("app.utils.similarity.settings")
+    def test_truncates_long_text(self, mock_settings, mock_get_client):
+        """Should truncate text that exceeds embedding_max_tokens * 3 characters."""
+        mock_settings.embedding_model = "text-embedding-3-small"
+        mock_settings.embedding_max_tokens = 10  # max_chars = 30
+
+        mock_response = MagicMock()
+        mock_response.data = [MagicMock(embedding=[0.5])]
+        mock_client = MagicMock()
+        mock_client.embeddings.create.return_value = mock_response
+        mock_get_client.return_value = mock_client
+
+        long_text = "a" * 100  # 100 chars, well beyond the 30-char limit
+        result = generate_embedding(long_text)
+
+        assert result == [0.5]
+        # Verify the text was truncated to 30 chars (max_tokens=10, 10*3=30)
+        call_args = mock_client.embeddings.create.call_args
+        actual_input = call_args.kwargs.get("input") or call_args[1].get("input") or call_args[0][0]
+        assert len(actual_input) == 30
+
+    @pytest.mark.unit
+    @patch("app.utils.similarity._get_embedding_client")
+    @patch("app.utils.similarity.settings")
+    def test_explicit_model_used(self, mock_settings, mock_get_client):
+        """Should use the provided model rather than settings.embedding_model."""
+        mock_settings.embedding_model = "default-model"
+        mock_settings.embedding_max_tokens = 8000
+
+        mock_response = MagicMock()
+        mock_response.data = [MagicMock(embedding=[0.9])]
+        mock_client = MagicMock()
+        mock_client.embeddings.create.return_value = mock_response
+        mock_get_client.return_value = mock_client
+
+        generate_embedding("some text", model="custom-model")
+
+        mock_client.embeddings.create.assert_called_once_with(input="some text", model="custom-model")
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for _get_cached_embedding (invalid JSON paths)
+# ---------------------------------------------------------------------------
+
+
+class TestGetCachedEmbeddingEdgeCases:
+    """Edge-case tests for _get_cached_embedding."""
+
+    @pytest.mark.unit
+    def test_returns_none_for_invalid_json(self):
+        """Should return None and log a warning for malformed JSON."""
+        mock_record = MagicMock()
+        mock_record.id = 42
+        mock_record.embedding = "not-valid-json{"
+
+        result = _get_cached_embedding(mock_record)
+
+        assert result is None
+
+    @pytest.mark.unit
+    def test_returns_none_for_non_string_embedding(self):
+        """Should return None when json.loads raises TypeError."""
+        mock_record = MagicMock()
+        mock_record.id = 99
+        # json.loads raises TypeError for non-string inputs other than bytes/bytearray
+        mock_record.embedding = 12345  # int causes TypeError in json.loads
+
+        result = _get_cached_embedding(mock_record)
+
+        assert result is None
+
+    @pytest.mark.unit
+    def test_returns_none_when_no_embedding_attr(self):
+        """Should return None when file record has no embedding attribute."""
+
+        class MinimalRecord:
+            id = 1
+
+        result = _get_cached_embedding(MinimalRecord())
+
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for compute_and_store_embedding
+# ---------------------------------------------------------------------------
+
+
+class TestComputeAndStoreEmbedding:
+    """Unit tests for compute_and_store_embedding."""
+
+    @pytest.mark.unit
+    def test_returns_cached_embedding_when_already_present(self, db_session):
+        """Should return the existing embedding without calling the API."""
+        cached = [0.1, 0.2, 0.3]
+        file_record = FileRecord(
+            filehash="cse1",
+            local_filename="/tmp/cse1.pdf",
+            file_size=100,
+            original_filename="cse1.pdf",
+            ocr_text="some text",
+            embedding=json.dumps(cached),
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        with patch("app.utils.similarity.generate_embedding") as mock_gen:
+            result = compute_and_store_embedding(db_session, file_record)
+
+        assert result == cached
+        mock_gen.assert_not_called()
+
+    @pytest.mark.unit
+    def test_returns_none_when_no_ocr_text(self, db_session):
+        """Should return None when file has no OCR text."""
+        file_record = FileRecord(
+            filehash="cse2",
+            local_filename="/tmp/cse2.pdf",
+            file_size=100,
+            original_filename="cse2.pdf",
+            ocr_text=None,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        result = compute_and_store_embedding(db_session, file_record)
+
+        assert result is None
+
+    @pytest.mark.unit
+    def test_returns_none_when_ocr_text_is_whitespace_only(self, db_session):
+        """Should return None when OCR text is only whitespace."""
+        file_record = FileRecord(
+            filehash="cse3",
+            local_filename="/tmp/cse3.pdf",
+            file_size=100,
+            original_filename="cse3.pdf",
+            ocr_text="   \t\n  ",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        result = compute_and_store_embedding(db_session, file_record)
+
+        assert result is None
+
+    @pytest.mark.unit
+    def test_returns_none_and_rolls_back_on_exception(self, db_session):
+        """Should return None and rollback when generate_embedding raises."""
+        file_record = FileRecord(
+            filehash="cse4",
+            local_filename="/tmp/cse4.pdf",
+            file_size=100,
+            original_filename="cse4.pdf",
+            ocr_text="Some valid text",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        with patch("app.utils.similarity.generate_embedding", side_effect=RuntimeError("API error")):
+            result = compute_and_store_embedding(db_session, file_record)
+
+        assert result is None
+
+    @pytest.mark.unit
+    def test_handles_invalid_cached_json_and_recomputes(self, db_session):
+        """Should recompute when cached embedding JSON is malformed."""
+        file_record = FileRecord(
+            filehash="cse5",
+            local_filename="/tmp/cse5.pdf",
+            file_size=100,
+            original_filename="cse5.pdf",
+            ocr_text="Some valid text",
+            embedding="not-valid-json",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        new_embedding = [0.7, 0.8, 0.9]
+        with patch("app.utils.similarity.generate_embedding", return_value=new_embedding):
+            result = compute_and_store_embedding(db_session, file_record)
+
+        assert result == new_embedding
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for find_similar_documents (invalid candidate JSON)
+# ---------------------------------------------------------------------------
+
+
+class TestFindSimilarDocumentsEdgeCases:
+    """Edge-case tests for find_similar_documents."""
+
+    @pytest.mark.unit
+    def test_skips_candidate_with_invalid_json_embedding(self, db_session):
+        """Candidates with malformed embedding JSON should be silently skipped."""
+        target_embedding = [1.0, 0.0, 0.0]
+        target = FileRecord(
+            filehash="fsd_t",
+            local_filename="/tmp/fsd_t.pdf",
+            file_size=100,
+            original_filename="target.pdf",
+            ocr_text="target text",
+            embedding=json.dumps(target_embedding),
+        )
+        # This candidate has corrupt embedding JSON
+        bad_candidate = FileRecord(
+            filehash="fsd_b",
+            local_filename="/tmp/fsd_b.pdf",
+            file_size=100,
+            original_filename="bad_candidate.pdf",
+            ocr_text="some text",
+            embedding="{invalid-json",
+        )
+        db_session.add_all([target, bad_candidate])
+        db_session.commit()
+
+        result = find_similar_documents(db_session, file_id=target.id, threshold=0.0)
+
+        # bad_candidate should be skipped, not crash
+        assert all(r["file_id"] != bad_candidate.id for r in result)
+
+    @pytest.mark.unit
+    def test_returns_empty_for_file_with_invalid_cached_embedding(self, db_session):
+        """Should return empty list when target file's embedding is invalid JSON."""
+        target = FileRecord(
+            filehash="fsd_inv",
+            local_filename="/tmp/fsd_inv.pdf",
+            file_size=100,
+            original_filename="inv.pdf",
+            ocr_text="some text",
+            embedding="{bad-json",
+        )
+        db_session.add(target)
+        db_session.commit()
+
+        result = find_similar_documents(db_session, file_id=target.id)
+
+        assert result == []
