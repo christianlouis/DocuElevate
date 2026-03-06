@@ -4,6 +4,8 @@ DocuElevate uses [SQLAlchemy](https://www.sqlalchemy.org/) as its ORM and [Alemb
 
 ## Table of Contents
 
+- [Database Configuration Wizard](#database-configuration-wizard)
+- [Database Migration Tool](#database-migration-tool)
 - [Supported Databases](#supported-databases)
 - [Configuration](#configuration)
 - [SQLite (Development)](#sqlite-development)
@@ -14,6 +16,74 @@ DocuElevate uses [SQLAlchemy](https://www.sqlalchemy.org/) as its ORM and [Alemb
 - [Backup Procedures](#backup-procedures)
 - [Performance Optimization](#performance-optimization)
 - [Troubleshooting](#troubleshooting)
+
+---
+
+## Database Configuration Wizard
+
+DocuElevate includes a guided **Database Configuration Wizard** accessible at `/database-wizard`.  The wizard walks you through building a connection string step by step — no need to remember the exact URL format.
+
+### How to Access
+
+Navigate to **`/database-wizard`** in your browser, or find the link under **Admin → Settings**.  On the Settings page, click the **DB Wizard** button in the toolbar, or look for the **Open Database Wizard** link next to the `database_url` setting.
+
+### Wizard Steps
+
+1. **Choose Database Type** — select SQLite, PostgreSQL, or MySQL/MariaDB.
+2. **Connection Details** — enter host, port, database name, credentials, and SSL mode (auto-populated with sensible defaults).
+3. **Test & Apply** — test the connection before committing, then copy the generated `DATABASE_URL` into your `.env` file.
+
+The wizard generates the full SQLAlchemy connection string and lets you test connectivity directly from the UI.  After testing, copy the `DATABASE_URL=…` line into your `.env` file (or Docker Compose environment) and restart DocuElevate.
+
+### REST API
+
+The wizard is backed by a REST API under `/api/database/`:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/database/backends` | GET | List supported database backends |
+| `/api/database/build-url` | POST | Build a connection string from components |
+| `/api/database/parse-url` | POST | Parse a connection string into components |
+| `/api/database/validate-url` | POST | Validate URL format without connecting |
+| `/api/database/test-connection` | POST | Test connectivity to a database |
+
+> **Note:** All write endpoints require admin authentication.
+
+---
+
+## Database Migration Tool
+
+The **Migrate Data** tab (on the same `/database-wizard` page) lets you copy all your data from one database to another — for example, migrating from the built-in SQLite database to an external PostgreSQL or MySQL instance.
+
+### When to Use
+
+- Moving from a development SQLite database to a production PostgreSQL instance.
+- Migrating to a managed cloud database (AWS RDS, Google Cloud SQL, Azure Database for PostgreSQL, Supabase, etc.).
+- Consolidating data from one database engine to another.
+
+### How It Works
+
+1. Enter (or auto-fill) the **Source Database URL** — this is your current database.
+2. Enter the **Target Database URL** — the new, empty database to copy data into.
+3. Click **Test Source** and **Test Target** to verify both connections.
+4. Click **Preview Migration** to see a table-by-table row count.
+5. Confirm and click **Start Migration** to copy all data.
+
+The migration tool:
+- Creates the full schema in the target database from the application models.
+- Copies all rows table by table in dependency order (parent tables first).
+- Stamps the Alembic migration version to `head` in the target.
+
+After migration, update your `DATABASE_URL` environment variable to point at the new database and restart DocuElevate.
+
+### REST API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/database/preview-migration` | POST | Preview tables and row counts |
+| `/api/database/migrate` | POST | Execute the full data migration |
+
+> **Warning:** Always run the migration against an **empty** target database.  The tool does not delete existing data in the target before copying.
 
 ---
 

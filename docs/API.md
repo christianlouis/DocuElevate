@@ -1238,6 +1238,125 @@ Send a test notification through all configured notification channels.
 The API implements rate limiting to ensure system stability. If you exceed the limits, you'll receive a `429 Too Many Requests` response.
 
 
+## Database Configuration Wizard
+
+Endpoints for building and testing database connection strings and migrating data between databases.  All write endpoints require admin authentication.
+
+### GET /api/database/backends
+
+List supported database backends with metadata.
+
+**Response (200):**
+```json
+[
+  {
+    "id": "sqlite",
+    "label": "SQLite (Development)",
+    "default_port": null,
+    "description": "File-based database. Best for development and single-user setups.",
+    "requires_host": false
+  },
+  {
+    "id": "postgresql",
+    "label": "PostgreSQL (Recommended for Production)",
+    "default_port": 5432,
+    "description": "Robust, full-featured database. Recommended for production.",
+    "requires_host": true
+  }
+]
+```
+
+### POST /api/database/build-url
+
+Build a SQLAlchemy connection string from individual components.
+
+**Request:**
+```json
+{
+  "backend": "postgresql",
+  "host": "my-db.rds.amazonaws.com",
+  "port": 5432,
+  "database": "docuelevate",
+  "username": "admin",
+  "password": "secret",
+  "ssl_mode": "require"
+}
+```
+
+**Response (200):**
+```json
+{
+  "url": "postgresql://admin:secret@my-db.rds.amazonaws.com:5432/docuelevate?sslmode=require"
+}
+```
+
+### POST /api/database/test-connection
+
+Test connectivity to a database.
+
+**Request:**
+```json
+{
+  "url": "postgresql://admin:secret@my-db.rds.amazonaws.com:5432/docuelevate?sslmode=require"
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Connection successful",
+  "backend": "postgresql",
+  "server_version": "PostgreSQL 16.2 on x86_64-pc-linux-gnu"
+}
+```
+
+### POST /api/database/preview-migration
+
+Preview a data migration (table-by-table row counts) without copying data.
+
+**Request:**
+```json
+{
+  "url": "sqlite:///./app/database.db"
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "tables": [
+    {"name": "documents", "row_count": 42},
+    {"name": "files", "row_count": 150}
+  ],
+  "total_rows": 192
+}
+```
+
+### POST /api/database/migrate
+
+Execute a full data migration from source to target database.
+
+**Request:**
+```json
+{
+  "source_url": "sqlite:///./app/database.db",
+  "target_url": "postgresql://admin:secret@host:5432/docuelevate"
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "tables_copied": 8,
+  "rows_copied": 192,
+  "errors": []
+}
+```
+
+
 ## Further Assistance
 
 For additional help with the API, please contact our support team or refer to the [Development Guide](../CONTRIBUTING.md).

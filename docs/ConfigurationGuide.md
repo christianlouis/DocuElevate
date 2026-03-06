@@ -10,7 +10,7 @@ Configuration is primarily done through environment variables specified in a `.e
 
 | **Variable**           | **Description**                                          | **Example**                    |
 |------------------------|----------------------------------------------------------|--------------------------------|
-| `DATABASE_URL`         | Path/URL to the SQLite database (or other SQL backend). | `sqlite:///./app/database.db`  |
+| `DATABASE_URL`         | Path/URL to the SQLite database (or other SQL backend). Use the [Database Wizard](/database-wizard) for guided setup. See [Database Configuration](DatabaseConfiguration.md). | `sqlite:///./app/database.db`  |
 | `REDIS_URL`            | URL for Redis, used by Celery for broker & result store. | `redis://redis:6379/0`         |
 | `WORKDIR`              | Working directory for the application.                  | `/workdir`                     |
 | `GOTENBERG_URL`        | Gotenberg PDF processing URL.                           | `http://gotenberg:3000`        |

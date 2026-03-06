@@ -7,6 +7,7 @@ import logging
 from fastapi import APIRouter
 
 from app.api.azure import router as azure_router
+from app.api.database import router as database_router
 from app.api.diagnostic import router as diagnostic_router
 from app.api.dropbox import router as dropbox_router
 from app.api.duplicates import router as duplicates_router
@@ -52,3 +53,4 @@ router.include_router(saved_searches_router)
 router.include_router(similarity_router)
 router.include_router(duplicates_router)
 router.include_router(webhooks_router)
+router.include_router(database_router)
