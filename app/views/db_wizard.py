@@ -8,6 +8,7 @@ and migrating data from one database to another.
 import logging
 
 from fastapi import Request
+from fastapi.responses import Response
 
 from app.config import settings
 from app.views.base import APIRouter, templates
@@ -17,7 +18,7 @@ router = APIRouter()
 
 
 @router.get("/database-wizard")
-async def database_wizard(request: Request) -> templates.TemplateResponse:
+async def database_wizard(request: Request) -> Response:
     """Render the database configuration wizard page."""
     return templates.TemplateResponse(
         "db_wizard.html",

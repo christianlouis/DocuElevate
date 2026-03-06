@@ -56,8 +56,9 @@ def process_document(
       3. If force_cloud_ocr is True, skip local text extraction and use cloud OCR
     """
     # Fall back to the configured default_owner_id when no explicit owner was provided
-    if owner_id is None and settings.default_owner_id:
-        owner_id = settings.default_owner_id
+    default_owner_id = settings.default_owner_id
+    if owner_id is None and isinstance(default_owner_id, str) and default_owner_id.strip():
+        owner_id = default_owner_id
 
     task_id = self.request.id
     logger.info(f"[{task_id}] Starting document processing: {original_local_file}")
