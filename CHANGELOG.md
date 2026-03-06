@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Testing
+
+- Improve coverage for extract_metadata_with_gpt to 100%
+  ([`b901576`](https://github.com/christianlouis/DocuElevate/commit/b9015764c5cd72954755ec7e77d54eba82d04c7e))
+
+
 ## v0.78.1 (2026-03-06)
 
 ### Bug Fixes
