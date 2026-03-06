@@ -446,6 +446,42 @@ async def install_ocr_languages(request: Request, admin: AdminUser):
         )
 
 
+@router.get("/{key}/suggestions")
+async def get_setting_suggestions(
+    key: str,
+    request: Request,
+    q: str = "",
+    limit: int = 10,
+):
+    """
+    Return autocomplete suggestions for a setting key.
+
+    Fetches values dynamically from cloud SDKs, installed tools, or
+    curated static lists depending on the setting.  Results are filtered
+    by case-insensitive substring match on the ``q`` parameter.
+
+    This endpoint does **not** require admin privileges so that the
+    autocomplete widget works for any authenticated user viewing settings.
+    """
+    from app.utils.suggestion_providers import SUGGESTION_PROVIDERS, get_suggestions  # noqa: PLC0415
+
+    if key not in SUGGESTION_PROVIDERS:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No suggestions available for setting '{key}'",
+        )
+
+    try:
+        suggestions = get_suggestions(key, query=q, limit=max(1, min(limit, 50)))
+        return {"key": key, "suggestions": suggestions}
+    except Exception as e:
+        logger.error(f"Error fetching suggestions for {key}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch suggestions",
+        )
+
+
 @router.get("/{key}/history")
 async def get_key_history(key: str, request: Request, db: DbSession, admin: AdminUser):
     """

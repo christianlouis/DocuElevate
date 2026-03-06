@@ -48,6 +48,8 @@ Settings are organized into logical categories for easy navigation:
 - **Dropdown**: Predefined option lists (e.g., PDF/A format, S3 storage class, S3 ACL)
 - **Multi-select**: Comma-separated selections from a list (e.g., OCR providers)
 - **Model Picker**: Free-text with suggested model names (e.g., AI model selection)
+- **User Autocomplete**: Typeahead search for existing user identifiers (e.g., default owner assignment), fetches from `GET /api/users/search`
+- **Autocomplete**: Typeahead search with dynamic suggestions fetched from `GET /api/settings/{key}/suggestions`. Used for AWS/Azure regions, OCR language codes, and embedding models. Providers attempt dynamic resolution (e.g., boto3 for AWS regions, `tesseract --list-langs` for Tesseract) and fall back to curated static lists if the SDK or tool is unavailable.
 - **List**: Comma-separated values (notification URLs, CORS origins)
 
 ### Sensitive Data

@@ -25,7 +25,12 @@ logger = logging.getLogger(__name__)
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
 def process_document(
-    self, original_local_file: str, original_filename: str = None, file_id: int = None, force_cloud_ocr: bool = False
+    self,
+    original_local_file: str,
+    original_filename: str = None,
+    file_id: int = None,
+    force_cloud_ocr: bool = False,
+    owner_id: str = None,
 ):
     """
     Process a document file and trigger appropriate text extraction.
@@ -37,6 +42,8 @@ def process_document(
                  detection and reuses the existing record (used for reprocessing).
         force_cloud_ocr: If True, forces Azure Document Intelligence OCR processing
                         regardless of embedded text quality. Used for re-processing.
+        owner_id: Optional user identifier for multi-user mode. When provided, the
+                  created FileRecord is associated with this user.
 
     Steps:
       1. Check if we have a FileRecord entry (via SHA-256 hash). If found, skip re-processing.
@@ -48,6 +55,10 @@ def process_document(
          - Otherwise, queue Azure Document Intelligence processing
       3. If force_cloud_ocr is True, skip local text extraction and use cloud OCR
     """
+    # Fall back to the configured default_owner_id when no explicit owner was provided
+    if owner_id is None and settings.default_owner_id:
+        owner_id = settings.default_owner_id
+
     task_id = self.request.id
     logger.info(f"[{task_id}] Starting document processing: {original_local_file}")
     log_task_progress(
@@ -141,6 +152,7 @@ def process_document(
                     mime_type=mime_type,
                     is_duplicate=True,
                     duplicate_of_id=existing.id,
+                    owner_id=owner_id,
                 )
                 db.add(duplicate_record)
                 db.commit()
@@ -191,6 +203,7 @@ def process_document(
                 file_size=file_size,
                 mime_type=mime_type,
                 is_duplicate=False,
+                owner_id=owner_id,
             )
             db.add(new_record)
             db.commit()

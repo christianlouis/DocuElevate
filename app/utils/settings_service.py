@@ -78,6 +78,52 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "multi_user_enabled": {
+        "category": "Authentication",
+        "description": (
+            "Enable multi-user mode with individual document spaces per user. "
+            "Each user sees only their own documents, uploads, and search results. "
+            "Requires auth_enabled=True."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "default_daily_upload_limit": {
+        "category": "Authentication",
+        "description": (
+            "Default maximum document uploads allowed per user per day in multi-user mode. Set to 0 for unlimited."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "unowned_docs_visible_to_all": {
+        "category": "Authentication",
+        "description": (
+            "In multi-user mode, controls whether documents without an owner are visible to all users. "
+            "When True, unowned documents appear alongside each user's own files. "
+            "When False, only admins can see unowned documents."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "default_owner_id": {
+        "category": "Authentication",
+        "description": (
+            "Automatically assigns this owner ID to newly ingested documents that would otherwise "
+            "have no owner. Start typing to search existing users, or leave empty to keep documents "
+            "unowned until claimed."
+        ),
+        "type": "user_autocomplete",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "session_secret": {
         "category": "Authentication",
         "description": "Secret key for session encryption (min 32 characters)",
@@ -314,7 +360,7 @@ SETTING_METADATA = {
     "azure_region": {
         "category": "AI Services",
         "description": "Azure region for Document Intelligence services (e.g., eastus)",
-        "type": "string",
+        "type": "autocomplete",
         "sensitive": False,
         "required": False,
         "restart_required": False,
@@ -366,8 +412,11 @@ SETTING_METADATA = {
     },
     "tesseract_language": {
         "category": "OCR Engines",
-        "description": "Tesseract language code(s), e.g. 'eng' or 'eng+deu'. Default: eng+deu (English + German).",
-        "type": "string",
+        "description": (
+            "Tesseract language code(s), e.g. 'eng' or 'eng+deu'. "
+            "Combine multiple with '+'. Default: eng+deu (English + German)."
+        ),
+        "type": "autocomplete",
         "sensitive": False,
         "required": False,
         "restart_required": False,
@@ -375,8 +424,8 @@ SETTING_METADATA = {
     # OCR – EasyOCR
     "easyocr_languages": {
         "category": "OCR Engines",
-        "description": "Comma-separated EasyOCR language codes, e.g. 'en,de,fr'. Default: en,de (English + German).",
-        "type": "string",
+        "description": ("Comma-separated EasyOCR language codes, e.g. 'en,de,fr'. Default: en,de (English + German)."),
+        "type": "autocomplete",
         "sensitive": False,
         "required": False,
         "restart_required": False,
@@ -807,7 +856,7 @@ SETTING_METADATA = {
     "aws_region": {
         "category": "Storage Providers",
         "description": "AWS region for S3 bucket (default: us-east-1)",
-        "type": "string",
+        "type": "autocomplete",
         "sensitive": False,
         "required": False,
         "restart_required": False,
@@ -1430,7 +1479,7 @@ SETTING_METADATA = {
             "Model name used for generating text embeddings via the OpenAI-compatible API. "
             "Embeddings drive the document similarity feature. Default: text-embedding-3-small."
         ),
-        "type": "string",
+        "type": "autocomplete",
         "sensitive": False,
         "required": False,
         "restart_required": False,

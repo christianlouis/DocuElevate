@@ -116,6 +116,43 @@ class Settings(BaseSettings):
     session_secret: Optional[str] = None
     admin_group_name: str = "admin"
 
+    # Multi-user settings
+    multi_user_enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable multi-user mode with individual document spaces per user. "
+            "When enabled, each authenticated user sees only their own documents, "
+            "uploads, and search results. Shared settings (AI, OCR) remain global. "
+            "Requires auth_enabled=True. Default: False (single-user/shared mode)."
+        ),
+    )
+    default_daily_upload_limit: int = Field(
+        default=0,
+        description=(
+            "Default maximum number of document uploads allowed per user per day "
+            "in multi-user mode. Set to 0 for unlimited. "
+            "Individual user limits can override this default. Default: 0 (unlimited)."
+        ),
+    )
+    unowned_docs_visible_to_all: bool = Field(
+        default=True,
+        description=(
+            "In multi-user mode, controls whether documents without an owner (owner_id is NULL) "
+            "are visible to all authenticated users. When True, unowned documents appear in every "
+            "user's file list alongside their own files. When False, only admins can see unowned "
+            "documents. Default: True."
+        ),
+    )
+    default_owner_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "When set, automatically assigns this owner ID to newly ingested documents that would "
+            "otherwise have no owner (e.g. documents from IMAP, API without session, or legacy imports). "
+            "Use the admin /api/files/assign-owner endpoint to bulk-assign existing unclaimed documents. "
+            "Default: None (documents remain unowned until claimed)."
+        ),
+    )
+
     # Authentik
     authentik_client_id: Optional[str] = None
     authentik_client_secret: Optional[str] = None
