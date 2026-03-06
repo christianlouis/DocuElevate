@@ -728,6 +728,90 @@ curl "http://<your-instance>/api/users/search?q=risti&limit=5"
 
 ---
 
+### Admin User Management
+
+**Admin only.** These endpoints let administrators list all known users, view per-user statistics,
+and manage per-user settings such as custom upload limits, display names, and blocked status.
+
+---
+
+**GET** `/api/admin/users/`
+
+List all known users — anyone who has uploaded a document or has an explicit profile.
+Returns aggregate document statistics merged with profile data.
+
+**Query Parameters**:
+- `q` (optional): Substring filter on user ID (case-insensitive)
+- `page` (optional): Page number (default: 1)
+- `per_page` (optional): Items per page (default: 25, max: 100)
+
+```bash
+curl "http://<your-instance>/api/admin/users/" \
+  -H "Cookie: session=<admin-session>"
+```
+
+**Response**:
+```json
+{
+  "users": [
+    {
+      "user_id": "alice@example.com",
+      "display_name": "Alice Smith",
+      "daily_upload_limit": 50,
+      "notes": null,
+      "is_blocked": false,
+      "profile_id": 1,
+      "document_count": 42,
+      "last_upload": "2026-02-15T10:23:00"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "per_page": 25,
+  "pages": 1
+}
+```
+
+---
+
+**GET** `/api/admin/users/{user_id}`
+
+Return profile and document statistics for a specific user.
+
+```bash
+curl "http://<your-instance>/api/admin/users/alice%40example.com"
+```
+
+---
+
+**PUT** `/api/admin/users/{user_id}`
+
+Create or update the admin-managed profile for a user. If no profile exists one is created.
+
+**Request body**:
+```json
+{
+  "display_name": "Alice Smith",
+  "daily_upload_limit": 50,
+  "notes": "VIP customer",
+  "is_blocked": false
+}
+```
+
+- `display_name` (optional): Human-readable name shown in the admin UI
+- `daily_upload_limit` (optional): Per-user daily cap; `null` = use global default; `0` = unlimited
+- `notes` (optional): Admin-only text notes
+- `is_blocked`: When `true`, blocks new uploads from this user
+
+---
+
+**DELETE** `/api/admin/users/{user_id}`
+
+Delete the admin-managed profile for a user. Documents owned by the user are **not** removed.
+Returns `204 No Content` on success, `404` if no profile exists.
+
+---
+
 ### Settings Suggestions (Autocomplete)
 
 **GET** `/api/settings/{key}/suggestions`
