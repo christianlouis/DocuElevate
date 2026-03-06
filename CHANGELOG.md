@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.78.1 (2026-03-06)
+
+### Bug Fixes
+
+- **views**: Resolve mypy TemplateResponse typing and owner fallback
+  ([`575b4e0`](https://github.com/christianlouis/DocuElevate/commit/575b4e088e77513468ffd1742f684a2623576d02))
+
+
 ## v0.78.0 (2026-03-06)
 
 ### Bug Fixes
