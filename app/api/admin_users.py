@@ -51,6 +51,10 @@ class UserProfileUpsert(BaseModel):
     )
     notes: str | None = Field(default=None, max_length=4096, description="Admin notes about this user")
     is_blocked: bool = Field(default=False, description="Block this user from uploading")
+    subscription_tier: str | None = Field(
+        default="free",
+        description="Subscription tier: free | starter | professional | business",
+    )
 
 
 class UserProfileResponse(BaseModel):
@@ -62,6 +66,7 @@ class UserProfileResponse(BaseModel):
     daily_upload_limit: int | None
     notes: str | None
     is_blocked: bool
+    subscription_tier: str | None
     created_at: str | None
     updated_at: str | None
 
@@ -76,6 +81,7 @@ class UserSummary(BaseModel):
     daily_upload_limit: int | None
     notes: str | None
     is_blocked: bool
+    subscription_tier: str | None
     profile_id: int | None
     document_count: int
     last_upload: str | None
@@ -99,6 +105,7 @@ def _profile_to_dict(profile: UserProfile) -> dict[str, Any]:
         "daily_upload_limit": profile.daily_upload_limit,
         "notes": profile.notes,
         "is_blocked": profile.is_blocked,
+        "subscription_tier": profile.subscription_tier or "free",
         "created_at": profile.created_at.isoformat() if profile.created_at else None,
         "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
     }
@@ -164,6 +171,7 @@ def list_users(
                 "daily_upload_limit": profile.daily_upload_limit if profile else None,
                 "notes": profile.notes if profile else None,
                 "is_blocked": profile.is_blocked if profile else False,
+                "subscription_tier": (profile.subscription_tier or "free") if profile else "free",
                 "profile_id": profile.id if profile else None,
                 "document_count": doc_row.doc_count if doc_row else 0,
                 "last_upload": doc_row.last_upload.isoformat() if (doc_row and doc_row.last_upload) else None,
@@ -199,6 +207,7 @@ def get_user(user_id: str, db: DbSession, _admin: AdminUser) -> dict[str, Any]:
         "daily_upload_limit": profile.daily_upload_limit if profile else None,
         "notes": profile.notes if profile else None,
         "is_blocked": profile.is_blocked if profile else False,
+        "subscription_tier": (profile.subscription_tier or "free") if profile else "free",
         "profile_id": profile.id if profile else None,
         "document_count": doc_count,
         "last_upload": last_upload,
@@ -226,6 +235,15 @@ def upsert_user_profile(
     profile.daily_upload_limit = body.daily_upload_limit
     profile.notes = body.notes
     profile.is_blocked = body.is_blocked
+    if body.subscription_tier is not None:
+        from app.utils.subscription import TIERS
+
+        if body.subscription_tier not in TIERS:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid subscription_tier '{body.subscription_tier}'. Valid values: {list(TIERS.keys())}",
+            )
+        profile.subscription_tier = body.subscription_tier
 
     try:
         db.commit()

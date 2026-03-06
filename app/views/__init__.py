@@ -18,6 +18,7 @@ from app.views.queue import router as queue_router
 from app.views.search import router as search_router
 from app.views.settings import router as settings_router
 from app.views.status import router as status_router
+from app.views.subscriptions import router as subscriptions_router
 from app.views.wizard import router as wizard_router
 
 # Create a main router that includes all the view routers
@@ -35,3 +36,4 @@ router.include_router(settings_router)
 router.include_router(filemanager_router)
 router.include_router(search_router)
 router.include_router(queue_router)
+router.include_router(subscriptions_router)  # Pricing + subscription pages

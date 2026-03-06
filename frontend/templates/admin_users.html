@@ -68,6 +68,7 @@
           <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Display Name</th>
           <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Documents</th>
           <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Upload</th>
+          <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>
           <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Upload Limit</th>
           <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
           <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -76,14 +77,14 @@
       <tbody class="bg-white divide-y divide-gray-200">
         <template x-if="loading">
           <tr>
-            <td colspan="7" class="px-4 py-8 text-center text-gray-400">
+            <td colspan="8" class="px-4 py-8 text-center text-gray-400">
               <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i> Loading users…
             </td>
           </tr>
         </template>
         <template x-if="!loading && users.length === 0">
           <tr>
-            <td colspan="7" class="px-4 py-8 text-center text-gray-400">
+            <td colspan="8" class="px-4 py-8 text-center text-gray-400">
               <i class="fas fa-users-slash text-3xl block mb-2" aria-hidden="true"></i>
               No users found.
               <span x-show="search"> Try a different search term.</span>
@@ -117,6 +118,29 @@
             <!-- Last upload -->
             <td class="px-4 py-3 text-sm text-gray-500 whitespace-nowrap"
                 x-text="user.last_upload ? formatDate(user.last_upload) : '—'"></td>
+            <!-- Subscription plan -->
+            <td class="px-4 py-3 text-sm text-center">
+              <span
+                :class="{
+                  'bg-gray-100 text-gray-600': !user.subscription_tier || user.subscription_tier === 'free',
+                  'bg-blue-100 text-blue-700': user.subscription_tier === 'starter',
+                  'bg-indigo-100 text-indigo-700': user.subscription_tier === 'professional',
+                  'bg-purple-100 text-purple-700': user.subscription_tier === 'business',
+                }"
+                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold capitalize"
+              >
+                <i
+                  :class="{
+                    'fas fa-seedling': !user.subscription_tier || user.subscription_tier === 'free',
+                    'fas fa-rocket': user.subscription_tier === 'starter',
+                    'fas fa-star': user.subscription_tier === 'professional',
+                    'fas fa-building': user.subscription_tier === 'business',
+                  }"
+                  aria-hidden="true"
+                ></i>
+                <span x-text="user.subscription_tier || 'free'"></span>
+              </span>
+            </td>
             <!-- Upload limit -->
             <td class="px-4 py-3 text-sm text-center text-gray-700">
               <span x-show="user.daily_upload_limit !== null && user.daily_upload_limit !== undefined"
@@ -300,6 +324,26 @@
             </label>
           </div>
 
+          <!-- Subscription tier -->
+          <div>
+            <label for="modal-tier" class="block text-sm font-medium text-gray-700 mb-1">
+              Subscription Plan
+            </label>
+            <select
+              id="modal-tier"
+              x-model="form.subscription_tier"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+            >
+              <option value="free">Free — 25 lifetime files</option>
+              <option value="starter">Starter — $9/mo (10/day, 100/mo)</option>
+              <option value="professional">Professional — $29/mo (50/day, 500/mo)</option>
+              <option value="business">Business — $79/mo (unlimited)</option>
+            </select>
+            <p class="text-xs text-gray-400 mt-1">
+              Sets the quota limits for this user. Limits are enforced on upload.
+            </p>
+          </div>
+
         </div>
 
         <!-- Footer -->
@@ -394,6 +438,7 @@ function adminUsersApp() {
       daily_upload_limit: null,
       notes: '',
       is_blocked: false,
+      subscription_tier: 'free',
     },
 
     // Delete modal
@@ -446,7 +491,7 @@ function adminUsersApp() {
     openCreateModal() {
       this.isCreate = true;
       this.modalTitle = 'Add User Profile';
-      this.form = { user_id: '', display_name: '', daily_upload_limit: null, notes: '', is_blocked: false };
+      this.form = { user_id: '', display_name: '', daily_upload_limit: null, notes: '', is_blocked: false, subscription_tier: 'free' };
       this.modalOpen = true;
     },
 
@@ -460,6 +505,7 @@ function adminUsersApp() {
           ? user.daily_upload_limit : null,
         notes: user.notes || '',
         is_blocked: !!user.is_blocked,
+        subscription_tier: user.subscription_tier || 'free',
       };
       this.modalOpen = true;
     },
@@ -473,6 +519,7 @@ function adminUsersApp() {
             ? Number(this.form.daily_upload_limit) : null,
           notes: this.form.notes || null,
           is_blocked: !!this.form.is_blocked,
+          subscription_tier: this.form.subscription_tier || 'free',
         };
         const uid = encodeURIComponent(this.form.user_id);
         const resp = await fetch(`/api/admin/users/${uid}`, {

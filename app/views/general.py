@@ -2,11 +2,12 @@
 General routes for the application homepage and basic pages.
 """
 
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.utils.config_validator import get_provider_status, validate_storage_configs
@@ -54,25 +55,76 @@ async def serve_index(request: Request, db: Session = Depends(get_db)):
         and provider in ["dropbox", "nextcloud", "sftp", "s3", "ftp", "webdav", "google_drive", "onedrive"]
     )
 
-    # Query the actual file count from the database
-    processed_files = 0
+    from app.models import FileRecord
+
+    today = datetime.now(timezone.utc).date()
+
+    # Global file counts (or per-user in multi-user mode)
+    from app.config import settings
+
+    user = request.session.get("user") or {}
+    is_admin = user.get("is_admin", False)
+
     try:
-        # Import the model here to avoid circular imports
-        from app.models import FileRecord
+        total_files: int = db.query(func.count(FileRecord.id)).scalar() or 0
 
-        processed_files = db.query(FileRecord.id).count()
+        files_today: int = (
+            db.query(func.count(FileRecord.id)).filter(func.date(FileRecord.created_at) == today).scalar() or 0
+        )
+
+        files_month: int = (
+            db.query(func.count(FileRecord.id))
+            .filter(func.strftime("%Y-%m", FileRecord.created_at) == today.strftime("%Y-%m"))
+            .scalar()
+            or 0
+        )
+
+        files_with_ocr: int = db.query(func.count(FileRecord.id)).filter(FileRecord.ocr_text.isnot(None)).scalar() or 0
+
+        unique_users: int = (
+            db.query(func.count(func.distinct(FileRecord.owner_id))).filter(FileRecord.owner_id.isnot(None)).scalar()
+            or 0
+        )
     except Exception as e:
-        # Log error but continue (don't break the page if DB query fails)
-        logger.error(f"Error counting files: {str(e)}")
+        logger.error(f"Error computing dashboard stats: {e}")
+        total_files = files_today = files_month = files_with_ocr = unique_users = 0
 
-    # Create stats object to pass to the template
+    # Per-user usage for the subscription widget (multi-user only)
+    user_usage = None
+    user_tier = None
+    if settings.multi_user_enabled:
+        owner_id: str = user.get("username") or user.get("email") or user.get("sub") or ""
+        if owner_id:
+            try:
+                from app.utils.subscription import get_tier, get_user_tier_id, get_user_usage
+
+                tier_id = get_user_tier_id(db, owner_id)
+                user_tier = get_tier(tier_id)
+                user_usage = get_user_usage(db, owner_id)
+            except Exception as e:
+                logger.error(f"Error fetching subscription info: {e}")
+
     stats = {
-        "processed_files": processed_files,
+        "processed_files": total_files,
+        "files_today": files_today,
+        "files_month": files_month,
+        "files_with_ocr": files_with_ocr,
+        "unique_users": unique_users,
         "active_integrations": configured_providers,
         "storage_targets": configured_storage_targets,
     }
 
-    return templates.TemplateResponse("index.html", {"request": request, "stats": stats})
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "stats": stats,
+            "user_usage": user_usage,
+            "user_tier": user_tier,
+            "multi_user_enabled": settings.multi_user_enabled,
+            "is_admin": is_admin,
+        },
+    )
 
 
 @router.get("/about", include_in_schema=False)

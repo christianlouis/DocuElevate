@@ -11,7 +11,7 @@ import zipfile
 from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
@@ -1294,6 +1294,22 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
 
     # Determine the owner_id for multi-user document isolation
     upload_owner_id = get_current_owner_id(request) if settings.multi_user_enabled else None
+
+    # Enforce subscription tier upload quotas (multi-user mode only)
+    if settings.multi_user_enabled and upload_owner_id:
+        from app.utils.subscription import QuotaExceeded, check_upload_allowed, get_user_tier_id
+
+        tier_id = get_user_tier_id(db, upload_owner_id)
+        try:
+            check_upload_allowed(db, upload_owner_id, tier_id)
+        except QuotaExceeded as qe:
+            # Clean up the already-saved file before rejecting
+            if os.path.exists(target_path):
+                os.remove(target_path)
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=str(qe),
+            )
 
     # Check if it's a PDF by extension or MIME type
     is_pdf = file_ext == ".pdf" or mime_type == "application/pdf"

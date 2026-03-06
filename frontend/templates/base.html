@@ -63,6 +63,7 @@
             <a href="/upload" class="text-gray-700 hover:text-gray-900" {% if request and request.url.path == '/upload' %}aria-current="page"{% endif %}>Upload</a>
             <a href="/files" class="text-gray-700 hover:text-gray-900" {% if request and request.url.path == '/files' %}aria-current="page"{% endif %}>Files</a>
             <a href="/search" class="text-gray-700 hover:text-gray-900" {% if request and request.url.path == '/search' %}aria-current="page"{% endif %}>Search</a>
+            <a href="/pricing" class="text-gray-700 hover:text-gray-900" {% if request and request.url.path == '/pricing' %}aria-current="page"{% endif %}>Pricing</a>
 
             <!-- Admin dropdown (shown only for admin users via JS) -->
             <div id="adminMenuContainer" class="relative hidden">
@@ -171,6 +172,7 @@
               <a href="/upload" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Upload</a>
               <a href="/files" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Files</a>
               <a href="/search" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Search</a>
+              <a href="/pricing" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Pricing</a>
 
               <!-- Admin section in mobile menu (shown only for admin users via JS) -->
               <div id="mobileAdminSection" class="hidden">
