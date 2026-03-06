@@ -15,6 +15,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - **changelog**: Update changelog [skip ci]
+  ([`299ae98`](https://github.com/christianlouis/DocuElevate/commit/299ae98ebdfa25c2c2b6cfc0dbebc36f82ecaedf))
+
+- **changelog**: Update changelog [skip ci]
+  ([`158b113`](https://github.com/christianlouis/DocuElevate/commit/158b113ac9b1ef7dae013d59e02a6e83682d9c0a))
+
+### Testing
+
+- Improve coverage for app/views/files.py from 59.67% to 99.35%
+  ([`aab1c5f`](https://github.com/christianlouis/DocuElevate/commit/aab1c5fda96e3e6be37f23094d722ba4079c388f))
+
+- Improve coverage for extract_metadata_with_gpt to 100%
+  ([`b901576`](https://github.com/christianlouis/DocuElevate/commit/b9015764c5cd72954755ec7e77d54eba82d04c7e))
+
+- Improve test coverage for app/utils/step_manager.py
+  ([`ed404b4`](https://github.com/christianlouis/DocuElevate/commit/ed404b46610929eb750764a98c4f0b7361cb0903))
+
+- **similarity**: Improve test coverage for app/utils/similarity.py to 100%
+  ([`7acac42`](https://github.com/christianlouis/DocuElevate/commit/7acac4225bc4383a943d9da644b44e83484249d2))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
   ([`158b113`](https://github.com/christianlouis/DocuElevate/commit/158b113ac9b1ef7dae013d59e02a6e83682d9c0a))
 
 ### Testing
