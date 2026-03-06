@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Continuous Integration
+
+- Merge quick and integration tests into a single test step
+  ([`9670e84`](https://github.com/christianlouis/DocuElevate/commit/9670e8486251de8f83d4faefb4ca370ced7cd8f9))
+
+
 ## v0.79.0 (2026-03-06)
 
 ### Bug Fixes
