@@ -2,10 +2,10 @@
 Subscription tier definitions and enforcement utilities for DocuElevate SaaS.
 
 Four tiers:
-  - free        $0/mo  — 25 lifetime files, 1 destination, 50 OCR pages/mo
-  - starter     $9/mo  — 10/day, 100/mo, 3 destinations, 500 OCR pages/mo
-  - professional $29/mo — 50/day, 500/mo, 10 destinations, 2 500 OCR pages/mo
-  - business    $79/mo  — unlimited, unlimited destinations, unlimited OCR
+  - free         $0/mo   — 25 lifetime files, 1 destination, 50 OCR pages/mo
+  - starter      $2.99/mo — 10/day, 100/mo, 3 destinations, 500 OCR pages/mo
+  - professional $5.99/mo — 50/day, 500/mo, 10 destinations, 2 500 OCR pages/mo
+  - business     $7.99/mo — unlimited, unlimited destinations, unlimited OCR
 
 Limits use 0 to represent "unlimited".
 """
@@ -57,8 +57,8 @@ TIERS: dict[str, dict[str, Any]] = {
         "id": "starter",
         "name": "Starter",
         "tagline": "Perfect for individuals & small teams",
-        "price_monthly": 9,
-        "price_yearly": 90,
+        "price_monthly": 2.99,
+        "price_yearly": 29.99,
         "highlight": False,
         "lifetime_file_limit": 0,
         "daily_upload_limit": 10,
@@ -85,8 +85,8 @@ TIERS: dict[str, dict[str, Any]] = {
         "id": "professional",
         "name": "Professional",
         "tagline": "For growing teams that need more power",
-        "price_monthly": 29,
-        "price_yearly": 290,
+        "price_monthly": 5.99,
+        "price_yearly": 59.99,
         "highlight": True,  # shown as "Most popular"
         "lifetime_file_limit": 0,
         "daily_upload_limit": 50,
@@ -113,8 +113,8 @@ TIERS: dict[str, dict[str, Any]] = {
         "id": "business",
         "name": "Business",
         "tagline": "Unlimited processing for organisations",
-        "price_monthly": 79,
-        "price_yearly": 790,
+        "price_monthly": 7.99,
+        "price_yearly": 79.99,
         "highlight": False,
         "lifetime_file_limit": 0,
         "daily_upload_limit": 0,
