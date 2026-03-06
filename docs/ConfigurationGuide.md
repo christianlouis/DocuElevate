@@ -195,6 +195,16 @@ Admins can assign ownership of documents to any user:
 The `DEFAULT_OWNER_ID` setting can also be configured via the Settings page, which provides an
 autocomplete field that searches existing users by substring.
 
+### Subscriptions & Upload Quotas
+
+DocuElevate supports configurable subscription plans with per-user upload quotas enforced at upload time.
+Plans are managed via the **Plan Designer** at `/admin/plans`. The following global setting controls the
+default overage buffer applied across all plans.
+
+| **Variable**                     | **Description**                                                                                                                                                                                                     | **Default** |
+|----------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------|
+| `SUBSCRIPTION_OVERAGE_PERCENT`   | Soft-limit overage buffer in percent (0–200). The announced monthly quota is multiplied by `(1 + percent/100)` for actual enforcement. E.g. `20` means a 150-doc/month plan enforces at 180 docs (150 × 1.20). Set `0` to enforce exactly at the announced limit. Per-plan `overage_percent` configured in the Plan Designer overrides this global default. | `20` |
+
 ### Security Headers
 
 DocuElevate supports HTTP security headers to improve browser-side security. **These headers are disabled by default** since most deployments use a reverse proxy (Traefik, Nginx, etc.) that already adds them. Enable only if deploying directly without a reverse proxy. See [Deployment Guide - Security Headers](DeploymentGuide.md#security-headers) for detailed configuration examples.
