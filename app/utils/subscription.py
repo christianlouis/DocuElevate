@@ -313,7 +313,7 @@ def _today_utc() -> date:
     return datetime.now(timezone.utc).date()
 
 
-def _scalar_count(query) -> int:
+def _scalar_count(query: Any) -> int:
     """Execute a count query and return an int, defaulting to 0 for NULL."""
     return query.scalar() or 0
 
