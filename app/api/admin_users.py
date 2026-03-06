@@ -5,6 +5,7 @@ administrators can inspect, configure, and manage users in multi-user mode.
 """
 
 import logging
+from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -55,6 +56,9 @@ class UserProfileUpsert(BaseModel):
         default="free",
         description="Subscription tier: free | starter | professional | business",
     )
+    subscription_billing_cycle: str = Field(default="monthly", pattern="^(monthly|yearly)$")
+    subscription_period_start: datetime | None = None
+    allow_overage: bool = False
 
 
 class UserProfileResponse(BaseModel):
@@ -67,6 +71,9 @@ class UserProfileResponse(BaseModel):
     notes: str | None
     is_blocked: bool
     subscription_tier: str | None
+    subscription_billing_cycle: str
+    subscription_period_start: str | None
+    allow_overage: bool
     created_at: str | None
     updated_at: str | None
 
@@ -82,6 +89,9 @@ class UserSummary(BaseModel):
     notes: str | None
     is_blocked: bool
     subscription_tier: str | None
+    subscription_billing_cycle: str | None
+    subscription_period_start: str | None
+    allow_overage: bool
     profile_id: int | None
     document_count: int
     last_upload: str | None
@@ -106,6 +116,11 @@ def _profile_to_dict(profile: UserProfile) -> dict[str, Any]:
         "notes": profile.notes,
         "is_blocked": profile.is_blocked,
         "subscription_tier": profile.subscription_tier or "free",
+        "subscription_billing_cycle": profile.subscription_billing_cycle or "monthly",
+        "subscription_period_start": profile.subscription_period_start.isoformat()
+        if profile.subscription_period_start
+        else None,
+        "allow_overage": bool(profile.allow_overage),
         "created_at": profile.created_at.isoformat() if profile.created_at else None,
         "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
     }
@@ -172,6 +187,13 @@ def list_users(
                 "notes": profile.notes if profile else None,
                 "is_blocked": profile.is_blocked if profile else False,
                 "subscription_tier": (profile.subscription_tier or "free") if profile else "free",
+                "subscription_billing_cycle": (profile.subscription_billing_cycle or "monthly")
+                if profile
+                else "monthly",
+                "subscription_period_start": profile.subscription_period_start.isoformat()
+                if (profile and profile.subscription_period_start)
+                else None,
+                "allow_overage": bool(profile.allow_overage) if profile else False,
                 "profile_id": profile.id if profile else None,
                 "document_count": doc_row.doc_count if doc_row else 0,
                 "last_upload": doc_row.last_upload.isoformat() if (doc_row and doc_row.last_upload) else None,
@@ -208,6 +230,11 @@ def get_user(user_id: str, db: DbSession, _admin: AdminUser) -> dict[str, Any]:
         "notes": profile.notes if profile else None,
         "is_blocked": profile.is_blocked if profile else False,
         "subscription_tier": (profile.subscription_tier or "free") if profile else "free",
+        "subscription_billing_cycle": (profile.subscription_billing_cycle or "monthly") if profile else "monthly",
+        "subscription_period_start": profile.subscription_period_start.isoformat()
+        if (profile and profile.subscription_period_start)
+        else None,
+        "allow_overage": bool(profile.allow_overage) if profile else False,
         "profile_id": profile.id if profile else None,
         "document_count": doc_count,
         "last_upload": last_upload,
@@ -235,6 +262,9 @@ def upsert_user_profile(
     profile.daily_upload_limit = body.daily_upload_limit
     profile.notes = body.notes
     profile.is_blocked = body.is_blocked
+    profile.subscription_billing_cycle = body.subscription_billing_cycle
+    profile.subscription_period_start = body.subscription_period_start
+    profile.allow_overage = body.allow_overage
     if body.subscription_tier is not None:
         from app.utils.subscription import TIERS
 

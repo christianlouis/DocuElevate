@@ -17,6 +17,7 @@ from app.api.google_drive import router as google_drive_router
 from app.api.logs import router as logs_router
 from app.api.onedrive import router as onedrive_router
 from app.api.openai import router as openai_router
+from app.api.plans import router as plans_router
 from app.api.process import router as process_router
 from app.api.queue import router as queue_router
 from app.api.saved_searches import router as saved_searches_router
@@ -58,3 +59,4 @@ router.include_router(duplicates_router)
 router.include_router(webhooks_router)
 router.include_router(database_router)
 router.include_router(subscriptions_router)
+router.include_router(plans_router)

@@ -171,19 +171,6 @@
             </tr>
 
             <tr class="hover:bg-indigo-50/30 transition">
-              <td class="px-6 py-3 text-sm text-gray-700">Files per day</td>
-              {% for tier in tiers %}
-              <td class="px-4 py-3 text-center text-sm">
-                {% if tier.daily_upload_limit == 0 %}
-                <span class="font-semibold text-green-600">Unlimited</span>
-                {% else %}
-                <span class="font-medium text-gray-800">{{ tier.daily_upload_limit }}</span>
-                {% endif %}
-              </td>
-              {% endfor %}
-            </tr>
-
-            <tr class="hover:bg-indigo-50/30 transition">
               <td class="px-6 py-3 text-sm text-gray-700">Files per month</td>
               {% for tier in tiers %}
               <td class="px-4 py-3 text-center text-sm">

@@ -14,11 +14,12 @@ from app.views.general import router as general_router
 from app.views.google_drive import router as google_drive_router
 from app.views.license_routes import router as license_router  # Add the license router
 from app.views.onedrive import router as onedrive_router
+from app.views.plans import router as plans_router  # Admin Plan Designer
 from app.views.queue import router as queue_router
 from app.views.search import router as search_router
 from app.views.settings import router as settings_router
 from app.views.status import router as status_router
-from app.views.subscriptions import router as subscriptions_router
+from app.views.subscriptions import router as subscriptions_router  # Pricing + subscription pages
 from app.views.wizard import router as wizard_router
 
 # Create a main router that includes all the view routers
@@ -37,3 +38,4 @@ router.include_router(filemanager_router)
 router.include_router(search_router)
 router.include_router(queue_router)
 router.include_router(subscriptions_router)  # Pricing + subscription pages
+router.include_router(plans_router)  # Admin Plan Designer

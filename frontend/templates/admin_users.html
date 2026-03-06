@@ -335,12 +335,43 @@
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
             >
               <option value="free">Free — 25 lifetime files</option>
-              <option value="starter">Starter — $2.99/mo (5/day, 50/mo, 1 mailbox)</option>
-              <option value="professional">Professional — $5.99/mo (15/day, 150/mo, 3 mailboxes)</option>
-              <option value="business">Business — $7.99/mo (30/day, 300/mo, unlimited mailboxes)</option>
+              <option value="starter">Starter — $2.99/mo (50/mo, 1 mailbox)</option>
+              <option value="professional">Professional — $5.99/mo (150/mo, 3 mailboxes)</option>
+              <option value="business">Business — $7.99/mo (300/mo, unlimited mailboxes)</option>
             </select>
             <p class="text-xs text-gray-400 mt-1">
               Sets the quota limits for this user. Limits are enforced on upload.
+            </p>
+          </div>
+
+          <!-- Billing cycle -->
+          <div>
+            <label for="modal-billing-cycle" class="block text-sm font-medium text-gray-700 mb-1">
+              Billing Cycle
+            </label>
+            <select
+              id="modal-billing-cycle"
+              x-model="form.subscription_billing_cycle"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+            >
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </div>
+
+          <!-- Subscription period start (only shown for yearly) -->
+          <div x-show="form.subscription_billing_cycle === 'yearly'" x-cloak>
+            <label for="modal-period-start" class="block text-sm font-medium text-gray-700 mb-1">
+              Subscription Period Start
+            </label>
+            <input
+              type="date"
+              id="modal-period-start"
+              x-model="form.subscription_period_start"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+            <p class="text-xs text-gray-400 mt-1">
+              Annual carry-over calculates from this date. Leave blank for monthly enforcement.
             </p>
           </div>
 
@@ -439,6 +470,8 @@ function adminUsersApp() {
       notes: '',
       is_blocked: false,
       subscription_tier: 'free',
+      subscription_billing_cycle: 'monthly',
+      subscription_period_start: null,
     },
 
     // Delete modal
@@ -491,7 +524,7 @@ function adminUsersApp() {
     openCreateModal() {
       this.isCreate = true;
       this.modalTitle = 'Add User Profile';
-      this.form = { user_id: '', display_name: '', daily_upload_limit: null, notes: '', is_blocked: false, subscription_tier: 'free' };
+      this.form = { user_id: '', display_name: '', daily_upload_limit: null, notes: '', is_blocked: false, subscription_tier: 'free', subscription_billing_cycle: 'monthly', subscription_period_start: null };
       this.modalOpen = true;
     },
 
@@ -506,6 +539,8 @@ function adminUsersApp() {
         notes: user.notes || '',
         is_blocked: !!user.is_blocked,
         subscription_tier: user.subscription_tier || 'free',
+        subscription_billing_cycle: user.subscription_billing_cycle || 'monthly',
+        subscription_period_start: user.subscription_period_start ? user.subscription_period_start.substring(0, 10) : null,
       };
       this.modalOpen = true;
     },

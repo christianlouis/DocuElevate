@@ -3,9 +3,9 @@ Subscription tier definitions and enforcement utilities for DocuElevate SaaS.
 
 Four tiers (prices ex-VAT; German customers +19 % MwSt):
   - free         $0/mo    — 50 lifetime docs, 150 lifetime OCR pages, 1 dest
-  - starter      $2.99/mo — 5/day, 50/mo, 300 OCR pp/mo, 2 dests, 1 mailbox
-  - professional $5.99/mo — 15/day, 150/mo, 750 OCR pp/mo, 5 dests, 3 mailboxes
-  - business     $7.99/mo — 30/day, 300/mo, 1500 OCR pp/mo, 10 dests, unlimited mailboxes
+  - starter      $2.99/mo — 50/mo, 300 OCR pp/mo, 2 dests, 1 mailbox
+  - professional $5.99/mo — 150/mo, 750 OCR pp/mo, 5 dests, 3 mailboxes
+  - business     $7.99/mo — 300/mo, 1500 OCR pp/mo, 10 dests, unlimited mailboxes
 
 Limits use 0 to represent "unlimited".
 All paid tiers include a 30-day free trial (trial_days field).
@@ -34,13 +34,15 @@ from typing import Any
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Tier catalogue
 # ---------------------------------------------------------------------------
 
-TIERS: dict[str, dict[str, Any]] = {
+TIER_DEFAULTS: dict[str, dict[str, Any]] = {
     "free": {
         "id": "free",
         "name": "Free",
@@ -161,6 +163,9 @@ TIERS: dict[str, dict[str, Any]] = {
     },
 }
 
+# Backward-compatible alias
+TIERS = TIER_DEFAULTS
+
 # Display order for the pricing page
 TIER_ORDER = ["free", "starter", "professional", "business"]
 
@@ -169,18 +174,134 @@ DEFAULT_TIER = "free"
 
 
 # ---------------------------------------------------------------------------
+# DB → dict conversion
+# ---------------------------------------------------------------------------
+
+
+def _plan_to_dict(plan: Any) -> dict[str, Any]:
+    """Convert a SubscriptionPlan ORM object to the same dict shape as TIER_DEFAULTS entries."""
+    import json
+
+    features: list[str] = []
+    if plan.features:
+        try:
+            features = json.loads(plan.features)
+        except (json.JSONDecodeError, TypeError):
+            features = []
+    return {
+        "id": plan.plan_id,
+        "name": plan.name,
+        "tagline": plan.tagline or "",
+        "price_monthly": plan.price_monthly,
+        "price_yearly": plan.price_yearly,
+        "trial_days": plan.trial_days,
+        "highlight": plan.is_highlighted,
+        "lifetime_file_limit": plan.lifetime_file_limit,
+        "daily_upload_limit": plan.daily_upload_limit,
+        "monthly_upload_limit": plan.monthly_upload_limit,
+        "max_storage_destinations": plan.max_storage_destinations,
+        "max_ocr_pages_monthly": plan.max_ocr_pages_monthly,
+        "max_file_size_mb": plan.max_file_size_mb,
+        "max_mailboxes": plan.max_mailboxes,
+        "api_access": plan.api_access,
+        "features": features,
+        "cta": plan.cta_text or "Get started",
+        "badge": plan.badge_text,
+        "overage_percent": plan.overage_percent,
+        "allow_overage_billing": plan.allow_overage_billing,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Getters
 # ---------------------------------------------------------------------------
 
 
-def get_tier(tier_id: str) -> dict[str, Any]:
-    """Return tier config dict; falls back to *free* for unknown ids."""
-    return TIERS.get(tier_id, TIERS["free"])
+def get_tier(tier_id: str, db: Session | None = None) -> dict[str, Any]:
+    """Return plan config dict; DB-first when db is provided, falls back to TIER_DEFAULTS."""
+    if db is not None:
+        from app.models import SubscriptionPlan
+
+        plan = (
+            db.query(SubscriptionPlan)
+            .filter(
+                SubscriptionPlan.plan_id == tier_id,
+                SubscriptionPlan.is_active.is_(True),
+            )
+            .first()
+        )
+        if plan is not None:
+            return _plan_to_dict(plan)
+    return TIER_DEFAULTS.get(tier_id, TIER_DEFAULTS["free"])
 
 
-def get_all_tiers() -> list[dict[str, Any]]:
-    """Return tiers in display order."""
-    return [TIERS[tid] for tid in TIER_ORDER]
+def get_all_tiers(db: Session | None = None) -> list[dict[str, Any]]:
+    """Return plans in display order; DB-first when db is provided."""
+    if db is not None:
+        from app.models import SubscriptionPlan
+
+        plans = (
+            db.query(SubscriptionPlan)
+            .filter(SubscriptionPlan.is_active.is_(True))
+            .order_by(SubscriptionPlan.sort_order)
+            .all()
+        )
+        if plans:
+            return [_plan_to_dict(p) for p in plans]
+    return [TIER_DEFAULTS[tid] for tid in TIER_ORDER]
+
+
+def seed_default_plans(db: Session) -> int:
+    """Seed subscription_plans table from TIER_DEFAULTS if the table is empty.
+
+    Called at application startup. Returns the number of plans inserted (0 if already seeded).
+    """
+    import json
+
+    from app.models import SubscriptionPlan
+
+    try:
+        if db.query(SubscriptionPlan).count() > 0:
+            return 0
+    except Exception:
+        return 0  # table may not exist yet during first migration
+
+    inserted = 0
+    for sort_order, (_, tier) in enumerate(TIER_DEFAULTS.items()):
+        plan = SubscriptionPlan(
+            plan_id=tier["id"],
+            name=tier["name"],
+            tagline=tier.get("tagline", ""),
+            price_monthly=tier["price_monthly"],
+            price_yearly=tier["price_yearly"],
+            trial_days=tier.get("trial_days", 0),
+            is_highlighted=tier.get("highlight", False),
+            badge_text=tier.get("badge"),
+            cta_text=tier.get("cta", "Get started"),
+            lifetime_file_limit=tier["lifetime_file_limit"],
+            daily_upload_limit=tier["daily_upload_limit"],
+            monthly_upload_limit=tier["monthly_upload_limit"],
+            max_storage_destinations=tier["max_storage_destinations"],
+            max_ocr_pages_monthly=tier["max_ocr_pages_monthly"],
+            max_file_size_mb=tier["max_file_size_mb"],
+            max_mailboxes=tier.get("max_mailboxes", 0),
+            api_access=tier.get("api_access", False),
+            features=json.dumps(tier.get("features", [])),
+            overage_percent=20,
+            allow_overage_billing=False,
+            sort_order=sort_order,
+            is_active=True,
+        )
+        db.add(plan)
+        inserted += 1
+    try:
+        db.commit()
+        logger.info("Seeded %d default subscription plans", inserted)
+    except Exception as exc:
+        db.rollback()
+        logger.error("Failed to seed subscription plans: %s", exc)
+        inserted = 0
+    return inserted
 
 
 # ---------------------------------------------------------------------------
@@ -235,11 +356,7 @@ def get_month_file_count(db: Session, owner_id: str) -> int:
 
 
 def get_year_file_count(db: Session, owner_id: str, period_start: datetime) -> int:
-    """Files processed since the start of the current subscription period.
-
-    Used for yearly-subscription carry-over: compares cumulative usage against the
-    cumulative monthly budget since the annual period started.
-    """
+    """Files processed since the start of the current annual subscription period."""
     from app.models import FileRecord
 
     return _scalar_count(
@@ -252,7 +369,7 @@ def get_year_file_count(db: Session, owner_id: str, period_start: datetime) -> i
 
 
 def _months_elapsed(period_start: datetime, now: datetime) -> int:
-    """Calendar months elapsed since *period_start*, clamped to 1–12."""
+    """Calendar months elapsed since *period_start*, clamped to [1, 12]."""
     elapsed = (now.year - period_start.year) * 12 + (now.month - period_start.month) + 1
     return max(1, min(elapsed, 12))
 
@@ -275,37 +392,33 @@ class QuotaExceeded(Exception):
 def check_upload_allowed(db: Session, owner_id: str | None, tier_id: str | None) -> None:
     """Raise :class:`QuotaExceeded` if this user is not allowed to upload another file.
 
-    When *owner_id* or *tier_id* is ``None`` (e.g. single-user mode) the check
-    is skipped entirely.
+    Skipped entirely when *owner_id* or *tier_id* is ``None`` (single-user mode).
 
     Enforcement model
     -----------------
-    * **Announced limit** — the quota shown to users on the pricing page
-      (``monthly_upload_limit`` in TIERS).
-    * **Enforcement limit** — ``announced × settings.subscription_overage_factor``
-      (default 1.33).  A 150-doc/month plan is therefore enforced at 200 docs,
-      giving users a soft buffer before they see an error.
-    * **Overage flag** — if ``UserProfile.allow_overage`` is ``True`` the check
-      is bypassed entirely.  Usage is still tracked so future billing can charge
-      for overages.  (Not yet exposed in the admin UI.)
+    * **Announced limit** — the quota shown on the pricing page
+      (``monthly_upload_limit`` in the plan).
+    * **Overage buffer** — each plan stores ``overage_percent`` (default 20).
+      Enforcement = announced × (1 + overage_percent / 100). A 150-doc/month
+      plan with 20 % buffer is enforced at 180 docs.
+    * **Overage flag** — if ``UserProfile.allow_overage`` is ``True``, quota
+      checks are bypassed entirely so usage can be billed retroactively.
+      (Not yet exposed in the admin UI — baked in for future billing.)
     * **Yearly carry-over** — yearly subscribers have cumulative quota:
-      effective limit = ``monthly_limit × months_elapsed × overage_factor``.
+      effective limit = monthly_limit × months_elapsed × overage_factor.
       Unused quota from earlier months rolls forward automatically.
-
-    No daily cap is enforced — ``daily_upload_limit`` in TIERS is kept as
-    informational data only.
+    * **No daily cap** — ``daily_upload_limit`` is kept for display purposes
+      only; it is never enforced.
     """
     if owner_id is None or tier_id is None:
         return
 
-    tier = get_tier(tier_id)
+    tier = get_tier(tier_id, db)
 
-    # Resolve overage factor from config
-    from app.config import settings
+    # Per-plan overage_percent overrides global config default
+    overage_percent: int = tier.get("overage_percent", settings.subscription_overage_percent)
+    overage_factor: float = 1.0 + overage_percent / 100.0
 
-    overage_factor: float = settings.subscription_overage_factor
-
-    # Fetch profile for billing cycle and overage permission
     from app.models import UserProfile
 
     profile = db.query(UserProfile).filter(UserProfile.user_id == owner_id).first()
@@ -314,7 +427,7 @@ def check_upload_allowed(db: Session, owner_id: str | None, tier_id: str | None)
     period_start: datetime | None = profile.subscription_period_start if profile else None
 
     # 1. Lifetime file cap (free tier) — always enforced regardless of overage flag
-    lifetime_limit = tier["lifetime_file_limit"]
+    lifetime_limit: int = tier["lifetime_file_limit"]
     if lifetime_limit > 0:
         enforcement_limit = int(lifetime_limit * overage_factor)
         count = get_lifetime_file_count(db, owner_id)
@@ -327,14 +440,13 @@ def check_upload_allowed(db: Session, owner_id: str | None, tier_id: str | None)
                 current_value=count,
             )
 
-    # 2. Monthly cap — skipped entirely when overage is enabled for this user
+    # 2. Monthly cap — bypassed when allow_overage is True (future billing)
     if allow_overage:
         return
 
-    monthly_limit = tier["monthly_upload_limit"]
+    monthly_limit: int = tier["monthly_upload_limit"]
     if monthly_limit > 0:
         if billing_cycle == "yearly" and period_start is not None:
-            # Carry-over: cumulative usage vs cumulative budget within the subscription year
             now = datetime.now(timezone.utc)
             months = _months_elapsed(period_start, now)
             cumulative_budget = int(monthly_limit * months * overage_factor)
@@ -342,14 +454,13 @@ def check_upload_allowed(db: Session, owner_id: str | None, tier_id: str | None)
             if cumulative_used >= cumulative_budget:
                 raise QuotaExceeded(
                     f"Annual document quota for the {tier['name']} plan has been reached. "
-                    "Unused monthly quota carries forward — your limit will reset on your "
-                    "annual renewal date, or you can upgrade your plan.",
+                    "Unused monthly quota carries forward — your limit resets on your annual "
+                    "renewal date, or you can upgrade your plan.",
                     limit_type="monthly",
                     limit_value=monthly_limit,
                     current_value=cumulative_used,
                 )
         else:
-            # Monthly billing: check current calendar month only
             count = get_month_file_count(db, owner_id)
             enforcement_limit = int(monthly_limit * overage_factor)
             if count >= enforcement_limit:
@@ -360,9 +471,6 @@ def check_upload_allowed(db: Session, owner_id: str | None, tier_id: str | None)
                     limit_value=monthly_limit,
                     current_value=count,
                 )
-                limit_value=monthly_limit,
-                current_value=count,
-            )
 
 
 def get_user_tier_id(db: Session, owner_id: str | None) -> str:
@@ -378,9 +486,15 @@ def get_user_tier_id(db: Session, owner_id: str | None) -> str:
 
 
 def get_user_usage(db: Session, owner_id: str) -> dict[str, int]:
-    """Return a dict with lifetime / daily / monthly file counts for *owner_id*."""
-    return {
+    """Return file counts for *owner_id*, including carry-over data for yearly plans."""
+    from app.models import UserProfile
+
+    profile = db.query(UserProfile).filter(UserProfile.user_id == owner_id).first()
+    result: dict[str, int] = {
         "lifetime": get_lifetime_file_count(db, owner_id),
         "today": get_today_file_count(db, owner_id),
         "month": get_month_file_count(db, owner_id),
     }
+    if profile and (profile.subscription_billing_cycle or "monthly") == "yearly" and profile.subscription_period_start:
+        result["year_to_date"] = get_year_file_count(db, owner_id, profile.subscription_period_start)
+    return result

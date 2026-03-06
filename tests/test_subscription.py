@@ -1,26 +1,23 @@
 """Unit tests for the subscription tier utility module."""
 
-import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone, date
+
+import pytest
 
 from app.utils.subscription import (
-    TIERS,
-    TIER_ORDER,
     DEFAULT_TIER,
-    get_tier,
+    TIER_DEFAULTS,
+    TIER_ORDER,
+    TIERS,
+    QuotaExceeded,
+    _months_elapsed,
+    check_upload_allowed,
     get_all_tiers,
+    get_tier,
     get_user_tier_id,
     get_user_usage,
-    check_upload_allowed,
-    QuotaExceeded,
-    get_lifetime_file_count,
-    get_today_file_count,
-    get_month_file_count,
 )
-
 
 # ---------------------------------------------------------------------------
 # Basic catalogue tests
@@ -69,12 +66,21 @@ def test_get_all_tiers_returns_four():
 @pytest.mark.unit
 def test_all_tiers_have_required_fields():
     required = [
-        "id", "name", "tagline", "price_monthly", "price_yearly",
+        "id",
+        "name",
+        "tagline",
+        "price_monthly",
+        "price_yearly",
         "trial_days",
-        "lifetime_file_limit", "daily_upload_limit", "monthly_upload_limit",
-        "max_storage_destinations", "max_ocr_pages_monthly", "max_file_size_mb",
+        "lifetime_file_limit",
+        "daily_upload_limit",
+        "monthly_upload_limit",
+        "max_storage_destinations",
+        "max_ocr_pages_monthly",
+        "max_file_size_mb",
         "max_mailboxes",
-        "features", "cta",
+        "features",
+        "cta",
     ]
     for tid, tier in TIERS.items():
         for field in required:
@@ -103,18 +109,21 @@ def test_free_tier_has_no_mailboxes():
 def test_business_tier_has_highest_limits():
     """Business tier must have the highest limits of all paid tiers."""
     t = TIERS["business"]
-    # lifetime, daily, monthly: no hard cap (0 = unlimited) for lifetime; daily/monthly capped
+    # lifetime: no hard cap (0 = unlimited)
     assert t["lifetime_file_limit"] == 0
-    assert t["daily_upload_limit"] == 30
+    # no daily cap (0 = unlimited)
+    assert t["daily_upload_limit"] == 0
     assert t["monthly_upload_limit"] == 300
     assert t["max_ocr_pages_monthly"] == 1500
-    # unlimited mailboxes
+    # unlimited mailboxes (0 = unlimited)
     assert t["max_mailboxes"] == 0
+    # unlimited file size (0 = unlimited)
+    assert t["max_file_size_mb"] == 0
 
 
 @pytest.mark.unit
 def test_mailbox_limits_increase_by_tier():
-    """Mailbox limits must increase across tiers: free=0, starter=1, professional=3, business=0(∞)."""
+    """Mailbox limits must increase across tiers: free=0, starter=1, professional=3, business=0(inf)."""
     assert TIERS["free"]["max_mailboxes"] == 0
     assert TIERS["starter"]["max_mailboxes"] == 1
     assert TIERS["professional"]["max_mailboxes"] == 3
@@ -197,10 +206,16 @@ def test_check_upload_skipped_without_tier():
 
 @pytest.mark.unit
 def test_check_upload_raises_when_lifetime_exceeded():
-    """Free tier: should raise QuotaExceeded when lifetime limit (50) is hit."""
+    """Free tier: raise QuotaExceeded at lifetime limit (50) with 0% buffer (exact enforcement)."""
     db = MagicMock()
+    # Return None for both SubscriptionPlan lookup and UserProfile lookup
+    db.query.return_value.filter.return_value.first.return_value = None
 
-    with patch("app.utils.subscription.get_lifetime_file_count", return_value=50):
+    with (
+        patch("app.utils.subscription.settings") as mock_settings,
+        patch("app.utils.subscription.get_lifetime_file_count", return_value=50),
+    ):
+        mock_settings.subscription_overage_percent = 0
         with pytest.raises(QuotaExceeded) as exc_info:
             check_upload_allowed(db, "user@example.com", "free")
 
@@ -212,31 +227,34 @@ def test_check_upload_raises_when_lifetime_exceeded():
 @pytest.mark.unit
 def test_check_upload_passes_below_lifetime_limit():
     db = MagicMock()
-    with patch("app.utils.subscription.get_lifetime_file_count", return_value=10):
+    db.query.return_value.filter.return_value.first.return_value = None
+
+    with (
+        patch("app.utils.subscription.settings") as mock_settings,
+        patch("app.utils.subscription.get_lifetime_file_count", return_value=10),
+    ):
+        mock_settings.subscription_overage_percent = 0
         check_upload_allowed(db, "user@example.com", "free")  # must not raise
 
 
 @pytest.mark.unit
-def test_check_upload_raises_when_daily_exceeded():
-    """Starter tier: should raise QuotaExceeded when daily limit (5) is hit."""
-    db = MagicMock()
-
-    with patch("app.utils.subscription.get_lifetime_file_count", return_value=0), \
-         patch("app.utils.subscription.get_today_file_count", return_value=5):
-        with pytest.raises(QuotaExceeded) as exc_info:
-            check_upload_allowed(db, "user@example.com", "starter")
-
-    assert exc_info.value.limit_type == "daily"
-
-
-@pytest.mark.unit
 def test_check_upload_raises_when_monthly_exceeded():
-    """Starter tier: should raise QuotaExceeded when monthly limit (50) is hit."""
+    """Starter tier: raise QuotaExceeded when monthly limit (50) is hit (0% buffer)."""
     db = MagicMock()
 
-    with patch("app.utils.subscription.get_lifetime_file_count", return_value=0), \
-         patch("app.utils.subscription.get_today_file_count", return_value=0), \
-         patch("app.utils.subscription.get_month_file_count", return_value=50):
+    # UserProfile mock: no overage, monthly billing, no period_start
+    profile_mock = MagicMock()
+    profile_mock.allow_overage = False
+    profile_mock.subscription_billing_cycle = "monthly"
+    profile_mock.subscription_period_start = None
+    db.query.return_value.filter.return_value.first.side_effect = [None, profile_mock]
+
+    with (
+        patch("app.utils.subscription.settings") as mock_settings,
+        patch("app.utils.subscription.get_lifetime_file_count", return_value=0),
+        patch("app.utils.subscription.get_month_file_count", return_value=50),
+    ):
+        mock_settings.subscription_overage_percent = 0
         with pytest.raises(QuotaExceeded) as exc_info:
             check_upload_allowed(db, "user@example.com", "starter")
 
@@ -245,27 +263,154 @@ def test_check_upload_raises_when_monthly_exceeded():
 
 @pytest.mark.unit
 def test_check_upload_business_tier_within_limits():
-    """Business tier: upload is allowed as long as counts are below the capped limits."""
+    """Business tier: upload is allowed when count is below the monthly limit."""
     db = MagicMock()
-    # Use counts well below Business limits (30/day, 300/mo)
-    with patch("app.utils.subscription.get_lifetime_file_count", return_value=0), \
-         patch("app.utils.subscription.get_today_file_count", return_value=10), \
-         patch("app.utils.subscription.get_month_file_count", return_value=100):
+    profile_mock = MagicMock()
+    profile_mock.allow_overage = False
+    profile_mock.subscription_billing_cycle = "monthly"
+    profile_mock.subscription_period_start = None
+    db.query.return_value.filter.return_value.first.side_effect = [None, profile_mock]
+
+    with (
+        patch("app.utils.subscription.settings") as mock_settings,
+        patch("app.utils.subscription.get_lifetime_file_count", return_value=0),
+        patch("app.utils.subscription.get_month_file_count", return_value=100),
+    ):
+        mock_settings.subscription_overage_percent = 0
         check_upload_allowed(db, "user@example.com", "business")  # must not raise
 
 
+# ---------------------------------------------------------------------------
+# Overage buffer tests
+# ---------------------------------------------------------------------------
+
+
 @pytest.mark.unit
-def test_check_upload_business_tier_raises_when_daily_exceeded():
-    """Business tier: should raise QuotaExceeded when daily limit (30) is hit."""
+def test_overage_percent_allows_buffer():
+    """Starter monthly=50, 20% buffer -> enforce at 60. count=55 should pass, count=61 should raise."""
+    profile_mock = MagicMock()
+    profile_mock.allow_overage = False
+    profile_mock.subscription_billing_cycle = "monthly"
+    profile_mock.subscription_period_start = None
+
     db = MagicMock()
+    db.query.return_value.filter.return_value.first.side_effect = [None, profile_mock]
 
-    with patch("app.utils.subscription.get_lifetime_file_count", return_value=0), \
-         patch("app.utils.subscription.get_today_file_count", return_value=30):
+    with (
+        patch("app.utils.subscription.settings") as mock_settings,
+        patch("app.utils.subscription.get_lifetime_file_count", return_value=0),
+        patch("app.utils.subscription.get_month_file_count", return_value=55),
+    ):
+        mock_settings.subscription_overage_percent = 20
+        # count=55 < 60 (50*1.20) -> should NOT raise
+        check_upload_allowed(db, "user@example.com", "starter")
+
+    # Reset mock for second call
+    db2 = MagicMock()
+    db2.query.return_value.filter.return_value.first.side_effect = [None, profile_mock]
+
+    with (
+        patch("app.utils.subscription.settings") as mock_settings,
+        patch("app.utils.subscription.get_lifetime_file_count", return_value=0),
+        patch("app.utils.subscription.get_month_file_count", return_value=61),
+    ):
+        mock_settings.subscription_overage_percent = 20
+        # count=61 >= 60 -> should raise
         with pytest.raises(QuotaExceeded) as exc_info:
-            check_upload_allowed(db, "user@example.com", "business")
+            check_upload_allowed(db2, "user@example.com", "starter")
+    assert exc_info.value.limit_type == "monthly"
+    assert exc_info.value.limit_value == 50
 
-    assert exc_info.value.limit_type == "daily"
-    assert exc_info.value.limit_value == 30
+
+@pytest.mark.unit
+def test_allow_overage_flag_bypasses_monthly_limit():
+    """When allow_overage=True on UserProfile, monthly cap is never enforced."""
+    db = MagicMock()
+    profile_mock = MagicMock()
+    profile_mock.allow_overage = True
+    profile_mock.subscription_billing_cycle = "monthly"
+    profile_mock.subscription_period_start = None
+    db.query.return_value.filter.return_value.first.side_effect = [None, profile_mock]
+
+    with (
+        patch("app.utils.subscription.settings") as mock_settings,
+        patch("app.utils.subscription.get_lifetime_file_count", return_value=0),
+        patch("app.utils.subscription.get_month_file_count", return_value=999999),
+    ):
+        mock_settings.subscription_overage_percent = 0
+        # Should NOT raise even with enormous count
+        check_upload_allowed(db, "user@example.com", "starter")
+
+
+@pytest.mark.unit
+def test_yearly_carryover_allows_accumulated_budget():
+    """Yearly billing carry-over: period_start 2 months ago, monthly=50 (0% buffer).
+    Budget = 50 * months_elapsed. used=80 should pass; used at budget+1 should raise.
+    """
+    db = MagicMock()
+    profile_mock = MagicMock()
+    profile_mock.allow_overage = False
+    profile_mock.subscription_billing_cycle = "yearly"
+    now = datetime.now(timezone.utc)
+    # period_start is 2 months before current month
+    if now.month > 2:
+        period_start = now.replace(month=now.month - 2, day=1)
+    else:
+        period_start = now.replace(year=now.year - 1, month=now.month + 10, day=1)
+    profile_mock.subscription_period_start = period_start
+    db.query.return_value.filter.return_value.first.side_effect = [None, profile_mock]
+
+    # months_elapsed with period 2 months ago = 3 (prev-prev, prev, current)
+    # budget = 50 * 3 = 150 with 0% buffer
+    with (
+        patch("app.utils.subscription.settings") as mock_settings,
+        patch("app.utils.subscription.get_lifetime_file_count", return_value=0),
+        patch("app.utils.subscription.get_year_file_count", return_value=80),
+    ):
+        mock_settings.subscription_overage_percent = 0
+        # 80 < 150 -> should NOT raise
+        check_upload_allowed(db, "user@example.com", "starter")
+
+    # Reset mock for second call
+    db2 = MagicMock()
+    db2.query.return_value.filter.return_value.first.side_effect = [None, profile_mock]
+
+    with (
+        patch("app.utils.subscription.settings") as mock_settings,
+        patch("app.utils.subscription.get_lifetime_file_count", return_value=0),
+        patch("app.utils.subscription.get_year_file_count", return_value=151),
+    ):
+        mock_settings.subscription_overage_percent = 0
+        # 151 >= 150 -> should raise
+        with pytest.raises(QuotaExceeded) as exc_info:
+            check_upload_allowed(db2, "user@example.com", "starter")
+    assert exc_info.value.limit_type == "monthly"
+
+
+# ---------------------------------------------------------------------------
+# _months_elapsed helper
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_months_elapsed_same_month():
+    now = datetime(2025, 6, 15, tzinfo=timezone.utc)
+    start = datetime(2025, 6, 1, tzinfo=timezone.utc)
+    assert _months_elapsed(start, now) == 1
+
+
+@pytest.mark.unit
+def test_months_elapsed_two_months():
+    now = datetime(2025, 8, 1, tzinfo=timezone.utc)
+    start = datetime(2025, 6, 1, tzinfo=timezone.utc)
+    assert _months_elapsed(start, now) == 3  # June, July, August = 3
+
+
+@pytest.mark.unit
+def test_months_elapsed_clamped_to_12():
+    now = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    start = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    assert _months_elapsed(start, now) == 12
 
 
 # ---------------------------------------------------------------------------
@@ -276,12 +421,50 @@ def test_check_upload_business_tier_raises_when_daily_exceeded():
 @pytest.mark.unit
 def test_get_user_usage_returns_dict_with_correct_keys():
     db = MagicMock()
-    with patch("app.utils.subscription.get_lifetime_file_count", return_value=10), \
-         patch("app.utils.subscription.get_today_file_count", return_value=2), \
-         patch("app.utils.subscription.get_month_file_count", return_value=8):
+    # No profile -> monthly billing, no period_start
+    db.query.return_value.filter.return_value.first.return_value = None
+
+    with (
+        patch("app.utils.subscription.get_lifetime_file_count", return_value=10),
+        patch("app.utils.subscription.get_today_file_count", return_value=2),
+        patch("app.utils.subscription.get_month_file_count", return_value=8),
+    ):
         result = get_user_usage(db, "user@example.com")
 
     assert result == {"lifetime": 10, "today": 2, "month": 8}
+
+
+@pytest.mark.unit
+def test_get_user_usage_includes_year_to_date_for_yearly():
+    """Yearly subscriber gets year_to_date key in usage dict."""
+    db = MagicMock()
+    profile_mock = MagicMock()
+    profile_mock.subscription_billing_cycle = "yearly"
+    period_start = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    profile_mock.subscription_period_start = period_start
+    db.query.return_value.filter.return_value.first.return_value = profile_mock
+
+    with (
+        patch("app.utils.subscription.get_lifetime_file_count", return_value=10),
+        patch("app.utils.subscription.get_today_file_count", return_value=2),
+        patch("app.utils.subscription.get_month_file_count", return_value=8),
+        patch("app.utils.subscription.get_year_file_count", return_value=40),
+    ):
+        result = get_user_usage(db, "user@example.com")
+
+    assert "year_to_date" in result
+    assert result["year_to_date"] == 40
+
+
+# ---------------------------------------------------------------------------
+# TIERS / TIER_DEFAULTS alias
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_tiers_is_alias_for_tier_defaults():
+    """TIERS must be the same object as TIER_DEFAULTS (backward compat alias)."""
+    assert TIERS is TIER_DEFAULTS
 
 
 # ---------------------------------------------------------------------------

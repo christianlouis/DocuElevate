@@ -1,151 +1,117 @@
 # Subscription Tiers
 
-DocuElevate operates as a SaaS platform with four subscription tiers. When
-`MULTI_USER_ENABLED=True` each user is assigned a tier that controls how many
-documents they can process and how many storage destinations they can use.
+DocuElevate uses database-backed subscription plans that are fully configurable by admins via the **Plan Designer** at `/admin/plans`. Four default tiers are seeded automatically on first startup.
 
----
+## Default Plans
 
-## Tier Overview
+| Plan | Monthly | Yearly | Docs/Month | Lifetime Docs | OCR Pages/Mo | Max File | Mailboxes | Destinations |
+|------|---------|--------|-----------|---------------|--------------|----------|-----------|--------------|
+| **Free** | $0 | $0 | — | 50 total | 150 total | 5 MB | 0 | 1 |
+| **Starter** | $2.99 | $28.99 | 50 | — | 300 | 25 MB | 1 | 2 |
+| **Professional** | $5.99 | $57.99 | 150 | — | 750 | 100 MB | 3 | 5 |
+| **Business** | $7.99 | $76.99 | 300 | — | 1,500 | Unlimited | Unlimited | 10 |
 
-| | Free | Starter | Professional | Business |
-|---|---|---|---|---|
-| **Price / month** | $0 | $9 | $29 | $79 |
-| **Price / year** | $0 | $90 | $290 | $790 |
-| **Lifetime file limit** | 25 files (total, ever) | Unlimited | Unlimited | Unlimited |
-| **Files per day** | Unlimited* | 10 | 50 | Unlimited |
-| **Files per month** | Unlimited* | 100 | 500 | Unlimited |
-| **Storage destinations** | 1 | 3 | 10 | Unlimited |
-| **OCR pages / month** | 50 | 500 | 2 500 | Unlimited |
-| **Max file size** | 10 MB | 50 MB | 200 MB | Unlimited |
-| **API access** | ✗ | ✓ | ✓ | ✓ |
-| **Email ingestion** | ✗ | ✓ | ✓ | ✓ |
-| **Webhooks** | ✗ | ✗ | ✓ | ✓ |
-| **Support** | Community | Email | Priority email | Dedicated |
+> Prices ex-VAT. German customers add 19% MwSt.
 
-\* Free tier is capped by the **lifetime** limit of 25 files; there is no
-separate daily or monthly cap on top of that.
+All paid plans include a **30-day free trial**.
 
----
+## How Plans Are Stored
 
-## Free Tier
+Plans are stored in the `subscription_plans` database table. On application startup, `seed_default_plans()` is called automatically — if the table is empty, the four built-in defaults are inserted. If plans already exist, the seed is a no-op.
 
-The Free tier is designed for exploration. It allows up to **25 documents
-processed in total across the lifetime of the account** — this is enforced
-strictly; once 25 documents have been processed the upload endpoint returns
-HTTP 402 and invites the user to upgrade.
+Users are assigned a plan via `UserProfile.subscription_tier` (stores the `plan_id` string). The subscription utility functions (`get_tier`, `get_all_tiers`) query the database first and fall back to the hard-coded `TIER_DEFAULTS` dict if the database is unavailable or the plan doesn't exist.
 
-There is no per-day or per-month cap: the user can use all 25 files in a
-single day if they wish.
+## Overage Buffer
 
----
+### Announced vs. Enforced Limit
 
-## Paid Tiers
+DocuElevate uses a **soft-limit overage buffer** that is invisible to users:
 
-### Starter — $9/month (or $90/year)
+- The **announced limit** is what appears on the pricing page (e.g., "150 docs/month").
+- The **enforced limit** = announced × (1 + overage_percent / 100).
+  - With the default 20% buffer: a 150-doc plan enforces at **180 docs**.
+  - This prevents hard cutoffs at the exact announced limit, giving users a graceful landing.
 
-Good for individuals or small teams getting started with automated document
-processing. Provides a meaningful step up from the free tier without a high
-price commitment.
+### Per-Plan vs. Global Buffer
 
-- 10 documents/day, 100 documents/month
-- 3 storage destinations (e.g. Dropbox + Google Drive + Nextcloud)
-- 500 OCR pages/month
-- Email ingestion and API access included
+Each plan has its own `overage_percent` field (set in the Plan Designer). There is also a global fallback: `settings.subscription_overage_percent` (default: 20, range: 0–200), which applies when a plan does not have an explicit value.
 
-### Professional — $29/month (or $290/year) *(Most Popular)*
+Set `subscription_overage_percent=0` in your `.env` to enforce exactly at the announced limit with no buffer.
 
-Better for growing teams that need higher volume and more integration
-flexibility.
+## Yearly Billing & Carry-Over
 
-- 50 documents/day, 500 documents/month
-- 10 storage destinations
-- 2 500 OCR pages/month
-- All processing steps, webhooks, and priority email support
+When a user's `subscription_billing_cycle` is set to `yearly`:
 
-### Business — $79/month (or $790/year)
+- Unused quota from earlier months **rolls forward automatically**.
+- Enforcement = `monthly_limit × months_elapsed × overage_factor` (cumulative budget from the subscription start date).
+- Example: A 50-doc/month Starter plan in month 3 of its annual period has a cumulative budget of 150 docs (plus overage buffer). If the user only used 20 docs in months 1–2, they can use 130 docs in month 3.
+- The `subscription_period_start` field on `UserProfile` tracks the start of the annual period.
 
-Best for organisations that need truly unlimited throughput with dedicated
-support.
+## No Daily Cap
 
-- Unlimited documents and storage destinations
-- Unlimited OCR pages
-- Unlimited file size
-- Custom integrations and dedicated support
+`daily_upload_limit` is kept for display and future reference only — it is **never enforced**. All enforcement is lifetime (free tier) or monthly/cumulative-yearly (paid tiers).
 
-> **Contact Sales** for the Business tier — email
-> `sales@docuelevate.io` with subject "Business Plan Enquiry".
+## allow_overage Flag
 
----
+Setting `UserProfile.allow_overage = True` bypasses monthly quota checks entirely for that user. Usage is still tracked so future billing integrations can charge retroactively. This field is not yet exposed in the admin UI.
 
-## Limit Enforcement
+## Plan Designer
 
-Limits are enforced in real-time at the upload endpoint
-(`POST /api/ui-upload`). When a user exceeds any quota:
+Navigate to `/admin/plans` (admin only) to:
 
-1. The uploaded file is discarded.
-2. The endpoint returns **HTTP 402 Payment Required** with a human-readable
-   `detail` message explaining which limit was hit and how to upgrade.
-3. The upload UI displays the error message to the user.
+1. **View** all plans (active and inactive) with key stats.
+2. **Create** a new plan with a custom `plan_id` slug.
+3. **Edit** any plan's pricing, limits, overage buffer, features, and display settings.
+4. **Reorder** plans using the up/down arrows (order reflects pricing page display order).
+5. **Delete** a plan (does not affect existing users assigned to it).
+6. **Restore Defaults** — seeds the four built-in plans (no-op if plans already exist).
 
-Quota checks run in order:
+### Overage Designer
 
-1. Lifetime file limit (free tier only)
-2. Daily file limit
-3. Monthly file limit
+The Plan Designer includes an overage slider (0–100%). The live preview shows:
 
----
+> "Announce **X** docs, enforce at **Y** docs"
 
-## Admin Management
+Overage billing and per-doc overage pricing are planned future features (currently disabled in the UI).
 
-Administrators can view and change each user's subscription tier from the
-**Admin → Users** page (`/admin/users`).
+## API Endpoints
 
-1. Click **Edit** next to any user.
-2. Change the **Subscription Plan** dropdown.
-3. Click **Save Changes**.
+All plan endpoints are under `/api/plans/`.
 
-The new limits take effect immediately on the user's next upload attempt.
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/api/plans/` | Public | List active plans in sort order |
+| `GET` | `/api/plans/admin` | Admin | List all plans including inactive |
+| `POST` | `/api/plans/?plan_id=<id>` | Admin | Create a new plan |
+| `GET` | `/api/plans/{plan_id}` | Public | Get a single active plan |
+| `PUT` | `/api/plans/{plan_id}` | Admin | Update an existing plan |
+| `DELETE` | `/api/plans/{plan_id}` | Admin | Delete a plan |
+| `POST` | `/api/plans/seed` | Admin | Seed default plans (no-op if non-empty) |
+| `POST` | `/api/plans/reorder` | Admin | Update sort order; body: `{"order": ["free", "starter", ...]}` |
 
-### API
-
-Admins can also manage tiers via the REST API:
+### Example: List Active Plans
 
 ```bash
-# Update a user's subscription tier
-curl -X PUT /api/admin/users/user@example.com \
-  -H 'Content-Type: application/json' \
-  -d '{"subscription_tier": "professional", "is_blocked": false}'
+curl http://localhost:8000/api/plans/
 ```
 
----
+### Example: Update a Plan's Monthly Limit
 
-## Platform Statistics
-
-Admins can view platform-wide statistics via:
-
-- **Dashboard** (`/`) — shows total files, today, this month, unique users
-  when `MULTI_USER_ENABLED=True`.
-- **API** — `GET /api/subscriptions/platform` returns aggregate file counts
-  and per-tier user distribution.
-
----
+```bash
+curl -X PUT http://localhost:8000/api/plans/starter \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Starter",
+    "monthly_upload_limit": 75,
+    "overage_percent": 15,
+    ...
+  }'
+```
 
 ## Configuration
 
-Subscription tiers are defined in `app/utils/subscription.py` in the `TIERS`
-dictionary. Pricing, limits, and feature lists are all set there.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SUBSCRIPTION_OVERAGE_PERCENT` | `20` | Global overage buffer (0–200). Per-plan setting overrides this. |
 
-Single-user mode (`MULTI_USER_ENABLED=False`) bypasses all quota checks
-entirely — the instance behaves as if every request is on the Business tier.
-
----
-
-## Pricing Page
-
-The public pricing page is available at `/pricing` and requires no
-authentication. It shows the interactive tier comparison table with an
-annual/monthly toggle and an FAQ section.
-
-Individual users can view their own subscription status, usage progress bars,
-and upgrade options at `/subscription` (requires login).
+See `docs/ConfigurationGuide.md` for all available settings.

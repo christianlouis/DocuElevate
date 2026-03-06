@@ -18,9 +18,9 @@ router = APIRouter()
 
 
 @router.get("/pricing", include_in_schema=False)
-async def pricing_page(request: Request):
+async def pricing_page(request: Request, db: Session = Depends(get_db)):
     """Public-facing pricing and plans page."""
-    tiers = get_all_tiers()
+    tiers = get_all_tiers(db)
     return templates.TemplateResponse(
         "pricing.html",
         {
@@ -47,8 +47,8 @@ async def my_subscription_page(request: Request, db: Session = Depends(get_db)):
         tier_id = "business"
         usage = None
 
-    tier = get_tier(tier_id)
-    all_tiers = get_all_tiers()
+    tier = get_tier(tier_id, db)
+    all_tiers = get_all_tiers(db)
 
     return templates.TemplateResponse(
         "subscription.html",

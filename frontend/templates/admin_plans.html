@@ -1,0 +1,608 @@
+{% extends "base.html" %}
+
+{% block title %}Plan Designer — DocuElevate Admin{% endblock %}
+
+{% block content %}
+<main id="main-content" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+  x-data="planDesigner()"
+  x-init="init()">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Plan Designer</h1>
+      <p class="text-sm text-gray-500 mt-1">Manage subscription plans shown on the public pricing page.</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <button
+        @click="seedDefaults()"
+        :disabled="seeding"
+        class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400 disabled:opacity-50"
+        title="Restore all four default plans (only if no plans exist yet)"
+      >
+        <i class="fas fa-undo mr-2 text-gray-400" aria-hidden="true"></i>
+        <span x-show="!seeding">Restore Defaults</span>
+        <span x-show="seeding"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Restoring…</span>
+      </button>
+      <button
+        @click="openCreateModal()"
+        class="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500"
+      >
+        <i class="fas fa-plus mr-2" aria-hidden="true"></i> Add Plan
+      </button>
+    </div>
+  </div>
+
+  <!-- Overage callout -->
+  <div class="mb-6 rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-800" role="note">
+    <p class="font-semibold mb-1"><i class="fas fa-info-circle mr-1" aria-hidden="true"></i> About the Overage Buffer</p>
+    <p>
+      The overage buffer is <strong>invisible to users</strong>. We advertise X docs/month but only enforce
+      at <strong>X × (1 + buffer%)</strong> docs. For example, a 150-doc/month plan with a 20% buffer
+      enforces at 180 docs. This prevents hard cutoffs at the exact announced limit, giving users a
+      graceful soft landing.
+    </p>
+  </div>
+
+  <!-- Error / success messages -->
+  <div x-show="errorMsg" x-cloak class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700" role="alert">
+    <i class="fas fa-exclamation-circle mr-1" aria-hidden="true"></i>
+    <span x-text="errorMsg"></span>
+  </div>
+  <div x-show="successMsg" x-cloak class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700" role="status" aria-live="polite">
+    <i class="fas fa-check-circle mr-1" aria-hidden="true"></i>
+    <span x-text="successMsg"></span>
+  </div>
+
+  <!-- Loading -->
+  <div x-show="loading" class="text-center py-12 text-gray-400">
+    <i class="fas fa-spinner fa-spin text-2xl" aria-hidden="true"></i>
+    <p class="mt-2 text-sm">Loading plans…</p>
+  </div>
+
+  <!-- Plans table -->
+  <div x-show="!loading" class="bg-white shadow-sm rounded-lg overflow-hidden border border-gray-200">
+    <table class="min-w-full divide-y divide-gray-200" aria-label="Subscription plans">
+      <thead class="bg-gray-50">
+        <tr>
+          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order</th>
+          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>
+          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Monthly</th>
+          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Yearly</th>
+          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Monthly Limit</th>
+          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Overage %</th>
+          <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Active</th>
+          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-100">
+        <template x-if="plans.length === 0">
+          <tr>
+            <td colspan="8" class="px-4 py-8 text-center text-sm text-gray-400">
+              No plans yet. Click <strong>Restore Defaults</strong> to seed the four built-in plans.
+            </td>
+          </tr>
+        </template>
+        <template x-for="(plan, idx) in plans" :key="plan.plan_id">
+          <tr class="hover:bg-gray-50 transition">
+            <td class="px-4 py-3 text-sm text-gray-500">
+              <div class="flex items-center gap-1">
+                <button
+                  @click="moveUp(idx)"
+                  :disabled="idx === 0"
+                  class="p-1 rounded hover:bg-gray-200 disabled:opacity-30"
+                  :aria-label="'Move ' + plan.name + ' up'"
+                ><i class="fas fa-chevron-up text-xs" aria-hidden="true"></i></button>
+                <button
+                  @click="moveDown(idx)"
+                  :disabled="idx === plans.length - 1"
+                  class="p-1 rounded hover:bg-gray-200 disabled:opacity-30"
+                  :aria-label="'Move ' + plan.name + ' down'"
+                ><i class="fas fa-chevron-down text-xs" aria-hidden="true"></i></button>
+                <span x-text="idx + 1" class="w-5 text-center text-xs text-gray-400"></span>
+              </div>
+            </td>
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-gray-900" x-text="plan.name"></span>
+                <template x-if="plan.badge_text">
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium" x-text="plan.badge_text"></span>
+                </template>
+                <template x-if="plan.is_highlighted">
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-medium"><i class="fas fa-star" aria-hidden="true"></i> Featured</span>
+                </template>
+              </div>
+              <div class="text-xs text-gray-400 mt-0.5" x-text="plan.plan_id"></div>
+            </td>
+            <td class="px-4 py-3 text-right text-sm text-gray-700">
+              <span x-text="plan.price_monthly === 0 ? 'Free' : '$' + plan.price_monthly.toFixed(2)"></span>
+            </td>
+            <td class="px-4 py-3 text-right text-sm text-gray-700">
+              <span x-text="plan.price_yearly === 0 ? '—' : '$' + plan.price_yearly.toFixed(2)"></span>
+            </td>
+            <td class="px-4 py-3 text-right text-sm text-gray-700">
+              <span x-text="plan.monthly_upload_limit === 0 ? '∞' : plan.monthly_upload_limit + ' docs/mo'"></span>
+            </td>
+            <td class="px-4 py-3 text-right text-sm">
+              <span class="font-medium text-indigo-700" x-text="plan.overage_percent + '%'"></span>
+            </td>
+            <td class="px-4 py-3 text-center">
+              <span
+                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                :class="plan.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'"
+                x-text="plan.is_active ? 'Active' : 'Inactive'"
+              ></span>
+            </td>
+            <td class="px-4 py-3 text-right">
+              <div class="flex items-center justify-end gap-2">
+                <button
+                  @click="openEditModal(plan)"
+                  class="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                  :aria-label="'Edit ' + plan.name"
+                >
+                  <i class="fas fa-pencil-alt" aria-hidden="true"></i> Edit
+                </button>
+                <button
+                  @click="deletePlan(plan.plan_id)"
+                  class="text-sm text-red-500 hover:text-red-700 font-medium"
+                  :aria-label="'Delete ' + plan.name"
+                >
+                  <i class="fas fa-trash-alt" aria-hidden="true"></i> Delete
+                </button>
+              </div>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Save order button -->
+  <div x-show="orderDirty && !loading" x-cloak class="mt-4 flex justify-end">
+    <button
+      @click="saveOrder()"
+      :disabled="saving"
+      class="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 disabled:opacity-50"
+    >
+      <i class="fas fa-save mr-2" aria-hidden="true"></i>
+      <span x-show="!saving">Save Order</span>
+      <span x-show="saving"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Saving…</span>
+    </button>
+  </div>
+
+  <!-- ── Create / Edit Modal ─────────────────────────────────────────────── -->
+  <div
+    x-show="modalOpen"
+    x-transition:enter="transition ease-out duration-150"
+    x-transition:enter-start="opacity-0 scale-95"
+    x-transition:enter-end="opacity-100 scale-100"
+    x-transition:leave="transition ease-in duration-100"
+    x-transition:leave-start="opacity-100 scale-100"
+    x-transition:leave-end="opacity-0 scale-95"
+    class="fixed inset-0 z-50 flex items-start justify-center bg-black bg-opacity-50 px-4 py-8 overflow-y-auto"
+    role="dialog"
+    aria-modal="true"
+    :aria-labelledby="'modal-title'"
+    @keydown.escape.window="modalOpen = false"
+    x-cloak
+  >
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl my-auto" @click.outside="modalOpen = false">
+      <!-- Modal header -->
+      <div class="flex items-center justify-between px-6 py-4 border-b">
+        <h2 id="modal-title" class="text-lg font-semibold text-gray-900" x-text="isCreate ? 'Add Plan' : 'Edit Plan: ' + form.name"></h2>
+        <button @click="modalOpen = false" class="text-gray-400 hover:text-gray-600" aria-label="Close modal">
+          <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <form @submit.prevent="savePlan()" class="divide-y divide-gray-100">
+
+        <!-- Basic Info -->
+        <div class="px-6 py-5 space-y-4">
+          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Basic Info</h3>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label for="f-name" class="block text-sm font-medium text-gray-700 mb-1">Name <span class="text-red-500" aria-hidden="true">*</span></label>
+              <input id="f-name" type="text" x-model="form.name" required
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            </div>
+            <div>
+              <label for="f-plan-id" class="block text-sm font-medium text-gray-700 mb-1">Plan ID <span class="text-red-500" aria-hidden="true">*</span></label>
+              <input id="f-plan-id" type="text" x-model="form.plan_id" :readonly="!isCreate"
+                :class="!isCreate ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : ''"
+                required pattern="[a-z0-9_-]+" title="Lowercase letters, numbers, _ and - only"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              <p class="text-xs text-gray-400 mt-0.5">Lowercase slug, cannot be changed after creation.</p>
+            </div>
+          </div>
+          <div>
+            <label for="f-tagline" class="block text-sm font-medium text-gray-700 mb-1">Tagline</label>
+            <input id="f-tagline" type="text" x-model="form.tagline" maxlength="255"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+          </div>
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label for="f-sort-order" class="block text-sm font-medium text-gray-700 mb-1">Sort Order</label>
+              <input id="f-sort-order" type="number" x-model.number="form.sort_order" min="0"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            </div>
+            <div class="flex items-center gap-3 pt-6">
+              <input id="f-active" type="checkbox" x-model="form.is_active"
+                class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+              <label for="f-active" class="text-sm font-medium text-gray-700">Active</label>
+            </div>
+            <div class="flex items-center gap-3 pt-6">
+              <input id="f-highlighted" type="checkbox" x-model="form.is_highlighted"
+                class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+              <label for="f-highlighted" class="text-sm font-medium text-gray-700">Featured / Highlighted</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pricing -->
+        <div class="px-6 py-5 space-y-4">
+          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Pricing</h3>
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label for="f-price-monthly" class="block text-sm font-medium text-gray-700 mb-1">Monthly Price ($)</label>
+              <input id="f-price-monthly" type="number" x-model.number="form.price_monthly" min="0" step="0.01"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            </div>
+            <div>
+              <label for="f-price-yearly" class="block text-sm font-medium text-gray-700 mb-1">Yearly Price ($)</label>
+              <input id="f-price-yearly" type="number" x-model.number="form.price_yearly" min="0" step="0.01"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              <p class="text-xs mt-0.5"
+                :class="yearlySavingPct > 0 ? 'text-green-600 font-medium' : 'text-gray-400'"
+                x-text="yearlySavingPct > 0 ? 'Save ' + yearlySavingPct.toFixed(0) + '% vs monthly' : 'Enter yearly price to show savings'">
+              </p>
+            </div>
+            <div>
+              <label for="f-trial-days" class="block text-sm font-medium text-gray-700 mb-1">Trial Days</label>
+              <input id="f-trial-days" type="number" x-model.number="form.trial_days" min="0"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Volume Limits -->
+        <div class="px-6 py-5 space-y-4">
+          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Volume Limits</h3>
+          <p class="text-xs text-gray-500">Enter <strong>0</strong> for unlimited.</p>
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label for="f-monthly-limit" class="block text-sm font-medium text-gray-700 mb-1">Docs / Month</label>
+              <input id="f-monthly-limit" type="number" x-model.number="form.monthly_upload_limit" min="0"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            </div>
+            <div>
+              <label for="f-lifetime-limit" class="block text-sm font-medium text-gray-700 mb-1">Lifetime Docs</label>
+              <input id="f-lifetime-limit" type="number" x-model.number="form.lifetime_file_limit" min="0"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            </div>
+            <div>
+              <label for="f-ocr-pages" class="block text-sm font-medium text-gray-700 mb-1">OCR Pages / Month</label>
+              <input id="f-ocr-pages" type="number" x-model.number="form.max_ocr_pages_monthly" min="0"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            </div>
+            <div>
+              <label for="f-dests" class="block text-sm font-medium text-gray-700 mb-1">Storage Destinations</label>
+              <input id="f-dests" type="number" x-model.number="form.max_storage_destinations" min="0"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            </div>
+            <div>
+              <label for="f-mailboxes" class="block text-sm font-medium text-gray-700 mb-1">Email Mailboxes</label>
+              <input id="f-mailboxes" type="number" x-model.number="form.max_mailboxes" min="0"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            </div>
+            <div>
+              <label for="f-filesize" class="block text-sm font-medium text-gray-700 mb-1">Max File Size (MB)</label>
+              <input id="f-filesize" type="number" x-model.number="form.max_file_size_mb" min="0"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Overage Designer -->
+        <div class="px-6 py-5 space-y-4">
+          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Overage Designer</h3>
+          <div>
+            <label for="f-overage-pct" class="block text-sm font-medium text-gray-700 mb-2">
+              Buffer:
+              <span class="text-indigo-700 font-semibold" x-text="form.overage_percent + '%'"></span>
+              <template x-if="form.monthly_upload_limit > 0">
+                <span class="text-gray-500 font-normal ml-2">
+                  → announce <strong x-text="form.monthly_upload_limit"></strong> docs,
+                  enforce at <strong class="text-indigo-700" x-text="Math.round(form.monthly_upload_limit * (1 + form.overage_percent / 100))"></strong> docs
+                </span>
+              </template>
+            </label>
+            <input
+              id="f-overage-pct"
+              type="range"
+              x-model.number="form.overage_percent"
+              min="0" max="100" step="5"
+              class="w-full h-2 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+              aria-valuenow="form.overage_percent"
+              aria-valuemin="0"
+              aria-valuemax="100"
+            />
+            <div class="flex justify-between text-xs text-gray-400 mt-1">
+              <span>0% (exact)</span>
+              <span>50%</span>
+              <span>100%</span>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4 opacity-60">
+            <div class="relative">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Allow Overage Billing</label>
+              <div class="flex items-center gap-2">
+                <input type="checkbox" disabled class="h-4 w-4 rounded border-gray-300 text-indigo-600" />
+                <span class="text-xs text-gray-400">Coming soon</span>
+              </div>
+            </div>
+            <div></div>
+            <div class="relative">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Overage price / doc ($)</label>
+              <input type="number" disabled placeholder="Coming soon"
+                class="w-full px-3 py-2 border border-gray-200 rounded-md text-sm bg-gray-50 text-gray-400 cursor-not-allowed" />
+            </div>
+            <div class="relative">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Overage price / OCR page ($)</label>
+              <input type="number" disabled placeholder="Coming soon"
+                class="w-full px-3 py-2 border border-gray-200 rounded-md text-sm bg-gray-50 text-gray-400 cursor-not-allowed" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Features -->
+        <div class="px-6 py-5 space-y-3">
+          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Features List</h3>
+          <p class="text-xs text-gray-500">These bullet points appear on the pricing page card for this plan.</p>
+          <template x-for="(feat, i) in form.features" :key="i">
+            <div class="flex items-center gap-2">
+              <input
+                type="text"
+                x-model="form.features[i]"
+                :aria-label="'Feature ' + (i+1)"
+                class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+              <button type="button" @click="form.features.splice(i, 1)"
+                :aria-label="'Remove feature ' + (i+1)"
+                class="text-red-400 hover:text-red-600 px-2 py-2">
+                <i class="fas fa-times" aria-hidden="true"></i>
+              </button>
+            </div>
+          </template>
+          <button type="button" @click="form.features.push('')"
+            class="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+            <i class="fas fa-plus mr-1" aria-hidden="true"></i> Add Feature
+          </button>
+        </div>
+
+        <!-- Display -->
+        <div class="px-6 py-5 space-y-4">
+          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Display</h3>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label for="f-cta" class="block text-sm font-medium text-gray-700 mb-1">CTA Button Text</label>
+              <input id="f-cta" type="text" x-model="form.cta_text" maxlength="100"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            </div>
+            <div>
+              <label for="f-badge" class="block text-sm font-medium text-gray-700 mb-1">Badge Text</label>
+              <input id="f-badge" type="text" x-model="form.badge_text" maxlength="50"
+                placeholder="e.g. Most Popular"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <input id="f-api" type="checkbox" x-model="form.api_access"
+              class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+            <label for="f-api" class="text-sm font-medium text-gray-700">API Access</label>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="px-6 py-4 border-t flex justify-end gap-3">
+          <button
+            type="button"
+            @click="modalOpen = false"
+            class="px-4 py-2 text-sm font-medium border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            :disabled="saving"
+            class="px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span x-show="!saving" x-text="isCreate ? 'Create Plan' : 'Save Changes'"></span>
+            <span x-show="saving"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Saving…</span>
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+</main>
+
+<script>
+function planDesigner() {
+  return {
+    plans: [],
+    loading: true,
+    saving: false,
+    seeding: false,
+    modalOpen: false,
+    isCreate: true,
+    orderDirty: false,
+    errorMsg: '',
+    successMsg: '',
+
+    form: {
+      plan_id: '',
+      name: '',
+      tagline: '',
+      price_monthly: 0,
+      price_yearly: 0,
+      trial_days: 0,
+      lifetime_file_limit: 0,
+      daily_upload_limit: 0,
+      monthly_upload_limit: 0,
+      max_storage_destinations: 0,
+      max_ocr_pages_monthly: 0,
+      max_file_size_mb: 0,
+      max_mailboxes: 0,
+      overage_percent: 20,
+      allow_overage_billing: false,
+      overage_price_per_doc: null,
+      overage_price_per_ocr_page: null,
+      is_active: true,
+      is_highlighted: false,
+      badge_text: null,
+      cta_text: 'Get started',
+      sort_order: 0,
+      features: [],
+      api_access: false,
+    },
+
+    get yearlySavingPct() {
+      if (!this.form.price_monthly || !this.form.price_yearly) return 0;
+      const annualMonthly = this.form.price_monthly * 12;
+      return ((annualMonthly - this.form.price_yearly) / annualMonthly) * 100;
+    },
+
+    async init() {
+      await this.loadPlans();
+    },
+
+    async loadPlans() {
+      this.loading = true;
+      this.errorMsg = '';
+      try {
+        const resp = await fetch('/api/plans/admin');
+        if (!resp.ok) throw new Error('Failed to load plans');
+        const data = await resp.json();
+        this.plans = data.plans || [];
+      } catch (e) {
+        this.errorMsg = e.message;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    openCreateModal() {
+      this.isCreate = true;
+      this.form = {
+        plan_id: '', name: '', tagline: '', price_monthly: 0, price_yearly: 0, trial_days: 0,
+        lifetime_file_limit: 0, daily_upload_limit: 0, monthly_upload_limit: 0,
+        max_storage_destinations: 0, max_ocr_pages_monthly: 0, max_file_size_mb: 0, max_mailboxes: 0,
+        overage_percent: 20, allow_overage_billing: false, overage_price_per_doc: null,
+        overage_price_per_ocr_page: null, is_active: true, is_highlighted: false,
+        badge_text: null, cta_text: 'Get started', sort_order: this.plans.length, features: [], api_access: false,
+      };
+      this.modalOpen = true;
+    },
+
+    openEditModal(plan) {
+      this.isCreate = false;
+      this.form = Object.assign({}, plan, { features: [...(plan.features || [])] });
+      this.modalOpen = true;
+    },
+
+    async savePlan() {
+      this.saving = true;
+      this.errorMsg = '';
+      this.successMsg = '';
+      try {
+        const url = this.isCreate ? `/api/plans/?plan_id=${encodeURIComponent(this.form.plan_id)}` : `/api/plans/${encodeURIComponent(this.form.plan_id)}`;
+        const method = this.isCreate ? 'POST' : 'PUT';
+        const resp = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.form),
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+          throw new Error(err.detail || 'Save failed');
+        }
+        this.successMsg = this.isCreate ? 'Plan created!' : 'Plan updated!';
+        this.modalOpen = false;
+        await this.loadPlans();
+      } catch (e) {
+        this.errorMsg = e.message;
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    async deletePlan(planId) {
+      if (!confirm(`Delete plan "${planId}"? This cannot be undone.`)) return;
+      this.errorMsg = '';
+      try {
+        const resp = await fetch(`/api/plans/${encodeURIComponent(planId)}`, { method: 'DELETE' });
+        if (!resp.ok && resp.status !== 204) {
+          const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+          throw new Error(err.detail || 'Delete failed');
+        }
+        this.successMsg = `Plan "${planId}" deleted.`;
+        await this.loadPlans();
+      } catch (e) {
+        this.errorMsg = e.message;
+      }
+    },
+
+    async seedDefaults() {
+      if (!confirm('Seed the four default plans? This is a no-op if plans already exist.')) return;
+      this.seeding = true;
+      this.errorMsg = '';
+      try {
+        const resp = await fetch('/api/plans/seed', { method: 'POST' });
+        if (!resp.ok) throw new Error('Seed failed');
+        const data = await resp.json();
+        this.successMsg = data.message;
+        await this.loadPlans();
+      } catch (e) {
+        this.errorMsg = e.message;
+      } finally {
+        this.seeding = false;
+      }
+    },
+
+    moveUp(idx) {
+      if (idx === 0) return;
+      [this.plans[idx - 1], this.plans[idx]] = [this.plans[idx], this.plans[idx - 1]];
+      this.orderDirty = true;
+    },
+
+    moveDown(idx) {
+      if (idx >= this.plans.length - 1) return;
+      [this.plans[idx], this.plans[idx + 1]] = [this.plans[idx + 1], this.plans[idx]];
+      this.orderDirty = true;
+    },
+
+    async saveOrder() {
+      this.saving = true;
+      this.errorMsg = '';
+      try {
+        const order = this.plans.map(p => p.plan_id);
+        const resp = await fetch('/api/plans/reorder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order }),
+        });
+        if (!resp.ok) throw new Error('Reorder failed');
+        this.successMsg = 'Order saved!';
+        this.orderDirty = false;
+      } catch (e) {
+        this.errorMsg = e.message;
+      } finally {
+        this.saving = false;
+      }
+    },
+  };
+}
+</script>
+{% endblock %}

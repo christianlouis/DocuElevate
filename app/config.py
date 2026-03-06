@@ -153,6 +153,19 @@ class Settings(BaseSettings):
         ),
     )
 
+    subscription_overage_percent: int = Field(
+        default=20,
+        ge=0,
+        le=200,
+        description=(
+            "Soft-limit overage buffer in percent (0–200). The announced monthly quota is "
+            "increased by this percentage for actual enforcement. E.g. 20 means a 150-doc/month "
+            "plan enforces at 180 docs (150 × 1.20). Set 0 to enforce exactly at the announced "
+            "limit. Per-plan overage_percent (set in Plan Designer) overrides this global default. "
+            "Default: 20."
+        ),
+    )
+
     # Authentik
     authentik_client_id: Optional[str] = None
     authentik_client_secret: Optional[str] = None
