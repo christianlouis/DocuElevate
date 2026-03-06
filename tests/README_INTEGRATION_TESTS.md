@@ -361,28 +361,17 @@ docker volume prune -f
 
 ### GitHub Actions - Current Configuration
 
-The DocuElevate CI pipeline (`.github/workflows/ci.yml`) uses a **two-stage test strategy** for fast feedback:
+The DocuElevate CI pipeline (`.github/workflows/ci.yml`) runs all non-e2e tests in a single step for simplicity:
 
-1. **Quick Tests** (`test-quick`) — Runs ~2,790 unit and basic integration tests in ~2 minutes. Excludes tests marked `e2e`, `requires_docker`, `requires_external`, or `slow`. This stage gates the integration tests.
-
-2. **Integration Tests** (`test-integration`) — Runs ~28 Docker-based and external service tests. Only starts after quick tests pass. Uses testcontainers for WebDAV, OAuth, etc.
-
-Both stages use `pytest-timeout` to prevent individual tests from hanging:
-- Quick tests: 120 seconds per test, 15-minute job timeout
-- Integration tests: 300 seconds per test, 20-minute job timeout
+- All unit, integration, and Docker-based tests run together
+- Excludes tests marked `e2e`
+- Uses `pytest-timeout` (300 seconds per test) to prevent individual tests from hanging
 
 ```yaml
-# Quick tests (Stage 2b)
-- name: Run Quick Tests
-  run: >
-    pytest tests/ -v --timeout=120
-    -m "not e2e and not requires_docker and not requires_external and not slow"
-
-# Integration tests (Stage 2c) — only after quick tests pass
-- name: Run Integration Tests
+- name: Run Tests
   run: >
     pytest tests/ -v --timeout=300
-    -m "(requires_docker or requires_external or slow) and not e2e"
+    -m "not e2e"
 ```
 
 **To run E2E tests locally:**

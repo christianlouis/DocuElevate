@@ -13,8 +13,7 @@ The CI workflow (`.github/workflows/tests.yaml`) runs automatically on every pus
 | `lint` | Ruff | Fast Python linter (replaces Flake8, Black, isort, Bandit) | ✅ |
 | `html-lint` | djLint | HTML template accessibility linter | ✅ |
 | `dependency-scan` | pip-audit | Dependency vulnerability scanning against OSV/PyPA advisories | ✅ |
-| `test-quick` | pytest | Unit + basic integration tests with coverage (~2 min) | ✅ |
-| `test-integration` | pytest | Docker container and external service tests (~5 min) | ✅ |
+| `run-tests` | pytest | All unit + integration tests with coverage (excludes e2e) | ✅ |
 | `mypy` | mypy | Static type checking | ✅ |
 
 ### Pipeline Flow
@@ -22,34 +21,24 @@ The CI workflow (`.github/workflows/tests.yaml`) runs automatically on every pus
 ```
 Stage 1 (parallel):  lint, html-lint, dependency-scan
                           │
-Stage 2 (parallel):  test-quick + mypy
+Stage 2 (parallel):  run-tests + mypy
                           │
-Stage 3:             test-integration  (only after test-quick passes)
-                          │
-Stage 4:             build  (only after all above pass)
+Stage 3:             build  (only after all above pass)
 ```
 
-The pipeline follows a **fail-early** strategy: fast linters and quick tests run first to catch regressions early. Heavier integration tests only run after the quick tests pass, saving CI time when basic issues are present.
+The pipeline follows a **fail-early** strategy: fast linters run first to catch regressions early, then the full test suite and type checks run in parallel.
 
 > **Note:** DocuElevate uses Ruff, a modern all-in-one Python linter that consolidates the functionality of Flake8, Black, isort, and Bandit. This streamlined approach reduces CI complexity while maintaining code quality and security standards.
 
-### Quick Tests (`test-quick`)
+### All Tests (`run-tests`)
 
-- **Timeout:** 15 minutes (job), 120 seconds (per test via `pytest-timeout`)
-- Runs the majority of tests (~2,790 unit + basic integration tests)
-- Excludes tests marked `e2e`, `requires_docker`, `requires_external`, or `slow`
-- Uses a Redis service container for tests that need it
-- Collects coverage and uploads to Codecov
-- Uploads `junit.xml` and `coverage.xml` as workflow artifacts
-
-### Integration Tests (`test-integration`)
-
-- **Timeout:** 20 minutes (job), 300 seconds (per test via `pytest-timeout`)
-- Runs tests marked `requires_docker`, `requires_external`, or `slow` (excluding `e2e`)
+- **Timeout:** 300 seconds (per test via `pytest-timeout`)
+- Runs all tests (unit, integration, and Docker-based) in a single step
+- Excludes tests marked `e2e`
 - Uses Redis and RabbitMQ service containers
 - Docker daemon available for testcontainers (WebDAV, OAuth mock server, etc.)
-- Only runs after quick tests pass (fail-early gate)
-- Uploads `junit-integration.xml` as a workflow artifact
+- Collects coverage and uploads to Codecov
+- Uploads `junit.xml` and `coverage.xml` as workflow artifacts
 
 ### Ruff Lint & Format
 
@@ -73,8 +62,7 @@ The following artifacts are uploaded after every run:
 
 | Artifact | Contents | Condition |
 |-------------------------------|--------------------------------------|----------------------|
-| `test-results-quick` | `junit.xml`, `coverage.xml` | Always (unless cancelled) |
-| `test-results-integration` | `junit-integration.xml` | Always (unless cancelled) |
+| `test-results` | `junit.xml`, `coverage.xml` | Always (unless cancelled) |
 
 ## Running Linters Locally
 
@@ -93,14 +81,14 @@ ruff format --check app/ tests/
 # Run type checking
 mypy app/
 
-# Run quick tests (same as CI quick stage)
-pytest tests/ -v --timeout=120 --cov=app --cov-report=term -m "not e2e and not requires_docker and not requires_external and not slow"
+# Run all tests except e2e (same as CI)
+pytest tests/ -v --timeout=300 --cov=app --cov-report=term -m "not e2e"
 
-# Run integration tests (requires Docker)
+# Run only fast tests locally (skip Docker/external/slow)
+pytest tests/ -v --timeout=120 -m "not e2e and not requires_docker and not requires_external and not slow"
+
+# Run only Docker/external/slow tests locally (requires Docker)
 pytest tests/ -v --timeout=300 -m "(requires_docker or requires_external or slow) and not e2e"
-
-# Run all tests except e2e
-pytest tests/ -v --timeout=120 -m "not e2e"
 ```
 
 Or use pre-commit hooks to run checks automatically on each commit (recommended):
