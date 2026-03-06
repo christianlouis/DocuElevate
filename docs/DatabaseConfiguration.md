@@ -25,7 +25,7 @@ DocuElevate includes a guided **Database Configuration Wizard** accessible at `/
 
 ### How to Access
 
-Navigate to **`/database-wizard`** in your browser, or find the link under **Admin → Settings**.
+Navigate to **`/database-wizard`** in your browser, or find the link under **Admin → Settings**.  On the Settings page, click the **DB Wizard** button in the toolbar, or look for the **Open Database Wizard** link next to the `database_url` setting.
 
 ### Wizard Steps
 

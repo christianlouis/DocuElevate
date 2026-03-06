@@ -307,23 +307,6 @@ class TestMigrateData:
         with patch("app.utils.db_migrate._make_engine") as mock_make:
             mock_make.side_effect = [real_src, real_tgt]
             with patch("app.utils.db_migrate._stamp_alembic_head"):
-                # Patch MetaData to return None for target table lookup
-                original_metadata = __import__("sqlalchemy", fromlist=["MetaData"]).MetaData
-
-                class MockTargetMeta(original_metadata):
-                    """MetaData subclass that hides target tables after reflect."""
-
-                    _reflect_count = 0
-
-                    def reflect(self, *args, **kwargs):
-                        MockTargetMeta._reflect_count += 1
-                        if MockTargetMeta._reflect_count > 1:
-                            # After source reflect, make target reflect succeed but return empty
-                            return
-                        super().reflect(*args, **kwargs)
-
-                # This is complex, so let's use a simpler mock approach
-                # We'll just verify the error path catches errors from reflect
                 result = migrate_data("sqlite:///:memory:", "sqlite:///:memory:")
 
         # With schema in target, migration should succeed normally
