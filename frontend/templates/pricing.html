@@ -29,7 +29,7 @@
           :class="annual ? 'bg-white text-indigo-700 shadow' : 'text-white'"
           class="px-5 py-2 rounded-full text-sm font-semibold transition-all duration-200"
         >
-          Annual <span class="ml-1 text-xs bg-green-400 text-green-900 rounded-full px-2 py-0.5 font-bold">Save ~17%</span>
+          Annual <span class="ml-1 text-xs bg-green-400 text-green-900 rounded-full px-2 py-0.5 font-bold">Save ~20%</span>
         </button>
       </div>
     </div>
@@ -84,12 +84,20 @@
                 <span class="text-4xl font-extrabold text-gray-900">${{ tier.price_yearly }}</span>
                 <span class="text-gray-500 text-sm">/year</span>
                 <div class="text-xs text-green-600 font-semibold mt-0.5">
-                  ~${{ (tier.price_yearly / 12) | round(0) | int }}/month billed annually
+                  ~${{ "%.2f"|format(tier.price_yearly / 12) }}/month billed annually
                 </div>
                 {% endif %}
               </div>
             </template>
           </div>
+
+          <!-- Free trial badge for paid tiers -->
+          {% if tier.trial_days > 0 %}
+          <div class="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1">
+            <i class="fas fa-gift" aria-hidden="true"></i>
+            {{ tier.trial_days }}-day free trial — no credit card required
+          </div>
+          {% endif %}
         </div>
 
         <!-- Features list -->
@@ -109,10 +117,6 @@
           {% if tier.id == 'free' %}
           <a href="/login"
              class="block w-full text-center py-3 px-4 rounded-lg border-2 border-blue-600 text-blue-600 font-semibold hover:bg-blue-50 transition"
-          >{{ tier.cta }}</a>
-          {% elif tier.id == 'business' %}
-          <a href="mailto:sales@docuelevate.io?subject=Business+Plan+Enquiry"
-             class="block w-full text-center py-3 px-4 rounded-lg bg-gray-800 text-white font-semibold hover:bg-gray-700 transition"
           >{{ tier.cta }}</a>
           {% elif tier.highlight %}
           <a href="/login"
@@ -268,6 +272,21 @@
             </tr>
 
             <tr class="hover:bg-indigo-50/30 transition">
+              <td class="px-6 py-3 text-sm text-gray-700">Mailboxes (ingestion sources)</td>
+              {% for tier in tiers %}
+              <td class="px-4 py-3 text-center text-sm">
+                {% if tier.max_mailboxes == 0 and tier.id == 'free' %}
+                <i class="fas fa-times text-gray-300" aria-label="Not included"></i>
+                {% elif tier.max_mailboxes == 0 %}
+                <span class="font-semibold text-green-600">Unlimited</span>
+                {% else %}
+                <span class="font-medium text-gray-800">{{ tier.max_mailboxes }}</span>
+                {% endif %}
+              </td>
+              {% endfor %}
+            </tr>
+
+            <tr class="hover:bg-indigo-50/30 transition">
               <td class="px-6 py-3 text-sm text-gray-700">Webhooks</td>
               <td class="px-4 py-3 text-center">
                 <i class="fas fa-times text-gray-300" aria-label="Not included"></i>
@@ -323,15 +342,19 @@
           ("What counts as a 'processed file'?",
            "Every document you upload and run through the DocuElevate pipeline counts as one processed file — including OCR, AI metadata extraction, and storage delivery."),
           ("What happens when I reach the Free tier lifetime limit?",
-           "Once your 25-file lifetime quota is reached you will see a friendly upgrade prompt on the upload page and any further upload attempts will return a payment-required error until you upgrade to a paid plan."),
+           "Once your 50-file lifetime quota is reached you will see a friendly upgrade prompt on the upload page and any further upload attempts will return a payment-required error until you upgrade to a paid plan."),
           ("Can I change my plan at any time?",
            "Yes. Upgrades take effect immediately. Downgrades take effect at the start of the next billing cycle. Unused quota does not roll over between billing periods."),
           ("Is there an annual discount?",
-           "Yes — paying annually saves approximately 17% compared to monthly billing. The savings are shown in the annual pricing above."),
-          ("Do you offer a trial for paid plans?",
-           "The Free tier lets you try DocuElevate with up to 25 files at no cost and with no credit card required. Paid trials can be arranged — contact sales."),
+           "Yes — paying annually saves approximately 20 % compared to monthly billing (≈ 2½ months free). The exact annual price and per-month equivalent are shown when you toggle to Annual above."),
+          ("Is there a free trial for paid plans?",
+           "Yes! All three paid plans include a 30-day free trial — no credit card required. You can upgrade from the Free tier or start a trial directly from any paid plan card above."),
           ("What is a 'storage destination'?",
            "A storage destination is any cloud or self-hosted storage you configure as an output — Dropbox, Google Drive, OneDrive, Nextcloud, S3, SFTP, FTP, WebDAV, or Paperless-ngx each count as one destination."),
+          ("What is a 'mailbox'?",
+           "A mailbox is an email address DocuElevate monitors for incoming documents. Any attachment arriving at a configured mailbox is automatically processed through the pipeline. The Free tier does not include email ingestion."),
+          ("Are prices inclusive of VAT?",
+           "Listed prices are exclusive of VAT. Customers in Germany are charged 19 % Mehrwertsteuer (MwSt) at checkout. EU business customers outside Germany apply the reverse-charge mechanism. Non-EU customers are not subject to German VAT."),
         ] %}
 
         {% for q, a in faqs %}
