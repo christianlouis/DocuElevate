@@ -6,6 +6,7 @@ import logging
 
 from fastapi import APIRouter
 
+from app.api.admin_users import router as admin_users_router
 from app.api.azure import router as azure_router
 from app.api.database import router as database_router
 from app.api.diagnostic import router as diagnostic_router
@@ -35,6 +36,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Include all the routers
+router.include_router(admin_users_router)
 router.include_router(user_router)
 router.include_router(files_router)
 router.include_router(process_router)

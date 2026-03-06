@@ -170,3 +170,35 @@ class WebhookConfig(Base):
     description = Column(String, nullable=True)  # Optional human-readable description
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class UserProfile(Base):
+    """Per-user profile for admin-managed settings in multi-user mode.
+
+    Each row corresponds to one authenticated user (identified by their
+    ``user_id``, which matches ``FileRecord.owner_id``).  The admin can
+    create or update profiles to override global defaults such as the
+    daily upload limit and to attach notes or block a user.
+    """
+
+    __tablename__ = "user_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Stable user identifier — matches FileRecord.owner_id (OAuth sub / email / username)
+    user_id = Column(String, unique=True, nullable=False, index=True)
+
+    # Optional human-readable display name set by the admin
+    display_name = Column(String, nullable=True)
+
+    # Per-user daily upload limit; NULL means "use global default"
+    daily_upload_limit = Column(Integer, nullable=True)
+
+    # Admin-only free-text notes about this user
+    notes = Column(Text, nullable=True)
+
+    # When True the user is prevented from uploading new documents
+    is_blocked = Column(Boolean, default=False, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

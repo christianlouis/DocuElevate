@@ -4,6 +4,7 @@ Aggregated view routers for the application.
 
 from fastapi import APIRouter
 
+from app.views.admin_users import router as admin_users_router
 from app.views.db_wizard import router as db_wizard_router
 from app.views.dropbox import router as dropbox_router
 from app.views.filemanager import router as filemanager_router
@@ -23,6 +24,7 @@ from app.views.wizard import router as wizard_router
 router = APIRouter()
 router.include_router(wizard_router)  # Wizard first (for /setup)
 router.include_router(db_wizard_router)  # Database wizard
+router.include_router(admin_users_router)  # Admin user management
 router.include_router(general_router)
 router.include_router(status_router)
 router.include_router(onedrive_router)

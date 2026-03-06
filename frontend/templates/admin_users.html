@@ -1,0 +1,557 @@
+{% extends "base.html" %}
+{% block title %}User Management – Admin – DocuElevate{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8" x-data="adminUsersApp()">
+
+  <!-- ── Header ─────────────────────────────────────────────────────────────── -->
+  <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <h1 class="text-3xl font-bold text-gray-900 flex items-center gap-2">
+        <i class="fas fa-users text-blue-500" aria-hidden="true"></i>
+        User Management
+        <span class="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded px-2 py-0.5 ml-1">Admin Only</span>
+      </h1>
+      <p class="text-gray-500 text-sm mt-1">
+        Manage user profiles, per-user upload limits, and document ownership.
+      </p>
+    </div>
+    <button
+      type="button"
+      @click="openCreateModal()"
+      class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+    >
+      <i class="fas fa-user-plus mr-2" aria-hidden="true"></i> Add User Profile
+    </button>
+  </div>
+
+  <!-- ── Alert banner ───────────────────────────────────────────────────────── -->
+  <div x-show="alert.show" x-transition class="mb-4" role="alert" :aria-live="alert.type === 'error' ? 'assertive' : 'polite'">
+    <div
+      :class="alert.type === 'success'
+        ? 'bg-green-50 border-green-400 text-green-800'
+        : 'bg-red-50 border-red-400 text-red-800'"
+      class="border-l-4 p-4 rounded"
+    >
+      <p class="font-semibold" x-text="alert.title"></p>
+      <p class="text-sm" x-text="alert.message"></p>
+    </div>
+  </div>
+
+  <!-- ── Search & pagination controls ──────────────────────────────────────── -->
+  <div class="mb-4 flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+    <div class="flex-1 max-w-sm">
+      <label for="userSearch" class="sr-only">Search users</label>
+      <div class="relative">
+        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <i class="fas fa-search text-gray-400 text-sm" aria-hidden="true"></i>
+        </span>
+        <input
+          id="userSearch"
+          type="search"
+          x-model="search"
+          @input.debounce.300ms="fetchUsers(1)"
+          placeholder="Filter by user ID…"
+          class="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        />
+      </div>
+    </div>
+    <div class="text-sm text-gray-500" x-text="totalLabel"></div>
+  </div>
+
+  <!-- ── Table ──────────────────────────────────────────────────────────────── -->
+  <div class="bg-white shadow rounded-lg overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200" aria-label="User list">
+      <thead class="bg-gray-50">
+        <tr>
+          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User ID</th>
+          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Display Name</th>
+          <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Documents</th>
+          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Upload</th>
+          <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Upload Limit</th>
+          <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        <template x-if="loading">
+          <tr>
+            <td colspan="7" class="px-4 py-8 text-center text-gray-400">
+              <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i> Loading users…
+            </td>
+          </tr>
+        </template>
+        <template x-if="!loading && users.length === 0">
+          <tr>
+            <td colspan="7" class="px-4 py-8 text-center text-gray-400">
+              <i class="fas fa-users-slash text-3xl block mb-2" aria-hidden="true"></i>
+              No users found.
+              <span x-show="search"> Try a different search term.</span>
+              <span x-show="!search"> Upload some documents or add a profile above.</span>
+            </td>
+          </tr>
+        </template>
+        <template x-for="user in users" :key="user.user_id">
+          <tr class="hover:bg-gray-50">
+            <!-- User ID -->
+            <td class="px-4 py-3 text-sm">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-semibold text-xs flex-shrink-0"
+                      x-text="userInitials(user.user_id)" aria-hidden="true"></span>
+                <span class="font-mono text-gray-800 text-xs truncate max-w-xs" x-text="user.user_id" :title="user.user_id"></span>
+              </div>
+            </td>
+            <!-- Display name -->
+            <td class="px-4 py-3 text-sm text-gray-700" x-text="user.display_name || '—'"></td>
+            <!-- Document count -->
+            <td class="px-4 py-3 text-sm text-center">
+              <a
+                :href="`/files?owner_id=${encodeURIComponent(user.user_id)}`"
+                class="inline-flex items-center gap-1 text-blue-600 hover:underline font-medium"
+                :aria-label="`View ${user.document_count} document${user.document_count !== 1 ? 's' : ''} for ${user.user_id}`"
+              >
+                <i class="fas fa-file text-xs" aria-hidden="true"></i>
+                <span x-text="user.document_count"></span>
+              </a>
+            </td>
+            <!-- Last upload -->
+            <td class="px-4 py-3 text-sm text-gray-500 whitespace-nowrap"
+                x-text="user.last_upload ? formatDate(user.last_upload) : '—'"></td>
+            <!-- Upload limit -->
+            <td class="px-4 py-3 text-sm text-center text-gray-700">
+              <span x-show="user.daily_upload_limit !== null && user.daily_upload_limit !== undefined"
+                    class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700"
+                    x-text="user.daily_upload_limit + ' / day'"></span>
+              <span x-show="user.daily_upload_limit === null || user.daily_upload_limit === undefined"
+                    class="text-gray-400 text-xs">global default</span>
+            </td>
+            <!-- Status -->
+            <td class="px-4 py-3 text-sm text-center">
+              <span
+                :class="user.is_blocked
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-green-100 text-green-700'"
+                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+              >
+                <i :class="user.is_blocked ? 'fas fa-ban' : 'fas fa-check-circle'" aria-hidden="true"></i>
+                <span x-text="user.is_blocked ? 'Blocked' : 'Active'"></span>
+              </span>
+            </td>
+            <!-- Actions -->
+            <td class="px-4 py-3 text-sm text-right whitespace-nowrap">
+              <button
+                type="button"
+                @click="openEditModal(user)"
+                class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 mr-1"
+                :aria-label="`Edit profile for ${user.user_id}`"
+              >
+                <i class="fas fa-edit mr-1" aria-hidden="true"></i> Edit
+              </button>
+              <button
+                type="button"
+                @click="confirmDelete(user)"
+                x-show="user.profile_id !== null"
+                class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded border border-red-300 text-red-600 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-red-400"
+                :aria-label="`Delete profile for ${user.user_id}`"
+              >
+                <i class="fas fa-trash mr-1" aria-hidden="true"></i> Delete
+              </button>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Pagination ─────────────────────────────────────────────────────────── -->
+  <div class="mt-4 flex items-center justify-between" x-show="pages > 1">
+    <button
+      type="button"
+      @click="fetchUsers(currentPage - 1)"
+      :disabled="currentPage <= 1"
+      class="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      <i class="fas fa-chevron-left mr-1" aria-hidden="true"></i> Previous
+    </button>
+    <span class="text-sm text-gray-500">
+      Page <span x-text="currentPage"></span> of <span x-text="pages"></span>
+    </span>
+    <button
+      type="button"
+      @click="fetchUsers(currentPage + 1)"
+      :disabled="currentPage >= pages"
+      class="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      Next <i class="fas fa-chevron-right ml-1" aria-hidden="true"></i>
+    </button>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════
+       EDIT / CREATE MODAL
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <div
+    x-show="modalOpen"
+    x-transition:enter="transition ease-out duration-150"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="transition ease-in duration-100"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4"
+    role="dialog"
+    aria-modal="true"
+    :aria-labelledby="'modal-title'"
+  >
+    <div
+      class="bg-white rounded-lg shadow-xl w-full max-w-lg"
+      @click.outside="modalOpen = false"
+    >
+      <div class="flex items-center justify-between px-6 py-4 border-b">
+        <h2 id="modal-title" class="text-lg font-semibold text-gray-900" x-text="modalTitle"></h2>
+        <button
+          type="button"
+          @click="modalOpen = false"
+          class="text-gray-400 hover:text-gray-600 focus:outline-none"
+          aria-label="Close dialog"
+        >
+          <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <form @submit.prevent="saveProfile()">
+        <div class="px-6 py-5 space-y-4">
+
+          <!-- User ID (read-only when editing) -->
+          <div>
+            <label for="modal-user-id" class="block text-sm font-medium text-gray-700 mb-1">User ID</label>
+            <input
+              id="modal-user-id"
+              type="text"
+              x-model="form.user_id"
+              :readonly="!isCreate"
+              :class="!isCreate ? 'bg-gray-100 cursor-not-allowed' : ''"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              placeholder="user@example.com or OAuth sub"
+              required
+              aria-required="true"
+              autocomplete="off"
+            />
+            <p class="text-xs text-gray-400 mt-1">The stable identifier that matches <code>owner_id</code> in documents.</p>
+          </div>
+
+          <!-- Display name -->
+          <div>
+            <label for="modal-display-name" class="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+            <input
+              id="modal-display-name"
+              type="text"
+              x-model="form.display_name"
+              maxlength="255"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              placeholder="Alice Smith (optional)"
+            />
+          </div>
+
+          <!-- Daily upload limit -->
+          <div>
+            <label for="modal-limit" class="block text-sm font-medium text-gray-700 mb-1">
+              Daily Upload Limit
+              <span class="ml-1 text-xs font-normal text-gray-400">(leave empty to use global default)</span>
+            </label>
+            <input
+              id="modal-limit"
+              type="number"
+              x-model.number="form.daily_upload_limit"
+              min="0"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              placeholder="e.g. 50  (0 = unlimited)"
+            />
+          </div>
+
+          <!-- Notes -->
+          <div>
+            <label for="modal-notes" class="block text-sm font-medium text-gray-700 mb-1">Admin Notes</label>
+            <textarea
+              id="modal-notes"
+              x-model="form.notes"
+              rows="3"
+              maxlength="4096"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-y"
+              placeholder="Internal notes visible only to admins…"
+            ></textarea>
+          </div>
+
+          <!-- Blocked toggle -->
+          <div class="flex items-center gap-3">
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                x-model="form.is_blocked"
+                class="sr-only peer"
+                id="modal-blocked"
+                role="switch"
+                :aria-checked="form.is_blocked"
+              />
+              <div class="w-10 h-6 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-400 rounded-full peer peer-checked:bg-red-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-4"></div>
+            </label>
+            <label for="modal-blocked" class="text-sm font-medium text-gray-700">
+              Block this user
+              <span class="text-xs text-gray-400 font-normal">(prevents new document uploads)</span>
+            </label>
+          </div>
+
+        </div>
+
+        <!-- Footer -->
+        <div class="px-6 py-4 border-t flex justify-end gap-3">
+          <button
+            type="button"
+            @click="modalOpen = false"
+            class="px-4 py-2 text-sm font-medium border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            :disabled="saving"
+            class="px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span x-show="!saving" x-text="isCreate ? 'Create' : 'Save Changes'"></span>
+            <span x-show="saving"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Saving…</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Delete confirmation modal ──────────────────────────────────────────── -->
+  <div
+    x-show="deleteModal.open"
+    x-transition:enter="transition ease-out duration-100"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="delete-modal-title"
+  >
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md" @click.outside="deleteModal.open = false">
+      <div class="px-6 py-4 border-b">
+        <h2 id="delete-modal-title" class="text-lg font-semibold text-gray-900">Delete User Profile</h2>
+      </div>
+      <div class="px-6 py-5">
+        <p class="text-sm text-gray-700">
+          Are you sure you want to delete the profile for
+          <strong class="font-mono" x-text="deleteModal.user_id"></strong>?
+        </p>
+        <p class="text-sm text-gray-500 mt-2">
+          This only removes the admin-managed profile record. Documents owned by this user are <strong>not</strong> deleted.
+        </p>
+      </div>
+      <div class="px-6 py-4 border-t flex justify-end gap-3">
+        <button
+          type="button"
+          @click="deleteModal.open = false"
+          class="px-4 py-2 text-sm font-medium border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          @click="executeDelete()"
+          :disabled="deleteModal.deleting"
+          class="px-4 py-2 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
+        >
+          <span x-show="!deleteModal.deleting">Delete Profile</span>
+          <span x-show="deleteModal.deleting"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Deleting…</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function adminUsersApp() {
+  return {
+    // State
+    users: [],
+    loading: true,
+    search: '',
+    currentPage: 1,
+    perPage: 25,
+    total: 0,
+    pages: 1,
+
+    // Edit / create modal
+    modalOpen: false,
+    modalTitle: '',
+    isCreate: false,
+    saving: false,
+    form: {
+      user_id: '',
+      display_name: '',
+      daily_upload_limit: null,
+      notes: '',
+      is_blocked: false,
+    },
+
+    // Delete modal
+    deleteModal: {
+      open: false,
+      user_id: '',
+      deleting: false,
+    },
+
+    // Alert
+    alert: { show: false, type: 'success', title: '', message: '' },
+
+    get totalLabel() {
+      if (this.loading) return '';
+      if (this.total === 0) return 'No users';
+      return `${this.total} user${this.total !== 1 ? 's' : ''}`;
+    },
+
+    async init() {
+      await this.fetchUsers(1);
+    },
+
+    async fetchUsers(page) {
+      this.loading = true;
+      this.currentPage = page;
+      try {
+        const params = new URLSearchParams({
+          page: page,
+          per_page: this.perPage,
+        });
+        if (this.search.trim()) params.set('q', this.search.trim());
+
+        const resp = await fetch(`/api/admin/users/?${params}`);
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          this.showAlert('error', 'Failed to load users', err.detail || resp.statusText);
+          return;
+        }
+        const data = await resp.json();
+        this.users = data.users;
+        this.total = data.total;
+        this.pages = data.pages;
+      } catch (e) {
+        this.showAlert('error', 'Network error', e.message);
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    openCreateModal() {
+      this.isCreate = true;
+      this.modalTitle = 'Add User Profile';
+      this.form = { user_id: '', display_name: '', daily_upload_limit: null, notes: '', is_blocked: false };
+      this.modalOpen = true;
+    },
+
+    openEditModal(user) {
+      this.isCreate = false;
+      this.modalTitle = 'Edit User Profile';
+      this.form = {
+        user_id: user.user_id,
+        display_name: user.display_name || '',
+        daily_upload_limit: user.daily_upload_limit !== null && user.daily_upload_limit !== undefined
+          ? user.daily_upload_limit : null,
+        notes: user.notes || '',
+        is_blocked: !!user.is_blocked,
+      };
+      this.modalOpen = true;
+    },
+
+    async saveProfile() {
+      this.saving = true;
+      try {
+        const body = {
+          display_name: this.form.display_name || null,
+          daily_upload_limit: this.form.daily_upload_limit !== '' && this.form.daily_upload_limit !== null
+            ? Number(this.form.daily_upload_limit) : null,
+          notes: this.form.notes || null,
+          is_blocked: !!this.form.is_blocked,
+        };
+        const uid = encodeURIComponent(this.form.user_id);
+        const resp = await fetch(`/api/admin/users/${uid}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '',
+          },
+          body: JSON.stringify(body),
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          this.showAlert('error', 'Save failed', err.detail || resp.statusText);
+          return;
+        }
+        this.modalOpen = false;
+        this.showAlert('success', 'Saved', `Profile for "${this.form.user_id}" has been saved.`);
+        await this.fetchUsers(this.currentPage);
+      } catch (e) {
+        this.showAlert('error', 'Network error', e.message);
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    confirmDelete(user) {
+      this.deleteModal.user_id = user.user_id;
+      this.deleteModal.deleting = false;
+      this.deleteModal.open = true;
+    },
+
+    async executeDelete() {
+      this.deleteModal.deleting = true;
+      try {
+        const uid = encodeURIComponent(this.deleteModal.user_id);
+        const resp = await fetch(`/api/admin/users/${uid}`, {
+          method: 'DELETE',
+          headers: {
+            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '',
+          },
+        });
+        if (resp.status === 204) {
+          this.deleteModal.open = false;
+          this.showAlert('success', 'Deleted', `Profile for "${this.deleteModal.user_id}" has been removed.`);
+          await this.fetchUsers(this.currentPage);
+        } else {
+          const err = await resp.json().catch(() => ({}));
+          this.showAlert('error', 'Delete failed', err.detail || resp.statusText);
+          this.deleteModal.open = false;
+        }
+      } catch (e) {
+        this.showAlert('error', 'Network error', e.message);
+        this.deleteModal.open = false;
+      } finally {
+        this.deleteModal.deleting = false;
+      }
+    },
+
+    userInitials(userId) {
+      if (!userId) return '?';
+      // Try to get initials from email or username
+      const parts = userId.split(/[@._\s-]+/);
+      return parts.slice(0, 2).map(p => p[0]?.toUpperCase() || '').join('') || userId[0].toUpperCase();
+    },
+
+    formatDate(iso) {
+      if (!iso) return '—';
+      try {
+        return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      } catch {
+        return iso;
+      }
+    },
+
+    showAlert(type, title, message) {
+      this.alert = { show: true, type, title, message };
+      setTimeout(() => { this.alert.show = false; }, type === 'success' ? 5000 : 10000);
+    },
+  };
+}
+</script>
+{% endblock %}
