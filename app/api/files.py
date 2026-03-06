@@ -1256,6 +1256,23 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
     # Store both the safe original name and the unique name
     target_path = os.path.join(workdir, target_filename)
 
+    # Determine the owner_id for multi-user document isolation
+    upload_owner_id = get_current_owner_id(request) if settings.multi_user_enabled else None
+
+    # Enforce subscription tier upload quotas (multi-user mode only) BEFORE writing the file
+    # so that users who have exceeded their quota do not waste bandwidth or disk I/O.
+    if settings.multi_user_enabled and upload_owner_id:
+        from app.utils.subscription import QuotaExceeded, check_upload_allowed, get_user_tier_id
+
+        tier_id = get_user_tier_id(db, upload_owner_id)
+        try:
+            check_upload_allowed(db, upload_owner_id, tier_id)
+        except QuotaExceeded as qe:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=str(qe),
+            )
+
     # Read file in chunks to avoid loading the entire body into memory at once,
     # enforcing the size limit during the read so memory usage stays bounded.
     try:
@@ -1291,26 +1308,6 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
     # Determine if the file is a PDF or needs conversion
     mime_type, _ = mimetypes.guess_type(target_path)
     file_ext = os.path.splitext(target_path)[1].lower()
-
-    # Determine the owner_id for multi-user document isolation
-    upload_owner_id = get_current_owner_id(request) if settings.multi_user_enabled else None
-
-    # Enforce subscription tier upload quotas (multi-user mode only)
-    if settings.multi_user_enabled and upload_owner_id:
-        from app.utils.subscription import QuotaExceeded, check_upload_allowed, get_user_tier_id
-
-        tier_id = get_user_tier_id(db, upload_owner_id)
-        try:
-            check_upload_allowed(db, upload_owner_id, tier_id)
-        except QuotaExceeded as qe:
-            # Clean up the temporarily written file before returning the error
-            # to avoid consuming disk space for a rejected upload.
-            if os.path.exists(target_path):
-                os.remove(target_path)
-            raise HTTPException(
-                status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail=str(qe),
-            )
 
     # Check if it's a PDF by extension or MIME type
     is_pdf = file_ext == ".pdf" or mime_type == "application/pdf"
