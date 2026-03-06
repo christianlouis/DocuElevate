@@ -23,11 +23,13 @@ SETTING_METADATA = {
     # Core Settings
     "database_url": {
         "category": "Core",
-        "description": "Database connection URL (e.g., sqlite:///path/to/db.sqlite)",
+        "description": "Database connection URL (e.g., sqlite:///path/to/db.sqlite). Use the Database Wizard for guided setup.",
         "type": "string",
         "sensitive": False,
         "required": True,
         "restart_required": True,
+        "help_link": "/database-wizard",
+        "help_link_label": "Open Database Wizard",
     },
     "redis_url": {
         "category": "Core",

@@ -1,8 +1,11 @@
 """Tests for app/utils/db_wizard.py module."""
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from app.utils.db_wizard import (
+    _get_server_version,
     build_connection_string,
     get_supported_backends,
     parse_connection_string,
@@ -44,6 +47,21 @@ class TestGetSupportedBackends:
         ids = [b["id"] for b in get_supported_backends()]
         assert "mysql" in ids
 
+    def test_sqlite_does_not_require_host(self):
+        """Test that SQLite backend does not require host."""
+        sqlite = next(b for b in get_supported_backends() if b["id"] == "sqlite")
+        assert sqlite["requires_host"] is False
+
+    def test_postgresql_requires_host(self):
+        """Test that PostgreSQL backend requires host."""
+        pg = next(b for b in get_supported_backends() if b["id"] == "postgresql")
+        assert pg["requires_host"] is True
+
+    def test_mysql_default_port(self):
+        """Test that MySQL has default port 3306."""
+        mysql = next(b for b in get_supported_backends() if b["id"] == "mysql")
+        assert mysql["default_port"] == 3306
+
 
 @pytest.mark.unit
 class TestBuildConnectionString:
@@ -58,6 +76,11 @@ class TestBuildConnectionString:
         """Test building a SQLite URL with custom path."""
         url = build_connection_string(backend="sqlite", sqlite_path="/data/mydb.db")
         assert url == "sqlite:////data/mydb.db"
+
+    def test_sqlite_whitespace_path(self):
+        """Test building a SQLite URL with whitespace-only path uses default."""
+        url = build_connection_string(backend="sqlite", sqlite_path="   ")
+        assert url == "sqlite:///./app/database.db"
 
     def test_postgresql_basic(self):
         """Test building a basic PostgreSQL URL."""
@@ -119,6 +142,19 @@ class TestBuildConnectionString:
         )
         assert url.count("charset=utf8mb4") == 1
 
+    def test_mysql_extra_options(self):
+        """Test MySQL URL with extra options appended."""
+        url = build_connection_string(
+            backend="mysql",
+            host="localhost",
+            database="docuelevate",
+            username="root",
+            password="pass",
+            extra_options="connect_timeout=10",
+        )
+        assert "connect_timeout=10" in url
+        assert "charset=utf8mb4" in url
+
     def test_unsupported_backend_raises(self):
         """Test that unsupported backend raises ValueError."""
         with pytest.raises(ValueError, match="Unsupported backend"):
@@ -149,6 +185,30 @@ class TestBuildConnectionString:
         )
         assert "user@localhost" in url
         assert ":@" not in url
+
+    def test_postgresql_with_extra_options(self):
+        """Test PostgreSQL URL with extra query options."""
+        url = build_connection_string(
+            backend="postgresql",
+            host="localhost",
+            database="db",
+            username="user",
+            extra_options="application_name=docuelevate",
+        )
+        assert "application_name=docuelevate" in url
+
+    def test_postgresql_ssl_and_extra_options(self):
+        """Test PostgreSQL URL with both SSL and extra options combined."""
+        url = build_connection_string(
+            backend="postgresql",
+            host="localhost",
+            database="db",
+            username="user",
+            ssl_mode="require",
+            extra_options="application_name=docuelevate",
+        )
+        assert "sslmode=require" in url
+        assert "application_name=docuelevate" in url
 
 
 @pytest.mark.unit
@@ -184,6 +244,18 @@ class TestParseConnectionString:
         result = parse_connection_string("not-a-valid-url://")
         # Should still return a dict (make_url may or may not raise)
         assert isinstance(result, dict)
+
+    def test_parse_postgresql_no_password(self):
+        """Test parsing a PostgreSQL URL without password."""
+        result = parse_connection_string("postgresql://user@host:5432/mydb")
+        assert result["valid"] is True
+        assert result["password"] == ""
+
+    def test_parse_sqlite_memory(self):
+        """Test parsing a SQLite in-memory URL."""
+        result = parse_connection_string("sqlite:///:memory:")
+        assert result["valid"] is True
+        assert result["is_sqlite"] is True
 
 
 @pytest.mark.unit
@@ -233,3 +305,74 @@ class TestTestConnection:
         result = db_test_connection("postgresql://u:p@192.0.2.1:5432/db", timeout=2)
         assert result["success"] is False
         assert result["message"]  # Should contain an error message
+
+    def test_returns_backend_field(self):
+        """Test that the backend field is populated on success."""
+        result = db_test_connection("sqlite:///:memory:")
+        assert result["backend"] == "sqlite"
+
+    def test_failure_returns_empty_backend(self):
+        """Test that failure returns empty backend."""
+        result = db_test_connection("postgresql://u:p@192.0.2.1:5432/db", timeout=1)
+        assert result["backend"] == ""
+        assert result["server_version"] == ""
+
+
+@pytest.mark.unit
+class TestGetServerVersion:
+    """Tests for _get_server_version internal function."""
+
+    def test_postgresql_version(self):
+        """Test PostgreSQL version retrieval."""
+        mock_conn = MagicMock()
+        mock_conn.execute.return_value.fetchone.return_value = ("PostgreSQL 16.2 on x86_64",)
+        result = _get_server_version(mock_conn, "postgresql")
+        assert result == "PostgreSQL 16.2 on x86_64"
+
+    def test_mysql_version(self):
+        """Test MySQL version retrieval."""
+        mock_conn = MagicMock()
+        mock_conn.execute.return_value.fetchone.return_value = ("8.0.36",)
+        result = _get_server_version(mock_conn, "mysql")
+        assert result == "8.0.36"
+
+    def test_sqlite_version(self):
+        """Test SQLite version retrieval."""
+        mock_conn = MagicMock()
+        mock_conn.execute.return_value.fetchone.return_value = ("3.45.1",)
+        result = _get_server_version(mock_conn, "sqlite")
+        assert result == "SQLite 3.45.1"
+
+    def test_postgresql_empty_row(self):
+        """Test PostgreSQL version with empty row returns empty string."""
+        mock_conn = MagicMock()
+        mock_conn.execute.return_value.fetchone.return_value = None
+        result = _get_server_version(mock_conn, "postgresql")
+        assert result == ""
+
+    def test_mysql_empty_row(self):
+        """Test MySQL version with empty row returns empty string."""
+        mock_conn = MagicMock()
+        mock_conn.execute.return_value.fetchone.return_value = None
+        result = _get_server_version(mock_conn, "mysql")
+        assert result == ""
+
+    def test_sqlite_empty_row(self):
+        """Test SQLite version with empty row returns empty string."""
+        mock_conn = MagicMock()
+        mock_conn.execute.return_value.fetchone.return_value = None
+        result = _get_server_version(mock_conn, "sqlite")
+        assert result == ""
+
+    def test_unknown_backend_returns_empty(self):
+        """Test that an unknown backend returns empty string."""
+        mock_conn = MagicMock()
+        result = _get_server_version(mock_conn, "oracle")
+        assert result == ""
+
+    def test_exception_returns_empty(self):
+        """Test that an exception returns empty string."""
+        mock_conn = MagicMock()
+        mock_conn.execute.side_effect = Exception("Connection lost")
+        result = _get_server_version(mock_conn, "postgresql")
+        assert result == ""

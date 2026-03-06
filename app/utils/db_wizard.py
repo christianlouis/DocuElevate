@@ -82,7 +82,9 @@ def build_connection_string(
         ValueError: If required fields are missing for the chosen backend.
     """
     if backend == "sqlite":
-        path = sqlite_path.strip() if sqlite_path else "./app/database.db"
+        path = sqlite_path.strip() if sqlite_path else ""
+        if not path:
+            path = "./app/database.db"
         return f"sqlite:///{path}"
 
     # Resolve driver prefix

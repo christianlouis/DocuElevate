@@ -60,6 +60,10 @@
            class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
           <i class="fas fa-magic mr-1.5" aria-hidden="true"></i> Wizard
         </a>
+        <a href="/database-wizard"
+           class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+          <i class="fas fa-database mr-1.5" aria-hidden="true"></i> DB Wizard
+        </a>
         <div class="relative" x-data="{ exportOpen: false }">
           <button @click="exportOpen = !exportOpen"
                   class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
@@ -236,6 +240,14 @@
                     </div>
 
                     <p class="text-xs text-gray-500 mb-2">{{ setting.metadata.description }}</p>
+                    {% if setting.metadata.get('help_link') %}
+                    <p class="text-xs mb-2">
+                      <a href="{{ setting.metadata.help_link }}"
+                         class="text-indigo-600 hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded">
+                        <i class="fas fa-external-link-alt mr-1" aria-hidden="true"></i>{{ setting.metadata.get('help_link_label', 'More info') }}
+                      </a>
+                    </p>
+                    {% endif %}
 
                     {% if setting.metadata.type == 'boolean' %}
                     <!-- Boolean/Checkbox Input -->
