@@ -5,6 +5,7 @@ import logging
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
+from app.config import Settings
 from app.config import settings as _settings
 from app.models import UserProfile
 from app.utils.subscription import get_all_tiers
@@ -29,7 +30,7 @@ _DESTINATION_META: list[dict] = [
 ]
 
 
-def _get_configured_destinations(cfg) -> list[dict]:
+def _get_configured_destinations(cfg: Settings) -> list[dict]:
     """Return which storage providers are fully configured in the current settings.
 
     Each entry is a dict with ``id``, ``name``, and ``icon`` keys.

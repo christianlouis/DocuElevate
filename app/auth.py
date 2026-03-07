@@ -165,7 +165,7 @@ async def oauth_callback(request: Request, db: Session = Depends(get_db)):
         _ensure_user_profile(db, user_data)
 
         # Log the successful authentication
-        logger.info(f"[SECURITY] OAUTH_LOGIN_SUCCESS user={user_data.get('email', 'unknown')} admin={is_admin}")
+        logger.info("[SECURITY] OAUTH_LOGIN_SUCCESS user=%s admin=%s", user_data.get("email", "unknown"), is_admin)
 
         # Redirect first-time users to onboarding
         user_id = (

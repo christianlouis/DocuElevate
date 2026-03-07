@@ -151,12 +151,12 @@
           <h2 class="text-2xl font-bold">Choose Your Plan</h2>
           <p class="text-purple-100 text-sm">Start free, upgrade when you're ready</p>
         </div>
-        <div class="p-6" x-data="{ annual: false }">
+        <div class="p-6">
 
           <!-- Monthly / Annual toggle -->
-          <div class="flex items-center justify-center gap-3 mb-6">
+          <div class="flex items-center justify-center gap-3 mb-6" x-effect="billingCycle = annual ? 'yearly' : 'monthly'">
             <span class="text-sm font-medium" :class="!annual ? 'text-indigo-600' : 'text-gray-500'">Monthly</span>
-            <button @click="annual = !annual; billingCycle = annual ? 'yearly' : 'monthly'"
+            <button @click="annual = !annual"
                     class="relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     :class="annual ? 'bg-indigo-600' : 'bg-gray-300'"
                     role="switch"
@@ -185,7 +185,11 @@
                     Free
                   {% else %}
                     <span x-show="!annual">${{ tier.price_monthly }}<span class="text-xs font-normal text-gray-500">/mo</span></span>
-                    <span x-show="annual">${{ "%.2f" | format(tier.price_monthly * 10) }}<span class="text-xs font-normal text-gray-500">/yr</span></span>
+                    <span x-show="annual">
+                      {% if tier.price_yearly == 0 %}Free
+                      {% else %}${{ "%.2f"|format(tier.price_yearly) }}<span class="text-xs font-normal text-gray-500">/yr</span>
+                      {% endif %}
+                    </span>
                   {% endif %}
                 </span>
               </div>
@@ -374,6 +378,7 @@ function onboardingWizard() {
     contactEmail: '{{ user.email | default("") | e }}',
     selectedTier: 'free',
     billingCycle: 'monthly',
+    annual: false,
     selectedDestination: '',
 
     get progressPercent() {
@@ -459,8 +464,10 @@ function onboardingWizard() {
       this.loading = true; this.error = '';
       try {
         const r = await fetch('/api/onboarding/complete', { method: 'POST' });
-        if (r.ok) { window.location.href = '/upload'; }
-        else { const d = await r.json(); this.error = d.detail || 'Failed to complete onboarding'; }
+        if (r.ok) {
+          const data = await r.json();
+          window.location.href = data.redirect_url || '/upload';
+        } else { const d = await r.json(); this.error = d.detail || 'Failed to complete onboarding'; }
       } catch (_) { this.error = 'Network error. Please try again.'; }
       finally { this.loading = false; }
     }

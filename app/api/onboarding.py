@@ -208,8 +208,13 @@ def save_storage(request: Request, body: StorageBody, db: DbSession) -> dict[str
 
 
 @router.post("/complete", summary="Mark onboarding as completed")
-def complete_onboarding(request: Request, db: DbSession) -> dict[str, bool]:
-    """Set onboarding_completed=True and record the completion timestamp."""
+def complete_onboarding(request: Request, db: DbSession) -> dict[str, Any]:
+    """Set onboarding_completed=True, record the completion timestamp, and return the post-onboarding redirect URL.
+
+    The redirect URL is read from ``request.session["post_onboarding_redirect"]`` (stored by
+    ``oauth_callback`` when it reroutes a first-time user to the wizard) and defaults to
+    ``/upload`` when the session key is absent.
+    """
     user_id = _get_current_user_id(request)
     profile = _get_or_create_profile(db, user_id)
     profile.onboarding_completed = True
@@ -221,5 +226,6 @@ def complete_onboarding(request: Request, db: DbSession) -> dict[str, bool]:
         db.rollback()
         raise
 
-    logger.info("Onboarding: completed for user %s", user_id)
-    return {"success": True}
+    redirect_url = request.session.pop("post_onboarding_redirect", "/upload")
+    logger.info("Onboarding: completed for user %s, redirecting to %s", user_id, redirect_url)
+    return {"success": True, "redirect_url": redirect_url}

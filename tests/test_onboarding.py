@@ -278,7 +278,9 @@ class TestOnboardingAPI:
         _make_profile(ob_session, _TEST_USER["sub"])
         resp = ob_client_authed.post("/api/onboarding/complete")
         assert resp.status_code == 200
-        assert resp.json() == {"success": True}
+        data = resp.json()
+        assert data["success"] is True
+        assert "redirect_url" in data
 
         # Re-query to see persisted value
         ob_session.expire_all()
