@@ -162,7 +162,12 @@ class TestSubtaskRetry:
         assert call_args.kwargs.get("file_id") == file_record.id
 
     def test_retry_pipeline_step_ocr(self, client: TestClient, db_session, sample_pdf_path):
-        """Test retrying the OCR pipeline step."""
+        """Test retrying the OCR pipeline step via the legacy azure alias.
+
+        ``process_with_azure_document_intelligence`` is a legacy alias that the
+        implementation routes to the unified ``process_with_ocr`` task.  The
+        patch must therefore target ``app.tasks.process_with_ocr.process_with_ocr``.
+        """
         mock_task = MagicMock()
         mock_task.id = "ocr-retry-task"
 
@@ -177,10 +182,8 @@ class TestSubtaskRetry:
         db_session.commit()
         db_session.refresh(file_record)
 
-        with patch(
-            "app.tasks.process_with_azure_document_intelligence.process_with_azure_document_intelligence"
-        ) as mock_azure:
-            mock_azure.delay.return_value = mock_task
+        with patch("app.tasks.process_with_ocr.process_with_ocr") as mock_ocr:
+            mock_ocr.delay.return_value = mock_task
             response = client.post(
                 f"/api/files/{file_record.id}/retry-subtask?subtask_name=process_with_azure_document_intelligence"
             )
@@ -188,6 +191,32 @@ class TestSubtaskRetry:
         data = response.json()
         assert data["status"] == "success"
         assert data["subtask_name"] == "process_with_azure_document_intelligence"
+        mock_ocr.delay.assert_called_once()
+
+    def test_retry_pipeline_step_ocr_direct(self, client: TestClient, db_session, sample_pdf_path):
+        """Test retrying the OCR pipeline step via the ``process_with_ocr`` name."""
+        mock_task = MagicMock()
+        mock_task.id = "ocr-direct-retry-task"
+
+        file_record = FileRecord(
+            filehash="pipeline_retry2b",
+            original_filename="ocr_direct_retry.pdf",
+            local_filename=sample_pdf_path,
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+        db_session.refresh(file_record)
+
+        with patch("app.tasks.process_with_ocr.process_with_ocr") as mock_ocr:
+            mock_ocr.delay.return_value = mock_task
+            response = client.post(f"/api/files/{file_record.id}/retry-subtask?subtask_name=process_with_ocr")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert data["subtask_name"] == "process_with_ocr"
+        mock_ocr.delay.assert_called_once()
 
     def test_retry_pipeline_step_metadata_extraction(self, client: TestClient, db_session, sample_pdf_path):
         """Test retrying the metadata extraction pipeline step."""
