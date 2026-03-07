@@ -324,7 +324,17 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             return RedirectResponse(url=redirect_url, status_code=302)
 
     # --- Admin credentials (always available as a fallback / single-user mode) ---
-    if username == settings.admin_username and password == settings.admin_password:
+    # Guard: only attempt the match when credentials are actually configured.
+    # Without this guard, Python's `None == None` would be True when neither
+    # ADMIN_USERNAME nor ADMIN_PASSWORD is set, allowing any request that omits
+    # those form fields to be authenticated as an admin — creating a phantom
+    # "None@local.docuelevate" admin profile with full privileges.
+    if (
+        settings.admin_username
+        and settings.admin_password
+        and username == settings.admin_username
+        and password == settings.admin_password
+    ):
         admin_user_data = {
             "id": "admin",
             "name": "Administrator",
