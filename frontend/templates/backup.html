@@ -45,11 +45,36 @@
     </div>
   </div>
 
-  <!-- Status flash -->
-  <div x-show="flashMsg" x-transition aria-live="polite"
-       :class="flashError ? 'bg-red-100 border-red-500 text-red-700' : 'bg-green-100 border-green-500 text-green-700'"
-       class="border-l-4 p-4 mb-4 rounded" role="alert">
+  <!-- Status flash (always in DOM; content toggled via aria-live) -->
+  <div role="alert" aria-live="polite" aria-atomic="true"
+       :class="flashMsg ? '' : 'sr-only'"
+       class="border-l-4 p-4 mb-4 rounded transition-all"
+       :style="flashMsg ? '' : 'pointer-events:none'"
+       x-bind:class="flashMsg ? (flashError ? 'bg-red-100 border-red-500 text-red-700' : 'bg-green-100 border-green-500 text-green-700') : 'sr-only'">
     <span x-text="flashMsg"></span>
+  </div>
+
+  <!-- Accessible confirm dialog -->
+  <div x-show="confirmOpen" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+       role="dialog" aria-modal="true" :aria-labelledby="'confirmTitle'">
+    <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-6"
+         @keydown.escape.window="confirmOpen = false">
+      <h2 id="confirmTitle" class="text-lg font-semibold text-gray-900 mb-2">Confirm action</h2>
+      <p class="text-sm text-gray-600 mb-4" x-text="confirmMsg"></p>
+      <div class="flex justify-end gap-3">
+        <button @click="confirmOpen = false; confirmResolve(false)"
+                type="button"
+                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 min-h-[44px]">
+          Cancel
+        </button>
+        <button @click="confirmOpen = false; confirmResolve(true)"
+                type="button"
+                class="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 min-h-[44px]">
+          Confirm
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- Config summary -->
@@ -262,11 +287,29 @@ function backupDashboard() {
     filterType: '',
     flashMsg: '',
     flashError: false,
+    confirmOpen: false,
+    confirmMsg: '',
+    confirmResolve: null,
 
+    /** Show a timed status flash message. */
     flash(msg, isError = false) {
       this.flashMsg = msg;
       this.flashError = isError;
       setTimeout(() => { this.flashMsg = ''; }, 5000);
+    },
+
+    /** Return CSRF token value, or throw if missing. */
+    csrfToken() {
+      const el = document.querySelector('[name=csrf_token]');
+      if (!el || !el.value) throw new Error('CSRF token missing – cannot proceed.');
+      return el.value;
+    },
+
+    /** Show the accessible confirm dialog and return a Promise<boolean>. */
+    askConfirm(msg) {
+      this.confirmMsg = msg;
+      this.confirmOpen = true;
+      return new Promise(resolve => { this.confirmResolve = resolve; });
     },
 
     async triggerBackup(type) {
@@ -274,7 +317,7 @@ function backupDashboard() {
       try {
         const resp = await fetch(`/api/admin/backup/create?backup_type=${type}`, {
           method: 'POST',
-          headers: { 'X-CSRF-Token': document.querySelector('[name=csrf_token]')?.value || '' },
+          headers: { 'X-CSRF-Token': this.csrfToken() },
         });
         if (resp.ok) {
           const data = await resp.json();
@@ -296,7 +339,7 @@ function backupDashboard() {
       try {
         const resp = await fetch('/api/admin/backup/cleanup', {
           method: 'POST',
-          headers: { 'X-CSRF-Token': document.querySelector('[name=csrf_token]')?.value || '' },
+          headers: { 'X-CSRF-Token': this.csrfToken() },
         });
         if (resp.ok) {
           this.flash('Cleanup queued.');
@@ -313,11 +356,12 @@ function backupDashboard() {
     },
 
     async deleteBackup(id, filename) {
-      if (!confirm(`Delete backup "${filename}"? This cannot be undone.`)) return;
+      const ok = await this.askConfirm(`Delete backup "${filename}"? This cannot be undone.`);
+      if (!ok) return;
       try {
         const resp = await fetch(`/api/admin/backup/${id}`, {
           method: 'DELETE',
-          headers: { 'X-CSRF-Token': document.querySelector('[name=csrf_token]')?.value || '' },
+          headers: { 'X-CSRF-Token': this.csrfToken() },
         });
         if (resp.ok) {
           this.flash(`Backup ${filename} deleted.`);
@@ -337,14 +381,15 @@ function backupDashboard() {
       const fileInput = document.getElementById('restoreFile');
       if (!fileInput.files.length) return;
 
-      if (!confirm('Are you sure? This will OVERWRITE all current database data with the contents of the backup file.')) return;
+      const ok = await this.askConfirm('Are you sure? This will OVERWRITE all current database data with the contents of the backup file.');
+      if (!ok) return;
 
       this.restoring = true;
       try {
         const formData = new FormData(form);
         const resp = await fetch('/api/admin/backup/restore', {
           method: 'POST',
-          headers: { 'X-CSRF-Token': document.querySelector('[name=csrf_token]')?.value || '' },
+          headers: { 'X-CSRF-Token': this.csrfToken() },
           body: formData,
         });
         if (resp.ok) {

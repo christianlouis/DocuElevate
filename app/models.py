@@ -384,9 +384,9 @@ class BackupRecord(Base):
     - ``hourly``  – kept for up to 4 days (96 snapshots)
     - ``daily``   – kept for up to 3 weeks (21 snapshots)
     - ``weekly``  – kept for up to 13 weeks (≈ 90 days)
-    ``location`` is ``local`` when the file is stored on-disk under the
-    configured backup directory, or ``remote`` when it has been uploaded to
-    a storage provider or sent via e-mail.
+    ``local_path`` is the full filesystem path of the local copy (``None``
+    once pruned).  ``remote_destination`` and ``remote_path`` describe the
+    remote copy when one has been uploaded to a storage provider or e-mailed.
     """
 
     __tablename__ = "backup_records"

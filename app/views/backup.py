@@ -3,6 +3,7 @@ Backup management dashboard view – admin only.
 """
 
 import logging
+import os
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -31,8 +32,6 @@ async def backup_dashboard(request: Request, db: Session = Depends(get_db)):
                 counts[r.backup_type] += 1
 
         # Compute total local size
-        import os
-
         total_size = sum(r.size_bytes for r in records if r.local_path and os.path.exists(r.local_path))
 
         return templates.TemplateResponse(
