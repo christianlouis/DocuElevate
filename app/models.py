@@ -374,3 +374,47 @@ class PipelineStep(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class BackupRecord(Base):
+    """Tracks database backup files and their retention metadata.
+
+    Each row represents one backup archive (a gzipped SQLite dump).
+    ``backup_type`` classifies the backup for retention purposes:
+    - ``hourly``  – kept for up to 4 days (96 snapshots)
+    - ``daily``   – kept for up to 3 weeks (21 snapshots)
+    - ``weekly``  – kept for up to 13 weeks (≈ 90 days)
+    ``location`` is ``local`` when the file is stored on-disk under the
+    configured backup directory, or ``remote`` when it has been uploaded to
+    a storage provider or sent via e-mail.
+    """
+
+    __tablename__ = "backup_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Human-readable archive filename (e.g. backup_hourly_2026-03-07T12-00-00.db.gz)
+    filename = Column(String(255), nullable=False, unique=True)
+
+    # Full path on the local filesystem (may be NULL for remote-only backups)
+    local_path = Column(String(1024), nullable=True)
+
+    # Classification used by the retention policy
+    backup_type = Column(String(20), nullable=False, index=True)  # hourly | daily | weekly
+
+    # Archive size in bytes (0 if unknown)
+    size_bytes = Column(Integer, nullable=False, default=0)
+
+    # Checksum of the archive for integrity verification (SHA-256 hex)
+    checksum = Column(String(64), nullable=True)
+
+    # Whether the backup was successfully created
+    status = Column(String(20), nullable=False, default="ok")  # ok | failed
+
+    # Storage destination where a remote copy was uploaded (e.g. "s3", "dropbox", "email")
+    remote_destination = Column(String(50), nullable=True)
+
+    # Path / key of the remote copy (bucket key, folder path, etc.)
+    remote_path = Column(String(1024), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)

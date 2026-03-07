@@ -1300,6 +1300,72 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Backup / Restore
+    "backup_enabled": {
+        "category": "Backup",
+        "description": ("Enable automatic scheduled database backups (hourly, daily, weekly). Default: True."),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "backup_dir": {
+        "category": "Backup",
+        "description": (
+            "Directory where local backup archives are stored. Defaults to <workdir>/backups when not set."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "backup_remote_destination": {
+        "category": "Backup",
+        "description": (
+            "Storage provider for remote backup copies. "
+            "Accepted values: s3, dropbox, google_drive, onedrive, nextcloud, webdav, ftp, sftp, email. "
+            "Leave empty to keep backups local only."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "options": ["", "s3", "dropbox", "google_drive", "onedrive", "nextcloud", "webdav", "ftp", "sftp", "email"],
+    },
+    "backup_remote_folder": {
+        "category": "Backup",
+        "description": (
+            "Sub-folder / key prefix used when uploading backup archives to the remote destination. Default: 'backups'."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "backup_retain_hourly": {
+        "category": "Backup",
+        "description": "Number of hourly backups to retain (default 96 = 4 days × 24 h).",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "backup_retain_daily": {
+        "category": "Backup",
+        "description": "Number of daily backups to retain (default 21 = 3 weeks).",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "backup_retain_weekly": {
+        "category": "Backup",
+        "description": "Number of weekly backups to retain (default 13 ≈ 3 months / 91 days).",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # UI / Appearance
     "ui_default_color_scheme": {
         "category": "UI",
