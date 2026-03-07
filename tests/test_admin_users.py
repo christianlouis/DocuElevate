@@ -477,3 +477,189 @@ class TestUserProfileModel:
         with pytest.raises(IntegrityError):
             au_session.commit()
         au_session.rollback()
+
+
+# ---------------------------------------------------------------------------
+# Complimentary plan tests
+# ---------------------------------------------------------------------------
+
+
+class TestComplimentaryPlan:
+    """Tests for the is_complimentary field and admin auto-creation logic."""
+
+    @pytest.mark.unit
+    def test_create_profile_with_complimentary_flag(self, au_client, au_session):
+        """PUT can create a profile with is_complimentary=True."""
+        resp = au_client.put(
+            "/api/admin/users/comp@example.com",
+            json={"subscription_tier": "business", "is_complimentary": True, "is_blocked": False},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["is_complimentary"] is True
+        assert data["subscription_tier"] == "business"
+
+        profile = au_session.query(UserProfile).filter_by(user_id="comp@example.com").first()
+        assert profile is not None
+        assert profile.is_complimentary is True
+
+    @pytest.mark.unit
+    def test_update_profile_set_complimentary(self, au_client, au_session):
+        """PUT can toggle is_complimentary on an existing profile."""
+        _make_profile(au_session, "toggle@example.com", is_complimentary=False)
+
+        resp = au_client.put(
+            "/api/admin/users/toggle@example.com",
+            json={"is_blocked": False, "is_complimentary": True},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["is_complimentary"] is True
+
+    @pytest.mark.unit
+    def test_list_users_includes_complimentary_field(self, au_client, au_session):
+        """GET /api/admin/users/ returns is_complimentary per user."""
+        _make_profile(au_session, "complist@example.com", is_complimentary=True)
+
+        resp = au_client.get("/api/admin/users/")
+        assert resp.status_code == 200
+        users = {u["user_id"]: u for u in resp.json()["users"]}
+        assert "complist@example.com" in users
+        assert users["complist@example.com"]["is_complimentary"] is True
+
+    @pytest.mark.unit
+    def test_get_user_includes_complimentary_field(self, au_client, au_session):
+        """GET /api/admin/users/<id> returns is_complimentary in profile."""
+        _make_profile(au_session, "getcomp@example.com", is_complimentary=True, subscription_tier="business")
+
+        resp = au_client.get("/api/admin/users/getcomp%40example.com")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["is_complimentary"] is True
+        assert data["profile"]["is_complimentary"] is True
+
+    @pytest.mark.unit
+    def test_complimentary_defaults_to_false(self, au_client, au_session):
+        """Newly created profiles have is_complimentary=False by default."""
+        resp = au_client.put(
+            "/api/admin/users/nocomp@example.com",
+            json={"is_blocked": False},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["is_complimentary"] is False
+
+    @pytest.mark.unit
+    def test_profile_model_complimentary_column(self, au_session):
+        """UserProfile model stores is_complimentary correctly."""
+        profile = UserProfile(user_id="modelcomp@example.com", is_complimentary=True)
+        au_session.add(profile)
+        au_session.commit()
+        au_session.refresh(profile)
+        assert profile.is_complimentary is True
+
+
+# ---------------------------------------------------------------------------
+# _ensure_user_profile admin auto-creation tests
+# ---------------------------------------------------------------------------
+
+
+class TestEnsureUserProfileAdmin:
+    """Tests for _ensure_user_profile admin-specific behaviour."""
+
+    @pytest.mark.unit
+    def test_admin_login_creates_highest_tier_profile(self, au_session):
+        """Admin first login creates a profile with the highest subscription tier."""
+        from app.auth import _ensure_user_profile
+        from app.utils.subscription import TIER_ORDER
+
+        user_data = {
+            "preferred_username": "admin",
+            "email": "admin@local.docuelevate",
+            "name": "Administrator",
+            "is_admin": True,
+        }
+        _ensure_user_profile(au_session, user_data, is_admin=True)
+
+        # user_id uses preferred_username (sub not provided)
+        profile = au_session.query(UserProfile).filter_by(user_id="admin").first()
+        assert profile is not None
+        assert profile.subscription_tier == TIER_ORDER[-1]
+        assert profile.is_complimentary is True
+        assert profile.onboarding_completed is True
+
+    @pytest.mark.unit
+    def test_regular_user_login_creates_free_profile(self, au_session):
+        """Regular user login creates a profile with the free tier."""
+        from app.auth import _ensure_user_profile
+
+        user_data = {
+            "preferred_username": "regular",
+            "email": "user@example.com",
+            "name": "Regular User",
+        }
+        _ensure_user_profile(au_session, user_data, is_admin=False)
+
+        # user_id uses preferred_username (sub not provided)
+        profile = au_session.query(UserProfile).filter_by(user_id="regular").first()
+        assert profile is not None
+        assert profile.subscription_tier == "free"
+        assert profile.is_complimentary is False
+
+    @pytest.mark.unit
+    def test_admin_login_sets_complimentary_on_existing_profile(self, au_session):
+        """Existing admin profile gets is_complimentary=True on login."""
+        existing = UserProfile(user_id="existadmin", is_complimentary=False, subscription_tier="starter")
+        au_session.add(existing)
+        au_session.commit()
+
+        from app.auth import _ensure_user_profile
+
+        user_data = {"preferred_username": "existadmin", "email": "ea@example.com"}
+        _ensure_user_profile(au_session, user_data, is_admin=True)
+
+        au_session.refresh(existing)
+        assert existing.is_complimentary is True
+
+    @pytest.mark.unit
+    def test_admin_login_does_not_downgrade_existing_tier(self, au_session):
+        """Existing admin profile with a paid tier keeps that tier on re-login."""
+        from app.auth import _ensure_user_profile
+        from app.utils.subscription import TIER_ORDER
+
+        highest = TIER_ORDER[-1]
+        existing = UserProfile(user_id="toptieradmin", is_complimentary=False, subscription_tier=highest)
+        au_session.add(existing)
+        au_session.commit()
+
+        user_data = {"preferred_username": "toptieradmin", "email": "tt@example.com"}
+        _ensure_user_profile(au_session, user_data, is_admin=True)
+
+        au_session.refresh(existing)
+        assert existing.subscription_tier == highest
+        assert existing.is_complimentary is True
+
+    @pytest.mark.unit
+    def test_admin_login_upgrades_free_tier_on_existing_profile(self, au_session):
+        """Existing admin profile on free tier gets upgraded to highest tier."""
+        from app.auth import _ensure_user_profile
+        from app.utils.subscription import TIER_ORDER
+
+        existing = UserProfile(user_id="freeadmin", is_complimentary=False, subscription_tier="free")
+        au_session.add(existing)
+        au_session.commit()
+
+        user_data = {"preferred_username": "freeadmin", "email": "fa@example.com"}
+        _ensure_user_profile(au_session, user_data, is_admin=True)
+
+        au_session.refresh(existing)
+        assert existing.subscription_tier == TIER_ORDER[-1]
+        assert existing.is_complimentary is True
+
+    @pytest.mark.unit
+    def test_ensure_user_profile_no_identifier_logs_warning(self, au_session):
+        """_ensure_user_profile logs a warning when no stable user id is present."""
+        from app.auth import _ensure_user_profile
+
+        _ensure_user_profile(au_session, {}, is_admin=False)
+        # No profile should have been created
+        count = au_session.query(UserProfile).count()
+        assert count == 0
