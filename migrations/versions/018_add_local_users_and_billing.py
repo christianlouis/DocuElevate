@@ -1,7 +1,7 @@
 """Add local_users table and billing columns
 
 Revision ID: 018_add_local_users_and_billing
-Revises: 017_add_onboarding_fields
+Revises: 017_add_onboarding_fields, 017_add_pipelines
 Create Date: 2026-03-09
 """
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "018_add_local_users_and_billing"
-down_revision: Union[str, None] = "017_add_onboarding_fields"
+down_revision: Union[str, tuple] = ("017_add_onboarding_fields", "017_add_pipelines")
 depends_on: Union[str, None] = None
 
 

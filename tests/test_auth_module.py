@@ -298,6 +298,11 @@ class TestAuthEndpoint:
                 mock_settings.admin_username = "admin"
                 mock_settings.admin_password = "secret123"
                 mock_settings.multi_user_enabled = False
+
+                from app.auth import auth
+
+                mock_request = MagicMock()
+                mock_form_data = {"username": "admin", "password": "wrong_password"}
                 mock_request.form = AsyncMock(return_value=mock_form_data)
                 mock_request.session = {}
 
