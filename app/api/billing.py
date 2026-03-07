@@ -238,6 +238,11 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)) -> dic
         if settings.stripe_webhook_secret:
             event = stripe.Webhook.construct_event(payload, sig_header, settings.stripe_webhook_secret)
         else:
+            logger.warning(
+                "[SECURITY] STRIPE_WEBHOOK_SECRET is not configured. "
+                "Webhook events are accepted without signature verification. "
+                "Set STRIPE_WEBHOOK_SECRET in production to prevent spoofed events."
+            )
             event = stripe.Event.construct_from(json.loads(payload), stripe.api_key)
     except stripe.SignatureVerificationError:
         logger.warning("[SECURITY] Stripe webhook signature verification failed")

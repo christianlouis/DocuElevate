@@ -46,7 +46,7 @@ def is_token_expired(sent_at: datetime | None) -> bool:
     """Return True when *sent_at* is None or older than TOKEN_EXPIRY_HOURS."""
     if sent_at is None:
         return True
-    return datetime.now(tz=timezone.utc) > sent_at.replace(tzinfo=timezone.utc) + timedelta(hours=TOKEN_EXPIRY_HOURS)
+    return datetime.now(tz=timezone.utc) > sent_at.astimezone(timezone.utc) + timedelta(hours=TOKEN_EXPIRY_HOURS)
 
 
 def _smtp_send(subject: str, html_body: str, plain_body: str, recipient: str) -> None:

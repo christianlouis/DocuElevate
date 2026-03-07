@@ -187,6 +187,7 @@ async def signup(request: Request, body: SignupBody, db: DbSession) -> dict[str,
             db.commit()
         except Exception:
             db.rollback()
+            logger.exception("Failed to clean up orphan records for %s after email send failure", body.email)
         logger.warning("Signup email failed for %s: %s", body.email, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

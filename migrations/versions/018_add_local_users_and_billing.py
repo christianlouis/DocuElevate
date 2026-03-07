@@ -37,8 +37,8 @@ def upgrade() -> None:
         sa.UniqueConstraint("username"),
     )
     op.add_column("user_profiles", sa.Column("stripe_customer_id", sa.String(64), nullable=True))
-    op.add_column("subscription_plans", sa.Column("stripe_price_id_monthly", sa.String(64), nullable=True))
-    op.add_column("subscription_plans", sa.Column("stripe_price_id_yearly", sa.String(64), nullable=True))
+    op.add_column("subscription_plans", sa.Column("stripe_price_id_monthly", sa.String(128), nullable=True))
+    op.add_column("subscription_plans", sa.Column("stripe_price_id_yearly", sa.String(128), nullable=True))
 
 
 def downgrade() -> None:

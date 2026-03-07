@@ -397,6 +397,10 @@ async function startCheckout(planId) {
   const cycleEl = document.querySelector('[data-billing-cycle]');
   const billingCycle = (cycleEl && cycleEl.dataset.billingCycle) ? cycleEl.dataset.billingCycle : 'monthly';
 
+  // Clear previous error
+  const errEl = document.getElementById('checkout-error');
+  if (errEl) { errEl.textContent = ''; errEl.hidden = true; }
+
   try {
     const resp = await fetch('/api/billing/create-checkout-session', {
       method: 'POST',
@@ -415,10 +419,17 @@ async function startCheckout(planId) {
       }
     }
     const data = await resp.json().catch(() => ({}));
-    alert(data.detail || 'Unable to start checkout. Please try again.');
+    const msg = data.detail || 'Unable to start checkout. Please try again.';
+    if (errEl) { errEl.textContent = msg; errEl.hidden = false; }
   } catch (e) {
-    alert('Network error. Please try again.');
+    if (errEl) { errEl.textContent = 'Network error. Please try again.'; errEl.hidden = false; }
   }
 }
 </script>
+<div id="checkout-error"
+     role="alert"
+     aria-live="assertive"
+     hidden
+     class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-red-100 border border-red-400 text-red-700 px-6 py-3 rounded-lg shadow-lg text-sm z-50">
+</div>
 {% endblock %}

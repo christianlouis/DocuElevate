@@ -288,8 +288,8 @@ class SubscriptionPlan(Base):
     sort_order = Column(Integer, nullable=False, default=0)
     features = Column(Text, nullable=True)  # JSON-encoded list[str]
     api_access = Column(Boolean, nullable=False, default=False)
-    stripe_price_id_monthly = Column(String(64), nullable=True)
-    stripe_price_id_yearly = Column(String(64), nullable=True)
+    stripe_price_id_monthly = Column(String(128), nullable=True)
+    stripe_price_id_yearly = Column(String(128), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

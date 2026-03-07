@@ -550,9 +550,9 @@ def test_reset_password_page(la_client):
 
 
 @pytest.mark.unit
-def test_local_login_success(la_session, active_user):
+@pytest.mark.asyncio
+async def test_local_login_success(la_session, active_user):
     """auth() with valid LocalUser credentials sets session and redirects."""
-    import asyncio
     from unittest.mock import AsyncMock, MagicMock
 
     from fastapi import Request
@@ -563,16 +563,16 @@ def test_local_login_success(la_session, active_user):
     mock_request.form = AsyncMock(return_value={"username": "activeuser", "password": "password123"})
     mock_request.session = {}
 
-    result = asyncio.get_event_loop().run_until_complete(auth(mock_request, db=la_session))
+    result = await auth(mock_request, db=la_session)
     assert result.status_code == 302
     assert "user" in mock_request.session
     assert mock_request.session["user"]["email"] == "active@example.com"
 
 
 @pytest.mark.unit
-def test_local_login_by_email(la_session, active_user):
+@pytest.mark.asyncio
+async def test_local_login_by_email(la_session, active_user):
     """auth() accepts email as username for LocalUser lookup."""
-    import asyncio
     from unittest.mock import AsyncMock, MagicMock
 
     from fastapi import Request
@@ -583,15 +583,15 @@ def test_local_login_by_email(la_session, active_user):
     mock_request.form = AsyncMock(return_value={"username": "active@example.com", "password": "password123"})
     mock_request.session = {}
 
-    result = asyncio.get_event_loop().run_until_complete(auth(mock_request, db=la_session))
+    result = await auth(mock_request, db=la_session)
     assert result.status_code == 302
     assert "user" in mock_request.session
 
 
 @pytest.mark.unit
-def test_local_login_wrong_password(la_session, active_user):
+@pytest.mark.asyncio
+async def test_local_login_wrong_password(la_session, active_user):
     """auth() with wrong password redirects to login with error."""
-    import asyncio
     from unittest.mock import AsyncMock, MagicMock
 
     from fastapi import Request
@@ -602,16 +602,16 @@ def test_local_login_wrong_password(la_session, active_user):
     mock_request.form = AsyncMock(return_value={"username": "activeuser", "password": "wrongpassword"})
     mock_request.session = {}
 
-    result = asyncio.get_event_loop().run_until_complete(auth(mock_request, db=la_session))
+    result = await auth(mock_request, db=la_session)
     assert result.status_code == 302
     assert "/login" in result.headers["location"]
     assert "user" not in mock_request.session
 
 
 @pytest.mark.unit
-def test_local_login_unverified(la_session, pending_user):
+@pytest.mark.asyncio
+async def test_local_login_unverified(la_session, pending_user):
     """auth() for unverified user redirects with verification message."""
-    import asyncio
     from unittest.mock import AsyncMock, MagicMock
 
     from fastapi import Request
@@ -622,6 +622,6 @@ def test_local_login_unverified(la_session, pending_user):
     mock_request.form = AsyncMock(return_value={"username": "pendinguser", "password": "password123"})
     mock_request.session = {}
 
-    result = asyncio.get_event_loop().run_until_complete(auth(mock_request, db=la_session))
+    result = await auth(mock_request, db=la_session)
     assert result.status_code == 302
     assert "verify" in result.headers["location"].lower()
