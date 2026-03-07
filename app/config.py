@@ -404,6 +404,18 @@ class Settings(BaseSettings):
         default=True,
         description="Send notifications when files are successfully processed",
     )
+    notify_on_user_signup: bool = Field(
+        default=True,
+        description="Send admin notifications when a new user signs up",
+    )
+    notify_on_plan_change: bool = Field(
+        default=True,
+        description="Send admin notifications when a user changes their subscription plan",
+    )
+    notify_on_payment_issue: bool = Field(
+        default=True,
+        description="Send admin notifications when a payment issue is reported for a user",
+    )
 
     # Webhook settings
     webhook_enabled: bool = Field(

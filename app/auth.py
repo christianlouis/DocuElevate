@@ -168,6 +168,7 @@ def _ensure_user_profile(db: Session, user_data: dict, is_admin: bool = False) -
         existing = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
         if existing is None:
             display_name = user_data.get("name") or user_data.get("preferred_username") or user_data.get("email")
+            email = user_data.get("email")
             profile = UserProfile(
                 user_id=user_id,
                 display_name=display_name,
@@ -183,6 +184,23 @@ def _ensure_user_profile(db: Session, user_data: dict, is_admin: bool = False) -
                 is_admin,
                 highest_tier if is_admin else "free",
             )
+            # Notify admins and fire webhook for new (non-admin) user signup
+            if not is_admin:
+                try:
+                    from app.utils.notification import notify_user_signup
+                    from app.utils.webhook import dispatch_webhook_event
+
+                    notify_user_signup(user_id, display_name=display_name, email=email)
+                    dispatch_webhook_event(
+                        "user.signup",
+                        {
+                            "user_id": user_id,
+                            "display_name": display_name,
+                            "email": email,
+                        },
+                    )
+                except Exception:
+                    logger.exception("Failed to send signup notification/webhook for user_id=%s", user_id)
         elif is_admin:
             # Ensure existing admin profiles always have complimentary flag set.
             # Also upgrade from free tier to highest if still on default.

@@ -204,3 +204,104 @@ The file has been successfully processed and is being uploaded to all configured
     return send_notification(
         title=title, message=message.strip(), notification_type="success", tags=["document", "processed", "success"]
     )
+
+
+def notify_user_signup(user_id: str, display_name: str | None = None, email: str | None = None) -> bool:
+    """Send a notification to admins when a new user signs up.
+
+    Args:
+        user_id: The stable user identifier (preferred_username / email / sub).
+        display_name: Optional human-readable name for the user.
+        email: Optional email address for the user.
+
+    Returns:
+        bool: True if the notification was sent successfully.
+    """
+    if not settings.notify_on_user_signup:
+        return False
+
+    name_str = display_name or user_id
+    email_str = email or "N/A"
+
+    title = f"New User Signup: {name_str}"
+    message = f"""A new user has signed up for DocuElevate.
+
+User ID: {user_id}
+Display Name: {name_str}
+Email: {email_str}
+
+Review the new account in the admin panel."""
+
+    return send_notification(
+        title=title,
+        message=message.strip(),
+        notification_type="info",
+        tags=["user", "signup"],
+    )
+
+
+def notify_plan_changed(
+    user_id: str,
+    old_tier: str,
+    new_tier: str,
+    changed_by: str = "user",
+) -> bool:
+    """Send a notification to admins when a user changes their subscription plan.
+
+    Args:
+        user_id: The stable user identifier.
+        old_tier: The previous subscription tier.
+        new_tier: The new subscription tier.
+        changed_by: Who initiated the change (``"user"`` or ``"admin"``).
+
+    Returns:
+        bool: True if the notification was sent successfully.
+    """
+    if not settings.notify_on_plan_change:
+        return False
+
+    title = f"Plan Changed: {user_id}"
+    message = f"""A user's subscription plan has changed.
+
+User ID: {user_id}
+Previous Plan: {old_tier}
+New Plan: {new_tier}
+Changed By: {changed_by}
+
+Review the account in the admin panel."""
+
+    return send_notification(
+        title=title,
+        message=message.strip(),
+        notification_type="info",
+        tags=["user", "plan", "subscription"],
+    )
+
+
+def notify_payment_issue(user_id: str, issue: str) -> bool:
+    """Send a notification to admins when a payment issue is reported for a user.
+
+    Args:
+        user_id: The stable user identifier.
+        issue: A human-readable description of the payment issue.
+
+    Returns:
+        bool: True if the notification was sent successfully.
+    """
+    if not settings.notify_on_payment_issue:
+        return False
+
+    title = f"Payment Issue: {user_id}"
+    message = f"""A payment issue has been reported for a user.
+
+User ID: {user_id}
+Issue: {issue}
+
+Please review the account in the admin panel and follow up with the user."""
+
+    return send_notification(
+        title=title,
+        message=message.strip(),
+        notification_type="warning",
+        tags=["user", "payment", "billing"],
+    )

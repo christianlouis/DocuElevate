@@ -69,6 +69,12 @@ class UserProfileUpsert(BaseModel):
     )
 
 
+class PaymentIssueBody(BaseModel):
+    """Body for reporting a payment issue for a user."""
+
+    issue: str = Field(..., min_length=1, max_length=2048, description="Description of the payment issue")
+
+
 class UserProfileResponse(BaseModel):
     """Response schema for a user profile record."""
 
@@ -399,6 +405,7 @@ def upsert_user_profile(
         profile = UserProfile(user_id=user_id)
         db.add(profile)
 
+    old_tier = (profile.subscription_tier or "free") if profile.id else None  # None means brand-new profile
     profile.display_name = body.display_name
     profile.daily_upload_limit = body.daily_upload_limit
     profile.notes = body.notes
@@ -407,6 +414,8 @@ def upsert_user_profile(
     profile.subscription_period_start = body.subscription_period_start
     profile.allow_overage = body.allow_overage
     profile.is_complimentary = body.is_complimentary
+    tier_changed = False
+    new_tier: str | None = None
     if body.subscription_tier is not None:
         from app.utils.subscription import TIERS
 
@@ -415,6 +424,10 @@ def upsert_user_profile(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"Invalid subscription_tier '{body.subscription_tier}'. Valid values: {list(TIERS.keys())}",
             )
+        # Detect a real change only for existing profiles (old_tier is not None)
+        if old_tier is not None and old_tier != body.subscription_tier:
+            tier_changed = True
+            new_tier = body.subscription_tier
         profile.subscription_tier = body.subscription_tier
 
     try:
@@ -425,7 +438,64 @@ def upsert_user_profile(
         raise
 
     logger.info("Admin upserted profile for user %s", user_id)
+
+    # Notify admins and fire webhook when plan is changed by an admin
+    if tier_changed and new_tier is not None:
+        try:
+            from app.utils.notification import notify_plan_changed
+            from app.utils.webhook import dispatch_webhook_event
+
+            notify_plan_changed(user_id, old_tier=old_tier, new_tier=new_tier, changed_by="admin")  # type: ignore[arg-type]
+            dispatch_webhook_event(
+                "user.plan_changed",
+                {
+                    "user_id": user_id,
+                    "old_tier": old_tier,
+                    "new_tier": new_tier,
+                    "billing_cycle": body.subscription_billing_cycle,
+                    "changed_by": "admin",
+                },
+            )
+        except Exception:
+            logger.exception("Failed to send plan-change notification/webhook for user %s", user_id)
+
     return _profile_to_dict(profile)
+
+
+@router.post(
+    "/{user_id:path}/payment-issue", status_code=status.HTTP_200_OK, summary="Report a payment issue for a user"
+)
+def report_payment_issue(user_id: str, body: PaymentIssueBody, db: DbSession, _admin: AdminUser) -> dict[str, Any]:
+    """Notify admins and fire a webhook for a payment issue reported against *user_id*.
+
+    The user profile must exist.  Use this endpoint when a payment processor
+    webhook or manual review identifies a billing problem (e.g. failed charge,
+    expired card, disputed transaction).
+
+    Returns the user profile dict alongside an acknowledgement flag.
+    """
+    profile = _get_or_none(db, user_id)
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User profile not found")
+
+    logger.warning("Payment issue reported for user %s: %s", user_id, body.issue)
+
+    try:
+        from app.utils.notification import notify_payment_issue
+        from app.utils.webhook import dispatch_webhook_event
+
+        notify_payment_issue(user_id, issue=body.issue)
+        dispatch_webhook_event(
+            "user.payment_issue",
+            {
+                "user_id": user_id,
+                "issue": body.issue,
+            },
+        )
+    except Exception:
+        logger.exception("Failed to send payment-issue notification/webhook for user %s", user_id)
+
+    return {"acknowledged": True, "user_id": user_id, "profile": _profile_to_dict(profile)}
 
 
 @router.delete("/{user_id:path}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete a user profile")

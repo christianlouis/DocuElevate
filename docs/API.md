@@ -812,6 +812,38 @@ Returns `204 No Content` on success, `404` if no profile exists.
 
 ---
 
+**POST** `/api/admin/users/{user_id}/payment-issue`
+
+Report a payment issue for a user. Sends an admin notification (via configured Apprise channels) and
+fires a `user.payment_issue` webhook event.  Use this endpoint when a payment processor (e.g.
+Stripe, PayPal) sends a failed-charge notification or when a manual billing review identifies a
+problem.
+
+**Request body**:
+```json
+{
+  "issue": "Card declined: insufficient funds"
+}
+```
+
+- `issue` (required): Human-readable description of the payment problem (1–2048 characters)
+
+**Response (200)**:
+```json
+{
+  "acknowledged": true,
+  "user_id": "alice@example.com",
+  "profile": { ... }
+}
+```
+
+**Error Responses**:
+- `404`: User profile not found
+- `403`: Admin access required
+- `422`: Validation error (e.g. empty issue string)
+
+---
+
 ### Settings Suggestions (Autocomplete)
 
 **GET** `/api/settings/{key}/suggestions`
@@ -1072,6 +1104,9 @@ Manage webhook configurations for notifying external systems when document event
 | `document.uploaded` | A new document has been ingested |
 | `document.processed` | A document finished processing successfully |
 | `document.failed` | Document processing failed |
+| `user.signup` | A new user account was created |
+| `user.plan_changed` | A user's subscription plan changed |
+| `user.payment_issue` | A payment issue was reported for a user |
 
 ### GET /api/webhooks/events/
 
@@ -1079,7 +1114,7 @@ List all valid webhook event types.
 
 **Response (200):**
 ```json
-["document.failed", "document.processed", "document.uploaded"]
+["document.failed", "document.processed", "document.uploaded", "user.payment_issue", "user.plan_changed", "user.signup"]
 ```
 
 ### GET /api/webhooks/

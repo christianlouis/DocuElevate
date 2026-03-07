@@ -1251,6 +1251,30 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "notify_on_user_signup": {
+        "category": "Notifications",
+        "description": "Send admin notifications when a new user signs up",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "notify_on_plan_change": {
+        "category": "Notifications",
+        "description": "Send admin notifications when a user changes their subscription plan",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "notify_on_payment_issue": {
+        "category": "Notifications",
+        "description": "Send admin notifications when a payment issue is reported for a user",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Feature Flags
     "allow_file_delete": {
         "category": "Feature Flags",

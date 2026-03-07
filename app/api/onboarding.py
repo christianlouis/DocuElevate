@@ -175,6 +175,7 @@ def save_plan(request: Request, body: PlanBody, db: DbSession) -> dict[str, Any]
         )
 
     profile = _get_or_create_profile(db, user_id)
+    old_tier = profile.subscription_tier or "free"
     profile.subscription_tier = body.subscription_tier
     profile.subscription_billing_cycle = body.billing_cycle
 
@@ -186,6 +187,27 @@ def save_plan(request: Request, body: PlanBody, db: DbSession) -> dict[str, Any]
         raise
 
     logger.info("Onboarding: saved plan %s/%s", body.subscription_tier, body.billing_cycle)
+
+    # Notify admins and fire webhook when the plan actually changes
+    if old_tier != body.subscription_tier:
+        try:
+            from app.utils.notification import notify_plan_changed
+            from app.utils.webhook import dispatch_webhook_event
+
+            notify_plan_changed(user_id, old_tier=old_tier, new_tier=body.subscription_tier, changed_by="user")
+            dispatch_webhook_event(
+                "user.plan_changed",
+                {
+                    "user_id": user_id,
+                    "old_tier": old_tier,
+                    "new_tier": body.subscription_tier,
+                    "billing_cycle": body.billing_cycle,
+                    "changed_by": "user",
+                },
+            )
+        except Exception:
+            logger.exception("Failed to send plan-change notification/webhook for user %s", user_id)
+
     return _profile_to_dict(profile)
 
 
