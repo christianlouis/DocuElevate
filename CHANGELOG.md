@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.85.0 (2026-03-07)
+
+### Bug Fixes
+
+- **auth**: Restore get_user function body lost in refactor; fix button period placement
+  ([`19c1ccb`](https://github.com/christianlouis/DocuElevate/commit/19c1ccb11c10698259fa01b408979b4fac158cd5))
+
+- **ui**: Update plan descriptions to reflect per-user pricing
+  ([`9d11d74`](https://github.com/christianlouis/DocuElevate/commit/9d11d741f4e6c0f29529d7dafc93980eea955aeb))
+
+### Features
+
+- **auth**: Enable local user signup without SMTP, add admin user creation
+  ([`aa6e2fe`](https://github.com/christianlouis/DocuElevate/commit/aa6e2fe00157ed924d42ae305c932b04ad2c1a81))
+
+
 ## v0.84.0 (2026-03-07)
 
 ### Features
