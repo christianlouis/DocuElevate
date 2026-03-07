@@ -10,6 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.88.0 (2026-03-07)
+
+### Bug Fixes
+
+- **subscriptions**: Address code review feedback
+  ([`72f96e3`](https://github.com/christianlouis/DocuElevate/commit/72f96e3c02256bce32031dd230e8fbff50269b9f))
+
+### Features
+
+- **notifications**: Admin push notifications and webhooks for user signup, plan changes, and
+  payment issues
+  ([`fdc48c7`](https://github.com/christianlouis/DocuElevate/commit/fdc48c7fe9825cf703624c7bba01fbc32b17ee66))
+
+- **subscriptions**: Add subscription change management with upgrade/downgrade scheduling
+  ([`231f983`](https://github.com/christianlouis/DocuElevate/commit/231f983429336046348bf98699dbcd808adf6b89))
+
+
 ## v0.87.0 (2026-03-07)
 
 ### Bug Fixes
