@@ -5,11 +5,13 @@ import pathlib
 from functools import wraps
 
 from authlib.integrations.starlette_client import OAuth
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
 from starlette.responses import RedirectResponse
 
 from app.config import settings
+from app.database import get_db
 
 oauth = OAuth()
 
@@ -94,7 +96,40 @@ async def oauth_login(request: Request):
     return await oauth.authentik.authorize_redirect(request, redirect_uri)
 
 
-async def oauth_callback(request: Request):
+def _ensure_user_profile(db: Session, user_data: dict) -> None:
+    """Create a UserProfile row for *user_data* if one does not yet exist.
+
+    Uses the same identifier priority as ``get_current_owner_id`` (sub →
+    preferred_username → email → id) so that the profile's ``user_id`` matches
+    ``FileRecord.owner_id`` for every document the user uploads.
+
+    If a profile already exists it is left unchanged; only missing profiles
+    are created so that admin-managed settings (tier, limits, etc.) are
+    preserved across logins.
+    """
+    from app.models import UserProfile
+
+    user_id = (
+        user_data.get("sub") or user_data.get("preferred_username") or user_data.get("email") or user_data.get("id")
+    )
+    if not user_id:
+        logger.warning("Cannot create UserProfile: no stable user identifier in OAuth userinfo")
+        return
+
+    try:
+        existing = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+        if existing is None:
+            display_name = user_data.get("name") or user_data.get("preferred_username") or user_data.get("email")
+            profile = UserProfile(user_id=user_id, display_name=display_name)
+            db.add(profile)
+            db.commit()
+            logger.info("Auto-created UserProfile for user_id=%s", user_id)
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to auto-create UserProfile for user_id=%s", user_id)
+
+
+async def oauth_callback(request: Request, db: Session = Depends(get_db)):
     """Handle OAuth callback from provider"""
     try:
         token = await oauth.authentik.authorize_access_token(request)
@@ -125,6 +160,9 @@ async def oauth_callback(request: Request):
         user_data["is_admin"] = is_admin
 
         request.session["user"] = user_data
+
+        # Auto-create or update UserProfile so the user appears in admin user management
+        _ensure_user_profile(db, user_data)
 
         # Log the successful authentication
         logger.info(f"[SECURITY] OAUTH_LOGIN_SUCCESS user={user_data.get('email', 'unknown')} admin={is_admin}")

@@ -2,7 +2,7 @@
 {% block title %}Pricing & Plans – DocuElevate{% endblock %}
 
 {% block content %}
-<div class="bg-gray-50 min-h-screen">
+<div class="bg-gray-50 min-h-screen" x-data="{ annual: false }">
 
   <!-- ── Hero ──────────────────────────────────────────────────────────────── -->
   <div class="bg-gradient-to-br from-blue-700 via-indigo-700 to-purple-700 text-white py-20 px-4">
@@ -18,7 +18,7 @@
       </p>
 
       <!-- Annual / Monthly toggle (cosmetic — actual billing handled separately) -->
-      <div class="mt-8 inline-flex items-center bg-white/10 rounded-full p-1 gap-1" x-data="{ annual: false }">
+      <div class="mt-8 inline-flex items-center bg-white/10 rounded-full p-1 gap-1">
         <button
           @click="annual = false"
           :class="!annual ? 'bg-white text-indigo-700 shadow' : 'text-white'"
@@ -36,8 +36,7 @@
   </div>
 
   <!-- ── Tier cards ────────────────────────────────────────────────────────── -->
-  <div class="max-w-7xl mx-auto px-4 -mt-10 pb-20" x-data="{ annual: false }">
-    <!-- Recreate the toggle state here so cards react to the hero toggle too -->
+  <div class="max-w-7xl mx-auto px-4 -mt-10 pb-20">
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
 
       {% for tier in tiers %}
