@@ -341,6 +341,38 @@ def delete_local_user(local_user_id: int, db: DbSession, _admin: AdminUser) -> N
 
 
 @router.get("/{user_id:path}", summary="Get details for a single user")
+def get_user(user_id: str, db: DbSession, _admin: AdminUser) -> dict[str, Any]:
+    """Return profile and document statistics for a specific user."""
+    doc_count = db.query(func.count(FileRecord.id)).filter(FileRecord.owner_id == user_id).scalar() or 0
+    last_row = (
+        db.query(FileRecord.created_at)
+        .filter(FileRecord.owner_id == user_id)
+        .order_by(FileRecord.created_at.desc())
+        .first()
+    )
+    last_upload = last_row[0].isoformat() if last_row and last_row[0] else None
+
+    profile = _get_or_none(db, user_id)
+
+    return {
+        "user_id": user_id,
+        "display_name": profile.display_name if profile else None,
+        "daily_upload_limit": profile.daily_upload_limit if profile else None,
+        "notes": profile.notes if profile else None,
+        "is_blocked": profile.is_blocked if profile else False,
+        "subscription_tier": (profile.subscription_tier or "free") if profile else "free",
+        "subscription_billing_cycle": (profile.subscription_billing_cycle or "monthly") if profile else "monthly",
+        "subscription_period_start": profile.subscription_period_start.isoformat()
+        if (profile and profile.subscription_period_start)
+        else None,
+        "allow_overage": bool(profile.allow_overage) if profile else False,
+        "profile_id": profile.id if profile else None,
+        "document_count": doc_count,
+        "last_upload": last_upload,
+        "profile": _profile_to_dict(profile) if profile else None,
+    }
+
+
 @router.put("/{user_id:path}", summary="Create or update a user profile")
 def upsert_user_profile(
     user_id: str,
