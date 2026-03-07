@@ -208,9 +208,7 @@ class Settings(BaseSettings):
     )
     watch_folder_poll_interval: int = Field(
         default=1,
-        description=(
-            "Poll interval in minutes for local watch folder scanning. Default: 1 minute."
-        ),
+        description=("Poll interval in minutes for local watch folder scanning. Default: 1 minute."),
     )
     watch_folder_delete_after_process: bool = Field(
         default=False,
@@ -265,6 +263,116 @@ class Settings(BaseSettings):
             "Delete files from the SFTP ingest folder after they have been successfully downloaded "
             "and enqueued for processing. Default: False (files are left in place)."
         ),
+    )
+
+    # ---------------------------------------------------------------------------
+    # Cloud Provider Watch Folders
+    # ---------------------------------------------------------------------------
+    # Each cloud provider has three settings:
+    #   <provider>_ingest_enabled  — enable the watch-folder for this provider
+    #   <provider>_ingest_folder   — the remote path / folder ID to poll
+    #   <provider>_ingest_delete_after_process — delete from cloud after download
+
+    # Dropbox ingest — reuses existing Dropbox OAuth credentials
+    dropbox_ingest_enabled: bool = Field(
+        default=False,
+        description="Enable Dropbox watch folder ingestion. Requires Dropbox OAuth credentials.",
+    )
+    dropbox_ingest_folder: Optional[str] = Field(
+        default=None,
+        description=(
+            "Dropbox folder path to poll for new files to ingest (e.g. /Inbox/Scanner). "
+            "Uses the existing Dropbox OAuth credentials."
+        ),
+    )
+    dropbox_ingest_delete_after_process: bool = Field(
+        default=False,
+        description="Delete files from Dropbox ingest folder after download and enqueue.",
+    )
+
+    # Google Drive ingest — reuses existing Google Drive credentials
+    google_drive_ingest_enabled: bool = Field(
+        default=False,
+        description="Enable Google Drive watch folder ingestion. Requires Google Drive credentials.",
+    )
+    google_drive_ingest_folder_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "Google Drive folder ID to poll for new files to ingest. "
+            "Uses the existing Google Drive service-account or OAuth credentials."
+        ),
+    )
+    google_drive_ingest_delete_after_process: bool = Field(
+        default=False,
+        description="Delete files from Google Drive ingest folder after download and enqueue.",
+    )
+
+    # OneDrive ingest — reuses existing OneDrive MSAL credentials
+    onedrive_ingest_enabled: bool = Field(
+        default=False,
+        description="Enable OneDrive watch folder ingestion. Requires OneDrive MSAL credentials.",
+    )
+    onedrive_ingest_folder_path: Optional[str] = Field(
+        default=None,
+        description=(
+            "OneDrive folder path to poll for new files to ingest (e.g. /Inbox/Scanner). "
+            "Uses the existing OneDrive client credentials."
+        ),
+    )
+    onedrive_ingest_delete_after_process: bool = Field(
+        default=False,
+        description="Delete files from OneDrive ingest folder after download and enqueue.",
+    )
+
+    # Nextcloud ingest — reuses existing Nextcloud WebDAV credentials
+    nextcloud_ingest_enabled: bool = Field(
+        default=False,
+        description="Enable Nextcloud watch folder ingestion. Requires Nextcloud WebDAV credentials.",
+    )
+    nextcloud_ingest_folder: Optional[str] = Field(
+        default=None,
+        description=(
+            "Nextcloud folder path to poll for new files to ingest (e.g. /Scans/Inbox). "
+            "Uses the existing Nextcloud upload URL and credentials."
+        ),
+    )
+    nextcloud_ingest_delete_after_process: bool = Field(
+        default=False,
+        description="Delete files from Nextcloud ingest folder after download and enqueue.",
+    )
+
+    # S3 ingest — reuses existing AWS/S3 credentials
+    s3_ingest_enabled: bool = Field(
+        default=False,
+        description="Enable Amazon S3 watch folder (prefix) ingestion. Requires S3 credentials.",
+    )
+    s3_ingest_prefix: Optional[str] = Field(
+        default=None,
+        description=(
+            "S3 key prefix to poll for new objects to ingest (e.g. inbox/scanner/). "
+            "Uses the existing S3 bucket and AWS credentials."
+        ),
+    )
+    s3_ingest_delete_after_process: bool = Field(
+        default=False,
+        description="Delete objects from S3 ingest prefix after download and enqueue.",
+    )
+
+    # WebDAV ingest — reuses existing WebDAV credentials
+    webdav_ingest_enabled: bool = Field(
+        default=False,
+        description="Enable WebDAV watch folder ingestion. Requires WebDAV URL and credentials.",
+    )
+    webdav_ingest_folder: Optional[str] = Field(
+        default=None,
+        description=(
+            "WebDAV folder path to poll for new files to ingest (e.g. /remote.php/webdav/Inbox). "
+            "Uses the existing WebDAV URL and credentials."
+        ),
+    )
+    webdav_ingest_delete_after_process: bool = Field(
+        default=False,
+        description="Delete files from WebDAV ingest folder after download and enqueue.",
     )
 
     # IMAP 1

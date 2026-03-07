@@ -1,8 +1,6 @@
 """Tests for app/tasks/watch_folder_tasks.py module."""
 
-import json
 import os
-import tempfile
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
@@ -127,9 +125,10 @@ class TestScanLocalFolder:
         pdf_file.write_bytes(b"%PDF-1.4 test")
 
         cache: dict = {}
-        with patch("app.tasks.watch_folder_tasks.process_document") as mock_proc, patch(
-            "app.tasks.watch_folder_tasks.settings"
-        ) as mock_settings:
+        with (
+            patch("app.tasks.watch_folder_tasks.process_document") as mock_proc,
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+        ):
             mock_settings.workdir = str(tmp_path / "workdir")
             os.makedirs(mock_settings.workdir, exist_ok=True)
             count = _scan_local_folder(str(tmp_path), cache, False)
@@ -175,9 +174,10 @@ class TestScanLocalFolder:
         pdf_file.write_bytes(b"%PDF-1.4")
 
         cache: dict = {}
-        with patch("app.tasks.watch_folder_tasks.process_document"), patch(
-            "app.tasks.watch_folder_tasks.settings"
-        ) as mock_settings:
+        with (
+            patch("app.tasks.watch_folder_tasks.process_document"),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+        ):
             mock_settings.workdir = str(tmp_path / "workdir")
             os.makedirs(mock_settings.workdir, exist_ok=True)
             _scan_local_folder(str(tmp_path), cache, delete_after=True)
@@ -240,11 +240,12 @@ class TestScanLocalWatchFoldersTask:
         """With a valid folder configured, the task should scan it."""
         from app.tasks.watch_folder_tasks import scan_local_watch_folders
 
-        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings, patch(
-            "app.tasks.watch_folder_tasks._load_cache", return_value={}
-        ), patch("app.tasks.watch_folder_tasks._save_cache"), patch(
-            "app.tasks.watch_folder_tasks._scan_local_folder", return_value=0
-        ) as mock_scan:
+        with (
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._load_cache", return_value={}),
+            patch("app.tasks.watch_folder_tasks._save_cache"),
+            patch("app.tasks.watch_folder_tasks._scan_local_folder", return_value=0) as mock_scan,
+        ):
             mock_settings.watch_folders = str(tmp_path)
             mock_settings.watch_folder_delete_after_process = False
             result = scan_local_watch_folders()
@@ -278,8 +279,9 @@ class TestScanFtpWatchFolderTask:
     def test_returns_error_when_connection_fails(self):
         from app.tasks.watch_folder_tasks import scan_ftp_watch_folder
 
-        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings, patch(
-            "app.tasks.watch_folder_tasks._connect_ftp", return_value=None
+        with (
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._connect_ftp", return_value=None),
         ):
             mock_settings.ftp_ingest_enabled = True
             mock_settings.ftp_ingest_folder = "/inbox"
@@ -291,12 +293,12 @@ class TestScanFtpWatchFolderTask:
         from app.tasks.watch_folder_tasks import scan_ftp_watch_folder
 
         mock_ftp = MagicMock()
-        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings, patch(
-            "app.tasks.watch_folder_tasks._connect_ftp", return_value=mock_ftp
-        ), patch("app.tasks.watch_folder_tasks._load_cache", return_value={}), patch(
-            "app.tasks.watch_folder_tasks._save_cache"
-        ), patch(
-            "app.tasks.watch_folder_tasks._scan_ftp_folder", return_value=2
+        with (
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._connect_ftp", return_value=mock_ftp),
+            patch("app.tasks.watch_folder_tasks._load_cache", return_value={}),
+            patch("app.tasks.watch_folder_tasks._save_cache"),
+            patch("app.tasks.watch_folder_tasks._scan_ftp_folder", return_value=2),
         ):
             mock_settings.ftp_ingest_enabled = True
             mock_settings.ftp_ingest_folder = "/inbox"
@@ -331,8 +333,9 @@ class TestScanSftpWatchFolderTask:
     def test_returns_error_when_connection_fails(self):
         from app.tasks.watch_folder_tasks import scan_sftp_watch_folder
 
-        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings, patch(
-            "app.tasks.watch_folder_tasks._get_sftp_connection", return_value=(None, None)
+        with (
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._get_sftp_connection", return_value=(None, None)),
         ):
             mock_settings.sftp_ingest_enabled = True
             mock_settings.sftp_ingest_folder = "/upload"
@@ -345,12 +348,12 @@ class TestScanSftpWatchFolderTask:
 
         mock_ssh = MagicMock()
         mock_sftp = MagicMock()
-        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings, patch(
-            "app.tasks.watch_folder_tasks._get_sftp_connection", return_value=(mock_ssh, mock_sftp)
-        ), patch("app.tasks.watch_folder_tasks._load_cache", return_value={}), patch(
-            "app.tasks.watch_folder_tasks._save_cache"
-        ), patch(
-            "app.tasks.watch_folder_tasks._scan_sftp_folder", return_value=3
+        with (
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._get_sftp_connection", return_value=(mock_ssh, mock_sftp)),
+            patch("app.tasks.watch_folder_tasks._load_cache", return_value={}),
+            patch("app.tasks.watch_folder_tasks._save_cache"),
+            patch("app.tasks.watch_folder_tasks._scan_sftp_folder", return_value=3),
         ):
             mock_settings.sftp_ingest_enabled = True
             mock_settings.sftp_ingest_folder = "/upload"
@@ -375,14 +378,12 @@ class TestScanAllWatchFolders:
     def test_runs_all_scans_and_releases_lock(self):
         from app.tasks.watch_folder_tasks import scan_all_watch_folders
 
-        with patch("app.tasks.watch_folder_tasks._acquire_lock", return_value=True), patch(
-            "app.tasks.watch_folder_tasks._release_lock"
-        ) as mock_release, patch(
-            "app.tasks.watch_folder_tasks.scan_local_watch_folders", return_value={"status": "ok"}
-        ), patch(
-            "app.tasks.watch_folder_tasks.scan_ftp_watch_folder", return_value={"status": "skipped"}
-        ), patch(
-            "app.tasks.watch_folder_tasks.scan_sftp_watch_folder", return_value={"status": "skipped"}
+        with (
+            patch("app.tasks.watch_folder_tasks._acquire_lock", return_value=True),
+            patch("app.tasks.watch_folder_tasks._release_lock") as mock_release,
+            patch("app.tasks.watch_folder_tasks.scan_local_watch_folders", return_value={"status": "ok"}),
+            patch("app.tasks.watch_folder_tasks.scan_ftp_watch_folder", return_value={"status": "skipped"}),
+            patch("app.tasks.watch_folder_tasks.scan_sftp_watch_folder", return_value={"status": "skipped"}),
         ):
             result = scan_all_watch_folders()
 
@@ -394,10 +395,10 @@ class TestScanAllWatchFolders:
         """Lock must be released even if a sub-scan raises an exception."""
         from app.tasks.watch_folder_tasks import scan_all_watch_folders
 
-        with patch("app.tasks.watch_folder_tasks._acquire_lock", return_value=True), patch(
-            "app.tasks.watch_folder_tasks._release_lock"
-        ) as mock_release, patch(
-            "app.tasks.watch_folder_tasks.scan_local_watch_folders", side_effect=RuntimeError("boom")
+        with (
+            patch("app.tasks.watch_folder_tasks._acquire_lock", return_value=True),
+            patch("app.tasks.watch_folder_tasks._release_lock") as mock_release,
+            patch("app.tasks.watch_folder_tasks.scan_local_watch_folders", side_effect=RuntimeError("boom")),
         ):
             with pytest.raises(RuntimeError):
                 scan_all_watch_folders()
@@ -422,9 +423,11 @@ class TestConnectFtp:
     def test_returns_none_when_connection_fails(self):
         from app.tasks.watch_folder_tasks import _connect_ftp
 
-        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings, patch(
-            "ftplib.FTP_TLS"
-        ) as mock_ftps_cls, patch("ftplib.FTP") as mock_ftp_cls:
+        with (
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("ftplib.FTP_TLS") as mock_ftps_cls,
+            patch("ftplib.FTP") as mock_ftp_cls,
+        ):
             mock_settings.ftp_host = "ftp.example.com"
             mock_settings.ftp_port = 21
             mock_settings.ftp_username = "user"
@@ -442,12 +445,12 @@ class TestScanFtpFolder:
     """Tests for the _scan_ftp_folder helper."""
 
     def test_cwd_failure_returns_zero(self):
-        import ftplib
+        import ftplib  # noqa: S402
 
         from app.tasks.watch_folder_tasks import _scan_ftp_folder
 
         mock_ftp = MagicMock()
-        mock_ftp.cwd.side_effect = ftplib.error_perm("550 no such directory")
+        mock_ftp.cwd.side_effect = ftplib.error_perm("550 no such directory")  # noqa: S321
         count = _scan_ftp_folder(mock_ftp, "/missing", {}, False)
         assert count == 0
 
@@ -468,10 +471,12 @@ class TestScanFtpFolder:
         mock_ftp.nlst.return_value = ["invoice.pdf"]
 
         cache: dict = {}
-        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings, patch(
-            "app.tasks.watch_folder_tasks.process_document"
+        with (
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks.process_document"),
         ):
             mock_settings.workdir = str(tmp_path)
+
             # Simulate retrbinary writing bytes
             def fake_retrbinary(cmd, callback):
                 callback(b"%PDF-1.4")
@@ -492,3 +497,283 @@ class TestScanFtpFolder:
         cache = {"ftp:/inbox/invoice.pdf": datetime.now(timezone.utc).isoformat()}
         count = _scan_ftp_folder(mock_ftp, "/inbox", cache, False)
         assert count == 0
+
+
+@pytest.mark.unit
+class TestDropboxWatchFolderTask:
+    """Tests for the scan_dropbox_watch_folder Celery task."""
+
+    def test_returns_skipped_when_disabled(self):
+        from app.tasks.watch_folder_tasks import scan_dropbox_watch_folder
+
+        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings:
+            mock_settings.dropbox_ingest_enabled = False
+            result = scan_dropbox_watch_folder()
+        assert result["status"] == "skipped"
+
+    def test_returns_skipped_when_no_folder_configured(self):
+        from app.tasks.watch_folder_tasks import scan_dropbox_watch_folder
+
+        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings:
+            mock_settings.dropbox_ingest_enabled = True
+            mock_settings.dropbox_ingest_folder = None
+            result = scan_dropbox_watch_folder()
+        assert result["status"] == "skipped"
+
+    def test_successful_scan(self):
+        from app.tasks.watch_folder_tasks import scan_dropbox_watch_folder
+
+        with (
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._load_cache", return_value={}),
+            patch("app.tasks.watch_folder_tasks._save_cache"),
+            patch("app.tasks.watch_folder_tasks._scan_dropbox_folder", return_value=1),
+        ):
+            mock_settings.dropbox_ingest_enabled = True
+            mock_settings.dropbox_ingest_folder = "/Inbox"
+            mock_settings.dropbox_ingest_delete_after_process = False
+            result = scan_dropbox_watch_folder()
+
+        assert result["status"] == "ok"
+        assert result["files_enqueued"] == 1
+
+
+@pytest.mark.unit
+class TestGoogleDriveWatchFolderTask:
+    """Tests for the scan_google_drive_watch_folder Celery task."""
+
+    def test_returns_skipped_when_disabled(self):
+        from app.tasks.watch_folder_tasks import scan_google_drive_watch_folder
+
+        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings:
+            mock_settings.google_drive_ingest_enabled = False
+            result = scan_google_drive_watch_folder()
+        assert result["status"] == "skipped"
+
+    def test_returns_skipped_when_no_folder_id(self):
+        from app.tasks.watch_folder_tasks import scan_google_drive_watch_folder
+
+        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings:
+            mock_settings.google_drive_ingest_enabled = True
+            mock_settings.google_drive_ingest_folder_id = None
+            result = scan_google_drive_watch_folder()
+        assert result["status"] == "skipped"
+
+    def test_successful_scan(self):
+        from app.tasks.watch_folder_tasks import scan_google_drive_watch_folder
+
+        with (
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._load_cache", return_value={}),
+            patch("app.tasks.watch_folder_tasks._save_cache"),
+            patch("app.tasks.watch_folder_tasks._scan_google_drive_folder", return_value=2),
+        ):
+            mock_settings.google_drive_ingest_enabled = True
+            mock_settings.google_drive_ingest_folder_id = "abc123"
+            mock_settings.google_drive_ingest_delete_after_process = False
+            result = scan_google_drive_watch_folder()
+
+        assert result["status"] == "ok"
+        assert result["files_enqueued"] == 2
+
+
+@pytest.mark.unit
+class TestOnedriveWatchFolderTask:
+    """Tests for the scan_onedrive_watch_folder Celery task."""
+
+    def test_returns_skipped_when_disabled(self):
+        from app.tasks.watch_folder_tasks import scan_onedrive_watch_folder
+
+        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings:
+            mock_settings.onedrive_ingest_enabled = False
+            result = scan_onedrive_watch_folder()
+        assert result["status"] == "skipped"
+
+    def test_returns_skipped_when_no_folder_path(self):
+        from app.tasks.watch_folder_tasks import scan_onedrive_watch_folder
+
+        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings:
+            mock_settings.onedrive_ingest_enabled = True
+            mock_settings.onedrive_ingest_folder_path = None
+            result = scan_onedrive_watch_folder()
+        assert result["status"] == "skipped"
+
+    def test_successful_scan(self):
+        from app.tasks.watch_folder_tasks import scan_onedrive_watch_folder
+
+        with (
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._load_cache", return_value={}),
+            patch("app.tasks.watch_folder_tasks._save_cache"),
+            patch("app.tasks.watch_folder_tasks._scan_onedrive_folder", return_value=3),
+        ):
+            mock_settings.onedrive_ingest_enabled = True
+            mock_settings.onedrive_ingest_folder_path = "/Inbox/Scanner"
+            mock_settings.onedrive_ingest_delete_after_process = False
+            result = scan_onedrive_watch_folder()
+
+        assert result["status"] == "ok"
+        assert result["files_enqueued"] == 3
+
+
+@pytest.mark.unit
+class TestNextcloudWatchFolderTask:
+    """Tests for the scan_nextcloud_watch_folder Celery task."""
+
+    def test_returns_skipped_when_disabled(self):
+        from app.tasks.watch_folder_tasks import scan_nextcloud_watch_folder
+
+        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings:
+            mock_settings.nextcloud_ingest_enabled = False
+            result = scan_nextcloud_watch_folder()
+        assert result["status"] == "skipped"
+
+    def test_returns_skipped_when_no_folder(self):
+        from app.tasks.watch_folder_tasks import scan_nextcloud_watch_folder
+
+        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings:
+            mock_settings.nextcloud_ingest_enabled = True
+            mock_settings.nextcloud_ingest_folder = None
+            result = scan_nextcloud_watch_folder()
+        assert result["status"] == "skipped"
+
+    def test_successful_scan(self):
+        from app.tasks.watch_folder_tasks import scan_nextcloud_watch_folder
+
+        with (
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._load_cache", return_value={}),
+            patch("app.tasks.watch_folder_tasks._save_cache"),
+            patch("app.tasks.watch_folder_tasks._scan_nextcloud_folder", return_value=1),
+        ):
+            mock_settings.nextcloud_ingest_enabled = True
+            mock_settings.nextcloud_ingest_folder = "/Scans/Inbox"
+            mock_settings.nextcloud_ingest_delete_after_process = False
+            result = scan_nextcloud_watch_folder()
+
+        assert result["status"] == "ok"
+        assert result["files_enqueued"] == 1
+
+
+@pytest.mark.unit
+class TestS3WatchFolderTask:
+    """Tests for the scan_s3_watch_folder Celery task."""
+
+    def test_returns_skipped_when_disabled(self):
+        from app.tasks.watch_folder_tasks import scan_s3_watch_folder
+
+        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings:
+            mock_settings.s3_ingest_enabled = False
+            result = scan_s3_watch_folder()
+        assert result["status"] == "skipped"
+
+    def test_returns_skipped_when_no_prefix(self):
+        from app.tasks.watch_folder_tasks import scan_s3_watch_folder
+
+        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings:
+            mock_settings.s3_ingest_enabled = True
+            mock_settings.s3_ingest_prefix = None
+            result = scan_s3_watch_folder()
+        assert result["status"] == "skipped"
+
+    def test_successful_scan(self):
+        from app.tasks.watch_folder_tasks import scan_s3_watch_folder
+
+        with (
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._load_cache", return_value={}),
+            patch("app.tasks.watch_folder_tasks._save_cache"),
+            patch("app.tasks.watch_folder_tasks._scan_s3_prefix", return_value=4),
+        ):
+            mock_settings.s3_ingest_enabled = True
+            mock_settings.s3_ingest_prefix = "inbox/scanner/"
+            mock_settings.s3_ingest_delete_after_process = False
+            result = scan_s3_watch_folder()
+
+        assert result["status"] == "ok"
+        assert result["files_enqueued"] == 4
+
+
+@pytest.mark.unit
+class TestWebdavWatchFolderTask:
+    """Tests for the scan_webdav_watch_folder Celery task."""
+
+    def test_returns_skipped_when_disabled(self):
+        from app.tasks.watch_folder_tasks import scan_webdav_watch_folder
+
+        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings:
+            mock_settings.webdav_ingest_enabled = False
+            result = scan_webdav_watch_folder()
+        assert result["status"] == "skipped"
+
+    def test_returns_skipped_when_no_folder(self):
+        from app.tasks.watch_folder_tasks import scan_webdav_watch_folder
+
+        with patch("app.tasks.watch_folder_tasks.settings") as mock_settings:
+            mock_settings.webdav_ingest_enabled = True
+            mock_settings.webdav_ingest_folder = None
+            result = scan_webdav_watch_folder()
+        assert result["status"] == "skipped"
+
+    def test_successful_scan(self):
+        from app.tasks.watch_folder_tasks import scan_webdav_watch_folder
+
+        with (
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._load_cache", return_value={}),
+            patch("app.tasks.watch_folder_tasks._save_cache"),
+            patch("app.tasks.watch_folder_tasks._scan_webdav_folder", return_value=2),
+        ):
+            mock_settings.webdav_ingest_enabled = True
+            mock_settings.webdav_ingest_folder = "/remote.php/webdav/Inbox"
+            mock_settings.webdav_ingest_delete_after_process = False
+            result = scan_webdav_watch_folder()
+
+        assert result["status"] == "ok"
+        assert result["files_enqueued"] == 2
+
+
+@pytest.mark.unit
+class TestScanAllWatchFoldersCloud:
+    """Tests for the extended scan_all_watch_folders with cloud providers."""
+
+    def test_all_cloud_providers_called(self):
+        """scan_all_watch_folders should call all provider-specific tasks."""
+        from app.tasks.watch_folder_tasks import scan_all_watch_folders
+
+        provider_tasks = [
+            "scan_local_watch_folders",
+            "scan_ftp_watch_folder",
+            "scan_sftp_watch_folder",
+            "scan_dropbox_watch_folder",
+            "scan_google_drive_watch_folder",
+            "scan_onedrive_watch_folder",
+            "scan_nextcloud_watch_folder",
+            "scan_s3_watch_folder",
+            "scan_webdav_watch_folder",
+        ]
+
+        with (
+            patch("app.tasks.watch_folder_tasks._acquire_lock", return_value=True),
+            patch("app.tasks.watch_folder_tasks._release_lock"),
+        ):
+            mocks = {}
+            patches = []
+            for name in provider_tasks:
+                m = MagicMock(return_value={"status": "skipped"})
+                p = patch(f"app.tasks.watch_folder_tasks.{name}", m)
+                patches.append(p)
+                mocks[name] = m
+
+            # Apply all patches
+            for p in patches:
+                p.start()
+            try:
+                result = scan_all_watch_folders()
+            finally:
+                for p in patches:
+                    p.stop()
+
+        assert result["status"] == "ok"
+        for name in provider_tasks:
+            mocks[name].assert_called_once()

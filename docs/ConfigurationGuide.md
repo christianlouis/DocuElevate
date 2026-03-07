@@ -207,6 +207,66 @@ SFTP_INGEST_DELETE_AFTER_PROCESS=false
 
 Watch folder ingestion accepts the same file types as the web upload interface: PDF, Word, Excel, PowerPoint, images (JPEG, PNG, TIFF, BMP, GIF), plain text, CSV, RTF, and more. Unsupported files (executables, archives, etc.) are silently skipped.
 
+#### Dropbox Ingest (Watch Folder)
+
+DocuElevate can poll a Dropbox folder for new files. It reuses the Dropbox OAuth credentials already configured for uploads.
+
+| **Variable**                          | **Description**                                                                              | **Default** |
+|---------------------------------------|----------------------------------------------------------------------------------------------|-------------|
+| `DROPBOX_INGEST_ENABLED`              | Enable Dropbox folder watching (`true`/`false`).                                            | `false`     |
+| `DROPBOX_INGEST_FOLDER`               | Dropbox folder path to poll (e.g. `/Inbox/Scanner`). Uses the existing Dropbox OAuth credentials. | *(empty)* |
+| `DROPBOX_INGEST_DELETE_AFTER_PROCESS` | Delete files from Dropbox after they are downloaded and enqueued.                          | `false`     |
+
+#### Google Drive Ingest (Watch Folder)
+
+DocuElevate can poll a Google Drive folder for new files. It reuses the existing Google Drive service-account or OAuth credentials.
+
+| **Variable**                                 | **Description**                                                                              | **Default** |
+|----------------------------------------------|----------------------------------------------------------------------------------------------|-------------|
+| `GOOGLE_DRIVE_INGEST_ENABLED`                | Enable Google Drive folder watching (`true`/`false`).                                       | `false`     |
+| `GOOGLE_DRIVE_INGEST_FOLDER_ID`              | Google Drive **folder ID** to poll (copy from the URL of the target folder in Drive). Uses the existing Google Drive credentials. | *(empty)* |
+| `GOOGLE_DRIVE_INGEST_DELETE_AFTER_PROCESS`   | Delete files from Google Drive after they are downloaded and enqueued.                      | `false`     |
+
+#### OneDrive Ingest (Watch Folder)
+
+DocuElevate can poll a OneDrive folder for new files. It reuses the existing OneDrive MSAL (client ID/secret/refresh token) credentials.
+
+| **Variable**                               | **Description**                                                                              | **Default** |
+|--------------------------------------------|----------------------------------------------------------------------------------------------|-------------|
+| `ONEDRIVE_INGEST_ENABLED`                  | Enable OneDrive folder watching (`true`/`false`).                                           | `false`     |
+| `ONEDRIVE_INGEST_FOLDER_PATH`              | OneDrive folder path to poll (e.g. `/Inbox/Scanner`). Uses the existing OneDrive credentials. | *(empty)* |
+| `ONEDRIVE_INGEST_DELETE_AFTER_PROCESS`     | Delete files from OneDrive after they are downloaded and enqueued.                          | `false`     |
+
+#### Nextcloud Ingest (Watch Folder)
+
+DocuElevate can poll a Nextcloud folder via WebDAV for new files. It reuses the existing Nextcloud upload URL and credentials.
+
+| **Variable**                               | **Description**                                                                              | **Default** |
+|--------------------------------------------|----------------------------------------------------------------------------------------------|-------------|
+| `NEXTCLOUD_INGEST_ENABLED`                 | Enable Nextcloud folder watching (`true`/`false`).                                          | `false`     |
+| `NEXTCLOUD_INGEST_FOLDER`                  | Nextcloud folder path to poll (e.g. `/Scans/Inbox`). Uses the existing Nextcloud upload URL and credentials. | *(empty)* |
+| `NEXTCLOUD_INGEST_DELETE_AFTER_PROCESS`    | Delete files from Nextcloud after they are downloaded and enqueued.                         | `false`     |
+
+#### Amazon S3 Ingest (Watch Folder)
+
+DocuElevate can poll an S3 bucket prefix for new objects. It reuses the existing S3/AWS credentials and bucket name.
+
+| **Variable**                          | **Description**                                                                              | **Default** |
+|---------------------------------------|----------------------------------------------------------------------------------------------|-------------|
+| `S3_INGEST_ENABLED`                   | Enable S3 prefix watching (`true`/`false`).                                                 | `false`     |
+| `S3_INGEST_PREFIX`                    | S3 key prefix to poll (e.g. `inbox/scanner/`). Uses the existing S3 bucket and AWS credentials. | *(empty)* |
+| `S3_INGEST_DELETE_AFTER_PROCESS`      | Delete objects from S3 after they are downloaded and enqueued.                              | `false`     |
+
+#### WebDAV Ingest (Watch Folder)
+
+DocuElevate can poll a WebDAV folder for new files. It reuses the existing WebDAV URL and credentials.
+
+| **Variable**                          | **Description**                                                                              | **Default** |
+|---------------------------------------|----------------------------------------------------------------------------------------------|-------------|
+| `WEBDAV_INGEST_ENABLED`               | Enable WebDAV folder watching (`true`/`false`).                                             | `false`     |
+| `WEBDAV_INGEST_FOLDER`                | WebDAV folder path to poll. Uses the existing WebDAV URL and credentials.                   | *(empty)* |
+| `WEBDAV_INGEST_DELETE_AFTER_PROCESS`  | Delete files from WebDAV after they are downloaded and enqueued.                            | `false`     |
+
 ### IMAP Email Ingestion
 
 DocuElevate can automatically pull document attachments from IMAP mailboxes — no need to forward emails manually. Configure one or two mailboxes and DocuElevate polls them on the schedule you set.

@@ -17,7 +17,6 @@ from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt  # noq
 from app.tasks.finalize_document_storage import finalize_document_storage  # noqa: F401
 from app.tasks.imap_tasks import pull_all_inboxes  # noqa: F401
 from app.tasks.monitor_stalled_steps import monitor_stalled_steps  # noqa: F401
-from app.tasks.watch_folder_tasks import scan_all_watch_folders  # noqa: F401
 
 # **Ensure all tasks are imported before Celery starts**
 from app.tasks.process_document import process_document  # noqa: F401
@@ -40,6 +39,7 @@ from app.tasks.upload_to_sftp import upload_to_sftp  # noqa: F401
 from app.tasks.upload_to_webdav import upload_to_webdav  # noqa: F401
 from app.tasks.upload_with_rclone import send_to_all_rclone_destinations, upload_with_rclone  # noqa: F401
 from app.tasks.uptime_kuma_tasks import ping_uptime_kuma  # noqa: F401
+from app.tasks.watch_folder_tasks import scan_all_watch_folders  # noqa: F401
 from app.tasks.webhook_tasks import deliver_webhook_task  # noqa: F401
 
 # Register the settings reload signal handler so workers pick up config changes
@@ -98,7 +98,7 @@ celery.conf.beat_schedule = {
         "schedule": crontab(minute="*/1"),  # Every minute
         "options": {"expires": 55},  # Must complete within 55 seconds
     },
-    # Watch folder scanning — polls local paths, FTP, and SFTP ingest folders.
+    # Watch folder scanning — polls local paths, FTP, SFTP, and cloud ingest folders.
     # Schedule is controlled by WATCH_FOLDER_POLL_INTERVAL (default: 1 minute).
     "scan-watch-folders": (
         {
@@ -110,6 +110,12 @@ celery.conf.beat_schedule = {
             settings.watch_folders
             or settings.ftp_ingest_enabled
             or settings.sftp_ingest_enabled
+            or settings.dropbox_ingest_enabled
+            or settings.google_drive_ingest_enabled
+            or settings.onedrive_ingest_enabled
+            or settings.nextcloud_ingest_enabled
+            or settings.s3_ingest_enabled
+            or settings.webdav_ingest_enabled
         )
         else None
     ),
