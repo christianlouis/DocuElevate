@@ -321,21 +321,24 @@
 
           <!-- Blocked toggle -->
           <div class="flex items-center gap-3">
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                x-model="form.is_blocked"
-                class="sr-only peer"
-                id="modal-blocked"
-                role="switch"
-                :aria-checked="form.is_blocked"
-              />
-              <div class="w-10 h-6 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-400 rounded-full peer peer-checked:bg-red-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-4"></div>
-            </label>
-            <label for="modal-blocked" class="text-sm font-medium text-gray-700">
+            <button
+              type="button"
+              @click="form.is_blocked = !form.is_blocked"
+              :class="form.is_blocked ? 'bg-red-500' : 'bg-gray-200'"
+              class="relative inline-flex h-6 w-10 flex-shrink-0 rounded-full cursor-pointer transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-400"
+              role="switch"
+              :aria-checked="form.is_blocked.toString()"
+              aria-labelledby="modal-blocked-label"
+            >
+              <span
+                :class="form.is_blocked ? 'translate-x-4' : 'translate-x-0'"
+                class="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transform transition duration-200 ease-in-out pointer-events-none"
+              ></span>
+            </button>
+            <span id="modal-blocked-label" class="text-sm font-medium text-gray-700">
               Block this user
               <span class="text-xs text-gray-400 font-normal">(prevents new document uploads)</span>
-            </label>
+            </span>
           </div>
 
           <!-- Subscription tier -->
@@ -391,21 +394,24 @@
 
           <!-- Complimentary plan toggle -->
           <div class="flex items-center gap-3">
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                x-model="form.is_complimentary"
-                class="sr-only peer"
-                id="modal-complimentary"
-                role="switch"
-                :aria-checked="form.is_complimentary.toString()"
-              />
-              <div class="w-10 h-6 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-400 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-4"></div>
-            </label>
-            <label for="modal-complimentary" class="text-sm font-medium text-gray-700">
+            <button
+              type="button"
+              @click="form.is_complimentary = !form.is_complimentary"
+              :class="form.is_complimentary ? 'bg-green-500' : 'bg-gray-200'"
+              class="relative inline-flex h-6 w-10 flex-shrink-0 rounded-full cursor-pointer transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-400"
+              role="switch"
+              :aria-checked="form.is_complimentary.toString()"
+              aria-labelledby="modal-complimentary-label"
+            >
+              <span
+                :class="form.is_complimentary ? 'translate-x-4' : 'translate-x-0'"
+                class="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transform transition duration-200 ease-in-out pointer-events-none"
+              ></span>
+            </button>
+            <span id="modal-complimentary-label" class="text-sm font-medium text-gray-700">
               Complimentary plan
               <span class="text-xs text-gray-400 font-normal">(user keeps tier benefits but is never billed — set automatically for admin accounts)</span>
-            </label>
+            </span>
           </div>
 
         </div>
