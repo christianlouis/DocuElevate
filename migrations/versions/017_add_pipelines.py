@@ -44,9 +44,8 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
 
-    # Use batch mode for SQLite compatibility when altering the files table.
-    # SQLite does not support adding FK constraints inline via ALTER TABLE, so we
-    # add the plain integer column and define the FK reference at the model level.
+    # Use batch mode (copy-and-move strategy) for SQLite compatibility.
+    # A named FK constraint is created so Alembic can reference it in the downgrade.
     with op.batch_alter_table("files") as batch_op:
         batch_op.add_column(
             sa.Column("pipeline_id", sa.Integer(), nullable=True),

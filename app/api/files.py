@@ -1590,15 +1590,11 @@ def assign_pipeline_to_file(
         HTTPException 404: If the file or pipeline does not exist / is not
             accessible to the current user.
     """
-    from app.auth import get_current_user
+    from app.auth import get_current_user, get_current_user_id
     from app.models import Pipeline
 
     user = get_current_user(request)
-    # Derive user identity the same way the pipelines API does (_get_user_id)
-    if user:
-        user_id: str = user.get("preferred_username") or user.get("email") or user.get("id") or "anonymous"
-    else:
-        user_id = "anonymous"
+    user_id: str = get_current_user_id(request)
 
     is_admin_user = bool(user and user.get("is_admin"))
 

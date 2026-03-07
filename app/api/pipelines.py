@@ -18,7 +18,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user, require_login
+from app.auth import get_current_user, get_current_user_id, require_login
 from app.database import get_db
 from app.models import Pipeline, PipelineStep
 
@@ -90,11 +90,12 @@ MAX_NAME_LENGTH = 255
 
 
 def _get_user_id(request: Request) -> str:
-    """Return a stable user identifier from the session."""
-    user = get_current_user(request)
-    if user:
-        return user.get("preferred_username") or user.get("email") or user.get("id", "anonymous")
-    return "anonymous"
+    """Return a stable user identifier from the session.
+
+    Delegates to :func:`app.auth.get_current_user_id` so the same fallback
+    logic ("anonymous") is used consistently throughout the application.
+    """
+    return get_current_user_id(request)
 
 
 def _is_admin(request: Request) -> bool:
@@ -591,7 +592,7 @@ def add_step(pipeline_id: int, request: Request, db: DbSession, body: PipelineSt
     return _serialize_step(step)
 
 
-@router.put("/{pipeline_id}/steps/reorder", tags=["pipelines"])
+@router.put("/{pipeline_id}/steps/reorder")
 @require_login
 def reorder_steps(
     pipeline_id: int,

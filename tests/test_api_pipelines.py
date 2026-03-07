@@ -16,7 +16,7 @@ from app.models import FileRecord, Pipeline, PipelineStep
 # ---------------------------------------------------------------------------
 
 
-def _make_file(db_session, owner_id=None):
+def _make_test_file_record(db_session, owner_id=None):
     """Insert a minimal FileRecord and return it.
 
     Default owner_id=None so tests work without an authenticated session.
@@ -344,7 +344,7 @@ class TestAssignPipelineToFile:
     def test_assign_pipeline_to_file(self, client, db_session):
         """Assigning a pipeline to a file stores pipeline_id on the record."""
         # File with no owner so anonymous test session can access it
-        fr = _make_file(db_session, owner_id=None)
+        fr = _make_test_file_record(db_session, owner_id=None)
         pipeline = client.post("/api/pipelines", json={"name": "Assign Test"}).json()
 
         r = client.post(f"/api/files/{fr.id}/assign-pipeline?pipeline_id={pipeline['id']}")
@@ -358,7 +358,7 @@ class TestAssignPipelineToFile:
 
     def test_clear_pipeline_from_file(self, client, db_session):
         """Passing no pipeline_id clears the assignment."""
-        fr = _make_file(db_session, owner_id=None)
+        fr = _make_test_file_record(db_session, owner_id=None)
         pipeline = client.post("/api/pipelines", json={"name": "Clearable"}).json()
         client.post(f"/api/files/{fr.id}/assign-pipeline?pipeline_id={pipeline['id']}")
 
@@ -368,7 +368,7 @@ class TestAssignPipelineToFile:
 
     def test_assign_nonexistent_pipeline_returns_404(self, client, db_session):
         """Assigning a non-existent pipeline returns 404."""
-        fr = _make_file(db_session, owner_id=None)
+        fr = _make_test_file_record(db_session, owner_id=None)
         r = client.post(f"/api/files/{fr.id}/assign-pipeline?pipeline_id=99999")
         assert r.status_code == 404
 
