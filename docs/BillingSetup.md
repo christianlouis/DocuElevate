@@ -19,14 +19,14 @@ This guide covers how to configure Stripe billing and local user sign-up in Docu
 
 By default, user accounts are created by an administrator. To allow users to self-register with an email address and password, set `ALLOW_LOCAL_SIGNUP=true`.
 
-> **Note:** SMTP must be configured before enabling local sign-up. New accounts require email verification before they can log in.
+> **Note:** SMTP is **optional** for local sign-up. When SMTP is configured, new accounts require email verification before they can log in. Without SMTP, accounts are activated immediately upon registration — useful for self-hosted deployments without email infrastructure.
 
 ### Configuration
 
 ```bash
 ALLOW_LOCAL_SIGNUP=true
 
-# SMTP (required for verification emails)
+# SMTP (optional — enables email verification and password reset)
 EMAIL_HOST=smtp.example.com
 EMAIL_PORT=587
 EMAIL_USERNAME=noreply@example.com
@@ -37,10 +37,20 @@ EMAIL_SENDER=DocuElevate <noreply@example.com>
 
 ### Sign-up Flow
 
+**With SMTP configured (recommended):**
 1. User visits `/signup` and fills out the registration form.
 2. DocuElevate sends a verification email with a 24-hour token link.
 3. User clicks the link — their account is activated and they are signed in.
 4. First-time users are redirected to the onboarding wizard.
+
+**Without SMTP:**
+1. User visits `/signup` and fills out the registration form.
+2. Account is activated immediately — no email verification required.
+3. User is redirected to the login page to sign in straight away.
+
+### Admin-Created Accounts
+
+Administrators can create local user accounts directly from the **Admin → User Management** page without requiring self-registration. Admin-created accounts are immediately active regardless of SMTP configuration.
 
 ### Password Reset Flow
 

@@ -32,6 +32,10 @@ def _inject_global_context(ctx: dict) -> None:
     ctx.setdefault("ui_default_color_scheme", getattr(settings, "ui_default_color_scheme", "system"))
     ctx.setdefault("multi_user_enabled", getattr(settings, "multi_user_enabled", False))
     ctx.setdefault("auth_enabled", getattr(settings, "auth_enabled", True))
+    ctx.setdefault(
+        "allow_signup",
+        getattr(settings, "multi_user_enabled", False) and getattr(settings, "allow_local_signup", False),
+    )
 
     req = ctx.get("request")
     if req is not None:

@@ -208,7 +208,7 @@ def test_signup_disabled(la_client):
 
 @pytest.mark.integration
 def test_signup_smtp_not_configured(la_client):
-    """POST /api/auth/signup returns 503 when SMTP is not configured."""
+    """POST /api/auth/signup succeeds without SMTP and activates the account immediately."""
     with patch("app.api.local_auth.settings") as mock_settings:
         mock_settings.allow_local_signup = True
         mock_settings.multi_user_enabled = True
@@ -222,7 +222,10 @@ def test_signup_smtp_not_configured(la_client):
                 "password_confirm": "password1",
             },
         )
-    assert resp.status_code == 503
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["email_verification_required"] is False
+    assert "now log in" in data["message"]
 
 
 @pytest.mark.integration
@@ -266,6 +269,7 @@ def test_signup_success(la_client):
         )
     assert resp.status_code == 201
     assert "Verification email sent" in resp.json()["message"]
+    assert resp.json()["email_verification_required"] is True
     mock_send.assert_called_once()
 
 
@@ -675,3 +679,125 @@ async def test_single_user_mode_skips_local_user_table(la_session, active_user):
     # Admin path sets is_admin=True and id="admin"
     assert mock_request.session["user"]["is_admin"] is True
     assert mock_request.session["user"]["id"] == "admin"
+
+
+# ---------------------------------------------------------------------------
+# Integration tests: admin local user management
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def admin_session_client(la_engine):
+    """TestClient with admin access via dependency override."""
+    from app.api.admin_users import _require_admin
+    from app.main import app
+
+    Session = sessionmaker(bind=la_engine)
+
+    def override_get_db():
+        db = Session()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    def override_require_admin():
+        return {"id": "admin@example.com", "is_admin": True, "display_name": "Admin"}
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[_require_admin] = override_require_admin
+    with TestClient(app, base_url="http://localhost", raise_server_exceptions=True) as client:
+        yield client
+    app.dependency_overrides.pop(get_db, None)
+    app.dependency_overrides.pop(_require_admin, None)
+
+
+@pytest.mark.integration
+def test_admin_list_local_users_empty(admin_session_client):
+    """GET /api/admin/users/local returns an empty list when no local users exist."""
+    resp = admin_session_client.get("/api/admin/users/local")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+@pytest.mark.integration
+def test_admin_create_local_user(admin_session_client, la_session):
+    """POST /api/admin/users/local creates a new active local user."""
+    resp = admin_session_client.post(
+        "/api/admin/users/local",
+        json={
+            "email": "newuser@example.com",
+            "username": "newuser",
+            "password": "password1",
+            "is_admin": False,
+        },
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["email"] == "newuser@example.com"
+    assert data["username"] == "newuser"
+    assert data["is_active"] is True
+    assert data["is_admin"] is False
+
+    user = la_session.query(LocalUser).filter(LocalUser.email == "newuser@example.com").first()
+    assert user is not None
+    assert user.is_active is True
+
+
+@pytest.mark.integration
+def test_admin_create_local_user_duplicate_email(admin_session_client, active_user):
+    """POST /api/admin/users/local returns 409 when email already exists."""
+    resp = admin_session_client.post(
+        "/api/admin/users/local",
+        json={
+            "email": "active@example.com",
+            "username": "differentuser",
+            "password": "password1",
+        },
+    )
+    assert resp.status_code == 409
+
+
+@pytest.mark.integration
+def test_admin_create_local_user_duplicate_username(admin_session_client, active_user):
+    """POST /api/admin/users/local returns 409 when username already taken."""
+    resp = admin_session_client.post(
+        "/api/admin/users/local",
+        json={
+            "email": "different@example.com",
+            "username": "activeuser",
+            "password": "password1",
+        },
+    )
+    assert resp.status_code == 409
+
+
+@pytest.mark.integration
+def test_admin_delete_local_user(admin_session_client, la_session, active_user):
+    """DELETE /api/admin/users/local/{id} removes the account."""
+    user_id = active_user.id
+    resp = admin_session_client.delete(f"/api/admin/users/local/{user_id}")
+    assert resp.status_code == 204
+
+    user = la_session.query(LocalUser).filter(LocalUser.id == user_id).first()
+    assert user is None
+
+
+@pytest.mark.integration
+def test_admin_delete_local_user_not_found(admin_session_client):
+    """DELETE /api/admin/users/local/{id} returns 404 for unknown ID."""
+    resp = admin_session_client.delete("/api/admin/users/local/99999")
+    assert resp.status_code == 404
+
+
+@pytest.mark.integration
+def test_admin_local_user_list_after_create(admin_session_client):
+    """GET /api/admin/users/local returns the created user."""
+    admin_session_client.post(
+        "/api/admin/users/local",
+        json={"email": "listed@example.com", "username": "listeduser", "password": "password1"},
+    )
+    resp = admin_session_client.get("/api/admin/users/local")
+    assert resp.status_code == 200
+    users = resp.json()
+    assert any(u["email"] == "listed@example.com" for u in users)

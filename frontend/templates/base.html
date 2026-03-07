@@ -34,7 +34,8 @@
   </head>
 
   <body class="bg-gray-50 min-h-screen flex flex-col"
-        data-multi-user="{{ 'true' if multi_user_enabled else 'false' }}">
+        data-multi-user="{{ 'true' if multi_user_enabled else 'false' }}"
+        data-allow-signup="{{ 'true' if allow_signup else 'false' }}">
     <!-- Skip to main content link for keyboard/screen reader users -->
     <a href="#main-content" class="skip-link">Skip to main content</a>
 
