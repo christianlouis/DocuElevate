@@ -10,6 +10,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.81.0 (2026-03-07)
+
+### Bug Fixes
+
+- **pipelines**: Seed standard processing pipeline as system default on startup
+  ([`d318110`](https://github.com/christianlouis/DocuElevate/commit/d318110bbe133e75a9cc3852d86295e6f682e2a4))
+
+### Features
+
+- **files**: Show assigned pipeline info on file status and detail views
+  ([`a644efe`](https://github.com/christianlouis/DocuElevate/commit/a644efe016220af088654e6448b9429881bcc27b))
+
+- **pipelines**: Add custom processing pipeline engine
+  ([`89e0c2f`](https://github.com/christianlouis/DocuElevate/commit/89e0c2fb5055298aad40b9b493d37b95a7c0c480))
+
+### Refactoring
+
+- **pipelines**: Address code review - shared get_current_user_id, aria-live, deduplicate user ID
+  logic
+  ([`1203a4b`](https://github.com/christianlouis/DocuElevate/commit/1203a4b75fa56e80a8781700763ea3cb94943895))
+
+
 ## v0.80.0 (2026-03-07)
 
 ### Bug Fixes
