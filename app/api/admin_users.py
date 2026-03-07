@@ -62,6 +62,11 @@ class UserProfileUpsert(BaseModel):
     subscription_billing_cycle: str = Field(default="monthly", pattern="^(monthly|yearly)$")
     subscription_period_start: datetime | None = None
     allow_overage: bool = False
+    is_complimentary: bool = Field(
+        default=False,
+        description="When True the user is on a complimentary (uncharged) plan — they keep all tier "
+        "quota benefits but are never billed via Stripe.",
+    )
 
 
 class UserProfileResponse(BaseModel):
@@ -77,6 +82,7 @@ class UserProfileResponse(BaseModel):
     subscription_billing_cycle: str
     subscription_period_start: str | None
     allow_overage: bool
+    is_complimentary: bool
     created_at: str | None
     updated_at: str | None
 
@@ -95,6 +101,7 @@ class UserSummary(BaseModel):
     subscription_billing_cycle: str | None
     subscription_period_start: str | None
     allow_overage: bool
+    is_complimentary: bool
     profile_id: int | None
     document_count: int
     last_upload: str | None
@@ -148,6 +155,7 @@ def _profile_to_dict(profile: UserProfile) -> dict[str, Any]:
         if profile.subscription_period_start
         else None,
         "allow_overage": bool(profile.allow_overage),
+        "is_complimentary": bool(profile.is_complimentary),
         "created_at": profile.created_at.isoformat() if profile.created_at else None,
         "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
     }
@@ -221,6 +229,7 @@ def list_users(
                 if (profile and profile.subscription_period_start)
                 else None,
                 "allow_overage": bool(profile.allow_overage) if profile else False,
+                "is_complimentary": bool(profile.is_complimentary) if profile else False,
                 "profile_id": profile.id if profile else None,
                 "document_count": doc_row.doc_count if doc_row else 0,
                 "last_upload": doc_row.last_upload.isoformat() if (doc_row and doc_row.last_upload) else None,
@@ -366,6 +375,7 @@ def get_user(user_id: str, db: DbSession, _admin: AdminUser) -> dict[str, Any]:
         if (profile and profile.subscription_period_start)
         else None,
         "allow_overage": bool(profile.allow_overage) if profile else False,
+        "is_complimentary": bool(profile.is_complimentary) if profile else False,
         "profile_id": profile.id if profile else None,
         "document_count": doc_count,
         "last_upload": last_upload,
@@ -396,6 +406,7 @@ def upsert_user_profile(
     profile.subscription_billing_cycle = body.subscription_billing_cycle
     profile.subscription_period_start = body.subscription_period_start
     profile.allow_overage = body.allow_overage
+    profile.is_complimentary = body.is_complimentary
     if body.subscription_tier is not None:
         from app.utils.subscription import TIERS
 

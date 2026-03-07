@@ -127,18 +127,35 @@ async def oauth_login(request: Request):
     return await oauth.authentik.authorize_redirect(request, redirect_uri)
 
 
-def _ensure_user_profile(db: Session, user_data: dict) -> None:
-    """Create a UserProfile row for *user_data* if one does not yet exist.
+def _ensure_user_profile(db: Session, user_data: dict, is_admin: bool = False) -> None:
+    """Create or update a UserProfile row for *user_data*.
 
     Uses the same identifier priority as ``get_current_owner_id`` (sub →
     preferred_username → email → id) so that the profile's ``user_id`` matches
     ``FileRecord.owner_id`` for every document the user uploads.
 
-    If a profile already exists it is left unchanged; only missing profiles
-    are created so that admin-managed settings (tier, limits, etc.) are
-    preserved across logins.
+    For regular users, an existing profile is left unchanged so that
+    admin-managed settings (tier, limits, etc.) are preserved across logins.
+
+    For admin users (*is_admin=True*) the following rules apply:
+    - If no profile exists: one is created with the highest subscription tier,
+      ``is_complimentary=True``, and ``onboarding_completed=True`` so that
+      admins skip the first-time setup wizard.
+    - If a profile already exists: ``is_complimentary`` is set to ``True``
+      and, when the current tier is ``"free"``, the tier is upgraded to the
+      highest available plan.  Other admin-managed settings are left intact.
+
+    Args:
+        db: Active database session.
+        user_data: Mapping of user attributes as returned by the OAuth provider
+            or built by :func:`app.utils.local_auth.build_session_user`.
+        is_admin: When ``True``, apply admin-specific defaults on first login
+            and ensure the complimentary flag is always set.
     """
     from app.models import UserProfile
+    from app.utils.subscription import TIER_ORDER
+
+    highest_tier = TIER_ORDER[-1]
 
     user_id = (
         user_data.get("sub") or user_data.get("preferred_username") or user_data.get("email") or user_data.get("id")
@@ -151,13 +168,41 @@ def _ensure_user_profile(db: Session, user_data: dict) -> None:
         existing = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
         if existing is None:
             display_name = user_data.get("name") or user_data.get("preferred_username") or user_data.get("email")
-            profile = UserProfile(user_id=user_id, display_name=display_name)
+            profile = UserProfile(
+                user_id=user_id,
+                display_name=display_name,
+                subscription_tier=highest_tier if is_admin else "free",
+                is_complimentary=is_admin,
+                onboarding_completed=is_admin,
+            )
             db.add(profile)
             db.commit()
-            logger.info("Auto-created UserProfile for user_id=%s", user_id)
+            logger.info(
+                "Auto-created UserProfile for user_id=%s (admin=%s, tier=%s)",
+                user_id,
+                is_admin,
+                highest_tier if is_admin else "free",
+            )
+        elif is_admin:
+            # Ensure existing admin profiles always have complimentary flag set.
+            # Also upgrade from free tier to highest if still on default.
+            changed = False
+            if not existing.is_complimentary:
+                existing.is_complimentary = True
+                changed = True
+            if (existing.subscription_tier or "free") == "free":
+                existing.subscription_tier = highest_tier
+                changed = True
+            if changed:
+                db.commit()
+                logger.info(
+                    "Updated admin UserProfile for user_id=%s (complimentary=True, tier=%s)",
+                    user_id,
+                    existing.subscription_tier,
+                )
     except Exception:
         db.rollback()
-        logger.exception("Failed to auto-create UserProfile for user_id=%s", user_id)
+        logger.exception("Failed to auto-create/update UserProfile for user_id=%s", user_id)
 
 
 async def oauth_callback(request: Request, db: Session = Depends(get_db)):
@@ -193,7 +238,7 @@ async def oauth_callback(request: Request, db: Session = Depends(get_db)):
         request.session["user"] = user_data
 
         # Auto-create or update UserProfile so the user appears in admin user management
-        _ensure_user_profile(db, user_data)
+        _ensure_user_profile(db, user_data, is_admin=is_admin)
 
         # Log the successful authentication
         logger.info("[SECURITY] OAUTH_LOGIN_SUCCESS user=%s admin=%s", user_data.get("email", "unknown"), is_admin)
@@ -251,6 +296,7 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             user_data = _build_session_user(local_user)
             request.session["user"] = user_data
             logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", local_user.email)
+            _ensure_user_profile(db, user_data, is_admin=bool(local_user.is_admin))
             profile = db.query(_UserProfile).filter(_UserProfile.user_id == local_user.email).first()
             if profile and not profile.onboarding_completed:
                 post_onboarding = request.session.pop("redirect_after_login", "/upload")
@@ -261,7 +307,7 @@ async def auth(request: Request, db: Session = Depends(get_db)):
 
     # --- Admin credentials (always available as a fallback / single-user mode) ---
     if username == settings.admin_username and password == settings.admin_password:
-        request.session["user"] = {
+        admin_user_data = {
             "id": "admin",
             "name": "Administrator",
             "email": f"{username}@local.docuelevate",
@@ -269,7 +315,9 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             "picture": "/static/images/default-avatar.svg",
             "is_admin": True,
         }
+        request.session["user"] = admin_user_data
         logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", username)
+        _ensure_user_profile(db, admin_user_data, is_admin=True)
         redirect_url = request.session.pop("redirect_after_login", "/upload")
         return RedirectResponse(url=redirect_url, status_code=302)
     else:

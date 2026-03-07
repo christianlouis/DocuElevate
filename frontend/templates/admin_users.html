@@ -147,6 +147,13 @@
                 ></i>
                 <span x-text="user.subscription_tier || 'free'"></span>
               </span>
+              <span
+                x-show="user.is_complimentary"
+                class="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700"
+                aria-label="Complimentary plan — not billed"
+              >
+                <i class="fas fa-gift" aria-hidden="true"></i>
+              </span>
             </td>
             <!-- Upload limit -->
             <td class="px-4 py-3 text-sm text-center text-gray-700">
@@ -380,6 +387,25 @@
             <p class="text-xs text-gray-400 mt-1">
               Annual carry-over calculates from this date. Leave blank for monthly enforcement.
             </p>
+          </div>
+
+          <!-- Complimentary plan toggle -->
+          <div class="flex items-center gap-3">
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                x-model="form.is_complimentary"
+                class="sr-only peer"
+                id="modal-complimentary"
+                role="switch"
+                :aria-checked="form.is_complimentary.toString()"
+              />
+              <div class="w-10 h-6 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-400 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-4"></div>
+            </label>
+            <label for="modal-complimentary" class="text-sm font-medium text-gray-700">
+              Complimentary plan
+              <span class="text-xs text-gray-400 font-normal">(user keeps tier benefits but is never billed — set automatically for admin accounts)</span>
+            </label>
           </div>
 
         </div>
@@ -673,6 +699,7 @@ function adminUsersApp() {
       subscription_tier: 'free',
       subscription_billing_cycle: 'monthly',
       subscription_period_start: null,
+      is_complimentary: false,
     },
 
     // Delete modal
@@ -742,7 +769,7 @@ function adminUsersApp() {
     openCreateModal() {
       this.isCreate = true;
       this.modalTitle = 'Add User Profile';
-      this.form = { user_id: '', display_name: '', daily_upload_limit: null, notes: '', is_blocked: false, subscription_tier: 'free', subscription_billing_cycle: 'monthly', subscription_period_start: null };
+      this.form = { user_id: '', display_name: '', daily_upload_limit: null, notes: '', is_blocked: false, subscription_tier: 'free', subscription_billing_cycle: 'monthly', subscription_period_start: null, is_complimentary: false };
       this.modalOpen = true;
     },
 
@@ -759,6 +786,7 @@ function adminUsersApp() {
         subscription_tier: user.subscription_tier || 'free',
         subscription_billing_cycle: user.subscription_billing_cycle || 'monthly',
         subscription_period_start: user.subscription_period_start ? user.subscription_period_start.substring(0, 10) : null,
+        is_complimentary: !!user.is_complimentary,
       };
       this.modalOpen = true;
     },
@@ -773,6 +801,7 @@ function adminUsersApp() {
           notes: this.form.notes || null,
           is_blocked: !!this.form.is_blocked,
           subscription_tier: this.form.subscription_tier || 'free',
+          is_complimentary: !!this.form.is_complimentary,
         };
         const uid = encodeURIComponent(this.form.user_id);
         const resp = await fetch(`/api/admin/users/${uid}`, {

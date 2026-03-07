@@ -66,6 +66,35 @@ When a user's `subscription_billing_cycle` is set to `yearly`:
 
 Setting `UserProfile.allow_overage = True` bypasses monthly quota checks entirely for that user. Usage is still tracked so future billing integrations can charge retroactively. This field is not yet exposed in the admin UI.
 
+## is_complimentary Flag (Complimentary Plans)
+
+Setting `UserProfile.is_complimentary = True` marks a user as being on a **complimentary (uncharged) plan**. The user retains all quota benefits of their assigned subscription tier but is **never billed via Stripe**. This is useful for:
+
+- **Admin accounts** — automatically set on every admin user profile at login time.
+- **Gifted access** — granting full plan benefits to partners, testers, or sponsored users.
+
+### Admin Auto-Provisioning
+
+When an admin user logs in for the first time (via OAuth, local account, or the built-in admin credentials), DocuElevate automatically:
+
+1. Creates a `UserProfile` row if one does not already exist.
+2. Assigns the **highest available subscription tier** (currently `business`).
+3. Sets `is_complimentary = True` so the account is never billed.
+4. Sets `onboarding_completed = True` so admins skip the first-time setup wizard.
+
+On subsequent logins for existing admin profiles:
+- `is_complimentary` is ensured to be `True`.
+- If the profile was still on the `free` tier it is upgraded to the highest tier.
+- All other admin-managed settings (custom limits, notes, etc.) are preserved.
+
+### Managing via Admin UI
+
+The **User Management** page (`/admin/users`) shows a green gift icon (🎁) next to the plan badge for any user with `is_complimentary = True`. The toggle is available in the user edit modal under **Billing**.
+
+### API Field
+
+`is_complimentary` is exposed in the `PUT /api/admin/users/{user_id}` body and in all user detail responses.
+
 ## Plan Designer
 
 Navigate to `/admin/plans` (admin only) to:
