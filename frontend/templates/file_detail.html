@@ -1193,6 +1193,23 @@
         <span class="detail-value">{{ file.created_at.strftime('%Y-%m-%d %H:%M:%S') if file.created_at else 'N/A' }}</span>
       </div>
       <div class="detail-item">
+        <span class="detail-label">Processing Pipeline</span>
+        <span class="detail-value">
+          {% if pipeline_info %}
+          <a href="/pipelines" style="text-decoration: none; color: inherit; font-weight: 500;" aria-label="View pipeline management for {{ pipeline_info.name }}">{{ pipeline_info.name }}</a>
+          {% if not pipeline_info.is_explicit and pipeline_info.is_system %}
+          <span style="display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.45rem; font-size: 0.7rem; font-weight: 600; border-radius: 0.25rem; background: #ede9fe; color: #5b21b6;" title="No pipeline was explicitly assigned; the system default is applied">System Default</span>
+          {% elif pipeline_info.is_system %}
+          <span style="display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.45rem; font-size: 0.7rem; font-weight: 600; border-radius: 0.25rem; background: #dbeafe; color: #1e40af;" title="This file uses a system-managed pipeline">System</span>
+          {% else %}
+          <span style="display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.45rem; font-size: 0.7rem; font-weight: 600; border-radius: 0.25rem; background: #d1fae5; color: #065f46;" title="This file uses a custom user-defined pipeline">Custom</span>
+          {% endif %}
+          {% else %}
+          <span style="color: #9ca3af; font-style: italic;">Standard (legacy)</span>
+          {% endif %}
+        </span>
+      </div>
+      <div class="detail-item">
         <span class="detail-label">Original File Path</span>
         <span class="detail-value" style="font-family: monospace; font-size: 0.875rem;">
           {{ file.original_file_path if file.original_file_path else 'N/A' }}

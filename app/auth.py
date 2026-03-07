@@ -43,6 +43,27 @@ def get_current_user(request: Request):
     return request.session.get("user")
 
 
+def get_current_user_id(request: Request) -> str:
+    """Return a stable string identifier for the authenticated user.
+
+    Falls back to ``"anonymous"`` when no user is in the session (e.g. when
+    AUTH_ENABLED=False in single-user mode).  The returned value is consistent
+    with how pipeline and file ownership is stored in the database.
+
+    Priority order: ``preferred_username`` → ``email`` → ``id`` → ``"anonymous"``.
+
+    Args:
+        request: The current FastAPI request.
+
+    Returns:
+        A non-empty string identifying the current user.
+    """
+    user = get_current_user(request)
+    if not user or not isinstance(user, dict):
+        return "anonymous"
+    return user.get("preferred_username") or user.get("email") or user.get("id") or "anonymous"
+
+
 def require_login(func):
     if not AUTH_ENABLED:
         return func  # no-op

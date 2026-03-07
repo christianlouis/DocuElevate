@@ -112,6 +112,20 @@ async def lifespan(app: FastAPI):
     except Exception:
         logging.debug("Subscription plan seeding skipped — DB may not be ready yet")  # noqa: S110
 
+    # Seed the default system pipeline (mirrors the current hardcoded processing
+    # workflow) so it is immediately visible in the Pipelines management UI.
+    try:
+        from app.api.pipelines import seed_default_pipeline as _seed_pipeline
+        from app.database import SessionLocal as _SessionLocal  # noqa: F811 (re-import for clarity)
+
+        _db_pipeline = _SessionLocal()
+        try:
+            _seed_pipeline(_db_pipeline)
+        finally:
+            _db_pipeline.close()
+    except Exception:
+        logging.debug("Default pipeline seeding skipped — DB may not be ready yet")  # noqa: S110
+
     # Application is now running
     yield
 

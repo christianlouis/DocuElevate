@@ -270,6 +270,9 @@ def file_view_page(request: Request, file_id: int, db: Session = Depends(get_db)
         except Exception:
             step_summary = None
 
+        # Resolve the pipeline assigned to this file (explicit or system default)
+        pipeline_info = _resolve_pipeline(db, file_record)
+
         return templates.TemplateResponse(
             "file_view.html",
             {
@@ -279,6 +282,7 @@ def file_view_page(request: Request, file_id: int, db: Session = Depends(get_db)
                 "original_file_exists": original_file_exists,
                 "processed_file_exists": processed_file_exists,
                 "step_summary": step_summary,
+                "pipeline_info": pipeline_info,
             },
         )
     except Exception as e:
@@ -337,8 +341,11 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
                 except Exception as e:
                     logger.warning(f"Failed to load metadata from {metadata_path}: {e}")
 
-        # Compute processing flow for visualization
-        flow_data = _compute_processing_flow(logs)
+        # Resolve the pipeline assigned to this file (explicit or system default)
+        pipeline_info = _resolve_pipeline(db, file_record)
+
+        # Compute processing flow for visualization — filter to pipeline steps when available
+        flow_data = _compute_processing_flow(logs, pipeline_steps=pipeline_info["steps"] if pipeline_info else None)
 
         # Compute step-aligned summary from status table (preferred) or fallback to logs
         try:
@@ -360,6 +367,7 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
                 "gpt_metadata": gpt_metadata,
                 "flow_data": flow_data,
                 "step_summary": step_summary,
+                "pipeline_info": pipeline_info,
             },
         )
     except Exception as e:
@@ -367,15 +375,99 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
         return templates.TemplateResponse("file_detail.html", {"request": request, "file": None, "error": str(e)})
 
 
-def _compute_processing_flow(logs):
+# ---------------------------------------------------------------------------
+# Pipeline ↔ Celery-log stage mapping
+# ---------------------------------------------------------------------------
+
+# Maps each pipeline step_type to the set of Celery task log stage keys that
+# implement it.  Used to filter the flow visualization when a pipeline is
+# assigned to a file.
+#
+# ⚠️  MAINTENANCE NOTE: When a new step type is added to PIPELINE_STEP_TYPES
+# in app/api/pipelines.py it MUST also be added here, otherwise the flow
+# visualization will silently skip its Celery-task stages for files using that
+# step type.  The test ``TestPipelineInfoInViews::test_step_type_mapping_is_complete``
+# enforces this invariant automatically.
+_STEP_TYPE_TO_STAGES: dict[str, list[str]] = {
+    "convert_to_pdf": ["convert_to_pdf"],
+    "check_duplicates": ["check_for_duplicates"],
+    "ocr": ["check_text", "extract_text", "process_with_ocr"],
+    "extract_metadata": ["extract_metadata_with_gpt"],
+    "embed_metadata": ["embed_metadata_into_pdf"],
+    "compute_embedding": ["compute_embedding"],
+    "send_to_destinations": ["finalize_document_storage", "send_to_all_destinations"],
+    # "classify" is defined in PIPELINE_STEP_TYPES but has no Celery log stages yet.
+    # When a classify task is implemented, add its stage key(s) here.
+    "classify": [],
+}
+
+# These internal bookkeeping stages are always shown in the flow regardless of
+# which pipeline steps are defined.
+_ALWAYS_SHOW_STAGES: frozenset[str] = frozenset({"create_file_record"})
+
+
+def _resolve_pipeline(db: Session, file_record) -> dict | None:
+    """Resolve the pipeline information for a file.
+
+    If the file has an explicit ``pipeline_id``, load that pipeline.
+    Otherwise fall back to the active system-default pipeline
+    (``owner_id IS NULL``, ``is_default=True``).
+
+    Returns a dict with keys:
+        id, name, description, is_default, is_system, is_explicit, steps
+    or ``None`` when no pipeline exists in the database.
+    """
+    from app.models import Pipeline, PipelineStep
+
+    pipeline = None
+    if file_record.pipeline_id:
+        pipeline = db.query(Pipeline).filter(Pipeline.id == file_record.pipeline_id).first()
+
+    if pipeline is None:
+        pipeline = (
+            db.query(Pipeline)
+            .filter(
+                Pipeline.owner_id.is_(None),
+                Pipeline.is_default.is_(True),
+                Pipeline.is_active.is_(True),
+            )
+            .first()
+        )
+
+    if pipeline is None:
+        return None
+
+    steps = db.query(PipelineStep).filter(PipelineStep.pipeline_id == pipeline.id).order_by(PipelineStep.position).all()
+
+    return {
+        "id": pipeline.id,
+        "name": pipeline.name,
+        "description": pipeline.description,
+        "is_default": pipeline.is_default,
+        "is_system": pipeline.owner_id is None,
+        # True when the file has a pipeline explicitly assigned (not inferred default)
+        "is_explicit": bool(file_record.pipeline_id),
+        "steps": steps,
+    }
+
+
+def _compute_processing_flow(logs, pipeline_steps=None):
     """
     Compute the processing flow structure from logs for visualization.
 
     Returns a structured representation of the processing pipeline with branches.
     Detects upload sub-tasks and organizes them as branches under the parent upload stage.
+
+    Args:
+        logs: list of ProcessingLog objects (ordered by timestamp asc)
+        pipeline_steps: optional list of PipelineStep objects for the assigned pipeline.
+            When provided, the set of stages shown is filtered to only those that
+            correspond to the pipeline's enabled steps (plus bookkeeping stages like
+            ``create_file_record`` and any stage that actually ran in the logs).
     """
-    # Define the main processing stages
+    # Define the full catalogue of main processing stages
     stages = {
+        "convert_to_pdf": {"label": "Convert to PDF", "next": ["check_for_duplicates", "create_file_record"]},
         "check_for_duplicates": {"label": "Check for Duplicates", "next": ["create_file_record"]},
         "create_file_record": {"label": "Create File Record", "next": ["check_text"]},
         "check_text": {
@@ -405,6 +497,22 @@ def _compute_processing_flow(logs):
         # Update the next pointer for create_file_record
         if "create_file_record" in stages:
             stages["create_file_record"]["next"] = ["check_text"]
+
+    # When a pipeline is assigned, filter stages to only those relevant to the
+    # pipeline's enabled steps plus always-show bookkeeping stages and any stage
+    # that actually produced log entries (so nothing already-run is hidden).
+    if pipeline_steps is not None:
+        # Collect Celery stage keys that the pipeline's enabled steps map to
+        allowed: set[str] = set(_ALWAYS_SHOW_STAGES)
+        for ps in pipeline_steps:
+            if ps.enabled:
+                allowed.update(_STEP_TYPE_TO_STAGES.get(ps.step_type, []))
+        # Pre-scan logs so we can also keep any stage that already ran
+        ran_stages: set[str] = set()
+        for log in logs:
+            ran_stages.add(log.step_name)
+        allowed.update(ran_stages)
+        stages = {k: v for k, v in stages.items() if k in allowed}
 
     # Define upload sub-tasks (branches)
     upload_tasks = {
