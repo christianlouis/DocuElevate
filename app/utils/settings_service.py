@@ -971,6 +971,94 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Watch Folder / Ingest Settings
+    "watch_folders": {
+        "category": "Watch Folders",
+        "description": (
+            "Comma-separated list of absolute local filesystem paths that DocuElevate will "
+            "poll for new files to ingest. Works with any mounted path (SMB/CIFS, NFS, etc.). "
+            "Example: /watchfolders/scanner,/mnt/shared/inbox"
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "watch_folder_poll_interval": {
+        "category": "Watch Folders",
+        "description": "Poll interval in minutes for local watch folder scanning (default: 1)",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "watch_folder_delete_after_process": {
+        "category": "Watch Folders",
+        "description": (
+            "Delete files from local watch folders after they have been enqueued for processing. "
+            "When False (default), processed files are tracked via cache to avoid re-ingestion."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # FTP Ingest
+    "ftp_ingest_enabled": {
+        "category": "Watch Folders",
+        "description": "Enable FTP watch folder ingestion (requires FTP_INGEST_FOLDER and FTP connection settings)",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "ftp_ingest_folder": {
+        "category": "Watch Folders",
+        "description": (
+            "FTP folder path to poll for new documents to ingest. "
+            "Uses the existing FTP connection settings (FTP_HOST, FTP_USERNAME, FTP_PASSWORD)."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "ftp_ingest_delete_after_process": {
+        "category": "Watch Folders",
+        "description": "Delete files from the FTP ingest folder after they have been downloaded and enqueued",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # SFTP Ingest
+    "sftp_ingest_enabled": {
+        "category": "Watch Folders",
+        "description": "Enable SFTP watch folder ingestion (requires SFTP_INGEST_FOLDER and SFTP connection settings)",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sftp_ingest_folder": {
+        "category": "Watch Folders",
+        "description": (
+            "SFTP folder path to poll for new documents to ingest. "
+            "Uses the existing SFTP connection settings (SFTP_HOST, SFTP_USERNAME, SFTP_PASSWORD/SFTP_PRIVATE_KEY)."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sftp_ingest_delete_after_process": {
+        "category": "Watch Folders",
+        "description": "Delete files from the SFTP ingest folder after they have been downloaded and enqueued",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # IMAP Settings - Account 1
     "imap1_host": {
         "category": "IMAP",

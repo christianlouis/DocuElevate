@@ -74,14 +74,37 @@ For even more convenience, you can upload files directly from the **Files** page
 
 This feature allows you to quickly add new files without navigating away from your document management view.
 
-### Email Attachments
+### Email Attachments (IMAP Ingestion)
 
-If configured, DocuElevate can automatically fetch documents from email attachments:
+DocuElevate acts as an email *client* that automatically retrieves document attachments from one or more IMAP mailboxes. You do not need to set up DocuElevate as an email server — it simply polls an existing mailbox that you designate for document delivery.
 
-1. Send an email with attachments to the configured email account
-2. DocuElevate will poll the mailbox at the configured interval
-3. Attachments will be automatically downloaded and processed
-4. No further action is required
+**How it works:**
+1. A document is sent as an email attachment to the configured mailbox (e.g. from a scanner, a colleague, or any email client)
+2. DocuElevate polls the mailbox at the configured interval (typically every 1–5 minutes)
+3. Email attachments in supported formats are automatically downloaded and enqueued for processing
+4. Processed emails are marked with a label or star (Gmail) or tracked locally, so they are not re-processed
+
+> **HP Scanners and MFPs (Scan to Email)**: Configure your scanner's "Scan to Email" feature to send scanned documents to a dedicated email account. Point DocuElevate at that mailbox using the IMAP settings. DocuElevate will retrieve the scanned PDFs automatically — no manual forwarding required.
+
+### Watch Folders (Automatic Folder Ingestion)
+
+Watch folders allow DocuElevate to automatically monitor directories for new files and ingest them without any manual action.
+
+#### Local Watch Folders (including SMB/CIFS and NFS)
+
+Mount a network share or local directory into the DocuElevate worker container and configure the path in `WATCH_FOLDERS`. DocuElevate scans the folder every minute (configurable via `WATCH_FOLDER_POLL_INTERVAL`) and enqueues any new documents it finds.
+
+This is the recommended approach for:
+- **HP Scanners / MFPs** using "Scan to Network Folder" — point the scanner at a shared folder that DocuElevate also has access to
+- **SMB/CIFS shares** — mount the Windows/Samba share and add the path to `WATCH_FOLDERS`
+- **NFS mounts** — works identically, just configure the mount path
+- **Any local directory** on the server running DocuElevate
+
+#### FTP / SFTP Watch Folders
+
+DocuElevate can poll an FTP or SFTP directory for new files. Enable this with `FTP_INGEST_ENABLED` or `SFTP_INGEST_ENABLED` and set the corresponding ingest folder. DocuElevate downloads new files, enqueues them for processing, and optionally deletes them from the remote server.
+
+See [Configuration Guide — Watch Folder Ingestion](ConfigurationGuide.md#watch-folder-ingestion) for full setup instructions.
 
 ## Managing Documents
 

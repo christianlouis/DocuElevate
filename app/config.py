@@ -190,6 +190,83 @@ class Settings(BaseSettings):
     stripe_success_url: Optional[str] = None  # e.g. https://app.example.com/billing/success
     stripe_cancel_url: Optional[str] = None  # e.g. https://app.example.com/pricing
 
+    # ---------------------------------------------------------------------------
+    # Watch Folder Ingestion
+    # ---------------------------------------------------------------------------
+    # Local filesystem watch folders (comma-separated list of absolute paths).
+    # DocuElevate will poll each path for new files and automatically ingest them.
+    # Works with any mounted path, including SMB/CIFS (via system mount), NFS, etc.
+    # Example: /watchfolders/scanner,/mnt/shared/inbox
+    watch_folders: Optional[str] = Field(
+        default=None,
+        description=(
+            "Comma-separated list of local filesystem paths (absolute) that DocuElevate will "
+            "poll for new files to ingest. Each file found is enqueued for document processing. "
+            "Works with any mounted path including SMB/CIFS (mounted via system) and NFS. "
+            "Example: /watchfolders/scanner,/mnt/shared/inbox"
+        ),
+    )
+    watch_folder_poll_interval: int = Field(
+        default=1,
+        description=(
+            "Poll interval in minutes for local watch folder scanning. Default: 1 minute."
+        ),
+    )
+    watch_folder_delete_after_process: bool = Field(
+        default=False,
+        description=(
+            "Delete files from local watch folders after they have been successfully enqueued "
+            "for processing. When False (default), files are left in place and tracked via a "
+            "cache file to avoid re-ingesting them."
+        ),
+    )
+
+    # FTP Ingest / Watch Folder
+    # Uses the existing FTP credentials (ftp_host, ftp_username, ftp_password) to poll
+    # a source folder on the FTP server for new files to ingest.
+    ftp_ingest_folder: Optional[str] = Field(
+        default=None,
+        description=(
+            "FTP folder path to monitor for new files to ingest. "
+            "Uses the existing FTP connection settings (FTP_HOST, FTP_USERNAME, FTP_PASSWORD). "
+            "When set, DocuElevate will periodically poll this folder and download new files for processing."
+        ),
+    )
+    ftp_ingest_enabled: bool = Field(
+        default=False,
+        description="Enable FTP watch folder ingestion. Requires FTP_INGEST_FOLDER and FTP connection settings.",
+    )
+    ftp_ingest_delete_after_process: bool = Field(
+        default=False,
+        description=(
+            "Delete files from the FTP ingest folder after they have been successfully downloaded "
+            "and enqueued for processing. Default: False (files are left in place)."
+        ),
+    )
+
+    # SFTP Ingest / Watch Folder
+    # Uses the existing SFTP credentials (sftp_host, sftp_username, sftp_password/sftp_private_key)
+    # to poll a source folder on the SFTP server for new files to ingest.
+    sftp_ingest_folder: Optional[str] = Field(
+        default=None,
+        description=(
+            "SFTP folder path to monitor for new files to ingest. "
+            "Uses the existing SFTP connection settings (SFTP_HOST, SFTP_USERNAME, SFTP_PASSWORD/SFTP_PRIVATE_KEY). "
+            "When set, DocuElevate will periodically poll this folder and download new files for processing."
+        ),
+    )
+    sftp_ingest_enabled: bool = Field(
+        default=False,
+        description="Enable SFTP watch folder ingestion. Requires SFTP_INGEST_FOLDER and SFTP connection settings.",
+    )
+    sftp_ingest_delete_after_process: bool = Field(
+        default=False,
+        description=(
+            "Delete files from the SFTP ingest folder after they have been successfully downloaded "
+            "and enqueued for processing. Default: False (files are left in place)."
+        ),
+    )
+
     # IMAP 1
     imap1_host: Optional[str] = None
     imap1_port: Optional[int] = 993

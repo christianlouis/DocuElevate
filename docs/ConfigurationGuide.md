@@ -121,9 +121,97 @@ MAX_SINGLE_FILE_SIZE=524288000
 - **With splitting**: Recommended for servers with limited memory or when processing very large scanned documents
 - **Higher limits**: For environments specifically designed to handle large architectural plans, books, or scanned archives
 
-### IMAP Configuration
+### Watch Folder Ingestion
 
-DocuElevate can monitor multiple IMAP mailboxes for document attachments. Each mailbox uses a numbered prefix (e.g., `IMAP1_`, `IMAP2_`).
+DocuElevate can automatically monitor directories for new files and ingest them without any manual action.
+This works for:
+- **Local filesystem paths** — including SMB/CIFS shares, NFS mounts, or any path accessible to the Docker container
+- **FTP server directories** — using the configured FTP connection credentials
+- **SFTP server directories** — using the configured SFTP connection credentials
+
+#### Local Watch Folders
+
+Mount the share or directory into the Docker container and configure one or more paths to watch.
+
+| **Variable**                        | **Description**                                                                              | **Default** |
+|-------------------------------------|----------------------------------------------------------------------------------------------|-------------|
+| `WATCH_FOLDERS`                     | Comma-separated list of **absolute** local filesystem paths to poll for new files.          | *(empty)*   |
+| `WATCH_FOLDER_POLL_INTERVAL`        | How often to scan the folders, in minutes.                                                  | `1`         |
+| `WATCH_FOLDER_DELETE_AFTER_PROCESS` | Delete source files from the watch folder after they are successfully enqueued. When `false`, processed files are tracked in a cache file to prevent re-ingestion. | `false` |
+
+**Example (docker-compose.yaml):**
+
+```yaml
+services:
+  worker:
+    volumes:
+      - /mnt/smb/scanner:/watchfolders/scanner  # SMB/CIFS share mounted on the host
+      - /mnt/nfs/inbox:/watchfolders/inbox       # NFS mount
+    environment:
+      WATCH_FOLDERS: /watchfolders/scanner,/watchfolders/inbox
+      WATCH_FOLDER_POLL_INTERVAL: 1
+      WATCH_FOLDER_DELETE_AFTER_PROCESS: false
+```
+
+> **Tip for HP Scanners and MFPs**: Configure your scanner's "Scan to Network Folder" to point at an SMB share that is also mounted into the DocuElevate worker container. DocuElevate will pick up the scan files automatically every minute. No email forwarding is required.
+
+#### FTP Ingest (Watch Folder)
+
+DocuElevate can poll an FTP server directory for new files. It reuses the FTP connection settings already configured for uploads.
+
+| **Variable**                      | **Description**                                                                                | **Default** |
+|-----------------------------------|------------------------------------------------------------------------------------------------|-------------|
+| `FTP_INGEST_ENABLED`              | Enable FTP folder watching (`true`/`false`).                                                  | `false`     |
+| `FTP_INGEST_FOLDER`               | Path on the FTP server to poll (e.g. `/incoming`). Uses the existing FTP connection settings. | *(empty)*   |
+| `FTP_INGEST_DELETE_AFTER_PROCESS` | Delete files from the FTP server after they are downloaded and enqueued.                      | `false`     |
+
+**Example:**
+
+```dotenv
+# Existing FTP upload settings (also used for ingest)
+FTP_HOST=ftp.example.com
+FTP_USERNAME=docuelevate
+FTP_PASSWORD=secret
+
+# FTP ingest configuration
+FTP_INGEST_ENABLED=true
+FTP_INGEST_FOLDER=/incoming
+FTP_INGEST_DELETE_AFTER_PROCESS=false
+```
+
+#### SFTP Ingest (Watch Folder)
+
+DocuElevate can poll an SFTP server directory for new files. It reuses the SFTP connection settings already configured for uploads.
+
+| **Variable**                       | **Description**                                                                                 | **Default** |
+|------------------------------------|-------------------------------------------------------------------------------------------------|-------------|
+| `SFTP_INGEST_ENABLED`              | Enable SFTP folder watching (`true`/`false`).                                                  | `false`     |
+| `SFTP_INGEST_FOLDER`               | Path on the SFTP server to poll (e.g. `/uploads/inbox`). Uses the existing SFTP connection settings. | *(empty)* |
+| `SFTP_INGEST_DELETE_AFTER_PROCESS` | Delete files from the SFTP server after they are downloaded and enqueued.                      | `false`     |
+
+**Example:**
+
+```dotenv
+# Existing SFTP upload settings (also used for ingest)
+SFTP_HOST=sftp.example.com
+SFTP_USERNAME=docuelevate
+SFTP_PRIVATE_KEY=/run/secrets/sftp_key
+
+# SFTP ingest configuration
+SFTP_INGEST_ENABLED=true
+SFTP_INGEST_FOLDER=/uploads/inbox
+SFTP_INGEST_DELETE_AFTER_PROCESS=false
+```
+
+#### Supported File Types for Watch Folders
+
+Watch folder ingestion accepts the same file types as the web upload interface: PDF, Word, Excel, PowerPoint, images (JPEG, PNG, TIFF, BMP, GIF), plain text, CSV, RTF, and more. Unsupported files (executables, archives, etc.) are silently skipped.
+
+### IMAP Email Ingestion
+
+DocuElevate can automatically pull document attachments from IMAP mailboxes — no need to forward emails manually. Configure one or two mailboxes and DocuElevate polls them on the schedule you set.
+
+> **For HP Scanners (Scan to Email)**: If your scanner is set up to email scanned documents to a dedicated mailbox, configure that mailbox in DocuElevate using the settings below. DocuElevate will automatically retrieve the scanned PDFs from the inbox and process them. You do **not** need to configure DocuElevate as an email server — it acts as an email *client* that reads from your existing mailbox.
 
 | **Variable**                  | **Description**                                              | **Example**       |
 |-------------------------------|--------------------------------------------------------------|-------------------|

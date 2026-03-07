@@ -106,6 +106,17 @@ def get_settings_for_display(show_values: bool = False) -> dict[str, list[dict[s
             "email_sender",
             "email_default_recipient",
         ],
+        "Watch Folders": [
+            "watch_folders",
+            "watch_folder_poll_interval",
+            "watch_folder_delete_after_process",
+            "ftp_ingest_enabled",
+            "ftp_ingest_folder",
+            "ftp_ingest_delete_after_process",
+            "sftp_ingest_enabled",
+            "sftp_ingest_folder",
+            "sftp_ingest_delete_after_process",
+        ],
         "IMAP": [
             "imap1_host",
             "imap1_port",

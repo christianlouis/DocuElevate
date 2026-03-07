@@ -17,6 +17,7 @@ from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt  # noq
 from app.tasks.finalize_document_storage import finalize_document_storage  # noqa: F401
 from app.tasks.imap_tasks import pull_all_inboxes  # noqa: F401
 from app.tasks.monitor_stalled_steps import monitor_stalled_steps  # noqa: F401
+from app.tasks.watch_folder_tasks import scan_all_watch_folders  # noqa: F401
 
 # **Ensure all tasks are imported before Celery starts**
 from app.tasks.process_document import process_document  # noqa: F401
@@ -97,6 +98,21 @@ celery.conf.beat_schedule = {
         "schedule": crontab(minute="*/1"),  # Every minute
         "options": {"expires": 55},  # Must complete within 55 seconds
     },
+    # Watch folder scanning — polls local paths, FTP, and SFTP ingest folders.
+    # Schedule is controlled by WATCH_FOLDER_POLL_INTERVAL (default: 1 minute).
+    "scan-watch-folders": (
+        {
+            "task": "app.tasks.watch_folder_tasks.scan_all_watch_folders",
+            "schedule": crontab(minute=f"*/{max(1, settings.watch_folder_poll_interval)}"),
+            "options": {"expires": 55},
+        }
+        if (
+            settings.watch_folders
+            or settings.ftp_ingest_enabled
+            or settings.sftp_ingest_enabled
+        )
+        else None
+    ),
     # Backfill embeddings for files that were processed before the
     # embedding pipeline was enabled, or where the embedding task failed.
     "backfill-missing-embeddings": {
