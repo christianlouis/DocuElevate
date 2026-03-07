@@ -1713,3 +1713,271 @@ class TestGetTextWithContent:
         assert "text" in data
         assert data["text"]  # Should have non-empty text
         assert "No text" not in data["text"]
+
+
+# ---------------------------------------------------------------------------
+# Pipeline-info tests: file_detail and file_view views
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestPipelineInfoInViews:
+    """Tests that pipeline information is correctly resolved and passed to templates."""
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _make_file(db_session, pipeline_id=None):
+        from app.models import FileRecord
+
+        f = FileRecord(
+            filehash="ph_" + str(pipeline_id),
+            original_filename="doc.pdf",
+            local_filename="/tmp/doc.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+            pipeline_id=pipeline_id,
+        )
+        db_session.add(f)
+        db_session.commit()
+        return f
+
+    @staticmethod
+    def _make_system_pipeline(db_session, is_default=True):
+        from app.models import Pipeline, PipelineStep
+
+        p = Pipeline(
+            owner_id=None,
+            name="Standard Processing Pipeline",
+            description="System default",
+            is_default=is_default,
+            is_active=True,
+        )
+        db_session.add(p)
+        db_session.flush()
+
+        for pos, (step_type, label) in enumerate(
+            [
+                ("convert_to_pdf", "Convert to PDF"),
+                ("ocr", "OCR"),
+                ("send_to_destinations", "Send"),
+            ]
+        ):
+            db_session.add(PipelineStep(pipeline_id=p.id, position=pos, step_type=step_type, label=label, enabled=True))
+
+        db_session.commit()
+        return p
+
+    @staticmethod
+    def _make_custom_pipeline(db_session):
+        from app.models import Pipeline, PipelineStep
+
+        p = Pipeline(
+            owner_id="user1",
+            name="My Custom Pipeline",
+            is_default=False,
+            is_active=True,
+        )
+        db_session.add(p)
+        db_session.flush()
+        db_session.add(PipelineStep(pipeline_id=p.id, position=0, step_type="ocr", label="OCR", enabled=True))
+        db_session.commit()
+        return p
+
+    # ------------------------------------------------------------------
+    # _resolve_pipeline unit tests
+    # ------------------------------------------------------------------
+
+    def test_resolve_pipeline_explicit_assignment(self, db_session):
+        """File with an explicit pipeline_id resolves to that pipeline."""
+        from app.views.files import _resolve_pipeline
+
+        pipeline = self._make_system_pipeline(db_session)
+        file_rec = self._make_file(db_session, pipeline_id=pipeline.id)
+
+        info = _resolve_pipeline(db_session, file_rec)
+
+        assert info is not None
+        assert info["id"] == pipeline.id
+        assert info["is_explicit"] is True
+        assert info["is_system"] is True
+
+    def test_resolve_pipeline_fallback_to_system_default(self, db_session):
+        """File without pipeline_id falls back to system-default pipeline."""
+        from app.views.files import _resolve_pipeline
+
+        pipeline = self._make_system_pipeline(db_session)
+        file_rec = self._make_file(db_session, pipeline_id=None)
+
+        info = _resolve_pipeline(db_session, file_rec)
+
+        assert info is not None
+        assert info["id"] == pipeline.id
+        assert info["is_explicit"] is False
+        assert info["is_system"] is True
+        assert info["is_default"] is True
+
+    def test_resolve_pipeline_returns_none_when_no_pipeline_in_db(self, db_session):
+        """Returns None when no pipeline exists (empty database)."""
+        from app.views.files import _resolve_pipeline
+
+        file_rec = self._make_file(db_session, pipeline_id=None)
+        info = _resolve_pipeline(db_session, file_rec)
+
+        assert info is None
+
+    def test_resolve_pipeline_includes_steps(self, db_session):
+        """Returned dict contains the pipeline's steps in order."""
+        from app.views.files import _resolve_pipeline
+
+        pipeline = self._make_system_pipeline(db_session)
+        file_rec = self._make_file(db_session, pipeline_id=pipeline.id)
+
+        info = _resolve_pipeline(db_session, file_rec)
+
+        assert info is not None
+        assert len(info["steps"]) == 3
+        assert info["steps"][0].step_type == "convert_to_pdf"
+
+    def test_resolve_pipeline_custom_pipeline(self, db_session):
+        """File with an explicit custom pipeline resolves correctly."""
+        from app.views.files import _resolve_pipeline
+
+        pipeline = self._make_custom_pipeline(db_session)
+        file_rec = self._make_file(db_session, pipeline_id=pipeline.id)
+
+        info = _resolve_pipeline(db_session, file_rec)
+
+        assert info is not None
+        assert info["id"] == pipeline.id
+        assert info["name"] == "My Custom Pipeline"
+        assert info["is_system"] is False
+        assert info["is_explicit"] is True
+
+    # ------------------------------------------------------------------
+    # _compute_processing_flow pipeline filtering
+    # ------------------------------------------------------------------
+
+    def test_compute_flow_without_pipeline_shows_all_stages(self):
+        """Without a pipeline, all hardcoded stages are included."""
+        from app.views.files import _compute_processing_flow
+
+        flow = _compute_processing_flow([], pipeline_steps=None)
+        # Should include standard stages (create_file_record, check_text, etc.)
+        keys = {s["key"] for s in flow}
+        assert "create_file_record" in keys
+        assert "extract_metadata_with_gpt" in keys
+
+    def test_step_type_mapping_is_complete(self):
+        """Every step type in PIPELINE_STEP_TYPES has an entry in _STEP_TYPE_TO_STAGES."""
+        from app.api.pipelines import PIPELINE_STEP_TYPES
+        from app.views.files import _STEP_TYPE_TO_STAGES
+
+        missing = set(PIPELINE_STEP_TYPES.keys()) - set(_STEP_TYPE_TO_STAGES.keys())
+        assert not missing, (
+            f"The following pipeline step types are missing from _STEP_TYPE_TO_STAGES "
+            f"in app/views/files.py: {missing}.  "
+            "Add them with their corresponding Celery log stage key(s) (use [] if none yet)."
+        )
+
+    def test_compute_flow_with_pipeline_filters_stages(self, db_session):
+        """With a pipeline, only mapped stages are shown (plus always-show and ran stages)."""
+
+        from app.models import PipelineStep
+        from app.views.files import _compute_processing_flow
+
+        pipeline = self._make_system_pipeline(db_session)
+        # pipeline has: convert_to_pdf, ocr, send_to_destinations
+
+        # Query steps explicitly (no SQLAlchemy relationship defined on Pipeline)
+        steps = db_session.query(PipelineStep).filter(PipelineStep.pipeline_id == pipeline.id).all()
+
+        flow = _compute_processing_flow([], pipeline_steps=steps)
+        # When no logs and pipeline steps provided, only pipeline-mapped + always-show stages appear
+        keys = {s["key"] for s in flow}
+        # Always show
+        assert "create_file_record" in keys
+        # ocr maps to check_text / extract_text / process_with_ocr
+        assert "check_text" in keys or "extract_text" in keys
+        # embed_metadata not in pipeline → should be absent (no logs ran it)
+        assert "embed_metadata_into_pdf" not in keys
+
+    def test_compute_flow_with_pipeline_always_shows_ran_stages(self, db_session):
+        """Stages that actually ran are always shown even if not in the pipeline."""
+        from unittest.mock import Mock
+
+        from app.models import PipelineStep
+        from app.views.files import _compute_processing_flow
+
+        pipeline = self._make_system_pipeline(db_session)
+        steps = db_session.query(PipelineStep).filter(PipelineStep.pipeline_id == pipeline.id).all()
+
+        # Simulate a log entry for embed_metadata_into_pdf (not in this pipeline)
+        ran_log = Mock(
+            step_name="embed_metadata_into_pdf",
+            status="success",
+            message="Done",
+            timestamp=Mock(),
+            task_id="t1",
+        )
+
+        flow = _compute_processing_flow([ran_log], pipeline_steps=steps)
+        keys = {s["key"] for s in flow}
+        assert "embed_metadata_into_pdf" in keys
+
+    # ------------------------------------------------------------------
+    # Integration: view endpoints pass pipeline_info to template
+    # ------------------------------------------------------------------
+
+    def test_file_detail_page_includes_pipeline_name(self, client, db_session):
+        """GET /files/{id}/detail response body contains the pipeline name."""
+        pipeline = self._make_system_pipeline(db_session)
+        file_rec = self._make_file(db_session, pipeline_id=None)
+
+        response = client.get(f"/files/{file_rec.id}/detail")
+
+        assert response.status_code == 200
+        assert b"Standard Processing Pipeline" in response.content
+
+    def test_file_detail_page_shows_system_default_badge(self, client, db_session):
+        """File without explicit pipeline shows 'System Default' badge in detail view."""
+        self._make_system_pipeline(db_session)
+        file_rec = self._make_file(db_session, pipeline_id=None)
+
+        response = client.get(f"/files/{file_rec.id}/detail")
+
+        assert response.status_code == 200
+        assert b"System Default" in response.content
+
+    def test_file_detail_page_shows_custom_badge_for_custom_pipeline(self, client, db_session):
+        """File with a custom (non-system) pipeline shows 'Custom' badge."""
+        pipeline = self._make_custom_pipeline(db_session)
+        file_rec = self._make_file(db_session, pipeline_id=pipeline.id)
+
+        response = client.get(f"/files/{file_rec.id}/detail")
+
+        assert response.status_code == 200
+        assert b"My Custom Pipeline" in response.content
+        assert b"Custom" in response.content
+
+    def test_file_view_page_includes_pipeline_name(self, client, db_session):
+        """GET /files/{id} response body contains the pipeline name in the sidebar."""
+        pipeline = self._make_system_pipeline(db_session)
+        file_rec = self._make_file(db_session, pipeline_id=None)
+
+        response = client.get(f"/files/{file_rec.id}")
+
+        assert response.status_code == 200
+        assert b"Standard Processing Pipeline" in response.content
+
+    def test_file_view_page_no_pipeline_shows_standard(self, client, db_session):
+        """When no pipeline exists, file view shows 'Standard' fallback text."""
+        # No pipeline in DB
+        file_rec = self._make_file(db_session, pipeline_id=None)
+
+        response = client.get(f"/files/{file_rec.id}")
+
+        assert response.status_code == 200
+        assert b"Standard" in response.content
