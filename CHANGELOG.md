@@ -10,6 +10,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.80.0 (2026-03-07)
+
+### Bug Fixes
+
+- Add subscription_overage_percent to SETTING_METADATA and docs
+  ([`9853a27`](https://github.com/christianlouis/DocuElevate/commit/9853a27d82a5c68ca01b9350365589837b0f8911))
+
+- Resolve mypy and djlint CI failures
+  ([`ab532b5`](https://github.com/christianlouis/DocuElevate/commit/ab532b55dcdf5bface2ac617db034c3d96b6a3ab))
+
+- **api**: Move quota check before file write in ui-upload endpoint
+  ([`45949f3`](https://github.com/christianlouis/DocuElevate/commit/45949f34c67696aa9cd453bfcb489d86c0392eba))
+
+- **subscriptions**: Address code review feedback
+  ([`7f521eb`](https://github.com/christianlouis/DocuElevate/commit/7f521eb755d92b306d84a612a5b74ee4ecf77dc2))
+
+### Chores
+
+- Plan dynamic plan designer feature
+  ([`d439d9a`](https://github.com/christianlouis/DocuElevate/commit/d439d9afdd6e54a7a65a0b62b09a0a7db39cba3b))
+
+- Plan pricing/limits overhaul with cost analysis
+  ([`5351d82`](https://github.com/christianlouis/DocuElevate/commit/5351d822759636a9f4e1fcbfd5e126e4183dea91))
+
+### Continuous Integration
+
+- Merge quick and integration tests into a single test step
+  ([`9670e84`](https://github.com/christianlouis/DocuElevate/commit/9670e8486251de8f83d4faefb4ca370ced7cd8f9))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`4277e5e`](https://github.com/christianlouis/DocuElevate/commit/4277e5ed5dee914ff555f2bfba90dc848dc81784))
+
+### Features
+
+- **subscriptions**: Add SaaS subscription tiers, pricing page, and enforced upload quotas
+  ([`179f612`](https://github.com/christianlouis/DocuElevate/commit/179f6125e80d8abc5818eb1f4c32fd1c1538f3f1))
+
+- **subscriptions**: Database-backed plan designer with admin CRUD and overage buffer
+  ([`ea7fffa`](https://github.com/christianlouis/DocuElevate/commit/ea7fffa3a126ba819261be36052b8f609743df98))
+
+
 ## Unreleased
 
 ### Continuous Integration
