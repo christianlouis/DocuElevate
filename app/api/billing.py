@@ -349,7 +349,7 @@ def _on_checkout_completed(db: Session, data: Any) -> None:
         if customer_id:
             profile.stripe_customer_id = customer_id
         db.commit()
-        logger.info("Activated plan %s/%s for user %s after checkout", plan_id, billing_cycle, user_id)
+        logger.info("Activated plan %s/%s after checkout", plan_id, billing_cycle)
 
 
 def _on_subscription_updated(db: Session, data: Any) -> None:
@@ -395,7 +395,7 @@ def _on_subscription_updated(db: Session, data: Any) -> None:
         profile.subscription_tier = plan_id
         profile.subscription_billing_cycle = billing_cycle
         db.commit()
-        logger.info("Updated subscription to %s/%s for user %s", plan_id, billing_cycle, user_id)
+        logger.info("Updated subscription to %s/%s", plan_id, billing_cycle)
 
 
 def _on_subscription_deleted(db: Session, data: Any) -> None:

@@ -185,7 +185,7 @@ def save_plan(request: Request, body: PlanBody, db: DbSession) -> dict[str, Any]
         db.rollback()
         raise
 
-    logger.info("Onboarding: saved plan %s/%s for user %s", body.subscription_tier, body.billing_cycle, user_id)
+    logger.info("Onboarding: saved plan %s/%s", body.subscription_tier, body.billing_cycle)
     return _profile_to_dict(profile)
 
 
