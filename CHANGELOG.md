@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.86.0 (2026-03-07)
+
+### Bug Fixes
+
+- **ui**: Address code review feedback on complimentary badge and aria attributes
+  ([`064ba72`](https://github.com/christianlouis/DocuElevate/commit/064ba72d361215c1370f0d3fd81ac04ff1624d2e))
+
+### Features
+
+- **auth**: Auto-create admin user profiles with highest tier and complimentary flag
+  ([`97f85ce`](https://github.com/christianlouis/DocuElevate/commit/97f85ce74ed5d7970f330c923c7ae60ec299b7fd))
+
+
 ## v0.85.0 (2026-03-07)
 
 ### Bug Fixes
