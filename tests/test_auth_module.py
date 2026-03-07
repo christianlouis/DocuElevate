@@ -270,6 +270,7 @@ class TestAuthEndpoint:
             with patch("app.auth.settings") as mock_settings:
                 mock_settings.admin_username = "admin"
                 mock_settings.admin_password = "secret123"
+                mock_settings.multi_user_enabled = False
 
                 from app.auth import auth
 
@@ -296,11 +297,7 @@ class TestAuthEndpoint:
             with patch("app.auth.settings") as mock_settings:
                 mock_settings.admin_username = "admin"
                 mock_settings.admin_password = "secret123"
-
-                from app.auth import auth
-
-                mock_request = MagicMock()
-                mock_form_data = {"username": "admin", "password": "wrong_password"}
+                mock_settings.multi_user_enabled = False
                 mock_request.form = AsyncMock(return_value=mock_form_data)
                 mock_request.session = {}
 
@@ -317,6 +314,7 @@ class TestAuthEndpoint:
             with patch("app.auth.settings") as mock_settings:
                 mock_settings.admin_username = "admin"
                 mock_settings.admin_password = "secret123"
+                mock_settings.multi_user_enabled = False
 
                 from app.auth import auth
 
