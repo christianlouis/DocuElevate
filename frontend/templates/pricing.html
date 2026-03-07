@@ -117,6 +117,13 @@
           <a href="/login"
              class="block w-full text-center py-3 px-4 rounded-lg border-2 border-blue-600 text-blue-600 font-semibold hover:bg-blue-50 transition"
           >{{ tier.cta }}</a>
+          {% elif tier.stripe_price_id_monthly or tier.stripe_price_id_yearly %}
+          <button
+             type="button"
+             onclick="startCheckout('{{ tier.id }}')"
+             class="block w-full text-center py-3 px-4 rounded-lg {% if tier.highlight %}bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition shadow-md{% else %}bg-blue-600 text-white font-semibold hover:bg-blue-700 transition{% endif %}"
+             style="min-height:44px;"
+          >{{ tier.cta }}</button>
           {% elif tier.highlight %}
           <a href="/login"
              class="block w-full text-center py-3 px-4 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition shadow-md"
@@ -376,4 +383,42 @@
 
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+/**
+ * Initiate a Stripe Checkout session for the given plan.
+ * Uses the currently-selected billing cycle toggle (monthly/yearly).
+ *
+ * @param {string} planId - The plan identifier (e.g. 'starter', 'professional').
+ */
+async function startCheckout(planId) {
+  const cycleEl = document.querySelector('[data-billing-cycle]');
+  const billingCycle = (cycleEl && cycleEl.dataset.billingCycle) ? cycleEl.dataset.billingCycle : 'monthly';
+
+  try {
+    const resp = await fetch('/api/billing/create-checkout-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan_id: planId, billing_cycle: billingCycle })
+    });
+    if (resp.status === 401) {
+      window.location.href = '/login?message=Please+sign+in+to+subscribe';
+      return;
+    }
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+        return;
+      }
+    }
+    const data = await resp.json().catch(() => ({}));
+    alert(data.detail || 'Unable to start checkout. Please try again.');
+  } catch (e) {
+    alert('Network error. Please try again.');
+  }
+}
+</script>
 {% endblock %}

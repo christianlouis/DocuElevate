@@ -44,3 +44,4 @@ pytesseract>=0.3.10  # Python wrapper for Tesseract OCR
 pdf2image>=1.17.0  # Convert PDF pages to images (used by Tesseract and EasyOCR providers)
 ocrmypdf>=16.0.0,<18.0.0  # Post-processing: embeds searchable text layers into PDFs via Tesseract
 meilisearch>=0.31.0  # Full-text search engine client
+stripe>=7.0.0,<15.0.0  # Stripe billing SDK (MIT license)

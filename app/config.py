@@ -172,6 +172,23 @@ class Settings(BaseSettings):
     authentik_config_url: Optional[str] = None
     oauth_provider_name: Optional[str] = None  # Name to display for the OAuth provider
 
+    # Local user signup
+    allow_local_signup: bool = Field(
+        default=False,
+        description=(
+            "Allow users to self-register with email and password. "
+            "Requires email (SMTP) to be configured for verification emails. "
+            "Default: False (registration disabled, admin creates users)."
+        ),
+    )
+
+    # Stripe billing
+    stripe_secret_key: Optional[str] = None
+    stripe_publishable_key: Optional[str] = None
+    stripe_webhook_secret: Optional[str] = None
+    stripe_success_url: Optional[str] = None  # e.g. https://app.example.com/billing/success
+    stripe_cancel_url: Optional[str] = None  # e.g. https://app.example.com/pricing
+
     # IMAP 1
     imap1_host: Optional[str] = None
     imap1_port: Optional[int] = 993

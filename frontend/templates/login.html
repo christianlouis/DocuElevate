@@ -78,6 +78,15 @@
                 Return to Home
             </a>
         </div>
+
+        {% if allow_signup %}
+        <div class="mt-4 text-center">
+            <span class="text-sm text-gray-600">Don't have an account?</span>
+            <a href="/signup" class="ml-1 text-sm font-medium text-indigo-600 hover:text-indigo-500">
+                Create account
+            </a>
+        </div>
+        {% endif %}
     </main>
     <div class="fixed bottom-4 text-center w-full text-xs text-gray-500">
         DocuElevate {{ app_version|default('', true) }}

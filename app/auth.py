@@ -72,7 +72,7 @@ def get_gravatar_url(email):
 
 
 async def login(request: Request):
-    """Show login page with appropriate authentication options"""
+    """Show login page with appropriate authentication options."""
     return templates.TemplateResponse(
         "login.html",
         {
@@ -81,8 +81,9 @@ async def login(request: Request):
             "message": request.query_params.get("message"),
             "show_oauth": OAUTH_CONFIGURED,
             "oauth_provider_name": OAUTH_PROVIDER_NAME,
-            "app_version": settings.version,  # Changed from app_version to version
+            "app_version": settings.version,
             "csrf_token": getattr(request.state, "csrf_token", ""),
+            "allow_signup": settings.allow_local_signup,
         },
     )
 
@@ -188,14 +189,45 @@ async def oauth_callback(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url=f"/login?error=Authentication+failed:+{str(e)}", status_code=status.HTTP_302_FOUND)
 
 
-async def auth(request: Request):
-    """Handle local username/password authentication"""
+async def auth(request: Request, db: Session = Depends(get_db)):
+    """Handle local username/password authentication.
+
+    Checks LocalUser accounts first, then falls back to admin credentials.
+    """
     form_data = await request.form()
     username = form_data.get("username")
     password = form_data.get("password")
 
+    # --- LocalUser check ---
+    from app.models import LocalUser as _LocalUser
+    from app.models import UserProfile as _UserProfile
+    from app.utils.local_auth import build_session_user as _build_session_user
+    from app.utils.local_auth import verify_password as _verify_password
+
+    local_user = db.query(_LocalUser).filter((_LocalUser.username == username) | (_LocalUser.email == username)).first()
+    if local_user is not None:
+        if not _verify_password(password or "", local_user.hashed_password):
+            logger.warning("[SECURITY] LOCAL_LOGIN_FAILURE user=%s", username)
+            return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
+        if not local_user.is_active:
+            logger.warning("[SECURITY] LOCAL_LOGIN_UNVERIFIED user=%s", username)
+            return RedirectResponse(
+                url="/login?error=Please+verify+your+email+address+before+logging+in",
+                status_code=302,
+            )
+        user_data = _build_session_user(local_user)
+        request.session["user"] = user_data
+        logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", local_user.email)
+        profile = db.query(_UserProfile).filter(_UserProfile.user_id == local_user.email).first()
+        if profile and not profile.onboarding_completed:
+            post_onboarding = request.session.pop("redirect_after_login", "/upload")
+            request.session["post_onboarding_redirect"] = post_onboarding
+            return RedirectResponse(url="/onboarding", status_code=302)
+        redirect_url = request.session.pop("redirect_after_login", "/upload")
+        return RedirectResponse(url=redirect_url, status_code=302)
+
+    # --- Admin credentials fallback ---
     if username == settings.admin_username and password == settings.admin_password:
-        # Create user session
         request.session["user"] = {
             "id": "admin",
             "name": "Administrator",
@@ -204,12 +236,11 @@ async def auth(request: Request):
             "picture": "/static/images/default-avatar.svg",
             "is_admin": True,
         }
-        logger.info(f"[SECURITY] LOCAL_LOGIN_SUCCESS user={username}")
-        # Redirect to original destination or default
+        logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", username)
         redirect_url = request.session.pop("redirect_after_login", "/upload")
         return RedirectResponse(url=redirect_url, status_code=302)
     else:
-        logger.warning(f"[SECURITY] LOCAL_LOGIN_FAILURE user={username}")
+        logger.warning("[SECURITY] LOCAL_LOGIN_FAILURE user=%s", username)
         return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
 
 

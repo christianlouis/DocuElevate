@@ -729,9 +729,16 @@ class TestEnsureUserProfile:
 class TestAuthFunction:
     """Tests for auth() function (local authentication)."""
 
+    def _make_mock_db(self):
+        """Create a mock DB that returns None for LocalUser queries (no local users)."""
+        mock_db = MagicMock()
+        # query().filter().first() returns None → no LocalUser found
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        return mock_db
+
     @pytest.mark.asyncio
     async def test_auth_success(self):
-        """Test successful local authentication."""
+        """Test successful local authentication (admin fallback)."""
         from app.auth import auth
 
         mock_request = MagicMock(spec=Request)
@@ -743,7 +750,7 @@ class TestAuthFunction:
             mock_settings.admin_username = "testadmin"
             mock_settings.admin_password = "testpass"
 
-            result = await auth(mock_request)
+            result = await auth(mock_request, db=self._make_mock_db())
 
             assert isinstance(result, RedirectResponse)
             assert result.status_code == 302
@@ -766,7 +773,7 @@ class TestAuthFunction:
             mock_settings.admin_username = "testadmin"
             mock_settings.admin_password = "testpass"
 
-            result = await auth(mock_request)
+            result = await auth(mock_request, db=self._make_mock_db())
 
             assert isinstance(result, RedirectResponse)
             assert "/login?error=Invalid+username+or+password" in result.headers["location"]
@@ -786,7 +793,7 @@ class TestAuthFunction:
             mock_settings.admin_username = "testadmin"
             mock_settings.admin_password = "testpass"
 
-            result = await auth(mock_request)
+            result = await auth(mock_request, db=self._make_mock_db())
 
             assert isinstance(result, RedirectResponse)
             assert "/login?error=Invalid+username+or+password" in result.headers["location"]
@@ -805,7 +812,7 @@ class TestAuthFunction:
             mock_settings.admin_username = "testadmin"
             mock_settings.admin_password = "testpass"
 
-            result = await auth(mock_request)
+            result = await auth(mock_request, db=self._make_mock_db())
 
             assert isinstance(result, RedirectResponse)
             assert result.headers["location"] == "/settings"

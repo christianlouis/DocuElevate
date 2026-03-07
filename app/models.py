@@ -172,6 +172,31 @@ class WebhookConfig(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class LocalUser(Base):
+    """A locally-registered user authenticated by email and bcrypt password.
+
+    Created during the self-registration flow when ``allow_local_signup`` is
+    enabled.  The account is inactive (``is_active=False``) until the user
+    clicks the verification link sent to their email address.
+    """
+
+    __tablename__ = "local_users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    username = Column(String(64), unique=True, nullable=False, index=True)
+    display_name = Column(String(255), nullable=True)
+    hashed_password = Column(String(255), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=False, server_default="0")
+    is_admin = Column(Boolean, nullable=False, default=False, server_default="0")
+    email_verification_token = Column(String(128), nullable=True)
+    email_verification_sent_at = Column(DateTime(timezone=True), nullable=True)
+    password_reset_token = Column(String(128), nullable=True)
+    password_reset_sent_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class UserProfile(Base):
     """Per-user profile for admin-managed settings in multi-user mode.
 
@@ -214,6 +239,7 @@ class UserProfile(Base):
     onboarding_completed_at = Column(DateTime(timezone=True), nullable=True)
     contact_email = Column(String(255), nullable=True)
     preferred_destination = Column(String(50), nullable=True)
+    stripe_customer_id = Column(String(64), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -262,6 +288,8 @@ class SubscriptionPlan(Base):
     sort_order = Column(Integer, nullable=False, default=0)
     features = Column(Text, nullable=True)  # JSON-encoded list[str]
     api_access = Column(Boolean, nullable=False, default=False)
+    stripe_price_id_monthly = Column(String(64), nullable=True)
+    stripe_price_id_yearly = Column(String(64), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
