@@ -8,6 +8,7 @@ from fastapi import APIRouter
 
 from app.api.admin_users import router as admin_users_router
 from app.api.azure import router as azure_router
+from app.api.billing import router as billing_router
 from app.api.database import router as database_router
 from app.api.diagnostic import router as diagnostic_router
 from app.api.dropbox import router as dropbox_router
@@ -15,6 +16,7 @@ from app.api.duplicates import router as duplicates_router
 from app.api.files import router as files_router
 from app.api.google_drive import router as google_drive_router
 from app.api.logs import router as logs_router
+from app.api.onboarding import router as onboarding_router
 from app.api.onedrive import router as onedrive_router
 from app.api.openai import router as openai_router
 from app.api.pipelines import router as pipelines_router
@@ -61,4 +63,6 @@ router.include_router(webhooks_router)
 router.include_router(database_router)
 router.include_router(subscriptions_router)
 router.include_router(plans_router)
+router.include_router(onboarding_router)
+router.include_router(billing_router)
 router.include_router(pipelines_router)

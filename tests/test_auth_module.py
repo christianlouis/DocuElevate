@@ -270,6 +270,7 @@ class TestAuthEndpoint:
             with patch("app.auth.settings") as mock_settings:
                 mock_settings.admin_username = "admin"
                 mock_settings.admin_password = "secret123"
+                mock_settings.multi_user_enabled = False
 
                 from app.auth import auth
 
@@ -296,6 +297,7 @@ class TestAuthEndpoint:
             with patch("app.auth.settings") as mock_settings:
                 mock_settings.admin_username = "admin"
                 mock_settings.admin_password = "secret123"
+                mock_settings.multi_user_enabled = False
 
                 from app.auth import auth
 
@@ -317,6 +319,7 @@ class TestAuthEndpoint:
             with patch("app.auth.settings") as mock_settings:
                 mock_settings.admin_username = "admin"
                 mock_settings.admin_password = "secret123"
+                mock_settings.multi_user_enabled = False
 
                 from app.auth import auth
 

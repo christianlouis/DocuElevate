@@ -375,6 +375,7 @@ class TestOAuthCallback:
 
         mock_request = MagicMock(spec=Request)
         mock_request.session = {}
+        mock_db = MagicMock()
 
         userinfo = {
             "email": "test@example.com",
@@ -388,11 +389,12 @@ class TestOAuthCallback:
         with (
             patch("app.auth.oauth") as mock_oauth,
             patch("app.auth.settings") as mock_settings,
+            patch("app.auth._ensure_user_profile"),
         ):
             mock_oauth.authentik = mock_authentik
             mock_settings.admin_group_name = "admin"
 
-            result = await oauth_callback(mock_request)
+            result = await oauth_callback(mock_request, db=mock_db)
 
             assert isinstance(result, RedirectResponse)
             assert result.status_code == status.HTTP_302_FOUND
@@ -407,6 +409,7 @@ class TestOAuthCallback:
 
         mock_request = MagicMock(spec=Request)
         mock_request.session = {}
+        mock_db = MagicMock()
 
         userinfo = {"email": "test@example.com", "name": "Test User"}
 
@@ -416,11 +419,12 @@ class TestOAuthCallback:
         with (
             patch("app.auth.oauth") as mock_oauth,
             patch("app.auth.settings") as mock_settings,
+            patch("app.auth._ensure_user_profile"),
         ):
             mock_oauth.authentik = mock_authentik
             mock_settings.admin_group_name = "admin"
 
-            result = await oauth_callback(mock_request)
+            result = await oauth_callback(mock_request, db=mock_db)
 
             # Gravatar should be added
             assert "picture" in mock_request.session["user"]
@@ -433,6 +437,7 @@ class TestOAuthCallback:
 
         mock_request = MagicMock(spec=Request)
         mock_request.session = {}
+        mock_db = MagicMock()
 
         userinfo = {
             "email": "test@example.com",
@@ -446,11 +451,12 @@ class TestOAuthCallback:
         with (
             patch("app.auth.oauth") as mock_oauth,
             patch("app.auth.settings") as mock_settings,
+            patch("app.auth._ensure_user_profile"),
         ):
             mock_oauth.authentik = mock_authentik
             mock_settings.admin_group_name = "admin"
 
-            result = await oauth_callback(mock_request)
+            result = await oauth_callback(mock_request, db=mock_db)
 
             # Custom picture should be preserved, not replaced with Gravatar
             assert mock_request.session["user"]["picture"] == "https://example.com/custom-pic.jpg"
@@ -462,6 +468,7 @@ class TestOAuthCallback:
 
         mock_request = MagicMock(spec=Request)
         mock_request.session = {}
+        mock_db = MagicMock()
 
         userinfo = {
             "email": "admin@example.com",
@@ -475,11 +482,12 @@ class TestOAuthCallback:
         with (
             patch("app.auth.oauth") as mock_oauth,
             patch("app.auth.settings") as mock_settings,
+            patch("app.auth._ensure_user_profile"),
         ):
             mock_oauth.authentik = mock_authentik
             mock_settings.admin_group_name = "admin"
 
-            result = await oauth_callback(mock_request)
+            result = await oauth_callback(mock_request, db=mock_db)
 
             # User should be marked as admin
             assert mock_request.session["user"]["is_admin"] is True
@@ -491,6 +499,7 @@ class TestOAuthCallback:
 
         mock_request = MagicMock(spec=Request)
         mock_request.session = {}
+        mock_db = MagicMock()
 
         userinfo = {
             "email": "user@example.com",
@@ -504,11 +513,12 @@ class TestOAuthCallback:
         with (
             patch("app.auth.oauth") as mock_oauth,
             patch("app.auth.settings") as mock_settings,
+            patch("app.auth._ensure_user_profile"),
         ):
             mock_oauth.authentik = mock_authentik
             mock_settings.admin_group_name = "admin"
 
-            result = await oauth_callback(mock_request)
+            result = await oauth_callback(mock_request, db=mock_db)
 
             # User should not be marked as admin
             assert mock_request.session["user"]["is_admin"] is False
@@ -520,6 +530,7 @@ class TestOAuthCallback:
 
         mock_request = MagicMock(spec=Request)
         mock_request.session = {}
+        mock_db = MagicMock()
 
         mock_authentik = MagicMock()
         mock_authentik.authorize_access_token = AsyncMock(return_value={})
@@ -527,7 +538,7 @@ class TestOAuthCallback:
         with patch("app.auth.oauth") as mock_oauth:
             mock_oauth.authentik = mock_authentik
 
-            result = await oauth_callback(mock_request)
+            result = await oauth_callback(mock_request, db=mock_db)
 
             assert isinstance(result, RedirectResponse)
             assert "/login?error=Failed+to+retrieve+user+information" in result.headers["location"]
@@ -539,6 +550,7 @@ class TestOAuthCallback:
 
         mock_request = MagicMock(spec=Request)
         mock_request.session = {"redirect_after_login": "/protected/page"}
+        mock_db = MagicMock()
 
         userinfo = {"email": "test@example.com", "name": "Test User"}
 
@@ -548,11 +560,12 @@ class TestOAuthCallback:
         with (
             patch("app.auth.oauth") as mock_oauth,
             patch("app.auth.settings") as mock_settings,
+            patch("app.auth._ensure_user_profile"),
         ):
             mock_oauth.authentik = mock_authentik
             mock_settings.admin_group_name = "admin"
 
-            result = await oauth_callback(mock_request)
+            result = await oauth_callback(mock_request, db=mock_db)
 
             assert isinstance(result, RedirectResponse)
             assert result.headers["location"] == "/protected/page"
@@ -566,6 +579,7 @@ class TestOAuthCallback:
 
         mock_request = MagicMock(spec=Request)
         mock_request.session = {}
+        mock_db = MagicMock()
 
         mock_authentik = MagicMock()
         mock_authentik.authorize_access_token = AsyncMock(side_effect=Exception("OAuth error"))
@@ -573,19 +587,158 @@ class TestOAuthCallback:
         with patch("app.auth.oauth") as mock_oauth:
             mock_oauth.authentik = mock_authentik
 
-            result = await oauth_callback(mock_request)
+            result = await oauth_callback(mock_request, db=mock_db)
 
             assert isinstance(result, RedirectResponse)
             assert "/login?error=Authentication+failed" in result.headers["location"]
+
+    @pytest.mark.asyncio
+    async def test_oauth_callback_creates_user_profile(self):
+        """Test OAuth callback auto-creates a UserProfile for the authenticated user."""
+        from app.auth import oauth_callback
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.session = {}
+        mock_db = MagicMock()
+
+        userinfo = {
+            "sub": "oauth-sub-abc123",
+            "email": "new@example.com",
+            "name": "New User",
+            "preferred_username": "newuser",
+        }
+
+        mock_authentik = MagicMock()
+        mock_authentik.authorize_access_token = AsyncMock(return_value={"userinfo": userinfo})
+
+        with (
+            patch("app.auth.oauth") as mock_oauth,
+            patch("app.auth.settings") as mock_settings,
+            patch("app.auth._ensure_user_profile") as mock_ensure,
+        ):
+            mock_oauth.authentik = mock_authentik
+            mock_settings.admin_group_name = "admin"
+
+            await oauth_callback(mock_request, db=mock_db)
+
+            # _ensure_user_profile should be called with the db and user_data
+            mock_ensure.assert_called_once()
+            call_args = mock_ensure.call_args
+            assert call_args[0][0] is mock_db
+            assert call_args[0][1]["sub"] == "oauth-sub-abc123"
+
+
+@pytest.mark.unit
+class TestEnsureUserProfile:
+    """Tests for _ensure_user_profile() helper."""
+
+    def test_creates_profile_for_new_user(self):
+        """New user_id should insert a UserProfile row."""
+        from app.auth import _ensure_user_profile
+        from app.models import UserProfile
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        user_data = {
+            "sub": "sub-xyz",
+            "email": "alice@example.com",
+            "name": "Alice",
+            "preferred_username": "alice",
+        }
+
+        _ensure_user_profile(mock_db, user_data)
+
+        mock_db.add.assert_called_once()
+        added_profile = mock_db.add.call_args[0][0]
+        assert isinstance(added_profile, UserProfile)
+        assert added_profile.user_id == "sub-xyz"
+        assert added_profile.display_name == "Alice"
+        mock_db.commit.assert_called_once()
+
+    def test_skips_existing_profile(self):
+        """Existing profile should not be overwritten."""
+        from app.auth import _ensure_user_profile
+        from app.models import UserProfile
+
+        mock_db = MagicMock()
+        existing = UserProfile(user_id="sub-xyz", display_name="Old Name")
+        mock_db.query.return_value.filter.return_value.first.return_value = existing
+
+        user_data = {"sub": "sub-xyz", "name": "New Name"}
+
+        _ensure_user_profile(mock_db, user_data)
+
+        mock_db.add.assert_not_called()
+        mock_db.commit.assert_not_called()
+
+    def test_uses_preferred_username_fallback(self):
+        """Falls back to preferred_username when sub is absent."""
+        from app.auth import _ensure_user_profile
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        user_data = {"preferred_username": "bob", "name": "Bob"}
+
+        _ensure_user_profile(mock_db, user_data)
+
+        added_profile = mock_db.add.call_args[0][0]
+        assert added_profile.user_id == "bob"
+
+    def test_uses_email_fallback(self):
+        """Falls back to email when sub and preferred_username are absent."""
+        from app.auth import _ensure_user_profile
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        user_data = {"email": "carol@example.com", "name": "Carol"}
+
+        _ensure_user_profile(mock_db, user_data)
+
+        added_profile = mock_db.add.call_args[0][0]
+        assert added_profile.user_id == "carol@example.com"
+
+    def test_no_op_when_no_identifier(self):
+        """Does nothing and logs a warning when no identifier is found."""
+        from app.auth import _ensure_user_profile
+
+        mock_db = MagicMock()
+
+        _ensure_user_profile(mock_db, {})
+
+        mock_db.add.assert_not_called()
+        mock_db.commit.assert_not_called()
+
+    def test_handles_db_exception_gracefully(self):
+        """DB errors are caught; a rollback is issued and no exception propagates."""
+        from app.auth import _ensure_user_profile
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.commit.side_effect = Exception("DB error")
+
+        # Should not raise
+        _ensure_user_profile(mock_db, {"sub": "sub-error-test"})
+
+        mock_db.rollback.assert_called_once()
 
 
 @pytest.mark.unit
 class TestAuthFunction:
     """Tests for auth() function (local authentication)."""
 
+    def _make_mock_db(self):
+        """Create a mock DB that returns None for LocalUser queries (no local users)."""
+        mock_db = MagicMock()
+        # query().filter().first() returns None → no LocalUser found
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        return mock_db
+
     @pytest.mark.asyncio
     async def test_auth_success(self):
-        """Test successful local authentication."""
+        """Test successful local authentication (admin fallback)."""
         from app.auth import auth
 
         mock_request = MagicMock(spec=Request)
@@ -597,7 +750,7 @@ class TestAuthFunction:
             mock_settings.admin_username = "testadmin"
             mock_settings.admin_password = "testpass"
 
-            result = await auth(mock_request)
+            result = await auth(mock_request, db=self._make_mock_db())
 
             assert isinstance(result, RedirectResponse)
             assert result.status_code == 302
@@ -620,7 +773,7 @@ class TestAuthFunction:
             mock_settings.admin_username = "testadmin"
             mock_settings.admin_password = "testpass"
 
-            result = await auth(mock_request)
+            result = await auth(mock_request, db=self._make_mock_db())
 
             assert isinstance(result, RedirectResponse)
             assert "/login?error=Invalid+username+or+password" in result.headers["location"]
@@ -640,7 +793,7 @@ class TestAuthFunction:
             mock_settings.admin_username = "testadmin"
             mock_settings.admin_password = "testpass"
 
-            result = await auth(mock_request)
+            result = await auth(mock_request, db=self._make_mock_db())
 
             assert isinstance(result, RedirectResponse)
             assert "/login?error=Invalid+username+or+password" in result.headers["location"]
@@ -659,7 +812,7 @@ class TestAuthFunction:
             mock_settings.admin_username = "testadmin"
             mock_settings.admin_password = "testpass"
 
-            result = await auth(mock_request)
+            result = await auth(mock_request, db=self._make_mock_db())
 
             assert isinstance(result, RedirectResponse)
             assert result.headers["location"] == "/settings"

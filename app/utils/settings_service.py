@@ -1784,6 +1784,60 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Local User Signup
+    "allow_local_signup": {
+        "category": "Authentication",
+        "description": (
+            "Allow users to self-register with email and password. "
+            "Has no effect unless MULTI_USER_ENABLED is also True. "
+            "Requires SMTP (EMAIL_HOST) to be configured so verification emails can be sent."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # Stripe Billing
+    "stripe_secret_key": {
+        "category": "Billing",
+        "description": "Stripe secret API key (starts with sk_). Required for payment processing.",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "stripe_publishable_key": {
+        "category": "Billing",
+        "description": "Stripe publishable key (starts with pk_). Exposed to the browser for Checkout.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "stripe_webhook_secret": {
+        "category": "Billing",
+        "description": "Stripe webhook signing secret (starts with whsec_). Used to verify incoming webhook payloads.",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "stripe_success_url": {
+        "category": "Billing",
+        "description": "Absolute URL Stripe redirects to after a successful checkout (e.g. https://app.example.com/billing/success).",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "stripe_cancel_url": {
+        "category": "Billing",
+        "description": "Absolute URL Stripe redirects to when a user cancels the checkout flow (e.g. https://app.example.com/pricing).",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
 }
 
 

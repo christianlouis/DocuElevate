@@ -2,7 +2,7 @@
 {% block title %}Pricing & Plans – DocuElevate{% endblock %}
 
 {% block content %}
-<div class="bg-gray-50 min-h-screen">
+<div class="bg-gray-50 min-h-screen" x-data="{ annual: false }">
 
   <!-- ── Hero ──────────────────────────────────────────────────────────────── -->
   <div class="bg-gradient-to-br from-blue-700 via-indigo-700 to-purple-700 text-white py-20 px-4">
@@ -18,7 +18,7 @@
       </p>
 
       <!-- Annual / Monthly toggle (cosmetic — actual billing handled separately) -->
-      <div class="mt-8 inline-flex items-center bg-white/10 rounded-full p-1 gap-1" x-data="{ annual: false }">
+      <div class="mt-8 inline-flex items-center bg-white/10 rounded-full p-1 gap-1">
         <button
           @click="annual = false"
           :class="!annual ? 'bg-white text-indigo-700 shadow' : 'text-white'"
@@ -36,8 +36,7 @@
   </div>
 
   <!-- ── Tier cards ────────────────────────────────────────────────────────── -->
-  <div class="max-w-7xl mx-auto px-4 -mt-10 pb-20" x-data="{ annual: false }">
-    <!-- Recreate the toggle state here so cards react to the hero toggle too -->
+  <div class="max-w-7xl mx-auto px-4 -mt-10 pb-20">
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
 
       {% for tier in tiers %}
@@ -118,6 +117,13 @@
           <a href="/login"
              class="block w-full text-center py-3 px-4 rounded-lg border-2 border-blue-600 text-blue-600 font-semibold hover:bg-blue-50 transition"
           >{{ tier.cta }}</a>
+          {% elif tier.stripe_price_id_monthly or tier.stripe_price_id_yearly %}
+          <button
+             type="button"
+             onclick="startCheckout('{{ tier.id }}')"
+             class="block w-full text-center py-3 px-4 rounded-lg {% if tier.highlight %}bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition shadow-md{% else %}bg-blue-600 text-white font-semibold hover:bg-blue-700 transition{% endif %}"
+             style="min-height:44px;"
+          >{{ tier.cta }}</button>
           {% elif tier.highlight %}
           <a href="/login"
              class="block w-full text-center py-3 px-4 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition shadow-md"
@@ -376,5 +382,54 @@
     </div>
 
   </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+/**
+ * Initiate a Stripe Checkout session for the given plan.
+ * Uses the currently-selected billing cycle toggle (monthly/yearly).
+ *
+ * @param {string} planId - The plan identifier (e.g. 'starter', 'professional').
+ */
+async function startCheckout(planId) {
+  const cycleEl = document.querySelector('[data-billing-cycle]');
+  const billingCycle = (cycleEl && cycleEl.dataset.billingCycle) ? cycleEl.dataset.billingCycle : 'monthly';
+
+  // Clear previous error
+  const errEl = document.getElementById('checkout-error');
+  if (errEl) { errEl.textContent = ''; errEl.hidden = true; }
+
+  try {
+    const resp = await fetch('/api/billing/create-checkout-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan_id: planId, billing_cycle: billingCycle })
+    });
+    if (resp.status === 401) {
+      window.location.href = '/login?message=Please+sign+in+to+subscribe';
+      return;
+    }
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+        return;
+      }
+    }
+    const data = await resp.json().catch(() => ({}));
+    const msg = data.detail || 'Unable to start checkout. Please try again.';
+    if (errEl) { errEl.textContent = msg; errEl.hidden = false; }
+  } catch (e) {
+    if (errEl) { errEl.textContent = 'Network error. Please try again.'; errEl.hidden = false; }
+  }
+}
+</script>
+<div id="checkout-error"
+     role="alert"
+     aria-live="assertive"
+     hidden
+     class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-red-100 border border-red-400 text-red-700 px-6 py-3 rounded-lg shadow-lg text-sm z-50">
 </div>
 {% endblock %}

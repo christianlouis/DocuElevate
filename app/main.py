@@ -16,6 +16,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api import router as api_router
+from app.api.local_auth import router as local_auth_router
 from app.auth import router as auth_router
 from app.config import settings
 from app.database import init_db
@@ -260,4 +261,5 @@ def test_500():
 app.include_router(frontend_router)
 app.include_router(files_router)  # Explicitly include the files router
 app.include_router(auth_router)
+app.include_router(local_auth_router)
 app.include_router(api_router, prefix="/api")
