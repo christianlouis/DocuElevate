@@ -2,6 +2,8 @@
 
 DocuElevate uses database-backed subscription plans that are fully configurable by admins via the **Plan Designer** at `/admin/plans`. Four default tiers are seeded automatically on first startup.
 
+All plans are priced **per user, per month** (or per year with ~20 % discount). There are no team, business, or enterprise tiers — every plan is a single-user subscription.
+
 ## Default Plans
 
 | Plan | Monthly | Yearly | Docs/Month | Lifetime Docs | OCR Pages/Mo | Max File | Mailboxes | Destinations |
@@ -9,11 +11,20 @@ DocuElevate uses database-backed subscription plans that are fully configurable 
 | **Free** | $0 | $0 | — | 50 total | 150 total | 5 MB | 0 | 1 |
 | **Starter** | $2.99 | $28.99 | 50 | — | 300 | 25 MB | 1 | 2 |
 | **Professional** | $5.99 | $57.99 | 150 | — | 750 | 100 MB | 3 | 5 |
-| **Business** | $7.99 | $76.99 | 300 | — | 1,500 | Unlimited | Unlimited | 10 |
+| **Power** | $7.99 | $76.99 | 300 | — | 1,500 | Unlimited | Unlimited | 10 |
 
 > Prices ex-VAT. German customers add 19% MwSt.
 
 All paid plans include a **30-day free trial**.
+
+### Intended Use Cases
+
+- **Free** — Try DocuElevate with no commitment. Good for one-off experiments or evaluating the service.
+- **Starter** — Freelancers and side-project owners sending ~50 invoices, contracts, or scanned receipts a month.
+- **Professional** — Knowledge workers (consultants, paralegals, accountants) handling ~150 multi-page documents a month across several cloud destinations.
+- **Power** — Power users with heavy daily workloads: real estate agents, bookkeepers, or researchers processing ~10 documents a day (≈ 300/month) with no file-size restrictions.
+
+> The **plan_id** in the database remains `"business"` for the Power tier to preserve backwards compatibility. The display name shown to users is "Power".
 
 ## How Plans Are Stored
 
@@ -54,6 +65,35 @@ When a user's `subscription_billing_cycle` is set to `yearly`:
 ## allow_overage Flag
 
 Setting `UserProfile.allow_overage = True` bypasses monthly quota checks entirely for that user. Usage is still tracked so future billing integrations can charge retroactively. This field is not yet exposed in the admin UI.
+
+## is_complimentary Flag (Complimentary Plans)
+
+Setting `UserProfile.is_complimentary = True` marks a user as being on a **complimentary (uncharged) plan**. The user retains all quota benefits of their assigned subscription tier but is **never billed via Stripe**. This is useful for:
+
+- **Admin accounts** — automatically set on every admin user profile at login time.
+- **Gifted access** — granting full plan benefits to partners, testers, or sponsored users.
+
+### Admin Auto-Provisioning
+
+When an admin user logs in for the first time (via OAuth, local account, or the built-in admin credentials), DocuElevate automatically:
+
+1. Creates a `UserProfile` row if one does not already exist.
+2. Assigns the **highest available subscription tier** (currently `business`).
+3. Sets `is_complimentary = True` so the account is never billed.
+4. Sets `onboarding_completed = True` so admins skip the first-time setup wizard.
+
+On subsequent logins for existing admin profiles:
+- `is_complimentary` is ensured to be `True`.
+- If the profile was still on the `free` tier it is upgraded to the highest tier.
+- All other admin-managed settings (custom limits, notes, etc.) are preserved.
+
+### Managing via Admin UI
+
+The **User Management** page (`/admin/users`) shows a green gift icon (🎁) next to the plan badge for any user with `is_complimentary = True`. The toggle is available in the user edit modal under **Billing**.
+
+### API Field
+
+`is_complimentary` is exposed in the `PUT /api/admin/users/{user_id}` body and in all user detail responses.
 
 ## Plan Designer
 

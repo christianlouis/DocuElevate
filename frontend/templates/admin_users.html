@@ -23,6 +23,13 @@
     >
       <i class="fas fa-user-plus mr-2" aria-hidden="true"></i> Add User Profile
     </button>
+    <button
+      type="button"
+      @click="openCreateLocalUserModal()"
+      class="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+    >
+      <i class="fas fa-user-lock mr-2" aria-hidden="true"></i> Create Local Account
+    </button>
   </div>
 
   <!-- ── Alert banner ───────────────────────────────────────────────────────── -->
@@ -139,6 +146,13 @@
                   aria-hidden="true"
                 ></i>
                 <span x-text="user.subscription_tier || 'free'"></span>
+              </span>
+              <span
+                x-show="user.is_complimentary"
+                class="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700"
+                aria-label="Complimentary plan — not billed"
+              >
+                <i class="fas fa-gift" aria-hidden="true"></i>
               </span>
             </td>
             <!-- Upload limit -->
@@ -375,6 +389,25 @@
             </p>
           </div>
 
+          <!-- Complimentary plan toggle -->
+          <div class="flex items-center gap-3">
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                x-model="form.is_complimentary"
+                class="sr-only peer"
+                id="modal-complimentary"
+                role="switch"
+                :aria-checked="form.is_complimentary.toString()"
+              />
+              <div class="w-10 h-6 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-400 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-4"></div>
+            </label>
+            <label for="modal-complimentary" class="text-sm font-medium text-gray-700">
+              Complimentary plan
+              <span class="text-xs text-gray-400 font-normal">(user keeps tier benefits but is never billed — set automatically for admin accounts)</span>
+            </label>
+          </div>
+
         </div>
 
         <!-- Footer -->
@@ -396,6 +429,200 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ── Local Accounts section ────────────────────────────────────────────── -->
+  <div class="bg-white shadow rounded-lg mt-8">
+    <div class="px-6 py-4 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
+          <i class="fas fa-user-lock text-green-600" aria-hidden="true"></i>
+          Local User Accounts
+        </h2>
+        <p class="text-sm text-gray-500 mt-0.5">
+          Email/password accounts created directly on this server.
+        </p>
+      </div>
+      <button
+        type="button"
+        @click="openCreateLocalUserModal()"
+        class="inline-flex items-center px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+      >
+        <i class="fas fa-plus mr-1" aria-hidden="true"></i> New Account
+      </button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200" aria-label="Local user accounts">
+        <thead class="bg-gray-50">
+          <tr>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Display Name</th>
+            <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+            <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          <template x-if="localUsersLoading">
+            <tr>
+              <td colspan="7" class="px-4 py-6 text-center text-gray-400">
+                <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i> Loading…
+              </td>
+            </tr>
+          </template>
+          <template x-if="!localUsersLoading && localUsers.length === 0">
+            <tr>
+              <td colspan="7" class="px-4 py-6 text-center text-gray-400">
+                No local accounts yet.
+                <button type="button" @click="openCreateLocalUserModal()" class="text-green-600 hover:underline ml-1">Create one.</button>
+              </td>
+            </tr>
+          </template>
+          <template x-for="lu in localUsers" :key="lu.id">
+            <tr class="hover:bg-gray-50">
+              <td class="px-4 py-3 text-sm font-mono text-gray-800" x-text="lu.username"></td>
+              <td class="px-4 py-3 text-sm text-gray-600" x-text="lu.email"></td>
+              <td class="px-4 py-3 text-sm text-gray-600" x-text="lu.display_name || '—'"></td>
+              <td class="px-4 py-3 text-sm text-center">
+                <span
+                  :class="lu.is_active ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'"
+                  class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                  x-text="lu.is_active ? 'Active' : 'Unverified'"
+                ></span>
+              </td>
+              <td class="px-4 py-3 text-sm text-center">
+                <span
+                  :class="lu.is_admin ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'"
+                  class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                  x-text="lu.is_admin ? 'Admin' : 'User'"
+                ></span>
+              </td>
+              <td class="px-4 py-3 text-sm text-gray-500 whitespace-nowrap" x-text="lu.created_at ? formatDate(lu.created_at) : '—'"></td>
+              <td class="px-4 py-3 text-sm text-right">
+                <button
+                  type="button"
+                  @click="confirmDeleteLocalUser(lu)"
+                  class="text-red-600 hover:text-red-800 focus:outline-none"
+                  :aria-label="`Delete account for ${lu.username}`"
+                >
+                  <i class="fas fa-trash" aria-hidden="true"></i>
+                </button>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Create local user modal ────────────────────────────────────────────── -->
+  <div
+    x-show="localUserModal.open"
+    x-transition:enter="transition ease-out duration-100"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="create-local-user-title"
+  >
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-lg" @click.outside="localUserModal.open = false">
+      <div class="px-6 py-4 border-b flex items-center justify-between">
+        <h2 id="create-local-user-title" class="text-lg font-semibold text-gray-900">Create Local Account</h2>
+        <button type="button" @click="localUserModal.open = false" aria-label="Close" class="text-gray-400 hover:text-gray-600">
+          <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+      </div>
+      <form @submit.prevent="submitCreateLocalUser" class="px-6 py-5 space-y-4">
+        <div>
+          <label for="lu-email" class="block text-sm font-medium text-gray-700">Email <span aria-hidden="true" class="text-red-500">*</span></label>
+          <input type="email" id="lu-email" x-model="localUserModal.form.email" required autocomplete="off"
+            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring focus:ring-green-500 focus:ring-opacity-50 text-sm"
+            style="min-height:40px;" aria-required="true">
+        </div>
+        <div>
+          <label for="lu-username" class="block text-sm font-medium text-gray-700">Username <span aria-hidden="true" class="text-red-500">*</span></label>
+          <input type="text" id="lu-username" x-model="localUserModal.form.username" required autocomplete="off"
+            pattern="^[a-zA-Z0-9_-]+$" minlength="3" maxlength="64"
+            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring focus:ring-green-500 focus:ring-opacity-50 text-sm"
+            style="min-height:40px;" aria-required="true" aria-describedby="lu-username-hint">
+          <p id="lu-username-hint" class="mt-1 text-xs text-gray-500">3–64 characters. Letters, numbers, hyphens and underscores only.</p>
+        </div>
+        <div>
+          <label for="lu-display-name" class="block text-sm font-medium text-gray-700">Display Name <span class="text-gray-400">(optional)</span></label>
+          <input type="text" id="lu-display-name" x-model="localUserModal.form.display_name" autocomplete="off" maxlength="255"
+            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring focus:ring-green-500 focus:ring-opacity-50 text-sm"
+            style="min-height:40px;">
+        </div>
+        <div>
+          <label for="lu-password" class="block text-sm font-medium text-gray-700">Password <span aria-hidden="true" class="text-red-500">*</span></label>
+          <input type="password" id="lu-password" x-model="localUserModal.form.password" required autocomplete="new-password"
+            minlength="8" maxlength="128"
+            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring focus:ring-green-500 focus:ring-opacity-50 text-sm"
+            style="min-height:40px;" aria-required="true" aria-describedby="lu-password-hint">
+          <p id="lu-password-hint" class="mt-1 text-xs text-gray-500">Minimum 8 characters.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="checkbox" id="lu-is-admin" x-model="localUserModal.form.is_admin"
+            class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500">
+          <label for="lu-is-admin" class="text-sm text-gray-700">Grant admin privileges</label>
+        </div>
+        <div x-show="localUserModal.error" x-cloak
+          class="bg-red-50 border-l-4 border-red-500 text-red-700 p-3 rounded text-sm"
+          role="alert" aria-live="assertive" x-text="localUserModal.error">
+        </div>
+        <div class="flex justify-end gap-3 pt-2">
+          <button type="button" @click="localUserModal.open = false"
+            class="px-4 py-2 text-sm font-medium border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50">
+            Cancel
+          </button>
+          <button type="submit" :disabled="localUserModal.saving"
+            class="px-4 py-2 text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500 disabled:opacity-50">
+            <span x-show="!localUserModal.saving">Create Account</span>
+            <span x-show="localUserModal.saving" x-cloak><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Creating…</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Delete local user confirmation modal ───────────────────────────────── -->
+  <div
+    x-show="deleteLocalUserModal.open"
+    x-transition:enter="transition ease-out duration-100"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="delete-local-user-title"
+  >
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md" @click.outside="deleteLocalUserModal.open = false">
+      <div class="px-6 py-4 border-b">
+        <h2 id="delete-local-user-title" class="text-lg font-semibold text-gray-900">Delete Local Account</h2>
+      </div>
+      <div class="px-6 py-5">
+        <p class="text-sm text-gray-700">
+          Are you sure you want to delete the account for
+          <strong class="font-mono" x-text="deleteLocalUserModal.username"></strong>
+          (<span class="font-mono" x-text="deleteLocalUserModal.email"></span>)?
+        </p>
+        <p class="text-sm text-gray-500 mt-2">This cannot be undone. Documents owned by this user are <strong>not</strong> deleted.</p>
+      </div>
+      <div class="px-6 py-4 border-t flex justify-end gap-3">
+        <button type="button" @click="deleteLocalUserModal.open = false"
+          class="px-4 py-2 text-sm font-medium border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50">
+          Cancel
+        </button>
+        <button type="button" @click="executeDeleteLocalUser()" :disabled="deleteLocalUserModal.deleting"
+          class="px-4 py-2 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 disabled:opacity-50">
+          <span x-show="!deleteLocalUserModal.deleting">Delete Account</span>
+          <span x-show="deleteLocalUserModal.deleting" x-cloak><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Deleting…</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -472,12 +699,30 @@ function adminUsersApp() {
       subscription_tier: 'free',
       subscription_billing_cycle: 'monthly',
       subscription_period_start: null,
+      is_complimentary: false,
     },
 
     // Delete modal
     deleteModal: {
       open: false,
       user_id: '',
+      deleting: false,
+    },
+
+    // Local users
+    localUsers: [],
+    localUsersLoading: true,
+    localUserModal: {
+      open: false,
+      saving: false,
+      error: '',
+      form: { email: '', username: '', display_name: '', password: '', is_admin: false },
+    },
+    deleteLocalUserModal: {
+      open: false,
+      id: null,
+      username: '',
+      email: '',
       deleting: false,
     },
 
@@ -491,7 +736,7 @@ function adminUsersApp() {
     },
 
     async init() {
-      await this.fetchUsers(1);
+      await Promise.all([this.fetchUsers(1), this.fetchLocalUsers()]);
     },
 
     async fetchUsers(page) {
@@ -524,7 +769,7 @@ function adminUsersApp() {
     openCreateModal() {
       this.isCreate = true;
       this.modalTitle = 'Add User Profile';
-      this.form = { user_id: '', display_name: '', daily_upload_limit: null, notes: '', is_blocked: false, subscription_tier: 'free', subscription_billing_cycle: 'monthly', subscription_period_start: null };
+      this.form = { user_id: '', display_name: '', daily_upload_limit: null, notes: '', is_blocked: false, subscription_tier: 'free', subscription_billing_cycle: 'monthly', subscription_period_start: null, is_complimentary: false };
       this.modalOpen = true;
     },
 
@@ -541,6 +786,7 @@ function adminUsersApp() {
         subscription_tier: user.subscription_tier || 'free',
         subscription_billing_cycle: user.subscription_billing_cycle || 'monthly',
         subscription_period_start: user.subscription_period_start ? user.subscription_period_start.substring(0, 10) : null,
+        is_complimentary: !!user.is_complimentary,
       };
       this.modalOpen = true;
     },
@@ -555,6 +801,7 @@ function adminUsersApp() {
           notes: this.form.notes || null,
           is_blocked: !!this.form.is_blocked,
           subscription_tier: this.form.subscription_tier || 'free',
+          is_complimentary: !!this.form.is_complimentary,
         };
         const uid = encodeURIComponent(this.form.user_id);
         const resp = await fetch(`/api/admin/users/${uid}`, {
@@ -632,6 +879,90 @@ function adminUsersApp() {
     showAlert(type, title, message) {
       this.alert = { show: true, type, title, message };
       setTimeout(() => { this.alert.show = false; }, type === 'success' ? 5000 : 10000);
+    },
+
+    async fetchLocalUsers() {
+      this.localUsersLoading = true;
+      try {
+        const resp = await fetch('/api/admin/users/local', {
+          headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '' },
+        });
+        if (!resp.ok) {
+          this.showAlert('error', 'Failed to load local users', resp.statusText);
+          return;
+        }
+        this.localUsers = await resp.json();
+      } catch (e) {
+        this.showAlert('error', 'Network error', e.message);
+      } finally {
+        this.localUsersLoading = false;
+      }
+    },
+
+    openCreateLocalUserModal() {
+      this.localUserModal.form = { email: '', username: '', display_name: '', password: '', is_admin: false };
+      this.localUserModal.error = '';
+      this.localUserModal.saving = false;
+      this.localUserModal.open = true;
+    },
+
+    async submitCreateLocalUser() {
+      this.localUserModal.error = '';
+      this.localUserModal.saving = true;
+      try {
+        const resp = await fetch('/api/admin/users/local', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '',
+          },
+          body: JSON.stringify(this.localUserModal.form),
+        });
+        if (resp.ok) {
+          this.localUserModal.open = false;
+          this.showAlert('success', 'Account created', `Local account for "${this.localUserModal.form.username}" was created successfully.`);
+          await this.fetchLocalUsers();
+        } else {
+          const err = await resp.json().catch(() => ({}));
+          this.localUserModal.error = err.detail || 'Failed to create account.';
+        }
+      } catch (e) {
+        this.localUserModal.error = 'Network error: ' + e.message;
+      } finally {
+        this.localUserModal.saving = false;
+      }
+    },
+
+    confirmDeleteLocalUser(lu) {
+      this.deleteLocalUserModal.id = lu.id;
+      this.deleteLocalUserModal.username = lu.username;
+      this.deleteLocalUserModal.email = lu.email;
+      this.deleteLocalUserModal.deleting = false;
+      this.deleteLocalUserModal.open = true;
+    },
+
+    async executeDeleteLocalUser() {
+      this.deleteLocalUserModal.deleting = true;
+      try {
+        const resp = await fetch(`/api/admin/users/local/${this.deleteLocalUserModal.id}`, {
+          method: 'DELETE',
+          headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '' },
+        });
+        if (resp.status === 204) {
+          this.deleteLocalUserModal.open = false;
+          this.showAlert('success', 'Deleted', `Account for "${this.deleteLocalUserModal.username}" has been removed.`);
+          await this.fetchLocalUsers();
+        } else {
+          const err = await resp.json().catch(() => ({}));
+          this.showAlert('error', 'Delete failed', err.detail || resp.statusText);
+          this.deleteLocalUserModal.open = false;
+        }
+      } catch (e) {
+        this.showAlert('error', 'Network error', e.message);
+        this.deleteLocalUserModal.open = false;
+      } finally {
+        this.deleteLocalUserModal.deleting = false;
+      }
     },
   };
 }

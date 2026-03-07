@@ -128,15 +128,18 @@ async def reset_password_page(request: Request) -> Any:
 
 
 @router.post("/api/auth/signup", status_code=status.HTTP_201_CREATED)
-async def signup(request: Request, body: SignupBody, db: DbSession) -> dict[str, str]:
-    """Create a new local user account and send a verification email.
+async def signup(request: Request, body: SignupBody, db: DbSession) -> dict[str, str | bool]:
+    """Create a new local user account.
 
-    The account is inactive until the user clicks the email link.
+    When SMTP is configured the account is inactive until the user clicks the
+    verification link sent to their email.  When SMTP is **not** configured the
+    account is activated immediately so that deployments without email can still
+    use the self-registration flow.
+
     Both ``MULTI_USER_ENABLED`` and ``ALLOW_LOCAL_SIGNUP`` must be ``True``.
 
     Raises:
         403: Multi-user mode or local signup is disabled.
-        503: SMTP is not configured.
         422: Passwords do not match.
         409: Email or username already registered.
     """
@@ -144,11 +147,6 @@ async def signup(request: Request, body: SignupBody, db: DbSession) -> dict[str,
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Multi-user mode is not enabled.")
     if not settings.allow_local_signup:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Registration is not enabled.")
-    if not settings.email_host:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Email (SMTP) must be configured before local signup can be enabled.",
-        )
     if body.password != body.password_confirm:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Passwords do not match.")
 
@@ -157,16 +155,30 @@ async def signup(request: Request, body: SignupBody, db: DbSession) -> dict[str,
     if db.query(LocalUser).filter(LocalUser.username == body.username).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken.")
 
-    token = generate_token()
-    user = LocalUser(
-        email=body.email,
-        username=body.username,
-        display_name=body.display_name,
-        hashed_password=hash_password(body.password),
-        is_active=False,
-        email_verification_token=token,
-        email_verification_sent_at=datetime.now(tz=timezone.utc),
-    )
+    smtp_configured = bool(settings.email_host)
+
+    if smtp_configured:
+        token = generate_token()
+        user = LocalUser(
+            email=body.email,
+            username=body.username,
+            display_name=body.display_name,
+            hashed_password=hash_password(body.password),
+            is_active=False,
+            email_verification_token=token,
+            email_verification_sent_at=datetime.now(tz=timezone.utc),
+        )
+    else:
+        # No SMTP configured — activate the account immediately.
+        token = None
+        user = LocalUser(
+            email=body.email,
+            username=body.username,
+            display_name=body.display_name,
+            hashed_password=hash_password(body.password),
+            is_active=True,
+        )
+
     db.add(user)
 
     profile = UserProfile(
@@ -185,22 +197,28 @@ async def signup(request: Request, body: SignupBody, db: DbSession) -> dict[str,
         db.rollback()
         raise
 
-    base_url = str(request.base_url).rstrip("/")
-    try:
-        send_verification_email(body.email, body.username, token, base_url)
-    except Exception as exc:
-        # Email failed — roll back so no unverifiable user row persists.
-        # The user can simply try registering again once SMTP is fixed.
-        db.rollback()
-        logger.warning("Signup email failed for %s: %s", body.email, exc)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=("Failed to send verification email. Please check that SMTP is correctly configured and try again."),
-        ) from exc
+    if smtp_configured and token:
+        base_url = str(request.base_url).rstrip("/")
+        try:
+            send_verification_email(body.email, body.username, token, base_url)
+        except Exception as exc:
+            # Email failed — roll back so no unverifiable user row persists.
+            # The user can simply try registering again once SMTP is fixed.
+            db.rollback()
+            logger.warning("Signup email failed for %s: %s", body.email, exc)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    "Failed to send verification email. Please check that SMTP is correctly configured and try again."
+                ),
+            ) from exc
 
     db.commit()
     logger.info("New local user registered: %s", body.email)
-    return {"message": "Verification email sent. Please check your inbox."}
+
+    if smtp_configured:
+        return {"message": "Verification email sent. Please check your inbox.", "email_verification_required": True}
+    return {"message": "Account created successfully. You can now log in.", "email_verification_required": False}
 
 
 @router.get("/verify-email", include_in_schema=False)

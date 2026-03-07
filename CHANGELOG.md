@@ -10,6 +10,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.86.0 (2026-03-07)
+
+### Bug Fixes
+
+- **ui**: Address code review feedback on complimentary badge and aria attributes
+  ([`064ba72`](https://github.com/christianlouis/DocuElevate/commit/064ba72d361215c1370f0d3fd81ac04ff1624d2e))
+
+### Features
+
+- **auth**: Auto-create admin user profiles with highest tier and complimentary flag
+  ([`97f85ce`](https://github.com/christianlouis/DocuElevate/commit/97f85ce74ed5d7970f330c923c7ae60ec299b7fd))
+
+
+## v0.85.0 (2026-03-07)
+
+### Bug Fixes
+
+- **auth**: Restore get_user function body lost in refactor; fix button period placement
+  ([`19c1ccb`](https://github.com/christianlouis/DocuElevate/commit/19c1ccb11c10698259fa01b408979b4fac158cd5))
+
+- **ui**: Update plan descriptions to reflect per-user pricing
+  ([`9d11d74`](https://github.com/christianlouis/DocuElevate/commit/9d11d741f4e6c0f29529d7dafc93980eea955aeb))
+
+### Features
+
+- **auth**: Enable local user signup without SMTP, add admin user creation
+  ([`aa6e2fe`](https://github.com/christianlouis/DocuElevate/commit/aa6e2fe00157ed924d42ae305c932b04ad2c1a81))
+
+
+## v0.84.0 (2026-03-07)
+
+### Features
+
+- **ui**: Show marketing landing page for unauthenticated multi-user visitors
+  ([`68e8af9`](https://github.com/christianlouis/DocuElevate/commit/68e8af95545b3cda94e1b84383fc42ae584705b7))
+
+
 ## v0.83.0 (2026-03-07)
 
 ### Bug Fixes

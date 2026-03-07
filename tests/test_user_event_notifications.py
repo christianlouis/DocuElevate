@@ -610,6 +610,27 @@ class TestSignupNotificationFromAuth:
 
         mock_notify.assert_not_called()
 
+    def test_no_signup_notification_for_new_admin_user(self, mocker):
+        """Admin users never receive a signup notification even on first login."""
+        mock_notify = mocker.patch("app.utils.notification.notify_user_signup")
+        mock_dispatch = mocker.patch("app.utils.webhook.dispatch_webhook_event")
+
+        from app.auth import _ensure_user_profile
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None  # no existing profile
+
+        user_data = {
+            "sub": "admin-user-sub",
+            "name": "Admin User",
+            "email": "admin@example.com",
+        }
+
+        _ensure_user_profile(mock_db, user_data, is_admin=True)
+
+        mock_notify.assert_not_called()
+        mock_dispatch.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # Tests: webhook events listed via the API include new user events
