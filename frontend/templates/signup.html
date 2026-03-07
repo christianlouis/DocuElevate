@@ -50,7 +50,12 @@
                             })
                         });
                         if (resp.ok) {
-                            window.location.href = '/verify-email-sent';
+                            const data = await resp.json();
+                            if (data.email_verification_required) {
+                                window.location.href = '/verify-email-sent';
+                            } else {
+                                window.location.href = '/login?message=Account+created+successfully.+You+can+now+log+in.';
+                            }
                         } else {
                             const data = await resp.json();
                             this.error = data.detail || 'Registration failed. Please try again.';

@@ -278,8 +278,10 @@ class TestAuthEndpoint:
                 mock_form_data = {"username": "admin", "password": "secret123"}
                 mock_request.form = AsyncMock(return_value=mock_form_data)
                 mock_request.session = {}
+                mock_db = MagicMock()
 
-                result = await auth(mock_request)
+                with patch("app.auth._ensure_user_profile"):
+                    result = await auth(mock_request, db=mock_db)
 
                 # Verify redirect to upload page
                 assert isinstance(result, RedirectResponse)
@@ -305,8 +307,9 @@ class TestAuthEndpoint:
                 mock_form_data = {"username": "admin", "password": "wrong_password"}
                 mock_request.form = AsyncMock(return_value=mock_form_data)
                 mock_request.session = {}
+                mock_db = MagicMock()
 
-                result = await auth(mock_request)
+                result = await auth(mock_request, db=mock_db)
 
                 # Verify redirect to login with error
                 assert isinstance(result, RedirectResponse)
@@ -327,8 +330,10 @@ class TestAuthEndpoint:
                 mock_form_data = {"username": "admin", "password": "secret123"}
                 mock_request.form = AsyncMock(return_value=mock_form_data)
                 mock_request.session = {"redirect_after_login": "/protected/page"}
+                mock_db = MagicMock()
 
-                result = await auth(mock_request)
+                with patch("app.auth._ensure_user_profile"):
+                    result = await auth(mock_request, db=mock_db)
 
                 # Verify redirect to saved URL
                 assert isinstance(result, RedirectResponse)

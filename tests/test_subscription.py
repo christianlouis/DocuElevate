@@ -107,7 +107,7 @@ def test_free_tier_has_no_mailboxes():
 
 @pytest.mark.unit
 def test_business_tier_has_highest_limits():
-    """Business tier must have the highest limits of all paid tiers."""
+    """Power tier (plan_id 'business') must have the highest limits of all paid tiers."""
     t = TIERS["business"]
     # lifetime: no hard cap (0 = unlimited)
     assert t["lifetime_file_limit"] == 0
@@ -122,8 +122,14 @@ def test_business_tier_has_highest_limits():
 
 
 @pytest.mark.unit
+def test_business_tier_display_name_is_power():
+    """The 'business' plan_id must display as 'Power'."""
+    assert TIERS["business"]["name"] == "Power"
+
+
+@pytest.mark.unit
 def test_mailbox_limits_increase_by_tier():
-    """Mailbox limits must increase across tiers: free=0, starter=1, professional=3, business=0(inf)."""
+    """Mailbox limits must increase across tiers: free=0, starter=1, professional=3, power/business=0(inf)."""
     assert TIERS["free"]["max_mailboxes"] == 0
     assert TIERS["starter"]["max_mailboxes"] == 1
     assert TIERS["professional"]["max_mailboxes"] == 3
@@ -144,7 +150,7 @@ def test_free_tier_has_no_trial():
 
 @pytest.mark.unit
 def test_pricing_order():
-    """Paid tier prices must increase in order: starter < professional < business."""
+    """Paid tier prices must increase in order: starter < professional < power."""
     assert TIERS["starter"]["price_monthly"] < TIERS["professional"]["price_monthly"]
     assert TIERS["professional"]["price_monthly"] < TIERS["business"]["price_monthly"]
 

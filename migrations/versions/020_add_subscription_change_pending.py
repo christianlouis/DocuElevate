@@ -1,7 +1,7 @@
 """Add pending subscription-change columns to user_profiles
 
-Revision ID: 019_add_subscription_change_pending
-Revises: 018_add_local_users_and_billing
+Revision ID: 020_add_subscription_change_pending
+Revises: 019_add_is_complimentary
 Create Date: 2026-03-07
 """
 
@@ -10,8 +10,8 @@ from typing import Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "019_add_subscription_change_pending"
-down_revision: Union[str, None] = "018_add_local_users_and_billing"
+revision: str = "020_add_subscription_change_pending"
+down_revision: Union[str, None] = "019_add_is_complimentary"
 depends_on: Union[str, None] = None
 
 
