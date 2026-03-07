@@ -423,6 +423,48 @@ class Settings(BaseSettings):
         description="Enable webhook delivery for document events",
     )
 
+    # ── Backup / restore settings ──────────────────────────────────────────────
+    backup_enabled: bool = Field(
+        default=True,
+        description=(
+            "Enable automatic scheduled database backups. "
+            "When enabled, hourly, daily, and weekly backups are created automatically. Default: True."
+        ),
+    )
+    backup_dir: Optional[str] = Field(
+        default=None,
+        description=("Directory where local backup archives are stored. Defaults to <workdir>/backups when not set."),
+    )
+    # Remote destination: one of s3, dropbox, google_drive, onedrive, nextcloud,
+    # webdav, ftp, sftp, email, or empty/None for local-only.
+    backup_remote_destination: Optional[str] = Field(
+        default=None,
+        description=(
+            "Storage provider to upload remote backup copies to. "
+            "Accepted values: s3, dropbox, google_drive, onedrive, nextcloud, webdav, ftp, sftp, email. "
+            "Leave empty to keep backups local only."
+        ),
+    )
+    backup_remote_folder: str = Field(
+        default="backups",
+        description=(
+            "Sub-folder / key prefix used when uploading backup archives to the remote destination. Default: 'backups'."
+        ),
+    )
+    # Retention counts (number of snapshots to keep per tier)
+    backup_retain_hourly: int = Field(
+        default=96,
+        description="Number of hourly backups to retain (default 96 = 4 days × 24 h).",
+    )
+    backup_retain_daily: int = Field(
+        default=21,
+        description="Number of daily backups to retain (default 21 = 3 weeks).",
+    )
+    backup_retain_weekly: int = Field(
+        default=13,
+        description="Number of weekly backups to retain (default 13 ≈ 3 months / 91 days).",
+    )
+
     # File upload size limits (for security - see SECURITY_AUDIT.md)
     max_upload_size: int = Field(
         default=1073741824,  # 1GB in bytes (1024 * 1024 * 1024)
