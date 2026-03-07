@@ -12,6 +12,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`fa78a71`](https://github.com/christianlouis/DocuElevate/commit/fa78a714928e24cde6e0d66f8f2bf997d42efae3))
+
+### Testing
+
+- Improve coverage for app/api/plans.py from 38% to 100%
+  ([`ac10ada`](https://github.com/christianlouis/DocuElevate/commit/ac10adac84811481ddafc8b596ff3dc84cd13351))
+
+- **views**: Add 100% coverage tests for app/views/admin_users.py
+  ([`7cebb82`](https://github.com/christianlouis/DocuElevate/commit/7cebb824122d9f69843ba6117e1d1efea878e65b))
+
+
+## Unreleased
+
 ### Testing
 
 - **views**: Add 100% coverage tests for app/views/admin_users.py
