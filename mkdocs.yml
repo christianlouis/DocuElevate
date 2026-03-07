@@ -12,11 +12,34 @@ theme:
     - navigation.instant
     - search.suggest
     - content.code.copy
+    - navigation.sections
+    - navigation.top
+    - toc.integrate
+  palette:
+    - scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
 nav:
   - Getting Started:
       - Setup Wizard: SetupWizard
       - User Guide: UserGuide
       - Browser Extension: BrowserExtension
+  - How-To Guides:
+      - Overview: HowToGuides.md
+      - HP Enterprise Printer: howto/HPPrinterSetup.md
+      - Fujitsu ScanSnap: howto/SnapScanSetup.md
+      - Watched Folder: howto/WatchedFolderSetup.md
+      - Email Ingestion: howto/EmailIngestion.md
+      - Mobile Scanning: howto/MobileScanning.md
   - API: API
   - Deployment:
       - Overview: DeploymentGuide

@@ -202,6 +202,15 @@ if os.path.exists(static_dir):
 else:
     print(f"WARNING: Static directory not found at {static_dir}. Static files will not be served.")
 
+# Mount the built MkDocs documentation site at /help/
+# The docs are pre-built into docs_build/ during the Docker image build.
+# When running locally, run `mkdocs build` from the repo root first.
+docs_build_dir = pathlib.Path(__file__).parents[1] / "docs_build"
+if os.path.exists(docs_build_dir):
+    app.mount("/help", StaticFiles(directory=str(docs_build_dir), html=True), name="help_docs")
+else:
+    print(f"INFO: Help docs not found at {docs_build_dir}. Run 'mkdocs build' to generate them.")
+
 
 # Custom exception handlers that return JSON for API routes and HTML for frontend routes
 @app.exception_handler(HTTPException)

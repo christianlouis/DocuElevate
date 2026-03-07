@@ -76,6 +76,12 @@
                {% if request and request.url.path == '/about' %}aria-current="page"{% endif %}>
               About
             </a>
+            <a href="/help/"
+               class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+               title="Help &amp; How-To Guides"
+               {% if request and request.url.path.startswith('/help') %}aria-current="page"{% endif %}>
+              <i class="fas fa-circle-question mr-1 text-gray-400" aria-hidden="true"></i>Help
+            </a>
 
             {% else %}
             {# ── App nav (logged-in or single-user / auth-disabled mode) ────── #}
@@ -171,6 +177,14 @@
               <i class="fas fa-circle-dot mr-0.5" aria-hidden="true"></i> Status
             </a>
 
+            <!-- Help documentation – visible to all users -->
+            <a href="/help/"
+               class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+               title="Help &amp; How-To Guides"
+               {% if request and request.url.path.startswith('/help') %}aria-current="page"{% endif %}>
+              <i class="fas fa-circle-question mr-1 text-gray-400" aria-hidden="true"></i>Help
+            </a>
+
             {% endif %}{# end multi_user_enabled / is_logged_in check #}
 
             <!-- Dark mode toggle -->
@@ -228,6 +242,11 @@
                  class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
                  {% if request and request.url.path == '/about' %}aria-current="page"{% endif %}>
                 <i class="fas fa-info-circle mr-2 text-gray-400" aria-hidden="true"></i>About
+              </a>
+              <a href="/help/"
+                 class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+                 {% if request and request.url.path.startswith('/help') %}aria-current="page"{% endif %}>
+                <i class="fas fa-circle-question mr-2 text-gray-400" aria-hidden="true"></i>Help
               </a>
 
               {% else %}
@@ -296,6 +315,13 @@
                  class="block px-3 py-3 rounded-md text-sm font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-50"
                  {% if request and request.url.path == '/status' %}aria-current="page"{% endif %}>
                 <i class="fas fa-circle-dot mr-1" aria-hidden="true"></i> Status
+              </a>
+
+              <!-- Help documentation -->
+              <a href="/help/"
+                 class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+                 {% if request and request.url.path.startswith('/help') %}aria-current="page"{% endif %}>
+                <i class="fas fa-circle-question mr-2 text-gray-400" aria-hidden="true"></i>Help
               </a>
 
               {% endif %}{# end multi_user_enabled / is_logged_in check #}
