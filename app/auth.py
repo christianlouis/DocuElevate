@@ -13,9 +13,17 @@ from starlette.responses import RedirectResponse
 from app.config import settings
 from app.database import get_db
 
-oauth = OAuth()
+# Conditional imports: only used when multi_user_enabled=True. Imported here at
+# module level (not inside auth()) so they don't incur repeated import overhead.
+# Guards at call-sites ensure they are never *called* in single-user mode.
+from app.models import LocalUser as _LocalUser
+from app.models import UserProfile as _UserProfile
+from app.utils.local_auth import build_session_user as _build_session_user
+from app.utils.local_auth import verify_password as _verify_password
 
 logger = logging.getLogger(__name__)
+
+oauth = OAuth()
 
 AUTH_ENABLED = settings.auth_enabled
 
@@ -83,7 +91,8 @@ async def login(request: Request):
             "oauth_provider_name": OAUTH_PROVIDER_NAME,
             "app_version": settings.version,
             "csrf_token": getattr(request.state, "csrf_token", ""),
-            "allow_signup": settings.allow_local_signup,
+            # "Create account" link is only shown when multi-user mode AND local signup are both enabled
+            "allow_signup": settings.multi_user_enabled and settings.allow_local_signup,
         },
     )
 
@@ -173,8 +182,6 @@ async def oauth_callback(request: Request, db: Session = Depends(get_db)):
             user_data.get("sub") or user_data.get("preferred_username") or user_data.get("email") or user_data.get("id")
         )
         if user_id:
-            from app.models import UserProfile as _UserProfile
-
             profile = db.query(_UserProfile).filter(_UserProfile.user_id == user_id).first()
             if profile and not profile.onboarding_completed:
                 post_onboarding = request.session.pop("redirect_after_login", "/upload")
@@ -192,41 +199,46 @@ async def oauth_callback(request: Request, db: Session = Depends(get_db)):
 async def auth(request: Request, db: Session = Depends(get_db)):
     """Handle local username/password authentication.
 
-    Checks LocalUser accounts first, then falls back to admin credentials.
+    In multi-user mode (``MULTI_USER_ENABLED=True``) local registered users are
+    checked first; if no matching LocalUser is found the request falls through to
+    the single admin-credential check so that single-user deployments continue to
+    work without any database involvement.
+
+    In single-user mode (``MULTI_USER_ENABLED=False``, the default) the LocalUser
+    table is never queried — only the configured ADMIN_USERNAME / ADMIN_PASSWORD
+    are accepted, preserving full backward compatibility.
     """
     form_data = await request.form()
     username = form_data.get("username")
     password = form_data.get("password")
 
-    # --- LocalUser check ---
-    from app.models import LocalUser as _LocalUser
-    from app.models import UserProfile as _UserProfile
-    from app.utils.local_auth import build_session_user as _build_session_user
-    from app.utils.local_auth import verify_password as _verify_password
+    # --- LocalUser check (multi-user mode only) ---
+    if settings.multi_user_enabled:
+        local_user = (
+            db.query(_LocalUser).filter((_LocalUser.username == username) | (_LocalUser.email == username)).first()
+        )
+        if local_user is not None:
+            if not _verify_password(password or "", local_user.hashed_password):
+                logger.warning("[SECURITY] LOCAL_LOGIN_FAILURE user=%s", username)
+                return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
+            if not local_user.is_active:
+                logger.warning("[SECURITY] LOCAL_LOGIN_UNVERIFIED user=%s", username)
+                return RedirectResponse(
+                    url="/login?error=Please+verify+your+email+address+before+logging+in",
+                    status_code=302,
+                )
+            user_data = _build_session_user(local_user)
+            request.session["user"] = user_data
+            logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", local_user.email)
+            profile = db.query(_UserProfile).filter(_UserProfile.user_id == local_user.email).first()
+            if profile and not profile.onboarding_completed:
+                post_onboarding = request.session.pop("redirect_after_login", "/upload")
+                request.session["post_onboarding_redirect"] = post_onboarding
+                return RedirectResponse(url="/onboarding", status_code=302)
+            redirect_url = request.session.pop("redirect_after_login", "/upload")
+            return RedirectResponse(url=redirect_url, status_code=302)
 
-    local_user = db.query(_LocalUser).filter((_LocalUser.username == username) | (_LocalUser.email == username)).first()
-    if local_user is not None:
-        if not _verify_password(password or "", local_user.hashed_password):
-            logger.warning("[SECURITY] LOCAL_LOGIN_FAILURE user=%s", username)
-            return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
-        if not local_user.is_active:
-            logger.warning("[SECURITY] LOCAL_LOGIN_UNVERIFIED user=%s", username)
-            return RedirectResponse(
-                url="/login?error=Please+verify+your+email+address+before+logging+in",
-                status_code=302,
-            )
-        user_data = _build_session_user(local_user)
-        request.session["user"] = user_data
-        logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", local_user.email)
-        profile = db.query(_UserProfile).filter(_UserProfile.user_id == local_user.email).first()
-        if profile and not profile.onboarding_completed:
-            post_onboarding = request.session.pop("redirect_after_login", "/upload")
-            request.session["post_onboarding_redirect"] = post_onboarding
-            return RedirectResponse(url="/onboarding", status_code=302)
-        redirect_url = request.session.pop("redirect_after_login", "/upload")
-        return RedirectResponse(url=redirect_url, status_code=302)
-
-    # --- Admin credentials fallback ---
+    # --- Admin credentials (always available as a fallback / single-user mode) ---
     if username == settings.admin_username and password == settings.admin_password:
         request.session["user"] = {
             "id": "admin",

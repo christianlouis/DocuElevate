@@ -22,6 +22,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.config import settings
 from app.database import Base, get_db
 from app.models import LocalUser, UserProfile
 from app.utils.local_auth import (
@@ -210,6 +211,7 @@ def test_signup_smtp_not_configured(la_client):
     """POST /api/auth/signup returns 503 when SMTP is not configured."""
     with patch("app.api.local_auth.settings") as mock_settings:
         mock_settings.allow_local_signup = True
+        mock_settings.multi_user_enabled = True
         mock_settings.email_host = None
         resp = la_client.post(
             "/api/auth/signup",
@@ -228,6 +230,7 @@ def test_signup_password_mismatch(la_client):
     """POST /api/auth/signup returns 422 when passwords do not match."""
     with patch("app.api.local_auth.settings") as mock_settings:
         mock_settings.allow_local_signup = True
+        mock_settings.multi_user_enabled = True
         mock_settings.email_host = "smtp.example.com"
         resp = la_client.post(
             "/api/auth/signup",
@@ -249,6 +252,7 @@ def test_signup_success(la_client):
         patch("app.api.local_auth.send_verification_email") as mock_send,
     ):
         mock_settings.allow_local_signup = True
+        mock_settings.multi_user_enabled = True
         mock_settings.email_host = "smtp.example.com"
         mock_settings.version = "test"
         resp = la_client.post(
@@ -273,6 +277,7 @@ def test_signup_duplicate_email(la_client, active_user):
         patch("app.api.local_auth.send_verification_email"),
     ):
         mock_settings.allow_local_signup = True
+        mock_settings.multi_user_enabled = True
         mock_settings.email_host = "smtp.example.com"
         resp = la_client.post(
             "/api/auth/signup",
@@ -295,6 +300,7 @@ def test_signup_duplicate_username(la_client, active_user):
         patch("app.api.local_auth.send_verification_email"),
     ):
         mock_settings.allow_local_signup = True
+        mock_settings.multi_user_enabled = True
         mock_settings.email_host = "smtp.example.com"
         resp = la_client.post(
             "/api/auth/signup",
@@ -317,6 +323,7 @@ def test_signup_smtp_failure_cleans_up(la_client, la_session):
         patch("app.api.local_auth.send_verification_email", side_effect=RuntimeError("SMTP down")),
     ):
         mock_settings.allow_local_signup = True
+        mock_settings.multi_user_enabled = True
         mock_settings.email_host = "smtp.example.com"
         resp = la_client.post(
             "/api/auth/signup",
@@ -521,6 +528,7 @@ def test_signup_page_enabled(la_client):
     """GET /signup returns 200 when allow_local_signup is True."""
     with patch("app.api.local_auth.settings") as mock_settings:
         mock_settings.allow_local_signup = True
+        mock_settings.multi_user_enabled = True
         mock_settings.version = "test"
         resp = la_client.get("/signup")
     assert resp.status_code == 200
@@ -551,6 +559,7 @@ def test_reset_password_page(la_client):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@patch.object(settings, "multi_user_enabled", True)
 async def test_local_login_success(la_session, active_user):
     """auth() with valid LocalUser credentials sets session and redirects."""
     from unittest.mock import AsyncMock, MagicMock
@@ -571,6 +580,7 @@ async def test_local_login_success(la_session, active_user):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@patch.object(settings, "multi_user_enabled", True)
 async def test_local_login_by_email(la_session, active_user):
     """auth() accepts email as username for LocalUser lookup."""
     from unittest.mock import AsyncMock, MagicMock
@@ -590,6 +600,7 @@ async def test_local_login_by_email(la_session, active_user):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@patch.object(settings, "multi_user_enabled", True)
 async def test_local_login_wrong_password(la_session, active_user):
     """auth() with wrong password redirects to login with error."""
     from unittest.mock import AsyncMock, MagicMock
@@ -610,6 +621,7 @@ async def test_local_login_wrong_password(la_session, active_user):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@patch.object(settings, "multi_user_enabled", True)
 async def test_local_login_unverified(la_session, pending_user):
     """auth() for unverified user redirects with verification message."""
     from unittest.mock import AsyncMock, MagicMock
@@ -625,3 +637,41 @@ async def test_local_login_unverified(la_session, pending_user):
     result = await auth(mock_request, db=la_session)
     assert result.status_code == 302
     assert "verify" in result.headers["location"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Single-user backward-compatibility: LocalUser table must NOT be queried
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@patch.object(settings, "multi_user_enabled", False)
+async def test_single_user_mode_skips_local_user_table(la_session, active_user):
+    """In single-user mode auth() must not query LocalUser even when a matching
+    row exists.  It should fall through to the admin-credential check."""
+    from unittest.mock import AsyncMock, MagicMock
+    from unittest.mock import patch as _patch
+
+    from fastapi import Request
+
+    from app.auth import auth
+
+    mock_request = MagicMock(spec=Request)
+    # Use the active LocalUser's credentials — they must NOT work in single-user mode
+    # because the whole LocalUser block is skipped.
+    mock_request.form = AsyncMock(return_value={"username": "activeuser", "password": "password123"})
+    mock_request.session = {}
+
+    with (
+        _patch.object(settings, "admin_username", "activeuser"),
+        _patch.object(settings, "admin_password", "password123"),
+    ):
+        result = await auth(mock_request, db=la_session)
+
+    # Should succeed via admin-credentials path (is_admin=True), not LocalUser path
+    assert result.status_code == 302
+    assert "user" in mock_request.session
+    # Admin path sets is_admin=True and id="admin"
+    assert mock_request.session["user"]["is_admin"] is True
+    assert mock_request.session["user"]["id"] == "admin"

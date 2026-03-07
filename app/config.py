@@ -177,8 +177,9 @@ class Settings(BaseSettings):
         default=False,
         description=(
             "Allow users to self-register with email and password. "
-            "Requires email (SMTP) to be configured for verification emails. "
-            "Default: False (registration disabled, admin creates users)."
+            "Has no effect unless MULTI_USER_ENABLED is also True. "
+            "Requires SMTP to be configured so verification emails can be sent. "
+            "Default: False (registration disabled — admin creates users manually)."
         ),
     )
 

@@ -86,7 +86,9 @@ class PasswordResetBody(BaseModel):
 
 @router.get("/signup", include_in_schema=False)
 async def signup_page(request: Request) -> Any:
-    """Render the signup page, or redirect to login when signup is disabled."""
+    """Render the signup page, or redirect to login when multi-user / signup is disabled."""
+    if not settings.multi_user_enabled:
+        return RedirectResponse(url="/login?error=Multi-user+mode+is+not+enabled", status_code=302)
     if not settings.allow_local_signup:
         return RedirectResponse(url="/login?error=Registration+is+not+enabled", status_code=302)
     return templates.TemplateResponse(
@@ -130,13 +132,16 @@ async def signup(request: Request, body: SignupBody, db: DbSession) -> dict[str,
     """Create a new local user account and send a verification email.
 
     The account is inactive until the user clicks the email link.
+    Both ``MULTI_USER_ENABLED`` and ``ALLOW_LOCAL_SIGNUP`` must be ``True``.
 
     Raises:
-        403: Local signup is disabled.
+        403: Multi-user mode or local signup is disabled.
         503: SMTP is not configured.
         422: Passwords do not match.
         409: Email or username already registered.
     """
+    if not settings.multi_user_enabled:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Multi-user mode is not enabled.")
     if not settings.allow_local_signup:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Registration is not enabled.")
     if not settings.email_host:
@@ -170,8 +175,12 @@ async def signup(request: Request, body: SignupBody, db: DbSession) -> dict[str,
     )
     db.add(profile)
 
+    # Flush to the DB so constraint violations (duplicate key etc.) surface NOW,
+    # before we attempt to send the email. We do NOT commit yet — the commit only
+    # happens after the email is sent successfully so that a failed email leaves
+    # no orphan records in the database.
     try:
-        db.commit()
+        db.flush()
     except Exception:
         db.rollback()
         raise
@@ -180,20 +189,16 @@ async def signup(request: Request, body: SignupBody, db: DbSession) -> dict[str,
     try:
         send_verification_email(body.email, body.username, token, base_url)
     except Exception as exc:
-        # Clean up orphan records — don't leave an unverifiable account
-        try:
-            db.delete(user)
-            db.delete(profile)
-            db.commit()
-        except Exception:
-            db.rollback()
-            logger.exception("Failed to clean up orphan records for %s after email send failure", body.email)
+        # Email failed — roll back so no unverifiable user row persists.
+        # The user can simply try registering again once SMTP is fixed.
+        db.rollback()
         logger.warning("Signup email failed for %s: %s", body.email, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=("Failed to send verification email. Please check that SMTP is correctly configured and try again."),
         ) from exc
 
+    db.commit()
     logger.info("New local user registered: %s", body.email)
     return {"message": "Verification email sent. Please check your inbox."}
 
