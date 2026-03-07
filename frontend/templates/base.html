@@ -33,7 +33,8 @@
     <meta name="csrf-token" content="{{ csrf_token | default('', true) }}">
   </head>
 
-  <body class="bg-gray-50 min-h-screen flex flex-col">
+  <body class="bg-gray-50 min-h-screen flex flex-col"
+        data-multi-user="{{ 'true' if multi_user_enabled else 'false' }}">
     <!-- Skip to main content link for keyboard/screen reader users -->
     <a href="#main-content" class="skip-link">Skip to main content</a>
 
@@ -56,30 +57,69 @@
           </a>
         </div>
 
-        <!-- Menu Items - using x-data for mobile menu toggle -->
+        <!-- ── Navigation: uses x-data for mobile menu + dropdowns ─────────── -->
         <div x-data="{ mobileMenuOpen: false, adminMenuOpen: false }">
-          <div class="hidden md:flex space-x-4 items-center">
-            <a href="/" class="text-gray-700 hover:text-gray-900" {% if request and request.url.path == '/' %}aria-current="page"{% endif %}>Home</a>
-            <a href="/upload" class="text-gray-700 hover:text-gray-900" {% if request and request.url.path == '/upload' %}aria-current="page"{% endif %}>Upload</a>
-            <a href="/files" class="text-gray-700 hover:text-gray-900" {% if request and request.url.path == '/files' %}aria-current="page"{% endif %}>Files</a>
-            <a href="/search" class="text-gray-700 hover:text-gray-900" {% if request and request.url.path == '/search' %}aria-current="page"{% endif %}>Search</a>
-            <a href="/pipelines" class="text-gray-700 hover:text-gray-900" {% if request and request.url.path == '/pipelines' %}aria-current="page"{% endif %}>Pipelines</a>
-            <a href="/pricing" class="text-gray-700 hover:text-gray-900" {% if request and request.url.path == '/pricing' %}aria-current="page"{% endif %}>Pricing</a>
 
-            <!-- Admin dropdown (shown only for admin users via JS) -->
+          <!-- ── DESKTOP navigation ──────────────────────────────────────────── -->
+          <div class="hidden md:flex space-x-1 items-center">
+
+            {% if multi_user_enabled and not is_logged_in %}
+            {# ── Public / marketing nav (multi-user, visitor not signed in) ── #}
+
+            <a href="/pricing"
+               class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+               {% if request and request.url.path == '/pricing' %}aria-current="page"{% endif %}>
+              Pricing
+            </a>
+            <a href="/about"
+               class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+               {% if request and request.url.path == '/about' %}aria-current="page"{% endif %}>
+              About
+            </a>
+
+            {% else %}
+            {# ── App nav (logged-in or single-user / auth-disabled mode) ────── #}
+
+            <a href="/"
+               class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+               {% if request and request.url.path == '/' %}aria-current="page"{% endif %}>
+              <i class="fas fa-home mr-1 text-gray-400" aria-hidden="true"></i>Dashboard
+            </a>
+            <a href="/upload"
+               class="px-3 py-2 rounded-md text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+               {% if request and request.url.path == '/upload' %}aria-current="page"{% endif %}>
+              <i class="fas fa-upload mr-1" aria-hidden="true"></i>Upload
+            </a>
+            <a href="/files"
+               class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+               {% if request and request.url.path == '/files' %}aria-current="page"{% endif %}>
+              <i class="fas fa-folder-open mr-1 text-gray-400" aria-hidden="true"></i>Files
+            </a>
+            <a href="/search"
+               class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+               {% if request and request.url.path == '/search' %}aria-current="page"{% endif %}>
+              <i class="fas fa-search mr-1 text-gray-400" aria-hidden="true"></i>Search
+            </a>
+            <a href="/pipelines"
+               class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+               {% if request and request.url.path == '/pipelines' %}aria-current="page"{% endif %}>
+              <i class="fas fa-project-diagram mr-1 text-gray-400" aria-hidden="true"></i>Pipelines
+            </a>
+
+            <!-- Admin dropdown – shown only for admin users via JS -->
             <div id="adminMenuContainer" class="relative hidden">
               <button
                 @click="adminMenuOpen = !adminMenuOpen"
                 @click.outside="adminMenuOpen = false"
                 type="button"
-                class="inline-flex items-center text-gray-700 hover:text-gray-900 focus:outline-none"
+                class="inline-flex items-center px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
                 aria-haspopup="true"
                 aria-label="Admin menu"
                 :aria-expanded="adminMenuOpen"
               >
-                <i class="fas fa-shield-alt mr-1 text-red-500"></i>
+                <i class="fas fa-shield-alt mr-1 text-red-500" aria-hidden="true"></i>
                 Admin
-                <i class="fas fa-chevron-down ml-1 text-xs"></i>
+                <i class="fas fa-chevron-down ml-1 text-xs" aria-hidden="true"></i>
               </button>
               <div
                 x-show="adminMenuOpen"
@@ -89,7 +129,7 @@
                 x-transition:leave="transition ease-in duration-75 transform"
                 x-transition:leave-start="opacity-100 scale-100"
                 x-transition:leave-end="opacity-0 scale-95"
-                class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50"
+                class="absolute left-0 mt-2 w-52 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50"
                 role="menu"
                 aria-label="Admin actions"
               >
@@ -109,11 +149,12 @@
                   <a href="/admin/files" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                     <i class="fas fa-folder-open w-4 mr-2 text-gray-500" aria-hidden="true"></i> File Manager
                   </a>
+                  <div class="border-t border-gray-100 my-1"></div>
                   <a href="/duplicates" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                     <i class="fas fa-clone w-4 mr-2 text-orange-500" aria-hidden="true"></i> Duplicates
                   </a>
                   <a href="/similarity" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                    <i class="fas fa-project-diagram w-4 mr-2 text-blue-500" aria-hidden="true"></i> Similarity
+                    <i class="fas fa-sitemap w-4 mr-2 text-purple-500" aria-hidden="true"></i> Similarity
                   </a>
                   <a href="/admin/queue" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                     <i class="fas fa-stream w-4 mr-2 text-blue-500" aria-hidden="true"></i> Queue Monitor
@@ -122,14 +163,17 @@
               </div>
             </div>
 
-            <!-- Status (de-emphasized) -->
-            <a href="/status" class="text-gray-500 hover:text-gray-700 text-sm" title="System Status">
+            <!-- Status (de-emphasised, shown after Admin) -->
+            <a href="/status"
+               class="px-2 py-2 rounded-md text-xs font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+               title="System Status"
+               {% if request and request.url.path == '/status' %}aria-current="page"{% endif %}>
               <i class="fas fa-circle-dot mr-0.5" aria-hidden="true"></i> Status
             </a>
 
-            <a href="/about" class="text-gray-700 hover:text-gray-900" {% if request and request.url.path == '/about' %}aria-current="page"{% endif %}>About</a>
+            {% endif %}{# end multi_user_enabled / is_logged_in check #}
 
-            <!-- Dark mode toggle (desktop) -->
+            <!-- Dark mode toggle -->
             <button
               id="darkModeToggle"
               onclick="toggleDarkMode()"
@@ -141,11 +185,11 @@
               <i class="fas fa-moon"></i>
             </button>
 
-            <!-- Dynamic Auth Section -->
-            <div id="authSection" class="text-gray-700 hover:text-gray-900"></div>
+            <!-- Dynamic Auth Section (populated by common.js) -->
+            <div id="authSection"></div>
           </div>
 
-          <!-- Mobile menu button -->
+          <!-- ── Mobile menu button ──────────────────────────────────────────── -->
           <button
             @click="mobileMenuOpen = !mobileMenuOpen"
             type="button"
@@ -160,7 +204,7 @@
             </svg>
           </button>
 
-          <!-- Mobile menu, show/hide based on menu state -->
+          <!-- ── MOBILE menu ─────────────────────────────────────────────────── -->
           <div
             x-show="mobileMenuOpen"
             x-transition:enter="transition ease-out duration-100 transform"
@@ -172,14 +216,49 @@
             class="md:hidden absolute top-16 inset-x-0 bg-white shadow-md z-50"
           >
             <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-              <a href="/" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Home</a>
-              <a href="/upload" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Upload</a>
-              <a href="/files" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Files</a>
-              <a href="/search" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Search</a>
-              <a href="/pipelines" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Pipelines</a>
-              <a href="/pricing" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">Pricing</a>
 
-              <!-- Admin section in mobile menu (shown only for admin users via JS) -->
+              {% if multi_user_enabled and not is_logged_in %}
+              {# ── Public / marketing links ────────────────────────────────── #}
+              <a href="/pricing"
+                 class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+                 {% if request and request.url.path == '/pricing' %}aria-current="page"{% endif %}>
+                <i class="fas fa-tag mr-2 text-gray-400" aria-hidden="true"></i>Pricing
+              </a>
+              <a href="/about"
+                 class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+                 {% if request and request.url.path == '/about' %}aria-current="page"{% endif %}>
+                <i class="fas fa-info-circle mr-2 text-gray-400" aria-hidden="true"></i>About
+              </a>
+
+              {% else %}
+              {# ── App links (logged-in or single-user) ────────────────────── #}
+              <a href="/"
+                 class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+                 {% if request and request.url.path == '/' %}aria-current="page"{% endif %}>
+                <i class="fas fa-home mr-2 text-gray-400" aria-hidden="true"></i>Dashboard
+              </a>
+              <a href="/upload"
+                 class="block px-3 py-3 rounded-md text-base font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                 {% if request and request.url.path == '/upload' %}aria-current="page"{% endif %}>
+                <i class="fas fa-upload mr-2" aria-hidden="true"></i>Upload
+              </a>
+              <a href="/files"
+                 class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+                 {% if request and request.url.path == '/files' %}aria-current="page"{% endif %}>
+                <i class="fas fa-folder-open mr-2 text-gray-400" aria-hidden="true"></i>Files
+              </a>
+              <a href="/search"
+                 class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+                 {% if request and request.url.path == '/search' %}aria-current="page"{% endif %}>
+                <i class="fas fa-search mr-2 text-gray-400" aria-hidden="true"></i>Search
+              </a>
+              <a href="/pipelines"
+                 class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+                 {% if request and request.url.path == '/pipelines' %}aria-current="page"{% endif %}>
+                <i class="fas fa-project-diagram mr-2 text-gray-400" aria-hidden="true"></i>Pipelines
+              </a>
+
+              <!-- Admin section in mobile menu – shown only for admin users via JS -->
               <div id="mobileAdminSection" class="hidden">
                 <div class="border-t border-gray-200 mt-1 pt-1">
                   <p class="px-3 py-1 text-xs font-semibold text-red-600 uppercase tracking-wider flex items-center">
@@ -204,7 +283,7 @@
                     <i class="fas fa-clone mr-2 text-orange-400" aria-hidden="true"></i> Duplicates
                   </a>
                   <a href="/similarity" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    <i class="fas fa-project-diagram mr-2 text-blue-400" aria-hidden="true"></i> Similarity
+                    <i class="fas fa-sitemap mr-2 text-purple-400" aria-hidden="true"></i> Similarity
                   </a>
                   <a href="/admin/queue" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
                     <i class="fas fa-stream mr-2 text-blue-400" aria-hidden="true"></i> Queue Monitor
@@ -212,12 +291,14 @@
                 </div>
               </div>
 
-              <!-- Status (de-emphasized) in mobile -->
-              <a href="/status" class="block px-3 py-3 rounded-md text-sm font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-50">
+              <!-- Status (de-emphasised) -->
+              <a href="/status"
+                 class="block px-3 py-3 rounded-md text-sm font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                 {% if request and request.url.path == '/status' %}aria-current="page"{% endif %}>
                 <i class="fas fa-circle-dot mr-1" aria-hidden="true"></i> Status
               </a>
 
-              <a href="/about" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">About</a>
+              {% endif %}{# end multi_user_enabled / is_logged_in check #}
 
               <!-- Dark mode toggle (mobile) -->
               <button
@@ -227,12 +308,12 @@
                 id="darkModeToggleMobile"
                 aria-label="Toggle dark mode"
               >
-                <i class="fas fa-moon mr-2" id="darkModeIconMobile"></i>
+                <i class="fas fa-moon mr-2" id="darkModeIconMobile" aria-hidden="true"></i>
                 <span id="darkModeTextMobile">Dark Mode</span>
               </button>
 
-              <!-- Mobile Auth Section -->
-              <div id="mobileAuthSection" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+              <!-- Mobile Auth / Account section (populated by common.js) -->
+              <div id="mobileAuthSection" class="border-t border-gray-100 pt-1 mt-1">
                 <!-- Will be populated by JS -->
               </div>
             </div>
