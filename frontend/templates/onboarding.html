@@ -1,0 +1,470 @@
+{% extends "base.html" %}
+{% block title %}Welcome to DocuElevate{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-8 px-4"
+     x-data="onboardingWizard()" x-init="init()">
+  <div class="max-w-2xl mx-auto">
+
+    <!-- Brand header -->
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center gap-2 text-indigo-600 font-bold text-2xl mb-2">
+        <i class="fas fa-file-alt" aria-hidden="true"></i>
+        DocuElevate
+      </div>
+      <p class="text-gray-500 text-sm">Let's get you set up</p>
+    </div>
+
+    <!-- Progress indicator -->
+    <div class="flex items-center justify-between mb-8 relative" role="list" aria-label="Onboarding steps">
+      <!-- Background track -->
+      <div class="absolute left-0 right-0 top-4 h-0.5 bg-gray-200" aria-hidden="true"></div>
+      <!-- Progress fill -->
+      <div class="absolute left-0 top-4 h-0.5 bg-indigo-500 transition-all duration-500"
+           :style="`width: ${progressPercent}%`" aria-hidden="true"></div>
+
+      <template x-for="(label, i) in stepLabels" :key="i">
+        <div class="flex flex-col items-center z-10" role="listitem">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all duration-300 bg-white"
+               :class="i + 1 < step ? 'bg-indigo-600 border-indigo-600 text-white' : i + 1 === step ? 'border-indigo-600 text-indigo-600' : 'border-gray-300 text-gray-400'"
+               :aria-current="i + 1 === step ? 'step' : undefined">
+            <span x-show="i + 1 < step" aria-label="Completed">
+              <i class="fas fa-check text-xs" aria-hidden="true"></i>
+            </span>
+            <span x-show="i + 1 >= step" x-text="i + 1" aria-hidden="true"></span>
+          </div>
+          <span class="text-xs mt-1 hidden sm:block transition-all duration-300"
+                :class="i + 1 === step ? 'text-indigo-600 font-semibold' : 'text-gray-400'"
+                x-text="label"></span>
+        </div>
+      </template>
+    </div>
+
+    <!-- Wizard card -->
+    <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
+
+      <!-- ================================================================
+           Step 1: Welcome
+      ================================================================ -->
+      <div x-show="step === 1"
+           x-transition:enter="transition ease-out duration-300"
+           x-transition:enter-start="opacity-0 translate-x-4"
+           x-transition:enter-end="opacity-100 translate-x-0">
+        <div class="bg-gradient-to-r from-indigo-600 to-purple-600 px-8 py-10 text-white text-center">
+          <div class="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i class="fas fa-hand-wave text-3xl" aria-hidden="true"></i>
+          </div>
+          <h1 class="text-3xl font-extrabold mb-2">
+            Welcome, {{ user.given_name | default(user.name) | default("there") }}! 👋
+          </h1>
+          <p class="text-indigo-100 text-lg">You're just a few steps away from transforming how you handle documents.</p>
+        </div>
+        <div class="p-8">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            <div class="text-center p-4 rounded-xl bg-blue-50">
+              <i class="fas fa-magic text-blue-500 text-2xl mb-2" aria-hidden="true"></i>
+              <h3 class="font-semibold text-gray-800 text-sm">Smart OCR</h3>
+              <p class="text-gray-500 text-xs mt-1">AI extracts text from any document</p>
+            </div>
+            <div class="text-center p-4 rounded-xl bg-indigo-50">
+              <i class="fas fa-tags text-indigo-500 text-2xl mb-2" aria-hidden="true"></i>
+              <h3 class="font-semibold text-gray-800 text-sm">Auto-tagging</h3>
+              <p class="text-gray-500 text-xs mt-1">Documents organised automatically</p>
+            </div>
+            <div class="text-center p-4 rounded-xl bg-purple-50">
+              <i class="fas fa-cloud-upload-alt text-purple-500 text-2xl mb-2" aria-hidden="true"></i>
+              <h3 class="font-semibold text-gray-800 text-sm">Cloud Sync</h3>
+              <p class="text-gray-500 text-xs mt-1">Instantly backed up to your storage</p>
+            </div>
+          </div>
+          <p class="text-gray-500 text-sm text-center mb-6">
+            This quick setup takes about 2 minutes. You can change everything later in your settings.
+          </p>
+          <button @click="step++"
+                  class="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition min-h-[44px]">
+            Let's get started <i class="fas fa-arrow-right ml-2" aria-hidden="true"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- ================================================================
+           Step 2: Your Profile
+      ================================================================ -->
+      <div x-show="step === 2"
+           x-transition:enter="transition ease-out duration-300"
+           x-transition:enter-start="opacity-0 translate-x-4"
+           x-transition:enter-end="opacity-100 translate-x-0">
+        <div class="bg-gradient-to-r from-blue-500 to-indigo-600 px-8 py-6 text-white">
+          <i class="fas fa-user-circle text-4xl mb-2" aria-hidden="true"></i>
+          <h2 class="text-2xl font-bold">Your Profile</h2>
+          <p class="text-blue-100 text-sm">Tell us a little about yourself</p>
+        </div>
+        <div class="p-8">
+          <div class="mb-5">
+            <label for="displayName" class="block text-sm font-medium text-gray-700 mb-1">
+              Display Name
+            </label>
+            <input id="displayName"
+                   type="text"
+                   x-model="displayName"
+                   placeholder="Your name"
+                   class="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+                   aria-describedby="displayNameHint" />
+            <p id="displayNameHint" class="text-gray-400 text-xs mt-1">This is how you'll appear in DocuElevate.</p>
+          </div>
+          <div class="mb-6">
+            <label for="contactEmail" class="block text-sm font-medium text-gray-700 mb-1">
+              Contact Email
+            </label>
+            <input id="contactEmail"
+                   type="email"
+                   x-model="contactEmail"
+                   placeholder="you@example.com"
+                   class="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+                   aria-describedby="contactEmailHint" />
+            <p id="contactEmailHint" class="text-gray-400 text-xs mt-1">Used for notifications. Can be different from your login email.</p>
+          </div>
+          <div class="flex gap-3">
+            <button @click="goBack()"
+                    class="flex-1 py-2.5 px-4 border border-gray-300 text-gray-600 font-semibold rounded-xl hover:bg-gray-50 transition min-h-[44px]">
+              <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> Back
+            </button>
+            <button @click="goNext()"
+                    :disabled="loading"
+                    class="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition min-h-[44px]">
+              <span x-show="!loading">Continue <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i></span>
+              <span x-show="loading"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Saving…</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================
+           Step 3: Choose Your Plan
+      ================================================================ -->
+      <div x-show="step === 3"
+           x-transition:enter="transition ease-out duration-300"
+           x-transition:enter-start="opacity-0 translate-x-4"
+           x-transition:enter-end="opacity-100 translate-x-0">
+        <div class="bg-gradient-to-r from-purple-500 to-pink-600 px-8 py-6 text-white">
+          <i class="fas fa-layer-group text-4xl mb-2" aria-hidden="true"></i>
+          <h2 class="text-2xl font-bold">Choose Your Plan</h2>
+          <p class="text-purple-100 text-sm">Start free, upgrade when you're ready</p>
+        </div>
+        <div class="p-6" x-data="{ annual: false }">
+
+          <!-- Monthly / Annual toggle -->
+          <div class="flex items-center justify-center gap-3 mb-6">
+            <span class="text-sm font-medium" :class="!annual ? 'text-indigo-600' : 'text-gray-500'">Monthly</span>
+            <button @click="annual = !annual; billingCycle = annual ? 'yearly' : 'monthly'"
+                    class="relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    :class="annual ? 'bg-indigo-600' : 'bg-gray-300'"
+                    role="switch"
+                    :aria-checked="annual.toString()"
+                    aria-label="Toggle billing cycle">
+              <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-300"
+                    :class="annual ? 'translate-x-6' : 'translate-x-0'"></span>
+            </button>
+            <span class="text-sm font-medium" :class="annual ? 'text-indigo-600' : 'text-gray-500'">
+            Annual <span class="bg-green-100 text-green-700 text-xs px-1.5 py-0.5 rounded-full ml-1">2 months free</span>
+            </span>
+          </div>
+
+          <!-- Tier cards (server-rendered by Jinja2) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+            {% for tier in tiers %}
+            <button type="button"
+                    @click="selectedTier = '{{ tier.id }}'"
+                    class="text-left p-4 rounded-xl border-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px]"
+                    :class="selectedTier === '{{ tier.id }}' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-gray-300 bg-white'"
+                    :aria-pressed="(selectedTier === '{{ tier.id }}').toString()">
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-bold text-gray-800">{{ tier.name }}</span>
+                <span class="text-lg font-extrabold text-indigo-600">
+                  {% if tier.price_monthly == 0 %}
+                    Free
+                  {% else %}
+                    <span x-show="!annual">${{ tier.price_monthly }}<span class="text-xs font-normal text-gray-500">/mo</span></span>
+                    <span x-show="annual">${{ "%.2f" | format(tier.price_monthly * 10) }}<span class="text-xs font-normal text-gray-500">/yr</span></span>
+                  {% endif %}
+                </span>
+              </div>
+              <p class="text-gray-500 text-xs">{{ tier.tagline }}</p>
+              {% if tier.id != "free" and tier.get("trial_days") %}
+              <span class="inline-block mt-1.5 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                {{ tier.trial_days }}-day free trial
+              </span>
+              {% endif %}
+            </button>
+            {% endfor %}
+          </div>
+
+          <!-- Beta notice -->
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-5 flex gap-2 text-sm text-amber-700">
+            <i class="fas fa-info-circle mt-0.5 shrink-0" aria-hidden="true"></i>
+            <span>Payment processing is coming soon. You can select a plan now and billing will activate at launch.</span>
+          </div>
+
+          <div class="flex gap-3">
+            <button @click="goBack()"
+                    class="flex-1 py-2.5 px-4 border border-gray-300 text-gray-600 font-semibold rounded-xl hover:bg-gray-50 transition min-h-[44px]">
+              <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> Back
+            </button>
+            <button @click="goNext()"
+                    :disabled="loading"
+                    class="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition min-h-[44px]">
+              <span x-show="!loading">Continue <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i></span>
+              <span x-show="loading"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Saving…</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================
+           Step 4: Storage Destination
+      ================================================================ -->
+      <div x-show="step === 4"
+           x-transition:enter="transition ease-out duration-300"
+           x-transition:enter-start="opacity-0 translate-x-4"
+           x-transition:enter-end="opacity-100 translate-x-0">
+        <div class="bg-gradient-to-r from-green-500 to-teal-600 px-8 py-6 text-white">
+          <i class="fas fa-hdd text-4xl mb-2" aria-hidden="true"></i>
+          <h2 class="text-2xl font-bold">Storage Destination</h2>
+          <p class="text-green-100 text-sm">Where should your processed documents go?</p>
+        </div>
+        <div class="p-8">
+          {% if configured_destinations %}
+          <p class="text-gray-600 text-sm mb-4">Select where you'd like your documents stored. You can change this later in settings.</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6" role="listbox" aria-label="Storage destinations">
+            {% for dest in configured_destinations %}
+            <button type="button"
+                    @click="selectedDestination = '{{ dest.id }}'"
+                    role="option"
+                    :aria-selected="(selectedDestination === '{{ dest.id }}').toString()"
+                    class="flex items-center gap-3 p-4 rounded-xl border-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 min-h-[44px]"
+                    :class="selectedDestination === '{{ dest.id }}' ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-gray-300 bg-white'">
+              <i class="{{ dest.icon }} text-xl text-gray-600" aria-hidden="true"></i>
+              <span class="font-medium text-gray-800">{{ dest.name }}</span>
+              <span x-show="selectedDestination === '{{ dest.id }}'" class="ml-auto text-green-600">
+                <i class="fas fa-check-circle" aria-hidden="true"></i>
+              </span>
+            </button>
+            {% endfor %}
+          </div>
+          <p class="text-gray-400 text-xs mb-4">
+            Not seeing your provider?
+            {% if user.is_admin %}
+            <a href="/settings" class="text-indigo-500 hover:underline">Go to Settings</a> to configure more destinations.
+            {% else %}
+            Ask your administrator to configure additional storage providers.
+            {% endif %}
+          </p>
+          {% else %}
+          <div class="text-center py-8">
+            <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <i class="fas fa-hdd text-2xl text-gray-400" aria-hidden="true"></i>
+            </div>
+            <h3 class="font-semibold text-gray-700 mb-2">No Storage Configured Yet</h3>
+            <p class="text-gray-500 text-sm mb-4">
+              No storage destinations have been configured for this instance yet.
+              You can skip this step and set one up later.
+            </p>
+            {% if user.is_admin %}
+            <a href="/settings"
+               class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition text-sm font-semibold min-h-[44px]">
+              <i class="fas fa-cog" aria-hidden="true"></i> Configure Storage
+            </a>
+            {% else %}
+            <p class="text-gray-400 text-xs">Contact your administrator to set up a storage destination.</p>
+            {% endif %}
+          </div>
+          {% endif %}
+
+          <div class="flex gap-3">
+            <button @click="goBack()"
+                    class="flex-1 py-2.5 px-4 border border-gray-300 text-gray-600 font-semibold rounded-xl hover:bg-gray-50 transition min-h-[44px]">
+              <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> Back
+            </button>
+            <button @click="goNext()"
+                    :disabled="loading"
+                    class="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition min-h-[44px]">
+              <span x-show="!loading">
+                {% if configured_destinations %}Continue{% else %}Skip{% endif %}
+                <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
+              </span>
+              <span x-show="loading"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Saving…</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================
+           Step 5: All Set!
+      ================================================================ -->
+      <div x-show="step === 5"
+           x-transition:enter="transition ease-out duration-300"
+           x-transition:enter-start="opacity-0 translate-x-4"
+           x-transition:enter-end="opacity-100 translate-x-0">
+        <div class="bg-gradient-to-r from-indigo-600 to-purple-600 px-8 py-10 text-white text-center">
+          <div class="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i class="fas fa-check-circle text-4xl" aria-hidden="true"></i>
+          </div>
+          <h2 class="text-3xl font-extrabold mb-2">You're all set! 🎉</h2>
+          <p class="text-indigo-100">Your account is configured and ready to go.</p>
+        </div>
+        <div class="p-8">
+          <ul class="space-y-3 mb-8" aria-label="Setup summary">
+            <li class="flex items-center gap-3 text-gray-700">
+              <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center shrink-0">
+                <i class="fas fa-check text-green-600 text-sm" aria-hidden="true"></i>
+              </div>
+              <span>Profile saved</span>
+            </li>
+            <li class="flex items-center gap-3 text-gray-700">
+              <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center shrink-0">
+                <i class="fas fa-check text-green-600 text-sm" aria-hidden="true"></i>
+              </div>
+              <span>Plan selected: <strong x-text="selectedTier"></strong></span>
+            </li>
+            <li class="flex items-center gap-3 text-gray-700">
+              <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                   :class="selectedDestination ? 'bg-green-100' : 'bg-gray-100'">
+                <i class="fas text-sm"
+                   :class="selectedDestination ? 'fa-check text-green-600' : 'fa-minus text-gray-400'"
+                   aria-hidden="true"></i>
+              </div>
+              <span x-show="selectedDestination">Storage: <strong x-text="selectedDestination"></strong></span>
+              <span x-show="!selectedDestination" class="text-gray-400">No storage destination selected (can be set later)</span>
+            </li>
+          </ul>
+          <button @click="goNext()"
+                  :disabled="loading"
+                  class="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition min-h-[44px]">
+            <span x-show="!loading">
+              <i class="fas fa-rocket mr-2" aria-hidden="true"></i> Start uploading documents
+            </span>
+            <span x-show="loading"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Setting up…</span>
+          </button>
+        </div>
+      </div>
+
+    </div><!-- /card -->
+
+    <!-- Error display -->
+    <div x-show="error"
+         x-text="error"
+         role="alert"
+         aria-live="polite"
+         class="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm text-center">
+    </div>
+
+  </div><!-- /max-w-2xl -->
+</div><!-- /min-h-screen -->
+
+<script>
+function onboardingWizard() {
+  return {
+    step: 1,
+    totalSteps: 5,
+    loading: false,
+    error: '',
+
+    // Form data – pre-populated from Jinja2 context
+    displayName: '{{ user.name | default("") | e }}',
+    contactEmail: '{{ user.email | default("") | e }}',
+    selectedTier: 'free',
+    billingCycle: 'monthly',
+    selectedDestination: '',
+
+    get progressPercent() {
+      return ((this.step - 1) / (this.totalSteps - 1)) * 100;
+    },
+
+    stepLabels: ['Welcome', 'Your Profile', 'Your Plan', 'Storage', 'All Done!'],
+
+    async init() {
+      try {
+        const r = await fetch('/api/onboarding/status');
+        if (r.ok) {
+          const data = await r.json();
+          if (data.completed) {
+            window.location.href = '/upload';
+            return;
+          }
+          if (data.profile) {
+            if (data.profile.display_name) this.displayName = data.profile.display_name;
+            if (data.profile.contact_email) this.contactEmail = data.profile.contact_email;
+            if (data.profile.subscription_tier) this.selectedTier = data.profile.subscription_tier;
+            if (data.profile.subscription_billing_cycle) this.billingCycle = data.profile.subscription_billing_cycle;
+            if (data.profile.preferred_destination) this.selectedDestination = data.profile.preferred_destination;
+          }
+        }
+      } catch (_) {
+        // Non-fatal: proceed with defaults
+      }
+    },
+
+    async goNext() {
+      if (this.step === 2) await this.saveProfile();
+      else if (this.step === 3) await this.savePlan();
+      else if (this.step === 4) await this.saveStorage();
+      else if (this.step === 5) { await this.completeOnboarding(); return; }
+      if (!this.error) this.step++;
+    },
+
+    goBack() {
+      if (this.step > 1) this.step--;
+    },
+
+    async saveProfile() {
+      this.loading = true; this.error = '';
+      try {
+        const r = await fetch('/api/onboarding/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ display_name: this.displayName, contact_email: this.contactEmail })
+        });
+        if (!r.ok) { const d = await r.json(); this.error = d.detail || 'Failed to save profile'; }
+      } catch (_) { this.error = 'Network error. Please try again.'; }
+      finally { this.loading = false; }
+    },
+
+    async savePlan() {
+      this.loading = true; this.error = '';
+      try {
+        const r = await fetch('/api/onboarding/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscription_tier: this.selectedTier, billing_cycle: this.billingCycle })
+        });
+        if (!r.ok) { const d = await r.json(); this.error = d.detail || 'Failed to save plan'; }
+      } catch (_) { this.error = 'Network error. Please try again.'; }
+      finally { this.loading = false; }
+    },
+
+    async saveStorage() {
+      this.loading = true; this.error = '';
+      try {
+        const r = await fetch('/api/onboarding/storage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ preferred_destination: this.selectedDestination || null })
+        });
+        if (!r.ok) { const d = await r.json(); this.error = d.detail || 'Failed to save storage preference'; }
+      } catch (_) { this.error = 'Network error. Please try again.'; }
+      finally { this.loading = false; }
+    },
+
+    async completeOnboarding() {
+      this.loading = true; this.error = '';
+      try {
+        const r = await fetch('/api/onboarding/complete', { method: 'POST' });
+        if (r.ok) { window.location.href = '/upload'; }
+        else { const d = await r.json(); this.error = d.detail || 'Failed to complete onboarding'; }
+      } catch (_) { this.error = 'Network error. Please try again.'; }
+      finally { this.loading = false; }
+    }
+  };
+}
+</script>
+{% endblock %}

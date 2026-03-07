@@ -167,6 +167,19 @@ async def oauth_callback(request: Request, db: Session = Depends(get_db)):
         # Log the successful authentication
         logger.info(f"[SECURITY] OAUTH_LOGIN_SUCCESS user={user_data.get('email', 'unknown')} admin={is_admin}")
 
+        # Redirect first-time users to onboarding
+        user_id = (
+            user_data.get("sub") or user_data.get("preferred_username") or user_data.get("email") or user_data.get("id")
+        )
+        if user_id:
+            from app.models import UserProfile as _UserProfile
+
+            profile = db.query(_UserProfile).filter(_UserProfile.user_id == user_id).first()
+            if profile and not profile.onboarding_completed:
+                post_onboarding = request.session.pop("redirect_after_login", "/upload")
+                request.session["post_onboarding_redirect"] = post_onboarding
+                return RedirectResponse(url="/onboarding", status_code=status.HTTP_302_FOUND)
+
         # Redirect to original destination or default
         redirect_url = request.session.pop("redirect_after_login", "/upload")
         return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)

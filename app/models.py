@@ -209,6 +209,12 @@ class UserProfile(Base):
     subscription_period_start = Column(DateTime(timezone=True), nullable=True)
     allow_overage = Column(Boolean, nullable=False, default=False, server_default="0")
 
+    # Onboarding tracking (added in migration 017)
+    onboarding_completed = Column(Boolean, nullable=False, default=False, server_default="0")
+    onboarding_completed_at = Column(DateTime(timezone=True), nullable=True)
+    contact_email = Column(String(255), nullable=True)
+    preferred_destination = Column(String(50), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
