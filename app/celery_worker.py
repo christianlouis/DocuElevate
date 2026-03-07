@@ -25,6 +25,7 @@ from app.tasks.process_with_ocr import process_with_ocr  # noqa: F401
 from app.tasks.refine_text_with_gpt import refine_text_with_gpt  # noqa: F401
 from app.tasks.rotate_pdf_pages import rotate_pdf_pages  # noqa: F401
 from app.tasks.send_to_all import send_to_all_destinations  # noqa: F401
+from app.tasks.subscription_tasks import apply_pending_subscription_changes_all  # noqa: F401
 
 # Import new send tasks
 from app.tasks.upload_to_dropbox import upload_to_dropbox  # noqa: F401
@@ -103,6 +104,12 @@ celery.conf.beat_schedule = {
         "task": "backfill_missing_embeddings",
         "schedule": crontab(minute="*/5"),  # Every 5 minutes
         "options": {"expires": 240},  # 4 minutes expiry
+    },
+    # Apply scheduled subscription downgrades daily at 00:05 UTC
+    "apply-pending-subscription-changes": {
+        "task": "app.tasks.subscription_tasks.apply_pending_subscription_changes_all",
+        "schedule": crontab(hour="0", minute="5"),  # 00:05 UTC daily
+        "options": {"expires": 3600},
     },
 }
 

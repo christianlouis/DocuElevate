@@ -498,3 +498,279 @@ def get_user_usage(db: Session, owner_id: str) -> dict[str, int]:
     if profile and (profile.subscription_billing_cycle or "monthly") == "yearly" and profile.subscription_period_start:
         result["year_to_date"] = get_year_file_count(db, owner_id, profile.subscription_period_start)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Subscription change management
+# ---------------------------------------------------------------------------
+
+
+class SubscriptionChangeError(Exception):
+    """Raised when a requested subscription change is not permitted."""
+
+
+def _tier_rank(tier_id: str) -> int:
+    """Return the numeric rank of *tier_id* (0 = free … 3 = business).
+
+    Unknown tier IDs are treated as rank 0 (free).
+    """
+    try:
+        return TIER_ORDER.index(tier_id)
+    except ValueError:
+        return 0
+
+
+def apply_pending_subscription_changes(db: Session, owner_id: str) -> bool:
+    """Apply any pending subscription change that is now due.
+
+    Checks whether the scheduled change date has arrived and, if so, applies
+    the new tier immediately.
+
+    Args:
+        db: Database session.
+        owner_id: Stable user identifier.
+
+    Returns:
+        ``True`` if a pending change was applied, ``False`` otherwise.
+    """
+    from app.models import UserProfile
+
+    profile = db.query(UserProfile).filter(UserProfile.user_id == owner_id).first()
+    if not profile:
+        return False
+
+    pending_tier = profile.subscription_change_pending_tier
+    pending_date = profile.subscription_change_pending_date
+    if not pending_tier or not pending_date:
+        return False
+
+    now = datetime.now(timezone.utc)
+    # Normalise pending_date to UTC-aware for comparison
+    if pending_date.tzinfo is None:
+        pending_date = pending_date.replace(tzinfo=timezone.utc)
+
+    if now < pending_date:
+        return False  # Not yet due
+
+    old_tier = profile.subscription_tier or DEFAULT_TIER
+    profile.subscription_tier = pending_tier
+    profile.subscription_period_start = pending_date  # New period started at change date
+    profile.subscription_change_pending_tier = None
+    profile.subscription_change_pending_date = None
+    try:
+        db.commit()
+        logger.info(
+            "Applied pending subscription change for %s: %s → %s",
+            owner_id,
+            old_tier,
+            pending_tier,
+        )
+    except Exception as exc:
+        db.rollback()
+        logger.error("Failed to apply pending subscription change for %s: %s", owner_id, exc)
+        return False
+    return True
+
+
+def request_subscription_change(
+    db: Session,
+    owner_id: str,
+    new_tier_id: str,
+    billing_cycle: str = "monthly",
+) -> dict[str, Any]:
+    """Process a user-initiated subscription change request.
+
+    Upgrade rules
+    -------------
+    Upgrades (moving to a higher-ranked tier) take effect **immediately**:
+    the tier is switched and the period start is reset to *now*.  Any
+    previously scheduled downgrade is cancelled.
+
+    Downgrade rules
+    ---------------
+    Downgrades (moving to a lower-ranked tier) are **always scheduled** for
+    the end of the current billing period:
+
+    * If ``subscription_period_start`` is set and the period end is in the
+      future, the change is queued for that date.
+    * If there is no period start (e.g. admin-assigned tier), the period start
+      is treated as *now* and the change is scheduled one month out.
+    * If the period has already elapsed the change is applied immediately.
+
+    Cancelling a pending downgrade
+    --------------------------------
+    Requesting the *current* tier when there is a pending change cancels that
+    pending change.
+
+    Args:
+        db: Database session.
+        owner_id: Stable user identifier.
+        new_tier_id: Target plan ID (e.g. ``"starter"``).
+        billing_cycle: ``"monthly"`` or ``"yearly"`` — stored on upgrade.
+
+    Returns:
+        A dict with keys ``immediate`` (bool), ``effective_date`` (ISO-8601 str
+        or ``None``), ``old_tier``, ``new_tier``, ``message``.
+
+    Raises:
+        SubscriptionChangeError: If the requested change is not allowed.
+    """
+    from app.models import UserProfile
+
+    now = datetime.now(timezone.utc)
+
+    # Validate target tier
+    valid_ids = [t["id"] for t in get_all_tiers(db)]
+    if new_tier_id not in valid_ids:
+        raise SubscriptionChangeError(f"Unknown subscription plan: {new_tier_id!r}")
+
+    # Ensure profile row exists
+    profile = db.query(UserProfile).filter(UserProfile.user_id == owner_id).first()
+    if not profile:
+        profile = UserProfile(user_id=owner_id)
+        db.add(profile)
+        db.flush()
+
+    old_tier_id = profile.subscription_tier or DEFAULT_TIER
+
+    # Cancel pending change when user re-selects their current active tier
+    if new_tier_id == old_tier_id:
+        if profile.subscription_change_pending_tier:
+            profile.subscription_change_pending_tier = None
+            profile.subscription_change_pending_date = None
+            db.commit()
+            return {
+                "immediate": True,
+                "effective_date": None,
+                "old_tier": old_tier_id,
+                "new_tier": old_tier_id,
+                "message": "Pending subscription change cancelled.",
+            }
+        raise SubscriptionChangeError("You are already on this plan.")
+
+    old_rank = _tier_rank(old_tier_id)
+    new_rank = _tier_rank(new_tier_id)
+    is_upgrade = new_rank > old_rank
+
+    if is_upgrade:
+        # Apply immediately — reset period start
+        profile.subscription_tier = new_tier_id
+        profile.subscription_billing_cycle = billing_cycle
+        profile.subscription_period_start = now
+        # Cancel any previously scheduled downgrade
+        profile.subscription_change_pending_tier = None
+        profile.subscription_change_pending_date = None
+        try:
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            raise SubscriptionChangeError("Failed to apply subscription upgrade.") from exc
+        logger.info("Immediate upgrade for %s: %s → %s", owner_id, old_tier_id, new_tier_id)
+        return {
+            "immediate": True,
+            "effective_date": None,
+            "old_tier": old_tier_id,
+            "new_tier": new_tier_id,
+            "message": f"You have been upgraded to {get_tier(new_tier_id, db)['name']}. "
+            "Your new limits are active immediately.",
+        }
+
+    # --- Downgrade path ---
+    # Determine end of the *first* billing period for the current plan.
+    # Rule: a downgrade is immediate if the user has completed at least one
+    # full month on the current plan; otherwise it is scheduled for the
+    # end of that first month.  This prevents gaming: a user who just
+    # upgraded cannot immediately downgrade to avoid paying the first month.
+    import calendar
+
+    period_start: datetime | None = profile.subscription_period_start
+    if period_start is None:
+        # No recorded start → treat today as start; schedule for one month out
+        period_start = now
+        profile.subscription_period_start = period_start
+
+    if period_start.tzinfo is None:
+        period_start = period_start.replace(tzinfo=timezone.utc)
+
+    # End of the first billing month (same day next month, clamped to valid day)
+    next_month_num = period_start.month % 12 + 1
+    next_year = period_start.year + (1 if period_start.month == 12 else 0)
+    max_day = calendar.monthrange(next_year, next_month_num)[1]
+    next_day = min(period_start.day, max_day)
+    change_date = period_start.replace(year=next_year, month=next_month_num, day=next_day)
+
+    if change_date <= now:
+        profile.subscription_tier = new_tier_id
+        profile.subscription_billing_cycle = billing_cycle
+        profile.subscription_period_start = now
+        profile.subscription_change_pending_tier = None
+        profile.subscription_change_pending_date = None
+        try:
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            raise SubscriptionChangeError("Failed to apply subscription downgrade.") from exc
+        logger.info("Immediate downgrade for %s: %s → %s (period elapsed)", owner_id, old_tier_id, new_tier_id)
+        return {
+            "immediate": True,
+            "effective_date": None,
+            "old_tier": old_tier_id,
+            "new_tier": new_tier_id,
+            "message": f"Your subscription has been changed to {get_tier(new_tier_id, db)['name']}.",
+        }
+
+    # Schedule the downgrade
+    profile.subscription_change_pending_tier = new_tier_id
+    profile.subscription_change_pending_date = change_date
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise SubscriptionChangeError("Failed to schedule subscription downgrade.") from exc
+
+    logger.info(
+        "Scheduled downgrade for %s: %s → %s on %s",
+        owner_id,
+        old_tier_id,
+        new_tier_id,
+        change_date.isoformat(),
+    )
+    return {
+        "immediate": False,
+        "effective_date": change_date.isoformat(),
+        "old_tier": old_tier_id,
+        "new_tier": new_tier_id,
+        "message": (
+            f"Your downgrade to {get_tier(new_tier_id, db)['name']} has been scheduled for "
+            f"{change_date.strftime('%B %-d, %Y')}. "
+            "You will continue to have access to your current plan until then."
+        ),
+    }
+
+
+def cancel_pending_subscription_change(db: Session, owner_id: str) -> bool:
+    """Cancel a pending subscription change for *owner_id*.
+
+    Args:
+        db: Database session.
+        owner_id: Stable user identifier.
+
+    Returns:
+        ``True`` if a pending change was cancelled, ``False`` if there was nothing to cancel.
+    """
+    from app.models import UserProfile
+
+    profile = db.query(UserProfile).filter(UserProfile.user_id == owner_id).first()
+    if not profile or not profile.subscription_change_pending_tier:
+        return False
+
+    profile.subscription_change_pending_tier = None
+    profile.subscription_change_pending_date = None
+    try:
+        db.commit()
+        logger.info("Cancelled pending subscription change for %s", owner_id)
+    except Exception as exc:
+        db.rollback()
+        logger.error("Failed to cancel pending subscription change for %s: %s", owner_id, exc)
+        return False
+    return True

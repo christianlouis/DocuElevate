@@ -238,6 +238,13 @@ class UserProfile(Base):
     subscription_period_start = Column(DateTime(timezone=True), nullable=True)
     allow_overage = Column(Boolean, nullable=False, default=False, server_default="0")
 
+    # Pending subscription change (added in migration 019)
+    # When a user requests a downgrade, the new tier is stored here and the
+    # change is applied on `subscription_change_pending_date`.  Upgrades are
+    # applied immediately and these fields are left NULL.
+    subscription_change_pending_tier = Column(String(50), nullable=True)
+    subscription_change_pending_date = Column(DateTime(timezone=True), nullable=True)
+
     # Onboarding tracking (added in migration 017)
     onboarding_completed = Column(Boolean, nullable=False, default=False, server_default="0")
     onboarding_completed_at = Column(DateTime(timezone=True), nullable=True)
