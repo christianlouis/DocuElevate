@@ -25,9 +25,9 @@ def apply_pending_subscription_changes_all() -> dict[str, int]:
     from app.models import UserProfile
     from app.utils.subscription import apply_pending_subscription_changes
 
-    db = SessionLocal()
     applied = 0
     checked = 0
+    db = SessionLocal()
     try:
         profiles = (
             db.query(UserProfile)

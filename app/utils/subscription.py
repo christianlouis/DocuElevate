@@ -742,7 +742,7 @@ def request_subscription_change(
         "new_tier": new_tier_id,
         "message": (
             f"Your downgrade to {get_tier(new_tier_id, db)['name']} has been scheduled for "
-            f"{change_date.strftime('%B %-d, %Y')}. "
+            f"{change_date.strftime('%B')} {change_date.day}, {change_date.year}. "
             "You will continue to have access to your current plan until then."
         ),
     }

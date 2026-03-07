@@ -14,7 +14,7 @@
   </div>
 
   <!-- Flash messages -->
-  <div id="flash-container" aria-live="polite"></div>
+  <div id="flash-container" aria-live="polite" aria-atomic="true"></div>
 
   {% if not multi_user_enabled %}
   <!-- Single-user notice -->
@@ -40,7 +40,7 @@
       <p class="font-semibold text-amber-800">Pending plan change scheduled</p>
       <p class="text-amber-700 text-sm mt-1">
         Your plan will change to <strong>{{ pending_tier.name }}</strong>
-        on <strong>{{ pending_date | string | truncate(10, True, '') }}</strong>.
+        on <strong>{% if pending_date %}{{ pending_date.strftime('%B') }} {{ pending_date.day }}, {{ pending_date.year }}{% endif %}</strong>.
         You keep all current plan benefits until then.
       </p>
     </div>
@@ -79,7 +79,7 @@
       {% if period_start %}
       <p class="text-xs text-gray-400 mt-2">
         <i class="fas fa-calendar-alt mr-1" aria-hidden="true"></i>
-        Since {{ period_start.strftime('%b %-d, %Y') }}
+        Since {{ period_start.strftime('%b') }} {{ period_start.day }}, {{ period_start.year }}
       </p>
       {% endif %}
     </div>
@@ -290,12 +290,21 @@ const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribu
 
 function showFlash(message, type) {
   const container = document.getElementById('flash-container');
-  const color = type === 'success' ? 'green' : (type === 'warning' ? 'amber' : 'red');
-  const icon = type === 'success' ? 'fa-check-circle' : (type === 'warning' ? 'fa-clock' : 'fa-exclamation-circle');
+  let bgClass, borderClass, iconClass, textClass;
+  if (type === 'success') {
+    bgClass = 'bg-green-50'; borderClass = 'border-green-300';
+    iconClass = 'fa-check-circle text-green-500'; textClass = 'text-green-800';
+  } else if (type === 'warning') {
+    bgClass = 'bg-amber-50'; borderClass = 'border-amber-300';
+    iconClass = 'fa-clock text-amber-500'; textClass = 'text-amber-800';
+  } else {
+    bgClass = 'bg-red-50'; borderClass = 'border-red-300';
+    iconClass = 'fa-exclamation-circle text-red-500'; textClass = 'text-red-800';
+  }
   container.innerHTML = `
-    <div class="bg-${color}-50 border border-${color}-300 rounded-xl p-4 mb-6 flex items-start gap-3" role="alert">
-      <i class="fas ${icon} text-${color}-500 text-xl flex-shrink-0 mt-0.5" aria-hidden="true"></i>
-      <p class="text-${color}-800 text-sm">${message}</p>
+    <div class="${bgClass} border ${borderClass} rounded-xl p-4 mb-6 flex items-start gap-3" role="alert">
+      <i class="fas ${iconClass} text-xl flex-shrink-0 mt-0.5" aria-hidden="true"></i>
+      <p class="${textClass} text-sm">${message}</p>
     </div>`;
   container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
