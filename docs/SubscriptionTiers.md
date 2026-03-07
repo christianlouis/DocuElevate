@@ -2,6 +2,8 @@
 
 DocuElevate uses database-backed subscription plans that are fully configurable by admins via the **Plan Designer** at `/admin/plans`. Four default tiers are seeded automatically on first startup.
 
+All plans are priced **per user, per month** (or per year with ~20 % discount). There are no team, business, or enterprise tiers — every plan is a single-user subscription.
+
 ## Default Plans
 
 | Plan | Monthly | Yearly | Docs/Month | Lifetime Docs | OCR Pages/Mo | Max File | Mailboxes | Destinations |
@@ -9,11 +11,20 @@ DocuElevate uses database-backed subscription plans that are fully configurable 
 | **Free** | $0 | $0 | — | 50 total | 150 total | 5 MB | 0 | 1 |
 | **Starter** | $2.99 | $28.99 | 50 | — | 300 | 25 MB | 1 | 2 |
 | **Professional** | $5.99 | $57.99 | 150 | — | 750 | 100 MB | 3 | 5 |
-| **Business** | $7.99 | $76.99 | 300 | — | 1,500 | Unlimited | Unlimited | 10 |
+| **Power** | $7.99 | $76.99 | 300 | — | 1,500 | Unlimited | Unlimited | 10 |
 
 > Prices ex-VAT. German customers add 19% MwSt.
 
 All paid plans include a **30-day free trial**.
+
+### Intended Use Cases
+
+- **Free** — Try DocuElevate with no commitment. Good for one-off experiments or evaluating the service.
+- **Starter** — Freelancers and side-project owners sending ~50 invoices, contracts, or scanned receipts a month.
+- **Professional** — Knowledge workers (consultants, paralegals, accountants) handling ~150 multi-page documents a month across several cloud destinations.
+- **Power** — Power users with heavy daily workloads: real estate agents, bookkeepers, or researchers processing ~10 documents a day (≈ 300/month) with no file-size restrictions.
+
+> The **plan_id** in the database remains `"business"` for the Power tier to preserve backwards compatibility. The display name shown to users is "Power".
 
 ## How Plans Are Stored
 

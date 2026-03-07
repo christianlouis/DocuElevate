@@ -1,11 +1,12 @@
 """
 Subscription tier definitions and enforcement utilities for DocuElevate SaaS.
 
+All plans are priced per user per month (or per year with ~20 % discount).
 Four tiers (prices ex-VAT; German customers +19 % MwSt):
   - free         $0/mo    — 50 lifetime docs, 150 lifetime OCR pages, 1 dest
   - starter      $2.99/mo — 50/mo, 300 OCR pp/mo, 2 dests, 1 mailbox
   - professional $5.99/mo — 150/mo, 750 OCR pp/mo, 5 dests, 3 mailboxes
-  - business     $7.99/mo — 300/mo, 1500 OCR pp/mo, 10 dests, unlimited mailboxes
+  - power        $7.99/mo — 300/mo, 1500 OCR pp/mo, 10 dests, unlimited mailboxes
 
 Limits use 0 to represent "unlimited".
 All paid tiers include a 30-day free trial (trial_days field).
@@ -14,14 +15,14 @@ All paid tiers include a 30-day free trial (trial_days field).
 Infrastructure: CX32 (app+Redis €7.59) + CX22 (worker €3.79) + BX21 (storage €7.22) ≈ $24/mo
 At 100 users infra share ≈ $0.24/user/mo.
 
-  Starter  : OCR $0.45 + AI $0.012 + infra $0.24 + Stripe $0.34 = $1.04 → 65 % gross margin
+  Starter     : OCR $0.45 + AI $0.012 + infra $0.24 + Stripe $0.34 = $1.04 → 65 % gross margin
   Professional: OCR $1.13 + AI $0.035 + infra $0.24 + Stripe $0.42 = $1.82 → 70 % gross margin
-  Business : OCR $2.25 + AI $0.069 + infra $0.24 + Stripe $0.48 = $3.04 → 62 % gross margin
+  Power       : OCR $2.25 + AI $0.069 + infra $0.24 + Stripe $0.48 = $3.04 → 62 % gross margin
 
-After ~30 % German corporate tax: Starter 45 %, Professional 49 %, Business 43 %.
+After ~30 % German corporate tax: Starter 45 %, Professional 49 %, Power 43 %.
 At average usage (~40 % of quota) margins improve to 55-65 % after tax.
 
-⚠ If GPT-4o (not mini) is configured, Business AI cost at max rises to ~$1.92/user,
+⚠ If GPT-4o (not mini) is configured, Power AI cost at max rises to ~$1.92/user,
   reducing after-tax margin to ~33 %. Recommend GPT-4o mini as default in production.
 """
 
@@ -46,7 +47,7 @@ TIER_DEFAULTS: dict[str, dict[str, Any]] = {
     "free": {
         "id": "free",
         "name": "Free",
-        "tagline": "Explore DocuElevate at no cost",
+        "tagline": "Try DocuElevate free — no credit card needed",
         "price_monthly": 0,
         "price_yearly": 0,
         "trial_days": 0,
@@ -75,7 +76,8 @@ TIER_DEFAULTS: dict[str, dict[str, Any]] = {
     "starter": {
         "id": "starter",
         "name": "Starter",
-        "tagline": "Perfect for individuals getting started",
+        # Use case: freelancer sending ~50 invoices, contracts, or scanned receipts a month
+        "tagline": "Perfect for freelancers and side-project owners",
         "price_monthly": 2.99,
         "price_yearly": 28.99,  # ≈ 80 % of monthly × 12 — save ~19 % (≈ 2½ months free)
         "trial_days": 30,
@@ -89,7 +91,7 @@ TIER_DEFAULTS: dict[str, dict[str, Any]] = {
         "max_mailboxes": 1,
         "api_access": True,
         "features": [
-            "50 documents / month",
+            "50 documents / month — invoices, contracts, receipts",
             "2 storage destinations",
             "300 OCR pages / month",
             "25 MB max file size",
@@ -104,7 +106,8 @@ TIER_DEFAULTS: dict[str, dict[str, Any]] = {
     "professional": {
         "id": "professional",
         "name": "Professional",
-        "tagline": "For growing teams that need more power",
+        # Use case: consultant or knowledge worker handling ~150 docs/month across multiple platforms
+        "tagline": "For knowledge workers managing documents daily",
         "price_monthly": 5.99,
         "price_yearly": 57.99,  # ≈ 80 % of monthly × 12 — save ~19 %
         "trial_days": 30,
@@ -118,7 +121,7 @@ TIER_DEFAULTS: dict[str, dict[str, Any]] = {
         "max_mailboxes": 3,
         "api_access": True,
         "features": [
-            "150 documents / month",
+            "150 documents / month — reports, contracts, invoices",
             "5 storage destinations",
             "750 OCR pages / month",
             "100 MB max file size",
@@ -133,8 +136,9 @@ TIER_DEFAULTS: dict[str, dict[str, Any]] = {
     },
     "business": {
         "id": "business",
-        "name": "Business",
-        "tagline": "High-volume processing for organisations",
+        "name": "Power",
+        # Use case: power user — real estate agent, bookkeeper, or researcher processing ~10 docs/day
+        "tagline": "For power users with high-volume document workflows",
         "price_monthly": 7.99,
         "price_yearly": 76.99,  # ≈ 80 % of monthly × 12 — save ~20 %
         "trial_days": 30,
@@ -148,7 +152,7 @@ TIER_DEFAULTS: dict[str, dict[str, Any]] = {
         "max_mailboxes": 0,  # unlimited mailboxes
         "api_access": True,
         "features": [
-            "300 documents / month",
+            "300 documents / month — ~10 documents per day",
             "10 storage destinations",
             "1,500 OCR pages / month",
             "Unlimited file size",
@@ -156,7 +160,7 @@ TIER_DEFAULTS: dict[str, dict[str, Any]] = {
             "Unlimited email ingestion mailboxes",
             "All ingestion methods",
             "Webhooks & full API access",
-            "Dedicated support",
+            "Priority support",
         ],
         "cta": "Start free trial",
         "badge": "Best Value",
