@@ -621,7 +621,7 @@ class TestEnsureUserProfileAdmin:
 
     @pytest.mark.unit
     def test_admin_login_does_not_downgrade_existing_tier(self, au_session):
-        """Existing admin profile with a paid tier keeps that tier on re-login."""
+        """Existing admin profile with the highest tier keeps that tier on re-login."""
         from app.auth import _ensure_user_profile
         from app.utils.subscription import TIER_ORDER
 
