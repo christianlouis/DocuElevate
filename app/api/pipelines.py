@@ -792,3 +792,95 @@ def _unset_default(db: Session, owner_id: str | None) -> None:
         db.query(Pipeline).filter(Pipeline.owner_id == owner_id, Pipeline.is_default.is_(True)).update(
             {"is_default": False}
         )
+
+
+# ---------------------------------------------------------------------------
+# Default system pipeline seeding
+# ---------------------------------------------------------------------------
+
+# The steps that make up the standard document-processing workflow.  The order
+# here mirrors what the existing Celery-based pipeline executes for every
+# uploaded file.
+_DEFAULT_PIPELINE_STEPS: list[tuple[str, str]] = [
+    ("convert_to_pdf", "Convert to PDF"),
+    ("check_duplicates", "Check for Duplicates"),
+    ("ocr", "OCR Processing"),
+    ("extract_metadata", "Extract Metadata"),
+    ("embed_metadata", "Embed Metadata into PDF"),
+    ("compute_embedding", "Compute Text Embedding"),
+    ("send_to_destinations", "Send to Storage Destinations"),
+]
+
+#: Human-readable name shown in the management UI for the auto-seeded pipeline.
+DEFAULT_PIPELINE_NAME = "Standard Processing Pipeline"
+
+
+def seed_default_pipeline(db: Session) -> int:
+    """Ensure a system-owned default pipeline exists in the database.
+
+    This function is idempotent — it is a no-op when any system pipeline
+    (``owner_id IS NULL``) already exists.  It is intended to be called once
+    at application startup (in ``app.main.lifespan``) so that the pipeline
+    management UI always shows the default workflow that mirrors the existing
+    Celery-based processing steps.
+
+    The created pipeline:
+
+    * ``owner_id = None`` — owned by the system, visible to all users
+    * ``is_default = True`` — selected automatically for new documents
+    * Steps (in order): convert_to_pdf → check_duplicates → ocr →
+      extract_metadata → embed_metadata → compute_embedding →
+      send_to_destinations
+
+    Args:
+        db: An active SQLAlchemy session.
+
+    Returns:
+        ``1`` if a new pipeline was created, ``0`` if one already existed.
+    """
+    try:
+        if db.query(Pipeline).filter(Pipeline.owner_id.is_(None)).count() > 0:
+            return 0
+    except Exception:
+        # Table may not exist yet during the very first migration run.
+        return 0
+
+    pipeline = Pipeline(
+        owner_id=None,
+        name=DEFAULT_PIPELINE_NAME,
+        description=(
+            "The standard document processing workflow: PDF conversion, "
+            "duplicate detection, OCR, metadata extraction and embedding, "
+            "semantic embeddings, and final distribution to storage destinations."
+        ),
+        is_default=True,
+        is_active=True,
+    )
+    db.add(pipeline)
+    try:
+        db.flush()  # Assign pipeline.id without committing yet
+    except Exception as exc:  # pragma: no cover
+        db.rollback()
+        logger.error(f"Failed to create default pipeline: {exc}")
+        return 0
+
+    for pos, (step_type, label) in enumerate(_DEFAULT_PIPELINE_STEPS):
+        db.add(
+            PipelineStep(
+                pipeline_id=pipeline.id,
+                position=pos,
+                step_type=step_type,
+                label=label,
+                enabled=True,
+            )
+        )
+
+    try:
+        db.commit()
+        logger.info("Seeded default system pipeline: '%s' (id=%d)", DEFAULT_PIPELINE_NAME, pipeline.id)
+    except Exception as exc:  # pragma: no cover
+        db.rollback()
+        logger.error(f"Failed to seed default pipeline steps: {exc}")
+        return 0
+
+    return 1

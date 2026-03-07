@@ -465,3 +465,120 @@ class TestPipelineAPIHelpers:
 
         p = Pipeline(owner_id="user99", name="Private", is_default=False, is_active=True)
         assert _can_access_pipeline(p, "admin", admin=True) is True
+
+
+# ---------------------------------------------------------------------------
+# Unit + integration tests – seed_default_pipeline
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestSeedDefaultPipeline:
+    """Tests for the seed_default_pipeline startup helper."""
+
+    def test_seed_creates_pipeline(self, db_session):
+        """seed_default_pipeline creates exactly one system pipeline."""
+        from app.api.pipelines import seed_default_pipeline
+
+        result = seed_default_pipeline(db_session)
+
+        assert result == 1
+        pipelines = db_session.query(Pipeline).filter(Pipeline.owner_id.is_(None)).all()
+        assert len(pipelines) == 1
+
+    def test_seeded_pipeline_is_default(self, db_session):
+        """The seeded pipeline has is_default=True and is_active=True."""
+        from app.api.pipelines import seed_default_pipeline
+
+        seed_default_pipeline(db_session)
+        p = db_session.query(Pipeline).filter(Pipeline.owner_id.is_(None)).first()
+
+        assert p is not None
+        assert p.is_default is True
+        assert p.is_active is True
+
+    def test_seeded_pipeline_has_correct_name(self, db_session):
+        """The seeded pipeline uses the canonical DEFAULT_PIPELINE_NAME."""
+        from app.api.pipelines import DEFAULT_PIPELINE_NAME, seed_default_pipeline
+
+        seed_default_pipeline(db_session)
+        p = db_session.query(Pipeline).filter(Pipeline.owner_id.is_(None)).first()
+
+        assert p.name == DEFAULT_PIPELINE_NAME
+
+    def test_seeded_pipeline_steps_count(self, db_session):
+        """The seeded pipeline has the correct number of steps."""
+        from app.api.pipelines import _DEFAULT_PIPELINE_STEPS, seed_default_pipeline
+
+        seed_default_pipeline(db_session)
+        p = db_session.query(Pipeline).filter(Pipeline.owner_id.is_(None)).first()
+        steps = db_session.query(PipelineStep).filter(PipelineStep.pipeline_id == p.id).all()
+
+        assert len(steps) == len(_DEFAULT_PIPELINE_STEPS)
+
+    def test_seeded_pipeline_step_types_and_order(self, db_session):
+        """Steps are in the correct order and match the expected step types."""
+        from app.api.pipelines import _DEFAULT_PIPELINE_STEPS, seed_default_pipeline
+
+        seed_default_pipeline(db_session)
+        p = db_session.query(Pipeline).filter(Pipeline.owner_id.is_(None)).first()
+        steps = (
+            db_session.query(PipelineStep)
+            .filter(PipelineStep.pipeline_id == p.id)
+            .order_by(PipelineStep.position)
+            .all()
+        )
+
+        expected_types = [step_type for step_type, _ in _DEFAULT_PIPELINE_STEPS]
+        actual_types = [s.step_type for s in steps]
+        assert actual_types == expected_types
+
+    def test_seeded_pipeline_all_steps_enabled(self, db_session):
+        """All seeded steps are enabled by default."""
+        from app.api.pipelines import seed_default_pipeline
+
+        seed_default_pipeline(db_session)
+        p = db_session.query(Pipeline).filter(Pipeline.owner_id.is_(None)).first()
+        steps = db_session.query(PipelineStep).filter(PipelineStep.pipeline_id == p.id).all()
+
+        assert all(s.enabled for s in steps), "All seeded steps should be enabled"
+
+    def test_seed_is_idempotent(self, db_session):
+        """Calling seed_default_pipeline twice does not create a duplicate."""
+        from app.api.pipelines import seed_default_pipeline
+
+        first = seed_default_pipeline(db_session)
+        second = seed_default_pipeline(db_session)
+
+        assert first == 1
+        assert second == 0  # No-op on second call
+
+        count = db_session.query(Pipeline).filter(Pipeline.owner_id.is_(None)).count()
+        assert count == 1
+
+    def test_seeded_pipeline_visible_via_api(self, client):
+        """The default pipeline is visible in the GET /api/pipelines listing."""
+        from app.api.pipelines import DEFAULT_PIPELINE_NAME, seed_default_pipeline
+        from app.database import get_db
+
+        # Seed using the same DB session that the test client uses
+        db = next(client.app.dependency_overrides[get_db]())
+        seed_default_pipeline(db)
+
+        r = client.get("/api/pipelines")
+        assert r.status_code == 200
+        names = [p["name"] for p in r.json()]
+        assert DEFAULT_PIPELINE_NAME in names
+
+    def test_seeded_pipeline_default_flag_visible_via_api(self, client):
+        """The seeded pipeline is returned with is_default=True via the API."""
+        from app.api.pipelines import DEFAULT_PIPELINE_NAME, seed_default_pipeline
+        from app.database import get_db
+
+        db = next(client.app.dependency_overrides[get_db]())
+        seed_default_pipeline(db)
+
+        r = client.get("/api/pipelines")
+        default_pipelines = [p for p in r.json() if p["name"] == DEFAULT_PIPELINE_NAME]
+        assert len(default_pipelines) == 1
+        assert default_pipelines[0]["is_default"] is True
