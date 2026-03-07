@@ -19,6 +19,9 @@ ruff>=0.3.0
 mypy>=1.8.0
 djlint>=1.36.0  # HTML template linter for accessibility and best practices
 
+# Documentation (builds the embedded /help site via MkDocs Material)
+mkdocs-material>=9.5.0  # MkDocs Material theme – same package used in docs/requirements.txt
+
 # Type stubs for mypy
 types-requests>=2.31.0
 types-paramiko>=3.0.0

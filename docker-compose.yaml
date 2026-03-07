@@ -72,3 +72,22 @@ services:
     image: redis:alpine
     container_name: document_redis
     restart: always
+
+  # Optional: standalone docs server using MkDocs Material (live-reload during development).
+  # Start with: docker compose --profile docs up docs
+  # Access at: http://localhost:8001
+  # Note: The /help route in the main app serves pre-built docs from the Docker image.
+  # This service is for content authors who want live preview while editing documentation.
+  docs:
+    image: squidfunk/mkdocs-material:latest
+    container_name: docuelevate_docs
+    restart: "no"
+    profiles:
+      - docs
+    volumes:
+      - ./docs:/docs/docs
+      - ./mkdocs.yml:/docs/mkdocs.yml
+    working_dir: /docs
+    command: ["serve", "--dev-addr=0.0.0.0:8000", "--config-file=/docs/mkdocs.yml"]
+    ports:
+      - "8001:8000"

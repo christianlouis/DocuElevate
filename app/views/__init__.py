@@ -12,6 +12,7 @@ from app.views.filemanager import router as filemanager_router
 # Import all the view routers
 from app.views.general import router as general_router
 from app.views.google_drive import router as google_drive_router
+from app.views.help import router as help_router  # Built-in help / How-To docs
 from app.views.license_routes import router as license_router  # Add the license router
 from app.views.onboarding import router as onboarding_router
 from app.views.onedrive import router as onedrive_router
@@ -43,3 +44,4 @@ router.include_router(subscriptions_router)  # Pricing + subscription pages
 router.include_router(plans_router)  # Admin Plan Designer
 router.include_router(onboarding_router)  # User onboarding wizard
 router.include_router(pipelines_router)  # Processing pipelines
+router.include_router(help_router)  # Built-in help / How-To docs

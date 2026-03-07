@@ -174,6 +174,15 @@
 
             {% endif %}{# end multi_user_enabled / is_logged_in check #}
 
+            <!-- Help – always visible, for every visitor regardless of auth state -->
+            <a href="/help/"
+               class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+               aria-label="Help and How-To Guides"
+               title="Help &amp; How-To Guides"
+               {% if request and request.url.path.startswith('/help') %}aria-current="page"{% endif %}>
+              <i class="fas fa-circle-question mr-1 text-gray-400" aria-hidden="true"></i>Help
+            </a>
+
             <!-- Dark mode toggle -->
             <button
               id="darkModeToggle"
@@ -300,6 +309,14 @@
               </a>
 
               {% endif %}{# end multi_user_enabled / is_logged_in check #}
+
+              <!-- Help – always visible, for every visitor regardless of auth state -->
+              <a href="/help/"
+                 class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+                 aria-label="Help and How-To Guides"
+                 {% if request and request.url.path.startswith('/help') %}aria-current="page"{% endif %}>
+                <i class="fas fa-circle-question mr-2 text-gray-400" aria-hidden="true"></i>Help
+              </a>
 
               <!-- Dark mode toggle (mobile) -->
               <button

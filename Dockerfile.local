@@ -6,6 +6,19 @@ WORKDIR /app
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
+# ── Documentation build stage ───────────────────────────────────────────────
+FROM python:3.14.1-slim AS docs-builder
+
+WORKDIR /docs
+
+COPY docs/requirements.txt /docs/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY docs /docs/docs
+COPY mkdocs.yml /docs/mkdocs.yml
+
+RUN mkdocs build --config-file /docs/mkdocs.yml --site-dir /docs/docs_build
+
 FROM python:3.14.1-slim
 
 WORKDIR /app
@@ -32,6 +45,9 @@ COPY ./alembic.ini /app/alembic.ini
 COPY ./LICENSE /app/LICENSE
 COPY ./VERSION /app/VERSION
 COPY ./BUILD_DATE /app/BUILD_DATE
+
+# Copy the pre-built MkDocs documentation site (served at /help)
+COPY --from=docs-builder /docs/docs_build /app/docs_build
 
 # Local fallbacks for build metadata
 RUN echo "local" > /app/GIT_SHA \

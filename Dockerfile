@@ -7,6 +7,22 @@ WORKDIR /app
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
+# ── Documentation build stage ───────────────────────────────────────────────
+FROM python:3.14.1-slim AS docs-builder
+
+WORKDIR /docs
+
+# Install MkDocs Material and its dependencies
+COPY docs/requirements.txt /docs/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy documentation sources
+COPY docs /docs/docs
+COPY mkdocs.yml /docs/mkdocs.yml
+
+# Build the static documentation site
+RUN mkdocs build --config-file /docs/mkdocs.yml --site-dir /docs/docs_build
+
 # Second stage for the actual runtime
 FROM python:3.14.3-slim
 
@@ -42,6 +58,9 @@ COPY ./VERSION /app/VERSION
 COPY ./BUILD_DATE /app/BUILD_DATE
 COPY ./GIT_SHA /app/GIT_SHA
 COPY ./RUNTIME_INFO /app/RUNTIME_INFO
+
+# Copy the pre-built MkDocs documentation site (served at /help)
+COPY --from=docs-builder /docs/docs_build /app/docs_build
 
 # Create runtime_info directory
 RUN mkdir -p /app/runtime_info
