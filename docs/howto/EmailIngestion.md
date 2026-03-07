@@ -35,7 +35,9 @@ EMAIL_INGESTION_IMAP_HOST=mail.yourdomain.com
 EMAIL_INGESTION_IMAP_PORT=993
 EMAIL_INGESTION_IMAP_SSL=true
 EMAIL_INGESTION_USERNAME=scan@yourdomain.com
-EMAIL_INGESTION_PASSWORD=your-email-password
+# Use an app-specific password (Gmail, Outlook) – NOT your main account password.
+# See the Security Considerations section below for details.
+EMAIL_INGESTION_PASSWORD=your-app-specific-password
 EMAIL_INGESTION_FOLDER=INBOX
 EMAIL_INGESTION_INTERVAL=60           # Check every 60 seconds
 EMAIL_INGESTION_MARK_SEEN=true        # Mark emails as read after processing

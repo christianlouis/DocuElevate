@@ -38,14 +38,24 @@ Use a lightweight tool like [imapfilter](https://github.com/lefcha/imapfilter) o
 ```python
 import imaplib
 import email
-import requests
 import os
+import sys
+
+import requests
 
 IMAP_HOST = "mail.yourdomain.com"
 IMAP_USER = "docuelevate-inbox@yourdomain.com"
-IMAP_PASS = os.environ["IMAP_PASS"]
+# Use an app-specific password (Gmail/Outlook), NOT your main account password.
+# Store credentials as environment variables – never hardcode them.
+IMAP_PASS = os.environ.get("IMAP_PASS")
 DOCUELEVATE_URL = "http://your-docuelevate-host:8000"
-API_KEY = os.environ["DOCUELEVATE_API_KEY"]
+API_KEY = os.environ.get("DOCUELEVATE_API_KEY")
+
+if not IMAP_PASS:
+    sys.exit("Error: IMAP_PASS environment variable is not set.")
+if not API_KEY:
+    sys.exit("Error: DOCUELEVATE_API_KEY environment variable is not set.")
+
 
 def fetch_and_upload():
     mail = imaplib.IMAP4_SSL(IMAP_HOST)
@@ -101,6 +111,10 @@ On your DocuElevate server (or any reachable server), create a shared folder:
 # Create the shared folder
 mkdir -p /srv/scanner-inbox
 
+# Create a dedicated Samba user for the printer
+sudo useradd -M -s /sbin/nologin scanner
+sudo smbpasswd -a scanner   # set a password for the printer to authenticate with
+
 # Install Samba
 sudo apt-get install samba
 
@@ -108,9 +122,13 @@ sudo apt-get install samba
 [scanner-inbox]
   path = /srv/scanner-inbox
   writable = yes
-  guest ok = yes
-  force user = nobody
+  guest ok = no
+  valid users = scanner
+  create mask = 0660
+  directory mask = 0770
 ```
+
+> **Security note:** Use a dedicated user (`scanner`) with a strong password instead of `guest ok = yes`. This prevents unauthorised devices on your network from depositing files.
 
 Restart Samba: `sudo systemctl restart smbd`
 
@@ -120,7 +138,8 @@ Restart Samba: `sudo systemctl restart smbd`
 2. Go to **Scan** → **Scan to Network Folder**.
 3. Click **Add** to create a new Quick Set:
    - **UNC Path:** `\\192.168.1.200\scanner-inbox` (replace with your server's IP)
-   - **Username/Password:** Leave blank for guest, or provide credentials
+   - **Username:** `scanner` (the Samba user created above)
+   - **Password:** the password set with `smbpasswd`
    - **File Type:** PDF (Searchable PDF if available)
    - **Resolution:** 200–300 DPI
 4. Test the connection from the EWS interface.

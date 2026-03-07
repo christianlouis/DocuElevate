@@ -57,8 +57,19 @@ Create the folder and set permissions:
 
 ```bash
 sudo mkdir -p /srv/docuelevate/watch
-sudo chmod 777 /srv/docuelevate/watch
+
+# Create a dedicated group for scanner/upload access
+sudo groupadd scanner-upload
+
+# Set group ownership and restrict access to owner + group only
+sudo chown root:scanner-upload /srv/docuelevate/watch
+sudo chmod 770 /srv/docuelevate/watch
+
+# Add the user running DocuElevate (e.g., www-data or your deploy user) to the group
+sudo usermod -aG scanner-upload www-data
 ```
+
+> **Security note:** Avoid `chmod 777` (world-writable). Use group-based access control so only authorised processes can write to the watched folder.
 
 ---
 
@@ -90,19 +101,27 @@ DocuElevate will monitor all subdirectories and tag documents with the subfolder
 
 Share the watch folder over the network so scanners and Windows PCs can drop files directly:
 
+> **Security note:** The example below uses a dedicated Samba user (`scanner`) for authentication. Using `guest ok = yes` (no password) is convenient but allows any device on the network to write files — avoid it in multi-tenant or internet-exposed environments.
+
 ```bash
 # Install Samba
 sudo apt-get install samba -y
+
+# Create a dedicated Samba user for scanner devices
+sudo useradd -M -s /sbin/nologin scanner
+sudo smbpasswd -a scanner   # set a password
 
 # Add to /etc/samba/smb.conf
 [DocuElevate-Inbox]
   comment = DocuElevate Document Inbox
   path = /srv/docuelevate/watch
   browsable = yes
-  guest ok = yes
+  guest ok = no
+  valid users = scanner
   read only = no
-  create mask = 0777
-  directory mask = 0777
+  create mask = 0660
+  directory mask = 0770
+  force group = scanner-upload
 ```
 
 Restart Samba:
@@ -186,10 +205,13 @@ You can also view processing status in the DocuElevate web interface under **Que
 
 **Permission denied errors?**
 ```bash
-# Fix permissions
-sudo chmod -R 777 /srv/docuelevate/watch
-# Or use ACLs for more granular control
-sudo setfacl -m u:nobody:rwx /srv/docuelevate/watch
+# Preferred: use group-based ACL for targeted access
+sudo setfacl -m g:scanner-upload:rwx /srv/docuelevate/watch
+sudo setfacl -d -m g:scanner-upload:rwx /srv/docuelevate/watch
+
+# If you need a quick fix and understand the risk, restrict to owner+group:
+sudo chown -R root:scanner-upload /srv/docuelevate/watch
+sudo chmod -R 770 /srv/docuelevate/watch
 ```
 
 **Files processed but not deleted?**
