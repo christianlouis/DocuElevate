@@ -2,6 +2,8 @@
 
 Provides CRUD operations for user profiles and aggregate statistics so that
 administrators can inspect, configure, and manage users in multi-user mode.
+Also provides endpoints for admins to create and manage local (email/password)
+user accounts directly, without requiring email verification.
 """
 
 import logging
@@ -14,7 +16,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import FileRecord, UserProfile
+from app.models import FileRecord, LocalUser, UserProfile
+from app.utils.local_auth import hash_password
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/users", tags=["admin-users"])
@@ -95,6 +98,30 @@ class UserSummary(BaseModel):
     profile_id: int | None
     document_count: int
     last_upload: str | None
+
+
+class LocalUserCreate(BaseModel):
+    """Body for admin-creating a local (email/password) user account."""
+
+    email: str = Field(..., max_length=255, description="Email address for the new user")
+    username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")
+    display_name: str | None = Field(default=None, max_length=255)
+    password: str = Field(..., min_length=8, max_length=128)
+    is_admin: bool = Field(default=False, description="Grant admin privileges")
+
+
+class LocalUserResponse(BaseModel):
+    """Summary of a local user account."""
+
+    id: int
+    email: str
+    username: str
+    display_name: str | None
+    is_active: bool
+    is_admin: bool
+    created_at: str | None
+
+    model_config = {"from_attributes": True}
 
 
 # ---------------------------------------------------------------------------
@@ -209,39 +236,111 @@ def list_users(
     }
 
 
-@router.get("/{user_id:path}", summary="Get details for a single user")
-def get_user(user_id: str, db: DbSession, _admin: AdminUser) -> dict[str, Any]:
-    """Return profile and document statistics for a specific user."""
-    doc_count = db.query(func.count(FileRecord.id)).filter(FileRecord.owner_id == user_id).scalar() or 0
-    last_row = (
-        db.query(FileRecord.created_at)
-        .filter(FileRecord.owner_id == user_id)
-        .order_by(FileRecord.created_at.desc())
-        .first()
+# ---------------------------------------------------------------------------
+# Local user management (admin-only)
+# ---------------------------------------------------------------------------
+# NOTE: These routes MUST be defined before /{user_id:path} to avoid being
+# swallowed by the catch-all path parameter.
+# ---------------------------------------------------------------------------
+
+
+@router.get("/local", summary="List all local (email/password) user accounts")
+def list_local_users(db: DbSession, _admin: AdminUser) -> list[dict[str, Any]]:
+    """Return every local user account with basic metadata."""
+    users = db.query(LocalUser).order_by(LocalUser.created_at.desc()).all()
+    return [
+        {
+            "id": u.id,
+            "email": u.email,
+            "username": u.username,
+            "display_name": u.display_name,
+            "is_active": u.is_active,
+            "is_admin": u.is_admin,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+        }
+        for u in users
+    ]
+
+
+@router.post("/local", status_code=status.HTTP_201_CREATED, summary="Create a local user account")
+def create_local_user(body: LocalUserCreate, db: DbSession, _admin: AdminUser) -> dict[str, Any]:
+    """Create a new local (email/password) user account.
+
+    The account is immediately active — no email verification is required when
+    created by an administrator.  A matching UserProfile row is also created.
+
+    Raises:
+        409: Email or username already registered.
+    """
+    if db.query(LocalUser).filter(LocalUser.email == body.email).first():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered.")
+    if db.query(LocalUser).filter(LocalUser.username == body.username).first():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken.")
+
+    user = LocalUser(
+        email=body.email,
+        username=body.username,
+        display_name=body.display_name,
+        hashed_password=hash_password(body.password),
+        is_active=True,
+        is_admin=body.is_admin,
     )
-    last_upload = last_row[0].isoformat() if last_row and last_row[0] else None
+    db.add(user)
 
-    profile = _get_or_none(db, user_id)
+    # Ensure a UserProfile exists for the new user
+    if not db.query(UserProfile).filter(UserProfile.user_id == body.email).first():
+        db.add(UserProfile(user_id=body.email, display_name=body.display_name or body.username))
 
+    try:
+        db.commit()
+        db.refresh(user)
+    except Exception:
+        db.rollback()
+        raise
+
+    logger.info("Admin created local user account: %s", body.email)
     return {
-        "user_id": user_id,
-        "display_name": profile.display_name if profile else None,
-        "daily_upload_limit": profile.daily_upload_limit if profile else None,
-        "notes": profile.notes if profile else None,
-        "is_blocked": profile.is_blocked if profile else False,
-        "subscription_tier": (profile.subscription_tier or "free") if profile else "free",
-        "subscription_billing_cycle": (profile.subscription_billing_cycle or "monthly") if profile else "monthly",
-        "subscription_period_start": profile.subscription_period_start.isoformat()
-        if (profile and profile.subscription_period_start)
-        else None,
-        "allow_overage": bool(profile.allow_overage) if profile else False,
-        "profile_id": profile.id if profile else None,
-        "document_count": doc_count,
-        "last_upload": last_upload,
-        "profile": _profile_to_dict(profile) if profile else None,
+        "id": user.id,
+        "email": user.email,
+        "username": user.username,
+        "display_name": user.display_name,
+        "is_active": user.is_active,
+        "is_admin": user.is_admin,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
     }
 
 
+@router.delete(
+    "/local/{local_user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a local user account",
+)
+def delete_local_user(local_user_id: int, db: DbSession, _admin: AdminUser) -> None:
+    """Delete a local user account by its numeric ID.
+
+    The associated UserProfile is also removed.  Documents owned by this user
+    are **not** deleted.
+    """
+    user = db.query(LocalUser).filter(LocalUser.id == local_user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Local user not found.")
+
+    # Remove associated profile if present
+    profile = db.query(UserProfile).filter(UserProfile.user_id == user.email).first()
+    if profile:
+        db.delete(profile)
+
+    try:
+        db.delete(user)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    logger.info("Admin deleted local user account: %s", user.email)
+
+
+@router.get("/{user_id:path}", summary="Get details for a single user")
 @router.put("/{user_id:path}", summary="Create or update a user profile")
 def upsert_user_profile(
     user_id: str,

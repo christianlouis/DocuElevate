@@ -304,11 +304,14 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
 
 /**
  * Render the login / get-started buttons for unauthenticated visitors.
- * Reads the data-multi-user attribute that the server injects on <body> to
- * decide whether to show a prominent "Get Started" CTA alongside the login link.
+ * Reads the data-multi-user and data-allow-signup attributes that the server
+ * injects on <body> to decide whether to show a prominent "Get Started" CTA
+ * alongside the login link, and whether it should link to /signup or /pricing.
  */
 function _renderLoggedOutAuth(authSection, mobileAuthSection) {
   const multiUser = document.body.getAttribute('data-multi-user') === 'true';
+  const allowSignup = document.body.getAttribute('data-allow-signup') === 'true';
+  const startHref = allowSignup ? '/signup' : '/pricing';
 
   if (authSection) {
     authSection.textContent = '';
@@ -324,10 +327,10 @@ function _renderLoggedOutAuth(authSection, mobileAuthSection) {
 
     if (multiUser) {
       const startLink = document.createElement('a');
-      startLink.href = '/pricing';
+      startLink.href = startHref;
       startLink.className =
         'px-3 py-1.5 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500';
-      startLink.textContent = 'Get Started';
+      startLink.textContent = allowSignup ? 'Sign Up' : 'Get Started';
       row.appendChild(startLink);
     }
 
@@ -350,14 +353,14 @@ function _renderLoggedOutAuth(authSection, mobileAuthSection) {
 
     if (multiUser) {
       const startLink = document.createElement('a');
-      startLink.href = '/pricing';
+      startLink.href = startHref;
       startLink.className =
         'block px-3 py-3 rounded-md text-base font-medium text-white bg-blue-600 hover:text-white hover:bg-blue-700 mt-1';
       const startIcon = document.createElement('i');
       startIcon.className = 'fas fa-arrow-right mr-2';
       startIcon.setAttribute('aria-hidden', 'true');
       startLink.appendChild(startIcon);
-      startLink.appendChild(document.createTextNode('Get Started'));
+      startLink.appendChild(document.createTextNode(allowSignup ? 'Sign Up' : 'Get Started'));
       mobileAuthSection.appendChild(startLink);
     }
   }
