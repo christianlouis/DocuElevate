@@ -102,9 +102,10 @@ class TestViewsBase:
         """is_logged_in should be True when auth is disabled (single-user mode)."""
         from app.views.base import template_response_with_version
 
-        with patch("app.views.base.original_template_response") as mock_orig, patch(
-            "app.views.base.settings"
-        ) as mock_settings:
+        with (
+            patch("app.views.base.original_template_response") as mock_orig,
+            patch("app.views.base.settings") as mock_settings,
+        ):
             mock_orig.return_value = "response"
             mock_settings.auth_enabled = False
             mock_settings.multi_user_enabled = False
@@ -127,9 +128,10 @@ class TestViewsBase:
         """is_logged_in should be True when session contains a user."""
         from app.views.base import template_response_with_version
 
-        with patch("app.views.base.original_template_response") as mock_orig, patch(
-            "app.views.base.settings"
-        ) as mock_settings:
+        with (
+            patch("app.views.base.original_template_response") as mock_orig,
+            patch("app.views.base.settings") as mock_settings,
+        ):
             mock_orig.return_value = "response"
             mock_settings.auth_enabled = True
             mock_settings.multi_user_enabled = True
@@ -153,9 +155,10 @@ class TestViewsBase:
         """is_logged_in should be False when auth is enabled and no session user."""
         from app.views.base import template_response_with_version
 
-        with patch("app.views.base.original_template_response") as mock_orig, patch(
-            "app.views.base.settings"
-        ) as mock_settings:
+        with (
+            patch("app.views.base.original_template_response") as mock_orig,
+            patch("app.views.base.settings") as mock_settings,
+        ):
             mock_orig.return_value = "response"
             mock_settings.auth_enabled = True
             mock_settings.multi_user_enabled = True
@@ -179,9 +182,10 @@ class TestViewsBase:
         """is_logged_in should default to False when request has no session attribute."""
         from app.views.base import template_response_with_version
 
-        with patch("app.views.base.original_template_response") as mock_orig, patch(
-            "app.views.base.settings"
-        ) as mock_settings:
+        with (
+            patch("app.views.base.original_template_response") as mock_orig,
+            patch("app.views.base.settings") as mock_settings,
+        ):
             mock_orig.return_value = "response"
             mock_settings.auth_enabled = True
             mock_settings.multi_user_enabled = False
@@ -206,9 +210,10 @@ class TestViewsBase:
         """multi_user_enabled should be injected into every template context."""
         from app.views.base import template_response_with_version
 
-        with patch("app.views.base.original_template_response") as mock_orig, patch(
-            "app.views.base.settings"
-        ) as mock_settings:
+        with (
+            patch("app.views.base.original_template_response") as mock_orig,
+            patch("app.views.base.settings") as mock_settings,
+        ):
             mock_orig.return_value = "response"
             mock_settings.auth_enabled = False
             mock_settings.multi_user_enabled = True
