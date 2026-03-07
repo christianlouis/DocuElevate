@@ -13,6 +13,9 @@
     <p class="text-gray-500 text-sm mt-1">Your current plan, usage and available upgrades.</p>
   </div>
 
+  <!-- Flash messages -->
+  <div id="flash-container" aria-live="polite" aria-atomic="true"></div>
+
   {% if not multi_user_enabled %}
   <!-- Single-user notice -->
   <div class="bg-blue-50 border border-blue-200 rounded-xl p-6 flex items-start gap-4">
@@ -28,6 +31,26 @@
   </div>
 
   {% else %}
+
+  <!-- Pending-change banner -->
+  {% if pending_tier_id %}
+  <div class="bg-amber-50 border border-amber-300 rounded-xl p-4 mb-6 flex items-start gap-3">
+    <i class="fas fa-clock text-amber-500 text-xl flex-shrink-0 mt-0.5" aria-hidden="true"></i>
+    <div class="flex-1">
+      <p class="font-semibold text-amber-800">Pending plan change scheduled</p>
+      <p class="text-amber-700 text-sm mt-1">
+        Your plan will change to <strong>{{ pending_tier.name }}</strong>
+        on <strong>{% if pending_date %}{{ pending_date.strftime('%B') }} {{ pending_date.day }}, {{ pending_date.year }}{% endif %}</strong>.
+        You keep all current plan benefits until then.
+      </p>
+    </div>
+    <button type="button" onclick="cancelPendingChange()"
+            class="ml-auto flex-shrink-0 text-sm text-amber-700 underline hover:text-amber-900 font-medium"
+            aria-label="Cancel pending plan change">
+      Cancel change
+    </button>
+  </div>
+  {% endif %}
 
   <!-- Current plan card -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -52,6 +75,12 @@
       <p class="mt-3 text-lg font-bold text-indigo-600">${{ tier.price_monthly }}<span class="text-sm font-normal text-gray-400">/month</span></p>
       {% else %}
       <p class="mt-3 text-lg font-bold text-gray-500">Free</p>
+      {% endif %}
+      {% if period_start %}
+      <p class="text-xs text-gray-400 mt-2">
+        <i class="fas fa-calendar-alt mr-1" aria-hidden="true"></i>
+        Since {{ period_start.strftime('%b') }} {{ period_start.day }}, {{ period_start.year }}
+      </p>
       {% endif %}
     </div>
 
@@ -143,67 +172,107 @@
     </ul>
   </div>
 
-  <!-- Upgrade options (only show tiers above current) -->
-  {% set tier_order = ['free', 'starter', 'professional', 'business'] %}
-  {% set current_index = tier_order.index(tier_id) %}
-  {% set upgrade_tiers = all_tiers | selectattr('id', 'ne', tier_id) | list %}
-
-  {% if tier_id != 'business' %}
+  <!-- All available plans -->
   <div class="mb-8">
     <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-      <i class="fas fa-arrow-up-right-dots text-indigo-500" aria-hidden="true"></i>
-      Upgrade your plan
+      <i class="fas fa-layer-group text-indigo-500" aria-hidden="true"></i>
+      Available Plans
     </h2>
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {% for t in all_tiers %}
-        {% if tier_order.index(t.id) > current_index %}
-        <div class="bg-white rounded-xl border-2
-          {% if t.highlight %}border-indigo-500{% else %}border-gray-200{% endif %}
-          p-5 flex flex-col justify-between hover:shadow-md transition">
-          <div>
-            <div class="flex items-center justify-between mb-2">
-              <span class="font-bold text-gray-900">{{ t.name }}</span>
-              {% if t.badge %}
-              <span class="text-xs bg-indigo-100 text-indigo-700 font-semibold rounded-full px-2 py-0.5">{{ t.badge }}</span>
-              {% endif %}
-            </div>
-            <p class="text-gray-500 text-xs mb-3">{{ t.tagline }}</p>
-            {% if t.price_monthly > 0 %}
-            <p class="text-xl font-extrabold text-gray-900">${{ t.price_monthly }}<span class="text-sm font-normal text-gray-400">/mo</span></p>
-            {% endif %}
-            <ul class="mt-3 space-y-1.5 text-xs text-gray-600">
-              {% for feature in t.features[:4] %}
-              <li class="flex items-start gap-1.5">
-                <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
-                {{ feature }}
-              </li>
-              {% endfor %}
-              {% if t.features | length > 4 %}
-              <li class="text-indigo-500 font-medium">+ {{ (t.features | length) - 4 }} more features</li>
-              {% endif %}
-            </ul>
-          </div>
-          <div class="mt-4">
-            {% if t.id == 'business' %}
-            <a href="mailto:sales@docuelevate.io?subject=Business+Plan+Enquiry"
-               class="block text-center py-2 px-4 rounded-lg bg-gray-800 text-white text-sm font-semibold hover:bg-gray-700 transition">
-              Contact Sales
-            </a>
-            {% else %}
-            <a href="/pricing"
-               class="block text-center py-2 px-4 rounded-lg
-               {% if t.highlight %}bg-indigo-600 hover:bg-indigo-700{% else %}bg-blue-600 hover:bg-blue-700{% endif %}
-               text-white text-sm font-semibold transition">
-              Upgrade to {{ t.name }}
-            </a>
-            {% endif %}
-          </div>
-        </div>
+      {% set t_rank = tier_order.index(t.id) %}
+      {% set current_rank = tier_order.index(tier_id) %}
+      {% set is_current = (t.id == tier_id) %}
+      {% set is_pending = (t.id == pending_tier_id) %}
+      {% set is_upgrade = (t_rank > current_rank) %}
+      {% set is_downgrade = (t_rank < current_rank) %}
+      <div class="bg-white rounded-xl border-2
+        {% if is_current %}border-indigo-500 ring-2 ring-indigo-200{% elif t.highlight %}border-indigo-300{% else %}border-gray-200{% endif %}
+        p-5 flex flex-col justify-between hover:shadow-md transition relative">
+
+        {% if is_current %}
+        <span class="absolute top-3 right-3 text-xs bg-indigo-100 text-indigo-700 font-semibold rounded-full px-2 py-0.5">
+          Current
+        </span>
+        {% elif is_pending %}
+        <span class="absolute top-3 right-3 text-xs bg-amber-100 text-amber-700 font-semibold rounded-full px-2 py-0.5">
+          Pending
+        </span>
+        {% elif t.badge %}
+        <span class="absolute top-3 right-3 text-xs bg-indigo-100 text-indigo-700 font-semibold rounded-full px-2 py-0.5">
+          {{ t.badge }}
+        </span>
         {% endif %}
+
+        <div>
+          <p class="font-bold text-gray-900 pr-16">{{ t.name }}</p>
+          <p class="text-gray-500 text-xs mt-1 mb-3">{{ t.tagline }}</p>
+          {% if t.price_monthly > 0 %}
+          <p class="text-xl font-extrabold text-gray-900">${{ t.price_monthly }}<span class="text-sm font-normal text-gray-400">/mo</span></p>
+          {% else %}
+          <p class="text-xl font-extrabold text-gray-500">Free</p>
+          {% endif %}
+          <ul class="mt-3 space-y-1 text-xs text-gray-600">
+            {% for feature in t.features[:3] %}
+            <li class="flex items-start gap-1.5">
+              <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
+              {{ feature }}
+            </li>
+            {% endfor %}
+            {% if t.features | length > 3 %}
+            <li class="text-indigo-500 font-medium">+ {{ (t.features | length) - 3 }} more</li>
+            {% endif %}
+          </ul>
+        </div>
+
+        <div class="mt-4">
+          {% if is_current and not pending_tier_id %}
+          <span class="block text-center py-2 px-4 rounded-lg bg-gray-100 text-gray-400 text-sm font-semibold cursor-default">
+            Your current plan
+          </span>
+          {% elif is_current and pending_tier_id %}
+          <!-- Keep current plan (cancel pending downgrade) -->
+          <button type="button"
+                  onclick="changePlan('{{ t.id }}')"
+                  class="block w-full text-center py-2 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition">
+            Keep {{ t.name }}
+          </button>
+          {% elif is_upgrade %}
+          {% if t.id == 'business' %}
+          <a href="mailto:sales@docuelevate.io?subject=Business+Plan+Enquiry"
+             class="block text-center py-2 px-4 rounded-lg bg-gray-800 hover:bg-gray-700 text-white text-sm font-semibold transition">
+            Contact Sales
+          </a>
+          {% else %}
+          <button type="button"
+                  onclick="changePlan('{{ t.id }}')"
+                  class="block w-full text-center py-2 px-4 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold transition">
+            Upgrade to {{ t.name }}
+          </button>
+          {% endif %}
+          {% elif is_pending %}
+          <button type="button"
+                  onclick="cancelPendingChange()"
+                  class="block w-full text-center py-2 px-4 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 text-sm font-semibold transition">
+            Cancel scheduled change
+          </button>
+          {% else %}
+          <!-- Downgrade -->
+          <button type="button"
+                  onclick="changePlan('{{ t.id }}')"
+                  class="block w-full text-center py-2 px-4 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold transition">
+            Downgrade to {{ t.name }}
+          </button>
+          {% endif %}
+        </div>
+      </div>
       {% endfor %}
     </div>
+    <p class="text-xs text-gray-400 mt-3">
+      <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
+      Upgrades take effect immediately. Downgrades are scheduled for the end of your current billing period.
+    </p>
   </div>
-  {% endif %}
 
   {% endif %}
 
@@ -215,4 +284,71 @@
   </div>
 
 </div>
+
+<script>
+const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+function showFlash(message, type) {
+  const container = document.getElementById('flash-container');
+  let bgClass, borderClass, iconClass, textClass;
+  if (type === 'success') {
+    bgClass = 'bg-green-50'; borderClass = 'border-green-300';
+    iconClass = 'fa-check-circle text-green-500'; textClass = 'text-green-800';
+  } else if (type === 'warning') {
+    bgClass = 'bg-amber-50'; borderClass = 'border-amber-300';
+    iconClass = 'fa-clock text-amber-500'; textClass = 'text-amber-800';
+  } else {
+    bgClass = 'bg-red-50'; borderClass = 'border-red-300';
+    iconClass = 'fa-exclamation-circle text-red-500'; textClass = 'text-red-800';
+  }
+  container.innerHTML = `
+    <div class="${bgClass} border ${borderClass} rounded-xl p-4 mb-6 flex items-start gap-3" role="alert">
+      <i class="fas ${iconClass} text-xl flex-shrink-0 mt-0.5" aria-hidden="true"></i>
+      <p class="${textClass} text-sm">${message}</p>
+    </div>`;
+  container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function changePlan(planId) {
+  try {
+    const res = await fetch('/api/subscriptions/change', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': CSRF_TOKEN,
+      },
+      body: JSON.stringify({ plan_id: planId, billing_cycle: 'monthly' }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showFlash(data.detail || 'An error occurred. Please try again.', 'error');
+      return;
+    }
+    const msgType = data.immediate ? 'success' : 'warning';
+    showFlash(data.message, msgType);
+    // Reload after a short delay to reflect the change
+    setTimeout(() => window.location.reload(), 1800);
+  } catch (err) {
+    showFlash('Network error. Please try again.', 'error');
+  }
+}
+
+async function cancelPendingChange() {
+  try {
+    const res = await fetch('/api/subscriptions/change', {
+      method: 'DELETE',
+      headers: { 'X-CSRF-Token': CSRF_TOKEN },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showFlash(data.detail || 'An error occurred. Please try again.', 'error');
+      return;
+    }
+    showFlash(data.message, 'success');
+    setTimeout(() => window.location.reload(), 1800);
+  } catch (err) {
+    showFlash('Network error. Please try again.', 'error');
+  }
+}
+</script>
 {% endblock %}
