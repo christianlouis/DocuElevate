@@ -1,12 +1,143 @@
 {% extends "base.html" %}
-{% block title %}Dashboard – DocuElevate{% endblock %}
+{% block title %}{% if multi_user_enabled and not is_logged_in %}DocuElevate – Intelligent Document Processing{% else %}Dashboard – DocuElevate{% endif %}{% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8">
+<div class="{% if multi_user_enabled and not is_logged_in %}bg-gray-50 min-h-screen{% else %}container mx-auto px-4 py-8{% endif %}">
 
-{% if multi_user_enabled %}
+{% if multi_user_enabled and not is_logged_in %}
 {# ══════════════════════════════════════════════════════════════════════════ #}
-{# MULTI-USER / SAAS DASHBOARD                                              #}
+{# PUBLIC LANDING PAGE (multi-user, visitor not signed in)                  #}
+{# ══════════════════════════════════════════════════════════════════════════ #}
+
+  <!-- Hero -->
+  <div class="bg-gradient-to-br from-blue-700 via-indigo-700 to-purple-700 text-white py-20 px-4">
+    <div class="max-w-4xl mx-auto text-center">
+      <span class="inline-block bg-white/20 text-white text-xs font-semibold uppercase tracking-widest px-3 py-1 rounded-full mb-4">
+        Intelligent Document Processing
+      </span>
+      <h1 class="text-4xl sm:text-5xl font-extrabold mb-4 leading-tight">
+        From upload to insight — automatically.
+      </h1>
+      <p class="text-indigo-100 text-lg max-w-2xl mx-auto mb-8">
+        DocuElevate ingests your documents, runs OCR, extracts metadata with AI, and routes files to
+        Dropbox, Google Drive, OneDrive, S3, Nextcloud, and more — all in one seamless pipeline.
+      </p>
+      <div class="flex flex-wrap justify-center gap-4">
+        {% if allow_signup %}
+        <a href="/signup"
+           class="bg-white text-indigo-700 hover:bg-indigo-50 font-bold py-3 px-8 rounded-xl shadow-lg transition duration-200 flex items-center min-h-[44px]">
+          <i class="fas fa-user-plus mr-2" aria-hidden="true"></i> Get Started — it's free
+        </a>
+        {% else %}
+        <a href="/login"
+           class="bg-white text-indigo-700 hover:bg-indigo-50 font-bold py-3 px-8 rounded-xl shadow-lg transition duration-200 flex items-center min-h-[44px]">
+          <i class="fas fa-sign-in-alt mr-2" aria-hidden="true"></i> Log In
+        </a>
+        {% endif %}
+        <a href="/pricing"
+           class="bg-transparent border-2 border-white text-white hover:bg-white hover:text-indigo-700 font-bold py-3 px-8 rounded-xl transition duration-200 flex items-center min-h-[44px]">
+          <i class="fas fa-tags mr-2" aria-hidden="true"></i> View Plans &amp; Pricing
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feature grid -->
+  <div class="max-w-6xl mx-auto px-4 py-16">
+    <h2 class="text-2xl font-bold text-center text-gray-800 mb-10">Everything you need for smart document workflows</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+
+      <div class="bg-white rounded-2xl shadow p-6 flex gap-4">
+        <div class="h-12 w-12 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-file-alt text-blue-600 text-xl" aria-hidden="true"></i>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-800 mb-1">OCR &amp; Text Extraction</h3>
+          <p class="text-gray-500 text-sm">Azure Document Intelligence converts scanned PDFs and images into fully searchable text automatically.</p>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow p-6 flex gap-4">
+        <div class="h-12 w-12 rounded-xl bg-indigo-100 flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-brain text-indigo-600 text-xl" aria-hidden="true"></i>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-800 mb-1">AI Metadata Extraction</h3>
+          <p class="text-gray-500 text-sm">OpenAI, Claude, Gemini, and other pluggable AI providers classify documents and pull out key fields like dates, amounts, and subjects.</p>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow p-6 flex gap-4">
+        <div class="h-12 w-12 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-cloud-upload-alt text-green-600 text-xl" aria-hidden="true"></i>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-800 mb-1">Multi-Cloud Storage</h3>
+          <p class="text-gray-500 text-sm">Route processed files to Dropbox, Google Drive, OneDrive, Amazon S3, Nextcloud, Paperless NGX, WebDAV, FTP/SFTP, and more.</p>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow p-6 flex gap-4">
+        <div class="h-12 w-12 rounded-xl bg-yellow-100 flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-mail-bulk text-yellow-600 text-xl" aria-hidden="true"></i>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-800 mb-1">Email &amp; IMAP Ingestion</h3>
+          <p class="text-gray-500 text-sm">Automatically pull documents from Gmail or any IMAP mailbox — no manual uploads needed.</p>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow p-6 flex gap-4">
+        <div class="h-12 w-12 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-search text-purple-600 text-xl" aria-hidden="true"></i>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-800 mb-1">Full-Text Search</h3>
+          <p class="text-gray-500 text-sm">Instantly find any document by content, metadata, or tags across your entire archive.</p>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow p-6 flex gap-4">
+        <div class="h-12 w-12 rounded-xl bg-pink-100 flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-project-diagram text-pink-600 text-xl" aria-hidden="true"></i>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-800 mb-1">Custom Pipelines</h3>
+          <p class="text-gray-500 text-sm">Build processing pipelines with configurable steps — OCR, AI extraction, format conversion, and storage routing in any order.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CTA banner -->
+  <div class="bg-indigo-700 text-white py-14 px-4">
+    <div class="max-w-2xl mx-auto text-center">
+      <h2 class="text-3xl font-extrabold mb-4">Ready to elevate your document workflow?</h2>
+      <p class="text-indigo-200 mb-8">Join teams already automating their document processing with DocuElevate.</p>
+      <div class="flex flex-wrap justify-center gap-4">
+        {% if allow_signup %}
+        <a href="/signup"
+           class="bg-white text-indigo-700 hover:bg-indigo-50 font-bold py-3 px-8 rounded-xl shadow-lg transition duration-200 flex items-center min-h-[44px]">
+          <i class="fas fa-rocket mr-2" aria-hidden="true"></i> Create a free account
+        </a>
+        {% else %}
+        <a href="/login"
+           class="bg-white text-indigo-700 hover:bg-indigo-50 font-bold py-3 px-8 rounded-xl shadow-lg transition duration-200 flex items-center min-h-[44px]">
+          <i class="fas fa-sign-in-alt mr-2" aria-hidden="true"></i> Log In
+        </a>
+        {% endif %}
+        <a href="/pricing"
+           class="bg-transparent border-2 border-white text-white hover:bg-white hover:text-indigo-700 font-bold py-3 px-8 rounded-xl transition duration-200 flex items-center min-h-[44px]">
+          <i class="fas fa-tags mr-2" aria-hidden="true"></i> See pricing
+        </a>
+      </div>
+    </div>
+  </div>
+
+{% elif multi_user_enabled %}
+{# ══════════════════════════════════════════════════════════════════════════ #}
+{# MULTI-USER / SAAS DASHBOARD (logged-in user)                             #}
 {# ══════════════════════════════════════════════════════════════════════════ #}
 
   <!-- Hero -->
