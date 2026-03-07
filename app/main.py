@@ -99,6 +99,19 @@ async def lifespan(app: FastAPI):
     # Send startup notification
     notify_startup()
 
+    # Seed default subscription plans if none exist
+    try:
+        from app.database import SessionLocal as _SessionLocal
+        from app.utils.subscription import seed_default_plans as _seed_plans
+
+        _db_seed = _SessionLocal()
+        try:
+            _seed_plans(_db_seed)
+        finally:
+            _db_seed.close()
+    except Exception:
+        logging.debug("Subscription plan seeding skipped — DB may not be ready yet")  # noqa: S110
+
     # Application is now running
     yield
 

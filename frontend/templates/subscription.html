@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}My Subscription – DocuElevate{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8 max-w-4xl">
+
+  <!-- Header -->
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-900 flex items-center gap-3">
+      <i class="fas fa-layer-group text-indigo-500" aria-hidden="true"></i>
+      My Subscription
+    </h1>
+    <p class="text-gray-500 text-sm mt-1">Your current plan, usage and available upgrades.</p>
+  </div>
+
+  {% if not multi_user_enabled %}
+  <!-- Single-user notice -->
+  <div class="bg-blue-50 border border-blue-200 rounded-xl p-6 flex items-start gap-4">
+    <i class="fas fa-info-circle text-blue-500 text-2xl flex-shrink-0 mt-0.5" aria-hidden="true"></i>
+    <div>
+      <p class="font-semibold text-blue-800">Multi-user mode is not enabled.</p>
+      <p class="text-blue-700 text-sm mt-1">
+        Subscription tiers apply when multi-user mode is active. Your instance currently runs in
+        single-user mode with no processing limits.
+        An admin can enable multi-user mode via <a href="/settings" class="underline hover:text-blue-900">Settings</a>.
+      </p>
+    </div>
+  </div>
+
+  {% else %}
+
+  <!-- Current plan card -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+
+    <!-- Plan badge -->
+    <div class="bg-white rounded-xl shadow p-6 flex flex-col items-center text-center
+      {% if tier_id == 'professional' %}ring-2 ring-indigo-500{% endif %}">
+      <div class="h-14 w-14 rounded-full
+        {% if tier_id == 'free' %}bg-gray-100{% elif tier_id == 'starter' %}bg-blue-100{% elif tier_id == 'professional' %}bg-indigo-100{% else %}bg-purple-100{% endif %}
+        flex items-center justify-center mb-3">
+        <i class="fas
+          {% if tier_id == 'free' %}fa-seedling text-gray-500
+          {% elif tier_id == 'starter' %}fa-rocket text-blue-600
+          {% elif tier_id == 'professional' %}fa-star text-indigo-600
+          {% else %}fa-building text-purple-600{% endif %}
+          text-2xl" aria-hidden="true"></i>
+      </div>
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Current Plan</p>
+      <p class="text-2xl font-extrabold text-gray-900 mt-1">{{ tier.name }}</p>
+      <p class="text-gray-500 text-sm mt-1">{{ tier.tagline }}</p>
+      {% if tier.price_monthly > 0 %}
+      <p class="mt-3 text-lg font-bold text-indigo-600">${{ tier.price_monthly }}<span class="text-sm font-normal text-gray-400">/month</span></p>
+      {% else %}
+      <p class="mt-3 text-lg font-bold text-gray-500">Free</p>
+      {% endif %}
+    </div>
+
+    <!-- Usage this period -->
+    {% if usage %}
+    <div class="md:col-span-2 bg-white rounded-xl shadow p-6">
+      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-widest mb-4">Usage</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+        <!-- Lifetime -->
+        <div class="text-center">
+          <p class="text-3xl font-extrabold text-gray-900">{{ usage.lifetime }}</p>
+          <p class="text-xs text-gray-500 mt-1">Total files (lifetime)</p>
+          {% if tier.lifetime_file_limit > 0 %}
+          <div class="mt-2">
+            {% set lifetime_pct = ((usage.lifetime / tier.lifetime_file_limit) * 100) | int %}
+            <div class="w-full bg-gray-200 rounded-full h-1.5" role="progressbar" aria-valuemin="0"
+                 aria-valuenow="{{ usage.lifetime }}" aria-valuemax="{{ tier.lifetime_file_limit }}">
+              <div class="h-1.5 rounded-full
+                {% if lifetime_pct >= 90 %}bg-red-500{% elif lifetime_pct >= 70 %}bg-yellow-500{% else %}bg-green-500{% endif %}"
+                   style="width: {{ [lifetime_pct, 100] | min }}%"></div>
+            </div>
+            <p class="text-xs text-gray-400 mt-1">{{ usage.lifetime }} / {{ tier.lifetime_file_limit }}</p>
+          </div>
+          {% else %}
+          <p class="text-xs text-green-600 mt-1">Unlimited</p>
+          {% endif %}
+        </div>
+
+        <!-- Today -->
+        <div class="text-center">
+          <p class="text-3xl font-extrabold text-gray-900">{{ usage.today }}</p>
+          <p class="text-xs text-gray-500 mt-1">Files today</p>
+          {% if tier.daily_upload_limit > 0 %}
+          <div class="mt-2">
+            {% set today_pct = ((usage.today / tier.daily_upload_limit) * 100) | int %}
+            <div class="w-full bg-gray-200 rounded-full h-1.5" role="progressbar" aria-valuemin="0"
+                 aria-valuenow="{{ usage.today }}" aria-valuemax="{{ tier.daily_upload_limit }}">
+              <div class="h-1.5 rounded-full
+                {% if today_pct >= 90 %}bg-red-500{% elif today_pct >= 70 %}bg-yellow-500{% else %}bg-blue-500{% endif %}"
+                   style="width: {{ [today_pct, 100] | min }}%"></div>
+            </div>
+            <p class="text-xs text-gray-400 mt-1">{{ usage.today }} / {{ tier.daily_upload_limit }} today</p>
+          </div>
+          {% else %}
+          <p class="text-xs text-green-600 mt-1">Unlimited</p>
+          {% endif %}
+        </div>
+
+        <!-- This month -->
+        <div class="text-center">
+          <p class="text-3xl font-extrabold text-gray-900">{{ usage.month }}</p>
+          <p class="text-xs text-gray-500 mt-1">Files this month</p>
+          {% if tier.monthly_upload_limit > 0 %}
+          <div class="mt-2">
+            {% set month_pct = ((usage.month / tier.monthly_upload_limit) * 100) | int %}
+            <div class="w-full bg-gray-200 rounded-full h-1.5" role="progressbar" aria-valuemin="0"
+                 aria-valuenow="{{ usage.month }}" aria-valuemax="{{ tier.monthly_upload_limit }}">
+              <div class="h-1.5 rounded-full
+                {% if month_pct >= 90 %}bg-red-500{% elif month_pct >= 70 %}bg-yellow-500{% else %}bg-indigo-500{% endif %}"
+                   style="width: {{ [month_pct, 100] | min }}%"></div>
+            </div>
+            <p class="text-xs text-gray-400 mt-1">{{ usage.month }} / {{ tier.monthly_upload_limit }} this month</p>
+          </div>
+          {% else %}
+          <p class="text-xs text-green-600 mt-1">Unlimited</p>
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+
+  <!-- Plan features included -->
+  <div class="bg-white rounded-xl shadow p-6 mb-8">
+    <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+      <i class="fas fa-list-check text-green-500" aria-hidden="true"></i>
+      What's included in your plan
+    </h2>
+    <ul class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-600">
+      {% for feature in tier.features %}
+      <li class="flex items-start gap-2">
+        <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
+        <span>{{ feature }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <!-- Upgrade options (only show tiers above current) -->
+  {% set tier_order = ['free', 'starter', 'professional', 'business'] %}
+  {% set current_index = tier_order.index(tier_id) %}
+  {% set upgrade_tiers = all_tiers | selectattr('id', 'ne', tier_id) | list %}
+
+  {% if tier_id != 'business' %}
+  <div class="mb-8">
+    <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+      <i class="fas fa-arrow-up-right-dots text-indigo-500" aria-hidden="true"></i>
+      Upgrade your plan
+    </h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {% for t in all_tiers %}
+        {% if tier_order.index(t.id) > current_index %}
+        <div class="bg-white rounded-xl border-2
+          {% if t.highlight %}border-indigo-500{% else %}border-gray-200{% endif %}
+          p-5 flex flex-col justify-between hover:shadow-md transition">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-bold text-gray-900">{{ t.name }}</span>
+              {% if t.badge %}
+              <span class="text-xs bg-indigo-100 text-indigo-700 font-semibold rounded-full px-2 py-0.5">{{ t.badge }}</span>
+              {% endif %}
+            </div>
+            <p class="text-gray-500 text-xs mb-3">{{ t.tagline }}</p>
+            {% if t.price_monthly > 0 %}
+            <p class="text-xl font-extrabold text-gray-900">${{ t.price_monthly }}<span class="text-sm font-normal text-gray-400">/mo</span></p>
+            {% endif %}
+            <ul class="mt-3 space-y-1.5 text-xs text-gray-600">
+              {% for feature in t.features[:4] %}
+              <li class="flex items-start gap-1.5">
+                <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
+                {{ feature }}
+              </li>
+              {% endfor %}
+              {% if t.features | length > 4 %}
+              <li class="text-indigo-500 font-medium">+ {{ (t.features | length) - 4 }} more features</li>
+              {% endif %}
+            </ul>
+          </div>
+          <div class="mt-4">
+            {% if t.id == 'business' %}
+            <a href="mailto:sales@docuelevate.io?subject=Business+Plan+Enquiry"
+               class="block text-center py-2 px-4 rounded-lg bg-gray-800 text-white text-sm font-semibold hover:bg-gray-700 transition">
+              Contact Sales
+            </a>
+            {% else %}
+            <a href="/pricing"
+               class="block text-center py-2 px-4 rounded-lg
+               {% if t.highlight %}bg-indigo-600 hover:bg-indigo-700{% else %}bg-blue-600 hover:bg-blue-700{% endif %}
+               text-white text-sm font-semibold transition">
+              Upgrade to {{ t.name }}
+            </a>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% endif %}
+
+  <!-- Back link -->
+  <div class="mt-8">
+    <a href="/" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1">
+      <i class="fas fa-arrow-left text-xs" aria-hidden="true"></i> Back to Dashboard
+    </a>
+  </div>
+
+</div>
+{% endblock %}

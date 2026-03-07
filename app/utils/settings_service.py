@@ -1771,6 +1771,19 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "subscription_overage_percent": {
+        "category": "Subscriptions",
+        "description": (
+            "Soft-limit overage buffer in percent (0–200). The announced monthly quota is increased by this "
+            "percentage for actual enforcement. For example, 20 means a 150-doc/month plan enforces at 180 docs "
+            "(150 × 1.20). Set to 0 to enforce exactly at the announced limit. Per-plan overage_percent configured "
+            "in the Plan Designer overrides this global default. Default: 20."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
 }
 
 

@@ -4,6 +4,302 @@
 {% block content %}
 <div class="container mx-auto px-4 py-8">
 
+{% if multi_user_enabled %}
+{# ══════════════════════════════════════════════════════════════════════════ #}
+{# MULTI-USER / SAAS DASHBOARD                                              #}
+{# ══════════════════════════════════════════════════════════════════════════ #}
+
+  <!-- Hero -->
+  <div class="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl shadow-lg text-white p-8 mb-8">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-bold mb-1">DocuElevate</h1>
+        <p class="text-blue-100 text-sm">Intelligent document processing &amp; management — built for teams</p>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <a href="/upload"
+           class="bg-white text-blue-700 hover:bg-blue-50 font-semibold py-2 px-5 rounded-lg transition duration-200 flex items-center shadow-sm">
+          <i class="fas fa-upload mr-2" aria-hidden="true"></i> Upload
+        </a>
+        <a href="/files"
+           class="bg-transparent border border-white text-white hover:bg-white hover:text-blue-700 font-semibold py-2 px-5 rounded-lg transition duration-200 flex items-center">
+          <i class="fas fa-list mr-2" aria-hidden="true"></i> Browse Files
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Platform stats row (admin only) -->
+  {% if is_admin %}
+  <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-3">Platform overview</h2>
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+    <div class="bg-white rounded-xl shadow p-5 flex items-center gap-3">
+      <div class="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-file-alt text-blue-600" aria-hidden="true"></i>
+      </div>
+      <div>
+        <p class="text-2xl font-extrabold text-blue-600">{{ stats.processed_files | default(0) }}</p>
+        <p class="text-gray-500 text-xs">Total files</p>
+      </div>
+    </div>
+    <div class="bg-white rounded-xl shadow p-5 flex items-center gap-3">
+      <div class="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-calendar-day text-green-600" aria-hidden="true"></i>
+      </div>
+      <div>
+        <p class="text-2xl font-extrabold text-green-600">{{ stats.files_today | default(0) }}</p>
+        <p class="text-gray-500 text-xs">Files today</p>
+      </div>
+    </div>
+    <div class="bg-white rounded-xl shadow p-5 flex items-center gap-3">
+      <div class="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-calendar-alt text-indigo-600" aria-hidden="true"></i>
+      </div>
+      <div>
+        <p class="text-2xl font-extrabold text-indigo-600">{{ stats.files_month | default(0) }}</p>
+        <p class="text-gray-500 text-xs">Files this month</p>
+      </div>
+    </div>
+    <div class="bg-white rounded-xl shadow p-5 flex items-center gap-3">
+      <div class="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-users text-purple-600" aria-hidden="true"></i>
+      </div>
+      <div>
+        <p class="text-2xl font-extrabold text-purple-600">{{ stats.unique_users | default(0) }}</p>
+        <p class="text-gray-500 text-xs">Active users</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- My usage / subscription widget -->
+  {% if user_tier and user_usage %}
+  <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-3">My usage</h2>
+  <div class="bg-white rounded-xl shadow p-6 mb-8">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+      <div class="flex items-center gap-3">
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold
+          {% if user_tier.id == 'free' %}bg-gray-100 text-gray-600
+          {% elif user_tier.id == 'starter' %}bg-blue-100 text-blue-700
+          {% elif user_tier.id == 'professional' %}bg-indigo-100 text-indigo-700
+          {% else %}bg-purple-100 text-purple-700{% endif %}">
+          <i class="fas
+            {% if user_tier.id == 'free' %}fa-seedling
+            {% elif user_tier.id == 'starter' %}fa-rocket
+            {% elif user_tier.id == 'professional' %}fa-star
+            {% else %}fa-building{% endif %}
+            mr-1" aria-hidden="true"></i>
+          {{ user_tier.name }} Plan
+        </span>
+        {% if user_tier.id != 'business' %}
+        <a href="/pricing" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+          Upgrade <i class="fas fa-arrow-up-right-from-square ml-0.5 text-xs" aria-hidden="true"></i>
+        </a>
+        {% endif %}
+      </div>
+      <a href="/subscription" class="text-xs text-gray-500 hover:text-gray-700">
+        View full details →
+      </a>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <!-- Lifetime -->
+      <div>
+        <div class="flex justify-between text-xs mb-1">
+          <span class="text-gray-500">Lifetime files</span>
+          <span class="font-semibold text-gray-700">
+            {{ user_usage.lifetime }}{% if user_tier.lifetime_file_limit > 0 %} / {{ user_tier.lifetime_file_limit }}{% endif %}
+          </span>
+        </div>
+        {% if user_tier.lifetime_file_limit > 0 %}
+        {% set pct = ([((user_usage.lifetime / user_tier.lifetime_file_limit) * 100) | int, 100] | min) %}
+        <div class="w-full bg-gray-100 rounded-full h-2" role="progressbar" aria-valuemin="0"
+             aria-valuenow="{{ user_usage.lifetime }}" aria-valuemax="{{ user_tier.lifetime_file_limit }}">
+          <div class="h-2 rounded-full {% if pct >= 90 %}bg-red-500{% elif pct >= 70 %}bg-yellow-500{% else %}bg-green-500{% endif %}"
+               style="width: {{ pct }}%"></div>
+        </div>
+        {% else %}
+        <div class="text-xs text-green-600">Unlimited</div>
+        {% endif %}
+      </div>
+      <!-- Today -->
+      <div>
+        <div class="flex justify-between text-xs mb-1">
+          <span class="text-gray-500">Files today</span>
+          <span class="font-semibold text-gray-700">
+            {{ user_usage.today }}{% if user_tier.daily_upload_limit > 0 %} / {{ user_tier.daily_upload_limit }}{% endif %}
+          </span>
+        </div>
+        {% if user_tier.daily_upload_limit > 0 %}
+        {% set pct = ([((user_usage.today / user_tier.daily_upload_limit) * 100) | int, 100] | min) %}
+        <div class="w-full bg-gray-100 rounded-full h-2" role="progressbar" aria-valuemin="0"
+             aria-valuenow="{{ user_usage.today }}" aria-valuemax="{{ user_tier.daily_upload_limit }}">
+          <div class="h-2 rounded-full {% if pct >= 90 %}bg-red-500{% elif pct >= 70 %}bg-yellow-500{% else %}bg-blue-500{% endif %}"
+               style="width: {{ pct }}%"></div>
+        </div>
+        {% else %}
+        <div class="text-xs text-green-600">Unlimited</div>
+        {% endif %}
+      </div>
+      <!-- This month -->
+      <div>
+        <div class="flex justify-between text-xs mb-1">
+          <span class="text-gray-500">Files this month</span>
+          <span class="font-semibold text-gray-700">
+            {{ user_usage.month }}{% if user_tier.monthly_upload_limit > 0 %} / {{ user_tier.monthly_upload_limit }}{% endif %}
+          </span>
+        </div>
+        {% if user_tier.monthly_upload_limit > 0 %}
+        {% set pct = ([((user_usage.month / user_tier.monthly_upload_limit) * 100) | int, 100] | min) %}
+        <div class="w-full bg-gray-100 rounded-full h-2" role="progressbar" aria-valuemin="0"
+             aria-valuenow="{{ user_usage.month }}" aria-valuemax="{{ user_tier.monthly_upload_limit }}">
+          <div class="h-2 rounded-full {% if pct >= 90 %}bg-red-500{% elif pct >= 70 %}bg-yellow-500{% else %}bg-indigo-500{% endif %}"
+               style="width: {{ pct }}%"></div>
+        </div>
+        {% else %}
+        <div class="text-xs text-green-600">Unlimited</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Widget grid (multi-user) -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <!-- Quick Actions -->
+    <div class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <i class="fas fa-bolt text-yellow-500" aria-hidden="true"></i> Quick Actions
+      </h2>
+      <ul class="space-y-2">
+        <li>
+          <a href="/upload" class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition group">
+            <span class="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-200">
+              <i class="fas fa-upload text-blue-600 text-sm" aria-hidden="true"></i>
+            </span>
+            <div>
+              <p class="text-sm font-medium text-gray-800">Upload Document</p>
+              <p class="text-xs text-gray-400">Process a new file</p>
+            </div>
+          </a>
+        </li>
+        <li>
+          <a href="/files" class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition group">
+            <span class="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-200">
+              <i class="fas fa-list text-indigo-600 text-sm" aria-hidden="true"></i>
+            </span>
+            <div>
+              <p class="text-sm font-medium text-gray-800">My Documents</p>
+              <p class="text-xs text-gray-400">Browse your processed files</p>
+            </div>
+          </a>
+        </li>
+        <li>
+          <a href="/subscription" class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition group">
+            <span class="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 group-hover:bg-purple-200">
+              <i class="fas fa-layer-group text-purple-600 text-sm" aria-hidden="true"></i>
+            </span>
+            <div>
+              <p class="text-sm font-medium text-gray-800">My Subscription</p>
+              <p class="text-xs text-gray-400">View plan &amp; usage details</p>
+            </div>
+          </a>
+        </li>
+        <li>
+          <a href="/search" class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition group">
+            <span class="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 group-hover:bg-green-200">
+              <i class="fas fa-search text-green-600 text-sm" aria-hidden="true"></i>
+            </span>
+            <div>
+              <p class="text-sm font-medium text-gray-800">Search</p>
+              <p class="text-xs text-gray-400">Full-text search across documents</p>
+            </div>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Processing stats -->
+    <div class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <i class="fas fa-chart-bar text-blue-500" aria-hidden="true"></i> Processing Stats
+      </h2>
+      <ul class="space-y-3 text-sm">
+        <li class="flex items-center justify-between py-2 border-b border-gray-100">
+          <span class="text-gray-600 flex items-center gap-2">
+            <i class="fas fa-file-alt text-blue-400 w-4" aria-hidden="true"></i> Total processed
+          </span>
+          <span class="font-bold text-gray-900">{{ stats.processed_files | default(0) }}</span>
+        </li>
+        <li class="flex items-center justify-between py-2 border-b border-gray-100">
+          <span class="text-gray-600 flex items-center gap-2">
+            <i class="fas fa-eye text-indigo-400 w-4" aria-hidden="true"></i> Files with OCR
+          </span>
+          <span class="font-bold text-gray-900">{{ stats.files_with_ocr | default(0) }}</span>
+        </li>
+        <li class="flex items-center justify-between py-2 border-b border-gray-100">
+          <span class="text-gray-600 flex items-center gap-2">
+            <i class="fas fa-calendar-day text-green-400 w-4" aria-hidden="true"></i> Today
+          </span>
+          <span class="font-bold text-gray-900">{{ stats.files_today | default(0) }}</span>
+        </li>
+        <li class="flex items-center justify-between py-2">
+          <span class="text-gray-600 flex items-center gap-2">
+            <i class="fas fa-calendar-alt text-orange-400 w-4" aria-hidden="true"></i> This month
+          </span>
+          <span class="font-bold text-gray-900">{{ stats.files_month | default(0) }}</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Upgrade CTA or Integrations -->
+    {% if user_tier and user_tier.id != 'business' %}
+    <div class="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-xl shadow p-6 text-white flex flex-col justify-between">
+      <div>
+        <h2 class="text-lg font-semibold mb-2 flex items-center gap-2">
+          <i class="fas fa-arrow-up-right-dots" aria-hidden="true"></i> Upgrade your plan
+        </h2>
+        <p class="text-indigo-100 text-sm mb-4">
+          Unlock more documents, more destinations and priority support.
+        </p>
+        <ul class="space-y-1.5 text-sm text-indigo-100">
+          <li class="flex items-center gap-2"><i class="fas fa-check-circle text-indigo-300" aria-hidden="true"></i> Higher daily &amp; monthly limits</li>
+          <li class="flex items-center gap-2"><i class="fas fa-check-circle text-indigo-300" aria-hidden="true"></i> More storage destinations</li>
+          <li class="flex items-center gap-2"><i class="fas fa-check-circle text-indigo-300" aria-hidden="true"></i> More OCR pages</li>
+        </ul>
+      </div>
+      <a href="/pricing"
+         class="mt-6 inline-flex items-center justify-center bg-white text-indigo-700 font-semibold px-5 py-2.5 rounded-lg hover:bg-indigo-50 transition shadow">
+        View plans &amp; pricing <i class="fas fa-arrow-right ml-2 text-xs" aria-hidden="true"></i>
+      </a>
+    </div>
+    {% else %}
+    <div class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <i class="fas fa-plug text-green-500" aria-hidden="true"></i> Integrations
+      </h2>
+      <div class="space-y-3 text-sm text-gray-600">
+        <div class="flex items-center justify-between">
+          <span>Active integrations</span>
+          <span class="font-bold text-green-600">{{ stats.active_integrations | default(0) }}</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span>Storage targets</span>
+          <span class="font-bold text-indigo-600">{{ stats.storage_targets | default(0) }}</span>
+        </div>
+      </div>
+      <a href="/status" class="mt-4 inline-flex items-center text-xs text-indigo-600 hover:text-indigo-800">
+        View system status <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
+      </a>
+    </div>
+    {% endif %}
+  </div>
+
+{% else %}
+{# ══════════════════════════════════════════════════════════════════════════ #}
+{# SINGLE-USER DASHBOARD (original layout, preserved as-is)                #}
+{# ══════════════════════════════════════════════════════════════════════════ #}
+
   <!-- Hero / Quick Actions -->
   <div class="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl shadow-lg text-white p-8 mb-8">
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -153,6 +449,8 @@
       </a>
     </div>
   </div>
+
+{% endif %}{# end multi_user_enabled #}
 
 </div>
 {% endblock %}

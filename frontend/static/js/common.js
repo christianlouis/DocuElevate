@@ -141,25 +141,35 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', fun
       if (authSection) {
         authSection.textContent = ''; // Clear existing content
         const container = document.createElement('div');
-        container.className = 'flex items-center';
+        container.className = 'flex items-center gap-2';
         
         const img = document.createElement('img');
         img.src = data.picture;
         img.alt = 'Avatar';
-        img.className = 'w-8 h-8 rounded-full mr-2';
+        img.className = 'w-8 h-8 rounded-full';
         
         const span = document.createElement('span');
         span.textContent = displayName;
+
+        // Subscription link
+        const planLink = document.createElement('a');
+        planLink.href = '/subscription';
+        planLink.className = 'text-xs text-indigo-600 hover:text-indigo-800 font-medium hidden md:inline';
+        planLink.title = 'My subscription';
+        const planIcon = document.createElement('i');
+        planIcon.className = 'fas fa-layer-group';
+        planLink.appendChild(planIcon);
         
         const logoutLink = document.createElement('a');
         logoutLink.href = '/logout';
-        logoutLink.className = 'ml-3 text-red-600 hover:text-red-800';
+        logoutLink.className = 'text-red-600 hover:text-red-800';
         const icon = document.createElement('i');
         icon.className = 'fas fa-sign-out-alt';
         logoutLink.appendChild(icon);
         
         container.appendChild(img);
         container.appendChild(span);
+        container.appendChild(planLink);
         container.appendChild(logoutLink);
         authSection.appendChild(container);
       }

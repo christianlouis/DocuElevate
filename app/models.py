@@ -1,6 +1,6 @@
 # app/models.py
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 
 from app.database import Base
 
@@ -199,6 +199,63 @@ class UserProfile(Base):
 
     # When True the user is prevented from uploading new documents
     is_blocked = Column(Boolean, default=False, nullable=False)
+
+    # Subscription tier: "free" | "starter" | "professional" | "business"
+    # NULL is treated as "free" by the subscription utility.
+    subscription_tier = Column(String(50), nullable=True, default="free")
+
+    # Billing cycle and overage settings (added in migration 016)
+    subscription_billing_cycle = Column(String(10), nullable=False, default="monthly", server_default="monthly")
+    subscription_period_start = Column(DateTime(timezone=True), nullable=True)
+    allow_overage = Column(Boolean, nullable=False, default=False, server_default="0")
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class SubscriptionPlan(Base):
+    """Dynamically configurable subscription plan stored in the database.
+
+    Plans are shown on the public /pricing page and assigned to users via
+    UserProfile.subscription_tier (which stores plan_id).  On first start the
+    four default plans are seeded from TIER_DEFAULTS in app/utils/subscription.py.
+    """
+
+    __tablename__ = "subscription_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    plan_id = Column(String(50), unique=True, nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    tagline = Column(String(255), nullable=True)
+
+    # Pricing
+    price_monthly = Column(Float, nullable=False, default=0.0)
+    price_yearly = Column(Float, nullable=False, default=0.0)
+    trial_days = Column(Integer, nullable=False, default=0)
+
+    # Volume limits (0 = unlimited)
+    lifetime_file_limit = Column(Integer, nullable=False, default=0)
+    daily_upload_limit = Column(Integer, nullable=False, default=0)
+    monthly_upload_limit = Column(Integer, nullable=False, default=0)
+    max_storage_destinations = Column(Integer, nullable=False, default=0)
+    max_ocr_pages_monthly = Column(Integer, nullable=False, default=0)
+    max_file_size_mb = Column(Integer, nullable=False, default=0)
+    max_mailboxes = Column(Integer, nullable=False, default=0)
+
+    # Overage configuration
+    overage_percent = Column(Integer, nullable=False, default=20)
+    allow_overage_billing = Column(Boolean, nullable=False, default=False)
+    overage_price_per_doc = Column(Float, nullable=True)
+    overage_price_per_ocr_page = Column(Float, nullable=True)
+
+    # Display / marketing
+    is_active = Column(Boolean, nullable=False, default=True)
+    is_highlighted = Column(Boolean, nullable=False, default=False)
+    badge_text = Column(String(50), nullable=True)
+    cta_text = Column(String(100), nullable=False, default="Get started")
+    sort_order = Column(Integer, nullable=False, default=0)
+    features = Column(Text, nullable=True)  # JSON-encoded list[str]
+    api_access = Column(Boolean, nullable=False, default=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
