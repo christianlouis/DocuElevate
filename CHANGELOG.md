@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Testing
+
+- **views**: Add 100% coverage tests for app/views/admin_users.py
+  ([`7cebb82`](https://github.com/christianlouis/DocuElevate/commit/7cebb824122d9f69843ba6117e1d1efea878e65b))
+
+
 ## v0.81.0 (2026-03-07)
 
 ### Bug Fixes
