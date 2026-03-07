@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.83.0 (2026-03-07)
+
+### Bug Fixes
+
+- **tests**: Correct OCR subtask retry test to patch process_with_ocr instead of azure module
+  ([`c485d44`](https://github.com/christianlouis/DocuElevate/commit/c485d4410d014d479230804ed7c51150a26ceab2))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`650a992`](https://github.com/christianlouis/DocuElevate/commit/650a9925c4d3754d553937a6eedd6e0ede8feb5c))
+
+### Features
+
+- **ui**: Redesign navigation for multi-user SaaS UX with pre/post-login visibility
+  ([`dc1ee0e`](https://github.com/christianlouis/DocuElevate/commit/dc1ee0e2e5b5e4328783bc0f9c92ac8af546fd88))
+
+
 ## v0.82.0 (2026-03-07)
 
 ### Bug Fixes
