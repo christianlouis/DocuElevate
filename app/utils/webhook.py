@@ -7,6 +7,9 @@ Supported events:
 - ``document.uploaded``  – a new document has been ingested
 - ``document.processed`` – a document finished processing successfully
 - ``document.failed``    – document processing failed
+- ``user.signup``        – a new user account was created
+- ``user.plan_changed``  – a user's subscription plan changed
+- ``user.payment_issue`` – a payment issue was reported for a user
 """
 
 import hashlib
@@ -29,6 +32,9 @@ VALID_EVENTS: frozenset[str] = frozenset(
         "document.uploaded",
         "document.processed",
         "document.failed",
+        "user.signup",
+        "user.plan_changed",
+        "user.payment_issue",
     }
 )
 

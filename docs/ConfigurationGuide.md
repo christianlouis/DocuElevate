@@ -853,6 +853,26 @@ For detailed setup instructions, see the [Amazon S3 Setup Guide](AmazonS3Setup.m
 | `NOTIFY_ON_CREDENTIAL_FAILURE` | Send notifications on credential failures (`True`/`False`) |
 | `NOTIFY_ON_STARTUP`        | Send notification when system starts (`True`/`False`)    |
 | `NOTIFY_ON_SHUTDOWN`       | Send notification when system shuts down (`True`/`False`)|
+| `NOTIFY_ON_FILE_PROCESSED` | Send notification when a file is successfully processed (`True`/`False`) |
+| `NOTIFY_ON_USER_SIGNUP`    | Send admin notification when a new user signs up (`True`/`False`, default `True`) |
+| `NOTIFY_ON_PLAN_CHANGE`    | Send admin notification when a user changes their subscription plan (`True`/`False`, default `True`) |
+| `NOTIFY_ON_PAYMENT_ISSUE`  | Send admin notification when a payment issue is reported for a user (`True`/`False`, default `True`) |
+
+#### User-Event Notifications
+
+DocuElevate sends admin push notifications (via Apprise) and fires outbound webhooks for three
+user-lifecycle events:
+
+| Event | Trigger | Notification type |
+|-------|---------|-------------------|
+| **New signup** | A first-time user logs in and a UserProfile is created | `NOTIFY_ON_USER_SIGNUP` |
+| **Plan change** | A user selects a new subscription tier during onboarding, or an admin changes their tier | `NOTIFY_ON_PLAN_CHANGE` |
+| **Payment issue** | An admin POSTs to `/api/admin/users/{user_id}/payment-issue` | `NOTIFY_ON_PAYMENT_ISSUE` |
+
+In addition to the Apprise push notification, each event also fires the matching webhook event
+(`user.signup`, `user.plan_changed`, `user.payment_issue`) to all active webhook configurations
+subscribed to that event, enabling integration with CRM, helpdesk (Jira, Zendesk, etc.), or
+payment processors.
 
 For detailed setup instructions, see the [Notifications Setup Guide](NotificationsSetup.md).
 
