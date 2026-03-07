@@ -123,6 +123,7 @@ async def serve_index(request: Request, db: Session = Depends(get_db)):
             "user_tier": user_tier,
             "multi_user_enabled": settings.multi_user_enabled,
             "is_admin": is_admin,
+            "allow_signup": settings.multi_user_enabled and settings.allow_local_signup,
         },
     )
 
