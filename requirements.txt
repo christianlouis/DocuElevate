@@ -33,6 +33,9 @@ boto3>=1.28.0
 # SFTP
 paramiko>=3.4.0  # SSH/SFTP implementation for Python (LGPL license)
 
+# Safe XML parsing (protection against XML bomb / XXE attacks)
+defusedxml>=0.7.1
+
 # Notification service
 apprise>=1.4.0
 

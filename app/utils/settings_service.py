@@ -971,6 +971,244 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Watch Folder / Ingest Settings
+    "watch_folders": {
+        "category": "Watch Folders",
+        "description": (
+            "Comma-separated list of absolute local filesystem paths that DocuElevate will "
+            "poll for new files to ingest. Works with any mounted path (SMB/CIFS, NFS, etc.). "
+            "Example: /watchfolders/scanner,/mnt/shared/inbox"
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "watch_folder_poll_interval": {
+        "category": "Watch Folders",
+        "description": "Poll interval in minutes for local watch folder scanning (default: 1)",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "watch_folder_delete_after_process": {
+        "category": "Watch Folders",
+        "description": (
+            "Delete files from local watch folders after they have been enqueued for processing. "
+            "When False (default), processed files are tracked via cache to avoid re-ingestion."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # FTP Ingest
+    "ftp_ingest_enabled": {
+        "category": "Watch Folders",
+        "description": "Enable FTP watch folder ingestion (requires FTP_INGEST_FOLDER and FTP connection settings)",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "ftp_ingest_folder": {
+        "category": "Watch Folders",
+        "description": (
+            "FTP folder path to poll for new documents to ingest. "
+            "Uses the existing FTP connection settings (FTP_HOST, FTP_USERNAME, FTP_PASSWORD)."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "ftp_ingest_delete_after_process": {
+        "category": "Watch Folders",
+        "description": "Delete files from the FTP ingest folder after they have been downloaded and enqueued",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # SFTP Ingest
+    "sftp_ingest_enabled": {
+        "category": "Watch Folders",
+        "description": "Enable SFTP watch folder ingestion (requires SFTP_INGEST_FOLDER and SFTP connection settings)",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sftp_ingest_folder": {
+        "category": "Watch Folders",
+        "description": (
+            "SFTP folder path to poll for new documents to ingest. "
+            "Uses the existing SFTP connection settings (SFTP_HOST, SFTP_USERNAME, SFTP_PASSWORD/SFTP_PRIVATE_KEY)."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sftp_ingest_delete_after_process": {
+        "category": "Watch Folders",
+        "description": "Delete files from the SFTP ingest folder after they have been downloaded and enqueued",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # Cloud Provider Watch Folders — Dropbox
+    "dropbox_ingest_enabled": {
+        "category": "Watch Folders",
+        "description": "Enable Dropbox watch folder ingestion (requires Dropbox OAuth credentials)",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "dropbox_ingest_folder": {
+        "category": "Watch Folders",
+        "description": "Dropbox folder path to poll for new documents (e.g. /Inbox/Scanner). Uses existing Dropbox credentials.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "dropbox_ingest_delete_after_process": {
+        "category": "Watch Folders",
+        "description": "Delete files from Dropbox ingest folder after download and enqueue",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # Cloud Provider Watch Folders — Google Drive
+    "google_drive_ingest_enabled": {
+        "category": "Watch Folders",
+        "description": "Enable Google Drive watch folder ingestion (requires Google Drive credentials)",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "google_drive_ingest_folder_id": {
+        "category": "Watch Folders",
+        "description": "Google Drive folder ID to poll for new documents. Uses existing Google Drive credentials.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "google_drive_ingest_delete_after_process": {
+        "category": "Watch Folders",
+        "description": "Delete files from Google Drive ingest folder after download and enqueue",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # Cloud Provider Watch Folders — OneDrive
+    "onedrive_ingest_enabled": {
+        "category": "Watch Folders",
+        "description": "Enable OneDrive watch folder ingestion (requires OneDrive MSAL credentials)",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "onedrive_ingest_folder_path": {
+        "category": "Watch Folders",
+        "description": "OneDrive folder path to poll for new documents (e.g. /Inbox/Scanner). Uses existing OneDrive credentials.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "onedrive_ingest_delete_after_process": {
+        "category": "Watch Folders",
+        "description": "Delete files from OneDrive ingest folder after download and enqueue",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # Cloud Provider Watch Folders — Nextcloud
+    "nextcloud_ingest_enabled": {
+        "category": "Watch Folders",
+        "description": "Enable Nextcloud watch folder ingestion (requires Nextcloud WebDAV credentials)",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "nextcloud_ingest_folder": {
+        "category": "Watch Folders",
+        "description": "Nextcloud folder path to poll for new documents (e.g. /Scans/Inbox). Uses existing Nextcloud credentials.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "nextcloud_ingest_delete_after_process": {
+        "category": "Watch Folders",
+        "description": "Delete files from Nextcloud ingest folder after download and enqueue",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # Cloud Provider Watch Folders — S3
+    "s3_ingest_enabled": {
+        "category": "Watch Folders",
+        "description": "Enable Amazon S3 prefix (watch folder) ingestion (requires S3/AWS credentials)",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "s3_ingest_prefix": {
+        "category": "Watch Folders",
+        "description": "S3 key prefix to poll for new objects to ingest (e.g. inbox/scanner/). Uses existing S3 credentials.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "s3_ingest_delete_after_process": {
+        "category": "Watch Folders",
+        "description": "Delete objects from S3 ingest prefix after download and enqueue",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # Cloud Provider Watch Folders — WebDAV
+    "webdav_ingest_enabled": {
+        "category": "Watch Folders",
+        "description": "Enable WebDAV watch folder ingestion (requires WebDAV URL and credentials)",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "webdav_ingest_folder": {
+        "category": "Watch Folders",
+        "description": "WebDAV folder path to poll for new documents. Uses existing WebDAV URL and credentials.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "webdav_ingest_delete_after_process": {
+        "category": "Watch Folders",
+        "description": "Delete files from WebDAV ingest folder after download and enqueue",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # IMAP Settings - Account 1
     "imap1_host": {
         "category": "IMAP",
