@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.87.0 (2026-03-07)
+
+### Bug Fixes
+
+- **docs**: Improve security and accessibility in help section
+  ([`fe8e1c4`](https://github.com/christianlouis/DocuElevate/commit/fe8e1c41cc8ddb72d1130fa4d58a6b6ed3447704))
+
+- **ui**: Move Help nav link outside auth conditional so it shows for all visitors
+  ([`6390584`](https://github.com/christianlouis/DocuElevate/commit/63905842fde797a16c92c16a85fc291a15410ff9))
+
+### Features
+
+- **docs**: Add built-in help section with How-To guides embedded in app
+  ([`46b2f17`](https://github.com/christianlouis/DocuElevate/commit/46b2f17acc4553b9b22856e254e6d50cdfc047f1))
+
+
 ## v0.86.0 (2026-03-07)
 
 ### Bug Fixes
