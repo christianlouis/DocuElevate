@@ -10,6 +10,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.82.0 (2026-03-07)
+
+### Bug Fixes
+
+- Address code review feedback
+  ([`6a96705`](https://github.com/christianlouis/DocuElevate/commit/6a967051bada88cf66cf2df4edbabc215d41b588))
+
+- Gate LocalUser machinery on multi_user_enabled for single-user backward compat
+  ([`b5b285e`](https://github.com/christianlouis/DocuElevate/commit/b5b285ebe6c5c69a8b7557a045e40aa611e6e45a))
+
+- Pricing page toggle and user auto-creation on OAuth login
+  ([`dd207ee`](https://github.com/christianlouis/DocuElevate/commit/dd207eef9bdf738d6d6764df4ab6e8f5929801b5))
+
+- Resolve merge conflict with main, fix test failures
+  ([`b1ce28f`](https://github.com/christianlouis/DocuElevate/commit/b1ce28f804085df0f0e8211662deb6816484f14d))
+
+- **auth**: Add WCAG 2.5.8 min-height to signup form inputs
+  ([`43f3f6b`](https://github.com/christianlouis/DocuElevate/commit/43f3f6bdbe489f9018489dc3d6796a3f84567ab2))
+
+- **tests**: Set multi_user_enabled=False in auth module tests that call auth() directly
+  ([`6f197e6`](https://github.com/christianlouis/DocuElevate/commit/6f197e69fc04f3d5d00cf44ceb4cf5fd4c72a3d6))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`2317595`](https://github.com/christianlouis/DocuElevate/commit/2317595829b37f0c004d0a9d10809a5b6f9af77f))
+
+- **changelog**: Update changelog [skip ci]
+  ([`fa78a71`](https://github.com/christianlouis/DocuElevate/commit/fa78a714928e24cde6e0d66f8f2bf997d42efae3))
+
+### Features
+
+- Add multi-step user onboarding wizard
+  ([`e0de0fd`](https://github.com/christianlouis/DocuElevate/commit/e0de0fd6fbd441ac45c4ad2483dd64565174958a))
+
+- **auth**: Add local user signup, email verification, and Stripe billing
+  ([`52e3852`](https://github.com/christianlouis/DocuElevate/commit/52e3852129f4b64a9813c3a4041c8826eece9e8c))
+
+- **onboarding**: Add multi-step user onboarding wizard
+  ([`99df081`](https://github.com/christianlouis/DocuElevate/commit/99df0816b06ef6a36bad8e38c4551b76ec00997c))
+
+### Testing
+
+- Improve coverage for app/api/plans.py from 38% to 100%
+  ([`ac10ada`](https://github.com/christianlouis/DocuElevate/commit/ac10adac84811481ddafc8b596ff3dc84cd13351))
+
+- **views**: Add 100% coverage tests for app/views/admin_users.py
+  ([`7cebb82`](https://github.com/christianlouis/DocuElevate/commit/7cebb824122d9f69843ba6117e1d1efea878e65b))
+
+
 ## Unreleased
 
 ### Documentation
