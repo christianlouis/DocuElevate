@@ -334,6 +334,55 @@ PAPERLESS_CUSTOM_FIELDS_MAPPING='{"absender": "Sender", "empfaenger": "Recipient
 3. After successful upload, custom fields are automatically populated
 4. You can view the populated fields in your Paperless-ngx document details
 
+## Processing Pipelines
+
+Processing pipelines let you define exactly what happens to your documents when they are uploaded. Each pipeline is an ordered sequence of **steps** — for example: convert to PDF → OCR → extract metadata → send to storage.
+
+### Key concepts
+
+| Term | Meaning |
+|------|---------|
+| **Pipeline** | A named, ordered list of processing steps |
+| **Step** | A single processing action (e.g., OCR, metadata extraction) |
+| **System pipeline** | Created by an admin; visible to all users as a shared default |
+| **User pipeline** | Created by a regular user; private to that user |
+| **Default pipeline** | Marked `is_default=true`; used automatically for new uploads |
+
+### Managing your pipelines
+
+1. Navigate to **Pipelines** in the top navigation bar.
+2. Click **New Pipeline** to create a pipeline, give it a name and optional description.
+3. Expand the pipeline card and click **Add Step** to build the workflow.
+4. Use the ↑ / ↓ arrows to reorder steps, or click the edit icon to change step settings.
+5. Mark a pipeline as **Default** so new documents are automatically processed by it.
+
+### Available step types
+
+| Step Type | Description |
+|-----------|-------------|
+| `convert_to_pdf` | Convert non-PDF files to PDF using Gotenberg |
+| `check_duplicates` | Detect duplicate files by content hash |
+| `ocr` | Extract text with Azure Document Intelligence or local Tesseract |
+| `extract_metadata` | Extract structured metadata (type, sender, tags) with AI |
+| `embed_metadata` | Write extracted metadata into the PDF document properties |
+| `compute_embedding` | Compute semantic embeddings for similarity search |
+| `send_to_destinations` | Upload the processed document to all configured storage destinations |
+| `classify` | Classify the document type with AI |
+
+### Assigning a pipeline to a file
+
+You can assign (or change) the pipeline for an individual document via the file detail page or the API:
+
+```bash
+POST /api/files/{file_id}/assign-pipeline?pipeline_id=3
+```
+
+Pass no `pipeline_id` to clear the assignment and fall back to the system default.
+
+### Admin: system-wide pipelines
+
+Admins can create **system pipelines** that appear in every user's pipeline list. These can be set as the global default so all users benefit from a consistent processing baseline. Navigate to **Pipelines** and check the **System pipeline** box when creating a new one (admin only).
+
 ## API Access
 
 For programmatic access, DocuElevate provides a comprehensive REST API:

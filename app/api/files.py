@@ -1559,3 +1559,71 @@ def assign_owner(request: Request, db: DbSession, owner_id: str = Query(...), fi
         "updated_count": updated,
         "owner_id": owner_id,
     }
+
+
+# ---------------------------------------------------------------------------
+# Pipeline assignment
+# ---------------------------------------------------------------------------
+
+
+@router.post("/files/{file_id}/assign-pipeline")
+@require_login
+def assign_pipeline_to_file(
+    request: Request,
+    file_id: int,
+    db: DbSession,
+    pipeline_id: int | None = None,
+):
+    """Assign (or remove) a processing pipeline from a file.
+
+    Path Parameters:
+        file_id: The file to update.
+
+    Query / Body Parameters:
+        pipeline_id: The pipeline to assign.  Pass ``null`` or omit to clear the
+            assignment (the system default will be used for future processing).
+
+    Returns:
+        A summary dict with the file_id and updated pipeline_id.
+
+    Raises:
+        HTTPException 404: If the file or pipeline does not exist / is not
+            accessible to the current user.
+    """
+    from app.auth import get_current_user, get_current_user_id
+    from app.models import Pipeline
+
+    user = get_current_user(request)
+    user_id: str = get_current_user_id(request)
+
+    is_admin_user = bool(user and user.get("is_admin"))
+
+    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    if not file_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    # Non-admins may only update files they own (or unowned files in single-user mode)
+    owner_id = get_current_owner_id(request)
+    if not is_admin_user and file_record.owner_id is not None and file_record.owner_id != owner_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    if pipeline_id is not None:
+        pipeline = db.query(Pipeline).filter(Pipeline.id == pipeline_id).first()
+        if not pipeline:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found")
+        # Check access: users can only assign their own pipelines or system pipelines (owner_id=None)
+        if not is_admin_user and pipeline.owner_id is not None and pipeline.owner_id != user_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found")
+
+    file_record.pipeline_id = pipeline_id
+
+    try:
+        db.commit()
+        db.refresh(file_record)
+    except Exception as exc:
+        db.rollback()
+        logger.exception(f"Failed to assign pipeline to file id={file_id}: {exc}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to assign pipeline")
+
+    logger.info(f"Pipeline {pipeline_id!r} assigned to file id={file_id}")
+    return {"file_id": file_id, "pipeline_id": file_record.pipeline_id}

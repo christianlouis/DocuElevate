@@ -1441,6 +1441,176 @@ Execute a full data migration from source to target database.
 ```
 
 
+## Pipelines
+
+The pipeline API lets you build and manage custom document processing workflows. Each pipeline is owned by a single user (or by the system when `owner_id` is `null`).
+
+### Step-types catalogue
+
+```bash
+GET /api/pipelines/step-types
+```
+
+Returns the catalogue of built-in step types.
+
+**Response (200):**
+```json
+{
+  "convert_to_pdf": {
+    "label": "Convert to PDF",
+    "description": "Convert non-PDF documents to PDF format using Gotenberg.",
+    "config_schema": {}
+  },
+  "ocr": {
+    "label": "OCR Processing",
+    "description": "Extract text using Azure Document Intelligence or local Tesseract.",
+    "config_schema": {
+      "force_cloud_ocr": { "type": "boolean", "default": false }
+    }
+  }
+}
+```
+
+### List pipelines
+
+```bash
+GET /api/pipelines
+```
+
+Returns pipelines visible to the current user (own + system pipelines). Admins see all pipelines.
+
+### Create pipeline
+
+```bash
+POST /api/pipelines
+Content-Type: application/json
+
+{
+  "name": "My Workflow",
+  "description": "Converts, OCRs, and stores documents.",
+  "is_default": false,
+  "is_active": true
+}
+```
+
+**Response (201):**
+```json
+{
+  "id": 1,
+  "owner_id": "alice",
+  "name": "My Workflow",
+  "description": "Converts, OCRs, and stores documents.",
+  "is_default": false,
+  "is_active": true,
+  "created_at": "2026-03-07T10:00:00+00:00",
+  "updated_at": "2026-03-07T10:00:00+00:00"
+}
+```
+
+### Create system pipeline (admin only)
+
+```bash
+POST /api/pipelines/admin/system
+Content-Type: application/json
+
+{
+  "name": "Global Default",
+  "is_default": true
+}
+```
+
+### Get pipeline with steps
+
+```bash
+GET /api/pipelines/{pipeline_id}
+```
+
+**Response (200):**
+```json
+{
+  "id": 1,
+  "owner_id": "alice",
+  "name": "My Workflow",
+  "steps": [
+    { "id": 1, "position": 0, "step_type": "convert_to_pdf", "enabled": true, "config": {} },
+    { "id": 2, "position": 1, "step_type": "ocr", "enabled": true, "config": { "force_cloud_ocr": false } }
+  ]
+}
+```
+
+### Update pipeline
+
+```bash
+PUT /api/pipelines/{pipeline_id}
+Content-Type: application/json
+
+{ "name": "Renamed Workflow", "is_default": true }
+```
+
+### Delete pipeline
+
+```bash
+DELETE /api/pipelines/{pipeline_id}
+```
+
+Returns **204 No Content**.
+
+### Add step
+
+```bash
+POST /api/pipelines/{pipeline_id}/steps
+Content-Type: application/json
+
+{
+  "step_type": "ocr",
+  "label": "Cloud OCR",
+  "config": { "force_cloud_ocr": true },
+  "enabled": true
+}
+```
+
+### Update step
+
+```bash
+PUT /api/pipelines/{pipeline_id}/steps/{step_id}
+Content-Type: application/json
+
+{ "enabled": false }
+```
+
+### Delete step
+
+```bash
+DELETE /api/pipelines/{pipeline_id}/steps/{step_id}
+```
+
+Returns **204 No Content**.
+
+### Reorder steps
+
+```bash
+PUT /api/pipelines/{pipeline_id}/steps/reorder
+Content-Type: application/json
+
+[3, 1, 2]
+```
+
+Provide a complete ordered list of **all** step IDs. Their positions are reassigned 0, 1, 2, … in the given order.
+
+### Assign pipeline to a file
+
+```bash
+POST /api/files/{file_id}/assign-pipeline?pipeline_id=2
+```
+
+Pass no `pipeline_id` query parameter (or omit it) to clear the assignment.
+
+**Response (200):**
+```json
+{ "file_id": 42, "pipeline_id": 2 }
+```
+
+
 ## Further Assistance
 
 For additional help with the API, please contact our support team or refer to the [Development Guide](../CONTRIBUTING.md).

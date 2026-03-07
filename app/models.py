@@ -6,6 +6,7 @@ from app.database import Base
 
 # Foreign key constants
 _FILES_ID_FK = "files.id"
+_PIPELINES_ID_FK = "pipelines.id"
 
 
 class DocumentMetadata(Base):
@@ -78,6 +79,9 @@ class FileRecord(Base):
 
     # Pre-computed text embedding vector stored as JSON array of floats
     embedding = Column(Text, nullable=True)
+
+    # Processing pipeline assigned to this file (NULL = use system default)
+    pipeline_id = Column(Integer, ForeignKey(_PIPELINES_ID_FK), nullable=True, index=True)
 
     # Timestamp when we inserted this record
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
@@ -290,6 +294,72 @@ class SubscriptionPlan(Base):
     api_access = Column(Boolean, nullable=False, default=False)
     stripe_price_id_monthly = Column(String(128), nullable=True)
     stripe_price_id_yearly = Column(String(128), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class Pipeline(Base):
+    """User-defined processing pipeline: an ordered set of steps.
+
+    Pipelines are user-specific.  A pipeline with ``owner_id = NULL`` is a
+    *system default* pipeline that only admins may create.  Regular users
+    create pipelines under their own ``owner_id``.  When a file has no
+    explicit pipeline assigned, the active system default is used.
+    """
+
+    __tablename__ = "pipelines"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Owner of this pipeline.  NULL = system/admin pipeline visible to everyone.
+    owner_id = Column(String, nullable=True, index=True)
+
+    # Human-readable name (unique per owner)
+    name = Column(String(255), nullable=False)
+
+    # Optional description
+    description = Column(Text, nullable=True)
+
+    # When True this pipeline is the default for new files belonging to the owner
+    # (or the global default when owner_id is NULL).  Only one pipeline per
+    # owner may be active default at a time — enforced at the application level.
+    is_default = Column(Boolean, nullable=False, default=False)
+
+    # Soft-disable without deleting
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class PipelineStep(Base):
+    """A single step in a processing pipeline.
+
+    Steps are executed in ascending ``position`` order.  Each step has a
+    ``step_type`` that maps to a built-in processing action and an optional
+    ``config`` JSON blob with step-specific parameters.
+    """
+
+    __tablename__ = "pipeline_steps"
+
+    id = Column(Integer, primary_key=True, index=True)
+    pipeline_id = Column(Integer, ForeignKey(_PIPELINES_ID_FK), nullable=False, index=True)
+
+    # Execution order within the pipeline (lower = earlier)
+    position = Column(Integer, nullable=False, default=0)
+
+    # One of the recognised step types (see PIPELINE_STEP_TYPES in pipelines.py)
+    step_type = Column(String(100), nullable=False)
+
+    # Optional human-readable label override (defaults to step_type label)
+    label = Column(String(255), nullable=True)
+
+    # JSON-encoded step-specific configuration dict
+    config = Column(Text, nullable=True)
+
+    # When False this step is skipped during execution
+    enabled = Column(Boolean, nullable=False, default=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

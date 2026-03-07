@@ -62,6 +62,8 @@ from app.main import app as fastapi_app  # noqa: E402
 from app.models import (  # noqa: F401, E402
     DocumentMetadata,
     FileRecord,
+    Pipeline,
+    PipelineStep,
     ProcessingLog,
     SavedSearch,
     UserProfile,
