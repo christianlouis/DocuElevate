@@ -25,26 +25,36 @@ templates.env.globals["max"] = max
 original_template_response = templates.TemplateResponse
 
 
+def _inject_global_context(ctx: dict) -> None:
+    """Inject shared global variables into every template context dict."""
+    ctx.setdefault("version", settings.version)
+    ctx.setdefault("release_name", getattr(settings, "release_name", None))
+    ctx.setdefault("ui_default_color_scheme", getattr(settings, "ui_default_color_scheme", "system"))
+    ctx.setdefault("multi_user_enabled", getattr(settings, "multi_user_enabled", False))
+    ctx.setdefault("auth_enabled", getattr(settings, "auth_enabled", True))
+
+    req = ctx.get("request")
+    if req is not None:
+        # CSRF token
+        if hasattr(req, "state") and hasattr(req.state, "csrf_token"):
+            ctx.setdefault("csrf_token", req.state.csrf_token)
+        # Determine whether the current visitor is authenticated
+        session_user = None
+        if hasattr(req, "session"):
+            session_user = req.session.get("user")
+        # When auth is disabled every visitor is effectively "logged in"
+        ctx.setdefault("is_logged_in", not getattr(settings, "auth_enabled", True) or session_user is not None)
+    else:
+        ctx.setdefault("is_logged_in", not getattr(settings, "auth_enabled", True))
+
+
 def template_response_with_version(*args, **kwargs):
     """Wrapper for TemplateResponse to include version and CSRF token in all templates"""
     # If context dict is provided, add version to it
     if len(args) >= 2 and isinstance(args[1], dict):
-        args[1].setdefault("version", settings.version)
-        args[1].setdefault("release_name", getattr(settings, "release_name", None))
-        # Inject CSRF token from request state when available
-        req = args[1].get("request")
-        if req is not None and hasattr(req.state, "csrf_token"):
-            args[1].setdefault("csrf_token", req.state.csrf_token)
-        # Inject default color scheme for dark-mode initialisation
-        args[1].setdefault("ui_default_color_scheme", getattr(settings, "ui_default_color_scheme", "system"))
+        _inject_global_context(args[1])
     elif "context" in kwargs and isinstance(kwargs["context"], dict):
-        kwargs["context"].setdefault("version", settings.version)
-        kwargs["context"].setdefault("release_name", getattr(settings, "release_name", None))
-        req = kwargs["context"].get("request")
-        if req is not None and hasattr(req.state, "csrf_token"):
-            kwargs["context"].setdefault("csrf_token", req.state.csrf_token)
-        # Inject default color scheme for dark-mode initialisation
-        kwargs["context"].setdefault("ui_default_color_scheme", getattr(settings, "ui_default_color_scheme", "system"))
+        _inject_global_context(kwargs["context"])
     return original_template_response(*args, **kwargs)
 
 

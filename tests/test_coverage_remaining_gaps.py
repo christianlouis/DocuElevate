@@ -98,6 +98,137 @@ class TestViewsBase:
 
         mock_orig.assert_called_once()
 
+    def test_is_logged_in_injected_when_auth_disabled(self):
+        """is_logged_in should be True when auth is disabled (single-user mode)."""
+        from app.views.base import template_response_with_version
+
+        with (
+            patch("app.views.base.original_template_response") as mock_orig,
+            patch("app.views.base.settings") as mock_settings,
+        ):
+            mock_orig.return_value = "response"
+            mock_settings.auth_enabled = False
+            mock_settings.multi_user_enabled = False
+            mock_settings.version = "0.0.0"
+            mock_settings.release_name = None
+            mock_settings.ui_default_color_scheme = "system"
+
+            req = MagicMock()
+            del req.state.csrf_token
+
+            template_response_with_version(
+                "template.html",
+                context={"request": req},
+            )
+
+        _, kwargs = mock_orig.call_args
+        assert kwargs["context"].get("is_logged_in") is True
+
+    def test_is_logged_in_true_when_session_user_present(self):
+        """is_logged_in should be True when session contains a user."""
+        from app.views.base import template_response_with_version
+
+        with (
+            patch("app.views.base.original_template_response") as mock_orig,
+            patch("app.views.base.settings") as mock_settings,
+        ):
+            mock_orig.return_value = "response"
+            mock_settings.auth_enabled = True
+            mock_settings.multi_user_enabled = True
+            mock_settings.version = "0.0.0"
+            mock_settings.release_name = None
+            mock_settings.ui_default_color_scheme = "system"
+
+            req = MagicMock()
+            req.session.get.return_value = {"email": "user@example.com"}
+            del req.state.csrf_token
+
+            template_response_with_version(
+                "template.html",
+                context={"request": req},
+            )
+
+        _, kwargs = mock_orig.call_args
+        assert kwargs["context"].get("is_logged_in") is True
+
+    def test_is_logged_in_false_when_no_session_user(self):
+        """is_logged_in should be False when auth is enabled and no session user."""
+        from app.views.base import template_response_with_version
+
+        with (
+            patch("app.views.base.original_template_response") as mock_orig,
+            patch("app.views.base.settings") as mock_settings,
+        ):
+            mock_orig.return_value = "response"
+            mock_settings.auth_enabled = True
+            mock_settings.multi_user_enabled = True
+            mock_settings.version = "0.0.0"
+            mock_settings.release_name = None
+            mock_settings.ui_default_color_scheme = "system"
+
+            req = MagicMock()
+            req.session.get.return_value = None
+            del req.state.csrf_token
+
+            template_response_with_version(
+                "template.html",
+                context={"request": req},
+            )
+
+        _, kwargs = mock_orig.call_args
+        assert kwargs["context"].get("is_logged_in") is False
+
+    def test_is_logged_in_false_when_request_has_no_session(self):
+        """is_logged_in should default to False when request has no session attribute."""
+        from app.views.base import template_response_with_version
+
+        with (
+            patch("app.views.base.original_template_response") as mock_orig,
+            patch("app.views.base.settings") as mock_settings,
+        ):
+            mock_orig.return_value = "response"
+            mock_settings.auth_enabled = True
+            mock_settings.multi_user_enabled = False
+            mock_settings.version = "0.0.0"
+            mock_settings.release_name = None
+            mock_settings.ui_default_color_scheme = "system"
+
+            # Use a simple object without session attribute
+            class NoSessionRequest:
+                class state:
+                    pass  # no csrf_token
+
+            template_response_with_version(
+                "template.html",
+                context={"request": NoSessionRequest()},
+            )
+
+        _, kwargs = mock_orig.call_args
+        assert kwargs["context"].get("is_logged_in") is False
+
+    def test_multi_user_enabled_injected(self):
+        """multi_user_enabled should be injected into every template context."""
+        from app.views.base import template_response_with_version
+
+        with (
+            patch("app.views.base.original_template_response") as mock_orig,
+            patch("app.views.base.settings") as mock_settings,
+        ):
+            mock_orig.return_value = "response"
+            mock_settings.auth_enabled = False
+            mock_settings.multi_user_enabled = True
+            mock_settings.version = "0.0.0"
+            mock_settings.release_name = None
+            mock_settings.ui_default_color_scheme = "system"
+
+            template_response_with_version(
+                "template.html",
+                context={"title": "no request"},
+            )
+
+        _, kwargs = mock_orig.call_args
+        assert kwargs["context"].get("multi_user_enabled") is True
+
 
 # ===========================================================================
 # app/views/general.py  – error branches
