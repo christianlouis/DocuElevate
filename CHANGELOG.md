@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.84.0 (2026-03-07)
+
+### Features
+
+- **ui**: Show marketing landing page for unauthenticated multi-user visitors
+  ([`68e8af9`](https://github.com/christianlouis/DocuElevate/commit/68e8af95545b3cda94e1b84383fc42ae584705b7))
+
+
 ## v0.83.0 (2026-03-07)
 
 ### Bug Fixes
