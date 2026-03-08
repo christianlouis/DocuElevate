@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.101.0 (2026-03-08)
+
+### Features
+
+- **ui**: Add unified Sources & Destinations integrations dashboard
+  ([`2c652dc`](https://github.com/christianlouis/DocuElevate/commit/2c652dcc3e3b7bf5b959de8d0a1fe3cd6635763c))
+
+- **ui**: Replace Email Ingestion nav with unified Integrations link
+  ([`0edb941`](https://github.com/christianlouis/DocuElevate/commit/0edb94158d6956dcbd19a29751c3c89ac7980a87))
+
+### Refactoring
+
+- **ui**: Address code review - optimize queries, extract helpers, improve error handling
+  ([`e27bace`](https://github.com/christianlouis/DocuElevate/commit/e27bacee3bbd84384ca3e87a540da3a721cdc0c3))
+
+
 ## v0.100.0 (2026-03-08)
 
 ### Bug Fixes
