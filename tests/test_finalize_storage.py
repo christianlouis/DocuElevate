@@ -19,15 +19,16 @@ def _make_file_record(file_id: int = 123, owner_id=None):
     return rec
 
 
+@pytest.fixture(autouse=True)
+def _patch_celery_background_tasks(mocker):
+    """Module-level autouse fixture: prevent lazy-imported Celery tasks from connecting to Redis."""
+    mocker.patch("app.tasks.compute_embedding.compute_document_embedding")
+    mocker.patch("app.tasks.convert_to_pdfa.convert_to_pdfa", create=True)
+
+
 @pytest.mark.unit
 class TestFinalizeDocumentStorage:
     """Tests for finalize_document_storage Celery task."""
-
-    @pytest.fixture(autouse=True)
-    def _patch_celery_tasks(self, mocker):
-        """Prevent all lazy-imported Celery tasks from actually connecting to Redis."""
-        mocker.patch("app.tasks.compute_embedding.compute_document_embedding")
-        mocker.patch("app.tasks.convert_to_pdfa.convert_to_pdfa", create=True)
 
     @patch("app.tasks.finalize_document_storage.notify_file_processed")
     @patch("app.tasks.finalize_document_storage.send_to_user_destinations")
@@ -465,12 +466,6 @@ class TestFinalizeDocumentStorage:
 @pytest.mark.unit
 class TestFinalizeDocumentStorageUserRouting:
     """Tests for user-specific destination routing in finalize_document_storage."""
-
-    @pytest.fixture(autouse=True)
-    def _patch_celery_tasks(self, mocker):
-        """Prevent all lazy-imported Celery tasks from actually connecting to Redis."""
-        mocker.patch("app.tasks.compute_embedding.compute_document_embedding")
-        mocker.patch("app.tasks.convert_to_pdfa.convert_to_pdfa", create=True)
 
     @patch("app.tasks.finalize_document_storage.notify_file_processed")
     @patch("app.tasks.finalize_document_storage.send_to_user_destinations")

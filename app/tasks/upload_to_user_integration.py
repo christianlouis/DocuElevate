@@ -501,12 +501,17 @@ def _upload_email(file_path: str, cfg: dict[str, Any], creds: dict[str, Any], ta
     msg.attach(part)
 
     if use_tls:
+        import ssl
+
+        tls_context = ssl.create_default_context()
         with smtplib.SMTP(host, port, timeout=30) as smtp:
-            smtp.starttls()  # nosec B608
+            smtp.starttls(context=tls_context)
             if username and password:
                 smtp.login(username, password)
             smtp.sendmail(msg["From"], [recipient], msg.as_string())
     else:
+        # Plaintext SMTP — only use when explicitly configured and TLS is unavailable.
+        # Credentials and content will be transmitted without encryption.
         with smtplib.SMTP(host, port, timeout=30) as smtp:  # nosec B608
             if username and password:
                 smtp.login(username, password)
@@ -518,6 +523,9 @@ def _upload_email(file_path: str, cfg: dict[str, Any], creds: dict[str, Any], ta
 
 def _upload_rclone(file_path: str, cfg: dict[str, Any], creds: dict[str, Any], task_id: str) -> dict[str, Any]:
     """Copy *file_path* to an rclone remote using per-user rclone config."""
+    import re
+    import tempfile
+
     remote = cfg.get("remote") or ""
     folder = cfg.get("folder") or ""
     rclone_conf_text = creds.get("rclone_conf") or ""
@@ -528,9 +536,17 @@ def _upload_rclone(file_path: str, cfg: dict[str, Any], creds: dict[str, Any], t
     if not rclone_conf_text:
         raise ValueError("Rclone integration is missing rclone_conf in credentials")
 
-    # Write the user's rclone config to a temp file so we don't touch the system config
-    import tempfile
+    # Validate remote and folder to prevent shell metacharacter injection.
+    # rclone remote names are alphanumeric + hyphens/underscores followed by ':'.
+    # folder paths must not contain shell-dangerous characters.
+    _SAFE_REMOTE_RE = re.compile(r"^[A-Za-z0-9_\-]+:(/[A-Za-z0-9_.@\-/ ]*)?$")
+    _SAFE_FOLDER_RE = re.compile(r"^[A-Za-z0-9_.@\-/ ]*$")
+    if not _SAFE_REMOTE_RE.match(remote):
+        raise ValueError(f"Rclone remote contains unsafe characters: {remote!r}")
+    if folder and not _SAFE_FOLDER_RE.match(folder):
+        raise ValueError(f"Rclone folder contains unsafe characters: {folder!r}")
 
+    # Write the user's rclone config to a temp file so we don't touch the system config
     with tempfile.NamedTemporaryFile(mode="w", suffix=".conf", delete=False) as tmp_conf:
         tmp_conf.write(rclone_conf_text)
         conf_path = tmp_conf.name
