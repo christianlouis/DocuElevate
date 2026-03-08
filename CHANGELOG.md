@@ -10,6 +10,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.92.0 (2026-03-08)
+
+### Bug Fixes
+
+- **admin-users**: Restore missing @router.get decorator on get_user endpoint
+  ([`9b8eb91`](https://github.com/christianlouis/DocuElevate/commit/9b8eb911c3bf2b0be84a73030e82cff12151d4ba))
+
+### Chores
+
+- Update plan to include forgot-username and login label clarification
+  ([`44ea43f`](https://github.com/christianlouis/DocuElevate/commit/44ea43f9cf948aabe8f8ae98744cd41061ab8770))
+
+### Continuous Integration
+
+- Fix CodeQL javascript language identifier mismatch
+  ([`3f8a95d`](https://github.com/christianlouis/DocuElevate/commit/3f8a95d8081c4ce3ad380e6391afa3bebb57bbb7))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`f2d2aaa`](https://github.com/christianlouis/DocuElevate/commit/f2d2aaa3545081de1ff7317672199085daa3c3c0))
+
+### Features
+
+- **auth**: Password reset, forgot username, and admin user management for local accounts
+  ([`d36ba88`](https://github.com/christianlouis/DocuElevate/commit/d36ba88de765b688888c6e661256f8508da86d89))
+
+
+## v0.91.0 (2026-03-08)
+
+### Features
+
+- **backup**: Extend backup and restore to PostgreSQL and MySQL/MariaDB
+  ([`a0f5ba1`](https://github.com/christianlouis/DocuElevate/commit/a0f5ba179978d7c63bbdb8c564a32eaf3f78e5ad))
+
+
 ## v0.90.3 (2026-03-08)
 
 ### Bug Fixes

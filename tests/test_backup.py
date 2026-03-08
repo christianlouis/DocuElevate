@@ -236,6 +236,254 @@ class TestBackupTaskHelpers:
             result = _db_path()
             assert result is None
 
+    def test_db_backend_sqlite(self):
+        """_db_backend() returns 'sqlite' for SQLite URLs."""
+        from app.tasks.backup_tasks import _db_backend
+
+        with patch("app.tasks.backup_tasks.settings") as mock_settings:
+            mock_settings.database_url = "sqlite:////tmp/test.db"
+            assert _db_backend() == "sqlite"
+
+    def test_db_backend_postgresql(self):
+        """_db_backend() returns 'postgresql' for PostgreSQL URLs."""
+        from app.tasks.backup_tasks import _db_backend
+
+        with patch("app.tasks.backup_tasks.settings") as mock_settings:
+            mock_settings.database_url = "postgresql://user:pass@localhost/db"
+            assert _db_backend() == "postgresql"
+
+    def test_db_backend_mysql(self):
+        """_db_backend() returns 'mysql' for MySQL URLs."""
+        from app.tasks.backup_tasks import _db_backend
+
+        with patch("app.tasks.backup_tasks.settings") as mock_settings:
+            mock_settings.database_url = "mysql+pymysql://user:pass@localhost/db"
+            assert _db_backend() == "mysql"
+
+    def test_archive_ext_sqlite(self):
+        """_archive_ext_for_backend() returns '.db.gz' for sqlite."""
+        from app.tasks.backup_tasks import _archive_ext_for_backend
+
+        assert _archive_ext_for_backend("sqlite") == ".db.gz"
+
+    def test_archive_ext_postgresql(self):
+        """_archive_ext_for_backend() returns '.pgsql.gz' for postgresql."""
+        from app.tasks.backup_tasks import _archive_ext_for_backend
+
+        assert _archive_ext_for_backend("postgresql") == ".pgsql.gz"
+
+    def test_archive_ext_mysql(self):
+        """_archive_ext_for_backend() returns '.mysql.gz' for mysql."""
+        from app.tasks.backup_tasks import _archive_ext_for_backend
+
+        assert _archive_ext_for_backend("mysql") == ".mysql.gz"
+
+    def test_archive_ext_unknown(self):
+        """_archive_ext_for_backend() falls back to '.sql.gz' for unknown backends."""
+        from app.tasks.backup_tasks import _archive_ext_for_backend
+
+        assert _archive_ext_for_backend("mssql") == ".sql.gz"
+
+    def test_dump_postgresql_success(self, tmp_path):
+        """_dump_postgresql() streams pg_dump output into a gzip archive."""
+        from unittest.mock import MagicMock
+
+        from app.tasks.backup_tasks import _dump_postgresql
+
+        dest = tmp_path / "dump.pgsql.gz"
+        fake_sql = b"-- PostgreSQL database dump\nSELECT 1;\n"
+
+        mock_proc = MagicMock()
+        mock_proc.stdout.read.side_effect = [fake_sql, b""]
+        mock_proc.stderr.read.return_value = b""
+        mock_proc.returncode = 0
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc):
+            _dump_postgresql("postgresql://user:pass@localhost/testdb", dest)
+
+        assert dest.exists()
+        with gzip.open(str(dest), "rb") as gz:
+            assert gz.read() == fake_sql
+
+    def test_dump_postgresql_failure(self, tmp_path):
+        """_dump_postgresql() raises RuntimeError when pg_dump fails."""
+        from unittest.mock import MagicMock
+
+        from app.tasks.backup_tasks import _dump_postgresql
+
+        dest = tmp_path / "dump.pgsql.gz"
+
+        mock_proc = MagicMock()
+        mock_proc.stdout.read.side_effect = [b""]
+        mock_proc.stderr.read.return_value = b"FATAL: connection refused"
+        mock_proc.returncode = 1
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc):
+            with pytest.raises(RuntimeError, match="pg_dump exited with code 1"):
+                _dump_postgresql("postgresql://user:pass@localhost/testdb", dest)
+
+    def test_dump_mysql_success(self, tmp_path):
+        """_dump_mysql() streams mysqldump output into a gzip archive."""
+        from unittest.mock import MagicMock
+
+        from app.tasks.backup_tasks import _dump_mysql
+
+        dest = tmp_path / "dump.mysql.gz"
+        fake_sql = b"-- MySQL dump\nCREATE TABLE t (id INT);\n"
+
+        mock_proc = MagicMock()
+        mock_proc.stdout.read.side_effect = [fake_sql, b""]
+        mock_proc.stderr.read.return_value = b""
+        mock_proc.returncode = 0
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc):
+            _dump_mysql("mysql+pymysql://user:pass@localhost/testdb", dest)
+
+        assert dest.exists()
+        with gzip.open(str(dest), "rb") as gz:
+            assert gz.read() == fake_sql
+
+    def test_dump_mysql_failure(self, tmp_path):
+        """_dump_mysql() raises RuntimeError when mysqldump fails."""
+        from unittest.mock import MagicMock
+
+        from app.tasks.backup_tasks import _dump_mysql
+
+        dest = tmp_path / "dump.mysql.gz"
+
+        mock_proc = MagicMock()
+        mock_proc.stdout.read.side_effect = [b""]
+        mock_proc.stderr.read.return_value = b"ERROR: Access denied"
+        mock_proc.returncode = 1
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc):
+            with pytest.raises(RuntimeError, match="mysqldump exited with code 1"):
+                _dump_mysql("mysql+pymysql://user:pass@localhost/testdb", dest)
+
+    def test_restore_sqlite_success(self, tmp_path):
+        """_restore_sqlite() applies a valid SQL dump to a SQLite file."""
+        from app.tasks.backup_tasks import _restore_sqlite
+
+        db_file = tmp_path / "test.db"
+        conn = sqlite3.connect(str(db_file))
+        conn.execute("CREATE TABLE old (id INTEGER)")
+        conn.commit()
+        conn.close()
+
+        # Create a valid dump archive
+        sql = "BEGIN TRANSACTION;\nCREATE TABLE new_tbl (x TEXT);\nCOMMIT;\n"
+        archive = tmp_path / "dump.db.gz"
+        with gzip.open(str(archive), "wt") as gz:
+            gz.write(sql)
+
+        _restore_sqlite(db_file, archive)
+
+        conn2 = sqlite3.connect(str(db_file))
+        tables = [r[0] for r in conn2.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        conn2.close()
+        assert "new_tbl" in tables
+
+    def test_restore_sqlite_invalid_gz(self, tmp_path):
+        """_restore_sqlite() raises ValueError for corrupt gzip content."""
+        from app.tasks.backup_tasks import _restore_sqlite
+
+        db_file = tmp_path / "test.db"
+        db_file.write_bytes(b"")
+        archive = tmp_path / "bad.db.gz"
+        archive.write_bytes(b"not gzip data")
+
+        with pytest.raises(ValueError, match="Failed to decompress"):
+            _restore_sqlite(db_file, archive)
+
+    def test_restore_sqlite_invalid_sql(self, tmp_path):
+        """_restore_sqlite() raises ValueError for invalid SQL content."""
+        from app.tasks.backup_tasks import _restore_sqlite
+
+        db_file = tmp_path / "test.db"
+        db_file.write_bytes(b"")
+        archive = tmp_path / "bad.db.gz"
+        with gzip.open(str(archive), "wt") as gz:
+            gz.write("THIS IS NOT VALID SQL!!!;\n")
+
+        with pytest.raises(ValueError, match="invalid SQL"):
+            _restore_sqlite(db_file, archive)
+
+    def test_restore_postgresql_success(self, tmp_path):
+        """_restore_postgresql() pipes the archive to psql."""
+        from unittest.mock import MagicMock
+
+        from app.tasks.backup_tasks import _restore_postgresql
+
+        fake_sql = b"-- PostgreSQL dump\nSELECT 1;\n"
+        archive = tmp_path / "dump.pgsql.gz"
+        with gzip.open(str(archive), "wb") as gz:
+            gz.write(fake_sql)
+
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = (b"", b"")
+        mock_proc.returncode = 0
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc):
+            _restore_postgresql("postgresql://user:pass@localhost/testdb", archive)
+
+        mock_proc.communicate.assert_called_once_with(input=fake_sql)
+
+    def test_restore_postgresql_failure(self, tmp_path):
+        """_restore_postgresql() raises RuntimeError when psql fails."""
+        from unittest.mock import MagicMock
+
+        from app.tasks.backup_tasks import _restore_postgresql
+
+        archive = tmp_path / "dump.pgsql.gz"
+        with gzip.open(str(archive), "wb") as gz:
+            gz.write(b"SELECT 1;")
+
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = (b"", b"ERROR: invalid input")
+        mock_proc.returncode = 1
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc):
+            with pytest.raises(RuntimeError, match="psql exited with code 1"):
+                _restore_postgresql("postgresql://user:pass@localhost/testdb", archive)
+
+    def test_restore_mysql_success(self, tmp_path):
+        """_restore_mysql() pipes the archive to mysql."""
+        from unittest.mock import MagicMock
+
+        from app.tasks.backup_tasks import _restore_mysql
+
+        fake_sql = b"-- MySQL dump\nSELECT 1;\n"
+        archive = tmp_path / "dump.mysql.gz"
+        with gzip.open(str(archive), "wb") as gz:
+            gz.write(fake_sql)
+
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = (b"", b"")
+        mock_proc.returncode = 0
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc):
+            _restore_mysql("mysql+pymysql://user:pass@localhost/testdb", archive)
+
+        mock_proc.communicate.assert_called_once_with(input=fake_sql)
+
+    def test_restore_mysql_failure(self, tmp_path):
+        """_restore_mysql() raises RuntimeError when mysql fails."""
+        from unittest.mock import MagicMock
+
+        from app.tasks.backup_tasks import _restore_mysql
+
+        archive = tmp_path / "dump.mysql.gz"
+        with gzip.open(str(archive), "wb") as gz:
+            gz.write(b"SELECT 1;")
+
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = (b"", b"ERROR: Access denied")
+        mock_proc.returncode = 1
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc):
+            with pytest.raises(RuntimeError, match="mysql exited with code 1"):
+                _restore_mysql("mysql+pymysql://user:pass@localhost/testdb", archive)
+
     def test_apply_retention_prunes_old(self, tmp_path, db_session):
         """_apply_retention() deletes backups beyond the retention limit."""
         from app.tasks.backup_tasks import _apply_retention
@@ -352,20 +600,28 @@ class TestCreateBackupTask:
             result = create_backup("hourly")
         assert result["status"] == "disabled"
 
-    def test_non_sqlite_db(self):
-        """create_backup returns unsupported_db for non-SQLite databases."""
+    def test_unsupported_db_backend(self):
+        """create_backup returns unsupported_db for backends other than sqlite/postgresql/mysql."""
         from app.tasks.backup_tasks import create_backup
 
-        with (
-            patch("app.tasks.backup_tasks.settings") as mock_settings,
-            patch("app.tasks.backup_tasks._db_path", return_value=None),
-        ):
+        with patch("app.tasks.backup_tasks.settings") as mock_settings:
             mock_settings.backup_enabled = True
+            mock_settings.database_url = "mssql+pyodbc://user:pass@server/db"
+            result = create_backup("hourly")
+        assert result["status"] == "unsupported_db"
+
+    def test_in_memory_sqlite_unsupported(self):
+        """create_backup returns unsupported_db for in-memory SQLite."""
+        from app.tasks.backup_tasks import create_backup
+
+        with patch("app.tasks.backup_tasks.settings") as mock_settings:
+            mock_settings.backup_enabled = True
+            mock_settings.database_url = "sqlite:///:memory:"
             result = create_backup("hourly")
         assert result["status"] == "unsupported_db"
 
     def test_missing_db_file(self, tmp_path):
-        """create_backup returns error when the DB file does not exist."""
+        """create_backup returns error when the SQLite DB file does not exist."""
         from app.tasks.backup_tasks import create_backup
 
         missing = tmp_path / "does_not_exist.db"
@@ -375,6 +631,7 @@ class TestCreateBackupTask:
             patch("app.tasks.backup_tasks._db_path", return_value=missing),
         ):
             mock_settings.backup_enabled = True
+            mock_settings.database_url = f"sqlite:///{missing}"
             result = create_backup("hourly")
         assert result["status"] == "error"
 
@@ -400,6 +657,7 @@ class TestCreateBackupTask:
         ):
             backup_dir.mkdir(parents=True, exist_ok=True)
             mock_settings.backup_enabled = True
+            mock_settings.database_url = f"sqlite:///{db_file}"
             mock_db = MagicMock()
             mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
             mock_sl.return_value.__exit__ = MagicMock(return_value=False)
@@ -408,6 +666,69 @@ class TestCreateBackupTask:
         assert result["status"] == "ok"
         assert "filename" in result
         assert result["filename"].startswith("backup_hourly_")
+        assert result["filename"].endswith(".db.gz")
+
+    def test_successful_backup_postgresql(self, tmp_path):
+        """create_backup creates a .pgsql.gz archive for PostgreSQL databases."""
+        from app.tasks.backup_tasks import create_backup
+
+        backup_dir = tmp_path / "backups"
+        backup_dir.mkdir()
+
+        def fake_pg_dump(db_url: str, dest: Path) -> None:
+            with gzip.open(str(dest), "wb") as gz:
+                gz.write(b"-- PostgreSQL dump\n")
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("app.tasks.backup_tasks._backup_dir", return_value=backup_dir),
+            patch("app.tasks.backup_tasks._dump_postgresql", side_effect=fake_pg_dump),
+            patch("app.tasks.backup_tasks._upload_remote", return_value=None),
+            patch("app.tasks.backup_tasks._apply_retention"),
+            patch("app.tasks.backup_tasks._prune_remote_backups"),
+            patch("app.tasks.backup_tasks.SessionLocal") as mock_sl,
+        ):
+            mock_settings.backup_enabled = True
+            mock_settings.database_url = "postgresql://user:pass@localhost/testdb"
+            mock_db = MagicMock()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = create_backup("daily")
+
+        assert result["status"] == "ok"
+        assert result["filename"].endswith(".pgsql.gz")
+        assert "daily" in result["filename"]
+
+    def test_successful_backup_mysql(self, tmp_path):
+        """create_backup creates a .mysql.gz archive for MySQL databases."""
+        from app.tasks.backup_tasks import create_backup
+
+        backup_dir = tmp_path / "backups"
+        backup_dir.mkdir()
+
+        def fake_mysql_dump(db_url: str, dest: Path) -> None:
+            with gzip.open(str(dest), "wb") as gz:
+                gz.write(b"-- MySQL dump\n")
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("app.tasks.backup_tasks._backup_dir", return_value=backup_dir),
+            patch("app.tasks.backup_tasks._dump_mysql", side_effect=fake_mysql_dump),
+            patch("app.tasks.backup_tasks._upload_remote", return_value=None),
+            patch("app.tasks.backup_tasks._apply_retention"),
+            patch("app.tasks.backup_tasks._prune_remote_backups"),
+            patch("app.tasks.backup_tasks.SessionLocal") as mock_sl,
+        ):
+            mock_settings.backup_enabled = True
+            mock_settings.database_url = "mysql+pymysql://user:pass@localhost/testdb"
+            mock_db = MagicMock()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = create_backup("weekly")
+
+        assert result["status"] == "ok"
+        assert result["filename"].endswith(".mysql.gz")
+        assert "weekly" in result["filename"]
 
     def test_invalid_backup_type_defaults_to_hourly(self, tmp_path):
         """create_backup normalises unknown backup_type to 'hourly'."""
@@ -431,6 +752,7 @@ class TestCreateBackupTask:
             patch("app.tasks.backup_tasks.SessionLocal") as mock_sl,
         ):
             mock_settings.backup_enabled = True
+            mock_settings.database_url = f"sqlite:///{db_file}"
             mock_db = MagicMock()
             mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
             mock_sl.return_value.__exit__ = MagicMock(return_value=False)
@@ -549,19 +871,24 @@ class TestBackupAPIEndpoints:
         assert resp.status_code == 403
 
     def test_restore_wrong_extension(self, admin_client):
-        """POST /api/admin/backup/restore rejects non-.db.gz files."""
+        """POST /api/admin/backup/restore rejects files with wrong extension for current backend."""
+        # Default test env uses sqlite:///:memory: → expects .db.gz
         resp = admin_client.post(
             "/api/admin/backup/restore",
             files={"file": ("backup.zip", b"data", "application/zip")},
         )
         assert resp.status_code == 400
 
-    def test_restore_invalid_gz_content(self, admin_client):
+    def test_restore_invalid_gz_content(self, admin_client, tmp_path):
         """POST /api/admin/backup/restore rejects corrupt gzip data."""
-        resp = admin_client.post(
-            "/api/admin/backup/restore",
-            files={"file": ("backup.db.gz", b"not gzip data at all", "application/gzip")},
-        )
+        db_file = tmp_path / "test.db"
+        db_file.write_bytes(b"")
+
+        with patch("app.tasks.backup_tasks._db_path", return_value=db_file):
+            resp = admin_client.post(
+                "/api/admin/backup/restore",
+                files={"file": ("backup.db.gz", b"not gzip data at all", "application/gzip")},
+            )
         assert resp.status_code == 400
 
     def test_restore_valid_archive(self, admin_client, tmp_path):
@@ -581,15 +908,115 @@ class TestBackupAPIEndpoints:
         assert resp.status_code == 200
         assert resp.json()["status"] == "restored"
 
-    def test_restore_non_sqlite_db(self, admin_client):
-        """POST /api/admin/backup/restore returns 400 for non-SQLite database."""
-        sql = "BEGIN TRANSACTION;\nCOMMIT;\n"
-        gz_data = gzip.compress(sql.encode())
+    def test_restore_in_memory_sqlite(self, admin_client):
+        """POST /api/admin/backup/restore returns 400 for in-memory SQLite (no file to restore to)."""
+        gz_data = gzip.compress(b"BEGIN TRANSACTION;\nCOMMIT;\n")
 
+        # _db_path() returns None for :memory: URLs → 400
         with patch("app.tasks.backup_tasks._db_path", return_value=None):
             resp = admin_client.post(
                 "/api/admin/backup/restore",
                 files={"file": ("backup.db.gz", gz_data, "application/gzip")},
+            )
+        assert resp.status_code == 400
+
+    def test_restore_wrong_extension_for_postgresql(self, admin_client):
+        """POST /api/admin/backup/restore returns 400 when uploading .db.gz for PostgreSQL backend."""
+        gz_data = gzip.compress(b"-- PostgreSQL dump")
+
+        with patch("app.config.settings") as mock_settings:
+            mock_settings.database_url = "postgresql://user:pass@localhost/testdb"
+            resp = admin_client.post(
+                "/api/admin/backup/restore",
+                files={"file": ("backup.db.gz", gz_data, "application/gzip")},
+            )
+        assert resp.status_code == 400
+
+    def test_restore_wrong_extension_for_mysql(self, admin_client):
+        """POST /api/admin/backup/restore returns 400 when uploading .db.gz for MySQL backend."""
+        gz_data = gzip.compress(b"-- MySQL dump")
+
+        with patch("app.config.settings") as mock_settings:
+            mock_settings.database_url = "mysql+pymysql://user:pass@localhost/testdb"
+            resp = admin_client.post(
+                "/api/admin/backup/restore",
+                files={"file": ("backup.db.gz", gz_data, "application/gzip")},
+            )
+        assert resp.status_code == 400
+
+    def test_restore_postgresql_success(self, admin_client):
+        """POST /api/admin/backup/restore succeeds for PostgreSQL database."""
+        gz_data = gzip.compress(b"-- PostgreSQL dump\n")
+
+        with (
+            patch("app.config.settings") as mock_settings,
+            patch("app.tasks.backup_tasks._restore_postgresql") as mock_restore,
+        ):
+            mock_settings.database_url = "postgresql://user:pass@localhost/testdb"
+            resp = admin_client.post(
+                "/api/admin/backup/restore",
+                files={"file": ("backup.pgsql.gz", gz_data, "application/gzip")},
+            )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "restored"
+        mock_restore.assert_called_once()
+
+    def test_restore_mysql_success(self, admin_client):
+        """POST /api/admin/backup/restore succeeds for MySQL database."""
+        gz_data = gzip.compress(b"-- MySQL dump\n")
+
+        with (
+            patch("app.config.settings") as mock_settings,
+            patch("app.tasks.backup_tasks._restore_mysql") as mock_restore,
+        ):
+            mock_settings.database_url = "mysql+pymysql://user:pass@localhost/testdb"
+            resp = admin_client.post(
+                "/api/admin/backup/restore",
+                files={"file": ("backup.mysql.gz", gz_data, "application/gzip")},
+            )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "restored"
+        mock_restore.assert_called_once()
+
+    def test_restore_postgresql_runtime_error(self, admin_client):
+        """POST /api/admin/backup/restore returns 500 when psql command fails."""
+        gz_data = gzip.compress(b"-- PostgreSQL dump\n")
+
+        with (
+            patch("app.config.settings") as mock_settings,
+            patch("app.tasks.backup_tasks._restore_postgresql", side_effect=RuntimeError("psql failed")),
+        ):
+            mock_settings.database_url = "postgresql://user:pass@localhost/testdb"
+            resp = admin_client.post(
+                "/api/admin/backup/restore",
+                files={"file": ("backup.pgsql.gz", gz_data, "application/gzip")},
+            )
+        assert resp.status_code == 500
+
+    def test_restore_postgresql_missing_binary(self, admin_client):
+        """POST /api/admin/backup/restore returns 500 when psql binary is missing."""
+        gz_data = gzip.compress(b"-- PostgreSQL dump\n")
+
+        with (
+            patch("app.config.settings") as mock_settings,
+            patch("app.tasks.backup_tasks._restore_postgresql", side_effect=FileNotFoundError("psql not found")),
+        ):
+            mock_settings.database_url = "postgresql://user:pass@localhost/testdb"
+            resp = admin_client.post(
+                "/api/admin/backup/restore",
+                files={"file": ("backup.pgsql.gz", gz_data, "application/gzip")},
+            )
+        assert resp.status_code == 500
+
+    def test_restore_unsupported_backend(self, admin_client):
+        """POST /api/admin/backup/restore returns 400 for an unsupported database backend."""
+        gz_data = gzip.compress(b"-- some dump\n")
+
+        with patch("app.config.settings") as mock_settings:
+            mock_settings.database_url = "mssql+pyodbc://user:pass@server/db"
+            resp = admin_client.post(
+                "/api/admin/backup/restore",
+                files={"file": ("backup.sql.gz", gz_data, "application/gzip")},
             )
         assert resp.status_code == 400
 

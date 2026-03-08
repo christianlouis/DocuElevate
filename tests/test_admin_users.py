@@ -10,6 +10,7 @@ Covers:
 - Pagination and search filtering
 """
 
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -20,7 +21,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
-from app.models import FileRecord, UserProfile
+from app.models import FileRecord, LocalUser, UserProfile
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -663,3 +664,266 @@ class TestEnsureUserProfileAdmin:
         # No profile should have been created
         count = au_session.query(UserProfile).count()
         assert count == 0
+
+
+# ---------------------------------------------------------------------------
+# Local user admin management: update, send-password-reset, set-password
+# ---------------------------------------------------------------------------
+
+
+def _make_local_user(session, email: str = "lu@example.com", username: str = "luuser", **kwargs) -> LocalUser:
+    """Insert a LocalUser row and return it."""
+    from app.utils.local_auth import hash_password
+
+    defaults = {
+        "hashed_password": hash_password("password123"),
+        "is_active": True,
+        "is_admin": False,
+    }
+    defaults.update(kwargs)
+    user = LocalUser(email=email, username=username, **defaults)
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+class TestAdminUpdateLocalUser:
+    """Tests for PATCH /api/admin/users/local/{id}."""
+
+    @pytest.mark.unit
+    def test_update_email(self, au_client, au_session):
+        """PATCH can change the email address of a local user."""
+        user = _make_local_user(au_session, email="old@example.com", username="updateemail")
+
+        resp = au_client.patch(
+            f"/api/admin/users/local/{user.id}",
+            json={"email": "new@example.com"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["email"] == "new@example.com"
+
+        au_session.refresh(user)
+        assert user.email == "new@example.com"
+
+    @pytest.mark.unit
+    def test_update_email_syncs_user_profile(self, au_client, au_session):
+        """PATCH email also updates UserProfile.user_id for the matching profile."""
+        user = _make_local_user(au_session, email="synced@example.com", username="synceduser")
+        _make_profile(au_session, "synced@example.com")
+
+        au_client.patch(
+            f"/api/admin/users/local/{user.id}",
+            json={"email": "synced_new@example.com"},
+        )
+
+        from app.models import UserProfile
+
+        old_profile = au_session.query(UserProfile).filter_by(user_id="synced@example.com").first()
+        new_profile = au_session.query(UserProfile).filter_by(user_id="synced_new@example.com").first()
+        assert old_profile is None
+        assert new_profile is not None
+
+    @pytest.mark.unit
+    def test_update_email_conflict_returns_409(self, au_client, au_session):
+        """PATCH returns 409 when the new email is already taken."""
+        _make_local_user(au_session, email="taken@example.com", username="takenuser")
+        user = _make_local_user(au_session, email="mine@example.com", username="myuser")
+
+        resp = au_client.patch(
+            f"/api/admin/users/local/{user.id}",
+            json={"email": "taken@example.com"},
+        )
+        assert resp.status_code == 409
+
+    @pytest.mark.unit
+    def test_update_is_admin(self, au_client, au_session):
+        """PATCH can grant or revoke admin privileges."""
+        user = _make_local_user(au_session, email="grantadmin@example.com", username="grantadmin")
+        assert user.is_admin is False
+
+        resp = au_client.patch(
+            f"/api/admin/users/local/{user.id}",
+            json={"is_admin": True},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["is_admin"] is True
+
+        au_session.refresh(user)
+        assert user.is_admin is True
+
+    @pytest.mark.unit
+    def test_update_is_active(self, au_client, au_session):
+        """PATCH can deactivate a user account."""
+        user = _make_local_user(au_session, email="deactivate@example.com", username="deactivateuser")
+
+        resp = au_client.patch(
+            f"/api/admin/users/local/{user.id}",
+            json={"is_active": False},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["is_active"] is False
+
+        au_session.refresh(user)
+        assert user.is_active is False
+
+    @pytest.mark.unit
+    def test_update_display_name(self, au_client, au_session):
+        """PATCH can update the display name."""
+        user = _make_local_user(au_session, email="displayname@example.com", username="displaynameuser")
+
+        resp = au_client.patch(
+            f"/api/admin/users/local/{user.id}",
+            json={"display_name": "Alice Wonderland"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["display_name"] == "Alice Wonderland"
+
+    @pytest.mark.unit
+    def test_update_nonexistent_user_returns_404(self, au_client):
+        """PATCH on unknown ID returns 404."""
+        resp = au_client.patch("/api/admin/users/local/99999", json={"email": "x@example.com"})
+        assert resp.status_code == 404
+
+
+class TestAdminSendPasswordReset:
+    """Tests for POST /api/admin/users/local/{id}/send-password-reset."""
+
+    @pytest.mark.unit
+    def test_send_reset_email_success(self, au_client, au_session):
+        """Returns sent=True when SMTP is configured and sending succeeds."""
+        from unittest.mock import patch
+
+        user = _make_local_user(au_session, email="resetme@example.com", username="resetmeuser")
+
+        with (
+            patch("app.api.admin_users.settings") as mock_settings,
+            patch("app.api.admin_users.send_password_reset_email") as mock_send,
+        ):
+            mock_settings.email_host = "smtp.example.com"
+            mock_settings.version = "test"
+            resp = au_client.post(f"/api/admin/users/local/{user.id}/send-password-reset")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["sent"] is True
+        assert data["email"] == "resetme@example.com"
+        mock_send.assert_called_once()
+
+    @pytest.mark.unit
+    def test_send_reset_email_no_smtp_returns_not_sent(self, au_client, au_session):
+        """Returns sent=False with reason when SMTP is not configured."""
+        from unittest.mock import patch
+
+        user = _make_local_user(au_session, email="nosmtp@example.com", username="nosmtpuser")
+
+        with patch("app.api.admin_users.settings") as mock_settings:
+            mock_settings.email_host = ""
+            resp = au_client.post(f"/api/admin/users/local/{user.id}/send-password-reset")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["sent"] is False
+        assert "smtp" in data["reason"].lower()
+
+    @pytest.mark.unit
+    def test_send_reset_email_smtp_failure_returns_not_sent(self, au_client, au_session):
+        """Returns sent=False with reason when SMTP sending fails."""
+        from unittest.mock import patch
+
+        user = _make_local_user(au_session, email="smtperr@example.com", username="smtperruser")
+
+        with (
+            patch("app.api.admin_users.settings") as mock_settings,
+            patch("app.api.admin_users.send_password_reset_email", side_effect=RuntimeError("connection refused")),
+        ):
+            mock_settings.email_host = "smtp.example.com"
+            resp = au_client.post(f"/api/admin/users/local/{user.id}/send-password-reset")
+
+        assert resp.status_code == 200
+        assert resp.json()["sent"] is False
+
+    @pytest.mark.unit
+    def test_send_reset_email_unknown_user_returns_404(self, au_client):
+        """Returns 404 for unknown local_user_id."""
+        resp = au_client.post("/api/admin/users/local/99999/send-password-reset")
+        assert resp.status_code == 404
+
+    @pytest.mark.unit
+    def test_send_reset_stores_token(self, au_client, au_session):
+        """Password reset token is persisted to the DB."""
+        from unittest.mock import patch
+
+        user = _make_local_user(au_session, email="tokenstore@example.com", username="tokenstoreuser")
+        assert user.password_reset_token is None
+
+        with (
+            patch("app.api.admin_users.settings") as mock_settings,
+            patch("app.api.admin_users.send_password_reset_email"),
+        ):
+            mock_settings.email_host = "smtp.example.com"
+            au_client.post(f"/api/admin/users/local/{user.id}/send-password-reset")
+
+        au_session.refresh(user)
+        assert user.password_reset_token is not None
+        assert user.password_reset_sent_at is not None
+
+
+class TestAdminSetPassword:
+    """Tests for POST /api/admin/users/local/{id}/set-password."""
+
+    @pytest.mark.unit
+    def test_set_password_success(self, au_client, au_session):
+        """Returns updated=True and changes the hashed password."""
+        from app.utils.local_auth import verify_password
+
+        user = _make_local_user(au_session, email="setpw@example.com", username="setpwuser")
+
+        resp = au_client.post(
+            f"/api/admin/users/local/{user.id}/set-password",
+            json={"password": "brandnewpassword"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["updated"] is True
+
+        au_session.refresh(user)
+        assert verify_password("brandnewpassword", user.hashed_password)
+
+    @pytest.mark.unit
+    def test_set_password_too_short_returns_422(self, au_client, au_session):
+        """Returns 422 when password is shorter than 8 characters."""
+        user = _make_local_user(au_session, email="shortpw@example.com", username="shortpwuser")
+
+        resp = au_client.post(
+            f"/api/admin/users/local/{user.id}/set-password",
+            json={"password": "short"},
+        )
+        assert resp.status_code == 422
+
+    @pytest.mark.unit
+    def test_set_password_clears_reset_token(self, au_client, au_session):
+        """Setting a password clears any outstanding password_reset_token."""
+        from app.utils.local_auth import generate_token
+
+        user = _make_local_user(au_session, email="cleartok@example.com", username="cleartokuser")
+        user.password_reset_token = generate_token()
+        user.password_reset_sent_at = datetime.now(tz=timezone.utc)
+        au_session.commit()
+
+        au_client.post(
+            f"/api/admin/users/local/{user.id}/set-password",
+            json={"password": "clearedpassword"},
+        )
+
+        au_session.refresh(user)
+        assert user.password_reset_token is None
+        assert user.password_reset_sent_at is None
+
+    @pytest.mark.unit
+    def test_set_password_unknown_user_returns_404(self, au_client):
+        """Returns 404 for unknown local_user_id."""
+        resp = au_client.post(
+            "/api/admin/users/local/99999/set-password",
+            json={"password": "doesnotmatter"},
+        )
+        assert resp.status_code == 404

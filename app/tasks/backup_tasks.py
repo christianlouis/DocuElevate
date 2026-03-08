@@ -16,12 +16,19 @@ Three separate Celery-beat entries call ``create_backup`` with the appropriate
 After each backup is created ``_apply_retention`` prunes old local backups for
 that tier.  Remote copies are pruned by ``_prune_remote_backups`` which mirrors
 the same retention limits.
+
+Supported database backends
+----------------------------
+- **SQLite**    – dumped via Python's built-in ``sqlite3.iterdump()``; archive extension ``.db.gz``
+- **PostgreSQL** – dumped via ``pg_dump --format=plain``; archive extension ``.pgsql.gz``
+- **MySQL / MariaDB** – dumped via ``mysqldump --single-transaction``; archive extension ``.mysql.gz``
 """
 
 import gzip
 import hashlib
 import logging
 import os
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -42,6 +49,13 @@ _BACKUP_TYPE_RETAIN: dict[str, str] = {
     "weekly": "backup_retain_weekly",
 }
 
+#: Map of backend name → archive file extension.
+_BACKEND_EXTENSIONS: dict[str, str] = {
+    "sqlite": ".db.gz",
+    "postgresql": ".pgsql.gz",
+    "mysql": ".mysql.gz",
+}
+
 
 def _backup_dir() -> Path:
     """Return (and create) the local backup directory."""
@@ -49,6 +63,14 @@ def _backup_dir() -> Path:
     path = Path(raw)
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _db_backend() -> str:
+    """Return the database backend name (e.g. ``'sqlite'``, ``'postgresql'``, ``'mysql'``)."""
+    from sqlalchemy.engine.url import make_url
+
+    url = make_url(settings.database_url)
+    return url.get_backend_name()
 
 
 def _db_path() -> Path | None:
@@ -62,6 +84,20 @@ def _db_path() -> Path | None:
     if not db or db == ":memory:":
         return None
     return Path(db)
+
+
+def _archive_ext_for_backend(backend: str) -> str:
+    """Return the archive file extension for the given database backend.
+
+    Args:
+        backend: Backend name as returned by
+            ``sqlalchemy.engine.url.URL.get_backend_name()`` (e.g. ``'sqlite'``).
+
+    Returns:
+        File extension string including the leading dot, e.g. ``'.db.gz'``.
+        Falls back to ``'.sql.gz'`` for unknown backends.
+    """
+    return _BACKEND_EXTENSIONS.get(backend, ".sql.gz")
 
 
 def _sha256(path: Path) -> str:
@@ -84,6 +120,277 @@ def _dump_sqlite(db_path: Path, dest: Path) -> None:
                 gz.write(line + "\n")
     finally:
         conn.close()
+
+
+def _dump_postgresql(db_url: str, dest: Path) -> None:
+    """Write a gzip-compressed ``pg_dump`` of the PostgreSQL database to *dest*.
+
+    Uses ``PGPASSWORD`` environment variable so the password is never exposed on
+    the process command line.
+
+    Args:
+        db_url: Full SQLAlchemy database URL (e.g. ``postgresql://user:pass@host/db``).
+        dest: Destination path for the ``.pgsql.gz`` archive.
+
+    Raises:
+        RuntimeError: If ``pg_dump`` exits with a non-zero return code.
+        FileNotFoundError: If the ``pg_dump`` binary is not found.
+    """
+    from sqlalchemy.engine.url import make_url
+
+    url = make_url(db_url)
+    env = os.environ.copy()
+    if url.password:
+        env["PGPASSWORD"] = str(url.password)
+
+    # Command arguments are built from the SQLAlchemy URL (admin-configured DATABASE_URL),
+    # not from user-controlled input.  shell=False (the default when passing a list) is used
+    # so there is no shell interpretation of the argument values.
+    cmd: list[str] = ["pg_dump", "--format=plain", "--no-password"]
+    if url.host:
+        cmd.extend(["-h", url.host])
+    if url.port:
+        cmd.extend(["-p", str(url.port)])
+    if url.username:
+        cmd.extend(["-U", url.username])
+    if url.database:
+        cmd.append(url.database)
+
+    with gzip.open(str(dest), "wb") as gz:
+        proc = subprocess.Popen(  # noqa: S603
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+        )
+        stdout = proc.stdout
+        if stdout is None:  # pragma: no cover – guaranteed by stdout=PIPE
+            raise RuntimeError("pg_dump produced no stdout pipe")
+        try:
+            while True:
+                chunk = stdout.read(65536)
+                if not chunk:
+                    break
+                gz.write(chunk)
+        finally:
+            stdout.close()
+            stderr_bytes = proc.stderr.read() if proc.stderr else b""
+            proc.wait()
+
+    if proc.returncode != 0:
+        dest.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"pg_dump exited with code {proc.returncode}: {stderr_bytes.decode(errors='replace').strip()}"
+        )
+
+
+def _dump_mysql(db_url: str, dest: Path) -> None:
+    """Write a gzip-compressed ``mysqldump`` of the MySQL database to *dest*.
+
+    Uses the ``MYSQL_PWD`` environment variable so the password is never exposed
+    on the process command line.
+
+    Args:
+        db_url: Full SQLAlchemy database URL
+            (e.g. ``mysql+pymysql://user:pass@host/db``).
+        dest: Destination path for the ``.mysql.gz`` archive.
+
+    Raises:
+        RuntimeError: If ``mysqldump`` exits with a non-zero return code.
+        FileNotFoundError: If the ``mysqldump`` binary is not found.
+    """
+    from sqlalchemy.engine.url import make_url
+
+    url = make_url(db_url)
+    env = os.environ.copy()
+    if url.password:
+        env["MYSQL_PWD"] = str(url.password)
+
+    # Command arguments are built from the SQLAlchemy URL (admin-configured DATABASE_URL).
+    # shell=False (list form) prevents shell interpretation of argument values.
+    cmd: list[str] = ["mysqldump", "--single-transaction", "--routines", "--triggers"]
+    if url.host:
+        cmd.extend(["-h", url.host])
+    if url.port:
+        cmd.extend(["-P", str(url.port)])
+    if url.username:
+        cmd.extend(["-u", url.username])
+    if url.database:
+        cmd.append(url.database)
+
+    with gzip.open(str(dest), "wb") as gz:
+        proc = subprocess.Popen(  # noqa: S603
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+        )
+        stdout = proc.stdout
+        if stdout is None:  # pragma: no cover – guaranteed by stdout=PIPE
+            raise RuntimeError("mysqldump produced no stdout pipe")
+        try:
+            while True:
+                chunk = stdout.read(65536)
+                if not chunk:
+                    break
+                gz.write(chunk)
+        finally:
+            stdout.close()
+            stderr_bytes = proc.stderr.read() if proc.stderr else b""
+            proc.wait()
+
+    if proc.returncode != 0:
+        dest.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"mysqldump exited with code {proc.returncode}: {stderr_bytes.decode(errors='replace').strip()}"
+        )
+
+
+def _restore_sqlite(db_path: Path, archive_path: Path) -> None:
+    """Restore a SQLite database from a gzip-compressed SQL dump archive.
+
+    Validates the SQL by replaying it on an in-memory database before touching
+    the live file.  Saves a ``<db_path>.pre_restore`` rollback copy first.
+
+    Args:
+        db_path: Path to the live SQLite database file to overwrite.
+        archive_path: Path to the ``.db.gz`` gzip-compressed SQL dump.
+
+    Raises:
+        ValueError: If the archive cannot be decompressed or contains invalid SQL.
+        RuntimeError: If writing the restored database fails.
+    """
+    import shutil
+    import sqlite3
+
+    # Decompress and read SQL statements
+    try:
+        with gzip.open(str(archive_path), "rt", encoding="utf-8") as gz:
+            sql_script = gz.read()
+    except Exception as exc:
+        raise ValueError(f"Failed to decompress backup file: {exc}") from exc
+
+    # Validate by replaying on an in-memory database
+    try:
+        mem_conn = sqlite3.connect(":memory:")
+        mem_conn.executescript(sql_script)
+        mem_conn.close()
+    except sqlite3.Error as exc:
+        raise ValueError(f"Backup file contains invalid SQL: {exc}") from exc
+
+    # Preserve the current DB before overwriting
+    bak = str(db_path) + ".pre_restore"
+    try:
+        shutil.copy2(str(db_path), bak)
+    except OSError as exc:
+        logger.warning(f"Could not create pre-restore backup at {bak}: {exc}")
+
+    try:
+        restore_conn = sqlite3.connect(str(db_path))
+        restore_conn.executescript(sql_script)
+        restore_conn.close()
+    except sqlite3.Error as exc:
+        # Attempt rollback to the pre-restore copy
+        try:
+            if os.path.exists(bak):
+                shutil.copy2(bak, str(db_path))
+        except OSError as rollback_exc:
+            logger.error(f"Rollback failed; database may be corrupted: {rollback_exc}")
+        raise RuntimeError(f"SQLite restore failed: {exc}") from exc
+
+
+def _restore_postgresql(db_url: str, archive_path: Path) -> None:
+    """Restore a PostgreSQL database from a gzip-compressed SQL dump archive.
+
+    Pipes the decompressed dump to ``psql``.  Uses ``PGPASSWORD`` so the
+    password is never exposed on the process command line.
+
+    Args:
+        db_url: Full SQLAlchemy database URL.
+        archive_path: Path to the ``.pgsql.gz`` gzip-compressed ``pg_dump`` archive.
+
+    Raises:
+        RuntimeError: If ``psql`` exits with a non-zero return code.
+        FileNotFoundError: If the ``psql`` binary is not found.
+    """
+    from sqlalchemy.engine.url import make_url
+
+    url = make_url(db_url)
+    env = os.environ.copy()
+    if url.password:
+        env["PGPASSWORD"] = str(url.password)
+
+    # Command arguments are built from the SQLAlchemy URL (admin-configured DATABASE_URL).
+    # shell=False (list form) prevents shell interpretation of argument values.
+    cmd: list[str] = ["psql", "--no-password"]
+    if url.host:
+        cmd.extend(["-h", url.host])
+    if url.port:
+        cmd.extend(["-p", str(url.port)])
+    if url.username:
+        cmd.extend(["-U", url.username])
+    if url.database:
+        cmd.append(url.database)
+
+    with gzip.open(str(archive_path), "rb") as gz:
+        proc = subprocess.Popen(  # noqa: S603
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+        )
+        _, stderr_bytes = proc.communicate(input=gz.read())
+
+    if proc.returncode != 0:
+        raise RuntimeError(f"psql exited with code {proc.returncode}: {stderr_bytes.decode(errors='replace').strip()}")
+
+
+def _restore_mysql(db_url: str, archive_path: Path) -> None:
+    """Restore a MySQL database from a gzip-compressed SQL dump archive.
+
+    Pipes the decompressed dump to ``mysql``.  Uses the ``MYSQL_PWD``
+    environment variable so the password is never exposed on the command line.
+
+    Args:
+        db_url: Full SQLAlchemy database URL.
+        archive_path: Path to the ``.mysql.gz`` gzip-compressed ``mysqldump`` archive.
+
+    Raises:
+        RuntimeError: If ``mysql`` exits with a non-zero return code.
+        FileNotFoundError: If the ``mysql`` binary is not found.
+    """
+    from sqlalchemy.engine.url import make_url
+
+    url = make_url(db_url)
+    env = os.environ.copy()
+    if url.password:
+        env["MYSQL_PWD"] = str(url.password)
+
+    # Command arguments are built from the SQLAlchemy URL (admin-configured DATABASE_URL).
+    # shell=False (list form) prevents shell interpretation of argument values.
+    cmd: list[str] = ["mysql"]
+    if url.host:
+        cmd.extend(["-h", url.host])
+    if url.port:
+        cmd.extend(["-P", str(url.port)])
+    if url.username:
+        cmd.extend(["-u", url.username])
+    if url.database:
+        cmd.append(url.database)
+
+    with gzip.open(str(archive_path), "rb") as gz:
+        proc = subprocess.Popen(  # noqa: S603
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+        )
+        _, stderr_bytes = proc.communicate(input=gz.read())
+
+    if proc.returncode != 0:
+        raise RuntimeError(f"mysql exited with code {proc.returncode}: {stderr_bytes.decode(errors='replace').strip()}")
 
 
 def _apply_retention(backup_type: str, db: object) -> None:
@@ -314,6 +621,11 @@ def _email_backup(archive_path: Path, filename: str) -> None:
 def create_backup(self, backup_type: str = "hourly") -> dict:
     """Create a database backup archive and apply retention.
 
+    Supports SQLite (``.db.gz``), PostgreSQL (``.pgsql.gz``), and
+    MySQL / MariaDB (``.mysql.gz``) databases.  The native dump tool for the
+    configured backend (``sqlite3``, ``pg_dump``, or ``mysqldump``) must be
+    available on the worker's ``PATH``.
+
     Args:
         backup_type: ``"hourly"``, ``"daily"``, or ``"weekly"``.
 
@@ -327,18 +639,26 @@ def create_backup(self, backup_type: str = "hourly") -> dict:
         logger.debug("Backup is disabled; skipping create_backup task.")
         return {"status": "disabled"}
 
+    backend = _db_backend()
+    ext = _archive_ext_for_backend(backend)
+
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
-    filename = f"backup_{backup_type}_{ts}.db.gz"
+    filename = f"backup_{backup_type}_{ts}{ext}"
     archive_path = _backup_dir() / filename
 
-    db_path = _db_path()
-    if db_path is None:
-        logger.warning("Backup task skipped: non-SQLite databases are not supported for file-based backups.")
+    # SQLite: verify the database file exists before attempting to dump it
+    db_path: Path | None = None
+    if backend == "sqlite":
+        db_path = _db_path()
+        if db_path is None:
+            logger.warning("Backup task skipped: in-memory SQLite databases are not supported.")
+            return {"status": "unsupported_db"}
+        if not db_path.exists():
+            logger.error(f"Database file not found: {db_path}")
+            return {"status": "error", "detail": f"DB file missing: {db_path}"}
+    elif backend not in ("postgresql", "mysql"):
+        logger.warning(f"Backup task skipped: unsupported database backend '{backend}'.")
         return {"status": "unsupported_db"}
-
-    if not db_path.exists():
-        logger.error(f"Database file not found: {db_path}")
-        return {"status": "error", "detail": f"DB file missing: {db_path}"}
 
     status = "ok"
     checksum: str | None = None
@@ -347,7 +667,15 @@ def create_backup(self, backup_type: str = "hourly") -> dict:
     remote_path: str | None = None
 
     try:
-        _dump_sqlite(db_path, archive_path)
+        if backend == "sqlite":
+            # db_path is guaranteed non-None: we returned early if it were None
+            if db_path is None:  # pragma: no cover
+                return {"status": "error", "detail": "db_path unexpectedly None"}
+            _dump_sqlite(db_path, archive_path)
+        elif backend == "postgresql":
+            _dump_postgresql(settings.database_url, archive_path)
+        elif backend == "mysql":
+            _dump_mysql(settings.database_url, archive_path)
         size_bytes = archive_path.stat().st_size
         checksum = _sha256(archive_path)
         logger.info(f"Created {backup_type} backup: {archive_path} ({size_bytes:,} bytes)")
