@@ -63,18 +63,27 @@ async def integrations_dashboard(request: Request, db: Session = Depends(get_db)
         tier_id = "free"
 
         if owner_id:
-            integrations = (
-                db.query(UserIntegration)
-                .filter(UserIntegration.owner_id == owner_id)
-                .order_by(UserIntegration.id)
-                .all()
-            )
-            dest_count = sum(1 for i in integrations if i.direction == IntegrationDirection.DESTINATION)
-            src_count = sum(
-                1
-                for i in integrations
-                if i.direction == IntegrationDirection.SOURCE and i.integration_type in _MAILBOX_SOURCE_TYPES
-            )
+            from sqlalchemy import func
+
+            dest_count = (
+                db.query(func.count())
+                .select_from(UserIntegration)
+                .filter(
+                    UserIntegration.owner_id == owner_id,
+                    UserIntegration.direction == IntegrationDirection.DESTINATION,
+                )
+                .scalar()
+            ) or 0
+            src_count = (
+                db.query(func.count())
+                .select_from(UserIntegration)
+                .filter(
+                    UserIntegration.owner_id == owner_id,
+                    UserIntegration.direction == IntegrationDirection.SOURCE,
+                    UserIntegration.integration_type.in_(list(_MAILBOX_SOURCE_TYPES)),
+                )
+                .scalar()
+            ) or 0
             tier_id = get_user_tier_id(db, owner_id)
             tier = get_tier(tier_id, db)
             tier_name = tier.get("name", tier_id)

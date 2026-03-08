@@ -610,7 +610,7 @@
         </template>
 
         <!-- Generic fallback for types without dedicated fields -->
-        <template x-if="form.integration_type && !['IMAP','S3','WEBDAV','NEXTCLOUD','FTP','SFTP','DROPBOX','GOOGLE_DRIVE','ONEDRIVE','EMAIL','WATCH_FOLDER','PAPERLESS'].includes(form.integration_type)">
+        <template x-if="form.integration_type && !hasFormFields(form.integration_type)">
           <div class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
             <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider" x-text="form.integration_type + ' Settings'"></p>
             <p class="text-sm text-gray-500 dark:text-gray-400">
@@ -741,6 +741,7 @@
 function integrationsDashboard() {
   const SOURCE_TYPES = ['IMAP', 'WATCH_FOLDER', 'WEBHOOK'];
   const DEST_TYPES = ['S3', 'DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE', 'WEBDAV', 'NEXTCLOUD', 'FTP', 'SFTP', 'EMAIL', 'PAPERLESS', 'RCLONE'];
+  const TYPES_WITH_FORM_FIELDS = new Set(['IMAP', 'S3', 'WEBDAV', 'NEXTCLOUD', 'FTP', 'SFTP', 'DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE', 'EMAIL', 'WATCH_FOLDER', 'PAPERLESS']);
 
   const TYPE_LABELS = {
     IMAP: 'IMAP Email',
@@ -836,6 +837,7 @@ function integrationsDashboard() {
 
     typeLabel(t) { return TYPE_LABELS[t] || t; },
     typeIcon(t) { return TYPE_ICONS[t] || 'fa-plug text-gray-400'; },
+    hasFormFields(t) { return TYPES_WITH_FORM_FIELDS.has(t); },
 
     oauthLink(t) {
       if (t === 'DROPBOX') return '/dropbox';
@@ -982,13 +984,13 @@ function integrationsDashboard() {
           if (payload.credentials) update.credentials = payload.credentials;
           resp = await fetch(`/api/integrations/${this.editingIntegration.id}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+            headers: authHeaders(true),
             body: JSON.stringify(update),
           });
         } else {
           resp = await fetch('/api/integrations/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+            headers: authHeaders(true),
             body: JSON.stringify(payload),
           });
         }
@@ -1025,7 +1027,7 @@ function integrationsDashboard() {
         };
         const resp = await fetch('/api/integrations/test', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+          headers: authHeaders(true),
           body: JSON.stringify(payload),
         });
         this.testResult = await resp.json();
@@ -1041,10 +1043,14 @@ function integrationsDashboard() {
       try {
         // Retrieve saved credentials to test
         const credsResp = await fetch(`/api/integrations/${intg.id}/credentials`);
-        const creds = credsResp.ok ? await credsResp.json() : null;
+        if (!credsResp.ok) {
+          this.showAlert('error', 'Test Failed', 'Could not retrieve saved credentials for testing.');
+          return;
+        }
+        const creds = await credsResp.json();
         const resp = await fetch('/api/integrations/test', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+          headers: authHeaders(true),
           body: JSON.stringify({
             integration_type: intg.integration_type,
             config: intg.config,
@@ -1075,7 +1081,7 @@ function integrationsDashboard() {
       try {
         const resp = await fetch(`/api/integrations/${this.integrationToDelete.id}`, {
           method: 'DELETE',
-          headers: { 'X-CSRF-Token': getCsrfToken() },
+          headers: authHeaders(false),
         });
         if (resp.ok || resp.status === 204) {
           this.integrations = this.integrations.filter(i => i.id !== this.integrationToDelete.id);
@@ -1111,6 +1117,12 @@ function getCsrfToken() {
   const meta = document.querySelector('meta[name="csrf-token"]');
   if (meta) return meta.getAttribute('content');
   return '';
+}
+
+function authHeaders(json) {
+  const h = { 'X-CSRF-Token': getCsrfToken() };
+  if (json) h['Content-Type'] = 'application/json';
+  return h;
 }
 </script>
 {% endblock %}
