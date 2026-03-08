@@ -491,6 +491,47 @@ $(function() {
     messageThankYou: 'Thank you for your request (#%s)! We will get back to you shortly.',
     modal: true
   });
+
+  {% if user_name or user_email %}
+  {# ── Auto-fill Zammad form fields from the authenticated user context ── #}
+  $('#zammad-feedback-form').on('click', function() {
+    var attempts = 0;
+    var prefillForm = function() {
+      var $modal = $('.zammad-form-modal, .js-zammad-form-modal');
+      if ($modal.length === 0 && attempts < 30) {
+        attempts++;
+        setTimeout(prefillForm, 100);
+        return;
+      }
+      var $name = $modal.find('input[name="name"]');
+      var $email = $modal.find('input[name="email"]');
+      {% if user_name %}
+      if ($name.length && !$name.val()) $name.val({{ user_name | tojson }});
+      {% endif %}
+      {% if user_email %}
+      if ($email.length && !$email.val()) $email.val({{ user_email | tojson }});
+      {% endif %}
+    };
+    setTimeout(prefillForm, 200);
+  });
+
+  {# ── Append user metadata to the ticket body before Zammad posts it ── #}
+  $.ajaxPrefilter(function(options) {
+    if (options.url && options.url.indexOf('/api/v1/form_submit') !== -1 && options.data) {
+      try {
+        var data = JSON.parse(options.data);
+        if (data.body && data.body.indexOf('\n--- DocuElevate User Context ---') === -1) {
+          var ctx = '\n\n--- DocuElevate User Context ---';
+          {% if user_name %}ctx += '\nName: ' + {{ user_name | tojson }};{% endif %}
+          {% if user_email %}ctx += '\nEmail: ' + {{ user_email | tojson }};{% endif %}
+          {% if user_id %}ctx += '\nUsername: ' + {{ user_id | tojson }};{% endif %}
+          data.body += ctx;
+          options.data = JSON.stringify(data);
+        }
+      } catch(e) { /* ignore parse errors from non-JSON payloads */ }
+    }
+  });
+  {% endif %}
 });
 </script>
 {% endif %}
@@ -504,7 +545,9 @@ $(function() {
     fontSize: '12px',
     flat: true,
     chatId: {{ zammad_chat_id | int }},
-    title: '<strong>Chat</strong> with us!'
+    title: '<strong>Chat</strong> with us!'{% if user_name or user_email %},
+    name: {{ user_name | tojson }},
+    email: {{ user_email | tojson }}{% endif %}
   });
 })();
 </script>

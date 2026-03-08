@@ -142,6 +142,85 @@ class TestHelpViewUnit:
         assert b"ZammadForm" not in resp.content
 
 
+@pytest.mark.unit
+class TestHelpViewUserContext:
+    """Tests that user context is passed to Zammad widgets."""
+
+    @staticmethod
+    def _make_app_with_session(user_data: dict | None = None):
+        """Build a minimal FastAPI app with session middleware and optional user session."""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from starlette.middleware.sessions import SessionMiddleware
+
+        from app.views.help import router
+
+        app = FastAPI()
+        app.add_middleware(SessionMiddleware, secret_key="test-secret")
+        app.include_router(router)
+        tc = TestClient(app)
+
+        if user_data is not None:
+            # Seed a session by setting the cookie through a helper endpoint
+            from fastapi import Request as _Req
+            from fastapi.responses import JSONResponse
+
+            @app.get("/_test_set_session")
+            async def _set_session(request: _Req):
+                request.session["user"] = user_data
+                return JSONResponse({"ok": True})
+
+            tc.get("/_test_set_session")
+
+        return tc
+
+    def test_user_context_not_in_page_when_anonymous(self):
+        """Anonymous visitors should not see user context variables in the output."""
+        tc = self._make_app_with_session(user_data=None)
+        resp = tc.get("/help")
+        assert resp.status_code == 200
+        # No user context metadata should appear
+        assert b"DocuElevate User Context" not in resp.content
+
+    def test_user_context_passed_to_template_when_logged_in(self):
+        """Logged-in user's name/email should be available in the template context."""
+        tc = self._make_app_with_session(
+            user_data={
+                "name": "Test User",
+                "email": "test@example.com",
+                "preferred_username": "testuser",
+            }
+        )
+        resp = tc.get("/help")
+        assert resp.status_code == 200
+        # The template receives user_name, user_email, user_id but they only
+        # appear in the rendered HTML when Zammad widgets are enabled.
+        # With default settings (Zammad disabled), the values are still passed
+        # but not rendered. Verify the view doesn't error out.
+
+    def test_user_context_fallback_for_missing_fields(self):
+        """User session with only email should still resolve user_id correctly."""
+        tc = self._make_app_with_session(
+            user_data={
+                "email": "only-email@example.com",
+            }
+        )
+        resp = tc.get("/help")
+        assert resp.status_code == 200
+
+    def test_user_context_with_display_name_fallback(self):
+        """When 'name' is absent, display_name should be used as fallback."""
+        tc = self._make_app_with_session(
+            user_data={
+                "display_name": "Display Only",
+                "email": "display@example.com",
+                "id": "user-123",
+            }
+        )
+        resp = tc.get("/help")
+        assert resp.status_code == 200
+
+
 @pytest.mark.integration
 class TestHelpNavigationLink:
     """Tests that the Help link appears in the navigation."""

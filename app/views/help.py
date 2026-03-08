@@ -29,6 +29,19 @@ _DOCS_BUILD_DIR = pathlib.Path(__file__).parents[2] / "docs_build"
 @router.get("/help", include_in_schema=False)
 async def help_center(request: Request):
     """Render the end-user Help Center page."""
+    # Extract user context for Zammad widget pre-fill ----------------------
+    session_user = None
+    if hasattr(request, "session"):
+        session_user = request.session.get("user")
+
+    user_name = ""
+    user_email = ""
+    user_id = ""
+    if session_user and isinstance(session_user, dict):
+        user_name = session_user.get("name") or session_user.get("display_name") or ""
+        user_email = session_user.get("email") or ""
+        user_id = session_user.get("preferred_username") or session_user.get("email") or session_user.get("id") or ""
+
     return templates.TemplateResponse(
         "help.html",
         {
@@ -39,5 +52,8 @@ async def help_center(request: Request):
             "zammad_chat_id": settings.zammad_chat_id,
             "zammad_form_enabled": settings.zammad_form_enabled,
             "support_email": settings.support_email,
+            "user_name": user_name,
+            "user_email": user_email,
+            "user_id": user_id,
         },
     )

@@ -1142,6 +1142,15 @@ SUPPORT_EMAIL=support@example.com
 
 > **Note:** The live-chat widget requires at least one Zammad agent to be online. If no agent is available, the widget will not appear. Enable Zammad's debug mode (`debug: true`) for troubleshooting.
 
+#### Automatic User Context (Auto-Fill)
+
+When a user is logged in, DocuElevate automatically passes their identity to the Zammad widgets:
+
+- **Ticket form:** The user's **name** and **email** are pre-filled in the form fields. A *DocuElevate User Context* block containing the user's name, email, and username is appended to the ticket body so the support agent can immediately identify the requester.
+- **Live chat:** The user's **name** and **email** are passed to the Zammad chat widget constructor. Depending on your Zammad version, the agent may see this information in the chat session details.
+
+No additional configuration is required — the auto-fill uses the authenticated session data (OAuth, local login, or admin credentials). Anonymous visitors see the standard Zammad widgets without pre-filled data.
+
 ## Duplicate Document Detection
 
 DocuElevate detects and flags documents that share the same content, even if they arrive as separate uploads.
