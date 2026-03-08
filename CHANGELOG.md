@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.105.0 (2026-03-08)
+
+### Continuous Integration
+
+- Restore javascript-typescript CodeQL config alongside javascript
+  ([`1fe6f86`](https://github.com/christianlouis/DocuElevate/commit/1fe6f86cc0d10047349825122d2582304a03beee))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`289eb42`](https://github.com/christianlouis/DocuElevate/commit/289eb422f317932b72c913b2dc88f39fbb871381))
+
+### Features
+
+- **ci**: Integrate Codecov for test coverage analysis and reporting
+  ([`6d533aa`](https://github.com/christianlouis/DocuElevate/commit/6d533aae337b765e97c36a0d79f091bac2a639ba))
+
+
 ## Unreleased
 
 ### Continuous Integration
