@@ -32,6 +32,9 @@ Changelog = "https://github.com/christianlouis/DocuElevate/blob/main/CHANGELOG.m
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
 
+[project.scripts]
+docuelevate = "app.cli:main"
+
 [tool.semantic_release]
 version_toml = []
 version_source = "tag"
