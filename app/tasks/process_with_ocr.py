@@ -33,7 +33,13 @@ logger = logging.getLogger(__name__)
 
 
 @celery.task(base=OcrTaskWithRetry, bind=True)
-def process_with_ocr(self, filename: str, file_id: Optional[int] = None, original_text: Optional[str] = None):
+def process_with_ocr(
+    self,
+    filename: str,
+    file_id: Optional[int] = None,
+    original_text: Optional[str] = None,
+    language: Optional[str] = None,
+):
     """Run the configured OCR providers on *filename* and continue the pipeline.
 
     When multiple OCR providers are configured the results are merged using the
@@ -47,6 +53,10 @@ def process_with_ocr(self, filename: str, file_id: Optional[int] = None, origina
         filename: Base name of the file inside ``<workdir>/tmp/``.
         file_id: Optional database record ID passed through to downstream tasks.
         original_text: Optional original embedded text for head-to-head comparison.
+        language: Optional Tesseract-style language code(s) (e.g. ``"eng+deu"``)
+            to override the global OCR language settings for this specific run.
+            Pass ``None`` or ``"auto"`` to use the global settings.  This
+            enables per-pipeline language configuration.
     """
     task_id = self.request.id
     log_task_progress(
@@ -62,7 +72,7 @@ def process_with_ocr(self, filename: str, file_id: Optional[int] = None, origina
         if not os.path.exists(tmp_file_path):
             raise FileNotFoundError(f"Local file not found: {tmp_file_path}")
 
-        providers = get_ocr_providers()
+        providers = get_ocr_providers(language=language)
         provider_names = [p.name for p in providers]
         logger.info(f"[{task_id}] Running {len(providers)} OCR provider(s): {provider_names}")
 
@@ -122,7 +132,12 @@ def process_with_ocr(self, filename: str, file_id: Optional[int] = None, origina
         # PDF with ocrmypdf to embed an invisible text layer so the output is
         # selectable/searchable in PDF viewers.
         if searchable_pdf_path is None:
-            lang = getattr(settings, "tesseract_language", None) or "eng"
+            # Use the per-call language override; fall back to global setting
+            embed_lang = (
+                language
+                if language and language != "auto"
+                else (getattr(settings, "tesseract_language", None) or "eng")
+            )
             log_task_progress(
                 task_id,
                 "embed_text_layer",
@@ -130,7 +145,7 @@ def process_with_ocr(self, filename: str, file_id: Optional[int] = None, origina
                 "Embedding searchable text layer into PDF",
                 file_id=file_id,
             )
-            embedded = embed_text_layer(tmp_file_path, tmp_file_path, language=lang)
+            embedded = embed_text_layer(tmp_file_path, tmp_file_path, language=embed_lang)
             if embedded:
                 searchable_pdf_path = tmp_file_path
                 log_task_progress(

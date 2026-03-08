@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import logging
 import mimetypes
 import os
@@ -12,7 +13,7 @@ from pypdf.errors import PdfReadError
 from app.celery_app import celery
 from app.config import settings
 from app.database import SessionLocal
-from app.models import FileRecord
+from app.models import FileRecord, Pipeline, PipelineStep
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.tasks.process_with_ocr import process_with_ocr
 from app.tasks.retry_config import BaseTaskWithRetry
@@ -21,6 +22,69 @@ from app.utils.step_manager import initialize_file_steps
 from app.utils.text_quality import check_text_quality, detect_pdf_text_source
 
 logger = logging.getLogger(__name__)
+
+
+def _get_pipeline_ocr_language(db, file_record: FileRecord, owner_id: str | None) -> str | None:
+    """Look up the OCR language override from the file's pipeline OCR step config.
+
+    Resolution order:
+    1. Explicit pipeline assigned to the file (``file_record.pipeline_id``).
+    2. User's own default pipeline (``owner_id``, ``is_default=True``).
+    3. System default pipeline (``owner_id=NULL``, ``is_default=True``).
+
+    Returns the ``ocr_language`` value from the pipeline's OCR step config, or
+    ``None`` when no override is configured.
+    """
+    pipeline = None
+
+    if file_record.pipeline_id:
+        pipeline = db.query(Pipeline).filter(Pipeline.id == file_record.pipeline_id).first()
+
+    if pipeline is None and owner_id:
+        pipeline = (
+            db.query(Pipeline)
+            .filter(
+                Pipeline.owner_id == owner_id,
+                Pipeline.is_default.is_(True),
+                Pipeline.is_active.is_(True),
+            )
+            .first()
+        )
+
+    if pipeline is None:
+        pipeline = (
+            db.query(Pipeline)
+            .filter(
+                Pipeline.owner_id.is_(None),
+                Pipeline.is_default.is_(True),
+                Pipeline.is_active.is_(True),
+            )
+            .first()
+        )
+
+    if pipeline is None:
+        return None
+
+    ocr_step = (
+        db.query(PipelineStep)
+        .filter(
+            PipelineStep.pipeline_id == pipeline.id,
+            PipelineStep.step_type == "ocr",
+            PipelineStep.enabled.is_(True),
+        )
+        .first()
+    )
+
+    if ocr_step is None or not ocr_step.config:
+        return None
+
+    try:
+        step_config = json.loads(ocr_step.config)
+        lang = step_config.get("ocr_language") or None
+        # "auto" is treated as no override
+        return lang if lang and lang != "auto" else None
+    except Exception:
+        return None
 
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
@@ -109,6 +173,7 @@ def process_document(
         )
 
     # Acquire DB session in the task
+    ocr_language: str | None = None  # Pipeline OCR language override resolved inside DB session
     with SessionLocal() as db:
         # When file_id is provided, we are reprocessing an existing file.
         # Skip the duplicate check and reuse the existing record.
@@ -305,6 +370,14 @@ def process_document(
         new_record.local_filename = new_local_path
         db.commit()
 
+        # Look up pipeline OCR language override before the session closes.
+        # This reads the OCR step config from the file's assigned pipeline (or
+        # the user/system default pipeline) so the language is available when
+        # dispatching process_with_ocr below.
+        ocr_language = _get_pipeline_ocr_language(db, new_record, owner_id)
+        if ocr_language:
+            logger.info(f"[{task_id}] Pipeline OCR language override: {ocr_language!r}")
+
         # Store file_id before session closes to avoid DetachedInstanceError
         file_id = new_record.id
 
@@ -334,7 +407,7 @@ def process_document(
             "Queued for forced OCR processing",
             file_id=file_id,
         )
-        process_with_ocr.delay(new_filename, file_id)
+        process_with_ocr.delay(new_filename, file_id, language=ocr_language)
         return {"file": new_local_path, "status": "Queued for forced OCR", "file_id": file_id}
 
     # If the file is not a PDF, skip embedded text check and convert to PDF first
@@ -491,7 +564,7 @@ def process_document(
                     "Queued for OCR (text quality too low)",
                     file_id=file_id,
                 )
-                process_with_ocr.delay(new_filename, file_id, extracted_text)
+                process_with_ocr.delay(new_filename, file_id, extracted_text, language=ocr_language)
                 return {
                     "file": new_local_path,
                     "status": "Queued for OCR (poor embedded text quality)",
@@ -564,5 +637,5 @@ def process_document(
         "Queued for OCR processing",
         file_id=file_id,
     )
-    process_with_ocr.delay(new_filename, file_id)
+    process_with_ocr.delay(new_filename, file_id, language=ocr_language)
     return {"file": new_local_path, "status": "Queued for OCR", "file_id": file_id}

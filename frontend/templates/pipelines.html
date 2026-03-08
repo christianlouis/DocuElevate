@@ -404,6 +404,53 @@
             </label>
           </template>
 
+          <!-- ocr_language (only shown for ocr step) -->
+          <template x-if="stepModal.form.step_type === 'ocr'">
+            <div>
+              <label for="ocrLanguage" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                OCR Language
+              </label>
+              <select
+                id="ocrLanguage"
+                x-model="stepModal.form.config.ocr_language"
+                class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 dark:bg-gray-700 dark:text-white"
+              >
+                <option value="auto">Auto (use system default)</option>
+                <option value="ara">Arabic</option>
+                <option value="chi_sim">Chinese (Simplified)</option>
+                <option value="chi_tra">Chinese (Traditional)</option>
+                <option value="ces">Czech</option>
+                <option value="dan">Danish</option>
+                <option value="nld">Dutch</option>
+                <option value="eng">English</option>
+                <option value="fin">Finnish</option>
+                <option value="fra">French</option>
+                <option value="deu">German</option>
+                <option value="ell">Greek</option>
+                <option value="heb">Hebrew</option>
+                <option value="hin">Hindi</option>
+                <option value="hun">Hungarian</option>
+                <option value="ita">Italian</option>
+                <option value="jpn">Japanese</option>
+                <option value="kor">Korean</option>
+                <option value="nor">Norwegian</option>
+                <option value="pol">Polish</option>
+                <option value="por">Portuguese</option>
+                <option value="ron">Romanian</option>
+                <option value="rus">Russian</option>
+                <option value="spa">Spanish</option>
+                <option value="swe">Swedish</option>
+                <option value="tha">Thai</option>
+                <option value="tur">Turkish</option>
+                <option value="ukr">Ukrainian</option>
+                <option value="vie">Vietnamese</option>
+              </select>
+              <p class="mt-1 text-xs text-gray-400">
+                Overrides the global language setting for Tesseract/EasyOCR. Azure and Mistral auto-detect the language.
+              </p>
+            </div>
+          </template>
+
           <!-- Enabled -->
           <label class="inline-flex items-center gap-2 cursor-pointer">
             <input
