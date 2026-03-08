@@ -8,7 +8,8 @@ This guide covers how to configure Stripe billing and local user sign-up in Docu
 - [Stripe Billing Integration](#stripe-billing-integration)
   - [Prerequisites](#prerequisites)
   - [Configuration](#configuration)
-  - [Setting Up Plans](#setting-up-plans)
+  - [Stripe Setup Wizard (recommended)](#stripe-setup-wizard-recommended)
+  - [Setting Up Plans Manually](#setting-up-plans-manually)
   - [Webhook Configuration](#webhook-configuration)
   - [Billing Flows](#billing-flows)
 - [Compliance Notes](#compliance-notes)
@@ -75,7 +76,6 @@ DocuElevate integrates with [Stripe](https://stripe.com) to handle subscription 
 ### Prerequisites
 
 - A Stripe account (sign up at [stripe.com](https://stripe.com))
-- Products and prices created in the Stripe Dashboard for each paid plan
 - A publicly reachable webhook endpoint (or use [Stripe CLI](https://stripe.com/docs/stripe-cli) for local testing)
 
 ### Configuration
@@ -90,16 +90,75 @@ STRIPE_CANCEL_URL=https://app.example.com/pricing               # Optional overr
 
 > **Security:** Never commit your Stripe secret key. Store it in your environment or secrets manager.
 
-### Setting Up Plans
+### Stripe Setup Wizard (recommended)
 
-After starting DocuElevate, go to **Admin → Plans** to configure each plan:
+DocuElevate includes a built-in **Stripe Setup Wizard** at `/admin/stripe-wizard` that guides you through the complete setup in three steps:
 
-1. Open the **Plan Designer** for a paid tier (e.g. Starter, Professional).
-2. Enter the **Stripe Price ID (monthly)** from your Stripe Dashboard (e.g. `price_1OtAbc...`).
-3. Optionally enter the **Stripe Price ID (yearly)** for annual billing.
-4. Save the plan.
+1. **Verify API Keys** — checks that your Stripe secret key is configured and the connection to Stripe is working.
+2. **Sync Plans to Stripe** — automatically creates Stripe **Products** and **Prices** for every paid plan defined in DocuElevate, then stores the resulting `price_id` values back in the database. Free plans are skipped; plans that already have a price ID are left unchanged.
+3. **Configure Webhook** — shows the exact webhook endpoint URL to register in the Stripe Dashboard and which events to subscribe to.
 
-Stripe Price IDs look like `price_1OtAbcDefGhIjKlMnOpQrSt`. Find them in **Products** in your Stripe Dashboard.
+You can also reach the wizard from the **Admin → Plans** page via the **Stripe Setup** button.
+
+#### Auto-sync API
+
+The sync step is also available as an API endpoint for automation:
+
+```bash
+curl -X POST https://your-app.example.com/api/billing/stripe/sync-plans \
+  -H "Cookie: <admin-session-cookie>"
+```
+
+Response:
+
+```json
+{
+  "results": [
+    {
+      "plan_id": "starter",
+      "name": "Starter",
+      "status": "created",
+      "stripe_price_id_monthly": "price_1OtAbc...",
+      "stripe_price_id_yearly": "price_1OtDef..."
+    },
+    {
+      "plan_id": "free",
+      "name": "Free",
+      "status": "skipped_free"
+    }
+  ]
+}
+```
+
+Possible `status` values:
+
+| Status | Meaning |
+|--------|---------|
+| `created` | Stripe product and price(s) were created and saved |
+| `already_synced` | Plan already had a price ID — no changes made |
+| `skipped_free` | Free plan (price is $0) — no Stripe price needed |
+| `error` | Stripe API call failed — `detail` contains the error message |
+
+#### Stripe connection status API
+
+```bash
+curl https://your-app.example.com/api/billing/stripe/status
+```
+
+Returns connection health, API mode (test/live), webhook secret status, and per-plan sync status.
+
+### Setting Up Plans Manually
+
+If you prefer to enter price IDs yourself rather than using the wizard:
+
+1. Create **Products** and **Prices** in the [Stripe Dashboard](https://dashboard.stripe.com/products).
+2. Go to **Admin → Plans** in DocuElevate and click the **Edit** (pencil) button for a paid plan.
+3. Scroll to the **Stripe Integration** section in the plan editor.
+4. Enter the **Stripe Price ID (monthly)** (e.g. `price_1OtAbc...`).
+5. Optionally enter the **Stripe Price ID (yearly)** for annual billing.
+6. Save the plan.
+
+> **Stable link:** DocuElevate stores the Stripe `customer_id` in the `UserProfile.stripe_customer_id` column and matches it on every webhook event. This is the stable link between Stripe billing profiles and DocuElevate accounts. It is set automatically when a user completes their first checkout.
 
 ### Webhook Configuration
 
@@ -110,6 +169,7 @@ Stripe webhooks allow DocuElevate to sync subscription status in real time.
 1. Go to **Developers → Webhooks** in the Stripe Dashboard.
 2. Click **Add endpoint**.
 3. Set the endpoint URL to: `https://your-app-domain.com/api/billing/webhook`
+   (The Stripe Setup Wizard shows the exact URL for your deployment.)
 4. Select the following events:
    - `checkout.session.completed`
    - `customer.subscription.updated`
@@ -126,8 +186,10 @@ stripe login
 # Forward webhooks to your local server
 stripe listen --forward-to http://localhost:8000/api/billing/webhook
 
-# Trigger a test event
+# Trigger test events
 stripe trigger checkout.session.completed
+stripe trigger customer.subscription.updated
+stripe trigger customer.subscription.deleted
 ```
 
 ### Billing Flows
@@ -139,7 +201,7 @@ stripe trigger checkout.session.completed
 3. DocuElevate calls `POST /api/billing/create-checkout-session`.
 4. User is redirected to Stripe Checkout.
 5. After payment, Stripe fires `checkout.session.completed`.
-6. DocuElevate webhook handler activates the subscription tier.
+6. DocuElevate webhook handler activates the subscription tier and stores the Stripe `customer_id`.
 7. User is redirected to `/api/billing/success`.
 
 #### Manage or cancel subscription

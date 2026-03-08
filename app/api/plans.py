@@ -75,6 +75,8 @@ class PlanUpsert(BaseModel):
     sort_order: int = 0
     features: list[str] = []
     api_access: bool = False
+    stripe_price_id_monthly: str | None = None
+    stripe_price_id_yearly: str | None = None
 
 
 class ReorderBody(BaseModel):
@@ -121,6 +123,8 @@ def _plan_to_response(plan: SubscriptionPlan) -> dict[str, Any]:
         "sort_order": plan.sort_order,
         "features": features,
         "api_access": plan.api_access,
+        "stripe_price_id_monthly": plan.stripe_price_id_monthly,
+        "stripe_price_id_yearly": plan.stripe_price_id_yearly,
         "created_at": plan.created_at.isoformat() if plan.created_at else None,
         "updated_at": plan.updated_at.isoformat() if plan.updated_at else None,
     }
@@ -151,6 +155,8 @@ def _apply_body(plan: SubscriptionPlan, body: PlanUpsert) -> None:
     plan.sort_order = body.sort_order
     plan.features = json.dumps(body.features)
     plan.api_access = body.api_access
+    plan.stripe_price_id_monthly = body.stripe_price_id_monthly or None
+    plan.stripe_price_id_yearly = body.stripe_price_id_yearly or None
 
 
 # ---------------------------------------------------------------------------

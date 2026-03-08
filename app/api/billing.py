@@ -262,6 +262,199 @@ async def billing_success(request: Request) -> Any:
     return _templates.TemplateResponse("billing_success.html", {"request": request})
 
 
+# ---------------------------------------------------------------------------
+# Admin: Stripe status + sync helpers
+# ---------------------------------------------------------------------------
+
+
+def _require_admin(request: Request) -> None:
+    """Raise 403 if the current session user is not an admin."""
+    user = request.session.get("user") or {}
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required.")
+
+
+@router.get("/stripe/status", summary="Check Stripe connection and plan sync status (admin only)")
+@require_login
+async def stripe_status(request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Return Stripe connection health and per-plan price-ID sync status.
+
+    Returns a JSON object with:
+    - ``configured``: whether STRIPE_SECRET_KEY is set
+    - ``connection``: ``"ok"`` or an error string (live/test mode label)
+    - ``mode``: ``"live"`` | ``"test"`` | ``null``
+    - ``plans``: list of plan objects with ``plan_id``, ``name``,
+      ``stripe_price_id_monthly``, ``stripe_price_id_yearly``, ``synced``
+
+    Raises:
+        403: Not admin.
+        503: Stripe not configured.
+    """
+    _require_admin(request)
+
+    if not settings.stripe_secret_key:
+        return {
+            "configured": False,
+            "connection": "not_configured",
+            "mode": None,
+            "plans": [],
+        }
+
+    client = _get_stripe()
+    # Probe Stripe with a lightweight account fetch
+    mode: str | None = None
+    connection_status = "ok"
+    try:
+        account = client.accounts.retrieve("me")  # type: ignore[arg-type]
+        mode = "live" if getattr(account, "livemode", True) is not False else "test"
+        # stripe returns livemode=False in test mode
+        livemode = getattr(account, "livemode", None)
+        if livemode is True:
+            mode = "live"
+        elif livemode is False:
+            mode = "test"
+        else:
+            mode = "test" if settings.stripe_secret_key.startswith("sk_test_") else "live"
+    except Exception as exc:
+        connection_status = str(exc)
+        mode = "test" if settings.stripe_secret_key.startswith("sk_test_") else "live"
+
+    plans = db.query(SubscriptionPlan).order_by(SubscriptionPlan.sort_order).all()
+    plan_statuses = []
+    for plan in plans:
+        has_monthly = bool(plan.stripe_price_id_monthly)
+        has_yearly = bool(plan.stripe_price_id_yearly)
+        is_paid = plan.price_monthly > 0 or plan.price_yearly > 0
+        synced = (not is_paid) or (has_monthly and (not plan.price_yearly or has_yearly))
+        plan_statuses.append(
+            {
+                "plan_id": plan.plan_id,
+                "name": plan.name,
+                "price_monthly": plan.price_monthly,
+                "price_yearly": plan.price_yearly,
+                "stripe_price_id_monthly": plan.stripe_price_id_monthly,
+                "stripe_price_id_yearly": plan.stripe_price_id_yearly,
+                "synced": synced,
+            }
+        )
+
+    return {
+        "configured": True,
+        "connection": connection_status,
+        "mode": mode,
+        "webhook_secret_configured": bool(settings.stripe_webhook_secret),
+        "plans": plan_statuses,
+        "webhook_endpoint": str(request.base_url).rstrip("/") + "/api/billing/webhook",
+    }
+
+
+@router.post("/stripe/sync-plans", summary="Auto-create Stripe products and prices for all plans (admin only)")
+@require_login
+async def stripe_sync_plans(request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Create Stripe Product + Price objects for every paid plan that is missing them.
+
+    For each paid plan (``price_monthly > 0``) that lacks a ``stripe_price_id_monthly``,
+    this endpoint:
+
+    1. Creates a Stripe *Product* named after the plan.
+    2. Creates a Stripe *Price* for the monthly amount.
+    3. Optionally creates a yearly Price if ``price_yearly > 0``.
+    4. Persists the resulting ``price_id`` values back into ``SubscriptionPlan``.
+
+    Already-synced plans (those that already have ``stripe_price_id_monthly``) are
+    skipped — existing prices in Stripe are never modified.
+
+    Raises:
+        403: Not admin.
+        503: Stripe not configured.
+    """
+    _require_admin(request)
+
+    client = _get_stripe()
+    if not client:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Billing is not configured.")
+
+    plans = db.query(SubscriptionPlan).order_by(SubscriptionPlan.sort_order).all()
+    results: list[dict[str, Any]] = []
+
+    for plan in plans:
+        is_paid = plan.price_monthly > 0 or plan.price_yearly > 0
+        if not is_paid:
+            results.append({"plan_id": plan.plan_id, "name": plan.name, "status": "skipped_free"})
+            continue
+
+        already_has_monthly = bool(plan.stripe_price_id_monthly)
+        already_has_yearly = bool(plan.stripe_price_id_yearly)
+
+        if already_has_monthly and (not plan.price_yearly or already_has_yearly):
+            results.append({"plan_id": plan.plan_id, "name": plan.name, "status": "already_synced"})
+            continue
+
+        try:
+            # Create (or look up) the Stripe Product for this plan
+            product = client.products.create(
+                params={
+                    "name": plan.name,
+                    "metadata": {"docuelevate_plan_id": plan.plan_id},
+                }
+            )
+
+            changed = False
+
+            # Monthly price
+            if not already_has_monthly and plan.price_monthly > 0:
+                monthly_price = client.prices.create(
+                    params={
+                        "product": product.id,
+                        "unit_amount": int(round(plan.price_monthly * 100)),
+                        "currency": "usd",
+                        "recurring": {"interval": "month"},
+                        "metadata": {"docuelevate_plan_id": plan.plan_id, "billing_cycle": "monthly"},
+                    }
+                )
+                plan.stripe_price_id_monthly = monthly_price.id
+                changed = True
+
+            # Yearly price
+            if not already_has_yearly and plan.price_yearly > 0:
+                yearly_price = client.prices.create(
+                    params={
+                        "product": product.id,
+                        "unit_amount": int(round(plan.price_yearly * 100)),
+                        "currency": "usd",
+                        "recurring": {"interval": "year"},
+                        "metadata": {"docuelevate_plan_id": plan.plan_id, "billing_cycle": "yearly"},
+                    }
+                )
+                plan.stripe_price_id_yearly = yearly_price.id
+                changed = True
+
+            if changed:
+                db.commit()
+                logger.info(
+                    "Stripe sync: created product/prices for plan %s (product %s)",
+                    plan.plan_id,
+                    product.id,
+                )
+
+            results.append(
+                {
+                    "plan_id": plan.plan_id,
+                    "name": plan.name,
+                    "status": "created",
+                    "stripe_price_id_monthly": plan.stripe_price_id_monthly,
+                    "stripe_price_id_yearly": plan.stripe_price_id_yearly,
+                }
+            )
+
+        except Exception as exc:
+            db.rollback()
+            logger.error("Stripe sync failed for plan %s: %s", plan.plan_id, exc)
+            results.append({"plan_id": plan.plan_id, "name": plan.name, "status": "error", "detail": str(exc)})
+
+    return {"results": results}
+
+
 def _handle_stripe_event(db: Session, event: Any) -> None:
     """Dispatch Stripe event to the appropriate handler.
 
