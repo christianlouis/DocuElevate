@@ -515,6 +515,41 @@ def test_reset_password_mismatch(la_client, la_session):
     assert resp.status_code == 422
 
 
+@pytest.mark.integration
+def test_reset_password_activates_inactive_user(la_client, la_session):
+    """POST /api/auth/reset-password sets is_active=True for inactive accounts.
+
+    A user who registered when SMTP was configured starts out with is_active=False.
+    Using the password-reset flow (which proves ownership of the email address) must
+    also activate the account so the user can log in immediately afterwards.
+    """
+    token = "activatetoken456"
+    user = LocalUser(
+        email="inactive_reset@example.com",
+        username="inactivereset",
+        hashed_password=hash_password("oldpassword"),
+        is_active=False,  # account not yet verified
+        password_reset_token=token,
+        password_reset_sent_at=datetime.now(tz=timezone.utc),
+    )
+    la_session.add(user)
+    la_session.commit()
+
+    resp = la_client.post(
+        "/api/auth/reset-password",
+        json={
+            "token": token,
+            "new_password": "newpassword2",
+            "new_password_confirm": "newpassword2",
+        },
+    )
+    assert resp.status_code == 200
+    la_session.refresh(user)
+    assert user.is_active is True, "reset_password must activate inactive accounts"
+    assert verify_password("newpassword2", user.hashed_password)
+    assert user.password_reset_token is None
+
+
 # ---------------------------------------------------------------------------
 # Integration tests: page routes
 # ---------------------------------------------------------------------------
@@ -644,6 +679,34 @@ async def test_local_login_unverified(la_session, pending_user):
     result = await auth(mock_request, db=la_session)
     assert result.status_code == 302
     assert "verify" in result.headers["location"].lower()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@patch.object(settings, "multi_user_enabled", True)
+async def test_local_login_unverified_wrong_password(la_session, pending_user):
+    """auth() for unverified user with wrong password still shows the verify message.
+
+    is_active is checked before password so that inactive users always receive
+    the email-verification prompt regardless of whether they typed the correct
+    password.  This avoids leaking whether the password is correct for an
+    account that has not yet been verified.
+    """
+    from unittest.mock import AsyncMock, MagicMock
+
+    from fastapi import Request
+
+    from app.auth import auth
+
+    mock_request = MagicMock(spec=Request)
+    mock_request.form = AsyncMock(return_value={"username": "pendinguser", "password": "wrongpassword"})
+    mock_request.session = {}
+
+    result = await auth(mock_request, db=la_session)
+    assert result.status_code == 302
+    # Must send to the *verify* page, not the generic "invalid credentials" page.
+    assert "verify" in result.headers["location"].lower()
+    assert "user" not in mock_request.session
 
 
 # ---------------------------------------------------------------------------

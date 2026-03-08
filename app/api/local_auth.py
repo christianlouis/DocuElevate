@@ -366,6 +366,9 @@ async def reset_password(body: PasswordResetBody, db: DbSession) -> dict[str, st
     user.hashed_password = hash_password(body.new_password)
     user.password_reset_token = None
     user.password_reset_sent_at = None
+    # Activate the account in case it was still pending email verification.
+    # A valid password-reset token proves control of the registered email address.
+    user.is_active = True
     db.commit()
 
     logger.info("[SECURITY] PASSWORD_RESET_SUCCESS user=%s", user.email)

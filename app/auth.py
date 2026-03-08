@@ -318,15 +318,15 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             db.query(_LocalUser).filter((_LocalUser.username == username) | (_LocalUser.email == username)).first()
         )
         if local_user is not None:
-            if not _verify_password(password or "", local_user.hashed_password):
-                logger.warning("[SECURITY] LOCAL_LOGIN_FAILURE user=%s", username)
-                return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
             if not local_user.is_active:
                 logger.warning("[SECURITY] LOCAL_LOGIN_UNVERIFIED user=%s", username)
                 return RedirectResponse(
                     url="/login?error=Please+verify+your+email+address+before+logging+in",
                     status_code=302,
                 )
+            if not _verify_password(password or "", local_user.hashed_password):
+                logger.warning("[SECURITY] LOCAL_LOGIN_FAILURE user=%s", username)
+                return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
             user_data = _build_session_user(local_user)
             request.session["user"] = user_data
             logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", local_user.email)

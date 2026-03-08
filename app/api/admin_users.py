@@ -488,9 +488,11 @@ def admin_set_password(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Local user not found.")
 
     user.hashed_password = hash_password(body.password)
-    # Clear any outstanding reset tokens
+    # Clear any outstanding reset tokens and activate the account so the user
+    # can log in immediately after an admin sets their password.
     user.password_reset_token = None
     user.password_reset_sent_at = None
+    user.is_active = True
 
     try:
         db.commit()
