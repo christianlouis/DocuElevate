@@ -80,13 +80,6 @@ def finalize_document_storage(self, original_file: str, processed_file: str, met
             from app.tasks.convert_to_pdfa import convert_to_pdfa
 
             logger.info(f"[{task_id}] PDF/A conversion enabled, queueing archival conversion")
-            log_task_progress(
-                task_id,
-                "finalize_document_storage",
-                "in_progress",
-                "Queueing PDF/A archival conversion",
-                file_id=file_id,
-            )
             convert_to_pdfa.delay(file_id)
         except Exception as e:
             logger.warning(f"[{task_id}] Could not queue PDF/A conversion: {e}")
