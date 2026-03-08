@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.90.3 (2026-03-08)
+
+### Bug Fixes
+
+- **email**: Create missing email template and decouple email destination settings
+  ([`58c9b5d`](https://github.com/christianlouis/DocuElevate/commit/58c9b5d7f01941949db71b2816678ac6464d9d0f))
+
+
 ## v0.90.2 (2026-03-08)
 
 ### Bug Fixes
