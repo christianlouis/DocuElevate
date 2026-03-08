@@ -1218,6 +1218,135 @@ Send a processed file to Google Drive.
 }
 ```
 
+## Integrations
+
+Manage per-user integrations (sources and destinations). All endpoints require authentication and are scoped to the current user's integrations. Subscription-tier quota enforcement is applied on creation.
+
+### Quota Enforcement
+
+When creating an integration, the API checks the user's subscription tier:
+
+| Tier | Storage Destinations | IMAP Sources |
+|------|---------------------|--------------|
+| **Free** | 1 | 0 |
+| **Starter** | 2 | 1 |
+| **Professional** | 5 | 3 |
+| **Power** | 10 | Unlimited |
+
+Exceeding a quota returns HTTP 403 with a descriptive error message.
+
+### GET /api/integrations/
+
+List all integrations for the current user. Supports optional query-string filters.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `direction` | string | Filter by `SOURCE` or `DESTINATION` |
+| `integration_type` | string | Filter by type (e.g. `IMAP`, `S3`, `DROPBOX`) |
+
+**Response (200):**
+
+```json
+[
+  {
+    "id": 1,
+    "owner_id": "user@example.com",
+    "direction": "DESTINATION",
+    "integration_type": "S3",
+    "name": "Archive Bucket",
+    "config": {"bucket": "my-bucket", "region": "us-east-1"},
+    "has_credentials": true,
+    "is_active": true,
+    "last_used_at": null,
+    "last_error": null,
+    "created_at": "2025-01-01T00:00:00",
+    "updated_at": "2025-01-01T00:00:00"
+  }
+]
+```
+
+### POST /api/integrations/
+
+Create a new integration. Quota is enforced before creation.
+
+**Request:**
+
+```json
+{
+  "direction": "DESTINATION",
+  "integration_type": "S3",
+  "name": "Archive Bucket",
+  "config": {"bucket": "my-bucket", "region": "us-east-1"},
+  "credentials": {"access_key_id": "AKIA...", "secret_access_key": "..."},
+  "is_active": true
+}
+```
+
+**Response (201):** The created integration (same shape as list response).
+
+**Response (403):** Quota exceeded.
+
+```json
+{
+  "detail": "You have reached your plan limit of 1 storage destination(s). Please remove an existing destination or upgrade your plan."
+}
+```
+
+### PUT /api/integrations/{id}
+
+Update an existing integration. Only provided fields are changed.
+
+### DELETE /api/integrations/{id}
+
+Delete an integration permanently. Returns 204 on success.
+
+### POST /api/integrations/test
+
+Test an integration connection without saving. Useful for "Test connection" UI buttons.
+
+**Request:**
+
+```json
+{
+  "integration_type": "IMAP",
+  "config": {"host": "imap.gmail.com", "port": 993, "username": "user@example.com", "use_ssl": true},
+  "credentials": {"password": "app-password"}
+}
+```
+
+**Response (200):**
+
+```json
+{"success": true, "message": "IMAP connection successful"}
+```
+
+Supported connection tests: `IMAP`, `S3`, `WEBDAV`, `NEXTCLOUD`. Other types return a message that testing is not yet supported.
+
+### GET /api/integrations/quota/
+
+Get the current user's integration quota usage.
+
+**Response (200):**
+
+```json
+{
+  "tier_id": "starter",
+  "tier_name": "Starter",
+  "destinations": {
+    "current_count": 1,
+    "max_allowed": 2,
+    "can_add": true
+  },
+  "sources": {
+    "current_count": 0,
+    "max_allowed": 1,
+    "can_add": true
+  }
+}
+```
+
 ## Webhooks
 
 Manage webhook configurations for notifying external systems when document events occur. All webhook endpoints require admin access.
