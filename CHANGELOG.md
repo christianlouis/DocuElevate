@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.89.0 (2026-03-08)
+
+### Bug Fixes
+
+- **backup**: Address code review feedback - accessibility, CSRF, docs, imports
+  ([`1877fc0`](https://github.com/christianlouis/DocuElevate/commit/1877fc0000490340e5d53e8654ba3116f545c444))
+
+### Features
+
+- **backup**: Add database backup/restore with scheduled retention and admin dashboard
+  ([`2dd1ca0`](https://github.com/christianlouis/DocuElevate/commit/2dd1ca0197eaba2c9b6ca9b7083f8814401a8d0f))
+
+
 ## v0.88.2 (2026-03-08)
 
 ### Bug Fixes
