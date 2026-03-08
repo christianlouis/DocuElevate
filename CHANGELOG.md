@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.96.0 (2026-03-08)
+
+### Bug Fixes
+
+- **ui**: Move IMAP modals inside Alpine.js x-data scope so create/edit/delete buttons work
+  ([`8aa8a93`](https://github.com/christianlouis/DocuElevate/commit/8aa8a93a6a49aa344be47285f9447abf4502f1f3))
+
+### Features
+
+- **models**: Add UserIntegration model, encrypt IMAP passwords, add integrations API
+  ([`743627e`](https://github.com/christianlouis/DocuElevate/commit/743627ecc2155864ecaabde9cac8de43c3b81b30))
+
+
 ## v0.95.0 (2026-03-08)
 
 ### Bug Fixes
