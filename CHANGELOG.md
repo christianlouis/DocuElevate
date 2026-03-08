@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.107.0 (2026-03-08)
+
+### Documentation
+
+- Add per-user notification system documentation to ConfigurationGuide.md
+  ([`ae07590`](https://github.com/christianlouis/DocuElevate/commit/ae075908d1256ad728f4b992c020de2ef978fb65))
+
+### Features
+
+- **notifications**: Add per-user notification system with inbox, email, and webhook targets
+  ([`fcefd09`](https://github.com/christianlouis/DocuElevate/commit/fcefd0978f36fc66ec2a34c9ab26021e38b1fcfb))
+
+- **notifications**: Build per-user notification system (email, webhook, in-app)
+  ([`d48e368`](https://github.com/christianlouis/DocuElevate/commit/d48e36813e37d3db220a04044f319698ecb48056))
+
+
 ## v0.106.0 (2026-03-08)
 
 ### Features
