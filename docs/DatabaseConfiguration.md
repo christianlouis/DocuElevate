@@ -341,29 +341,91 @@ Disable `prepared_statements` when using PgBouncer in transaction mode.
 
 ## Backup Procedures
 
-### PostgreSQL
+DocuElevate's built-in **Backup & Restore** feature (Admin → Backup & Restore) supports all three
+database backends natively, using the native dump tools of each database.
 
-**Manual backup:**
+| Backend        | Backup tool  | Archive extension | Restore tool |
+|----------------|--------------|-------------------|--------------|
+| SQLite         | `sqlite3` (built-in Python) | `.db.gz`    | `sqlite3` (built-in Python) |
+| PostgreSQL     | `pg_dump`    | `.pgsql.gz`       | `psql`       |
+| MySQL/MariaDB  | `mysqldump`  | `.mysql.gz`       | `mysql`      |
+
+Passwords are passed via the `PGPASSWORD` (PostgreSQL) and `MYSQL_PWD` (MySQL) environment
+variables so they are never exposed on the process command line.
+
+### Prerequisites
+
+For PostgreSQL and MySQL backups the corresponding CLI client must be installed on the
+worker host (the container / server that runs Celery workers):
+
+```bash
+# PostgreSQL clients (Debian/Ubuntu)
+apt-get install -y postgresql-client
+
+# MySQL clients (Debian/Ubuntu)
+apt-get install -y default-mysql-client
+```
+
+The binaries required are:
+
+- **PostgreSQL**: `pg_dump` (backup) and `psql` (restore)
+- **MySQL / MariaDB**: `mysqldump` (backup) and `mysql` (restore)
+
+### Using the Admin Dashboard
+
+Navigate to **Admin → Backup & Restore** to:
+
+- Trigger manual backups (hourly / daily / weekly)
+- Download backup archives
+- Upload and restore a backup archive
+- Configure retention and remote storage destinations
+
+### PostgreSQL – manual backup/restore
+
+**Manual backup using DocuElevate's archive format (for use with the UI restore):**
+
+```bash
+pg_dump --format=plain --no-password \
+  -h localhost -U docuelevate docuelevate \
+  | gzip > docuelevate_$(date +%Y%m%d_%H%M).pgsql.gz
+```
+
+**Restore via the DocuElevate UI:**  upload the `.pgsql.gz` file on the Backup & Restore page.
+
+**Manual restore using native tools (custom format):**
 
 ```bash
 pg_dump -h localhost -U docuelevate -F c docuelevate > docuelevate_$(date +%Y%m%d_%H%M).dump
-```
-
-**Restore:**
-
-```bash
 pg_restore -h localhost -U docuelevate -d docuelevate docuelevate_20240101_1200.dump
 ```
 
 **Automated daily backup (cron example):**
 
 ```cron
-0 2 * * * pg_dump -h localhost -U docuelevate -F c docuelevate | gzip > /backups/docuelevate_$(date +\%Y\%m\%d).dump.gz
+0 2 * * * pg_dump --format=plain -h localhost -U docuelevate docuelevate | gzip > /backups/docuelevate_$(date +\%Y\%m\%d).pgsql.gz
 ```
 
 Use your cloud provider's automated backup feature when available (e.g., RDS automated snapshots, Cloud SQL backups).
 
-### SQLite
+### MySQL / MariaDB – manual backup/restore
+
+**Manual backup using DocuElevate's archive format (for use with the UI restore):**
+
+```bash
+MYSQL_PWD=yourpassword mysqldump --single-transaction --routines --triggers \
+  -h localhost -u docuelevate docuelevate \
+  | gzip > docuelevate_$(date +%Y%m%d_%H%M).mysql.gz
+```
+
+**Restore via the DocuElevate UI:**  upload the `.mysql.gz` file on the Backup & Restore page.
+
+**Manual restore using native tools:**
+
+```bash
+gunzip -c docuelevate_20240101_1200.mysql.gz | mysql -h localhost -u docuelevate -p docuelevate
+```
+
+### SQLite – manual backup/restore
 
 ```bash
 # Stop the application first, or use SQLite's online backup API
