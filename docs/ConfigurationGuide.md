@@ -121,9 +121,157 @@ MAX_SINGLE_FILE_SIZE=524288000
 - **With splitting**: Recommended for servers with limited memory or when processing very large scanned documents
 - **Higher limits**: For environments specifically designed to handle large architectural plans, books, or scanned archives
 
-### IMAP Configuration
+### Watch Folder Ingestion
 
-DocuElevate can monitor multiple IMAP mailboxes for document attachments. Each mailbox uses a numbered prefix (e.g., `IMAP1_`, `IMAP2_`).
+DocuElevate can automatically monitor directories for new files and ingest them without any manual action.
+This works for:
+- **Local filesystem paths** — including SMB/CIFS shares, NFS mounts, or any path accessible to the Docker container
+- **FTP server directories** — using the configured FTP connection credentials
+- **SFTP server directories** — using the configured SFTP connection credentials
+
+#### Local Watch Folders
+
+Mount the share or directory into the Docker container and configure one or more paths to watch.
+
+| **Variable**                        | **Description**                                                                              | **Default** |
+|-------------------------------------|----------------------------------------------------------------------------------------------|-------------|
+| `WATCH_FOLDERS`                     | Comma-separated list of **absolute** local filesystem paths to poll for new files.          | *(empty)*   |
+| `WATCH_FOLDER_POLL_INTERVAL`        | How often to scan the folders, in minutes.                                                  | `1`         |
+| `WATCH_FOLDER_DELETE_AFTER_PROCESS` | Delete source files from the watch folder after they are successfully enqueued. When `false`, processed files are tracked in a cache file to prevent re-ingestion. | `false` |
+
+**Example (docker-compose.yaml):**
+
+```yaml
+services:
+  worker:
+    volumes:
+      - /mnt/smb/scanner:/watchfolders/scanner  # SMB/CIFS share mounted on the host
+      - /mnt/nfs/inbox:/watchfolders/inbox       # NFS mount
+    environment:
+      WATCH_FOLDERS: /watchfolders/scanner,/watchfolders/inbox
+      WATCH_FOLDER_POLL_INTERVAL: 1
+      WATCH_FOLDER_DELETE_AFTER_PROCESS: false
+```
+
+> **Tip for HP Scanners and MFPs**: Configure your scanner's "Scan to Network Folder" to point at an SMB share that is also mounted into the DocuElevate worker container. DocuElevate will pick up the scan files automatically every minute. No email forwarding is required.
+
+#### FTP Ingest (Watch Folder)
+
+DocuElevate can poll an FTP server directory for new files. It reuses the FTP connection settings already configured for uploads.
+
+| **Variable**                      | **Description**                                                                                | **Default** |
+|-----------------------------------|------------------------------------------------------------------------------------------------|-------------|
+| `FTP_INGEST_ENABLED`              | Enable FTP folder watching (`true`/`false`).                                                  | `false`     |
+| `FTP_INGEST_FOLDER`               | Path on the FTP server to poll (e.g. `/incoming`). Uses the existing FTP connection settings. | *(empty)*   |
+| `FTP_INGEST_DELETE_AFTER_PROCESS` | Delete files from the FTP server after they are downloaded and enqueued.                      | `false`     |
+
+**Example:**
+
+```dotenv
+# Existing FTP upload settings (also used for ingest)
+FTP_HOST=ftp.example.com
+FTP_USERNAME=docuelevate
+FTP_PASSWORD=secret
+
+# FTP ingest configuration
+FTP_INGEST_ENABLED=true
+FTP_INGEST_FOLDER=/incoming
+FTP_INGEST_DELETE_AFTER_PROCESS=false
+```
+
+#### SFTP Ingest (Watch Folder)
+
+DocuElevate can poll an SFTP server directory for new files. It reuses the SFTP connection settings already configured for uploads.
+
+| **Variable**                       | **Description**                                                                                 | **Default** |
+|------------------------------------|-------------------------------------------------------------------------------------------------|-------------|
+| `SFTP_INGEST_ENABLED`              | Enable SFTP folder watching (`true`/`false`).                                                  | `false`     |
+| `SFTP_INGEST_FOLDER`               | Path on the SFTP server to poll (e.g. `/uploads/inbox`). Uses the existing SFTP connection settings. | *(empty)* |
+| `SFTP_INGEST_DELETE_AFTER_PROCESS` | Delete files from the SFTP server after they are downloaded and enqueued.                      | `false`     |
+
+**Example:**
+
+```dotenv
+# Existing SFTP upload settings (also used for ingest)
+SFTP_HOST=sftp.example.com
+SFTP_USERNAME=docuelevate
+SFTP_PRIVATE_KEY=/run/secrets/sftp_key
+
+# SFTP ingest configuration
+SFTP_INGEST_ENABLED=true
+SFTP_INGEST_FOLDER=/uploads/inbox
+SFTP_INGEST_DELETE_AFTER_PROCESS=false
+```
+
+#### Supported File Types for Watch Folders
+
+Watch folder ingestion accepts the same file types as the web upload interface: PDF, Word, Excel, PowerPoint, images (JPEG, PNG, TIFF, BMP, GIF), plain text, CSV, RTF, and more. Unsupported files (executables, archives, etc.) are silently skipped.
+
+#### Dropbox Ingest (Watch Folder)
+
+DocuElevate can poll a Dropbox folder for new files. It reuses the Dropbox OAuth credentials already configured for uploads.
+
+| **Variable**                          | **Description**                                                                              | **Default** |
+|---------------------------------------|----------------------------------------------------------------------------------------------|-------------|
+| `DROPBOX_INGEST_ENABLED`              | Enable Dropbox folder watching (`true`/`false`).                                            | `false`     |
+| `DROPBOX_INGEST_FOLDER`               | Dropbox folder path to poll (e.g. `/Inbox/Scanner`). Uses the existing Dropbox OAuth credentials. | *(empty)* |
+| `DROPBOX_INGEST_DELETE_AFTER_PROCESS` | Delete files from Dropbox after they are downloaded and enqueued.                          | `false`     |
+
+#### Google Drive Ingest (Watch Folder)
+
+DocuElevate can poll a Google Drive folder for new files. It reuses the existing Google Drive service-account or OAuth credentials.
+
+| **Variable**                                 | **Description**                                                                              | **Default** |
+|----------------------------------------------|----------------------------------------------------------------------------------------------|-------------|
+| `GOOGLE_DRIVE_INGEST_ENABLED`                | Enable Google Drive folder watching (`true`/`false`).                                       | `false`     |
+| `GOOGLE_DRIVE_INGEST_FOLDER_ID`              | Google Drive **folder ID** to poll (copy from the URL of the target folder in Drive). Uses the existing Google Drive credentials. | *(empty)* |
+| `GOOGLE_DRIVE_INGEST_DELETE_AFTER_PROCESS`   | Delete files from Google Drive after they are downloaded and enqueued.                      | `false`     |
+
+#### OneDrive Ingest (Watch Folder)
+
+DocuElevate can poll a OneDrive folder for new files. It reuses the existing OneDrive MSAL (client ID/secret/refresh token) credentials.
+
+| **Variable**                               | **Description**                                                                              | **Default** |
+|--------------------------------------------|----------------------------------------------------------------------------------------------|-------------|
+| `ONEDRIVE_INGEST_ENABLED`                  | Enable OneDrive folder watching (`true`/`false`).                                           | `false`     |
+| `ONEDRIVE_INGEST_FOLDER_PATH`              | OneDrive folder path to poll (e.g. `/Inbox/Scanner`). Uses the existing OneDrive credentials. | *(empty)* |
+| `ONEDRIVE_INGEST_DELETE_AFTER_PROCESS`     | Delete files from OneDrive after they are downloaded and enqueued.                          | `false`     |
+
+#### Nextcloud Ingest (Watch Folder)
+
+DocuElevate can poll a Nextcloud folder via WebDAV for new files. It reuses the existing Nextcloud upload URL and credentials.
+
+| **Variable**                               | **Description**                                                                              | **Default** |
+|--------------------------------------------|----------------------------------------------------------------------------------------------|-------------|
+| `NEXTCLOUD_INGEST_ENABLED`                 | Enable Nextcloud folder watching (`true`/`false`).                                          | `false`     |
+| `NEXTCLOUD_INGEST_FOLDER`                  | Nextcloud folder path to poll (e.g. `/Scans/Inbox`). Uses the existing Nextcloud upload URL and credentials. | *(empty)* |
+| `NEXTCLOUD_INGEST_DELETE_AFTER_PROCESS`    | Delete files from Nextcloud after they are downloaded and enqueued.                         | `false`     |
+
+#### Amazon S3 Ingest (Watch Folder)
+
+DocuElevate can poll an S3 bucket prefix for new objects. It reuses the existing S3/AWS credentials and bucket name.
+
+| **Variable**                          | **Description**                                                                              | **Default** |
+|---------------------------------------|----------------------------------------------------------------------------------------------|-------------|
+| `S3_INGEST_ENABLED`                   | Enable S3 prefix watching (`true`/`false`).                                                 | `false`     |
+| `S3_INGEST_PREFIX`                    | S3 key prefix to poll (e.g. `inbox/scanner/`). Uses the existing S3 bucket and AWS credentials. | *(empty)* |
+| `S3_INGEST_DELETE_AFTER_PROCESS`      | Delete objects from S3 after they are downloaded and enqueued.                              | `false`     |
+
+#### WebDAV Ingest (Watch Folder)
+
+DocuElevate can poll a WebDAV folder for new files. It reuses the existing WebDAV URL and credentials.
+
+| **Variable**                          | **Description**                                                                              | **Default** |
+|---------------------------------------|----------------------------------------------------------------------------------------------|-------------|
+| `WEBDAV_INGEST_ENABLED`               | Enable WebDAV folder watching (`true`/`false`).                                             | `false`     |
+| `WEBDAV_INGEST_FOLDER`                | WebDAV folder path to poll. Uses the existing WebDAV URL and credentials.                   | *(empty)* |
+| `WEBDAV_INGEST_DELETE_AFTER_PROCESS`  | Delete files from WebDAV after they are downloaded and enqueued.                            | `false`     |
+
+### IMAP Email Ingestion
+
+DocuElevate can automatically pull document attachments from IMAP mailboxes — no need to forward emails manually. Configure one or two mailboxes and DocuElevate polls them on the schedule you set.
+
+> **For HP Scanners (Scan to Email)**: If your scanner is set up to email scanned documents to a dedicated mailbox, configure that mailbox in DocuElevate using the settings below. DocuElevate will automatically retrieve the scanned PDFs from the inbox and process them. You do **not** need to configure DocuElevate as an email server — it acts as an email *client* that reads from your existing mailbox.
 
 | **Variable**                  | **Description**                                              | **Example**       |
 |-------------------------------|--------------------------------------------------------------|-------------------|
