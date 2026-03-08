@@ -86,7 +86,38 @@ def make_api_request(url, max_retries=3):
 
 ## Authentication
 
-When authentication is enabled, you must include an authentication token in your requests:
+When authentication is enabled, you must include an authentication token in your requests.
+
+### API Tokens (Recommended)
+
+DocuElevate supports personal API tokens for programmatic access. Tokens are the recommended
+way to authenticate scripts, CI/CD pipelines, and webhook integrations.
+
+**Creating a token:**
+
+1. Log in to DocuElevate and navigate to **API Tokens** (available in your user menu or at `/api-tokens`).
+2. Enter a descriptive name (e.g. "CI Pipeline", "Scanner Integration") and click **Create Token**.
+3. Copy the token immediately — it is shown only once.
+
+**Using a token:**
+
+```bash
+curl -X GET "http://<your-docuelevate-instance>/api/files" \
+  -H "Authorization: Bearer <your-api-token>"
+```
+
+**Managing tokens programmatically:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/api-tokens/` | Create a new token |
+| `GET` | `/api/api-tokens/` | List all your tokens |
+| `DELETE` | `/api/api-tokens/{id}` | Revoke a token |
+
+### Session Authentication
+
+Browser-based users authenticate via OAuth or local login. Session cookies are set
+automatically and used for subsequent requests:
 
 ```bash
 curl -X GET "http://<your-docuelevate-instance>/api/files" \
@@ -1897,6 +1928,106 @@ Pass no `pipeline_id` query parameter (or omit it) to clear the assignment.
 **Response (200):**
 ```json
 { "file_id": 42, "pipeline_id": 2 }
+```
+
+
+## API Tokens
+
+Personal API tokens allow programmatic access to the DocuElevate API without
+session cookies. Tokens are ideal for CI/CD pipelines, webhook integrations,
+and automation scripts.
+
+Each token is prefixed with `de_` for easy identification. Only a SHA-256 hash
+is stored server-side; the plaintext is returned exactly once at creation time.
+
+Usage tracking records when each token was last used and from which IP address.
+
+### POST /api/api-tokens/
+
+Create a new API token.
+
+**Request:**
+```json
+{
+  "name": "CI Pipeline"
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "id": 1,
+  "name": "CI Pipeline",
+  "token_prefix": "de_Ab3xY7kL",
+  "token": "de_Ab3xY7kLmN9pQrStUvWxYz0123456789abcdef",
+  "is_active": true,
+  "last_used_at": null,
+  "last_used_ip": null,
+  "created_at": "2026-03-08T12:00:00Z",
+  "revoked_at": null
+}
+```
+
+> **Important:** The `token` field is only included in the creation response.
+> Copy it immediately — it will not be shown again.
+
+### GET /api/api-tokens/
+
+List all tokens for the authenticated user. The full token value is never included.
+
+**Response (200):**
+```json
+[
+  {
+    "id": 1,
+    "name": "CI Pipeline",
+    "token_prefix": "de_Ab3xY7kL",
+    "is_active": true,
+    "last_used_at": "2026-03-08T15:30:00Z",
+    "last_used_ip": "203.0.113.42",
+    "created_at": "2026-03-08T12:00:00Z",
+    "revoked_at": null
+  }
+]
+```
+
+### DELETE /api/api-tokens/{token_id}
+
+Revoke a token. The token is soft-deleted (kept for audit purposes) and can no
+longer be used for authentication.
+
+**Response (200):**
+```json
+{
+  "detail": "Token revoked"
+}
+```
+
+### Using API Tokens
+
+Include the token in the `Authorization` header of any API request:
+
+```bash
+# Upload a document
+curl -X POST "http://your-instance/api/files/ui-upload" \
+  -H "Authorization: Bearer de_your_token_here" \
+  -F "file=@/path/to/document.pdf"
+
+# List files
+curl -X GET "http://your-instance/api/files" \
+  -H "Authorization: Bearer de_your_token_here"
+```
+
+**Python example:**
+```python
+import requests
+
+response = requests.post(
+    "http://your-instance/api/files/ui-upload",
+    headers={"Authorization": "Bearer de_your_token_here"},
+    files={"file": open("document.pdf", "rb")},
+)
+print(response.json())
 ```
 
 

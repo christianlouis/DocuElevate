@@ -2,6 +2,7 @@ import hashlib
 import inspect
 import logging
 import pathlib
+from datetime import datetime, timezone
 from functools import wraps
 from urllib.parse import urlparse
 
@@ -52,7 +53,60 @@ router = APIRouter()
 
 
 def get_current_user(request: Request):
+    # Check for Bearer token auth first (API tokens)
+    api_user = getattr(request.state, "api_token_user", None)
+    if isinstance(api_user, dict):
+        return api_user
     return request.session.get("user")
+
+
+def _resolve_bearer_user(request: Request, db: Session) -> dict | None:
+    """Resolve a user from a Bearer API token in the Authorization header.
+
+    If the header is present and the token is valid, updates usage tracking
+    (last_used_at, last_used_ip) and returns a synthetic user dict compatible
+    with the session user format.
+
+    Returns:
+        A user dict or ``None`` if no valid Bearer token is present.
+    """
+    auth_header = request.headers.get("authorization", "")
+    if not isinstance(auth_header, str) or not auth_header.startswith("Bearer "):
+        return None
+
+    raw_token = auth_header[7:]
+    if not raw_token or not isinstance(raw_token, str):
+        return None
+
+    from app.api.api_tokens import hash_token
+    from app.models import ApiToken
+
+    token_hash = hash_token(raw_token)
+    db_token = db.query(ApiToken).filter(ApiToken.token_hash == token_hash, ApiToken.is_active.is_(True)).first()
+    if db_token is None:
+        return None
+
+    # Update usage tracking
+    try:
+        db_token.last_used_at = datetime.now(timezone.utc)
+        # Extract client IP (respect X-Forwarded-For from reverse proxy)
+        client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        if not client_ip and request.client:
+            client_ip = request.client.host
+        db_token.last_used_ip = client_ip or None
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.debug("Failed to update API token usage tracking for token_id=%s", db_token.id)
+
+    # Build a synthetic user dict that mimics the session user format
+    return {
+        "id": db_token.owner_id,
+        "email": db_token.owner_id,
+        "preferred_username": db_token.owner_id,
+        "is_admin": False,
+        "_api_token_id": db_token.id,
+    }
 
 
 def get_current_user_id(request: Request) -> str:
@@ -82,28 +136,42 @@ def require_login(func):
 
     @wraps(func)
     async def wrapper(request: Request, *args, **kwargs):
-        if not request.session.get("user"):
-            # For API endpoints return 401 instead of storing the URL in the session
-            # and redirecting to /login.  Without this guard, the /api/auth/whoami
-            # probe issued by common.js on every page load would overwrite
-            # redirect_after_login with the API URL, causing the post-login redirect
-            # to land on a JSON endpoint rather than the original page.
-            url_path = urlparse(str(request.url)).path
-            if url_path.startswith("/api/"):
-                return JSONResponse(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    content={"error": "Not authenticated"},
-                )
-            request.session["redirect_after_login"] = str(request.url)
-            return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
-        # Pass request as a keyword argument so that endpoints whose first
-        # parameter is a path variable (e.g. pipeline_id) are not accidentally
-        # bound to the request object when FastAPI supplies all arguments as
-        # keyword arguments.
-        if inspect.iscoroutinefunction(func):
-            return await func(*args, request=request, **kwargs)
-        else:
-            return func(*args, request=request, **kwargs)
+        # Check session auth first
+        if request.session.get("user"):
+            if inspect.iscoroutinefunction(func):
+                return await func(*args, request=request, **kwargs)
+            else:
+                return func(*args, request=request, **kwargs)
+
+        # Fall back to Bearer token auth for API endpoints
+        url_path = urlparse(str(request.url)).path
+        if url_path.startswith("/api/"):
+            try:
+                from app.database import SessionLocal
+
+                db = SessionLocal()
+                try:
+                    api_user = _resolve_bearer_user(request, db)
+                finally:
+                    db.close()
+            except Exception:
+                api_user = None
+
+            if api_user:
+                request.state.api_token_user = api_user
+                if inspect.iscoroutinefunction(func):
+                    return await func(*args, request=request, **kwargs)
+                else:
+                    return func(*args, request=request, **kwargs)
+
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={"error": "Not authenticated"},
+            )
+
+        # Non-API endpoint with no session — redirect to login
+        request.session["redirect_after_login"] = str(request.url)
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
 
     return wrapper
 
@@ -443,7 +511,7 @@ if AUTH_ENABLED:
 @require_login
 async def whoami(request: Request):
     """API endpoint to get current user information"""
-    user = request.session.get("user")
+    user = get_current_user(request)
     return user or {"error": "Not authenticated"}
 
 

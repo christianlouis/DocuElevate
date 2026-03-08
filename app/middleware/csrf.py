@@ -109,6 +109,13 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 
         # Validate for state-changing methods on non-exempt paths.
         if request.method in CSRF_PROTECTED_METHODS and request.url.path not in CSRF_EXEMPT_PATHS:
+            # Bearer-authenticated requests (API tokens) are exempt from CSRF
+            # because the token itself acts as proof of intent — it cannot be
+            # injected by a cross-site request from a browser.
+            auth_header = request.headers.get("authorization", "")
+            if auth_header.startswith("Bearer "):
+                return await call_next(request)
+
             submitted_token = await self._get_submitted_token(request)
             if not submitted_token or not secrets.compare_digest(csrf_token, submitted_token):
                 logger.warning(f"[SECURITY] CSRF_VALIDATION_FAILED method={request.method} path={request.url.path}")

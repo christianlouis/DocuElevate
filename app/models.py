@@ -600,3 +600,40 @@ class UserIntegration(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class ApiToken(Base):
+    """Personal API token for programmatic access.
+
+    Users can create multiple tokens, each with a human-readable name.
+    Only the SHA-256 hash of the token is stored; the plaintext is shown
+    exactly once at creation time.  A short prefix (first 8 chars) is
+    persisted for easy identification in the UI.
+
+    Usage tracking records the timestamp and IP address of the most
+    recent request that used the token.
+    """
+
+    __tablename__ = "api_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Stable owner identifier — matches FileRecord.owner_id / UserIntegration.owner_id
+    owner_id = Column(String, nullable=False, index=True)
+
+    # Human-readable label chosen by the user (e.g. "CI Pipeline", "Webhook Upload")
+    name = Column(String(255), nullable=False)
+
+    # SHA-256 hex digest of the full token value
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+
+    # First 12 characters of the token for display (e.g. "de_Ab3xY7kL…")
+    token_prefix = Column(String(16), nullable=False)
+
+    # Usage tracking
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    last_used_ip = Column(String(45), nullable=True)  # IPv6 max length
+
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
