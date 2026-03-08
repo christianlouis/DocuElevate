@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.109.0 (2026-03-08)
+
+### Bug Fixes
+
+- **ocr**: Address code review feedback on multi-language OCR
+  ([`0b29199`](https://github.com/christianlouis/DocuElevate/commit/0b291995b90fe3141128f19542dd3c7308f0c7c3))
+
+### Features
+
+- **ocr**: Add multi-language OCR support with per-pipeline language override
+  ([`a2a4c6f`](https://github.com/christianlouis/DocuElevate/commit/a2a4c6fc9a077a80d1877a441f61f72c5e611e58))
+
+
 ## v0.108.0 (2026-03-08)
 
 ### Chores
