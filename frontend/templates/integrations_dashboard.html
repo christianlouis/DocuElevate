@@ -840,9 +840,9 @@ function integrationsDashboard() {
     hasFormFields(t) { return TYPES_WITH_FORM_FIELDS.has(t); },
 
     oauthLink(t) {
-      if (t === 'DROPBOX') return '/dropbox';
-      if (t === 'GOOGLE_DRIVE') return '/google-drive';
-      if (t === 'ONEDRIVE') return '/onedrive';
+      if (t === 'DROPBOX') return '/dropbox-setup';
+      if (t === 'GOOGLE_DRIVE') return '/google-drive-setup';
+      if (t === 'ONEDRIVE') return '/onedrive-setup';
       return '#';
     },
 

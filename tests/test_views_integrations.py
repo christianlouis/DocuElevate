@@ -63,6 +63,19 @@ class TestIntegrationsDashboardView:
         assert response.status_code == 200
         assert b"integrationsDashboard" in response.content
 
+    def test_integrations_page_oauth_links_point_to_setup_pages(self, client):
+        """oauthLink() must reference the correct -setup URLs, not bare paths."""
+        response = client.get("/integrations")
+        assert response.status_code == 200
+        body = response.text
+        assert "'/dropbox-setup'" in body or '"/dropbox-setup"' in body
+        assert "'/google-drive-setup'" in body or '"/google-drive-setup"' in body
+        assert "'/onedrive-setup'" in body or '"/onedrive-setup"' in body
+        # Ensure the old broken paths are gone
+        assert "return '/dropbox'" not in body.replace("/dropbox-setup", "")
+        assert "return '/google-drive'" not in body.replace("/google-drive-setup", "")
+        assert "return '/onedrive'" not in body.replace("/onedrive-setup", "")
+
     def test_integrations_page_contains_quota_indicators(self, client):
         """GET /integrations page includes quota labels."""
         response = client.get("/integrations")
