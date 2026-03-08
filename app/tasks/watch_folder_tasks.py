@@ -39,7 +39,26 @@ FTP_INGEST_CACHE_FILE = os.path.join(settings.workdir, "ftp_ingest_processed.jso
 # Cache file for tracking already-ingested files (SFTP watch folder)
 SFTP_INGEST_CACHE_FILE = os.path.join(settings.workdir, "sftp_ingest_processed.json")
 
+# Per-integration watch-folder cache file prefix
+_USER_WF_CACHE_PREFIX = os.path.join(settings.workdir, "user_wf_")
+
 _CACHE_RETENTION_DAYS = 30
+
+# Maximum length to store as last_error on UserIntegration to prevent DB bloat
+_MAX_ERROR_LENGTH = 500
+
+# Database session factory (imported lazily to avoid circular imports)
+_db_session_factory = None
+
+
+def _get_db_session():
+    """Return a new SQLAlchemy session (lazy import to avoid startup issues)."""
+    global _db_session_factory  # noqa: PLW0603
+    if _db_session_factory is None:
+        from app.database import SessionLocal
+
+        _db_session_factory = SessionLocal
+    return _db_session_factory()
 
 
 # ---------------------------------------------------------------------------
@@ -122,17 +141,24 @@ def _is_allowed_file(filename: str) -> bool:
     return ext in ALLOWED_EXTENSIONS or filename.lower().endswith(".pdf")
 
 
-def _enqueue_file(file_path: str, *, filename: str | None = None) -> None:
-    """Enqueue a local file path for document processing."""
+def _enqueue_file(file_path: str, *, filename: str | None = None, owner_id: str | None = None) -> None:
+    """Enqueue a local file path for document processing.
+
+    Args:
+        file_path: Absolute path to the file on disk.
+        filename: Optional display filename (defaults to basename of *file_path*).
+        owner_id: Optional user identifier forwarded to ``process_document`` /
+                  ``convert_to_pdf`` for multi-tenant attribution.
+    """
     fname = filename or os.path.basename(file_path)
     _, ext = os.path.splitext(fname)
     mime_check = ext.lower() in {".pdf"}
 
     if mime_check or fname.lower().endswith(".pdf"):
-        process_document.delay(file_path)
+        process_document.delay(file_path, owner_id=owner_id)
         logger.info("Enqueued for processing: %s", fname)
     else:
-        convert_to_pdf.delay(file_path)
+        convert_to_pdf.delay(file_path, owner_id=owner_id)
         logger.info("Enqueued for PDF conversion: %s", fname)
 
 
@@ -1288,6 +1314,216 @@ def scan_webdav_watch_folder() -> dict:
     return {"status": "ok", "files_enqueued": n, "folder": ingest_folder}
 
 
+# ---------------------------------------------------------------------------
+# Per-user watch folder integration scanning
+# ---------------------------------------------------------------------------
+
+
+def _is_safe_watch_path(folder_path: str) -> bool:
+    """Validate that a user-configured watch folder path is safe.
+
+    Rejects paths that attempt directory traversal (``..``), use relative
+    references, or are not absolute.  This prevents a malicious user from
+    configuring a watch folder that could escape its intended directory.
+
+    Args:
+        folder_path: The path to validate.
+
+    Returns:
+        ``True`` if the path is considered safe, ``False`` otherwise.
+    """
+    if not folder_path:
+        return False
+    # Must be absolute
+    if not os.path.isabs(folder_path):
+        logger.warning("Rejecting non-absolute watch folder path: %s", folder_path)
+        return False
+    # Resolve to canonical path and ensure no traversal components exist
+    resolved = os.path.realpath(folder_path)
+    if ".." in folder_path.split(os.sep):
+        logger.warning("Rejecting path with traversal components: %s", folder_path)
+        return False
+    # Ensure resolved path matches the original intent (no symlink escapes)
+    if resolved != os.path.normpath(folder_path):
+        logger.warning(
+            "Watch folder path resolves differently (possible symlink escape): %s -> %s",
+            folder_path,
+            resolved,
+        )
+        return False
+    return True
+
+
+def _scan_user_watch_folder(
+    folder_path: str,
+    cache: dict[str, str],
+    delete_after: bool,
+    owner_id: str,
+) -> int:
+    """Scan a user-configured local watch folder, attributing files to *owner_id*.
+
+    Delegates to the same file-scanning logic as :func:`_scan_local_folder` but
+    passes ``owner_id`` to :func:`_enqueue_file` so that ingested documents are
+    correctly attributed to the user.
+
+    Args:
+        folder_path: Absolute directory path to scan.
+        cache: In-memory dict of already-processed file keys.
+        delete_after: Whether to remove the source file after ingestion.
+        owner_id: The user to attribute ingested documents to.
+
+    Returns:
+        Number of files newly enqueued.
+    """
+    if not os.path.isdir(folder_path):
+        logger.warning("User watch folder does not exist or is not a directory: %s", folder_path)
+        return 0
+
+    count = 0
+    try:
+        entries = os.scandir(folder_path)
+    except PermissionError as exc:
+        logger.error("Cannot scan user watch folder %s: %s", folder_path, exc)
+        return 0
+
+    for entry in entries:
+        if not entry.is_file(follow_symlinks=True):
+            continue
+        if not _is_allowed_file(entry.name):
+            continue
+
+        abs_path = entry.path
+        if abs_path in cache:
+            continue
+
+        dest_filename = f"uwf_{owner_id}_{entry.name}"
+        dest_path = os.path.join(settings.workdir, dest_filename)
+        if os.path.exists(dest_path):
+            base, ext2 = os.path.splitext(dest_filename)
+            dest_path = os.path.join(settings.workdir, f"{base}_{int(datetime.now().timestamp())}{ext2}")
+
+        try:
+            import shutil
+
+            shutil.copy2(abs_path, dest_path)
+        except OSError as exc:
+            logger.error("Failed to copy %s to workdir: %s", abs_path, exc)
+            continue
+
+        _enqueue_file(dest_path, owner_id=owner_id)
+        _mark_processed(cache, abs_path)
+        count += 1
+
+        if delete_after:
+            try:
+                os.remove(abs_path)
+                logger.info("Deleted source file after ingestion: %s", abs_path)
+            except OSError as exc:
+                logger.warning("Could not delete source file %s: %s", abs_path, exc)
+
+    return count
+
+
+def _pull_user_integration_watch_folders() -> dict:
+    """Iterate over all active WATCH_FOLDER UserIntegrations and scan their paths.
+
+    Polls the ``user_integrations`` table for records with
+    ``integration_type='WATCH_FOLDER'``, ``direction='SOURCE'``, and
+    ``is_active=True``.  Each integration's config is decoded and the
+    configured ``folder_path`` is scanned for new files, which are enqueued
+    with the owning user's ``owner_id``.
+
+    Path traversal protection is enforced on the configured path.
+
+    Individual integration failures are caught and recorded without crashing
+    the polling loop.
+
+    Returns:
+        Summary dict with ``status`` and ``integrations_processed`` count.
+    """
+    try:
+        import json as _json
+
+        from app.models import IntegrationDirection, IntegrationType, UserIntegration
+
+        db = _get_db_session()
+        try:
+            integrations = (
+                db.query(UserIntegration)
+                .filter(
+                    UserIntegration.integration_type == IntegrationType.WATCH_FOLDER,
+                    UserIntegration.direction == IntegrationDirection.SOURCE,
+                    UserIntegration.is_active.is_(True),
+                )
+                .all()
+            )
+            logger.info("Processing %d WATCH_FOLDER UserIntegration(s)", len(integrations))
+            total_files = 0
+            for integ in integrations:
+                try:
+                    cfg = _json.loads(integ.config) if integ.config else {}
+                    folder_path = cfg.get("folder_path", "")
+                    delete_after = cfg.get("delete_after_process", False)
+
+                    if not folder_path:
+                        logger.warning(
+                            "Watch folder integration %d (owner %s) has no folder_path — skipping.",
+                            integ.id,
+                            integ.owner_id,
+                        )
+                        continue
+
+                    if not _is_safe_watch_path(folder_path):
+                        error_msg = f"Unsafe watch folder path rejected: {folder_path}"
+                        logger.error(
+                            "Watch folder integration %d (owner %s): %s",
+                            integ.id,
+                            integ.owner_id,
+                            error_msg,
+                        )
+                        integ.last_error = error_msg[:_MAX_ERROR_LENGTH]
+                        db.commit()
+                        continue
+
+                    cache_file = f"{_USER_WF_CACHE_PREFIX}{integ.id}.json"
+                    cache = _load_cache(cache_file)
+                    n = _scan_user_watch_folder(folder_path, cache, delete_after, integ.owner_id)
+                    _save_cache(cache_file, cache)
+
+                    total_files += n
+                    integ.last_used_at = datetime.now(timezone.utc)
+                    integ.last_error = None
+                    db.commit()
+                    logger.info(
+                        "Watch folder integration %d (owner %s): %d file(s) enqueued from %s",
+                        integ.id,
+                        integ.owner_id,
+                        n,
+                        folder_path,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    error_msg = str(exc)[:_MAX_ERROR_LENGTH]
+                    logger.error(
+                        "Error scanning watch folder integration %d (owner %s): %s",
+                        integ.id,
+                        integ.owner_id,
+                        error_msg,
+                    )
+                    try:
+                        integ.last_used_at = datetime.now(timezone.utc)
+                        integ.last_error = error_msg
+                        db.commit()
+                    except Exception:  # noqa: BLE001
+                        db.rollback()
+
+            return {"status": "ok", "integrations_processed": len(integrations), "files_enqueued": total_files}
+        finally:
+            db.close()
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to process WATCH_FOLDER UserIntegrations: %s", exc)
+        return {"status": "error", "reason": str(exc)[:_MAX_ERROR_LENGTH]}
+
+
 @shared_task
 def scan_all_watch_folders() -> dict:
     """
@@ -1303,6 +1539,7 @@ def scan_all_watch_folders() -> dict:
     7. Nextcloud ingest folder (if enabled)
     8. Amazon S3 ingest prefix (if enabled)
     9. WebDAV ingest folder (if enabled)
+    10. Per-user WATCH_FOLDER integrations from the database
     """
     if not _acquire_lock(WATCH_FOLDER_LOCK_KEY):
         logger.info("Watch folder scan already running — skipping this cycle.")
@@ -1319,6 +1556,7 @@ def scan_all_watch_folders() -> dict:
         results["nextcloud"] = scan_nextcloud_watch_folder()
         results["s3"] = scan_s3_watch_folder()
         results["webdav"] = scan_webdav_watch_folder()
+        results["user_watch_folders"] = _pull_user_integration_watch_folders()
     finally:
         _release_lock(WATCH_FOLDER_LOCK_KEY)
 

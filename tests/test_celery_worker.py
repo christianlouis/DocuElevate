@@ -163,10 +163,10 @@ class TestBeatScheduleConfiguration:
 
     # -- Conditional schedule entries ----------------------------------------
 
-    def test_imap_schedule_absent_when_not_configured(self):
-        """Test IMAP polling absent when neither imap host is set."""
+    def test_imap_schedule_always_present(self):
+        """Test IMAP polling is always scheduled (user integrations may exist)."""
         mod = _reload_celery_worker()
-        assert "poll-inboxes-every-minute" not in mod.celery.conf.beat_schedule
+        assert "poll-inboxes-every-minute" in mod.celery.conf.beat_schedule
 
     def test_uptime_kuma_schedule_absent_when_not_configured(self):
         """Test Uptime Kuma ping absent when url is not set."""

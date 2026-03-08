@@ -834,7 +834,7 @@ class TestEnqueueFileNonPdf:
             patch("app.tasks.watch_folder_tasks.process_document") as mock_proc,
         ):
             _enqueue_file("/tmp/doc.docx")
-        mock_conv.delay.assert_called_once_with("/tmp/doc.docx")
+        mock_conv.delay.assert_called_once_with("/tmp/doc.docx", owner_id=None)
         mock_proc.delay.assert_not_called()
 
     def test_pdf_triggers_process_document(self):
@@ -846,7 +846,7 @@ class TestEnqueueFileNonPdf:
             patch("app.tasks.watch_folder_tasks.process_document") as mock_proc,
         ):
             _enqueue_file("/tmp/report.pdf")
-        mock_proc.delay.assert_called_once_with("/tmp/report.pdf")
+        mock_proc.delay.assert_called_once_with("/tmp/report.pdf", owner_id=None)
         mock_conv.delay.assert_not_called()
 
     def test_pdf_detected_via_filename_param(self):
@@ -858,7 +858,7 @@ class TestEnqueueFileNonPdf:
             patch("app.tasks.watch_folder_tasks.process_document") as mock_proc,
         ):
             _enqueue_file("/tmp/somefile", filename="renamed.pdf")
-        mock_proc.delay.assert_called_once_with("/tmp/somefile")
+        mock_proc.delay.assert_called_once_with("/tmp/somefile", owner_id=None)
         mock_conv.delay.assert_not_called()
 
 
