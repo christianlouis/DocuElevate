@@ -1,8 +1,66 @@
 """Tests for app/views/status.py module."""
 
-from unittest.mock import Mock, mock_open, patch
+from unittest.mock import MagicMock, Mock, mock_open, patch
 
 import pytest
+
+
+@pytest.mark.unit
+class TestRequireAdmin:
+    """Unit tests for the _require_admin helper in views/status.py."""
+
+    def test_returns_none_when_no_user_in_session(self):
+        """_require_admin returns None when session has no user."""
+        from app.views.status import _require_admin
+
+        mock_request = MagicMock()
+        mock_request.session = {}
+
+        result = _require_admin(mock_request)
+        assert result is None
+
+    def test_returns_none_for_non_admin_user(self):
+        """_require_admin returns None when user is not an admin."""
+        from app.views.status import _require_admin
+
+        mock_request = MagicMock()
+        mock_request.session = {"user": {"email": "user@example.com", "is_admin": False}}
+
+        result = _require_admin(mock_request)
+        assert result is None
+
+    def test_logs_warning_for_non_admin(self):
+        """_require_admin logs a warning when a non-admin attempts access."""
+        from app.views.status import _require_admin
+
+        mock_request = MagicMock()
+        mock_request.session = {"user": {"email": "user@example.com", "is_admin": False}}
+
+        with patch("app.views.status.logger") as mock_logger:
+            _require_admin(mock_request)
+            mock_logger.warning.assert_called_once()
+
+    def test_logs_warning_when_no_user(self):
+        """_require_admin logs a warning when there is no user in the session."""
+        from app.views.status import _require_admin
+
+        mock_request = MagicMock()
+        mock_request.session = {}
+
+        with patch("app.views.status.logger") as mock_logger:
+            _require_admin(mock_request)
+            mock_logger.warning.assert_called_once()
+
+    def test_returns_user_for_admin(self):
+        """_require_admin returns the user dict when the user is an admin."""
+        from app.views.status import _require_admin
+
+        admin_user = {"email": "admin@example.com", "is_admin": True}
+        mock_request = MagicMock()
+        mock_request.session = {"user": admin_user}
+
+        result = _require_admin(mock_request)
+        assert result == admin_user
 
 
 @pytest.mark.integration
@@ -10,7 +68,7 @@ class TestStatusViews:
     """Tests for status view routes."""
 
     def test_status_dashboard(self, client):
-        """Test status dashboard page."""
+        """Test status dashboard page returns 200 (auth disabled in tests)."""
         response = client.get("/status")
         assert response.status_code == 200
 
@@ -18,6 +76,63 @@ class TestStatusViews:
 @pytest.mark.unit
 class TestStatusDashboard:
     """Tests for status_dashboard function."""
+
+    @pytest.mark.asyncio
+    async def test_redirects_non_admin_to_home(self):
+        """status_dashboard redirects to '/' when user is not an admin."""
+        from fastapi.responses import RedirectResponse
+
+        from app.views.status import status_dashboard
+
+        mock_request = MagicMock()
+        mock_request.session = {"user": {"email": "user@example.com", "is_admin": False}}
+
+        result = await status_dashboard(mock_request)
+
+        assert isinstance(result, RedirectResponse)
+        assert result.status_code == 302
+        assert result.headers["location"] == "/"
+
+    @pytest.mark.asyncio
+    async def test_redirects_when_no_user_in_session(self):
+        """status_dashboard redirects to '/' when no user is in the session."""
+        from fastapi.responses import RedirectResponse
+
+        from app.views.status import status_dashboard
+
+        mock_request = MagicMock()
+        mock_request.session = {}
+
+        result = await status_dashboard(mock_request)
+
+        assert isinstance(result, RedirectResponse)
+        assert result.status_code == 302
+
+    @patch("app.views.status.get_provider_status")
+    @patch("app.views.status.templates")
+    @patch("app.views.status.settings")
+    @patch("app.views.status.os.path.exists")
+    @pytest.mark.asyncio
+    async def test_returns_template_for_admin_user(self, mock_exists, mock_settings, mock_templates, mock_providers):
+        """status_dashboard renders the template for an authenticated admin user."""
+        from app.views.status import status_dashboard
+
+        mock_exists.return_value = False
+        mock_providers.return_value = {}
+        mock_settings.version = "1.0.0"
+        mock_settings.build_date = "2024-01-01"
+        mock_settings.debug = False
+        mock_settings.git_sha = "abc123"
+        mock_settings.notification_urls = []
+
+        mock_request = MagicMock()
+        mock_request.session = {"user": {"email": "admin@example.com", "is_admin": True}}
+
+        await status_dashboard(mock_request)
+
+        mock_templates.TemplateResponse.assert_called_once()
+        call_args = mock_templates.TemplateResponse.call_args
+        assert call_args[0][0] == "status_dashboard.html"
 
     @patch("app.views.status.get_provider_status")
     @patch("app.views.status.templates")
