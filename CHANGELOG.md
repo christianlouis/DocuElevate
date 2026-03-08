@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.97.0 (2026-03-08)
+
+### Features
+
+- **status**: Restrict status page to admin-only and move to admin menu
+  ([`feea051`](https://github.com/christianlouis/DocuElevate/commit/feea051c4f90c26c3d59894ee259e2d75c5eb073))
+
+
 ## v0.96.0 (2026-03-08)
 
 ### Bug Fixes
