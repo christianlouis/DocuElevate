@@ -267,11 +267,26 @@ DocuElevate can poll a WebDAV folder for new files. It reuses the existing WebDA
 | `WEBDAV_INGEST_FOLDER`                | WebDAV folder path to poll. Uses the existing WebDAV URL and credentials.                   | *(empty)* |
 | `WEBDAV_INGEST_DELETE_AFTER_PROCESS`  | Delete files from WebDAV after they are downloaded and enqueued.                            | `false`     |
 
+#### Per-User Watch Folder Integrations
+
+In addition to system-level watch folders, each user can configure personal watch folder sources through the **Integrations** dashboard (`/integrations`). Documents ingested from per-user watch folder integrations are automatically attributed to the owning user's `owner_id`.
+
+Per-user watch folder integrations are stored in the `user_integrations` table with `integration_type='WATCH_FOLDER'` and `direction='SOURCE'`. The `config` JSON field stores:
+- `folder_path` — absolute path to the directory to scan
+- `delete_after_process` — whether to remove source files after ingestion (default: `false`)
+
+> **Security**: Path traversal protection is enforced on user-configured watch folder paths. Relative paths, `..` components, and symlink escapes are rejected to prevent access to files outside the intended directory.
+
+- Individual scan failures are handled gracefully and recorded on the integration's `last_error` field without interrupting the scanning of other integrations.
+- The scan runs alongside the system-level watch folder polling cycle.
+
 ### IMAP Email Ingestion
 
-DocuElevate can automatically pull document attachments from IMAP mailboxes — no need to forward emails manually. Configure one or two mailboxes and DocuElevate polls them on the schedule you set.
+DocuElevate can automatically pull document attachments from IMAP mailboxes — no need to forward emails manually. Configure one or two system-wide mailboxes using environment variables, and/or let each user configure their own IMAP sources via the **Integrations** dashboard.
 
 > **For HP Scanners (Scan to Email)**: If your scanner is set up to email scanned documents to a dedicated mailbox, configure that mailbox in DocuElevate using the settings below. DocuElevate will automatically retrieve the scanned PDFs from the inbox and process them. You do **not** need to configure DocuElevate as an email server — it acts as an email *client* that reads from your existing mailbox.
+
+#### System-Level IMAP Configuration
 
 | **Variable**                  | **Description**                                              | **Example**       |
 |-------------------------------|--------------------------------------------------------------|-------------------|
@@ -282,6 +297,15 @@ DocuElevate can automatically pull document attachments from IMAP mailboxes — 
 | `IMAP1_SSL`                   | Use SSL (`true`/`false`).                                   | `true`            |
 | `IMAP1_POLL_INTERVAL_MINUTES` | Frequency in minutes to poll for new mail.                  | `5`               |
 | `IMAP_READONLY_MODE`          | When `true`, fetches and processes attachments but does **not** modify the mailbox (no starring, labeling, deleting, or flag changes). Use for pre-production instances sharing a mailbox with production. Default: `false`. | `false` |
+
+#### Per-User IMAP Integrations
+
+In addition to system-level mailboxes, each user can configure personal IMAP sources through the **Integrations** dashboard (`/integrations`). Documents ingested from per-user IMAP integrations are automatically attributed to the owning user's `owner_id`.
+
+Per-user IMAP integrations are stored in the `user_integrations` table with `integration_type='IMAP'` and `direction='SOURCE'`. Credentials are encrypted at rest using Fernet encryption.
+
+- Individual connection failures are handled gracefully and recorded on the integration's `last_error` field without interrupting the polling of other integrations.
+- The polling loop runs every minute and processes all active IMAP sources (system-level and per-user) in sequence.
 
 ### Authentication
 
@@ -316,8 +340,11 @@ Requires `AUTH_ENABLED=true`.
 
 #### Unclaimed Documents
 
-Documents ingested without a user session (e.g. via IMAP polling, API calls without authentication,
-or legacy imports) have `owner_id = NULL`. These are called **unclaimed** documents.
+Documents ingested via **system-level** sources (environment variable IMAP mailboxes, system watch folders)
+without a user session have `owner_id = NULL` unless `DEFAULT_OWNER_ID` is set. These are called **unclaimed** documents.
+
+Documents ingested via **per-user integrations** (IMAP or Watch Folder integrations configured through
+the Integrations dashboard) are automatically attributed to the owning user's `owner_id` and are never unclaimed.
 
 - When `UNOWNED_DOCS_VISIBLE_TO_ALL=true` (default), every authenticated user sees unclaimed
   documents alongside their own files. This allows users to discover and claim them.
