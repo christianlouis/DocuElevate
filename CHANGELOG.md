@@ -15,6 +15,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - **changelog**: Update changelog [skip ci]
+  ([`53f7ab3`](https://github.com/christianlouis/DocuElevate/commit/53f7ab37d5e0242dd5b45b4327026c2dbca3c46d))
+
+- **changelog**: Update changelog [skip ci]
+  ([`754ea99`](https://github.com/christianlouis/DocuElevate/commit/754ea99092670b125ee9e689391b1decc085e007))
+
+- **changelog**: Update changelog [skip ci]
+  ([`8db0093`](https://github.com/christianlouis/DocuElevate/commit/8db0093562789925bb460300e83f2bd7c02753a2))
+
+- **changelog**: Update changelog [skip ci]
+  ([`2be09ef`](https://github.com/christianlouis/DocuElevate/commit/2be09efd99020b295a05da2c49a1611a70616579))
+
+### Testing
+
+- Increase app/api/google_drive.py coverage to 100%
+  ([`14c9432`](https://github.com/christianlouis/DocuElevate/commit/14c94326402aed375a8178198ccd045f91765d74))
+
+- Increase coverage for app/views/pipelines.py to 100%
+  ([`344d20e`](https://github.com/christianlouis/DocuElevate/commit/344d20e4e63260e671118375ddfa811937b52c0c))
+
+- Increase coverage for app/views/subscriptions.py to 100%
+  ([`e96ddc7`](https://github.com/christianlouis/DocuElevate/commit/e96ddc78654ccc2f327f49eee587f6d62973532d))
+
+- Increase url_upload.py test coverage to 100%
+  ([`afe4227`](https://github.com/christianlouis/DocuElevate/commit/afe42270bb7dcbc23b4a8d7994899a18b0127d61))
+
+- **subscriptions**: Add comprehensive API tests reaching 100% coverage
+  ([`cd19ac6`](https://github.com/christianlouis/DocuElevate/commit/cd19ac661e84ff902bbbb3cc6a6fc78f3afb24c5))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
   ([`754ea99`](https://github.com/christianlouis/DocuElevate/commit/754ea99092670b125ee9e689391b1decc085e007))
 
 - **changelog**: Update changelog [skip ci]
