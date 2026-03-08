@@ -46,7 +46,7 @@ class TestHealthEndpoints:
 
     def test_docs_endpoint(self, client: TestClient):
         """Test that API documentation is accessible."""
-        response = client.get("/docs")
+        response = client.get("/admin/api-docs")
         assert response.status_code == 200
         assert "swagger" in response.text.lower() or "openapi" in response.text.lower()
 

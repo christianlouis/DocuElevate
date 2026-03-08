@@ -1118,6 +1118,30 @@ Administrators can set the **site-wide default** colour scheme that is applied w
 UI_DEFAULT_COLOR_SCHEME=dark
 ```
 
+### Support / Help Center – Zammad Integration
+
+The Help Center page (`/help`) can optionally integrate with a [Zammad](https://zammad.com/) instance to offer live chat and a ticket-creation form directly within DocuElevate.
+
+| **Variable**            | **Description**                                                                                       | **Default** |
+|-------------------------|-------------------------------------------------------------------------------------------------------|-------------|
+| `ZAMMAD_URL`            | Base URL of your Zammad instance (e.g. `https://zammad.example.com`). Required for chat and form.     | *(unset)*   |
+| `ZAMMAD_CHAT_ENABLED`   | Show a Zammad live-chat widget on the Help Center page.                                               | `false`     |
+| `ZAMMAD_CHAT_ID`        | Zammad chat topic ID (see *Channels → Chat → Topics* in Zammad admin).                               | `1`         |
+| `ZAMMAD_FORM_ENABLED`   | Show a "Submit a Ticket" feedback form on the Help Center page.                                       | `false`     |
+| `SUPPORT_EMAIL`         | Support e-mail address displayed on the Help Center page.                                             | *(unset)*   |
+
+**Example:**
+
+```dotenv
+ZAMMAD_URL=https://zammad.example.com
+ZAMMAD_CHAT_ENABLED=true
+ZAMMAD_CHAT_ID=1
+ZAMMAD_FORM_ENABLED=true
+SUPPORT_EMAIL=support@example.com
+```
+
+> **Note:** The live-chat widget requires at least one Zammad agent to be online. If no agent is available, the widget will not appear. Enable Zammad's debug mode (`debug: true`) for troubleshooting.
+
 ## Duplicate Document Detection
 
 DocuElevate detects and flags documents that share the same content, even if they arrive as separate uploads.
