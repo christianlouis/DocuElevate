@@ -2,6 +2,9 @@
 
 DocuElevate provides a powerful REST API for programmatic access to all its features. This document serves as a reference for the available endpoints and their usage.
 
+> **Looking for a quick way to script against DocuElevate?**
+> The built-in [CLI tool](./CLIGuide.md) wraps the API and is ready to use from a terminal or shell script — no HTTP client code required.
+
 ## API Overview
 
 - Base URL: `http://<your-docuelevate-instance>/api`
@@ -1785,11 +1788,26 @@ Returns the catalogue of built-in step types.
     "label": "OCR Processing",
     "description": "Extract text using Azure Document Intelligence or local Tesseract.",
     "config_schema": {
-      "force_cloud_ocr": { "type": "boolean", "default": false }
+      "force_cloud_ocr": { "type": "boolean", "default": false },
+      "ocr_language": {
+        "type": "select",
+        "default": "auto",
+        "description": "Language(s) for OCR. Overrides the global setting for Tesseract/EasyOCR. Azure/Mistral auto-detect.",
+        "options": [
+          { "value": "auto", "label": "Auto (use system default)" },
+          { "value": "eng",  "label": "English" },
+          { "value": "deu",  "label": "German" },
+          { "value": "fra",  "label": "French" },
+          { "value": "spa",  "label": "Spanish" },
+          "..."
+        ]
+      }
     }
   }
 }
 ```
+
+The `ocr_language` field accepts Tesseract language codes (e.g. `"eng"`, `"deu"`, `"eng+deu"` for multi-language) or `"auto"` to fall back to the global system setting.  The full list of 28 supported language codes is returned by the step-types endpoint.
 
 ### List pipelines
 
@@ -1883,11 +1901,22 @@ Content-Type: application/json
 
 {
   "step_type": "ocr",
-  "label": "Cloud OCR",
-  "config": { "force_cloud_ocr": true },
+  "label": "German OCR",
+  "config": { "force_cloud_ocr": false, "ocr_language": "deu" },
   "enabled": true
 }
 ```
+
+Multi-language (Tesseract `+`-separated codes):
+
+```bash
+{
+  "step_type": "ocr",
+  "config": { "ocr_language": "eng+deu" }
+}
+```
+
+Use `"ocr_language": "auto"` (or omit the field) to fall back to the global system language setting.
 
 ### Update step
 

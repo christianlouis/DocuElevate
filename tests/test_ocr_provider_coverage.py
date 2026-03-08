@@ -1057,3 +1057,241 @@ class TestMergeOCRResults:
             ms.openai_model = "gpt-4"
             text, _, _ = merge_ocr_results([r1, r2], "doc.pdf")
         assert text == "this is the longer text from tesseract engine"
+
+
+# ---------------------------------------------------------------------------
+# Multi-language OCR support
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestOCRLanguageConstants:
+    """Tests for the OCR_LANGUAGES constant and TESSERACT_TO_EASYOCR mapping."""
+
+    def test_ocr_languages_has_20_plus_entries(self):
+        """OCR_LANGUAGES contains at least 20 language options (excluding 'auto')."""
+        from app.utils.ocr_provider import OCR_LANGUAGES
+
+        language_entries = {k: v for k, v in OCR_LANGUAGES.items() if v != "auto"}
+        assert len(language_entries) >= 20, f"Expected ≥20 languages, got {len(language_entries)}"
+
+    def test_ocr_languages_includes_auto(self):
+        """OCR_LANGUAGES includes 'auto' as the first option."""
+        from app.utils.ocr_provider import OCR_LANGUAGES
+
+        assert "auto" in OCR_LANGUAGES.values()
+
+    def test_ocr_languages_common_languages(self):
+        """OCR_LANGUAGES includes the most common European and Asian languages."""
+        from app.utils.ocr_provider import OCR_LANGUAGES
+
+        expected_codes = {"eng", "deu", "fra", "spa", "ita", "por", "rus", "chi_sim", "jpn", "kor"}
+        all_codes = set(OCR_LANGUAGES.values())
+        missing = expected_codes - all_codes
+        assert not missing, f"Missing expected language codes: {missing}"
+
+    def test_tesseract_to_easyocr_mapping(self):
+        """TESSERACT_TO_EASYOCR maps common Tesseract codes to EasyOCR codes."""
+        from app.utils.ocr_provider import TESSERACT_TO_EASYOCR
+
+        assert TESSERACT_TO_EASYOCR["eng"] == "en"
+        assert TESSERACT_TO_EASYOCR["deu"] == "de"
+        assert TESSERACT_TO_EASYOCR["fra"] == "fr"
+        assert TESSERACT_TO_EASYOCR["chi_sim"] == "ch_sim"
+
+    def test_tesseract_codes_to_easyocr_single(self):
+        """_tesseract_codes_to_easyocr converts a single Tesseract code."""
+        from app.utils.ocr_provider import _tesseract_codes_to_easyocr
+
+        result = _tesseract_codes_to_easyocr("eng")
+        assert result == ["en"]
+
+    def test_tesseract_codes_to_easyocr_multi(self):
+        """_tesseract_codes_to_easyocr splits '+'-separated Tesseract codes."""
+        from app.utils.ocr_provider import _tesseract_codes_to_easyocr
+
+        result = _tesseract_codes_to_easyocr("eng+deu")
+        assert result == ["en", "de"]
+
+    def test_tesseract_codes_to_easyocr_passthrough_unknown(self):
+        """_tesseract_codes_to_easyocr passes through codes not in the mapping."""
+        from app.utils.ocr_provider import _tesseract_codes_to_easyocr
+
+        # EasyOCR-native codes are passed through unchanged
+        result = _tesseract_codes_to_easyocr("en")
+        assert result == ["en"]
+
+
+@pytest.mark.unit
+class TestTesseractLanguageOverride:
+    """Tests for per-call language override in TesseractOCRProvider."""
+
+    def test_language_override_used_in_process(self, tmp_path):
+        """Language override is used instead of global setting."""
+        pdf = _make_pdf(tmp_path)
+        provider = TesseractOCRProvider(language="deu")
+
+        mock_pytesseract = Mock()
+        mock_pytesseract.image_to_string.return_value = "Deutsches Text"
+        mock_pytesseract.pytesseract = Mock()
+        mock_pdf2image = Mock()
+        mock_pdf2image.convert_from_path.return_value = [Mock()]
+
+        with (
+            patch.dict(
+                sys.modules,
+                {"pytesseract": mock_pytesseract, "pdf2image": mock_pdf2image},
+            ),
+            patch("app.utils.ocr_provider.settings") as ms,
+            patch("app.utils.ocr_language_manager.ensure_tesseract_languages", return_value=[]),
+        ):
+            ms.tesseract_cmd = None
+            ms.tesseract_language = "eng"  # global setting; should be overridden
+            result = provider.process(pdf)
+
+        # Ensure image_to_string was called with the override language ("deu"), not global "eng"
+        mock_pytesseract.image_to_string.assert_called_once()
+        call_kwargs = mock_pytesseract.image_to_string.call_args
+        assert call_kwargs[1].get("lang") == "deu" or (call_kwargs[0] and call_kwargs[0][1] == "deu")
+        assert result.provider == "tesseract"
+
+    def test_auto_language_falls_back_to_global(self, tmp_path):
+        """'auto' language override falls back to global tesseract_language setting."""
+        pdf = _make_pdf(tmp_path)
+        provider = TesseractOCRProvider(language="auto")
+
+        mock_pytesseract = Mock()
+        mock_pytesseract.image_to_string.return_value = ""
+        mock_pytesseract.pytesseract = Mock()
+        mock_pdf2image = Mock()
+        mock_pdf2image.convert_from_path.return_value = [Mock()]
+
+        with (
+            patch.dict(
+                sys.modules,
+                {"pytesseract": mock_pytesseract, "pdf2image": mock_pdf2image},
+            ),
+            patch("app.utils.ocr_provider.settings") as ms,
+            patch("app.utils.ocr_language_manager.ensure_tesseract_languages", return_value=[]),
+        ):
+            ms.tesseract_cmd = None
+            ms.tesseract_language = "fra"
+            provider.process(pdf)
+
+        # Should use global setting "fra" since "auto" means no override
+        mock_pytesseract.image_to_string.assert_called_once()
+        call_kwargs = mock_pytesseract.image_to_string.call_args
+        lang_used = call_kwargs[1].get("lang") if call_kwargs[1] else call_kwargs[0][1]
+        assert lang_used == "fra"
+
+    def test_none_language_falls_back_to_global(self, tmp_path):
+        """None language override falls back to global setting."""
+        pdf = _make_pdf(tmp_path)
+        provider = TesseractOCRProvider(language=None)
+        assert provider._language_override is None
+
+
+@pytest.mark.unit
+class TestEasyOCRLanguageOverride:
+    """Tests for per-call language override in EasyOCRProvider."""
+
+    def test_language_override_converted_and_used(self, tmp_path):
+        """Tesseract-style language override is converted to EasyOCR codes."""
+        pdf = _make_pdf(tmp_path)
+        provider = EasyOCRProvider(language="deu")
+
+        mock_reader = Mock()
+        mock_reader.readtext.return_value = ["Deutsches Text"]
+        mock_easyocr = Mock()
+        mock_easyocr.Reader.return_value = mock_reader
+        mock_pdf2image = Mock()
+        mock_pdf2image.convert_from_path.return_value = [Mock()]
+
+        with (
+            patch.dict(
+                sys.modules,
+                {"easyocr": mock_easyocr, "pdf2image": mock_pdf2image},
+            ),
+            patch("app.utils.ocr_provider.settings") as ms,
+        ):
+            ms.easyocr_languages = "en"  # global; should be overridden
+            ms.easyocr_gpu = False
+            provider.process(pdf)
+
+        # Should call Reader with ["de"] (converted from "deu"), not global ["en"]
+        mock_easyocr.Reader.assert_called_once()
+        langs_arg = mock_easyocr.Reader.call_args[0][0]
+        assert langs_arg == ["de"]
+
+    def test_auto_language_uses_global_setting(self, tmp_path):
+        """'auto' language override falls back to global easyocr_languages setting."""
+        pdf = _make_pdf(tmp_path)
+        provider = EasyOCRProvider(language="auto")
+
+        mock_reader = Mock()
+        mock_reader.readtext.return_value = []
+        mock_easyocr = Mock()
+        mock_easyocr.Reader.return_value = mock_reader
+        mock_pdf2image = Mock()
+        mock_pdf2image.convert_from_path.return_value = [Mock()]
+
+        with (
+            patch.dict(
+                sys.modules,
+                {"easyocr": mock_easyocr, "pdf2image": mock_pdf2image},
+            ),
+            patch("app.utils.ocr_provider.settings") as ms,
+        ):
+            ms.easyocr_languages = "fr,es"
+            ms.easyocr_gpu = False
+            provider.process(pdf)
+
+        langs_arg = mock_easyocr.Reader.call_args[0][0]
+        assert langs_arg == ["fr", "es"]
+
+
+@pytest.mark.unit
+class TestGetOCRProvidersWithLanguage:
+    """Tests for get_ocr_providers(language=...) factory."""
+
+    def test_language_passed_to_tesseract_provider(self):
+        """Language override is passed to TesseractOCRProvider."""
+        with patch("app.utils.ocr_provider.settings") as ms:
+            ms.ocr_providers = "tesseract"
+            providers = get_ocr_providers(language="deu")
+        assert len(providers) == 1
+        assert isinstance(providers[0], TesseractOCRProvider)
+        assert providers[0]._language_override == "deu"
+
+    def test_language_passed_to_easyocr_provider(self):
+        """Language override is passed to EasyOCRProvider."""
+        with patch("app.utils.ocr_provider.settings") as ms:
+            ms.ocr_providers = "easyocr"
+            providers = get_ocr_providers(language="fra")
+        assert len(providers) == 1
+        assert isinstance(providers[0], EasyOCRProvider)
+        assert providers[0]._language_override == "fra"
+
+    def test_language_not_passed_to_azure(self):
+        """Language override is NOT passed to AzureOCRProvider (it auto-detects)."""
+        with patch("app.utils.ocr_provider.settings") as ms:
+            ms.ocr_providers = "azure"
+            providers = get_ocr_providers(language="deu")
+        assert len(providers) == 1
+        assert isinstance(providers[0], AzureOCRProvider)
+        # AzureOCRProvider has no _language_override attribute
+        assert not hasattr(providers[0], "_language_override")
+
+    def test_auto_language_not_passed_as_override(self):
+        """'auto' language is treated as no override for Tesseract."""
+        with patch("app.utils.ocr_provider.settings") as ms:
+            ms.ocr_providers = "tesseract"
+            providers = get_ocr_providers(language="auto")
+        assert providers[0]._language_override is None
+
+    def test_none_language_no_override(self):
+        """None language results in no override."""
+        with patch("app.utils.ocr_provider.settings") as ms:
+            ms.ocr_providers = "tesseract"
+            providers = get_ocr_providers(language=None)
+        assert providers[0]._language_override is None

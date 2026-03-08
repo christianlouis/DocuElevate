@@ -192,6 +192,95 @@ class OCRResult:
         )
 
 
+# ---------------------------------------------------------------------------
+# Multi-language support
+# ---------------------------------------------------------------------------
+
+#: Canonical list of supported OCR languages for pipeline configuration.
+#: Keys are display names; values are Tesseract language code(s).
+#: Tesseract codes are used as the canonical format because they are the most
+#: widely applicable across self-hosted providers (Tesseract + ocrmypdf).
+#: "auto" falls back to the global ``tesseract_language`` / ``easyocr_languages``
+#: settings (i.e. no per-call override).
+OCR_LANGUAGES: Dict[str, str] = {
+    "Auto (use system default)": "auto",
+    "Arabic": "ara",
+    "Chinese (Simplified)": "chi_sim",
+    "Chinese (Traditional)": "chi_tra",
+    "Czech": "ces",
+    "Danish": "dan",
+    "Dutch": "nld",
+    "English": "eng",
+    "Finnish": "fin",
+    "French": "fra",
+    "German": "deu",
+    "Greek": "ell",
+    "Hebrew": "heb",
+    "Hindi": "hin",
+    "Hungarian": "hun",
+    "Italian": "ita",
+    "Japanese": "jpn",
+    "Korean": "kor",
+    "Norwegian": "nor",
+    "Polish": "pol",
+    "Portuguese": "por",
+    "Romanian": "ron",
+    "Russian": "rus",
+    "Spanish": "spa",
+    "Swedish": "swe",
+    "Thai": "tha",
+    "Turkish": "tur",
+    "Ukrainian": "ukr",
+    "Vietnamese": "vie",
+}
+
+#: Mapping from Tesseract language codes to EasyOCR language codes.
+#: Used when ``TesseractOCRProvider``-style codes are specified but EasyOCR is
+#: the active provider.  Codes not present in this map are passed through as-is
+#: (EasyOCR accepts its own ISO 639-1 codes such as ``"en"`` or ``"de"``).
+TESSERACT_TO_EASYOCR: Dict[str, str] = {
+    "ara": "ar",
+    "ces": "cs",
+    "chi_sim": "ch_sim",
+    "chi_tra": "ch_tra",
+    "dan": "da",
+    "deu": "de",
+    "ell": "el",
+    "eng": "en",
+    "fin": "fi",
+    "fra": "fr",
+    "heb": "he",
+    "hin": "hi",
+    "hun": "hu",
+    "ita": "it",
+    "jpn": "ja",
+    "kor": "ko",
+    "nld": "nl",
+    "nor": "no",
+    "pol": "pl",
+    "por": "pt",
+    "ron": "ro",
+    "rus": "ru",
+    "spa": "es",
+    "swe": "sv",
+    "tha": "th",
+    "tur": "tr",
+    "ukr": "uk",
+    "vie": "vi",
+}
+
+
+def _tesseract_codes_to_easyocr(tesseract_lang: str) -> List[str]:
+    """Convert a Tesseract language string (e.g. ``"eng+deu"``) to a list of
+    EasyOCR language codes (e.g. ``["en", "de"]``).
+
+    Unknown codes are passed through unchanged, so native EasyOCR codes such
+    as ``"en"`` also work transparently.
+    """
+    codes = [part.strip() for part in tesseract_lang.split("+") if part.strip()]
+    return [TESSERACT_TO_EASYOCR.get(code, code) for code in codes]
+
+
 class OCRProvider(ABC):
     """Abstract base class for OCR providers.
 
@@ -290,9 +379,23 @@ class TesseractOCRProvider(OCRProvider):
     - ``tesseract_cmd`` – path to the ``tesseract`` binary (optional).
     - ``tesseract_language`` – Tesseract language code(s), e.g. ``"eng"`` or
       ``"eng+deu"`` (default: ``"eng"``).
+
+    The optional *language* constructor argument overrides the global
+    ``tesseract_language`` setting for this specific provider instance, enabling
+    per-pipeline language configuration.
     """
 
     name = "tesseract"
+
+    def __init__(self, language: Optional[str] = None) -> None:
+        """Initialise the Tesseract provider.
+
+        Args:
+            language: Optional Tesseract language code(s) to use instead of the
+                global ``tesseract_language`` setting (e.g. ``"eng+deu"``).
+                Pass ``None`` or ``"auto"`` to use the global setting.
+        """
+        self._language_override: Optional[str] = language if language and language != "auto" else None
 
     def process(self, file_path: str) -> OCRResult:
         try:
@@ -308,7 +411,7 @@ class TesseractOCRProvider(OCRProvider):
         if tesseract_cmd:
             pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
 
-        lang = getattr(settings, "tesseract_language", None) or "eng"
+        lang = self._language_override or getattr(settings, "tesseract_language", None) or "eng"
 
         # Ensure language data files are present; attempt download if missing.
         from app.utils.ocr_language_manager import ensure_tesseract_languages  # noqa: PLC0415
@@ -349,9 +452,25 @@ class EasyOCRProvider(OCRProvider):
     - ``easyocr_languages`` – comma-separated list of language codes
       (default: ``"en"``).
     - ``easyocr_gpu`` – whether to use GPU acceleration (default: ``False``).
+
+    The optional *language* constructor argument accepts a Tesseract-style
+    language string (e.g. ``"eng+deu"``) which is automatically translated to
+    EasyOCR codes (e.g. ``["en", "de"]``), overriding the global
+    ``easyocr_languages`` setting for this provider instance.
     """
 
     name = "easyocr"
+
+    def __init__(self, language: Optional[str] = None) -> None:
+        """Initialise the EasyOCR provider.
+
+        Args:
+            language: Optional Tesseract-style language code(s) (e.g. ``"eng+deu"``)
+                or a comma-separated EasyOCR language list (e.g. ``"en,de"``).
+                Pass ``None`` or ``"auto"`` to use the global ``easyocr_languages``
+                setting.
+        """
+        self._language_override: Optional[str] = language if language and language != "auto" else None
 
     def process(self, file_path: str) -> OCRResult:
         try:
@@ -363,8 +482,12 @@ class EasyOCRProvider(OCRProvider):
                 "Install them with: pip install easyocr pdf2image"
             ) from exc
 
-        lang_str = getattr(settings, "easyocr_languages", None) or "en"
-        langs = [lang.strip() for lang in lang_str.split(",") if lang.strip()]
+        if self._language_override:
+            # Convert Tesseract-style codes to EasyOCR codes
+            langs = _tesseract_codes_to_easyocr(self._language_override)
+        else:
+            lang_str = getattr(settings, "easyocr_languages", None) or "en"
+            langs = [lang.strip() for lang in lang_str.split(",") if lang.strip()]
         gpu = getattr(settings, "easyocr_gpu", False)
 
         logger.info(f"[EasyOCR] Processing {os.path.basename(file_path)} (langs={langs}, gpu={gpu})")
@@ -679,15 +802,24 @@ KNOWN_OCR_PROVIDERS: List[str] = sorted(_PROVIDER_MAP.keys())
 MAX_OCR_TEXT_FOR_AI_MERGE = 4000
 
 
-def get_ocr_providers() -> List[OCRProvider]:
+def get_ocr_providers(language: Optional[str] = None) -> List[OCRProvider]:
     """Return a list of configured OCR provider instances.
 
     Reads ``settings.ocr_providers`` (comma-separated provider names) and
     returns one instantiated provider per entry.  Falls back to ``["azure"]``
     when the setting is absent.
+
+    Args:
+        language: Optional Tesseract-style language code(s) (e.g. ``"eng+deu"``)
+            to override the global language settings for providers that support
+            per-call language configuration (Tesseract and EasyOCR).  Pass
+            ``None`` or ``"auto"`` to use the global settings.
     """
     raw = getattr(settings, "ocr_providers", None) or "azure"
     provider_names = [name.strip().lower() for name in raw.split(",") if name.strip()]
+
+    # Normalise "auto" to None so providers fall back to global settings
+    effective_language = language if language and language != "auto" else None
 
     providers: List[OCRProvider] = []
     for name in provider_names:
@@ -695,7 +827,11 @@ def get_ocr_providers() -> List[OCRProvider]:
         if cls is None:
             logger.warning(f"Unknown OCR provider '{name}' in OCR_PROVIDERS – skipping.")
             continue
-        providers.append(cls())
+        # Pass language override to providers that support per-call language config
+        if effective_language is not None and name in ("tesseract", "easyocr"):
+            providers.append(cls(language=effective_language))
+        else:
+            providers.append(cls())
         logger.debug(f"Registered OCR provider: {name}")
 
     if not providers:

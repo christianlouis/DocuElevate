@@ -194,6 +194,19 @@
               <i class="fas fa-circle-question mr-1 text-gray-400" aria-hidden="true"></i>Help
             </a>
 
+            <!-- Bell notification icon -->
+            <a href="/notifications"
+               id="notificationBell"
+               class="relative p-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+               aria-label="Notifications"
+               title="Notifications"
+               {% if request and request.url.path == '/notifications' %}aria-current="page"{% endif %}>
+              <i class="fas fa-bell" aria-hidden="true"></i>
+              <span id="notificationBadge"
+                    class="hidden absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-bold"
+                    aria-live="polite"></span>
+            </a>
+
             <!-- Dark mode toggle -->
             <button
               id="darkModeToggle"
@@ -282,6 +295,11 @@
                  class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
                  {% if request and request.url.path == '/integrations' %}aria-current="page"{% endif %}>
                 <i class="fas fa-plug mr-2 text-gray-400" aria-hidden="true"></i>Integrations
+              </a>
+              <a href="/notifications"
+                 class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+                 {% if request and request.url.path == '/notifications' %}aria-current="page"{% endif %}>
+                <i class="fas fa-bell mr-2 text-gray-400" aria-hidden="true"></i>Notifications
               </a>
 
               <!-- Admin section in mobile menu – shown only for admin users via JS -->
@@ -426,6 +444,30 @@
 
     <!-- Common JS (shared) -->
     <script src="/static/js/common.js"></script>
+
+    <!-- Notification badge updater -->
+    <script>
+      (function() {
+        async function updateNotificationBadge() {
+          try {
+            const resp = await fetch('/api/user-notifications/inbox/unread-count');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const badge = document.getElementById('notificationBadge');
+            if (!badge) return;
+            if (data.count > 0) {
+              badge.textContent = data.count > 99 ? '99+' : data.count;
+              badge.classList.remove('hidden');
+              badge.setAttribute('aria-label', data.count + ' unread notifications');
+            } else {
+              badge.classList.add('hidden');
+            }
+          } catch (_) {}
+        }
+        document.addEventListener('DOMContentLoaded', updateNotificationBadge);
+        setInterval(updateNotificationBadge, 60000);
+      })();
+    </script>
 
     <!-- Let child pages define extra scripts if needed -->
     {% block scripts %}{% endblock %}

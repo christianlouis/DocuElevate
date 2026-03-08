@@ -18,6 +18,7 @@ from app.views.help import router as help_router  # Built-in help / How-To docs
 from app.views.imap_accounts import router as imap_accounts_router
 from app.views.integrations import router as integrations_router  # Unified integrations dashboard
 from app.views.license_routes import router as license_router  # Add the license router
+from app.views.notifications import router as notifications_router
 from app.views.onboarding import router as onboarding_router
 from app.views.onedrive import router as onedrive_router
 from app.views.pipelines import router as pipelines_router  # Processing pipelines
@@ -56,4 +57,5 @@ router.include_router(onboarding_router)  # User onboarding wizard
 router.include_router(pipelines_router)  # Processing pipelines
 router.include_router(imap_accounts_router)  # Per-user IMAP ingestion accounts
 router.include_router(integrations_router)  # Unified integrations dashboard
+router.include_router(notifications_router)  # User notification dashboard
 router.include_router(help_router)  # Built-in help / How-To docs

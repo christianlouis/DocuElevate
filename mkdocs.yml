@@ -41,6 +41,7 @@ nav:
       - Email Ingestion: howto/EmailIngestion.md
       - Mobile Scanning: howto/MobileScanning.md
   - API: API
+  - CLI: CLIGuide
   - Deployment:
       - Overview: DeploymentGuide
       - Kubernetes / Helm: KubernetesDeployment
