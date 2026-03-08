@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.93.0 (2026-03-08)
+
+### Features
+
+- **tests**: Increase test coverage for app/views/onboarding.py to 100%
+  ([`ade7c9a`](https://github.com/christianlouis/DocuElevate/commit/ade7c9a86554be2bfbddb28b385c9769a9c91c88))
+
+### Testing
+
+- **local_auth**: Increase coverage for app/utils/local_auth.py to 100%
+  ([`25c31a6`](https://github.com/christianlouis/DocuElevate/commit/25c31a63ff0a2682f0326174e1cd5276512983b8))
+
+
 ## v0.92.1 (2026-03-08)
 
 
