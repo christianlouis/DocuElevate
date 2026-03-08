@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.108.0 (2026-03-08)
+
+### Chores
+
+- Remove accidentally committed =8.0.0 file
+  ([`a92bf8e`](https://github.com/christianlouis/DocuElevate/commit/a92bf8ec8f938a493e8992bdd71f655e5f266759))
+
+### Features
+
+- **cli**: Add docuelevate CLI tool for power users
+  ([`a3fd74f`](https://github.com/christianlouis/DocuElevate/commit/a3fd74f117e96b9693cbfc0f76abbd0a3d526b00))
+
+
 ## v0.107.0 (2026-03-08)
 
 ### Documentation
