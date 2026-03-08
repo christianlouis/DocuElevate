@@ -142,6 +142,141 @@ class TestHelpViewUnit:
         assert b"ZammadForm" not in resp.content
 
 
+@pytest.mark.unit
+class TestHelpViewUserContext:
+    """Tests that user context is passed to Zammad widgets."""
+
+    @staticmethod
+    def _make_app_with_session(user_data: dict | None = None):
+        """Build a minimal FastAPI app with session middleware and optional user session."""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from starlette.middleware.sessions import SessionMiddleware
+
+        from app.views.help import router
+
+        app = FastAPI()
+        app.add_middleware(SessionMiddleware, secret_key="test-secret")
+        app.include_router(router)
+        tc = TestClient(app)
+
+        if user_data is not None:
+            # Seed a session by setting the cookie through a helper endpoint
+            from fastapi import Request as _Req
+            from fastapi.responses import JSONResponse
+
+            @app.get("/_test_set_session")
+            async def _set_session(request: _Req):
+                request.session["user"] = user_data
+                return JSONResponse({"ok": True})
+
+            tc.get("/_test_set_session")
+
+        return tc
+
+    def test_user_context_not_in_page_when_anonymous(self):
+        """Anonymous visitors should not see user context variables in the output."""
+        tc = self._make_app_with_session(user_data=None)
+        resp = tc.get("/help")
+        assert resp.status_code == 200
+        # No user context metadata should appear
+        assert b"DocuElevate User Context" not in resp.content
+
+    def test_user_context_rendered_in_zammad_form_when_logged_in(self):
+        """With Zammad form enabled, logged-in user's name/email should appear in the script block."""
+        from unittest.mock import patch
+
+        tc = self._make_app_with_session(
+            user_data={
+                "name": "Test User",
+                "email": "test@example.com",
+                "preferred_username": "testuser",
+            }
+        )
+        with patch("app.views.help.settings") as mock_settings:
+            mock_settings.external_hostname = "localhost"
+            mock_settings.zammad_url = "https://zammad.example.com"
+            mock_settings.zammad_form_enabled = True
+            mock_settings.zammad_chat_enabled = False
+            mock_settings.zammad_chat_id = 1
+            mock_settings.support_email = None
+            resp = tc.get("/help")
+        assert resp.status_code == 200
+        assert b"Test User" in resp.content
+        assert b"test@example.com" in resp.content
+        assert b"testuser" in resp.content
+        assert b"DocuElevate User Context" in resp.content
+
+    def test_user_context_rendered_in_zammad_chat_when_logged_in(self):
+        """With Zammad chat enabled, user's name/email should appear in the ZammadChat constructor."""
+        from unittest.mock import patch
+
+        tc = self._make_app_with_session(
+            user_data={
+                "name": "Chat User",
+                "email": "chat@example.com",
+                "preferred_username": "chatuser",
+            }
+        )
+        with patch("app.views.help.settings") as mock_settings:
+            mock_settings.external_hostname = "localhost"
+            mock_settings.zammad_url = "https://zammad.example.com"
+            mock_settings.zammad_form_enabled = False
+            mock_settings.zammad_chat_enabled = True
+            mock_settings.zammad_chat_id = 1
+            mock_settings.support_email = None
+            resp = tc.get("/help")
+        assert resp.status_code == 200
+        assert b"Chat User" in resp.content
+        assert b"chat@example.com" in resp.content
+
+    def test_user_id_falls_back_to_email(self):
+        """When preferred_username is absent, user_id should resolve to email."""
+        from unittest.mock import patch
+
+        tc = self._make_app_with_session(
+            user_data={
+                "email": "only-email@example.com",
+            }
+        )
+        with patch("app.views.help.settings") as mock_settings:
+            mock_settings.external_hostname = "localhost"
+            mock_settings.zammad_url = "https://zammad.example.com"
+            mock_settings.zammad_form_enabled = True
+            mock_settings.zammad_chat_enabled = False
+            mock_settings.zammad_chat_id = 1
+            mock_settings.support_email = None
+            resp = tc.get("/help")
+        assert resp.status_code == 200
+        # user_id falls back to email; check it appears in the Username metadata line
+        content = resp.text
+        assert "only-email@example.com" in content
+        assert "DocuElevate User Context" in content
+
+    def test_user_name_falls_back_to_display_name(self):
+        """When 'name' is absent, display_name should be used as the user_name fallback."""
+        from unittest.mock import patch
+
+        tc = self._make_app_with_session(
+            user_data={
+                "display_name": "Display Only",
+                "email": "display@example.com",
+                "id": "user-123",
+            }
+        )
+        with patch("app.views.help.settings") as mock_settings:
+            mock_settings.external_hostname = "localhost"
+            mock_settings.zammad_url = "https://zammad.example.com"
+            mock_settings.zammad_form_enabled = True
+            mock_settings.zammad_chat_enabled = False
+            mock_settings.zammad_chat_id = 1
+            mock_settings.support_email = None
+            resp = tc.get("/help")
+        assert resp.status_code == 200
+        # display_name used as fallback for user_name
+        assert b"Display Only" in resp.content
+
+
 @pytest.mark.integration
 class TestHelpNavigationLink:
     """Tests that the Help link appears in the navigation."""
