@@ -1,5 +1,6 @@
 """Tests for app/auth.py module."""
 
+import asyncio
 import hashlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -168,8 +169,6 @@ class TestRequireLogin:
             mock_request.session = {"user": {"id": "test"}}
 
             # Call the decorated sync function
-            import asyncio
-
             result = asyncio.run(sync_endpoint(request=mock_request, param="test_value"))
 
             assert result["message"] == "sync"
@@ -229,6 +228,49 @@ class TestRequireLogin:
                 assert "redirect_after_login" not in mock_request.session, (
                     f"redirect_after_login must not be set for {api_path}"
                 )
+
+    @pytest.mark.asyncio
+    async def test_path_param_before_request_async(self):
+        """Regression: endpoints with a path param before request must not get
+        'multiple values for argument' when AUTH_ENABLED=True.
+
+        FastAPI passes all resolved parameters as keyword arguments to the
+        wrapper.  The wrapper must forward ``request`` as a keyword argument
+        too, otherwise the positional ``request`` object would bind to the
+        first parameter (e.g. ``pipeline_id``) while FastAPI simultaneously
+        supplies ``pipeline_id`` as a keyword argument → TypeError.
+        """
+        with patch("app.auth.AUTH_ENABLED", True):
+            from app.auth import require_login
+
+            @require_login
+            async def endpoint_with_path_param(pipeline_id: int, request: Request, extra: str = ""):
+                return {"pipeline_id": pipeline_id, "extra": extra}
+
+            mock_request = MagicMock(spec=Request)
+            mock_request.session = {"user": {"id": "test"}}
+
+            # Simulate how FastAPI calls the wrapper: all args as keyword args.
+            result = await endpoint_with_path_param(request=mock_request, pipeline_id=42, extra="hello")
+
+            assert result["pipeline_id"] == 42
+            assert result["extra"] == "hello"
+
+    def test_path_param_before_request_sync(self):
+        """Regression: same as above but for synchronous endpoint functions."""
+        with patch("app.auth.AUTH_ENABLED", True):
+            from app.auth import require_login
+
+            @require_login
+            def sync_endpoint_with_path_param(item_id: int, request: Request):
+                return {"item_id": item_id}
+
+            mock_request = MagicMock(spec=Request)
+            mock_request.session = {"user": {"id": "test"}}
+
+            result = asyncio.run(sync_endpoint_with_path_param(request=mock_request, item_id=7))
+
+            assert result["item_id"] == 7
 
 
 @pytest.mark.integration
