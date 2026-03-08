@@ -6,13 +6,13 @@
 <meta name="description" content="DocuElevate Help Center – learn how to upload, process, and route your documents automatically. Get started with sources, destinations, workflows, and integrations.">
 <meta name="keywords" content="DocuElevate, help, support, document processing, OCR, cloud storage, workflow automation, SaaS">
 <meta name="robots" content="index, follow">
-<link rel="canonical" href="https://{{ request.headers.get('host', 'app.docuelevate.com') }}/help">
+<link rel="canonical" href="https://{{ external_hostname }}/help">
 
 <!-- Open Graph -->
 <meta property="og:title" content="Help Center – DocuElevate">
 <meta property="og:description" content="Everything you need to get started with DocuElevate: upload documents, automate workflows, and connect your favourite cloud storage.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://{{ request.headers.get('host', 'app.docuelevate.com') }}/help">
+<meta property="og:url" content="https://{{ external_hostname }}/help">
 
 <!-- Structured data (JSON-LD) for FAQ rich results -->
 <script type="application/ld+json">
@@ -479,7 +479,9 @@
 {% block scripts %}
 {% if zammad_url and zammad_form_enabled %}
 <!-- Zammad Feedback Form -->
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"
+        integrity="sha384-vtXRMe3mGCbOeY7l30aIg8H9p3GdeSe4IFlP6G8JMa7o7lXvnz3GFKzPxzJdPfGK"
+        crossorigin="anonymous"></script>
 <script id="zammad_form_script" src="{{ zammad_url }}/assets/form/form.js"></script>
 <script>
 $(function() {
@@ -501,7 +503,7 @@ $(function() {
   new ZammadChat({
     fontSize: '12px',
     flat: true,
-    chatId: {{ zammad_chat_id }},
+    chatId: {{ zammad_chat_id | int }},
     title: '<strong>Chat</strong> with us!'
   });
 })();

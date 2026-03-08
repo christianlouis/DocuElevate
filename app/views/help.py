@@ -33,6 +33,7 @@ async def help_center(request: Request):
         "help.html",
         {
             "request": request,
+            "external_hostname": settings.external_hostname,
             "zammad_url": settings.zammad_url,
             "zammad_chat_enabled": settings.zammad_chat_enabled,
             "zammad_chat_id": settings.zammad_chat_id,
