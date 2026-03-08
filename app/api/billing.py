@@ -392,7 +392,7 @@ async def stripe_sync_plans(request: Request, db: Session = Depends(get_db)) -> 
             # Create (or look up) the Stripe Product for this plan
             product = client.products.create(
                 params={
-                    "name": plan.name,
+                    "name": str(plan.name),
                     "metadata": {"docuelevate_plan_id": plan.plan_id},
                 }
             )
@@ -451,9 +451,9 @@ async def stripe_sync_plans(request: Request, db: Session = Depends(get_db)) -> 
             results.append(
                 {
                     "plan_id": plan.plan_id,
-                    "name": plan.name,
+                    "name": str(plan.name),
                     "status": "error",
-                    "detail": "Internal error while syncing this plan with Stripe.",
+                    "detail": str(exc),
                 }
             )
 
