@@ -14,6 +14,12 @@
       <p class="text-sm text-gray-500 mt-1">Manage subscription plans shown on the public pricing page.</p>
     </div>
     <div class="flex items-center gap-3">
+      <a href="/admin/stripe-wizard"
+         class="inline-flex items-center px-4 py-2 border border-indigo-300 rounded-md text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
+         title="Open the Stripe Setup Wizard to configure API keys and sync plans"
+      >
+        <i class="fab fa-stripe mr-2" aria-hidden="true"></i> Stripe Setup
+      </a>
       <button
         @click="seedDefaults()"
         :disabled="seeding"
@@ -265,6 +271,40 @@
           </div>
         </div>
 
+        <!-- Stripe Integration -->
+        <div class="px-6 py-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Stripe Integration</h3>
+            <a href="/admin/stripe-wizard" target="_blank"
+               class="text-xs text-indigo-600 hover:text-indigo-800 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-400 rounded"
+               aria-label="Open Stripe Setup Wizard in a new tab"
+            ><i class="fab fa-stripe mr-1" aria-hidden="true"></i>Stripe Wizard</a>
+          </div>
+          <p class="text-xs text-gray-500">
+            Enter the Stripe Price IDs for this plan, or use the
+            <a href="/admin/stripe-wizard" target="_blank" class="text-indigo-600 hover:text-indigo-800 underline">Stripe Setup Wizard</a>
+            to auto-create them. Free plans do not need Stripe Price IDs.
+          </p>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label for="f-stripe-monthly" class="block text-sm font-medium text-gray-700 mb-1">
+                Stripe Price ID (monthly)
+              </label>
+              <input id="f-stripe-monthly" type="text" x-model="form.stripe_price_id_monthly"
+                placeholder="price_1OtAbc…"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            </div>
+            <div>
+              <label for="f-stripe-yearly" class="block text-sm font-medium text-gray-700 mb-1">
+                Stripe Price ID (yearly)
+              </label>
+              <input id="f-stripe-yearly" type="text" x-model="form.stripe_price_id_yearly"
+                placeholder="price_1OtAbc… (optional)"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            </div>
+          </div>
+        </div>
+
         <!-- Volume Limits -->
         <div class="px-6 py-5 space-y-4">
           <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Volume Limits</h3>
@@ -465,6 +505,8 @@ function planDesigner() {
       sort_order: 0,
       features: [],
       api_access: false,
+      stripe_price_id_monthly: null,
+      stripe_price_id_yearly: null,
     },
 
     get yearlySavingPct() {
@@ -501,6 +543,7 @@ function planDesigner() {
         overage_percent: 20, allow_overage_billing: false, overage_price_per_doc: null,
         overage_price_per_ocr_page: null, is_active: true, is_highlighted: false,
         badge_text: null, cta_text: 'Get started', sort_order: this.plans.length, features: [], api_access: false,
+        stripe_price_id_monthly: null, stripe_price_id_yearly: null,
       };
       this.modalOpen = true;
     },

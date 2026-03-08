@@ -484,3 +484,354 @@ def test_billing_success_page(bill_client):
     resp = bill_client.get("/api/billing/success")
     assert resp.status_code == 200
     assert b"subscription" in resp.content.lower() or b"success" in resp.content.lower()
+
+
+# ---------------------------------------------------------------------------
+# Tests: GET /api/billing/stripe/status (admin only)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_stripe_status_not_admin(bill_client):
+    """GET /api/billing/stripe/status returns 403 for non-admin."""
+    with patch("app.api.billing.settings") as mock_settings:
+        mock_settings.stripe_secret_key = "sk_test_fake"
+        mock_settings.stripe_webhook_secret = "whsec_test"
+        # bill_client session has no is_admin flag
+        resp = bill_client.get("/api/billing/stripe/status")
+    assert resp.status_code == 403
+
+
+@pytest.mark.integration
+def test_stripe_status_not_configured(bill_client):
+    """GET /api/billing/stripe/status returns configured=False when key is missing."""
+    with (
+        patch("app.api.billing.settings") as mock_settings,
+        patch(
+            "app.api.billing._require_admin",
+            return_value=None,
+        ),
+    ):
+        mock_settings.stripe_secret_key = None
+        mock_settings.stripe_webhook_secret = None
+        resp = bill_client.get("/api/billing/stripe/status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["configured"] is False
+    assert data["connection"] == "not_configured"
+
+
+@pytest.mark.integration
+def test_stripe_status_configured_ok(bill_client, starter_plan):
+    """GET /api/billing/stripe/status returns plan list with sync status when configured."""
+    mock_account = MagicMock()
+    mock_account.livemode = False  # test mode
+
+    mock_client = MagicMock()
+    mock_client.accounts.retrieve.return_value = mock_account
+
+    with (
+        patch("app.api.billing._get_stripe", return_value=mock_client),
+        patch("app.api.billing.settings") as mock_settings,
+        patch("app.api.billing._require_admin", return_value=None),
+    ):
+        mock_settings.stripe_secret_key = "sk_test_fake"
+        mock_settings.stripe_webhook_secret = "whsec_test"
+        resp = bill_client.get("/api/billing/stripe/status")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["configured"] is True
+    assert data["connection"] == "ok"
+    assert data["mode"] == "test"
+    assert data["webhook_secret_configured"] is True
+    assert "plans" in data
+    assert "webhook_endpoint" in data
+    # starter_plan has price IDs set → synced
+    plan_entry = next((p for p in data["plans"] if p["plan_id"] == "starter"), None)
+    assert plan_entry is not None
+    assert plan_entry["stripe_price_id_monthly"] == "price_monthly_starter"
+    assert plan_entry["synced"] is True
+
+
+@pytest.mark.integration
+def test_stripe_status_plan_not_synced(bill_client, bill_session):
+    """GET /api/billing/stripe/status shows synced=False for paid plan without price IDs."""
+    plan = SubscriptionPlan(
+        plan_id="unsynced",
+        name="Unsynced",
+        price_monthly=5.0,
+        price_yearly=50.0,
+        trial_days=0,
+        stripe_price_id_monthly=None,
+        stripe_price_id_yearly=None,
+    )
+    bill_session.add(plan)
+    bill_session.commit()
+
+    mock_account = MagicMock()
+    mock_account.livemode = False
+    mock_client = MagicMock()
+    mock_client.accounts.retrieve.return_value = mock_account
+
+    with (
+        patch("app.api.billing._get_stripe", return_value=mock_client),
+        patch("app.api.billing.settings") as mock_settings,
+        patch("app.api.billing._require_admin", return_value=None),
+    ):
+        mock_settings.stripe_secret_key = "sk_test_fake"
+        mock_settings.stripe_webhook_secret = None
+        resp = bill_client.get("/api/billing/stripe/status")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["webhook_secret_configured"] is False
+    entry = next((p for p in data["plans"] if p["plan_id"] == "unsynced"), None)
+    assert entry is not None
+    assert entry["synced"] is False
+
+
+# ---------------------------------------------------------------------------
+# Tests: POST /api/billing/stripe/sync-plans (admin only)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_stripe_sync_plans_not_configured(bill_client):
+    """POST /api/billing/stripe/sync-plans returns 503 when billing not configured."""
+    with (
+        patch("app.api.billing._get_stripe", return_value=None),
+        patch("app.api.billing._require_admin", return_value=None),
+    ):
+        resp = bill_client.post("/api/billing/stripe/sync-plans")
+    assert resp.status_code == 503
+
+
+@pytest.mark.integration
+def test_stripe_sync_plans_not_admin(bill_client):
+    """POST /api/billing/stripe/sync-plans returns 403 for non-admin."""
+    mock_client = MagicMock()
+    with patch("app.api.billing._get_stripe", return_value=mock_client):
+        resp = bill_client.post("/api/billing/stripe/sync-plans")
+    assert resp.status_code == 403
+
+
+@pytest.mark.integration
+def test_stripe_sync_plans_creates_prices(bill_client, bill_session):
+    """POST /api/billing/stripe/sync-plans creates Stripe products and prices for paid plans."""
+    plan = SubscriptionPlan(
+        plan_id="pro",
+        name="Professional",
+        price_monthly=19.0,
+        price_yearly=190.0,
+        trial_days=0,
+        stripe_price_id_monthly=None,
+        stripe_price_id_yearly=None,
+    )
+    bill_session.add(plan)
+    bill_session.commit()
+
+    mock_client = MagicMock()
+    mock_product = MagicMock()
+    mock_product.id = "prod_test123"
+    mock_monthly_price = MagicMock()
+    mock_monthly_price.id = "price_monthly_pro_new"
+    mock_yearly_price = MagicMock()
+    mock_yearly_price.id = "price_yearly_pro_new"
+
+    mock_client.products.create.return_value = mock_product
+    mock_client.prices.create.side_effect = [mock_monthly_price, mock_yearly_price]
+
+    with (
+        patch("app.api.billing._get_stripe", return_value=mock_client),
+        patch("app.api.billing._require_admin", return_value=None),
+    ):
+        resp = bill_client.post("/api/billing/stripe/sync-plans")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "results" in data
+
+    result = next((r for r in data["results"] if r["plan_id"] == "pro"), None)
+    assert result is not None
+    assert result["status"] == "created"
+    assert result["stripe_price_id_monthly"] == "price_monthly_pro_new"
+    assert result["stripe_price_id_yearly"] == "price_yearly_pro_new"
+
+    # Verify DB was updated
+    bill_session.expire_all()
+    db_plan = bill_session.query(SubscriptionPlan).filter(SubscriptionPlan.plan_id == "pro").first()
+    assert db_plan.stripe_price_id_monthly == "price_monthly_pro_new"
+    assert db_plan.stripe_price_id_yearly == "price_yearly_pro_new"
+
+    # Verify correct amounts were passed to Stripe, matching by interval (order-independent)
+    price_calls = mock_client.prices.create.call_args_list
+    by_interval = {call[1]["params"]["recurring"]["interval"]: call[1]["params"] for call in price_calls}
+    assert by_interval["month"]["unit_amount"] == 1900  # $19.00 → 1900 cents
+    assert by_interval["year"]["unit_amount"] == 19000  # $190.00 → 19000 cents
+
+
+@pytest.mark.integration
+def test_stripe_sync_plans_skips_free(bill_client, bill_session):
+    """POST /api/billing/stripe/sync-plans skips free plans."""
+    free_plan = SubscriptionPlan(
+        plan_id="free_test",
+        name="Free",
+        price_monthly=0.0,
+        price_yearly=0.0,
+        trial_days=0,
+        stripe_price_id_monthly=None,
+        stripe_price_id_yearly=None,
+    )
+    bill_session.add(free_plan)
+    bill_session.commit()
+
+    mock_client = MagicMock()
+    with (
+        patch("app.api.billing._get_stripe", return_value=mock_client),
+        patch("app.api.billing._require_admin", return_value=None),
+    ):
+        resp = bill_client.post("/api/billing/stripe/sync-plans")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    result = next((r for r in data["results"] if r["plan_id"] == "free_test"), None)
+    assert result is not None
+    assert result["status"] == "skipped_free"
+    # Products.create should NOT have been called for a free plan
+    mock_client.products.create.assert_not_called()
+
+
+@pytest.mark.integration
+def test_stripe_sync_plans_skips_already_synced(bill_client, starter_plan):
+    """POST /api/billing/stripe/sync-plans skips plans that already have price IDs."""
+    mock_client = MagicMock()
+    with (
+        patch("app.api.billing._get_stripe", return_value=mock_client),
+        patch("app.api.billing._require_admin", return_value=None),
+    ):
+        resp = bill_client.post("/api/billing/stripe/sync-plans")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    result = next((r for r in data["results"] if r["plan_id"] == "starter"), None)
+    assert result is not None
+    assert result["status"] == "already_synced"
+    mock_client.products.create.assert_not_called()
+
+
+@pytest.mark.integration
+def test_stripe_sync_plans_handles_stripe_error(bill_client, bill_session):
+    """POST /api/billing/stripe/sync-plans returns error status when Stripe API fails."""
+    plan = SubscriptionPlan(
+        plan_id="errplan",
+        name="Error Plan",
+        price_monthly=9.99,
+        price_yearly=0.0,
+        trial_days=0,
+        stripe_price_id_monthly=None,
+        stripe_price_id_yearly=None,
+    )
+    bill_session.add(plan)
+    bill_session.commit()
+
+    mock_client = MagicMock()
+    mock_client.products.create.side_effect = Exception("Stripe connection error")
+
+    with (
+        patch("app.api.billing._get_stripe", return_value=mock_client),
+        patch("app.api.billing._require_admin", return_value=None),
+    ):
+        resp = bill_client.post("/api/billing/stripe/sync-plans")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    result = next((r for r in data["results"] if r["plan_id"] == "errplan"), None)
+    assert result is not None
+    assert result["status"] == "error"
+    assert "Stripe connection error" in result["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Tests: plans API now exposes stripe_price_id fields
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_plan_to_response_includes_stripe_ids(bill_session, starter_plan):
+    """_plan_to_response includes stripe_price_id_monthly and stripe_price_id_yearly."""
+    from app.api.plans import _plan_to_response
+
+    result = _plan_to_response(starter_plan)
+    assert result["stripe_price_id_monthly"] == "price_monthly_starter"
+    assert result["stripe_price_id_yearly"] == "price_yearly_starter"
+
+
+@pytest.mark.integration
+def test_plan_api_returns_stripe_ids(bill_client, starter_plan):
+    """GET /api/plans/{plan_id} returns Stripe price IDs in the response."""
+    resp = bill_client.get("/api/plans/starter")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["stripe_price_id_monthly"] == "price_monthly_starter"
+    assert data["stripe_price_id_yearly"] == "price_yearly_starter"
+
+
+@pytest.mark.integration
+def test_plan_api_update_sets_stripe_ids(bill_client, bill_engine, starter_plan):
+    """PUT /api/plans/{plan_id} can update Stripe price IDs."""
+    from app.api.plans import _require_admin
+    from app.main import app
+
+    def override_admin():
+        return {"email": "admin@test.com", "is_admin": True}
+
+    app.dependency_overrides[_require_admin] = override_admin
+    try:
+        resp = bill_client.put(
+            "/api/plans/starter",
+            json={
+                "name": "Starter",
+                "price_monthly": 9.0,
+                "price_yearly": 90.0,
+                "stripe_price_id_monthly": "price_new_monthly",
+                "stripe_price_id_yearly": "price_new_yearly",
+                "features": [],
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(_require_admin, None)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["stripe_price_id_monthly"] == "price_new_monthly"
+    assert data["stripe_price_id_yearly"] == "price_new_yearly"
+
+
+@pytest.mark.integration
+def test_plan_api_update_clears_stripe_ids(bill_client, bill_engine, starter_plan):
+    """PUT /api/plans/{plan_id} clears Stripe price IDs when empty string is passed."""
+    from app.api.plans import _require_admin
+    from app.main import app
+
+    def override_admin():
+        return {"email": "admin@test.com", "is_admin": True}
+
+    app.dependency_overrides[_require_admin] = override_admin
+    try:
+        resp = bill_client.put(
+            "/api/plans/starter",
+            json={
+                "name": "Starter",
+                "price_monthly": 9.0,
+                "price_yearly": 90.0,
+                "stripe_price_id_monthly": "",
+                "stripe_price_id_yearly": "",
+                "features": [],
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(_require_admin, None)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["stripe_price_id_monthly"] is None
+    assert data["stripe_price_id_yearly"] is None
