@@ -372,3 +372,69 @@ class TestFinalizeDocumentStorage:
 
                     # Verify send_to_all was called with delete_after=True
                     mock_send_all.delay.assert_called_once_with("/workdir/processed/file.pdf", True, 505)
+
+    @patch("app.tasks.finalize_document_storage.notify_file_processed")
+    @patch("app.tasks.finalize_document_storage.send_to_all_destinations")
+    @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
+    @patch("app.tasks.finalize_document_storage.log_task_progress")
+    @patch("app.tasks.finalize_document_storage.SessionLocal")
+    def test_pdfa_enabled_does_not_regress_finalize_step_to_in_progress(
+        self,
+        mock_session_local,
+        mock_log_progress,
+        mock_get_services,
+        mock_send_all,
+        mock_notify,
+    ):
+        """
+        Regression test: when PDF/A conversion is enabled, the finalize_document_storage
+        step must NOT be logged as in_progress after it has already been logged as success.
+
+        Previously, a second log_task_progress call with status="in_progress" was made for
+        "finalize_document_storage" when queueing PDF/A archival conversion, which overwrote
+        the prior success status and caused the overall file status to appear stuck in
+        processing/failed.
+        """
+        mock_get_services.return_value = {"dropbox": True}
+
+        mock_db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = mock_db
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=True):
+            with patch("app.tasks.finalize_document_storage.os.path.getsize", return_value=1024):
+                with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="doc.pdf"):
+                    with patch("app.tasks.finalize_document_storage.settings") as mock_settings:
+                        mock_settings.workdir = "/tmp"
+                        mock_settings.enable_pdfa_conversion = True
+
+                        mock_convert = MagicMock()
+                        with patch(
+                            "app.tasks.finalize_document_storage.convert_to_pdfa",
+                            mock_convert,
+                            create=True,
+                        ):
+                            finalize_document_storage.request.id = "test-task-id"
+
+                            finalize_document_storage.__wrapped__(
+                                original_file="/tmp/original.pdf",
+                                processed_file="/workdir/processed/doc.pdf",
+                                metadata={"filename": "doc.pdf"},
+                                file_id=606,
+                            )
+
+                        # Collect all (step_name, status) pairs logged for finalize_document_storage
+                        finalize_calls = [
+                            call
+                            for call in mock_log_progress.call_args_list
+                            if call.args[1] == "finalize_document_storage"
+                        ]
+
+                        # After the success log, no in_progress log should follow for this step
+                        statuses = [call.args[2] for call in finalize_calls]
+                        assert "success" in statuses, "finalize_document_storage must be logged as success"
+                        # The last status logged must be success, not in_progress
+                        assert statuses[-1] == "success", (
+                            "finalize_document_storage must not be regressed to in_progress after success; "
+                            f"got statuses: {statuses}"
+                        )
