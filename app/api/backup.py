@@ -117,88 +117,104 @@ async def restore_backup(
     """Restore the database from an uploaded gzip-compressed SQL dump.
 
     **Warning**: This overwrites the current database contents.
-    Only SQLite databases are supported.
 
-    The uploaded file must be a ``.db.gz`` file produced by the DocuElevate
-    backup task (a gzip-compressed SQLite ``.dump()`` SQL script).
+    Supported formats (must match the currently configured database backend):
+
+    - ``*.db.gz``    – gzip-compressed SQLite ``.dump()`` SQL script (SQLite backend)
+    - ``*.pgsql.gz`` – gzip-compressed ``pg_dump --format=plain`` output (PostgreSQL backend)
+    - ``*.mysql.gz`` – gzip-compressed ``mysqldump`` output (MySQL / MariaDB backend)
     """
-    from app.tasks.backup_tasks import _db_path
-
-    db_path = _db_path()
-    if db_path is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Restore is only supported for SQLite databases.",
-        )
-
-    if not file.filename or not file.filename.endswith(".db.gz"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Uploaded file must be a .db.gz backup archive.",
-        )
-
-    import gzip
-    import sqlite3
     import tempfile
     from pathlib import Path
 
-    # Write the upload to a temp file first so we can validate it
-    with tempfile.NamedTemporaryFile(suffix=".db.gz", delete=False) as tmp:
+    from sqlalchemy.engine.url import make_url
+
+    from app.config import settings as app_settings
+    from app.tasks.backup_tasks import (
+        _archive_ext_for_backend,
+        _db_path,
+        _restore_mysql,
+        _restore_postgresql,
+        _restore_sqlite,
+    )
+
+    url = make_url(app_settings.database_url)
+    backend = url.get_backend_name()
+    expected_ext = _archive_ext_for_backend(backend)
+
+    if not file.filename or not file.filename.endswith(expected_ext):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Uploaded file must be a '{expected_ext}' backup archive for the current database backend ({backend})."
+            ),
+        )
+
+    # Write upload to a temp file
+    with tempfile.NamedTemporaryFile(suffix=expected_ext, delete=False) as tmp:
         tmp_path = Path(tmp.name)
         content = await file.read()
         tmp.write(content)
 
     try:
-        # Decompress and read SQL statements
-        with gzip.open(str(tmp_path), "rt", encoding="utf-8") as gz:
-            sql_script = gz.read()
-    except Exception as exc:
-        tmp_path.unlink(missing_ok=True)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to decompress backup file: {exc}",
-        ) from exc
+        if backend == "sqlite":
+            db_path = _db_path()
+            if db_path is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Restore is only supported for file-based SQLite databases.",
+                )
+            # Close the application DB session before replacing the file
+            db.close()
+            try:
+                _restore_sqlite(db_path, tmp_path)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=str(exc),
+                ) from exc
+            except RuntimeError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=str(exc),
+                ) from exc
 
-    # Create a fresh in-memory DB from the script to validate it
-    try:
-        mem_conn = sqlite3.connect(":memory:")
-        mem_conn.executescript(sql_script)
-        mem_conn.close()
-    except sqlite3.Error as exc:
-        tmp_path.unlink(missing_ok=True)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Backup file contains invalid SQL: {exc}",
-        ) from exc
+        elif backend == "postgresql":
+            db.close()
+            try:
+                _restore_postgresql(app_settings.database_url, tmp_path)
+            except FileNotFoundError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"psql binary not found – is PostgreSQL client installed? ({exc})",
+                ) from exc
+            except RuntimeError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"PostgreSQL restore failed: {exc}",
+                ) from exc
 
-    # Close the application DB session before replacing the file
-    db.close()
+        elif backend == "mysql":
+            db.close()
+            try:
+                _restore_mysql(app_settings.database_url, tmp_path)
+            except FileNotFoundError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"mysql binary not found – is MySQL client installed? ({exc})",
+                ) from exc
+            except RuntimeError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"MySQL restore failed: {exc}",
+                ) from exc
 
-    # Preserve the current DB before overwriting
-    import shutil
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Database backend '{backend}' does not support restore.",
+            )
 
-    bak = str(db_path) + ".pre_restore"
-    try:
-        shutil.copy2(str(db_path), bak)
-    except OSError as exc:
-        logger.warning(f"Could not create pre-restore backup at {bak}: {exc}")
-
-    try:
-        # Write the restored database
-        restore_conn = sqlite3.connect(str(db_path))
-        restore_conn.executescript(sql_script)
-        restore_conn.close()
-    except sqlite3.Error as exc:
-        # Attempt rollback
-        try:
-            if os.path.exists(bak):
-                shutil.copy2(bak, str(db_path))
-        except OSError as rollback_exc:
-            logger.error(f"Rollback failed; database may be corrupted: {rollback_exc}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Restore failed: {exc}",
-        ) from exc
     finally:
         tmp_path.unlink(missing_ok=True)
 

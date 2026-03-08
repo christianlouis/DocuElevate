@@ -1056,8 +1056,12 @@ Webhook URLs, secrets, and subscribed events are configured per-webhook via the 
 
 ### Backup & Restore
 
-DocuElevate can automatically back up the SQLite database on a scheduled basis.
+DocuElevate automatically backs up the database on a scheduled basis.
 Backups are managed from the **Admin → Backup & Restore** dashboard.
+
+Supported database backends: **SQLite** (`.db.gz`), **PostgreSQL** (`.pgsql.gz`), **MySQL / MariaDB** (`.mysql.gz`).
+For PostgreSQL and MySQL backups the respective CLI client (`pg_dump` / `psql` or `mysqldump` / `mysql`) must be installed on the Celery worker host.
+See the [Database Configuration Guide](DatabaseConfiguration.md#backup-procedures) for setup details.
 
 | **Variable**                   | **Description**                                                                               | **Default**         |
 |--------------------------------|-----------------------------------------------------------------------------------------------|---------------------|
