@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.106.0 (2026-03-08)
+
+### Features
+
+- **observability**: Add Sentry error and performance monitoring integration
+  ([`58af9e5`](https://github.com/christianlouis/DocuElevate/commit/58af9e5a29e01332c8d6a5886bf09b87d8fa2e9b))
+
+
 ## v0.105.0 (2026-03-08)
 
 ### Continuous Integration
