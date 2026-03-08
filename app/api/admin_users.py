@@ -7,7 +7,7 @@ user accounts directly, without requiring email verification.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import FileRecord, LocalUser, UserProfile
-from app.utils.local_auth import hash_password
+from app.utils.local_auth import generate_token, hash_password, send_password_reset_email
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/users", tags=["admin-users"])
@@ -121,6 +121,21 @@ class LocalUserCreate(BaseModel):
     display_name: str | None = Field(default=None, max_length=255)
     password: str = Field(..., min_length=8, max_length=128)
     is_admin: bool = Field(default=False, description="Grant admin privileges")
+
+
+class LocalUserUpdate(BaseModel):
+    """Body for admin-updating a local (email/password) user account."""
+
+    email: str | None = Field(default=None, max_length=255, description="New email address")
+    display_name: str | None = Field(default=None, max_length=255, description="New display name")
+    is_admin: bool | None = Field(default=None, description="Grant or revoke admin privileges")
+    is_active: bool | None = Field(default=None, description="Activate or deactivate the account")
+
+
+class LocalUserSetPassword(BaseModel):
+    """Body for admin setting a temporary password for a local user."""
+
+    password: str = Field(..., min_length=8, max_length=128, description="New temporary password")
 
 
 class LocalUserResponse(BaseModel):
@@ -355,7 +370,140 @@ def delete_local_user(local_user_id: int, db: DbSession, _admin: AdminUser) -> N
     logger.info("Admin deleted local user account: %s", user.email)
 
 
-@router.get("/{user_id:path}", summary="Get details for a single user")
+@router.patch("/local/{local_user_id}", summary="Update a local user account")
+def update_local_user(local_user_id: int, body: LocalUserUpdate, db: DbSession, _admin: AdminUser) -> dict[str, Any]:
+    """Update the email address, display name, admin flag, or active status of a local user account.
+
+    Only fields explicitly provided (non-None) are modified.  If the email is changed
+    the associated UserProfile row is also updated to keep ``user_id`` in sync.
+
+    Raises:
+        404: Local user not found.
+        409: The new email is already taken by another account.
+    """
+    user = db.query(LocalUser).filter(LocalUser.id == local_user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Local user not found.")
+
+    old_email = user.email
+
+    if body.email is not None and body.email != user.email:
+        if db.query(LocalUser).filter(LocalUser.email == body.email, LocalUser.id != local_user_id).first():
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered.")
+        user.email = body.email
+
+    if body.display_name is not None:
+        user.display_name = body.display_name
+
+    if body.is_admin is not None:
+        user.is_admin = body.is_admin
+
+    if body.is_active is not None:
+        user.is_active = body.is_active
+
+    try:
+        db.flush()
+        # Keep UserProfile.user_id in sync when email changes
+        if body.email is not None and body.email != old_email:
+            profile = db.query(UserProfile).filter(UserProfile.user_id == old_email).first()
+            if profile:
+                profile.user_id = body.email
+        db.commit()
+        db.refresh(user)
+    except Exception:
+        db.rollback()
+        raise
+
+    logger.info("Admin updated local user %s (id=%d)", user.email, user.id)
+    return {
+        "id": user.id,
+        "email": user.email,
+        "username": user.username,
+        "display_name": user.display_name,
+        "is_active": user.is_active,
+        "is_admin": user.is_admin,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+    }
+
+
+@router.post(
+    "/local/{local_user_id}/send-password-reset",
+    status_code=status.HTTP_200_OK,
+    summary="Send a password reset email to a local user",
+)
+def admin_send_password_reset(
+    local_user_id: int, request: Request, db: DbSession, _admin: AdminUser
+) -> dict[str, Any]:
+    """Generate a password reset token and email the reset link to the local user.
+
+    This is a last-resort tool for admins to help users who are locked out.
+    Returns ``{"sent": true}`` on success and ``{"sent": false, "reason": "..."}`` when
+    SMTP is not configured or sending fails.
+
+    Raises:
+        404: Local user not found.
+    """
+    from app.config import settings as _settings
+
+    user = db.query(LocalUser).filter(LocalUser.id == local_user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Local user not found.")
+
+    if not _settings.email_host:
+        logger.warning("Admin requested password reset for %s but SMTP is not configured", user.email)
+        return {"sent": False, "reason": "SMTP is not configured on this server."}
+
+    token = generate_token()
+    user.password_reset_token = token
+    user.password_reset_sent_at = datetime.now(tz=timezone.utc)
+    db.commit()
+
+    base_url = str(request.base_url).rstrip("/")
+    try:
+        send_password_reset_email(user.email, user.username, token, base_url)
+    except Exception as exc:
+        logger.warning("Admin-triggered password reset email failed for %s: %s", user.email, exc)
+        return {"sent": False, "reason": str(exc)}
+
+    logger.info("[SECURITY] ADMIN_PASSWORD_RESET_EMAIL user=%s admin=%s", user.email, _admin.get("email", "unknown"))
+    return {"sent": True, "email": user.email}
+
+
+@router.post(
+    "/local/{local_user_id}/set-password",
+    status_code=status.HTTP_200_OK,
+    summary="Set a temporary password for a local user account",
+)
+def admin_set_password(
+    local_user_id: int, body: LocalUserSetPassword, db: DbSession, _admin: AdminUser
+) -> dict[str, Any]:
+    """Directly set a new password for a local user without requiring an email token.
+
+    Use this as a last resort when email delivery is unavailable.  The user
+    should be advised to change their password after logging in.
+
+    Raises:
+        404: Local user not found.
+    """
+    user = db.query(LocalUser).filter(LocalUser.id == local_user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Local user not found.")
+
+    user.hashed_password = hash_password(body.password)
+    # Clear any outstanding reset tokens
+    user.password_reset_token = None
+    user.password_reset_sent_at = None
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    logger.info(
+        "[SECURITY] ADMIN_SET_PASSWORD user=%s admin=%s", user.email, _admin.get("email", "unknown")
+    )
+    return {"updated": True, "email": user.email}
 def get_user(user_id: str, db: DbSession, _admin: AdminUser) -> dict[str, Any]:
     """Return profile and document statistics for a specific user."""
     doc_count = db.query(func.count(FileRecord.id)).filter(FileRecord.owner_id == user_id).scalar() or 0

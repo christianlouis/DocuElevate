@@ -107,6 +107,19 @@ async def verify_email_sent_page(request: Request) -> Any:
     return templates.TemplateResponse("verify_email_sent.html", {"request": request})
 
 
+@router.get("/forgot-password", include_in_schema=False)
+async def forgot_password_page(request: Request) -> Any:
+    """Render the forgot-password page where users can request a reset email."""
+    return templates.TemplateResponse(
+        "forgot_password.html",
+        {
+            "request": request,
+            "csrf_token": getattr(request.state, "csrf_token", ""),
+            "app_version": settings.version,
+        },
+    )
+
+
 @router.get("/reset-password", include_in_schema=False)
 async def reset_password_page(request: Request) -> Any:
     """Render the password reset form page."""
