@@ -17,7 +17,6 @@ task with a multi-engine OCR pipeline that:
 
 import logging
 import os
-from typing import Optional
 
 from app.celery_app import celery
 from app.config import settings
@@ -36,9 +35,9 @@ logger = logging.getLogger(__name__)
 def process_with_ocr(
     self,
     filename: str,
-    file_id: Optional[int] = None,
-    original_text: Optional[str] = None,
-    language: Optional[str] = None,
+    file_id: int | None = None,
+    original_text: str | None = None,
+    language: str | None = None,
 ):
     """Run the configured OCR providers on *filename* and continue the pipeline.
 

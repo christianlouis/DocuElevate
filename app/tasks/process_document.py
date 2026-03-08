@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 
+from __future__ import annotations
+
 import json
 import logging
 import mimetypes
 import os
 import shutil
 import uuid
+from typing import TYPE_CHECKING
 
 import pypdf  # Upgraded from PyPDF2 to fix CVE-2023-36464
 from pypdf.errors import PdfReadError
@@ -21,10 +24,13 @@ from app.utils import get_unique_filepath_with_counter, hash_file, log_task_prog
 from app.utils.step_manager import initialize_file_steps
 from app.utils.text_quality import check_text_quality, detect_pdf_text_source
 
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
 logger = logging.getLogger(__name__)
 
 
-def _get_pipeline_ocr_language(db, file_record: FileRecord, owner_id: str | None) -> str | None:
+def _get_pipeline_ocr_language(db: "Session", file_record: FileRecord, owner_id: str | None) -> str | None:
     """Look up the OCR language override from the file's pipeline OCR step config.
 
     Resolution order:
@@ -80,7 +86,7 @@ def _get_pipeline_ocr_language(db, file_record: FileRecord, owner_id: str | None
 
     try:
         step_config = json.loads(ocr_step.config)
-        lang = step_config.get("ocr_language") or None
+        lang = step_config.get("ocr_language")
         # "auto" is treated as no override
         return lang if lang and lang != "auto" else None
     except Exception:

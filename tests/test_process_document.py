@@ -977,13 +977,15 @@ def test_get_pipeline_ocr_language_explicit_pipeline_takes_priority(db_session):
     db_session.add(sys_pipeline)
     db_session.commit()
 
-    PipelineStep(
+    sys_step = PipelineStep(
         pipeline_id=sys_pipeline.id,
         position=0,
         step_type="ocr",
         config=json.dumps({"ocr_language": "eng"}),
         enabled=True,
     )
+    db_session.add(sys_step)
+    db_session.commit()
 
     # Explicit pipeline with "fra"
     explicit_pipeline = Pipeline(
