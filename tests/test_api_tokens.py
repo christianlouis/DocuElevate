@@ -426,11 +426,14 @@ class TestTokenUtils:
         assert hash_token(token) == hash_token(token)
 
     @pytest.mark.unit
-    def test_hash_token_is_sha256(self):
-        """Token hash should be a SHA-256 hex digest."""
+    def test_hash_token_output_properties(self):
+        """Token hash should be a 64-character lowercase hex digest."""
         from app.api.api_tokens import hash_token
 
         token = "de_test_token_value"
-        expected = hashlib.sha256(token.encode()).hexdigest()
-        assert hash_token(token) == expected
-        assert len(hash_token(token)) == 64
+        h = hash_token(token)
+        assert isinstance(h, str)
+        assert len(h) == 64
+        # All characters should be valid lowercase hex digits.
+        int(h, 16)
+        assert h == h.lower()

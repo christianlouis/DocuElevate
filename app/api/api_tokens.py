@@ -37,6 +37,10 @@ DbSession = Annotated[Session, Depends(get_db)]
 TOKEN_PREFIX = "de_"
 #: Number of random bytes for the token body (32 → 43 URL-safe chars).
 TOKEN_BYTES = 32
+#: PBKDF2 iteration count for hashing API tokens.
+TOKEN_HASH_ITERATIONS = 100_000
+#: PBKDF2 salt for API token hashing (not secret, but fixed for determinism).
+TOKEN_HASH_SALT = b"api-token-v1"
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +74,7 @@ def generate_api_token() -> str:
 
 
 def hash_token(token: str) -> str:
-    """Return the SHA-256 hex digest of *token*.
+    """Return a PBKDF2-HMAC-SHA256 hex digest of *token*.
 
     Args:
         token: The plaintext API token.
@@ -78,7 +82,13 @@ def hash_token(token: str) -> str:
     Returns:
         64-character lowercase hex string.
     """
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+    dk = hashlib.pbkdf2_hmac(
+        "sha256",
+        token.encode("utf-8"),
+        TOKEN_HASH_SALT,
+        TOKEN_HASH_ITERATIONS,
+    )
+    return dk.hex()
 
 
 # ---------------------------------------------------------------------------
