@@ -48,10 +48,6 @@ SESSION_SECRET = (
     settings.session_secret or "INSECURE_DEFAULT_FOR_DEVELOPMENT_ONLY_DO_NOT_USE_IN_PRODUCTION_MINIMUM_32_CHARS"
 )
 
-# Initialise Sentry as early as possible so that any startup errors are captured
-init_sentry()
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -73,6 +69,10 @@ async def lifespan(app: FastAPI):
         logging.error(f"Failed to load database settings: {e}")
     finally:
         db.close()
+
+    # Initialize Sentry after DB settings are loaded so that values configured
+    # via the database UI (e.g. SENTRY_DSN) are respected in addition to env vars.
+    init_sentry()
 
     # Ensure OCR language data is available (background download, non-blocking)
     from app.utils.ocr_language_manager import ensure_ocr_languages_async
