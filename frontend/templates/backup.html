@@ -1,0 +1,411 @@
+{% extends "base.html" %}
+{% block title %}Backup Management{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8" x-data="backupDashboard()">
+
+  <!-- Header -->
+  <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-3xl font-bold text-gray-900">
+        <i class="fas fa-database mr-2 text-blue-600" aria-hidden="true"></i>
+        Backup Management
+      </h1>
+      <p class="mt-1 text-sm text-gray-500">
+        Database backups are created automatically: hourly (4 days), daily (3 weeks), weekly (13 weeks).
+      </p>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+      <!-- Manual backup triggers -->
+      <button @click="triggerBackup('hourly')"
+              :disabled="triggering"
+              type="button"
+              class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 min-h-[44px]">
+        <i class="fas fa-clock mr-1 text-blue-500" aria-hidden="true"></i> Backup Now (Hourly)
+      </button>
+      <button @click="triggerBackup('daily')"
+              :disabled="triggering"
+              type="button"
+              class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 min-h-[44px]">
+        <i class="fas fa-calendar-day mr-1 text-green-500" aria-hidden="true"></i> Backup Now (Daily)
+      </button>
+      <button @click="triggerBackup('weekly')"
+              :disabled="triggering"
+              type="button"
+              class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 min-h-[44px]">
+        <i class="fas fa-calendar-week mr-1 text-purple-500" aria-hidden="true"></i> Backup Now (Weekly)
+      </button>
+      <button @click="runCleanup()"
+              :disabled="triggering"
+              type="button"
+              class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 min-h-[44px]"
+              title="Run retention cleanup now">
+        <i class="fas fa-broom mr-1 text-orange-400" aria-hidden="true"></i> Clean Up
+      </button>
+    </div>
+  </div>
+
+  <!-- Status flash (always in DOM; content toggled via aria-live) -->
+  <div role="alert" aria-live="polite" aria-atomic="true"
+       :class="flashMsg ? '' : 'sr-only'"
+       class="border-l-4 p-4 mb-4 rounded transition-all"
+       :style="flashMsg ? '' : 'pointer-events:none'"
+       x-bind:class="flashMsg ? (flashError ? 'bg-red-100 border-red-500 text-red-700' : 'bg-green-100 border-green-500 text-green-700') : 'sr-only'">
+    <span x-text="flashMsg"></span>
+  </div>
+
+  <!-- Accessible confirm dialog -->
+  <div x-show="confirmOpen" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+       role="dialog" aria-modal="true" :aria-labelledby="'confirmTitle'">
+    <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-6"
+         @keydown.escape.window="confirmOpen = false">
+      <h2 id="confirmTitle" class="text-lg font-semibold text-gray-900 mb-2">Confirm action</h2>
+      <p class="text-sm text-gray-600 mb-4" x-text="confirmMsg"></p>
+      <div class="flex justify-end gap-3">
+        <button @click="confirmOpen = false; confirmResolve(false)"
+                type="button"
+                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 min-h-[44px]">
+          Cancel
+        </button>
+        <button @click="confirmOpen = false; confirmResolve(true)"
+                type="button"
+                class="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 min-h-[44px]">
+          Confirm
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Config summary -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <!-- Backup enabled -->
+    <div class="bg-white shadow rounded-lg p-4">
+      <p class="text-xs text-gray-500 uppercase tracking-wider">Auto-backup</p>
+      <p class="mt-1 text-lg font-semibold {% if backup_enabled %}text-green-600{% else %}text-red-600{% endif %}">
+        {% if backup_enabled %}<i class="fas fa-check-circle mr-1" aria-hidden="true"></i> Enabled
+        {% else %}<i class="fas fa-times-circle mr-1" aria-hidden="true"></i> Disabled{% endif %}
+      </p>
+    </div>
+    <!-- Remote destination -->
+    <div class="bg-white shadow rounded-lg p-4">
+      <p class="text-xs text-gray-500 uppercase tracking-wider">Remote destination</p>
+      <p class="mt-1 text-lg font-semibold text-gray-800">
+        {% if backup_remote_destination %}
+          <i class="fas fa-cloud-upload-alt mr-1 text-blue-500" aria-hidden="true"></i>
+          {{ backup_remote_destination }}
+        {% else %}
+          <span class="text-gray-400"><i class="fas fa-hdd mr-1" aria-hidden="true"></i> Local only</span>
+        {% endif %}
+      </p>
+    </div>
+    <!-- Retention hourly -->
+    <div class="bg-white shadow rounded-lg p-4">
+      <p class="text-xs text-gray-500 uppercase tracking-wider">Retention</p>
+      <p class="mt-1 text-sm text-gray-700">
+        <span class="font-semibold">{{ backup_retain_hourly }}</span> hourly &middot;
+        <span class="font-semibold">{{ backup_retain_daily }}</span> daily &middot;
+        <span class="font-semibold">{{ backup_retain_weekly }}</span> weekly
+      </p>
+    </div>
+    <!-- Total backup size -->
+    <div class="bg-white shadow rounded-lg p-4">
+      <p class="text-xs text-gray-500 uppercase tracking-wider">Total local size</p>
+      <p class="mt-1 text-lg font-semibold text-gray-800" id="totalSize">
+        {{ (total_size / 1048576) | round(2) }} MB
+      </p>
+    </div>
+  </div>
+
+  <!-- Upload restore section -->
+  <div class="bg-white shadow rounded-lg p-6 mb-8">
+    <h2 class="text-lg font-semibold text-gray-900 mb-1">
+      <i class="fas fa-upload mr-2 text-yellow-500" aria-hidden="true"></i>Restore from File
+    </h2>
+    <p class="text-sm text-gray-500 mb-4">
+      Upload a <code>.db.gz</code> backup archive to restore the database.
+      <strong class="text-red-600">This will overwrite all current data.</strong>
+    </p>
+    <form id="restoreForm" @submit.prevent="submitRestore" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+        <div>
+          <label for="restoreFile" class="block text-sm font-medium text-gray-700 mb-1">Backup archive (.db.gz)</label>
+          <input type="file" id="restoreFile" name="file" accept=".gz"
+                 required
+                 class="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+        </div>
+        <button type="submit"
+                :disabled="restoring"
+                class="inline-flex items-center px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded-md disabled:opacity-50 min-h-[44px]">
+          <i class="fas fa-undo mr-2" aria-hidden="true"></i>
+          <span x-text="restoring ? 'Restoring…' : 'Restore'"></span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Backup list -->
+  <div class="bg-white shadow rounded-lg overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <h2 class="text-lg font-semibold text-gray-900">
+        <i class="fas fa-list mr-2 text-gray-500" aria-hidden="true"></i>Backup Archives
+        <span class="ml-2 text-sm font-normal text-gray-400">({{ records | length }} records)</span>
+      </h2>
+      <!-- Tier filter -->
+      <div class="flex gap-2 text-sm">
+        <button @click="filterType = ''" :class="filterType === '' ? 'bg-gray-200 font-semibold' : 'hover:bg-gray-100'" class="px-2 py-1 rounded">All</button>
+        <button @click="filterType = 'hourly'" :class="filterType === 'hourly' ? 'bg-blue-200 font-semibold' : 'hover:bg-gray-100'" class="px-2 py-1 rounded">Hourly</button>
+        <button @click="filterType = 'daily'" :class="filterType === 'daily' ? 'bg-green-200 font-semibold' : 'hover:bg-gray-100'" class="px-2 py-1 rounded">Daily</button>
+        <button @click="filterType = 'weekly'" :class="filterType === 'weekly' ? 'bg-purple-200 font-semibold' : 'hover:bg-gray-100'" class="px-2 py-1 rounded">Weekly</button>
+      </div>
+    </div>
+
+    {% if records %}
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200" aria-label="Backup archives">
+        <thead class="bg-gray-50">
+          <tr>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Filename</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Storage</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          {% for r in records %}
+          <tr class="hover:bg-gray-50"
+              x-show="filterType === '' || filterType === '{{ r.backup_type }}'"
+              data-backup-id="{{ r.id }}">
+            <td class="px-4 py-3 text-sm text-gray-900 font-mono truncate max-w-xs" title="{{ r.filename }}">
+              {{ r.filename }}
+            </td>
+            <td class="px-4 py-3 text-sm">
+              {% if r.backup_type == 'hourly' %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                  <i class="fas fa-clock mr-1" aria-hidden="true"></i> hourly
+                </span>
+              {% elif r.backup_type == 'daily' %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                  <i class="fas fa-calendar-day mr-1" aria-hidden="true"></i> daily
+                </span>
+              {% else %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                  <i class="fas fa-calendar-week mr-1" aria-hidden="true"></i> weekly
+                </span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
+              {% if r.created_at %}{{ r.created_at.strftime('%Y-%m-%d %H:%M') }} UTC{% endif %}
+            </td>
+            <td class="px-4 py-3 text-sm text-gray-600 text-right whitespace-nowrap">
+              {% if r.size_bytes %}
+                {{ (r.size_bytes / 1024) | round(1) }} KB
+              {% else %}—{% endif %}
+            </td>
+            <td class="px-4 py-3 text-sm">
+              {% if r.status == 'ok' %}
+                <span class="inline-flex items-center text-green-700">
+                  <i class="fas fa-check-circle mr-1" aria-hidden="true"></i> ok
+                </span>
+              {% else %}
+                <span class="inline-flex items-center text-red-600">
+                  <i class="fas fa-exclamation-circle mr-1" aria-hidden="true"></i> {{ r.status }}
+                </span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-sm text-gray-600">
+              {% if r.local_path %}
+                <span class="inline-flex items-center" title="{{ r.local_path }}">
+                  <i class="fas fa-hdd mr-1 text-gray-400" aria-hidden="true"></i> local
+                </span>
+              {% endif %}
+              {% if r.remote_destination %}
+                <span class="inline-flex items-center ml-2 text-blue-600" title="{{ r.remote_path }}">
+                  <i class="fas fa-cloud mr-1" aria-hidden="true"></i> {{ r.remote_destination }}
+                </span>
+              {% endif %}
+              {% if not r.local_path and not r.remote_destination %}
+                <span class="text-gray-400">—</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-sm text-right whitespace-nowrap">
+              {% if r.local_path %}
+              <a href="/api/admin/backup/{{ r.id }}/download"
+                 class="inline-flex items-center px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 text-gray-700 min-h-[32px]"
+                 aria-label="Download backup {{ r.filename }}">
+                <i class="fas fa-download mr-1" aria-hidden="true"></i> Download
+              </a>
+              {% endif %}
+              <button @click="deleteBackup({{ r.id }}, '{{ r.filename }}')"
+                      type="button"
+                      class="inline-flex items-center px-2 py-1 text-xs border border-red-300 rounded hover:bg-red-50 text-red-600 ml-1 min-h-[32px]"
+                      aria-label="Delete backup {{ r.filename }}">
+                <i class="fas fa-trash-alt mr-1" aria-hidden="true"></i> Delete
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="px-6 py-12 text-center text-gray-400">
+      <i class="fas fa-database text-4xl mb-3" aria-hidden="true"></i>
+      <p class="text-lg font-medium">No backups yet.</p>
+      <p class="text-sm">Click <em>Backup Now</em> to create your first backup.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Retention explanation -->
+  <div class="mt-8 bg-gray-50 border border-gray-200 rounded-lg p-5">
+    <h3 class="text-sm font-semibold text-gray-700 mb-2">
+      <i class="fas fa-info-circle mr-1 text-blue-400" aria-hidden="true"></i> Retention policy
+    </h3>
+    <ul class="text-sm text-gray-600 space-y-1 list-disc list-inside">
+      <li><strong>Hourly</strong> – kept for 4 days ({{ backup_retain_hourly }} snapshots)</li>
+      <li><strong>Daily</strong> – kept for 3 weeks ({{ backup_retain_daily }} snapshots)</li>
+      <li><strong>Weekly</strong> – kept for ~3 months ({{ backup_retain_weekly }} snapshots)</li>
+    </ul>
+    <p class="text-xs text-gray-400 mt-2">
+      Backups beyond these limits are automatically pruned after each new backup is created.
+      Use the <em>Clean Up</em> button to apply retention manually.
+    </p>
+  </div>
+
+</div>
+
+<script>
+function backupDashboard() {
+  return {
+    triggering: false,
+    restoring: false,
+    filterType: '',
+    flashMsg: '',
+    flashError: false,
+    confirmOpen: false,
+    confirmMsg: '',
+    confirmResolve: null,
+
+    /** Show a timed status flash message. */
+    flash(msg, isError = false) {
+      this.flashMsg = msg;
+      this.flashError = isError;
+      setTimeout(() => { this.flashMsg = ''; }, 5000);
+    },
+
+    /** Return CSRF token value, or throw if missing. */
+    csrfToken() {
+      const el = document.querySelector('[name=csrf_token]');
+      if (!el || !el.value) throw new Error('CSRF token missing – cannot proceed.');
+      return el.value;
+    },
+
+    /** Show the accessible confirm dialog and return a Promise<boolean>. */
+    askConfirm(msg) {
+      this.confirmMsg = msg;
+      this.confirmOpen = true;
+      return new Promise(resolve => { this.confirmResolve = resolve; });
+    },
+
+    async triggerBackup(type) {
+      this.triggering = true;
+      try {
+        const resp = await fetch(`/api/admin/backup/create?backup_type=${type}`, {
+          method: 'POST',
+          headers: { 'X-CSRF-Token': this.csrfToken() },
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          this.flash(`${type.charAt(0).toUpperCase() + type.slice(1)} backup queued (task ${data.task_id}).`);
+          setTimeout(() => location.reload(), 3000);
+        } else {
+          const err = await resp.json();
+          this.flash(`Error: ${err.detail || resp.statusText}`, true);
+        }
+      } catch (e) {
+        this.flash(`Network error: ${e}`, true);
+      } finally {
+        this.triggering = false;
+      }
+    },
+
+    async runCleanup() {
+      this.triggering = true;
+      try {
+        const resp = await fetch('/api/admin/backup/cleanup', {
+          method: 'POST',
+          headers: { 'X-CSRF-Token': this.csrfToken() },
+        });
+        if (resp.ok) {
+          this.flash('Cleanup queued.');
+          setTimeout(() => location.reload(), 3000);
+        } else {
+          const err = await resp.json();
+          this.flash(`Error: ${err.detail || resp.statusText}`, true);
+        }
+      } catch (e) {
+        this.flash(`Network error: ${e}`, true);
+      } finally {
+        this.triggering = false;
+      }
+    },
+
+    async deleteBackup(id, filename) {
+      const ok = await this.askConfirm(`Delete backup "${filename}"? This cannot be undone.`);
+      if (!ok) return;
+      try {
+        const resp = await fetch(`/api/admin/backup/${id}`, {
+          method: 'DELETE',
+          headers: { 'X-CSRF-Token': this.csrfToken() },
+        });
+        if (resp.ok) {
+          this.flash(`Backup ${filename} deleted.`);
+          const row = document.querySelector(`[data-backup-id="${id}"]`);
+          if (row) row.remove();
+        } else {
+          const err = await resp.json();
+          this.flash(`Error: ${err.detail || resp.statusText}`, true);
+        }
+      } catch (e) {
+        this.flash(`Network error: ${e}`, true);
+      }
+    },
+
+    async submitRestore() {
+      const form = document.getElementById('restoreForm');
+      const fileInput = document.getElementById('restoreFile');
+      if (!fileInput.files.length) return;
+
+      const ok = await this.askConfirm('Are you sure? This will OVERWRITE all current database data with the contents of the backup file.');
+      if (!ok) return;
+
+      this.restoring = true;
+      try {
+        const formData = new FormData(form);
+        const resp = await fetch('/api/admin/backup/restore', {
+          method: 'POST',
+          headers: { 'X-CSRF-Token': this.csrfToken() },
+          body: formData,
+        });
+        if (resp.ok) {
+          this.flash('Database restored successfully. The page will reload.');
+          setTimeout(() => location.reload(), 3000);
+        } else {
+          const err = await resp.json();
+          this.flash(`Restore failed: ${err.detail || resp.statusText}`, true);
+        }
+      } catch (e) {
+        this.flash(`Network error: ${e}`, true);
+      } finally {
+        this.restoring = false;
+      }
+    },
+  };
+}
+</script>
+{% endblock %}

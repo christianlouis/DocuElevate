@@ -887,6 +887,33 @@ Configurations are stored in the database and managed through the API (see [API 
 
 Webhook URLs, secrets, and subscribed events are configured per-webhook via the `/api/webhooks/` endpoints (admin access required). Each delivery includes an optional HMAC-SHA256 signature for verification and is retried with exponential backoff on failure.
 
+### Backup & Restore
+
+DocuElevate can automatically back up the SQLite database on a scheduled basis.
+Backups are managed from the **Admin → Backup & Restore** dashboard.
+
+| **Variable**                   | **Description**                                                                               | **Default**         |
+|--------------------------------|-----------------------------------------------------------------------------------------------|---------------------|
+| `BACKUP_ENABLED`               | Enable or disable automatic scheduled backups (`True`/`False`).                              | `True`              |
+| `BACKUP_DIR`                   | Filesystem path where local backup archives are stored. Defaults to `<WORKDIR>/backups`.     | *(workdir/backups)* |
+| `BACKUP_REMOTE_DESTINATION`    | Storage provider to copy backups to. Options: `s3`, `dropbox`, `google_drive`, `onedrive`, `nextcloud`, `webdav`, `ftp`, `sftp`, `email`. Leave empty for local-only storage. | *(empty)*           |
+| `BACKUP_REMOTE_FOLDER`         | Sub-folder / key prefix used when uploading to the remote destination.                       | `backups`           |
+| `BACKUP_RETAIN_HOURLY`         | Number of hourly snapshots to keep (1 per hour = 96 covers 4 days).                         | `96`                |
+| `BACKUP_RETAIN_DAILY`          | Number of daily snapshots to keep (21 = 3 weeks).                                           | `21`                |
+| `BACKUP_RETAIN_WEEKLY`         | Number of weekly snapshots to keep (13 ≈ 3 months).                                         | `13`                |
+
+**Retention schedule:**
+
+| Tier    | Frequency        | Default retention | Coverage     |
+|---------|------------------|-------------------|--------------|
+| Hourly  | Every hour       | 96 snapshots      | ~4 days      |
+| Daily   | Daily at 02:00   | 21 snapshots      | ~3 weeks     |
+| Weekly  | Sundays at 03:00 | 13 snapshots      | ~3 months    |
+
+Archives beyond the retention window are automatically pruned after each new backup. The **Clean Up** button on the dashboard applies retention immediately. When a remote destination is configured, remote copies follow the same retention policy.
+
+> **Note:** Backup and restore is currently supported only for SQLite databases.
+
 ### Uptime Kuma
 
 | **Variable**                | **Description**                                                |
@@ -1223,6 +1250,15 @@ S3_ACL=private
 # Uptime Kuma
 UPTIME_KUMA_URL=https://kuma.example.com/api/push/abcde12345?status=up
 UPTIME_KUMA_PING_INTERVAL=5
+
+# Backup & Restore
+BACKUP_ENABLED=True
+BACKUP_DIR=/data/backups
+BACKUP_REMOTE_DESTINATION=s3         # or dropbox, google_drive, onedrive, nextcloud, webdav, ftp, sftp, email
+BACKUP_REMOTE_FOLDER=backups
+BACKUP_RETAIN_HOURLY=96
+BACKUP_RETAIN_DAILY=21
+BACKUP_RETAIN_WEEKLY=13
 ```
 
 ## Selective Service Configuration

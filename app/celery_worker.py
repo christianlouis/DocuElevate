@@ -8,6 +8,7 @@ from app import tasks  # noqa: F401 - Imports app/tasks.py so Celery can registe
 # Import the shared Celery instance
 from app.celery_app import celery
 from app.config import settings
+from app.tasks.backup_tasks import cleanup_old_backups, create_backup  # noqa: F401
 from app.tasks.check_credentials import check_credentials
 from app.tasks.compute_embedding import backfill_missing_embeddings, compute_document_embedding  # noqa: F401
 from app.tasks.convert_to_pdf import convert_to_pdf  # noqa: F401
@@ -111,6 +112,40 @@ celery.conf.beat_schedule = {
         "schedule": crontab(hour="0", minute="5"),  # 00:05 UTC daily
         "options": {"expires": 3600},
     },
+    # ── Database backup tasks ──────────────────────────────────────────────
+    # Hourly backup (kept for 4 days)
+    "backup-hourly": (
+        {
+            "task": "app.tasks.backup_tasks.create_backup",
+            "schedule": crontab(minute="0"),  # top of every hour
+            "kwargs": {"backup_type": "hourly"},
+            "options": {"expires": 3300},
+        }
+        if settings.backup_enabled
+        else None
+    ),
+    # Daily backup (kept for 3 weeks) – runs at 02:30 UTC
+    "backup-daily": (
+        {
+            "task": "app.tasks.backup_tasks.create_backup",
+            "schedule": crontab(hour="2", minute="30"),
+            "kwargs": {"backup_type": "daily"},
+            "options": {"expires": 3600},
+        }
+        if settings.backup_enabled
+        else None
+    ),
+    # Weekly backup (kept for 13 weeks) – runs every Sunday at 03:00 UTC
+    "backup-weekly": (
+        {
+            "task": "app.tasks.backup_tasks.create_backup",
+            "schedule": crontab(hour="3", minute="0", day_of_week="0"),
+            "kwargs": {"backup_type": "weekly"},
+            "options": {"expires": 3600},
+        }
+        if settings.backup_enabled
+        else None
+    ),
 }
 
 # Remove None entries from beat_schedule
