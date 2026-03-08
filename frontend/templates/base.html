@@ -106,10 +106,10 @@
                {% if request and request.url.path == '/pipelines' %}aria-current="page"{% endif %}>
               <i class="fas fa-project-diagram mr-1 text-gray-400" aria-hidden="true"></i>Pipelines
             </a>
-            <a href="/imap-accounts"
+            <a href="/integrations"
                class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
-               {% if request and request.url.path == '/imap-accounts' %}aria-current="page"{% endif %}>
-              <i class="fas fa-envelope-open-text mr-1 text-gray-400" aria-hidden="true"></i>Email Ingestion
+               {% if request and request.url.path == '/integrations' %}aria-current="page"{% endif %}>
+              <i class="fas fa-plug mr-1 text-gray-400" aria-hidden="true"></i>Integrations
             </a>
 
             <!-- Admin dropdown – shown only for admin users via JS -->
@@ -278,10 +278,10 @@
                  {% if request and request.url.path == '/pipelines' %}aria-current="page"{% endif %}>
                 <i class="fas fa-project-diagram mr-2 text-gray-400" aria-hidden="true"></i>Pipelines
               </a>
-              <a href="/imap-accounts"
+              <a href="/integrations"
                  class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
-                 {% if request and request.url.path == '/imap-accounts' %}aria-current="page"{% endif %}>
-                <i class="fas fa-envelope-open-text mr-2 text-gray-400" aria-hidden="true"></i>Email Ingestion
+                 {% if request and request.url.path == '/integrations' %}aria-current="page"{% endif %}>
+                <i class="fas fa-plug mr-2 text-gray-400" aria-hidden="true"></i>Integrations
               </a>
 
               <!-- Admin section in mobile menu – shown only for admin users via JS -->

@@ -140,6 +140,39 @@ In addition to the system-wide IMAP mailboxes configured by the administrator vi
 
 The quota bar on the Email Ingestion page shows your current usage against your plan limit. If you have reached the limit, delete an existing account or upgrade your plan.
 
+#### Integrations Dashboard
+
+The **Integrations** page (`/integrations`) provides a unified view of all your configured ingestion sources and storage destinations. Instead of managing each integration type separately, you can create, edit, test, and delete any integration from a single dashboard.
+
+**Opening the dashboard:** Click **Integrations** in the top navigation bar.
+
+**Quota indicators** at the top of the page show your current usage:
+- **Mailbox Sources** — how many IMAP ingestion accounts you have vs. your plan limit
+- **Storage Destinations** — how many storage targets you have vs. your plan limit
+- An **Upgrade Plan** link appears when you have reached your plan limit
+
+**Adding a new integration:**
+
+1. Click **Add Integration**.
+2. Choose a **Direction** — Source (ingestion) or Destination (storage).
+3. Choose an **Integration Type** (e.g. IMAP, S3, Dropbox, WebDAV).
+4. Fill in the type-specific fields — the form adapts dynamically based on your choice:
+   - **IMAP** — host, port, username, password, SSL toggle
+   - **S3** — bucket, region, access key, secret key
+   - **WebDAV / Nextcloud** — URL, folder, username, password
+   - **FTP / SFTP** — host, port, remote path, username, password
+   - **Dropbox / Google Drive / OneDrive** — folder path, with a link to the OAuth setup page
+   - **Email Forward** — recipient email address
+   - **Watch Folder** — folder path
+   - **Paperless NGX** — URL and API token
+5. Click **Test Connection** to verify the settings before saving.
+6. Click **Save** to persist the integration.
+
+**Managing existing integrations:**
+- Click **Test** on any card to re-verify the connection.
+- Click **Edit** to update the configuration or credentials.
+- Click **Delete** to permanently remove the integration.
+
 ### Watch Folders (Automatic Folder Ingestion)
 
 Watch folders allow DocuElevate to automatically monitor directories for new files and ingest them without any manual action.
