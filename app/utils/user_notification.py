@@ -71,6 +71,9 @@ def _send_email_notification(target_config: dict[str, Any], title: str, message:
                        smtp_password, smtp_use_tls, recipient_email
         title: Email subject
         message: Email body text
+
+    Returns:
+        True if the email was sent successfully, False otherwise.
     """
     try:
         smtp_host = target_config.get("smtp_host", "")
@@ -113,6 +116,9 @@ def _send_webhook_notification(target_config: dict[str, Any], event_type: str, t
         event_type: The event type string
         title: Notification title
         message: Notification body
+
+    Returns:
+        True if the webhook was delivered successfully, False otherwise.
     """
     try:
         url = target_config.get("url", "")
