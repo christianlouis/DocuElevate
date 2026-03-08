@@ -376,6 +376,53 @@ class PipelineStep(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class UserImapAccount(Base):
+    """Per-user IMAP ingestion account.
+
+    Each row represents one IMAP mailbox that a user wants DocuElevate to
+    poll for document attachments.  The periodic ``pull_all_inboxes`` Celery
+    task iterates over all active accounts and processes any new emails.
+
+    Quota enforcement: the user's subscription plan's ``max_mailboxes`` field
+    controls how many accounts a user may configure (0 = unlimited for paid
+    plans; free tier is not permitted any accounts).
+    """
+
+    __tablename__ = "user_imap_accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Stable owner identifier — matches FileRecord.owner_id
+    owner_id = Column(String, nullable=False, index=True)
+
+    # Human-readable label chosen by the user (e.g. "Work Gmail", "Scanner mailbox")
+    name = Column(String(255), nullable=False)
+
+    # IMAP connection settings
+    host = Column(String(255), nullable=False)
+    port = Column(Integer, nullable=False, default=993)
+    username = Column(String(255), nullable=False)
+    # Password stored in plain text — the admin is responsible for access control
+    password = Column(String(1024), nullable=False)
+    use_ssl = Column(Boolean, nullable=False, default=True)
+
+    # Processing options
+    # When True, emails are deleted from the mailbox after their attachments are processed
+    delete_after_process = Column(Boolean, nullable=False, default=False)
+
+    # When False the account is not polled by the periodic task (but not deleted)
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    # Last time this mailbox was successfully polled
+    last_checked_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Last error message if the most recent poll failed (NULL = last poll succeeded)
+    last_error = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class BackupRecord(Base):
     """Tracks database backup files and their retention metadata.
 

@@ -15,6 +15,20 @@ from app.tasks.convert_to_pdf import convert_to_pdf  # new conversion task
 from app.tasks.process_document import process_document  # Updated import
 from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES
 
+# Database session for per-user IMAP accounts (imported lazily to avoid circular imports)
+_db_session_factory = None
+
+
+def _get_db_session():
+    """Return a new SQLAlchemy session (lazy import to avoid startup issues)."""
+    global _db_session_factory  # noqa: PLW0603
+    if _db_session_factory is None:
+        from app.database import SessionLocal
+
+        _db_session_factory = SessionLocal
+    return _db_session_factory()
+
+
 logger = logging.getLogger(__name__)
 
 # Initialize Redis connection using Celery's Redis settings
@@ -82,6 +96,10 @@ def pull_all_inboxes():
     Periodic Celery task that checks all configured IMAP mailboxes
     and fetches attachments from new emails.
     Ensures only one instance runs at a time using Redis-based locking.
+
+    Processes:
+    1. System-level mailboxes configured via environment variables (IMAP1, IMAP2).
+    2. Per-user IMAP accounts stored in the ``user_imap_accounts`` database table.
     """
     if not acquire_lock():
         logger.info("Skipping execution: Another instance is running.")
@@ -112,10 +130,59 @@ def pull_all_inboxes():
             delete_after_process=settings.imap2_delete_after_process,
         )
 
+        # Per-user IMAP accounts from the database
+        _pull_user_imap_accounts()
+
         logger.info("Finished pull_all_inboxes")
 
     finally:
         release_lock()
+
+
+def _pull_user_imap_accounts() -> None:
+    """Iterate over all active per-user IMAP accounts and pull their inboxes."""
+    try:
+        from app.models import UserImapAccount
+
+        db = _get_db_session()
+        try:
+            accounts = db.query(UserImapAccount).filter(UserImapAccount.is_active.is_(True)).all()
+            logger.info("Processing %d per-user IMAP account(s)", len(accounts))
+            for acct in accounts:
+                mailbox_key = f"user_{acct.owner_id}_{acct.id}"
+                try:
+                    pull_inbox(
+                        mailbox_key=mailbox_key,
+                        host=acct.host,
+                        port=acct.port,
+                        username=acct.username,
+                        password=acct.password,
+                        use_ssl=acct.use_ssl,
+                        delete_after_process=acct.delete_after_process,
+                    )
+                    # Record successful poll
+                    acct.last_checked_at = datetime.now(timezone.utc)
+                    acct.last_error = None
+                    db.commit()
+                except Exception as exc:  # noqa: BLE001
+                    error_msg = str(exc)[:500]
+                    logger.error(
+                        "Error pulling user IMAP account %d (%s@%s): %s",
+                        acct.id,
+                        acct.username,
+                        acct.host,
+                        error_msg,
+                    )
+                    try:
+                        acct.last_checked_at = datetime.now(timezone.utc)
+                        acct.last_error = error_msg
+                        db.commit()
+                    except Exception:  # noqa: BLE001
+                        db.rollback()
+        finally:
+            db.close()
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to process per-user IMAP accounts: %s", exc)
 
 
 def check_and_pull_mailbox(

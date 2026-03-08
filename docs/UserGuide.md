@@ -107,6 +107,39 @@ DocuElevate acts as an email *client* that automatically retrieves document atta
 
 > **HP Scanners and MFPs (Scan to Email)**: Configure your scanner's "Scan to Email" feature to send scanned documents to a dedicated email account. Point DocuElevate at that mailbox using the IMAP settings. DocuElevate will retrieve the scanned PDFs automatically — no manual forwarding required.
 
+#### Per-User IMAP Accounts (Email Ingestion Dashboard)
+
+In addition to the system-wide IMAP mailboxes configured by the administrator via environment variables, each user can configure their own personal IMAP accounts directly from the **Email Ingestion** page (`/imap-accounts`).
+
+**To add a personal IMAP account:**
+
+1. Navigate to **Email Ingestion** in the top navigation bar.
+2. Click **Add Account**.
+3. Fill in:
+   - **Label** — a friendly name for this account (e.g. "Work Gmail", "Scanner inbox")
+   - **IMAP Host** — your mail server hostname (e.g. `imap.gmail.com`)
+   - **Port** — typically `993` for SSL or `143` for plain/STARTTLS
+   - **Username** — usually your full email address
+   - **Password** — your email password or app-specific password
+4. Select **Use SSL/TLS** (recommended).
+5. Click **Test Connection** to verify the credentials before saving.
+6. Click **Add Account** to save.
+
+**Account options:**
+- **Active** — when checked, the mailbox is polled on each cycle; uncheck to pause without deleting.
+- **Delete emails after processing** — when checked, processed emails are permanently deleted from the mailbox instead of being marked as read/labelled.
+
+**Quota limits** are determined by your subscription plan:
+
+| Plan         | IMAP accounts |
+|--------------|---------------|
+| Free         | None (not available) |
+| Starter      | 1             |
+| Professional | 3             |
+| Power        | Unlimited     |
+
+The quota bar on the Email Ingestion page shows your current usage against your plan limit. If you have reached the limit, delete an existing account or upgrade your plan.
+
 ### Watch Folders (Automatic Folder Ingestion)
 
 Watch folders allow DocuElevate to automatically monitor directories for new files and ingest them without any manual action.

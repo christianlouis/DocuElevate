@@ -1,0 +1,731 @@
+{% extends "base.html" %}
+{% block title %}Email Ingestion (IMAP) – DocuElevate{% endblock %}
+
+{% block content %}
+<div
+  class="container mx-auto px-4 py-8"
+  x-data="imapAccountsApp()"
+  x-init="init()"
+>
+
+  <!-- ── Header ───────────────────────────────────────────────────────────── -->
+  <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <h1 class="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+        <i class="fas fa-envelope-open-text text-blue-500" aria-hidden="true"></i>
+        Email Ingestion (IMAP)
+      </h1>
+      <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">
+        Configure IMAP mailboxes to automatically ingest document attachments.
+        DocuElevate polls each active account at regular intervals.
+      </p>
+    </div>
+    <button
+      type="button"
+      @click="openCreateModal()"
+      :disabled="!canAdd"
+      class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+      style="min-height:44px;"
+      :aria-disabled="!canAdd"
+    >
+      <i class="fas fa-plus mr-2" aria-hidden="true"></i> Add Account
+    </button>
+  </div>
+
+  <!-- ── Quota banner ─────────────────────────────────────────────────────── -->
+  <div class="mb-6">
+    <template x-if="quota.max_mailboxes === 0">
+      <!-- Free tier: no access -->
+      <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3" role="alert">
+        <i class="fas fa-lock text-amber-500 mt-0.5" aria-hidden="true"></i>
+        <div>
+          <p class="font-semibold text-amber-800">Email ingestion not available on your plan</p>
+          <p class="text-sm text-amber-700 mt-0.5">
+            The <strong x-text="quota.tier_name"></strong> plan does not include IMAP ingestion.
+            <a href="/subscription" class="underline hover:text-amber-900">Upgrade your plan</a>
+            to unlock this feature.
+          </p>
+        </div>
+      </div>
+    </template>
+
+    <template x-if="quota.max_mailboxes !== 0">
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow px-5 py-4 flex items-center gap-4">
+        <i class="fas fa-inbox text-blue-400 text-xl" aria-hidden="true"></i>
+        <div class="flex-1">
+          <p class="text-sm font-medium text-gray-700 dark:text-gray-200">
+            IMAP accounts:
+            <strong x-text="quota.current_count"></strong>
+            <template x-if="quota.max_mailboxes !== null">
+              <span> / <strong x-text="quota.max_mailboxes"></strong></span>
+            </template>
+            <template x-if="quota.max_mailboxes === null">
+              <span class="text-gray-400"> / unlimited</span>
+            </template>
+          </p>
+          <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+            Plan: <span x-text="quota.tier_name"></span>
+            <a href="/subscription" class="ml-2 underline hover:text-blue-600">Manage subscription</a>
+          </p>
+        </div>
+        <!-- Mini usage bar (only when a limit exists) -->
+        <template x-if="quota.max_mailboxes !== null && quota.max_mailboxes > 0">
+          <div class="w-32">
+            <div class="bg-gray-200 dark:bg-gray-600 rounded-full h-2 overflow-hidden">
+              <div
+                class="h-2 rounded-full transition-all"
+                :class="quota.current_count >= quota.max_mailboxes ? 'bg-red-500' : 'bg-blue-500'"
+                :style="`width:${Math.min(100, quota.current_count / quota.max_mailboxes * 100)}%`"
+                role="progressbar"
+                :aria-valuenow="quota.current_count"
+                :aria-valuemin="0"
+                :aria-valuemax="quota.max_mailboxes"
+                :aria-label="`${quota.current_count} of ${quota.max_mailboxes} IMAP accounts used`"
+              ></div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+  </div>
+
+  <!-- ── Alert banner ─────────────────────────────────────────────────────── -->
+  <div aria-live="polite" aria-atomic="true">
+    <div x-show="alert.show && alert.type !== 'error'" x-transition class="mb-4" role="status">
+      <div class="bg-green-50 border-green-400 text-green-800 border-l-4 p-4 rounded dark:bg-opacity-10">
+        <p class="font-semibold" x-text="alert.title"></p>
+        <p class="text-sm" x-text="alert.message"></p>
+      </div>
+    </div>
+  </div>
+  <div aria-live="assertive" aria-atomic="true">
+    <div x-show="alert.show && alert.type === 'error'" x-transition class="mb-4" role="alert">
+      <div class="bg-red-50 border-red-400 text-red-800 border-l-4 p-4 rounded dark:bg-opacity-10">
+        <p class="font-semibold" x-text="alert.title"></p>
+        <p class="text-sm" x-text="alert.message"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Loading ──────────────────────────────────────────────────────────── -->
+  <template x-if="loading">
+    <div class="text-center py-12 text-gray-400">
+      <i class="fas fa-spinner fa-spin text-3xl mb-3" aria-hidden="true"></i>
+      <p>Loading accounts…</p>
+    </div>
+  </template>
+
+  <!-- ── Empty state ──────────────────────────────────────────────────────── -->
+  <template x-if="!loading && accounts.length === 0 && quota.max_mailboxes !== 0">
+    <div class="text-center py-16 bg-white dark:bg-gray-800 rounded-lg shadow">
+      <i class="fas fa-envelope-open-text text-5xl text-gray-300 mb-4" aria-hidden="true"></i>
+      <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">No IMAP accounts yet</h2>
+      <p class="text-gray-500 dark:text-gray-400 mb-6">
+        Add an IMAP account and DocuElevate will automatically pull document attachments from that mailbox.
+      </p>
+      <button
+        type="button"
+        @click="openCreateModal()"
+        class="inline-flex items-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md"
+        style="min-height:44px;"
+      >
+        <i class="fas fa-plus mr-2" aria-hidden="true"></i> Add Your First Account
+      </button>
+    </div>
+  </template>
+
+  <!-- ── Account cards ────────────────────────────────────────────────────── -->
+  <template x-if="!loading && accounts.length > 0">
+    <div class="space-y-4">
+      <template x-for="acct in accounts" :key="acct.id">
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700">
+          <div class="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+
+            <!-- Icon + info -->
+            <div class="flex items-start gap-3 flex-1 min-w-0">
+              <div class="mt-0.5">
+                <i
+                  class="fas fa-circle text-xs"
+                  :class="acct.is_active ? 'text-green-500' : 'text-gray-300'"
+                  :title="acct.is_active ? 'Active' : 'Paused'"
+                  aria-hidden="true"
+                ></i>
+              </div>
+              <div class="min-w-0 flex-1">
+                <h2 class="text-base font-semibold text-gray-900 dark:text-white truncate" x-text="acct.name"></h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400 truncate">
+                  <span x-text="acct.username"></span>@<span x-text="acct.host"></span>:<span x-text="acct.port"></span>
+                  <span x-show="acct.use_ssl" class="ml-1 inline-flex items-center text-xs font-medium text-green-700 bg-green-50 px-1.5 py-0.5 rounded">
+                    <i class="fas fa-lock mr-1" aria-hidden="true"></i>SSL
+                  </span>
+                </p>
+
+                <!-- Status row -->
+                <div class="mt-1.5 flex flex-wrap gap-2 text-xs">
+                  <template x-if="!acct.is_active">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                      <i class="fas fa-pause mr-1" aria-hidden="true"></i>Paused
+                    </span>
+                  </template>
+                  <template x-if="acct.delete_after_process">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded bg-orange-50 text-orange-700">
+                      <i class="fas fa-trash-alt mr-1" aria-hidden="true"></i>Delete after process
+                    </span>
+                  </template>
+                  <template x-if="acct.last_checked_at">
+                    <span class="text-gray-400" :title="acct.last_checked_at">
+                      <i class="fas fa-clock mr-1" aria-hidden="true"></i>Last polled: <span x-text="formatDate(acct.last_checked_at)"></span>
+                    </span>
+                  </template>
+                  <template x-if="acct.last_error">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded bg-red-50 text-red-700" :title="acct.last_error">
+                      <i class="fas fa-exclamation-circle mr-1" aria-hidden="true"></i>Error
+                    </span>
+                  </template>
+                </div>
+
+                <!-- Last error detail (collapsible) -->
+                <template x-if="acct.last_error">
+                  <p class="mt-2 text-xs text-red-600 bg-red-50 rounded px-2 py-1 break-words" x-text="acct.last_error"></p>
+                </template>
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                @click="testSavedAccount(acct)"
+                :disabled="testingId === acct.id"
+                class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                style="min-height:36px;"
+                :aria-label="`Test connection for ${acct.name}`"
+              >
+                <template x-if="testingId === acct.id">
+                  <i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i>
+                </template>
+                <template x-if="testingId !== acct.id">
+                  <i class="fas fa-plug mr-1" aria-hidden="true"></i>
+                </template>
+                Test
+              </button>
+              <button
+                type="button"
+                @click="openEditModal(acct)"
+                class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style="min-height:36px;"
+                :aria-label="`Edit ${acct.name}`"
+              >
+                <i class="fas fa-edit mr-1" aria-hidden="true"></i>Edit
+              </button>
+              <button
+                type="button"
+                @click="confirmDelete(acct)"
+                class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-red-200 text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                style="min-height:36px;"
+                :aria-label="`Delete ${acct.name}`"
+              >
+                <i class="fas fa-trash-alt mr-1" aria-hidden="true"></i>Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </template>
+
+</div>
+
+<!-- ── Create / Edit modal ──────────────────────────────────────────────────── -->
+<div
+  x-show="modalOpen"
+  x-transition:enter="ease-out duration-200"
+  x-transition:enter-start="opacity-0"
+  x-transition:enter-end="opacity-100"
+  x-transition:leave="ease-in duration-150"
+  x-transition:leave-start="opacity-100"
+  x-transition:leave-end="opacity-0"
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+  role="dialog"
+  aria-modal="true"
+  :aria-labelledby="editingAccount ? 'modal-title-edit' : 'modal-title-create'"
+  @keydown.escape.window="closeModal()"
+  style="display:none;"
+>
+  <div
+    class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg overflow-y-auto max-h-[90vh]"
+    @click.stop
+  >
+    <div class="px-6 pt-6 pb-2 flex items-center justify-between">
+      <h2
+        :id="editingAccount ? 'modal-title-edit' : 'modal-title-create'"
+        class="text-lg font-semibold text-gray-900 dark:text-white"
+        x-text="editingAccount ? 'Edit IMAP Account' : 'Add IMAP Account'"
+      ></h2>
+      <button
+        type="button"
+        @click="closeModal()"
+        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+        aria-label="Close modal"
+      >
+        <i class="fas fa-times text-xl" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <form @submit.prevent="saveAccount()" class="px-6 pb-6 pt-4 space-y-4">
+
+      <!-- Name -->
+      <div>
+        <label for="acct-name" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+          Label <span class="text-red-500" aria-hidden="true">*</span>
+        </label>
+        <input
+          id="acct-name"
+          type="text"
+          x-model="form.name"
+          placeholder="e.g. Work Gmail, Scanner inbox"
+          required
+          maxlength="255"
+          class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+          aria-required="true"
+        />
+      </div>
+
+      <!-- Host + Port -->
+      <div class="grid grid-cols-3 gap-3">
+        <div class="col-span-2">
+          <label for="acct-host" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+            IMAP Host <span class="text-red-500" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="acct-host"
+            type="text"
+            x-model="form.host"
+            placeholder="imap.example.com"
+            required
+            maxlength="255"
+            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+            aria-required="true"
+          />
+        </div>
+        <div>
+          <label for="acct-port" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+            Port <span class="text-red-500" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="acct-port"
+            type="number"
+            x-model.number="form.port"
+            min="1"
+            max="65535"
+            required
+            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+            aria-required="true"
+          />
+        </div>
+      </div>
+
+      <!-- Username -->
+      <div>
+        <label for="acct-username" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+          Username / Email <span class="text-red-500" aria-hidden="true">*</span>
+        </label>
+        <input
+          id="acct-username"
+          type="text"
+          x-model="form.username"
+          placeholder="you@example.com"
+          required
+          maxlength="255"
+          class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+          aria-required="true"
+          autocomplete="username"
+        />
+      </div>
+
+      <!-- Password -->
+      <div>
+        <label for="acct-password" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+          Password
+          <span x-show="editingAccount" class="text-xs text-gray-400 font-normal">(leave blank to keep current)</span>
+          <span x-show="!editingAccount" class="text-red-500" aria-hidden="true">*</span>
+        </label>
+        <div class="relative">
+          <input
+            id="acct-password"
+            :type="showPassword ? 'text' : 'password'"
+            x-model="form.password"
+            :required="!editingAccount"
+            maxlength="1024"
+            class="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+            :aria-required="!editingAccount"
+            autocomplete="current-password"
+          />
+          <button
+            type="button"
+            @click="showPassword = !showPassword"
+            class="absolute inset-y-0 right-0 px-3 text-gray-400 hover:text-gray-600 focus:outline-none"
+            :aria-label="showPassword ? 'Hide password' : 'Show password'"
+          >
+            <i :class="showPassword ? 'fas fa-eye-slash' : 'fas fa-eye'" aria-hidden="true"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- SSL + Delete toggles -->
+      <div class="flex flex-col sm:flex-row gap-4">
+        <label class="flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox" x-model="form.use_ssl" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+          <span class="text-sm text-gray-700 dark:text-gray-200">Use SSL/TLS</span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox" x-model="form.delete_after_process" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+          <span class="text-sm text-gray-700 dark:text-gray-200">Delete emails after processing</span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox" x-model="form.is_active" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+          <span class="text-sm text-gray-700 dark:text-gray-200">Active (poll this mailbox)</span>
+        </label>
+      </div>
+
+      <!-- Test connection result -->
+      <template x-if="testResult">
+        <div
+          class="text-sm px-3 py-2 rounded border"
+          :class="testResult.success ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'"
+          role="status"
+          aria-live="polite"
+        >
+          <i :class="testResult.success ? 'fas fa-check-circle' : 'fas fa-times-circle'" class="mr-1" aria-hidden="true"></i>
+          <span x-text="testResult.message"></span>
+        </div>
+      </template>
+
+      <!-- Form errors -->
+      <template x-if="formError">
+        <p class="text-sm text-red-600" role="alert" x-text="formError"></p>
+      </template>
+
+      <!-- Actions -->
+      <div class="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
+        <button
+          type="button"
+          @click="testFromForm()"
+          :disabled="testing"
+          class="inline-flex items-center px-3 py-2 text-sm font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          style="min-height:40px;"
+        >
+          <template x-if="testing">
+            <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>
+          </template>
+          <template x-if="!testing">
+            <i class="fas fa-plug mr-2" aria-hidden="true"></i>
+          </template>
+          Test Connection
+        </button>
+        <div class="flex gap-2">
+          <button
+            type="button"
+            @click="closeModal()"
+            class="px-4 py-2 text-sm font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style="min-height:40px;"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            :disabled="saving"
+            class="inline-flex items-center px-4 py-2 text-sm font-medium rounded bg-blue-600 hover:bg-blue-700 text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            style="min-height:40px;"
+          >
+            <template x-if="saving">
+              <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>
+            </template>
+            <span x-text="editingAccount ? 'Save Changes' : 'Add Account'"></span>
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Delete confirmation modal ────────────────────────────────────────────── -->
+<div
+  x-show="deleteModalOpen"
+  x-transition
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="delete-modal-title"
+  @keydown.escape.window="deleteModalOpen = false"
+  style="display:none;"
+>
+  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-sm p-6" @click.stop>
+    <h2 id="delete-modal-title" class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+      Delete IMAP Account?
+    </h2>
+    <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">
+      Are you sure you want to delete
+      <strong x-text="accountToDelete ? accountToDelete.name : ''"></strong>?
+      This action cannot be undone.
+    </p>
+    <div class="flex justify-end gap-2">
+      <button
+        type="button"
+        @click="deleteModalOpen = false; accountToDelete = null"
+        class="px-4 py-2 text-sm font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+        style="min-height:40px;"
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        @click="deleteAccount()"
+        :disabled="deleting"
+        class="inline-flex items-center px-4 py-2 text-sm font-medium rounded bg-red-600 hover:bg-red-700 text-white focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
+        style="min-height:40px;"
+      >
+        <template x-if="deleting">
+          <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>
+        </template>
+        Delete
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+function imapAccountsApp() {
+  return {
+    accounts: {{ accounts | tojson }},
+    quota: {
+      current_count: {{ current_count }},
+      max_mailboxes: {{ max_mailboxes | tojson }},
+      can_add: {{ 'true' if can_add else 'false' }},
+      tier_id: {{ tier_id | tojson }},
+      tier_name: {{ tier_name | tojson }},
+    },
+    loading: false,
+    alert: { show: false, type: '', title: '', message: '' },
+
+    // Modal state
+    modalOpen: false,
+    editingAccount: null,
+    form: { name: '', host: '', port: 993, username: '', password: '', use_ssl: true, delete_after_process: false, is_active: true },
+    showPassword: false,
+    saving: false,
+    testing: false,
+    testResult: null,
+    formError: null,
+
+    // Delete state
+    deleteModalOpen: false,
+    accountToDelete: null,
+    deleting: false,
+
+    // Test (saved account) state
+    testingId: null,
+
+    get canAdd() {
+      return this.quota.can_add;
+    },
+
+    init() {
+      // Nothing to do — data is server-rendered
+    },
+
+    formatDate(iso) {
+      if (!iso) return '';
+      try {
+        return new Date(iso).toLocaleString();
+      } catch {
+        return iso;
+      }
+    },
+
+    showAlert(type, title, message) {
+      this.alert = { show: true, type, title, message };
+      setTimeout(() => { this.alert.show = false; }, 5000);
+    },
+
+    openCreateModal() {
+      this.editingAccount = null;
+      this.form = { name: '', host: '', port: 993, username: '', password: '', use_ssl: true, delete_after_process: false, is_active: true };
+      this.showPassword = false;
+      this.testResult = null;
+      this.formError = null;
+      this.modalOpen = true;
+    },
+
+    openEditModal(acct) {
+      this.editingAccount = acct;
+      this.form = {
+        name: acct.name,
+        host: acct.host,
+        port: acct.port,
+        username: acct.username,
+        password: '',  // never pre-fill password
+        use_ssl: acct.use_ssl,
+        delete_after_process: acct.delete_after_process,
+        is_active: acct.is_active,
+      };
+      this.showPassword = false;
+      this.testResult = null;
+      this.formError = null;
+      this.modalOpen = true;
+    },
+
+    closeModal() {
+      this.modalOpen = false;
+      this.editingAccount = null;
+      this.testResult = null;
+      this.formError = null;
+    },
+
+    async saveAccount() {
+      this.formError = null;
+      this.saving = true;
+      try {
+        const payload = { ...this.form };
+        // For edits: omit password if blank (backend keeps existing)
+        if (this.editingAccount && payload.password === '') {
+          delete payload.password;
+        }
+        let resp;
+        if (this.editingAccount) {
+          resp = await fetch(`/api/imap-accounts/${this.editingAccount.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+            body: JSON.stringify(payload),
+          });
+        } else {
+          resp = await fetch('/api/imap-accounts/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+            body: JSON.stringify(payload),
+          });
+        }
+        const data = await resp.json();
+        if (!resp.ok) {
+          this.formError = data.detail || 'Failed to save account.';
+          return;
+        }
+        // Update local list
+        if (this.editingAccount) {
+          const idx = this.accounts.findIndex(a => a.id === data.id);
+          if (idx !== -1) this.accounts.splice(idx, 1, data);
+        } else {
+          this.accounts.push(data);
+          this.quota.current_count += 1;
+          // Re-compute canAdd
+          if (this.quota.max_mailboxes !== null && this.quota.max_mailboxes > 0) {
+            this.quota.can_add = this.quota.current_count < this.quota.max_mailboxes;
+          }
+        }
+        this.closeModal();
+        this.showAlert('success', 'Saved', this.editingAccount ? 'Account updated.' : 'Account added successfully.');
+      } catch (err) {
+        this.formError = 'Network error. Please try again.';
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    async testFromForm() {
+      this.testing = true;
+      this.testResult = null;
+      try {
+        const payload = {
+          host: this.form.host,
+          port: this.form.port,
+          username: this.form.username,
+          password: this.form.password || (this.editingAccount ? '__SAVED__' : ''),
+          use_ssl: this.form.use_ssl,
+        };
+        // If editing and no new password, test the saved account directly
+        if (this.editingAccount && !this.form.password) {
+          const resp = await fetch(`/api/imap-accounts/${this.editingAccount.id}/test`, {
+            method: 'POST',
+            headers: { 'X-CSRF-Token': getCsrfToken() },
+          });
+          const data = await resp.json();
+          this.testResult = data;
+          return;
+        }
+        const resp = await fetch('/api/imap-accounts/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+          body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        this.testResult = data;
+      } catch {
+        this.testResult = { success: false, message: 'Network error during test.' };
+      } finally {
+        this.testing = false;
+      }
+    },
+
+    async testSavedAccount(acct) {
+      this.testingId = acct.id;
+      try {
+        const resp = await fetch(`/api/imap-accounts/${acct.id}/test`, {
+          method: 'POST',
+          headers: { 'X-CSRF-Token': getCsrfToken() },
+        });
+        const data = await resp.json();
+        if (data.success) {
+          this.showAlert('success', `${acct.name}: Connection OK`, data.message);
+        } else {
+          this.showAlert('error', `${acct.name}: Connection Failed`, data.message);
+        }
+      } catch {
+        this.showAlert('error', 'Test Failed', 'Network error.');
+      } finally {
+        this.testingId = null;
+      }
+    },
+
+    confirmDelete(acct) {
+      this.accountToDelete = acct;
+      this.deleteModalOpen = true;
+    },
+
+    async deleteAccount() {
+      if (!this.accountToDelete) return;
+      this.deleting = true;
+      try {
+        const resp = await fetch(`/api/imap-accounts/${this.accountToDelete.id}`, {
+          method: 'DELETE',
+          headers: { 'X-CSRF-Token': getCsrfToken() },
+        });
+        if (resp.ok || resp.status === 204) {
+          this.accounts = this.accounts.filter(a => a.id !== this.accountToDelete.id);
+          this.quota.current_count = Math.max(0, this.quota.current_count - 1);
+          if (this.quota.max_mailboxes !== null && this.quota.max_mailboxes > 0) {
+            this.quota.can_add = this.quota.current_count < this.quota.max_mailboxes;
+          }
+          this.showAlert('success', 'Deleted', `"${this.accountToDelete.name}" has been removed.`);
+          this.deleteModalOpen = false;
+          this.accountToDelete = null;
+        } else {
+          const data = await resp.json();
+          this.showAlert('error', 'Delete Failed', data.detail || 'Could not delete account.');
+        }
+      } catch {
+        this.showAlert('error', 'Delete Failed', 'Network error.');
+      } finally {
+        this.deleting = false;
+      }
+    },
+  };
+}
+
+function getCsrfToken() {
+  // Read CSRF token from meta tag injected by base template, or from cookie
+  const meta = document.querySelector('meta[name="csrf-token"]');
+  if (meta) return meta.getAttribute('content');
+  return '';
+}
+</script>
+{% endblock %}
