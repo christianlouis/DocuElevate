@@ -151,6 +151,16 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         logger.debug("CSRF: content_type=%r method=%s path=%s", content_type, request.method, request.url.path)
         if "application/x-www-form-urlencoded" in content_type:
             try:
+                # Cache the raw body bytes before parsing the form.  Starlette's
+                # BaseHTTPMiddleware uses _CachedRequest.wrapped_receive to relay
+                # the body to downstream handlers.  When form() is called it
+                # internally uses stream() which sets _stream_consumed=True but
+                # does NOT populate _body.  wrapped_receive then sees a consumed
+                # stream and forwards an empty body, so the auth endpoint gets
+                # form_keys=[].  Calling body() first stores the bytes in _body;
+                # wrapped_receive detects this and replays the real body to any
+                # downstream handler (e.g. the /auth endpoint).
+                await request.body()
                 form = await request.form()
                 token = form.get("csrf_token")
                 logger.debug(
