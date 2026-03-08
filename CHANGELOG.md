@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.98.0 (2026-03-08)
+
+### Bug Fixes
+
+- **integrations**: Sanitize error messages and add SSRF protection for WebDAV test
+  ([`c4b4643`](https://github.com/christianlouis/DocuElevate/commit/c4b4643f6ee700ea080dd3de3148dfdf0eb83839))
+
+### Documentation
+
+- **api**: Add integrations quota enforcement and test endpoint documentation
+  ([`71350f2`](https://github.com/christianlouis/DocuElevate/commit/71350f2ad6182b3fbc711740fe0669bf2985279e))
+
+### Features
+
+- **integrations**: Add quota enforcement, connection test, and quota endpoint
+  ([`35abdb0`](https://github.com/christianlouis/DocuElevate/commit/35abdb0e6970ef1ee72a2235d050f2a3fdfc161b))
+
+
 ## v0.97.0 (2026-03-08)
 
 ### Features
