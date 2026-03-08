@@ -402,9 +402,11 @@ class UserImapAccount(Base):
     host = Column(String(255), nullable=False)
     port = Column(Integer, nullable=False, default=993)
     username = Column(String(255), nullable=False)
-    # Password stored in plain text — the admin is responsible for access control.
-    # TODO: Encrypt at rest using cryptography.fernet before deploying in high-security
-    # environments. See SECURITY_AUDIT.md for full risk assessment and mitigation notes.
+    # Password stored encrypted using Fernet symmetric encryption via
+    # app.utils.encryption.encrypt_value / decrypt_value (keyed from SESSION_SECRET).
+    # New records are always encrypted; legacy plaintext records are transparently
+    # handled by decrypt_value which returns the value unchanged when no "enc:" prefix
+    # is present.
     password = Column(String(1024), nullable=False)
     use_ssl = Column(Boolean, nullable=False, default=True)
 
@@ -467,3 +469,134 @@ class BackupRecord(Base):
     remote_path = Column(String(1024), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+# ---------------------------------------------------------------------------
+# Integration direction / type constants
+# ---------------------------------------------------------------------------
+
+
+class IntegrationDirection:
+    """Direction of data flow for a UserIntegration."""
+
+    SOURCE = "SOURCE"
+    DESTINATION = "DESTINATION"
+
+    ALL = {SOURCE, DESTINATION}
+
+
+class IntegrationType:
+    """Supported integration types for UserIntegration."""
+
+    # Source integrations (ingestion)
+    IMAP = "IMAP"
+    WATCH_FOLDER = "WATCH_FOLDER"
+    WEBHOOK = "WEBHOOK"
+
+    # Destination integrations (storage / output)
+    S3 = "S3"
+    DROPBOX = "DROPBOX"
+    GOOGLE_DRIVE = "GOOGLE_DRIVE"
+    ONEDRIVE = "ONEDRIVE"
+    WEBDAV = "WEBDAV"
+    NEXTCLOUD = "NEXTCLOUD"
+    FTP = "FTP"
+    SFTP = "SFTP"
+    EMAIL = "EMAIL"
+    PAPERLESS = "PAPERLESS"
+    RCLONE = "RCLONE"
+
+    ALL = {
+        IMAP,
+        WATCH_FOLDER,
+        WEBHOOK,
+        S3,
+        DROPBOX,
+        GOOGLE_DRIVE,
+        ONEDRIVE,
+        WEBDAV,
+        NEXTCLOUD,
+        FTP,
+        SFTP,
+        EMAIL,
+        PAPERLESS,
+        RCLONE,
+    }
+
+
+class UserIntegration(Base):
+    """Generic per-user integration record (source or destination).
+
+    Replaces ad-hoc per-integration-type tables with a single, extensible
+    model that supports any combination of ingestion sources and storage
+    destinations without schema changes when new integrations are added.
+
+    ``config`` holds non-sensitive connection settings as a JSON string
+    (e.g. host, port, bucket name, folder path).
+
+    ``credentials`` holds sensitive secrets (passwords, tokens, API keys)
+    as a Fernet-encrypted JSON string.  Always use
+    ``app.utils.encryption.encrypt_value`` / ``decrypt_value`` when
+    writing / reading this field.
+
+    Example config + credentials shapes by integration type:
+
+    IMAP:
+      config      = {"host": "imap.example.com", "port": 993,
+                     "username": "user@example.com", "use_ssl": true,
+                     "delete_after_process": false}
+      credentials = {"password": "secret"}
+
+    S3:
+      config      = {"bucket": "my-bucket", "region": "us-east-1",
+                     "endpoint_url": null, "folder_prefix": ""}
+      credentials = {"access_key_id": "AKI…", "secret_access_key": "…"}
+
+    DROPBOX:
+      config      = {"folder": "/DocuElevate"}
+      credentials = {"refresh_token": "…", "app_key": "…",
+                     "app_secret": "…"}
+
+    GOOGLE_DRIVE:
+      config      = {"folder_id": "1abc…"}
+      credentials = {"credentials_json": "{…service-account or OAuth…}"}
+
+    WEBDAV / NEXTCLOUD:
+      config      = {"url": "https://cloud.example.com/dav/",
+                     "folder": "/Documents"}
+      credentials = {"username": "user", "password": "secret"}
+    """
+
+    __tablename__ = "user_integrations"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Stable owner identifier — matches FileRecord.owner_id / UserImapAccount.owner_id
+    owner_id = Column(String, nullable=False, index=True)
+
+    # "SOURCE" or "DESTINATION"  (see IntegrationDirection)
+    direction = Column(String(20), nullable=False, index=True)
+
+    # One of the IntegrationType constants (e.g. "IMAP", "S3", "DROPBOX")
+    integration_type = Column(String(50), nullable=False, index=True)
+
+    # Human-readable label chosen by the user (e.g. "Work Gmail", "S3 Archive")
+    name = Column(String(255), nullable=False)
+
+    # Non-sensitive connection configuration (JSON string)
+    config = Column(Text, nullable=True)
+
+    # Sensitive credentials — always stored encrypted via encrypt_value()
+    credentials = Column(Text, nullable=True)
+
+    # When False the integration is not polled / used by background tasks
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    # Timestamp of the last successful use of this integration
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Last error message if the most recent operation failed (NULL = last op succeeded)
+    last_error = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

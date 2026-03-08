@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import UserImapAccount
+from app.utils.encryption import decrypt_value, encrypt_value
 from app.utils.subscription import get_tier, get_user_tier_id
 from app.utils.user_scope import get_current_owner_id
 
@@ -217,7 +218,7 @@ def create_imap_account(
         host=body.host,
         port=body.port,
         username=body.username,
-        password=body.password,
+        password=encrypt_value(body.password),
         use_ssl=body.use_ssl,
         delete_after_process=body.delete_after_process,
         is_active=body.is_active,
@@ -269,7 +270,7 @@ def update_imap_account(
     if body.username is not None:
         acct.username = body.username
     if body.password is not None:
-        acct.password = body.password
+        acct.password = encrypt_value(body.password)
     if body.use_ssl is not None:
         acct.use_ssl = body.use_ssl
     if body.delete_after_process is not None:
@@ -320,7 +321,7 @@ def test_saved_imap_account(account_id: int, request: Request, db: DbSession, ow
     if not acct:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="IMAP account not found")
 
-    return _test_imap_connection(acct.host, acct.port, acct.username, acct.password, acct.use_ssl)
+    return _test_imap_connection(acct.host, acct.port, acct.username, decrypt_value(acct.password), acct.use_ssl)
 
 
 @router.post("/test", summary="Test an IMAP connection without saving")

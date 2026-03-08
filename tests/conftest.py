@@ -67,6 +67,7 @@ from app.models import (  # noqa: F401, E402
     ProcessingLog,
     SavedSearch,
     UserImapAccount,
+    UserIntegration,
     UserProfile,
     WebhookConfig,
 )

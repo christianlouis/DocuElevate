@@ -37,6 +37,19 @@ logger = logging.getLogger(__name__)
 # Initialize Redis connection using Celery's Redis settings
 redis_client = redis.StrictRedis.from_url(settings.redis_url, decode_responses=True)
 
+
+def _decrypt_imap_password(password: str | None) -> str | None:
+    """Decrypt an IMAP account password stored in the database.
+
+    Passwords are stored encrypted (Fernet, ``enc:`` prefix) for new records;
+    legacy plaintext records are returned unchanged so existing accounts
+    continue to work until they are next updated via the API.
+    """
+    from app.utils.encryption import decrypt_value
+
+    return decrypt_value(password)
+
+
 LOCK_KEY = "imap_lock"  # Unique key for locking
 LOCK_EXPIRE = 300  # Lock expires in 5 minutes
 
@@ -160,7 +173,7 @@ def _pull_user_imap_accounts() -> None:
                         host=acct.host,
                         port=acct.port,
                         username=acct.username,
-                        password=acct.password,
+                        password=_decrypt_imap_password(acct.password),
                         use_ssl=acct.use_ssl,
                         delete_after_process=acct.delete_after_process,
                     )
