@@ -10,6 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.90.0 (2026-03-08)
+
+### Features
+
+- **watch-folders**: Add cloud provider watch folders (Dropbox, Drive, OneDrive, Nextcloud, S3,
+  WebDAV)
+  ([`9a9efae`](https://github.com/christianlouis/DocuElevate/commit/9a9efae19e9a8e6e4e43ced3426aa0b6a873597a))
+
+- **watch-folders**: Add local/FTP/SFTP watch folder ingest with settings, tasks, tests, docs
+  ([`bdb67de`](https://github.com/christianlouis/DocuElevate/commit/bdb67de5cbe2fb4832065c2958c41eba708ac8db))
+
+
 ## v0.89.1 (2026-03-08)
 
 ### Bug Fixes
