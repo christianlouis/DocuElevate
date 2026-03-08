@@ -627,7 +627,7 @@ class ApiToken(Base):
     # SHA-256 hex digest of the full token value
     token_hash = Column(String(64), nullable=False, unique=True, index=True)
 
-    # First 8 characters of the token for display (e.g. "de_Ab3xY…")
+    # First 12 characters of the token for display (e.g. "de_Ab3xY7kL…")
     token_prefix = Column(String(16), nullable=False)
 
     # Usage tracking

@@ -131,7 +131,7 @@ async def create_token(
     """
     plaintext = generate_api_token()
     token_hash_value = hash_token(plaintext)
-    prefix = plaintext[:12]  # "de_" + first 9 random chars
+    prefix = plaintext[:12]  # "de_" prefix + 9 random chars = 12 chars total
 
     db_token = ApiToken(
         owner_id=owner_id,
