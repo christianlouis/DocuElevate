@@ -138,6 +138,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const clientId = sessionStorage.getItem('google_drive_client_id');
   const clientSecret = sessionStorage.getItem('google_drive_client_secret');
   const folderId = sessionStorage.getItem('google_drive_folder_id');
+  const integrationId = sessionStorage.getItem('oauth_integration_id');
 
   const redirectUri = window.location.origin + "/google-drive-callback";
 
@@ -192,7 +193,51 @@ document.addEventListener('DOMContentLoaded', function() {
         refreshToken = data.refresh_token;
         accessToken = data.access_token;
 
-        // Update settings in memory first
+        // Per-user flow: save to the user's integration record
+        if (integrationId) {
+          const creds = {
+            client_id: clientId,
+            client_secret: clientSecret,
+            refresh_token: data.refresh_token,
+          };
+          const cfgUpdate = {};
+          if (folderId) cfgUpdate.folder_id = folderId;
+
+          const body = { credentials: creds };
+          if (Object.keys(cfgUpdate).length > 0) body.config = cfgUpdate;
+
+          document.getElementById('processing-message').innerHTML =
+            '<p>Saving credentials to your integration...</p>';
+
+          return fetch(`/api/integrations/${integrationId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          }).then(response => {
+            if (!response.ok) {
+              return response.json().then(err => {
+                throw new Error('Failed to save credentials: ' + (err.detail || 'Unknown error'));
+              });
+            }
+            return response.json();
+          }).then(() => {
+            // Clean up
+            sessionStorage.removeItem('google_drive_client_id');
+            sessionStorage.removeItem('google_drive_client_secret');
+            sessionStorage.removeItem('google_drive_folder_id');
+            sessionStorage.removeItem('google_drive_use_oauth');
+            sessionStorage.removeItem('oauth_integration_id');
+
+            // Show brief success then redirect to integrations
+            document.getElementById('processing-message').innerHTML =
+              '<p class="text-green-600 font-semibold">✓ Google Drive authorized successfully!</p>' +
+              '<p class="text-sm text-gray-500 mt-2">Redirecting to Integrations...</p>';
+            document.querySelector('.animate-spin').parentNode.classList.add('hidden');
+            setTimeout(() => { window.location.href = '/integrations'; }, 2000);
+          });
+        }
+
+        // Global flow: update settings in memory first
         const updateFormData = new FormData();
         updateFormData.append('refresh_token', data.refresh_token);
 

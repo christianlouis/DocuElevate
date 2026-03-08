@@ -4,7 +4,7 @@ Google Drive integration views for setup and OAuth callback.
 
 import urllib.parse
 
-from fastapi import Request
+from fastapi import Query, Request
 from fastapi.responses import RedirectResponse
 
 from app.views.base import APIRouter, require_login, settings, templates
@@ -14,7 +14,7 @@ router = APIRouter()
 
 @router.get("/google-drive-setup")
 @require_login
-async def google_drive_setup_page(request: Request):
+async def google_drive_setup_page(request: Request, integration_id: int | None = Query(None)):
     """
     Setup page for the Google Drive integration.
     Shows configuration status and setup instructions.
@@ -55,6 +55,7 @@ async def google_drive_setup_page(request: Request):
             "refresh_token_value": settings.google_drive_refresh_token or "",
             "folder_id": settings.google_drive_folder_id or "",
             "has_credentials_json": bool(settings.google_drive_credentials_json),
+            "integration_id": integration_id,
         },
     )
 

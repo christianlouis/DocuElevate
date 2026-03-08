@@ -30,6 +30,22 @@ class TestGoogleDriveViews:
         response = client.get("/google-drive-callback?code=test_code")
         assert response.status_code == 200
 
+    def test_google_drive_setup_page_with_integration_id(self, client):
+        """Test the Google Drive setup page accepts integration_id query param."""
+        response = client.get("/google-drive-setup?integration_id=99")
+        assert response.status_code == 200
+        # The template should store the integration_id for per-user OAuth flow
+        assert b"oauth_integration_id" in response.content
+        assert b"99" in response.content
+
+    def test_google_drive_setup_page_without_integration_id(self, client):
+        """Test the Google Drive setup page works without integration_id (global flow)."""
+        response = client.get("/google-drive-setup")
+        assert response.status_code == 200
+        body = response.text
+        assert "oauth_integration_id" in body
+        assert 'const integrationId = ""' in body
+
     def test_google_drive_callback_with_code_and_state(self, client):
         """Test the Google Drive OAuth callback with code and state."""
         response = client.get("/google-drive-callback?code=test_code&state=test_state")

@@ -2,7 +2,7 @@
 Dropbox integration views for setup and OAuth callback.
 """
 
-from fastapi import Request
+from fastapi import Query, Request
 
 from app.views.base import APIRouter, require_login, settings, templates
 
@@ -11,7 +11,7 @@ router = APIRouter()
 
 @router.get("/dropbox-setup")
 @require_login
-async def dropbox_setup_page(request: Request):
+async def dropbox_setup_page(request: Request, integration_id: int | None = Query(None)):
     """
     Setup page for the Dropbox integration.
     Shows configuration status and setup instructions.
@@ -28,6 +28,7 @@ async def dropbox_setup_page(request: Request):
             "app_secret_value": settings.dropbox_app_secret if settings.dropbox_app_secret else "",
             "refresh_token_value": settings.dropbox_refresh_token if settings.dropbox_refresh_token else "",
             "folder_path": settings.dropbox_folder or "/Documents/Uploads",  # Default folder path
+            "integration_id": integration_id,
         },
     )
 

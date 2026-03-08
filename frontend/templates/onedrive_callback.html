@@ -98,6 +98,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const clientSecret = sessionStorage.getItem('onedrive_client_secret') || "{{ client_secret_value }}";
   const tenantId = sessionStorage.getItem('onedrive_tenant_id') || "{{ tenant_id }}" || "common";
   const folderPath = sessionStorage.getItem('onedrive_folder_path') || "";
+  const integrationId = sessionStorage.getItem('oauth_integration_id');
 
   const redirectUri = window.location.origin + "/onedrive-callback";
 
@@ -140,7 +141,52 @@ document.addEventListener('DOMContentLoaded', function() {
     })
     .then(data => {
       if (data.refresh_token) {
-        // Instead of saving to .env file, update settings in memory
+        // Per-user flow: save to the user's integration record
+        if (integrationId) {
+          const creds = {
+            client_id: clientId,
+            client_secret: clientSecret,
+            refresh_token: data.refresh_token,
+            tenant_id: tenantId,
+          };
+          const cfgUpdate = {};
+          if (folderPath) cfgUpdate.folder_path = folderPath;
+
+          const body = { credentials: creds };
+          if (Object.keys(cfgUpdate).length > 0) body.config = cfgUpdate;
+
+          document.getElementById('processing-message').innerHTML =
+            '<p>Saving credentials to your integration...</p>';
+
+          return fetch(`/api/integrations/${integrationId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          }).then(response => {
+            if (!response.ok) {
+              return response.json().then(err => {
+                throw new Error('Failed to save credentials: ' + (err.detail || 'Unknown error'));
+              });
+            }
+            return response.json();
+          }).then(() => {
+            // Clean up
+            sessionStorage.removeItem('onedrive_client_id');
+            sessionStorage.removeItem('onedrive_client_secret');
+            sessionStorage.removeItem('onedrive_tenant_id');
+            sessionStorage.removeItem('onedrive_folder_path');
+            sessionStorage.removeItem('oauth_integration_id');
+
+            // Show brief success then redirect to integrations
+            document.getElementById('processing-message').innerHTML =
+              '<p class="text-green-600 font-semibold">✓ OneDrive authorized successfully!</p>' +
+              '<p class="text-sm text-gray-500 mt-2">Redirecting to Integrations...</p>';
+            document.querySelector('.animate-spin').parentNode.classList.add('hidden');
+            setTimeout(() => { window.location.href = '/integrations'; }, 2000);
+          });
+        }
+
+        // Global flow: update settings in memory
         const updateFormData = new FormData();
         updateFormData.append('refresh_token', data.refresh_token);
 

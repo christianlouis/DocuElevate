@@ -2,7 +2,7 @@
 OneDrive integration views for setup and OAuth callback.
 """
 
-from fastapi import Request
+from fastapi import Query, Request
 
 from app.views.base import APIRouter, require_login, settings, templates
 
@@ -11,7 +11,7 @@ router = APIRouter()
 
 @router.get("/onedrive-setup")
 @require_login
-async def onedrive_setup_page(request: Request):
+async def onedrive_setup_page(request: Request, integration_id: int | None = Query(None)):
     """
     Setup page for the OneDrive integration.
     Shows configuration status and setup instructions.
@@ -35,6 +35,7 @@ async def onedrive_setup_page(request: Request):
             "refresh_token": bool(settings.onedrive_refresh_token),
             "refresh_token_value": settings.onedrive_refresh_token if settings.onedrive_refresh_token else "",
             "folder_path": settings.onedrive_folder_path or "Documents/Uploads",  # Default folder path
+            "integration_id": integration_id,
         },
     )
 
