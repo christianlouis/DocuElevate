@@ -7,6 +7,15 @@ storage destination (e.g. S3, Dropbox, Google Drive) configured by a user.
 Sensitive credentials are encrypted at rest using Fernet symmetric encryption
 (keyed from ``SESSION_SECRET``) via :mod:`app.utils.encryption`.  Credential
 values are **never** returned in API responses.
+
+Subscription quota enforcement
+------------------------------
+On creation, the endpoint checks the user's subscription tier limits:
+
+* **Destinations** — ``max_storage_destinations`` from the plan.
+* **Sources (IMAP)** — ``max_mailboxes`` from the plan.
+
+Exceeding the quota returns HTTP 403 with an actionable error message.
 """
 
 import json
@@ -20,6 +29,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import IntegrationDirection, IntegrationType, UserIntegration
 from app.utils.encryption import decrypt_value, encrypt_value
+from app.utils.subscription import get_tier, get_user_tier_id
 from app.utils.user_scope import get_current_owner_id
 
 logger = logging.getLogger(__name__)
@@ -41,6 +51,119 @@ def _get_owner_id(request: Request) -> str:
 
 
 CurrentOwner = Annotated[str, Depends(_get_owner_id)]
+
+# ---------------------------------------------------------------------------
+# Quota helpers
+# ---------------------------------------------------------------------------
+
+_FREE_TIER_ID = "free"
+
+# Source types that consume the mailbox quota
+_MAILBOX_SOURCE_TYPES = {IntegrationType.IMAP}
+
+
+def _get_max_destinations(tier: dict[str, Any]) -> int | None:
+    """Return the maximum number of storage destinations allowed by *tier*.
+
+    Returns:
+        ``None``  — unlimited (paid tiers with ``max_storage_destinations == 0``)
+        positive  — the configured limit
+    """
+    tier_id: str = tier.get("id", _FREE_TIER_ID)
+    max_dest: int = tier.get("max_storage_destinations", 0)
+
+    # Free tier: the value itself is the limit (e.g. 1)
+    if tier_id == _FREE_TIER_ID:
+        return max_dest if max_dest > 0 else 1  # safe default
+
+    # Paid tiers: 0 means unlimited
+    if max_dest == 0:
+        return None
+
+    return max_dest
+
+
+def _get_max_sources(tier: dict[str, Any]) -> int | None:
+    """Return the maximum number of IMAP source integrations allowed by *tier*.
+
+    Returns:
+        ``None``  — unlimited (paid tiers with ``max_mailboxes == 0``)
+        ``0``     — no mailboxes allowed (free tier)
+        positive  — the configured limit
+    """
+    tier_id: str = tier.get("id", _FREE_TIER_ID)
+    max_mb: int = tier.get("max_mailboxes", 0)
+
+    # Free tier: 0 means "no access" (not "unlimited")
+    if tier_id == _FREE_TIER_ID:
+        return 0
+
+    # Paid tiers: 0 means unlimited
+    if max_mb == 0:
+        return None
+
+    return max_mb
+
+
+def _check_quota(db: Session, owner_id: str, direction: str, integration_type: str) -> None:
+    """Raise 403 if the user has reached their integration quota.
+
+    Quota rules:
+    * DESTINATION integrations are limited by ``max_storage_destinations``.
+    * SOURCE integrations of type IMAP are limited by ``max_mailboxes``.
+    * Other SOURCE types (WATCH_FOLDER, WEBHOOK) are not quota-limited yet.
+    """
+    tier_id = get_user_tier_id(db, owner_id)
+    tier = get_tier(tier_id, db)
+
+    if direction == IntegrationDirection.DESTINATION:
+        max_dest = _get_max_destinations(tier)
+        if max_dest is not None:
+            current_count = (
+                db.query(UserIntegration)
+                .filter(
+                    UserIntegration.owner_id == owner_id,
+                    UserIntegration.direction == IntegrationDirection.DESTINATION,
+                )
+                .count()
+            )
+            if current_count >= max_dest:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        f"You have reached your plan limit of {max_dest} storage destination(s). "
+                        "Please remove an existing destination or upgrade your plan."
+                    ),
+                )
+
+    elif direction == IntegrationDirection.SOURCE and integration_type in _MAILBOX_SOURCE_TYPES:
+        max_src = _get_max_sources(tier)
+
+        if max_src == 0:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your current plan does not include email ingestion. Upgrade to a paid plan to add IMAP sources.",
+            )
+
+        if max_src is not None:
+            current_count = (
+                db.query(UserIntegration)
+                .filter(
+                    UserIntegration.owner_id == owner_id,
+                    UserIntegration.direction == IntegrationDirection.SOURCE,
+                    UserIntegration.integration_type.in_(list(_MAILBOX_SOURCE_TYPES)),
+                )
+                .count()
+            )
+            if current_count >= max_src:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        f"You have reached your plan limit of {max_src} IMAP source(s). "
+                        "Please remove an existing source or upgrade your plan."
+                    ),
+                )
+
 
 # ---------------------------------------------------------------------------
 # Pydantic schemas
@@ -70,6 +193,14 @@ class IntegrationUpdate(BaseModel):
     config: dict[str, Any] | None = None
     credentials: dict[str, Any] | None = None
     is_active: bool | None = None
+
+
+class IntegrationTestRequest(BaseModel):
+    """Schema for testing an integration connection without saving it."""
+
+    integration_type: str = Field(..., description="Integration type (e.g. 'IMAP', 'S3', 'DROPBOX')")
+    config: dict[str, Any] | None = Field(default=None, description="Non-sensitive configuration")
+    credentials: dict[str, Any] | None = Field(default=None, description="Credentials for the connection test")
 
 
 # ---------------------------------------------------------------------------
@@ -199,9 +330,14 @@ def create_integration(
 
     ``credentials`` are encrypted at rest using Fernet symmetric encryption
     before being persisted and are **never** returned in API responses.
+
+    Quota is enforced against the user's subscription plan before the
+    integration is persisted.
     """
     _validate_direction(body.direction)
     _validate_integration_type(body.integration_type)
+
+    _check_quota(db, owner_id, body.direction, body.integration_type)
 
     integration = UserIntegration(
         owner_id=owner_id,
@@ -342,3 +478,193 @@ def get_integration_credentials(
 
     credentials = _decode_credentials(integration.credentials)
     return {"credentials": credentials or {}}
+
+
+# ---------------------------------------------------------------------------
+# Connection test helpers
+# ---------------------------------------------------------------------------
+
+
+def _test_imap_connection(config: dict[str, Any] | None, credentials: dict[str, Any] | None) -> dict[str, Any]:
+    """Test an IMAP connection using the provided config and credentials."""
+    import imaplib
+
+    cfg = config or {}
+    creds = credentials or {}
+    host = cfg.get("host", "")
+    port = int(cfg.get("port", 993))
+    username = cfg.get("username", "")
+    password = creds.get("password", "")
+    use_ssl = cfg.get("use_ssl", True)
+
+    if not host or not username or not password:
+        return {"success": False, "message": "Missing required fields: host, username, and password"}
+
+    try:
+        if use_ssl:
+            mail = imaplib.IMAP4_SSL(host, port)
+        else:
+            mail = imaplib.IMAP4(host, port)
+        mail.login(username, password)
+        mail.logout()
+        return {"success": True, "message": "IMAP connection successful"}
+    except OSError as exc:
+        return {"success": False, "message": f"Connection error: {exc}"}
+    except Exception as exc:  # noqa: BLE001
+        return {"success": False, "message": f"IMAP error: {exc}"}
+
+
+def _test_s3_connection(config: dict[str, Any] | None, credentials: dict[str, Any] | None) -> dict[str, Any]:
+    """Test an S3 connection by calling HeadBucket."""
+    try:
+        import boto3
+        from botocore.exceptions import BotoCoreError, ClientError
+    except ImportError:
+        return {"success": False, "message": "boto3 is not installed"}
+
+    cfg = config or {}
+    creds = credentials or {}
+    bucket = cfg.get("bucket", "")
+    region = cfg.get("region", "us-east-1")
+
+    if not bucket:
+        return {"success": False, "message": "Missing required field: bucket"}
+
+    try:
+        client = boto3.client(
+            "s3",
+            region_name=region,
+            aws_access_key_id=creds.get("access_key_id", ""),
+            aws_secret_access_key=creds.get("secret_access_key", ""),
+            endpoint_url=cfg.get("endpoint_url"),
+        )
+        client.head_bucket(Bucket=bucket)
+        return {"success": True, "message": f"S3 bucket '{bucket}' is accessible"}
+    except (BotoCoreError, ClientError) as exc:
+        return {"success": False, "message": f"S3 error: {exc}"}
+    except Exception as exc:  # noqa: BLE001
+        return {"success": False, "message": f"Unexpected error: {exc}"}
+
+
+def _test_webdav_connection(config: dict[str, Any] | None, credentials: dict[str, Any] | None) -> dict[str, Any]:
+    """Test a WebDAV/Nextcloud connection by issuing an HTTP PROPFIND."""
+    import urllib.request
+
+    cfg = config or {}
+    creds = credentials or {}
+    url = cfg.get("url", "")
+    username = creds.get("username", "")
+    password = creds.get("password", "")
+
+    if not url:
+        return {"success": False, "message": "Missing required field: url"}
+
+    # Only allow http/https to prevent file:// or other custom scheme attacks
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        return {"success": False, "message": "URL must use http or https scheme"}
+
+    try:
+        import base64
+
+        req = urllib.request.Request(url, method="PROPFIND")  # noqa: S310
+        if username and password:
+            token = base64.b64encode(f"{username}:{password}".encode()).decode()
+            req.add_header("Authorization", f"Basic {token}")
+        req.add_header("Depth", "0")
+        with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
+            if resp.status < 400:
+                return {"success": True, "message": "WebDAV connection successful"}
+            return {"success": False, "message": f"WebDAV returned HTTP {resp.status}"}
+    except Exception as exc:  # noqa: BLE001
+        return {"success": False, "message": f"WebDAV error: {exc}"}
+
+
+_CONNECTION_TESTERS: dict[str, Any] = {
+    IntegrationType.IMAP: _test_imap_connection,
+    IntegrationType.S3: _test_s3_connection,
+    IntegrationType.WEBDAV: _test_webdav_connection,
+    IntegrationType.NEXTCLOUD: _test_webdav_connection,
+}
+
+
+# ---------------------------------------------------------------------------
+# Test & quota endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.post("/test", summary="Test an integration connection without saving")
+def test_integration_connection(
+    request: Request,
+    body: IntegrationTestRequest,
+    owner_id: CurrentOwner,
+) -> dict[str, Any]:
+    """Test integration credentials without persisting anything.
+
+    Useful for the "Test connection" button in the UI before the user saves
+    a new integration.  Returns ``{"success": bool, "message": str}``.
+    """
+    _validate_integration_type(body.integration_type)
+
+    tester = _CONNECTION_TESTERS.get(body.integration_type)
+    if tester is None:
+        return {
+            "success": False,
+            "message": f"Connection testing is not yet supported for '{body.integration_type}'. "
+            "The integration can still be saved and will be validated on first use.",
+        }
+
+    return tester(body.config, body.credentials)
+
+
+@router.get("/quota/", summary="Get integration quota information for the current user")
+def get_integration_quota(
+    request: Request,
+    db: DbSession,
+    owner_id: CurrentOwner,
+) -> dict[str, Any]:
+    """Return the user's current integration usage vs. their plan quota.
+
+    Includes separate counts for destinations and IMAP sources.
+    """
+    tier_id = get_user_tier_id(db, owner_id)
+    tier = get_tier(tier_id, db)
+
+    max_dest = _get_max_destinations(tier)
+    max_src = _get_max_sources(tier)
+
+    dest_count = (
+        db.query(UserIntegration)
+        .filter(
+            UserIntegration.owner_id == owner_id,
+            UserIntegration.direction == IntegrationDirection.DESTINATION,
+        )
+        .count()
+    )
+
+    src_count = (
+        db.query(UserIntegration)
+        .filter(
+            UserIntegration.owner_id == owner_id,
+            UserIntegration.direction == IntegrationDirection.SOURCE,
+            UserIntegration.integration_type.in_(list(_MAILBOX_SOURCE_TYPES)),
+        )
+        .count()
+    )
+
+    return {
+        "tier_id": tier_id,
+        "tier_name": tier.get("name", tier_id),
+        "destinations": {
+            "current_count": dest_count,
+            "max_allowed": max_dest,
+            "can_add": max_dest is None or dest_count < max_dest,
+        },
+        "sources": {
+            "current_count": src_count,
+            "max_allowed": max_src,
+            "can_add": max_src is None or (max_src > 0 and src_count < max_src),
+        },
+    }
