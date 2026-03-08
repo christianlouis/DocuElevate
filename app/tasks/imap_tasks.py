@@ -18,6 +18,9 @@ from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES
 # Database session for per-user IMAP accounts (imported lazily to avoid circular imports)
 _db_session_factory = None
 
+# Maximum length to store as last_error to prevent DB bloat
+_MAX_ERROR_LENGTH = 500
+
 
 def _get_db_session():
     """Return a new SQLAlchemy session (lazy import to avoid startup issues)."""
@@ -149,10 +152,11 @@ def _pull_user_imap_accounts() -> None:
             accounts = db.query(UserImapAccount).filter(UserImapAccount.is_active.is_(True)).all()
             logger.info("Processing %d per-user IMAP account(s)", len(accounts))
             for acct in accounts:
-                mailbox_key = f"user_{acct.owner_id}_{acct.id}"
+                # Use a descriptive identifier for logging and processed-email cache keys
+                account_identifier = f"user_{acct.owner_id}_{acct.id}"
                 try:
                     pull_inbox(
-                        mailbox_key=mailbox_key,
+                        mailbox_key=account_identifier,
                         host=acct.host,
                         port=acct.port,
                         username=acct.username,
@@ -165,7 +169,7 @@ def _pull_user_imap_accounts() -> None:
                     acct.last_error = None
                     db.commit()
                 except Exception as exc:  # noqa: BLE001
-                    error_msg = str(exc)[:500]
+                    error_msg = str(exc)[:_MAX_ERROR_LENGTH]
                     logger.error(
                         "Error pulling user IMAP account %d (%s@%s): %s",
                         acct.id,

@@ -402,7 +402,9 @@ class UserImapAccount(Base):
     host = Column(String(255), nullable=False)
     port = Column(Integer, nullable=False, default=993)
     username = Column(String(255), nullable=False)
-    # Password stored in plain text — the admin is responsible for access control
+    # Password stored in plain text — the admin is responsible for access control.
+    # TODO: Encrypt at rest using cryptography.fernet before deploying in high-security
+    # environments. See SECURITY_AUDIT.md for full risk assessment and mitigation notes.
     password = Column(String(1024), nullable=False)
     use_ssl = Column(Boolean, nullable=False, default=True)
 

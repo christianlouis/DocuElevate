@@ -538,7 +538,8 @@ function imapAccountsApp() {
       if (!iso) return '';
       try {
         return new Date(iso).toLocaleString();
-      } catch {
+      } catch (e) {
+        console.warn('Failed to parse date:', iso, e);
         return iso;
       }
     },
@@ -625,7 +626,7 @@ function imapAccountsApp() {
         this.closeModal();
         this.showAlert('success', 'Saved', this.editingAccount ? 'Account updated.' : 'Account added successfully.');
       } catch (err) {
-        this.formError = 'Network error. Please try again.';
+        this.formError = `Network error: ${err.message || 'Unknown error'}. Please try again.`;
       } finally {
         this.saving = false;
       }
@@ -659,8 +660,8 @@ function imapAccountsApp() {
         });
         const data = await resp.json();
         this.testResult = data;
-      } catch {
-        this.testResult = { success: false, message: 'Network error during test.' };
+      } catch (err) {
+        this.testResult = { success: false, message: `Network error: ${err.message || 'Unknown error'}` };
       } finally {
         this.testing = false;
       }
@@ -679,8 +680,8 @@ function imapAccountsApp() {
         } else {
           this.showAlert('error', `${acct.name}: Connection Failed`, data.message);
         }
-      } catch {
-        this.showAlert('error', 'Test Failed', 'Network error.');
+      } catch (err) {
+        this.showAlert('error', 'Test Failed', `Network error: ${err.message || 'Unknown error'}`);
       } finally {
         this.testingId = null;
       }
@@ -712,8 +713,8 @@ function imapAccountsApp() {
           const data = await resp.json();
           this.showAlert('error', 'Delete Failed', data.detail || 'Could not delete account.');
         }
-      } catch {
-        this.showAlert('error', 'Delete Failed', 'Network error.');
+      } catch (err) {
+        this.showAlert('error', 'Delete Failed', `Network error: ${err.message || 'Unknown error'}`);
       } finally {
         this.deleting = false;
       }
