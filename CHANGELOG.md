@@ -10,6 +10,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.104.0 (2026-03-08)
+
+### Bug Fixes
+
+- Correct token_prefix comment to match implementation (12 chars)
+  ([`2f95feb`](https://github.com/christianlouis/DocuElevate/commit/2f95febf71881d8e4b86aca29f931a5a6c2665c8))
+
+- **security**: Address CodeQL clear-text logging and weak hashing alerts
+  ([`a7eff2c`](https://github.com/christianlouis/DocuElevate/commit/a7eff2c0331119f7b04ba4d6d39a864590621222))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`fc9caf4`](https://github.com/christianlouis/DocuElevate/commit/fc9caf4f9b35c666c1a03b8c1857c5dea5ff6484))
+
+### Documentation
+
+- Add API tokens and webhook ingestion documentation
+  ([`a982959`](https://github.com/christianlouis/DocuElevate/commit/a9829598c509a230672daf53bb8656eb20f1a902))
+
+### Features
+
+- **api**: Add personal API tokens and enhance webhook integration UI
+  ([`c3bb93c`](https://github.com/christianlouis/DocuElevate/commit/c3bb93c1971b51ca2ef09b733e273a569604e85a))
+
+
 ## v0.103.0 (2026-03-08)
 
 ### Bug Fixes
