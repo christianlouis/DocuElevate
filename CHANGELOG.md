@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.89.1 (2026-03-08)
+
+### Bug Fixes
+
+- **ui**: Replace Tailwind v3-only peer toggles with Alpine.js-driven toggles in admin users modal
+  ([`56f346a`](https://github.com/christianlouis/DocuElevate/commit/56f346ac20ea2146b281430a03c60bd8445b3bf1))
+
+
 ## v0.89.0 (2026-03-08)
 
 ### Bug Fixes
