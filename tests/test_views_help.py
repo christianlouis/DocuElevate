@@ -182,8 +182,10 @@ class TestHelpViewUserContext:
         # No user context metadata should appear
         assert b"DocuElevate User Context" not in resp.content
 
-    def test_user_context_passed_to_template_when_logged_in(self):
-        """Logged-in user's name/email should be available in the template context."""
+    def test_user_context_rendered_in_zammad_form_when_logged_in(self):
+        """With Zammad form enabled, logged-in user's name/email should appear in the script block."""
+        from unittest.mock import patch
+
         tc = self._make_app_with_session(
             user_data={
                 "name": "Test User",
@@ -191,25 +193,70 @@ class TestHelpViewUserContext:
                 "preferred_username": "testuser",
             }
         )
-        resp = tc.get("/help")
+        with patch("app.views.help.settings") as mock_settings:
+            mock_settings.external_hostname = "localhost"
+            mock_settings.zammad_url = "https://zammad.example.com"
+            mock_settings.zammad_form_enabled = True
+            mock_settings.zammad_chat_enabled = False
+            mock_settings.zammad_chat_id = 1
+            mock_settings.support_email = None
+            resp = tc.get("/help")
         assert resp.status_code == 200
-        # The template receives user_name, user_email, user_id but they only
-        # appear in the rendered HTML when Zammad widgets are enabled.
-        # With default settings (Zammad disabled), the values are still passed
-        # but not rendered. Verify the view doesn't error out.
+        assert b"Test User" in resp.content
+        assert b"test@example.com" in resp.content
+        assert b"testuser" in resp.content
+        assert b"DocuElevate User Context" in resp.content
 
-    def test_user_context_fallback_for_missing_fields(self):
-        """User session with only email should still resolve user_id correctly."""
+    def test_user_context_rendered_in_zammad_chat_when_logged_in(self):
+        """With Zammad chat enabled, user's name/email should appear in the ZammadChat constructor."""
+        from unittest.mock import patch
+
+        tc = self._make_app_with_session(
+            user_data={
+                "name": "Chat User",
+                "email": "chat@example.com",
+                "preferred_username": "chatuser",
+            }
+        )
+        with patch("app.views.help.settings") as mock_settings:
+            mock_settings.external_hostname = "localhost"
+            mock_settings.zammad_url = "https://zammad.example.com"
+            mock_settings.zammad_form_enabled = False
+            mock_settings.zammad_chat_enabled = True
+            mock_settings.zammad_chat_id = 1
+            mock_settings.support_email = None
+            resp = tc.get("/help")
+        assert resp.status_code == 200
+        assert b"Chat User" in resp.content
+        assert b"chat@example.com" in resp.content
+
+    def test_user_id_falls_back_to_email(self):
+        """When preferred_username is absent, user_id should resolve to email."""
+        from unittest.mock import patch
+
         tc = self._make_app_with_session(
             user_data={
                 "email": "only-email@example.com",
             }
         )
-        resp = tc.get("/help")
+        with patch("app.views.help.settings") as mock_settings:
+            mock_settings.external_hostname = "localhost"
+            mock_settings.zammad_url = "https://zammad.example.com"
+            mock_settings.zammad_form_enabled = True
+            mock_settings.zammad_chat_enabled = False
+            mock_settings.zammad_chat_id = 1
+            mock_settings.support_email = None
+            resp = tc.get("/help")
         assert resp.status_code == 200
+        # user_id falls back to email; check it appears in the Username metadata line
+        content = resp.text
+        assert "only-email@example.com" in content
+        assert "DocuElevate User Context" in content
 
-    def test_user_context_with_display_name_fallback(self):
-        """When 'name' is absent, display_name should be used as fallback."""
+    def test_user_name_falls_back_to_display_name(self):
+        """When 'name' is absent, display_name should be used as the user_name fallback."""
+        from unittest.mock import patch
+
         tc = self._make_app_with_session(
             user_data={
                 "display_name": "Display Only",
@@ -217,8 +264,17 @@ class TestHelpViewUserContext:
                 "id": "user-123",
             }
         )
-        resp = tc.get("/help")
+        with patch("app.views.help.settings") as mock_settings:
+            mock_settings.external_hostname = "localhost"
+            mock_settings.zammad_url = "https://zammad.example.com"
+            mock_settings.zammad_form_enabled = True
+            mock_settings.zammad_chat_enabled = False
+            mock_settings.zammad_chat_id = 1
+            mock_settings.support_email = None
+            resp = tc.get("/help")
         assert resp.status_code == 200
+        # display_name used as fallback for user_name
+        assert b"Display Only" in resp.content
 
 
 @pytest.mark.integration

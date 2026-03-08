@@ -495,12 +495,14 @@ $(function() {
   {% if user_name or user_email %}
   {# ── Auto-fill Zammad form fields from the authenticated user context ── #}
   $('#zammad-feedback-form').on('click', function() {
+    var maxAttempts = 30;   /* ~3 s total wait for modal to appear */
+    var retryDelayMs = 100;
     var attempts = 0;
     var prefillForm = function() {
       var $modal = $('.zammad-form-modal, .js-zammad-form-modal');
-      if ($modal.length === 0 && attempts < 30) {
+      if ($modal.length === 0 && attempts < maxAttempts) {
         attempts++;
-        setTimeout(prefillForm, 100);
+        setTimeout(prefillForm, retryDelayMs);
         return;
       }
       var $name = $modal.find('input[name="name"]');
@@ -512,7 +514,8 @@ $(function() {
       if ($email.length && !$email.val()) $email.val({{ user_email | tojson }});
       {% endif %}
     };
-    setTimeout(prefillForm, 200);
+    var initialDelayMs = 200; /* wait for modal DOM to start rendering */
+    setTimeout(prefillForm, initialDelayMs);
   });
 
   {# ── Append user metadata to the ticket body before Zammad posts it ── #}
