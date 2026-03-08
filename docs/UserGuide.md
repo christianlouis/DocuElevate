@@ -240,6 +240,55 @@ can create multiple tokens, each with a descriptive name.
 > **Security tip:** Create a dedicated token for each integration and revoke it
 > immediately if compromised. Never share tokens or commit them to source control.
 
+## Sharing Documents
+
+DocuElevate lets you share individual documents with anyone via a secure,
+time-limited link.  Recipients do not need a DocuElevate account.
+
+### Creating a Shared Link
+
+1. Open the document detail page (`/files/{id}`) and click the **Share** button
+   in the Actions panel — this opens the Shared Links page with the file ID
+   pre-filled.  Alternatively, go to **Avatar → Shared Links** in the navigation.
+2. Enter the **File ID** you want to share (shown in the document detail URL).
+3. Choose an optional **label** (e.g. "For Alice") to identify the link later.
+4. Set an **expiry** — choose from 1 hour up to 30 days, or leave blank for a
+   link that never expires.
+5. Optionally set a **max downloads** limit.  Once that number is reached the
+   link is automatically invalidated.
+6. Optionally set a **password**.  Recipients will be prompted to enter it before
+   they can download the file.
+7. Click **Create Link** and copy the generated URL to share with the recipient.
+
+### What Recipients See
+
+When a recipient visits the `/share/{token}` URL they see a simple landing page:
+
+- The document filename and optional label.
+- Expiry date and remaining download count (if set).
+- If the link is password-protected they must enter the password first.
+- A **Download** button that serves the file directly.
+
+If the link has expired, been revoked, or reached its download limit, the
+recipient sees a clear "Link Unavailable" message.
+
+### Managing Your Shared Links
+
+The **Shared Links** management page (`/shared-links`) shows all links you have
+created with their current status:
+
+| Status | Meaning |
+|--------|---------|
+| **Active** | Link is valid and can be used by recipients |
+| **Expired** | Link's expiry date has passed |
+| **Limit reached** | View/download count has been exhausted |
+| **Revoked** | You manually deactivated the link |
+
+Click **Revoke** next to any active link to immediately invalidate it.
+
+> **Security tip:** Revoke shared links as soon as they are no longer needed.
+> Use short expiry times and download limits for sensitive documents.
+
 ## Managing Documents
 
 The **Files** page provides access to all processed documents:

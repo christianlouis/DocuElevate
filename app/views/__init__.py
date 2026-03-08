@@ -26,6 +26,8 @@ from app.views.plans import router as plans_router  # Admin Plan Designer
 from app.views.queue import router as queue_router
 from app.views.search import router as search_router
 from app.views.settings import router as settings_router
+from app.views.share import router as share_router
+from app.views.shared_links import router as shared_links_router
 from app.views.status import router as status_router
 from app.views.subscriptions import router as subscriptions_router  # Pricing + subscription pages
 from app.views.wizard import router as wizard_router
@@ -36,6 +38,8 @@ router.include_router(wizard_router)  # Wizard first (for /setup)
 router.include_router(db_wizard_router)  # Database wizard
 router.include_router(admin_users_router)  # Admin user management
 router.include_router(api_tokens_router)  # API token management
+router.include_router(shared_links_router)  # Shared links management
+router.include_router(share_router)  # Public share landing pages (no auth)
 router.include_router(backup_router)  # Backup dashboard
 router.include_router(general_router)
 router.include_router(status_router)
