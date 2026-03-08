@@ -164,6 +164,41 @@ def send_password_reset_email(email: str, username: str, token: str, base_url: s
     _smtp_send(subject, html_body, plain_body, email)
 
 
+def send_forgot_username_email(email: str, username: str) -> None:
+    """Send an email reminding the user of their username.
+
+    Args:
+        email: Recipient email address.
+        username: The user's username to include in the message.
+    """
+    subject = "Your DocuElevate username"
+    html_body = f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f4f4f5;margin:0;padding:32px;">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,.08);">
+    <h1 style="color:#4f46e5;font-size:24px;margin-bottom:8px;">Your Username</h1>
+    <p style="color:#374151;">You requested a reminder of your DocuElevate username.</p>
+    <div style="text-align:center;margin:32px 0;background:#f3f4f6;border-radius:8px;padding:20px;">
+      <p style="color:#6b7280;font-size:13px;margin-bottom:4px;">Your username is:</p>
+      <p style="color:#111827;font-size:22px;font-weight:700;font-family:monospace;">{username}</p>
+    </div>
+    <p style="color:#374151;font-size:14px;">You can sign in using your username <strong>or</strong> your email address.</p>
+    <p style="color:#6b7280;font-size:13px;margin-top:16px;">If you did not request this reminder, you can safely ignore this email.</p>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
+    <p style="color:#9ca3af;font-size:12px;text-align:center;">DocuElevate &middot; Intelligent Document Processing</p>
+  </div>
+</body>
+</html>"""
+    plain_body = (
+        f"You requested a reminder of your DocuElevate username.\n\n"
+        f"Your username is: {username}\n\n"
+        "You can sign in using your username or your email address.\n\n"
+        "If you did not request this, please ignore this email."
+    )
+    _smtp_send(subject, html_body, plain_body, email)
+
+
 def build_session_user(user: object) -> dict:
     """Build the session user dict for a LocalUser, matching the OAuth session format.
 

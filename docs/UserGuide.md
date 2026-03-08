@@ -28,8 +28,29 @@ If OpenID Connect authentication is configured:
 3. Log in with your existing credentials on that platform
 4. You'll be redirected back to DocuElevate after successful authentication
 
-#### User Sessions
-- Once authenticated, your session will remain active until you log out or it expires
+#### Local User Accounts
+If your administrator has created a local (email/password) account for you:
+
+1. You'll see a "Sign in with username" form on the login page
+2. Enter your **username or email address** — both are accepted
+3. Enter your password and click **Sign in**
+
+##### Forgot your password?
+If you can't remember your password:
+1. Click **Forgot password?** below the sign-in form
+2. Enter your email address and click **Send reset link**
+3. Check your inbox for a password reset email (valid for 24 hours)
+4. Click the link in the email and enter your new password
+
+##### Forgot your username?
+If you can't remember your username:
+1. Click **Forgot username?** below the sign-in form
+2. Enter your email address and click **Send username reminder**
+3. You'll receive an email with your username
+
+> **Tip:** You can always sign in with your email address directly — you don't need to look up your username.
+
+
 - Click the "Logout" button in the top navigation bar to end your session
 - For security, sessions automatically expire after a period of inactivity
 

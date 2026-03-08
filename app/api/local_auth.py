@@ -31,6 +31,7 @@ from app.utils.local_auth import (
     generate_token,
     hash_password,
     is_token_expired,
+    send_forgot_username_email,
     send_password_reset_email,
     send_verification_email,
 )
@@ -79,6 +80,12 @@ class PasswordResetBody(BaseModel):
     new_password_confirm: str
 
 
+class ForgotUsernameBody(BaseModel):
+    """Body for the forgot-username endpoint."""
+
+    email: str
+
+
 # ---------------------------------------------------------------------------
 # Page routes (return HTML)
 # ---------------------------------------------------------------------------
@@ -105,6 +112,32 @@ async def signup_page(request: Request) -> Any:
 async def verify_email_sent_page(request: Request) -> Any:
     """Render the verify-email-sent confirmation page."""
     return templates.TemplateResponse("verify_email_sent.html", {"request": request})
+
+
+@router.get("/forgot-username", include_in_schema=False)
+async def forgot_username_page(request: Request) -> Any:
+    """Render the forgot-username page where users can request a username reminder email."""
+    return templates.TemplateResponse(
+        "forgot_username.html",
+        {
+            "request": request,
+            "csrf_token": getattr(request.state, "csrf_token", ""),
+            "app_version": settings.version,
+        },
+    )
+
+
+@router.get("/forgot-password", include_in_schema=False)
+async def forgot_password_page(request: Request) -> Any:
+    """Render the forgot-password page where users can request a reset email."""
+    return templates.TemplateResponse(
+        "forgot_password.html",
+        {
+            "request": request,
+            "csrf_token": getattr(request.state, "csrf_token", ""),
+            "app_version": settings.version,
+        },
+    )
 
 
 @router.get("/reset-password", include_in_schema=False)
@@ -337,3 +370,19 @@ async def reset_password(body: PasswordResetBody, db: DbSession) -> dict[str, st
 
     logger.info("[SECURITY] PASSWORD_RESET_SUCCESS user=%s", user.email)
     return {"message": "Password updated successfully."}
+
+
+@router.post("/api/auth/forgot-username")
+async def forgot_username(body: ForgotUsernameBody, db: DbSession) -> dict[str, str]:
+    """Send a username reminder email.
+
+    Always returns 200 to avoid leaking whether an email is registered.
+    """
+    user = db.query(LocalUser).filter(LocalUser.email == body.email).first()
+    if user:
+        try:
+            send_forgot_username_email(user.email, user.username)
+        except Exception as exc:
+            logger.warning("Failed to send forgot-username email to %s: %s", user.email, exc)
+
+    return {"message": "Username reminder sent if account exists."}

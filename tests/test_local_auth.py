@@ -6,9 +6,12 @@ Covers:
 - POST /api/auth/resend-verification
 - POST /api/auth/request-password-reset
 - POST /api/auth/reset-password
+- POST /api/auth/forgot-username
 - GET  /signup (page route)
 - GET  /verify-email-sent (page route)
 - GET  /reset-password (page route)
+- GET  /forgot-password (page route)
+- GET  /forgot-username (page route)
 - app/utils/local_auth utility functions
 - auth() login flow with LocalUser
 """
@@ -801,3 +804,116 @@ def test_admin_local_user_list_after_create(admin_session_client):
     assert resp.status_code == 200
     users = resp.json()
     assert any(u["email"] == "listed@example.com" for u in users)
+
+
+# ---------------------------------------------------------------------------
+# Integration tests: forgot-username endpoint
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_forgot_username_returns_200_for_existing_email(la_client, la_session):
+    """POST /api/auth/forgot-username returns 200 and sends email when account exists."""
+    la_session.add(
+        LocalUser(
+            email="remindme@example.com",
+            username="remindmeuser",
+            hashed_password=hash_password("pw123456"),
+            is_active=True,
+        )
+    )
+    la_session.commit()
+
+    with patch("app.api.local_auth.send_forgot_username_email") as mock_send:
+        resp = la_client.post("/api/auth/forgot-username", json={"email": "remindme@example.com"})
+
+    assert resp.status_code == 200
+    assert "reminder" in resp.json()["message"].lower()
+    mock_send.assert_called_once_with("remindme@example.com", "remindmeuser")
+
+
+@pytest.mark.integration
+def test_forgot_username_returns_200_for_unknown_email(la_client):
+    """POST /api/auth/forgot-username always returns 200 (no info leak)."""
+    with patch("app.api.local_auth.send_forgot_username_email") as mock_send:
+        resp = la_client.post("/api/auth/forgot-username", json={"email": "nobody@example.com"})
+
+    assert resp.status_code == 200
+    mock_send.assert_not_called()
+
+
+@pytest.mark.integration
+def test_forgot_username_smtp_failure_does_not_raise(la_client, la_session):
+    """POST /api/auth/forgot-username returns 200 even when SMTP fails."""
+    la_session.add(
+        LocalUser(
+            email="smtpfail@example.com",
+            username="smtpfailuser",
+            hashed_password=hash_password("pw123456"),
+            is_active=True,
+        )
+    )
+    la_session.commit()
+
+    with patch("app.api.local_auth.send_forgot_username_email", side_effect=RuntimeError("SMTP down")):
+        resp = la_client.post("/api/auth/forgot-username", json={"email": "smtpfail@example.com"})
+
+    assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Integration tests: new page routes
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_forgot_password_page(la_client):
+    """GET /forgot-password returns 200."""
+    with patch("app.api.local_auth.settings") as mock_settings:
+        mock_settings.version = "test"
+        resp = la_client.get("/forgot-password")
+    assert resp.status_code == 200
+    assert b"password" in resp.content.lower()
+
+
+@pytest.mark.integration
+def test_forgot_username_page(la_client):
+    """GET /forgot-username returns 200."""
+    with patch("app.api.local_auth.settings") as mock_settings:
+        mock_settings.version = "test"
+        resp = la_client.get("/forgot-username")
+    assert resp.status_code == 200
+    assert b"username" in resp.content.lower()
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: send_forgot_username_email utility
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_send_forgot_username_email_calls_smtp():
+    """send_forgot_username_email calls _smtp_send with the username."""
+    from app.utils.local_auth import send_forgot_username_email
+
+    with patch("app.utils.local_auth._smtp_send") as mock_smtp:
+        send_forgot_username_email("u@example.com", "myusername")
+
+    mock_smtp.assert_called_once()
+    args = mock_smtp.call_args[0]
+    # subject, html_body, plain_body, recipient
+    assert "myusername" in args[1]  # HTML body
+    assert "myusername" in args[2]  # plain body
+    assert args[3] == "u@example.com"
+
+
+@pytest.mark.unit
+def test_send_forgot_username_email_no_smtp_raises():
+    """send_forgot_username_email raises RuntimeError when EMAIL_HOST is not set."""
+    from app.utils.local_auth import send_forgot_username_email
+
+    with patch("app.utils.local_auth.settings") as mock_settings:
+        mock_settings.email_host = ""
+
+        with pytest.raises(RuntimeError, match="SMTP"):
+            send_forgot_username_email("u@example.com", "myusername")
