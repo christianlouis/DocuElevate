@@ -125,11 +125,11 @@ def attach_logo(msg):
 def _prepare_recipients(recipients):
     """Helper function to prepare email recipients list."""
     if not recipients:
-        if not settings.email_default_recipient:
+        if not settings.dest_email_default_recipient:
             error_msg = "No recipients specified and no default recipient configured"
             logger.error(error_msg)
             return None, error_msg
-        return [settings.email_default_recipient], None
+        return [settings.dest_email_default_recipient], None
     elif isinstance(recipients, str):
         return [recipients], None  # Convert single email to list
     return recipients, None
@@ -139,17 +139,17 @@ def _send_email_with_smtp(msg, filename, recipients):
     """Helper function to handle SMTP connection and sending."""
     try:
         # First try to resolve the hostname
-        socket.gethostbyname(settings.email_host)
+        socket.gethostbyname(settings.dest_email_host)
 
         # Connect to the SMTP server
-        with smtplib.SMTP(settings.email_host, settings.email_port, timeout=30) as server:
+        with smtplib.SMTP(settings.dest_email_host, settings.dest_email_port, timeout=30) as server:
             # Use TLS if specified
-            if settings.email_use_tls:
+            if settings.dest_email_use_tls:
                 server.starttls()
 
             # Login if credentials are provided
-            if settings.email_username and settings.email_password:
-                server.login(settings.email_username, settings.email_password)
+            if settings.dest_email_username and settings.dest_email_password:
+                server.login(settings.dest_email_username, settings.dest_email_password)
 
             # Send the email
             server.send_message(msg)
@@ -157,11 +157,11 @@ def _send_email_with_smtp(msg, filename, recipients):
         logger.info(f"Successfully sent {filename} via email to {', '.join(recipients)}")
         return None
     except socket.gaierror as e:
-        error_msg = f"Failed to resolve email host: {settings.email_host} - {str(e)}"
+        error_msg = f"Failed to resolve email host: {settings.dest_email_host} - {str(e)}"
         logger.error(error_msg)
         return {"status": "Failed", "reason": error_msg, "error": str(e)}
     except (ConnectionRefusedError, TimeoutError) as e:
-        error_msg = f"Connection error to SMTP server {settings.email_host}:{settings.email_port} - {str(e)}"
+        error_msg = f"Connection error to SMTP server {settings.dest_email_host}:{settings.dest_email_port} - {str(e)}"
         logger.error(error_msg)
         return {"status": "Failed", "reason": error_msg, "error": str(e)}
 
@@ -205,17 +205,17 @@ def upload_to_email(
     # Extract filename
     filename = os.path.basename(file_path)
 
-    # Check if email settings are configured
-    if not settings.email_host:
-        error_msg = "Email host is not configured"
+    # Check if email destination settings are configured
+    if not settings.dest_email_host:
+        error_msg = "Email destination host is not configured (DEST_EMAIL_HOST)"
         logger.error(f"[{task_id}] {error_msg}")
         log_task_progress(task_id, "upload_to_email", "skipped", error_msg, file_id=file_id)
         return {"status": "Skipped", "reason": error_msg}
 
     # Log email configuration for debugging
     logger.debug(
-        f"[{task_id}] Email config - Host: {settings.email_host}, Port: {settings.email_port}, "
-        f"Username: {settings.email_username}, TLS: {settings.email_use_tls}"
+        f"[{task_id}] Email destination config - Host: {settings.dest_email_host}, Port: {settings.dest_email_port}, "
+        f"Username: {settings.dest_email_username}, TLS: {settings.dest_email_use_tls}"
     )
 
     # Process recipients
@@ -236,7 +236,7 @@ def upload_to_email(
     try:
         # Create the email
         msg = MIMEMultipart("related")
-        msg["From"] = settings.email_sender or settings.email_username
+        msg["From"] = settings.dest_email_sender or settings.dest_email_username
         msg["To"] = ", ".join(recipients)
         msg["Subject"] = subject
 

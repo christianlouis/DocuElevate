@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ filename }} – DocuElevate</title>
+  <style>
+    body { margin: 0; padding: 0; background-color: #f4f4f5; font-family: Arial, Helvetica, sans-serif; }
+    .wrapper { max-width: 600px; margin: 32px auto; background: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.08); overflow: hidden; }
+    .header { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 32px 40px; text-align: center; }
+    .header img { max-height: 48px; }
+    .header h1 { color: #ffffff; font-size: 22px; margin: 16px 0 0; }
+    .body { padding: 32px 40px; }
+    .body p { color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 16px; }
+    .attachment-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px 20px; margin: 24px 0; }
+    .attachment-box .label { font-size: 11px; font-weight: bold; color: #6b7280; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+    .attachment-box .filename { color: #111827; font-size: 15px; font-weight: bold; word-break: break-all; }
+    .metadata-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+    .metadata-table td { padding: 6px 0; color: #374151; vertical-align: top; }
+    .metadata-table td:first-child { font-weight: bold; color: #6b7280; width: 40%; padding-right: 12px; }
+    .footer { background: #f9fafb; border-top: 1px solid #e5e7eb; padding: 20px 40px; text-align: center; color: #9ca3af; font-size: 12px; }
+    .footer a { color: #4f46e5; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      {% if has_logo %}
+      <img src="cid:logo" alt="{{ app_name }} logo">
+      {% endif %}
+      <h1>Document Delivery</h1>
+    </div>
+    <div class="body">
+      <p>{{ message }}</p>
+
+      <div class="attachment-box">
+        <div class="label">Attached file</div>
+        <div class="filename">📎 {{ filename }}</div>
+      </div>
+
+      {% if has_metadata and metadata %}
+      <p style="font-weight:bold; color:#374151; margin-bottom:8px;">Document metadata</p>
+      <table class="metadata-table">
+        {% for key, value in metadata.items() %}
+        <tr>
+          <td>{{ key }}</td>
+          <td>{{ value }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% endif %}
+
+      <p style="margin-top:24px; color:#6b7280; font-size:13px;">
+        This document was sent automatically by {{ app_name }}.{% if app_url %} Visit <a href="{{ app_url }}" style="color:#4f46e5;">{{ app_url }}</a> to manage your documents.{% endif %}
+      </p>
+    </div>
+    <div class="footer">
+      &copy; {{ current_year }} {{ app_name }} &middot; Intelligent Document Processing
+      {% if app_url %}&middot; <a href="{{ app_url }}">{{ app_url }}</a>{% endif %}
+    </div>
+  </div>
+</body>
+</html>

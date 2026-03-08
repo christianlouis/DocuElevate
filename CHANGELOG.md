@@ -10,6 +10,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.90.3 (2026-03-08)
+
+### Bug Fixes
+
+- **email**: Create missing email template and decouple email destination settings
+  ([`58c9b5d`](https://github.com/christianlouis/DocuElevate/commit/58c9b5d7f01941949db71b2816678ac6464d9d0f))
+
+
+## v0.90.2 (2026-03-08)
+
+### Bug Fixes
+
+- **tasks**: Remove erroneous in_progress log that regressed finalize_document_storage status when
+  PDF/A archival is enabled
+  ([`ff1310c`](https://github.com/christianlouis/DocuElevate/commit/ff1310c23ed6080f95957bf19fdb7cc179d10ecb))
+
+
+## v0.90.1 (2026-03-08)
+
+### Bug Fixes
+
+- **auth**: Return 401 for API paths in require_login to prevent wrong post-login redirect
+  ([`3aa5364`](https://github.com/christianlouis/DocuElevate/commit/3aa5364e0ca3eaceb37616bb9b3a9a55fc08b223))
+
+
 ## v0.90.0 (2026-03-08)
 
 ### Features

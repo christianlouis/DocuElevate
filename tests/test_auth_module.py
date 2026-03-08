@@ -185,6 +185,33 @@ class TestRequireLogin:
             assert isinstance(result, RedirectResponse)
             assert result.status_code == status.HTTP_302_FOUND
 
+    @pytest.mark.asyncio
+    async def test_returns_401_for_api_path_when_not_authenticated(self):
+        """Test returns 401 for /api/* paths instead of redirect-to-login.
+
+        Prevents the common.js /api/auth/whoami probe from overwriting
+        redirect_after_login, which would send the user to a JSON endpoint
+        after login instead of the page they originally requested.
+        """
+        from fastapi.responses import JSONResponse
+
+        with patch("app.auth.AUTH_ENABLED", True):
+
+            @require_login
+            async def test_api_endpoint(request: Request):
+                return {"data": "ok"}
+
+            mock_request = MagicMock(spec=Request)
+            mock_request.session = {}
+            mock_request.url = MagicMock()
+            mock_request.url.__str__ = MagicMock(return_value="http://localhost/api/auth/whoami")
+
+            result = await test_api_endpoint(mock_request)
+
+            assert isinstance(result, JSONResponse)
+            assert result.status_code == status.HTTP_401_UNAUTHORIZED
+            assert "redirect_after_login" not in mock_request.session
+
 
 @pytest.mark.unit
 class TestOAuthConfiguration:
