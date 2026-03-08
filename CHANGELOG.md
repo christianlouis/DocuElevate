@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.110.1 (2026-03-08)
+
+### Bug Fixes
+
+- **sentry**: Initialize Sentry after DB settings are loaded in lifespan
+  ([`5864a4e`](https://github.com/christianlouis/DocuElevate/commit/5864a4ed0630b87469c49232653062f286297953))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`b22f9a6`](https://github.com/christianlouis/DocuElevate/commit/b22f9a6af6856ed2cafa79dfb2909e20b554f2f9))
+
+
 ## v0.110.0 (2026-03-08)
 
 ### Code Style
