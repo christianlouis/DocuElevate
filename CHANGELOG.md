@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Continuous Integration
+
+- Fix CodeQL javascript language identifier mismatch
+  ([`3f8a95d`](https://github.com/christianlouis/DocuElevate/commit/3f8a95d8081c4ce3ad380e6391afa3bebb57bbb7))
+
+
 ## v0.91.0 (2026-03-08)
 
 ### Features
