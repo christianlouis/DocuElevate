@@ -1070,6 +1070,55 @@ payment processors.
 
 For detailed setup instructions, see the [Notifications Setup Guide](NotificationsSetup.md).
 
+#### Per-User Notification System
+
+In addition to the system-level Apprise notifications, DocuElevate includes a **per-user notification system** that gives each user full control over how they are notified about their own document events.
+
+**Notification Dashboard** — available at `/notifications` for every logged-in user. It has three tabs:
+
+| Tab | Description |
+|-----|-------------|
+| **Inbox** | In-app bell-icon notification feed. Persisted in the database; shows unread count badge in the navigation bar. Users can mark individual items or all items as read. |
+| **Targets** | User-defined notification channels: **Email (SMTP)** and **Webhook (HTTP POST)**. Each target can be tested independently from the UI. |
+| **Preferences** | Event/channel matrix. Users choose which channels are triggered for each event type. In-app notifications are always enabled. |
+
+**User-centric event types:**
+
+| Event | Description |
+|-------|-------------|
+| `document.processed` | A document uploaded by the user was successfully processed and uploaded to destinations |
+| `document.failed` | A document uploaded by the user failed during processing |
+
+**Email target configuration fields:**
+
+| Field | Description |
+|-------|-------------|
+| `smtp_host` | SMTP server hostname |
+| `smtp_port` | SMTP port (default `587`) |
+| `smtp_username` | SMTP login username |
+| `smtp_password` | SMTP login password (stored in database, masked in UI) |
+| `smtp_use_tls` | Enable STARTTLS (`true`/`false`, default `true`) |
+| `sender_email` | From address (defaults to `smtp_username` if omitted) |
+| `recipient_email` | Destination address for this target |
+
+**Webhook target configuration fields:**
+
+| Field | Description |
+|-------|-------------|
+| `url` | HTTP(S) URL to POST the notification payload to |
+| `secret` | Optional secret string sent as `X-DocuElevate-Secret` header |
+
+**Webhook payload format:**
+```json
+{
+  "event": "document.processed",
+  "title": "Document processed: invoice.pdf",
+  "message": "Your document 'invoice.pdf' has been successfully processed and uploaded."
+}
+```
+
+> **Note:** There are no additional environment variables for the per-user notification system — all settings are stored in the database and managed through the user-facing `/notifications` dashboard.
+
 ### Webhooks
 
 Webhooks notify external systems via HTTP POST when document events occur.
