@@ -358,6 +358,12 @@ GOOGLE_DRIVE_FOLDER_ID={{ folder_id|default('YOUR_FOLDER_ID', true) }}
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  // Store integration_id if provided (for per-user OAuth flow)
+  const integrationId = "{{ integration_id or '' }}";
+  if (integrationId) {
+    sessionStorage.setItem('oauth_integration_id', integrationId);
+  }
+
   // Tab elements
   const oauthTabBtn = document.getElementById('oauth-tab-btn');
   const saTabBtn = document.getElementById('sa-tab-btn');

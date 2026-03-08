@@ -216,6 +216,12 @@ DROPBOX_FOLDER={{ folder_path|default('/Documents/Uploads', true) }}</code></pre
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  // Store integration_id if provided (for per-user OAuth flow)
+  const integrationId = "{{ integration_id or '' }}";
+  if (integrationId) {
+    sessionStorage.setItem('oauth_integration_id', integrationId);
+  }
+
   // Elements
   const startAuthFlowBtn = document.getElementById('start-auth-flow');
   const testTokenBtn = document.getElementById('test-token');

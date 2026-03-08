@@ -206,6 +206,16 @@
               </div>
               <!-- Actions -->
               <div class="flex items-center gap-2 shrink-0">
+                <template x-if="isOAuthType(intg.integration_type) && !intg.has_credentials">
+                  <a
+                    :href="oauthLink(intg.integration_type) + '?integration_id=' + intg.id"
+                    class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-yellow-400 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    style="min-height:36px;"
+                    :aria-label="`Authorize ${intg.name}`"
+                  >
+                    <i class="fas fa-key mr-1" aria-hidden="true"></i>Authorize
+                  </a>
+                </template>
                 <button
                   type="button"
                   @click="testSavedIntegration(intg)"
@@ -279,6 +289,16 @@
               </div>
               <!-- Actions -->
               <div class="flex items-center gap-2 shrink-0">
+                <template x-if="isOAuthType(intg.integration_type) && !intg.has_credentials">
+                  <a
+                    :href="oauthLink(intg.integration_type) + '?integration_id=' + intg.id"
+                    class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-yellow-400 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    style="min-height:36px;"
+                    :aria-label="`Authorize ${intg.name}`"
+                  >
+                    <i class="fas fa-key mr-1" aria-hidden="true"></i>Authorize
+                  </a>
+                </template>
                 <button
                   type="button"
                   @click="testSavedIntegration(intg)"
@@ -561,9 +581,8 @@
             </div>
             <div class="bg-blue-50 dark:bg-blue-900/30 rounded-md p-3 text-sm text-blue-700 dark:text-blue-300">
               <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
-              OAuth tokens can be configured via the dedicated
-              <a :href="oauthLink(form.integration_type)" class="underline hover:text-blue-900 dark:hover:text-blue-100" x-text="typeLabel(form.integration_type) + ' setup page'"></a>.
-              Once authorised, the token is stored automatically.
+              Save this integration first, then use the <strong>Authorize</strong> button to complete the OAuth flow.
+              Your credentials will be stored securely in your personal integration record.
             </div>
           </div>
         </template>
@@ -742,6 +761,7 @@ function integrationsDashboard() {
   const SOURCE_TYPES = ['IMAP', 'WATCH_FOLDER', 'WEBHOOK'];
   const DEST_TYPES = ['S3', 'DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE', 'WEBDAV', 'NEXTCLOUD', 'FTP', 'SFTP', 'EMAIL', 'PAPERLESS', 'RCLONE'];
   const TYPES_WITH_FORM_FIELDS = new Set(['IMAP', 'S3', 'WEBDAV', 'NEXTCLOUD', 'FTP', 'SFTP', 'DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE', 'EMAIL', 'WATCH_FOLDER', 'PAPERLESS']);
+  const OAUTH_TYPES = new Set(['DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE']);
 
   const TYPE_LABELS = {
     IMAP: 'IMAP Email',
@@ -838,6 +858,7 @@ function integrationsDashboard() {
     typeLabel(t) { return TYPE_LABELS[t] || t; },
     typeIcon(t) { return TYPE_ICONS[t] || 'fa-plug text-gray-400'; },
     hasFormFields(t) { return TYPES_WITH_FORM_FIELDS.has(t); },
+    isOAuthType(t) { return OAUTH_TYPES.has(t); },
 
     oauthLink(t) {
       if (t === 'DROPBOX') return '/dropbox-setup';
