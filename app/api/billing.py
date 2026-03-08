@@ -313,8 +313,9 @@ async def stripe_status(request: Request, db: Session = Depends(get_db)) -> dict
             mode = "test"
         else:
             mode = "test" if settings.stripe_secret_key.startswith("sk_test_") else "live"
-    except Exception as exc:
-        connection_status = str(exc)
+    except Exception:
+        logger.exception("Stripe connection check failed")
+        connection_status = "error"
         mode = "test" if settings.stripe_secret_key.startswith("sk_test_") else "live"
 
     plans = db.query(SubscriptionPlan).order_by(SubscriptionPlan.sort_order).all()
