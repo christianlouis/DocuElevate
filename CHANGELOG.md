@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.88.1 (2026-03-08)
+
+### Bug Fixes
+
+- **ui**: Make pricing page CTAs link to /signup when local signup is enabled
+  ([`db5f3d5`](https://github.com/christianlouis/DocuElevate/commit/db5f3d51d9f81b643f9c864c44d0dcc99df49963))
+
+
 ## v0.88.0 (2026-03-07)
 
 ### Bug Fixes
