@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Testing
+
+- Increase app/api/google_drive.py coverage to 100%
+  ([`14c9432`](https://github.com/christianlouis/DocuElevate/commit/14c94326402aed375a8178198ccd045f91765d74))
+
+- Increase coverage for app/views/pipelines.py to 100%
+  ([`344d20e`](https://github.com/christianlouis/DocuElevate/commit/344d20e4e63260e671118375ddfa811937b52c0c))
+
+
 ## v0.93.0 (2026-03-08)
 
 ### Features
