@@ -3622,3 +3622,253 @@ class TestS3DownloadFailureNoPartialFile:
             mock_settings.workdir = str(tmp_path)
             count = _scan_s3_prefix("inbox/", cache, False)
         assert count == 0
+
+
+# ---------------------------------------------------------------------------
+# Tests for multi-tenant watch folder integration polling
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestIsSafeWatchPath:
+    """Tests for _is_safe_watch_path path traversal security."""
+
+    def test_absolute_path_is_safe(self):
+        from app.tasks.watch_folder_tasks import _is_safe_watch_path
+
+        assert _is_safe_watch_path("/data/watch") is True
+
+    def test_empty_path_is_unsafe(self):
+        from app.tasks.watch_folder_tasks import _is_safe_watch_path
+
+        assert _is_safe_watch_path("") is False
+
+    def test_relative_path_is_unsafe(self):
+        from app.tasks.watch_folder_tasks import _is_safe_watch_path
+
+        assert _is_safe_watch_path("relative/path") is False
+
+    def test_traversal_path_is_unsafe(self):
+        from app.tasks.watch_folder_tasks import _is_safe_watch_path
+
+        assert _is_safe_watch_path("/data/../etc/passwd") is False
+
+    def test_double_dot_component_is_unsafe(self):
+        from app.tasks.watch_folder_tasks import _is_safe_watch_path
+
+        assert _is_safe_watch_path("/data/watch/../../secret") is False
+
+    def test_none_path_is_unsafe(self):
+        from app.tasks.watch_folder_tasks import _is_safe_watch_path
+
+        assert _is_safe_watch_path(None) is False
+
+
+@pytest.mark.unit
+class TestEnqueueFileOwnerIdPassthrough:
+    """Test that _enqueue_file forwards owner_id to downstream tasks."""
+
+    def test_pdf_forwards_owner_id(self):
+        from app.tasks.watch_folder_tasks import _enqueue_file
+
+        with (
+            patch("app.tasks.watch_folder_tasks.convert_to_pdf") as mock_conv,
+            patch("app.tasks.watch_folder_tasks.process_document") as mock_proc,
+        ):
+            _enqueue_file("/tmp/report.pdf", owner_id="user-123")
+        mock_proc.delay.assert_called_once_with("/tmp/report.pdf", owner_id="user-123")
+        mock_conv.delay.assert_not_called()
+
+    def test_non_pdf_forwards_owner_id(self):
+        from app.tasks.watch_folder_tasks import _enqueue_file
+
+        with (
+            patch("app.tasks.watch_folder_tasks.convert_to_pdf") as mock_conv,
+            patch("app.tasks.watch_folder_tasks.process_document") as mock_proc,
+        ):
+            _enqueue_file("/tmp/doc.docx", owner_id="user-456")
+        mock_conv.delay.assert_called_once_with("/tmp/doc.docx", owner_id="user-456")
+        mock_proc.delay.assert_not_called()
+
+
+@pytest.mark.unit
+class TestScanUserWatchFolder:
+    """Tests for _scan_user_watch_folder."""
+
+    def test_scans_and_attributes_files_to_owner(self, tmp_path):
+        from app.tasks.watch_folder_tasks import _scan_user_watch_folder
+
+        # Create a test file
+        (tmp_path / "test.pdf").write_bytes(b"%PDF-1.4")
+
+        cache: dict[str, str] = {}
+        with (
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+        ):
+            mock_settings.workdir = str(tmp_path / "workdir")
+            os.makedirs(mock_settings.workdir, exist_ok=True)
+            count = _scan_user_watch_folder(str(tmp_path), cache, False, "owner-77")
+
+        assert count == 1
+        mock_enqueue.assert_called_once()
+        call_kwargs = mock_enqueue.call_args
+        assert call_kwargs.kwargs.get("owner_id") == "owner-77"
+
+    def test_skips_already_processed_files(self, tmp_path):
+        from app.tasks.watch_folder_tasks import _scan_user_watch_folder
+
+        test_file = tmp_path / "test.pdf"
+        test_file.write_bytes(b"%PDF-1.4")
+        cache = {str(test_file): datetime.now(timezone.utc).isoformat()}
+
+        with (
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+        ):
+            mock_settings.workdir = str(tmp_path / "workdir")
+            count = _scan_user_watch_folder(str(tmp_path), cache, False, "owner-77")
+
+        assert count == 0
+        mock_enqueue.assert_not_called()
+
+    def test_returns_zero_for_nonexistent_dir(self):
+        from app.tasks.watch_folder_tasks import _scan_user_watch_folder
+
+        count = _scan_user_watch_folder("/nonexistent/path", {}, False, "owner-1")
+        assert count == 0
+
+
+@pytest.mark.unit
+class TestPullUserIntegrationWatchFolders:
+    """Tests for _pull_user_integration_watch_folders."""
+
+    @patch("app.tasks.watch_folder_tasks._get_db_session")
+    @patch("app.tasks.watch_folder_tasks._scan_user_watch_folder", return_value=2)
+    @patch("app.tasks.watch_folder_tasks._load_cache", return_value={})
+    @patch("app.tasks.watch_folder_tasks._save_cache")
+    def test_polls_active_watch_folder_integrations(self, mock_save, mock_load, mock_scan, mock_session_factory):
+        """Active WATCH_FOLDER integrations should be scanned."""
+        from app.tasks.watch_folder_tasks import _pull_user_integration_watch_folders
+
+        mock_integ = MagicMock()
+        mock_integ.id = 20
+        mock_integ.owner_id = "owner-wf"
+        mock_integ.config = '{"folder_path": "/data/scans", "delete_after_process": false}'
+        mock_integ.is_active = True
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        with patch("app.tasks.watch_folder_tasks._is_safe_watch_path", return_value=True):
+            result = _pull_user_integration_watch_folders()
+
+        assert result["status"] == "ok"
+        assert result["integrations_processed"] == 1
+        assert result["files_enqueued"] == 2
+        mock_scan.assert_called_once()
+
+    @patch("app.tasks.watch_folder_tasks._get_db_session")
+    def test_rejects_unsafe_paths(self, mock_session_factory):
+        """Integrations with unsafe paths should be rejected."""
+        from app.tasks.watch_folder_tasks import _pull_user_integration_watch_folders
+
+        mock_integ = MagicMock()
+        mock_integ.id = 21
+        mock_integ.owner_id = "owner-bad"
+        mock_integ.config = '{"folder_path": "/data/../etc/passwd"}'
+        mock_integ.is_active = True
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        with patch("app.tasks.watch_folder_tasks._is_safe_watch_path", return_value=False):
+            result = _pull_user_integration_watch_folders()
+
+        assert result["status"] == "ok"
+        assert mock_integ.last_error is not None
+
+    @patch("app.tasks.watch_folder_tasks._get_db_session")
+    @patch("app.tasks.watch_folder_tasks._scan_user_watch_folder")
+    @patch("app.tasks.watch_folder_tasks._load_cache", return_value={})
+    @patch("app.tasks.watch_folder_tasks._save_cache")
+    def test_handles_scan_failure_gracefully(self, mock_save, mock_load, mock_scan, mock_session_factory):
+        """Scan failures should be recorded but not crash the loop."""
+        from app.tasks.watch_folder_tasks import _pull_user_integration_watch_folders
+
+        mock_integ = MagicMock()
+        mock_integ.id = 22
+        mock_integ.owner_id = "owner-err"
+        mock_integ.config = '{"folder_path": "/data/broken"}'
+        mock_integ.is_active = True
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        mock_scan.side_effect = Exception("Disk error")
+
+        with patch("app.tasks.watch_folder_tasks._is_safe_watch_path", return_value=True):
+            result = _pull_user_integration_watch_folders()
+
+        assert mock_integ.last_error is not None
+        assert "Disk error" in mock_integ.last_error
+
+    @patch("app.tasks.watch_folder_tasks._get_db_session")
+    def test_handles_db_failure_gracefully(self, mock_session_factory):
+        """Database failures should return error status without crashing."""
+        from app.tasks.watch_folder_tasks import _pull_user_integration_watch_folders
+
+        mock_session_factory.side_effect = Exception("DB unavailable")
+        result = _pull_user_integration_watch_folders()
+        assert result["status"] == "error"
+
+    @patch("app.tasks.watch_folder_tasks._get_db_session")
+    def test_skips_integration_without_folder_path(self, mock_session_factory):
+        """Integrations without folder_path should be skipped."""
+        from app.tasks.watch_folder_tasks import _pull_user_integration_watch_folders
+
+        mock_integ = MagicMock()
+        mock_integ.id = 23
+        mock_integ.owner_id = "owner-empty"
+        mock_integ.config = '{"delete_after_process": false}'
+        mock_integ.is_active = True
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        result = _pull_user_integration_watch_folders()
+        assert result["status"] == "ok"
+
+
+@pytest.mark.unit
+class TestScanAllWatchFoldersIncludesUserIntegrations:
+    """Test that scan_all_watch_folders calls _pull_user_integration_watch_folders."""
+
+    def test_includes_user_watch_folders(self):
+        from app.tasks.watch_folder_tasks import scan_all_watch_folders
+
+        with (
+            patch("app.tasks.watch_folder_tasks._acquire_lock", return_value=True),
+            patch("app.tasks.watch_folder_tasks._release_lock"),
+            patch("app.tasks.watch_folder_tasks.scan_local_watch_folders", return_value={"status": "ok"}),
+            patch("app.tasks.watch_folder_tasks.scan_ftp_watch_folder", return_value={"status": "skipped"}),
+            patch("app.tasks.watch_folder_tasks.scan_sftp_watch_folder", return_value={"status": "skipped"}),
+            patch("app.tasks.watch_folder_tasks.scan_dropbox_watch_folder", return_value={"status": "skipped"}),
+            patch("app.tasks.watch_folder_tasks.scan_google_drive_watch_folder", return_value={"status": "skipped"}),
+            patch("app.tasks.watch_folder_tasks.scan_onedrive_watch_folder", return_value={"status": "skipped"}),
+            patch("app.tasks.watch_folder_tasks.scan_nextcloud_watch_folder", return_value={"status": "skipped"}),
+            patch("app.tasks.watch_folder_tasks.scan_s3_watch_folder", return_value={"status": "skipped"}),
+            patch("app.tasks.watch_folder_tasks.scan_webdav_watch_folder", return_value={"status": "skipped"}),
+            patch(
+                "app.tasks.watch_folder_tasks._pull_user_integration_watch_folders",
+                return_value={"status": "ok", "integrations_processed": 1, "files_enqueued": 3},
+            ) as mock_pull,
+        ):
+            result = scan_all_watch_folders()
+
+        mock_pull.assert_called_once()
+        assert result["results"]["user_watch_folders"]["files_enqueued"] == 3
