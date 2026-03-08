@@ -587,3 +587,180 @@ class TestURLUploadEndpoint:
         # Filename should be sanitized (no path traversal)
         assert ".." not in data["filename"]
         assert "/" not in data["filename"]
+
+
+@pytest.mark.unit
+class TestURLUploadCoverageGaps:
+    """Additional tests to cover previously uncovered lines/branches"""
+
+    def test_validate_url_scheme_raises_for_non_http_scheme(self):
+        """Test that validate_url_scheme raises ValueError for non-http/https scheme (line 41)"""
+        from unittest.mock import MagicMock
+
+        from app.api.url_upload import URLUploadRequest
+
+        # Call the validator directly with a mock URL whose str() returns an ftp scheme
+        mock_url = MagicMock()
+        mock_url.__str__ = MagicMock(return_value="ftp://example.com/file")
+
+        with pytest.raises(ValueError, match="Only HTTP and HTTPS URLs are allowed"):
+            URLUploadRequest.validate_url_scheme(mock_url)
+
+    @patch("socket.getaddrinfo")
+    def test_is_private_ip_hostname_resolves_to_public_ip(self, mock_getaddrinfo):
+        """Test that a hostname resolving to a public IP returns False (lines 65->61, 67)"""
+        from app.api.url_upload import is_private_ip
+
+        # Mock DNS resolution to return a single public IP (8.8.8.8 is Google DNS)
+        mock_getaddrinfo.return_value = [
+            (2, 1, 6, "", ("8.8.8.8", 0)),
+        ]
+
+        # "example.com" is not a direct IP, so socket.getaddrinfo is called
+        result = is_private_ip("example.com")
+        assert result is False
+        mock_getaddrinfo.assert_called_once()
+
+    @patch("socket.getaddrinfo")
+    def test_is_private_ip_hostname_resolves_multiple_ips_all_public(self, mock_getaddrinfo):
+        """Test hostname with multiple public IPs returns False (covers 65->61 loop branch)"""
+        from app.api.url_upload import is_private_ip
+
+        # Return two public IPs - neither is private, so loop runs twice (65->61) then returns False (67)
+        mock_getaddrinfo.return_value = [
+            (2, 1, 6, "", ("8.8.8.8", 0)),
+            (2, 1, 6, "", ("1.1.1.1", 0)),
+        ]
+
+        result = is_private_ip("multi.example.com")
+        assert result is False
+
+    def test_validate_url_safety_non_http_scheme_direct(self):
+        """Test validate_url_safety raises for ftp:// scheme (line 87)"""
+        from fastapi import HTTPException
+
+        from app.api.url_upload import validate_url_safety
+
+        with pytest.raises(HTTPException) as exc_info:
+            validate_url_safety("ftp://example.com/file.txt")
+        assert exc_info.value.status_code == 400
+        assert "HTTP and HTTPS" in exc_info.value.detail
+
+    @patch("app.api.url_upload.is_private_ip", return_value=False)
+    def test_validate_url_safety_blocks_google_metadata_internal(self, mock_is_private):
+        """Test that metadata.google.internal is blocked (line 107)"""
+        from fastapi import HTTPException
+
+        from app.api.url_upload import validate_url_safety
+
+        # metadata.google.internal is in the explicit metadata_endpoints list.
+        # Explicitly mock is_private_ip to return False so we always reach the
+        # metadata_endpoints check on line 106-107, regardless of DNS availability.
+        with pytest.raises(HTTPException) as exc_info:
+            validate_url_safety("http://metadata.google.internal/computeMetadata/v1/")
+        assert exc_info.value.status_code == 400
+        assert "metadata" in exc_info.value.detail
+
+    def test_validate_file_type_no_extension_not_allowed(self):
+        """Test validate_file_type returns False for filename without extension (line 130->135)"""
+        from app.api.url_upload import validate_file_type
+
+        # Unknown content-type and filename has NO extension at all
+        assert validate_file_type("application/x-unknown", "filename_without_extension") is False
+        # Empty content-type and no extension
+        assert validate_file_type("", "filename_without_extension") is False
+
+    @patch("app.api.url_upload.sanitize_filename", return_value="")
+    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.process_document")
+    def test_process_url_sanitize_filename_returns_empty(
+        self, mock_process_document, mock_requests_get, mock_sanitize, client
+    ):
+        """Test that when sanitize_filename returns empty string, filename defaults to 'download' (line 177)"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "100"}
+        mock_response.iter_content = Mock(return_value=[b"PDF content"])
+        mock_response.raise_for_status = Mock()
+        mock_requests_get.return_value = mock_response
+
+        mock_task = Mock()
+        mock_task.id = "test-task-id-sanitize"
+        mock_process_document.delay.return_value = mock_task
+
+        response = client.post("/api/process-url", json={"url": "https://example.com/file.pdf"})
+
+        assert response.status_code == 200
+        data = response.json()
+        # When sanitize_filename returns "", safe_filename defaults to "download"
+        assert data["filename"] == "download"
+
+    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.process_document")
+    def test_process_url_skips_empty_chunks(self, mock_process_document, mock_requests_get, client):
+        """Test that empty bytes chunks are skipped during download (line 234->233 branch)"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/pdf"}
+        # Mix empty bytes (falsy) with real content - covers the `if chunk:` False branch
+        mock_response.iter_content = Mock(return_value=[b"", b"PDF content", b""])
+        mock_response.raise_for_status = Mock()
+        mock_requests_get.return_value = mock_response
+
+        mock_task = Mock()
+        mock_task.id = "test-task-id-chunks"
+        mock_process_document.delay.return_value = mock_task
+
+        response = client.post("/api/process-url", json={"url": "https://example.com/file.pdf"})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["task_id"] == "test-task-id-chunks"
+
+    @patch("app.api.url_upload.os.remove")
+    @patch("app.api.url_upload.os.path.exists", return_value=True)
+    @patch("app.api.url_upload.requests.get")
+    def test_process_url_oserror_cleanup_removes_existing_file(
+        self, mock_requests_get, mock_exists, mock_remove, client, tmp_path, monkeypatch
+    ):
+        """Test OSError handler removes the partial file when it exists (line 285)"""
+        import os
+
+        from app.config import settings
+
+        # Create a temp subdir then remove it so open() raises OSError (dir doesn't exist)
+        non_existent = tmp_path / "removed_workdir"
+        non_existent.mkdir()
+        os.rmdir(non_existent)
+
+        monkeypatch.setattr(settings, "workdir", str(non_existent))
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "100"}
+        mock_response.iter_content = Mock(return_value=[b"PDF"])
+        mock_response.raise_for_status = Mock()
+        mock_requests_get.return_value = mock_response
+
+        response = client.post("/api/process-url", json={"url": "https://example.com/file.pdf"})
+
+        assert response.status_code == 500
+        assert "Failed to save file" in response.json()["detail"]
+        # os.path.exists returned True, so os.remove should have been called
+        mock_remove.assert_called_once()
+
+    @patch("app.api.url_upload.validate_file_type", side_effect=ValueError("unexpected internal error"))
+    @patch("app.api.url_upload.requests.get")
+    def test_process_url_unexpected_exception_with_no_file_created(self, mock_requests_get, mock_validate, client):
+        """Test unexpected exception before target_path is assigned; no file cleanup attempted (line 291->293)"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/pdf"}
+        mock_response.raise_for_status = Mock()
+        mock_requests_get.return_value = mock_response
+
+        response = client.post("/api/process-url", json={"url": "https://example.com/file.pdf"})
+
+        # Generic exception (not HTTPException/OSError/RequestException) is caught and returns 500
+        assert response.status_code == 500
+        assert "Unexpected error" in response.json()["detail"]
