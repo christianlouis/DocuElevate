@@ -502,6 +502,7 @@ def admin_set_password(
     return {"updated": True, "email": user.email}
 
 
+@router.get("/{user_id:path}", summary="Get details for a single user")
 def get_user(user_id: str, db: DbSession, _admin: AdminUser) -> dict[str, Any]:
     """Return profile and document statistics for a specific user."""
     doc_count = db.query(func.count(FileRecord.id)).filter(FileRecord.owner_id == user_id).scalar() or 0
