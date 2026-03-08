@@ -861,3 +861,21 @@ Security headers implementation is complete and production-ready. The middleware
 ---
 
 **Next Audit Due:** 2026-05-07 (Quarterly)
+
+## Per-User IMAP Account Passwords (Added 2026-03-08)
+
+### Known Limitation: Plain-text Password Storage
+
+IMAP account passwords in the `user_imap_accounts` table are stored in plain text in the database.
+
+**Risk:** Anyone with direct database access (DBA, backup access) can read IMAP credentials for all users.
+
+**Mitigations in place:**
+- Database itself should be protected with appropriate OS-level file permissions (SQLite) or network ACLs (PostgreSQL/MySQL).
+- Passwords are never returned in API responses (the `_to_response` serialiser omits them).
+- Only the account owner can read or update their own accounts (ownership enforced at the API layer).
+- Passwords are never logged.
+
+**Future improvement:** Encrypt IMAP passwords at rest using `cryptography.fernet` (symmetric encryption with the app's `SESSION_SECRET` as key material). This is tracked as a TODO item in `app/api/imap_accounts.py` and should be implemented before this feature is used in high-security environments.
+
+**Recommended admin action:** Use app-specific passwords (Gmail, Outlook) rather than account passwords where possible, so that compromised IMAP credentials can be revoked without affecting the user's primary account.
