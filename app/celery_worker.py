@@ -63,15 +63,13 @@ def test_task():
 check_credentials.apply_async(countdown=10)  # Run 10 seconds after worker starts
 
 celery.conf.beat_schedule = {
-    "poll-inboxes-every-minute": (
-        {
-            "task": "app.tasks.imap_tasks.pull_all_inboxes",
-            "schedule": crontab(minute="*/1"),  # every 1 minute
-            "options": {"expires": 55},  # Ensure tasks don't pile up
-        }
-        if (settings.imap1_host or settings.imap2_host)
-        else None
-    ),
+    # IMAP polling — always enabled because per-user IMAP integrations may
+    # exist in the database even when no system-level IMAP hosts are configured.
+    "poll-inboxes-every-minute": {
+        "task": "app.tasks.imap_tasks.pull_all_inboxes",
+        "schedule": crontab(minute="*/1"),  # every 1 minute
+        "options": {"expires": 55},  # Ensure tasks don't pile up
+    },
     # Add Uptime Kuma ping task if configured
     "ping-uptime-kuma": (
         {
@@ -100,27 +98,15 @@ celery.conf.beat_schedule = {
         "schedule": crontab(minute="*/1"),  # Every minute
         "options": {"expires": 55},  # Must complete within 55 seconds
     },
-    # Watch folder scanning — polls local paths, FTP, SFTP, and cloud ingest folders.
+    # Watch folder scanning — always enabled because per-user WATCH_FOLDER
+    # integrations may exist in the database even when no system-level watch
+    # folder settings are configured.
     # Schedule is controlled by WATCH_FOLDER_POLL_INTERVAL (default: 1 minute).
-    "scan-watch-folders": (
-        {
-            "task": "app.tasks.watch_folder_tasks.scan_all_watch_folders",
-            "schedule": crontab(minute=f"*/{max(1, settings.watch_folder_poll_interval)}"),
-            "options": {"expires": 55},
-        }
-        if (
-            settings.watch_folders
-            or settings.ftp_ingest_enabled
-            or settings.sftp_ingest_enabled
-            or settings.dropbox_ingest_enabled
-            or settings.google_drive_ingest_enabled
-            or settings.onedrive_ingest_enabled
-            or settings.nextcloud_ingest_enabled
-            or settings.s3_ingest_enabled
-            or settings.webdav_ingest_enabled
-        )
-        else None
-    ),
+    "scan-watch-folders": {
+        "task": "app.tasks.watch_folder_tasks.scan_all_watch_folders",
+        "schedule": crontab(minute=f"*/{max(1, settings.watch_folder_poll_interval)}"),
+        "options": {"expires": 55},
+    },
     # Backfill embeddings for files that were processed before the
     # embedding pipeline was enabled, or where the embedding task failed.
     "backfill-missing-embeddings": {

@@ -1354,3 +1354,197 @@ class TestEmailAlreadyHasLabelExceptions:
 
         # Should return False on error
         assert result is False
+
+
+# ---------------------------------------------------------------------------
+# Tests for multi-tenant IMAP user integration polling
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestFetchAttachmentsOwnerIdPassthrough:
+    """Test that fetch_attachments_and_enqueue forwards owner_id correctly."""
+
+    @patch("app.tasks.imap_tasks.process_document")
+    @patch("app.tasks.imap_tasks.convert_to_pdf")
+    def test_pdf_attachment_forwards_owner_id(self, mock_convert, mock_process, tmp_path):
+        """PDF attachments should forward owner_id to process_document."""
+        msg = EmailMessage()
+        msg["Subject"] = "Test"
+        msg.add_attachment(b"%PDF-1.4", maintype="application", subtype="pdf", filename="doc.pdf")
+
+        with patch("app.tasks.imap_tasks.settings") as mock_settings:
+            mock_settings.workdir = str(tmp_path)
+            result = fetch_attachments_and_enqueue(msg, owner_id="user-42")
+
+        assert result is True
+        mock_process.delay.assert_called_once()
+        call_kwargs = mock_process.delay.call_args
+        assert call_kwargs.kwargs.get("owner_id") == "user-42"
+
+    @patch("app.tasks.imap_tasks.process_document")
+    @patch("app.tasks.imap_tasks.convert_to_pdf")
+    def test_non_pdf_attachment_forwards_owner_id(self, mock_convert, mock_process, tmp_path):
+        """Non-PDF attachments should forward owner_id to convert_to_pdf."""
+        msg = EmailMessage()
+        msg["Subject"] = "Test"
+        msg.add_attachment(
+            b"excel content",
+            maintype="application",
+            subtype="vnd.ms-excel",
+            filename="spreadsheet.xls",
+        )
+
+        with patch("app.tasks.imap_tasks.settings") as mock_settings:
+            mock_settings.workdir = str(tmp_path)
+            result = fetch_attachments_and_enqueue(msg, owner_id="user-99")
+
+        assert result is True
+        mock_convert.delay.assert_called_once()
+        call_kwargs = mock_convert.delay.call_args
+        assert call_kwargs.kwargs.get("owner_id") == "user-99"
+
+    @patch("app.tasks.imap_tasks.process_document")
+    @patch("app.tasks.imap_tasks.convert_to_pdf")
+    def test_no_owner_id_defaults_to_none(self, mock_convert, mock_process, tmp_path):
+        """When owner_id is not provided, it defaults to None."""
+        msg = EmailMessage()
+        msg["Subject"] = "Test"
+        msg.add_attachment(b"%PDF-1.4", maintype="application", subtype="pdf", filename="doc.pdf")
+
+        with patch("app.tasks.imap_tasks.settings") as mock_settings:
+            mock_settings.workdir = str(tmp_path)
+            fetch_attachments_and_enqueue(msg)
+
+        call_kwargs = mock_process.delay.call_args
+        assert call_kwargs.kwargs.get("owner_id") is None
+
+
+@pytest.mark.unit
+class TestPullUserIntegrationImap:
+    """Tests for _pull_user_integration_imap() multi-tenant IMAP polling."""
+
+    @patch("app.tasks.imap_tasks._get_db_session")
+    @patch("app.tasks.imap_tasks.pull_inbox")
+    def test_polls_active_imap_integrations(self, mock_pull, mock_session_factory):
+        """Active IMAP integrations should be polled with correct owner_id."""
+        from app.tasks.imap_tasks import _pull_user_integration_imap
+
+        mock_integ = MagicMock()
+        mock_integ.id = 10
+        mock_integ.owner_id = "owner-abc"
+        mock_integ.config = '{"host": "imap.example.com", "port": 993, "username": "user@test.com", "use_ssl": true}'
+        mock_integ.credentials = "enc:encrypted"
+        mock_integ.is_active = True
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        with patch("app.utils.encryption.decrypt_value", return_value='{"password": "secret"}'):
+            _pull_user_integration_imap()
+
+        mock_pull.assert_called_once()
+        call_kwargs = mock_pull.call_args
+        assert call_kwargs.kwargs.get("owner_id") == "owner-abc"
+        assert call_kwargs.kwargs.get("host") == "imap.example.com"
+        assert call_kwargs.kwargs.get("password") == "secret"  # noqa: S105
+
+    @patch("app.tasks.imap_tasks._get_db_session")
+    @patch("app.tasks.imap_tasks.pull_inbox")
+    def test_skips_incomplete_config(self, mock_pull, mock_session_factory):
+        """Integrations missing host/username/password should be skipped."""
+        from app.tasks.imap_tasks import _pull_user_integration_imap
+
+        mock_integ = MagicMock()
+        mock_integ.id = 11
+        mock_integ.owner_id = "owner-xyz"
+        mock_integ.config = '{"host": "", "port": 993, "username": ""}'
+        mock_integ.credentials = None
+        mock_integ.is_active = True
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        _pull_user_integration_imap()
+
+        mock_pull.assert_not_called()
+
+    @patch("app.tasks.imap_tasks._get_db_session")
+    @patch("app.tasks.imap_tasks.pull_inbox")
+    def test_handles_connection_failure_gracefully(self, mock_pull, mock_session_factory):
+        """Connection failures should be recorded but not crash the loop."""
+        from app.tasks.imap_tasks import _pull_user_integration_imap
+
+        mock_integ = MagicMock()
+        mock_integ.id = 12
+        mock_integ.owner_id = "owner-fail"
+        mock_integ.config = '{"host": "bad.host", "port": 993, "username": "u@x.com", "use_ssl": true}'
+        mock_integ.credentials = "enc:encrypted"
+        mock_integ.is_active = True
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        mock_pull.side_effect = Exception("Connection refused")
+
+        with patch("app.utils.encryption.decrypt_value", return_value='{"password": "p"}'):
+            # Should not raise
+            _pull_user_integration_imap()
+
+        # last_error should be recorded
+        assert mock_integ.last_error is not None
+        assert "Connection refused" in mock_integ.last_error
+        mock_db.commit.assert_called()
+
+    @patch("app.tasks.imap_tasks._get_db_session")
+    def test_handles_db_failure_gracefully(self, mock_session_factory):
+        """Database failures should be caught without crashing."""
+        from app.tasks.imap_tasks import _pull_user_integration_imap
+
+        mock_session_factory.side_effect = Exception("DB unavailable")
+        # Should not raise
+        _pull_user_integration_imap()
+
+    @patch("app.tasks.imap_tasks._get_db_session")
+    @patch("app.tasks.imap_tasks.pull_inbox")
+    def test_records_last_used_at_on_success(self, mock_pull, mock_session_factory):
+        """Successful polling should update last_used_at and clear last_error."""
+        from app.tasks.imap_tasks import _pull_user_integration_imap
+
+        mock_integ = MagicMock()
+        mock_integ.id = 13
+        mock_integ.owner_id = "owner-ok"
+        mock_integ.config = '{"host": "imap.ok.com", "port": 993, "username": "ok@ok.com", "use_ssl": true}'
+        mock_integ.credentials = "enc:encrypted"
+        mock_integ.last_error = "previous error"
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        with patch("app.utils.encryption.decrypt_value", return_value='{"password": "ok"}'):
+            _pull_user_integration_imap()
+
+        assert mock_integ.last_error is None
+        assert mock_integ.last_used_at is not None
+
+
+@pytest.mark.unit
+class TestPullAllInboxesCallsIntegrations:
+    """Test that pull_all_inboxes calls both legacy and new integration polling."""
+
+    @patch("app.tasks.imap_tasks._pull_user_integration_imap")
+    @patch("app.tasks.imap_tasks._pull_user_imap_accounts")
+    @patch("app.tasks.imap_tasks.check_and_pull_mailbox")
+    @patch("app.tasks.imap_tasks.acquire_lock", return_value=True)
+    @patch("app.tasks.imap_tasks.release_lock")
+    def test_calls_both_legacy_and_integration_polling(
+        self, mock_release, mock_lock, mock_check, mock_legacy, mock_integ
+    ):
+        """pull_all_inboxes should call both _pull_user_imap_accounts and _pull_user_integration_imap."""
+        pull_all_inboxes()
+        mock_legacy.assert_called_once()
+        mock_integ.assert_called_once()

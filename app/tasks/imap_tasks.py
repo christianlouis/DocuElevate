@@ -149,6 +149,9 @@ def pull_all_inboxes():
         # Per-user IMAP accounts from the database
         _pull_user_imap_accounts()
 
+        # Per-user IMAP integrations from the UserIntegration model
+        _pull_user_integration_imap()
+
         logger.info("Finished pull_all_inboxes")
 
     finally:
@@ -176,6 +179,7 @@ def _pull_user_imap_accounts() -> None:
                         password=_decrypt_imap_password(acct.password),
                         use_ssl=acct.use_ssl,
                         delete_after_process=acct.delete_after_process,
+                        owner_id=acct.owner_id,
                     )
                     # Record successful poll
                     acct.last_checked_at = datetime.now(timezone.utc)
@@ -200,6 +204,91 @@ def _pull_user_imap_accounts() -> None:
             db.close()
     except Exception as exc:  # noqa: BLE001
         logger.error("Failed to process per-user IMAP accounts: %s", exc)
+
+
+def _pull_user_integration_imap() -> None:
+    """Iterate over all active IMAP UserIntegrations and pull their inboxes.
+
+    This polls the ``user_integrations`` table for records with
+    ``integration_type='IMAP'``, ``direction='SOURCE'``, and ``is_active=True``.
+    Each integration's config/credentials are decoded and passed to
+    :func:`pull_inbox` with the owning user's ``owner_id`` so that ingested
+    documents are correctly attributed.
+
+    Individual connection failures are caught and recorded on the integration
+    without crashing the polling loop.
+    """
+    try:
+        import json as _json
+
+        from app.models import IntegrationDirection, IntegrationType, UserIntegration
+        from app.utils.encryption import decrypt_value
+
+        db = _get_db_session()
+        try:
+            integrations = (
+                db.query(UserIntegration)
+                .filter(
+                    UserIntegration.integration_type == IntegrationType.IMAP,
+                    UserIntegration.direction == IntegrationDirection.SOURCE,
+                    UserIntegration.is_active.is_(True),
+                )
+                .all()
+            )
+            logger.info("Processing %d IMAP UserIntegration(s)", len(integrations))
+            for integ in integrations:
+                account_identifier = f"integration_{integ.owner_id}_{integ.id}"
+                try:
+                    cfg = _json.loads(integ.config) if integ.config else {}
+                    raw_creds = decrypt_value(integ.credentials) if integ.credentials else None
+                    creds = _json.loads(raw_creds) if raw_creds else {}
+
+                    host = cfg.get("host")
+                    port = int(cfg.get("port", 993))
+                    username = cfg.get("username")
+                    password = creds.get("password")
+                    use_ssl = cfg.get("use_ssl", True)
+                    delete_after = cfg.get("delete_after_process", False)
+
+                    if not (host and username and password):
+                        logger.warning(
+                            "IMAP integration %d (owner %s) has incomplete config — skipping.",
+                            integ.id,
+                            integ.owner_id,
+                        )
+                        continue
+
+                    pull_inbox(
+                        mailbox_key=account_identifier,
+                        host=host,
+                        port=port,
+                        username=username,
+                        password=password,
+                        use_ssl=use_ssl,
+                        delete_after_process=delete_after,
+                        owner_id=integ.owner_id,
+                    )
+                    integ.last_used_at = datetime.now(timezone.utc)
+                    integ.last_error = None
+                    db.commit()
+                except Exception as exc:  # noqa: BLE001
+                    error_msg = str(exc)[:_MAX_ERROR_LENGTH]
+                    logger.error(
+                        "Error pulling IMAP integration %d (owner %s): %s",
+                        integ.id,
+                        integ.owner_id,
+                        error_msg,
+                    )
+                    try:
+                        integ.last_used_at = datetime.now(timezone.utc)
+                        integ.last_error = error_msg
+                        db.commit()
+                    except Exception:  # noqa: BLE001
+                        db.rollback()
+        finally:
+            db.close()
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to process IMAP UserIntegrations: %s", exc)
 
 
 def check_and_pull_mailbox(
@@ -228,7 +317,7 @@ def check_and_pull_mailbox(
     )
 
 
-def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_after_process):
+def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_after_process, owner_id=None):
     """
     Connects to the IMAP inbox, fetches new unread emails from the last 3 days,
     and processes attachments while preserving the original unread status.
@@ -238,6 +327,10 @@ def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_afte
       - Runs an X-GM-RAW query: "in:anywhere in:unread newer_than:3d has:attachment".
 
     For non-Gmail mailboxes, it falls back to selecting the INBOX with a SINCE/UNSEEN filter.
+
+    Args:
+        owner_id: Optional user identifier. When provided, ingested documents are
+                  attributed to this user via ``process_document`` / ``convert_to_pdf``.
     """
     logger.info("Connecting to %s at %s:%s (SSL=%s)", mailbox_key, host, port, use_ssl)
     processed_emails = load_processed_emails()
@@ -300,7 +393,7 @@ def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_afte
 
             # Process attachments (and convert non-PDF files).
             # We call the function without assigning its return value since it is not used.
-            fetch_attachments_and_enqueue(email_message)
+            fetch_attachments_and_enqueue(email_message, owner_id=owner_id)
 
             if settings.imap_readonly_mode:
                 logger.info("Readonly mode: skipping mailbox modifications for %s in %s", msg_id, mailbox_key)
@@ -329,7 +422,7 @@ def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_afte
         logger.exception("Error pulling mailbox %s: %s", mailbox_key, e)
 
 
-def fetch_attachments_and_enqueue(email_message):
+def fetch_attachments_and_enqueue(email_message, owner_id: str | None = None):
     """
     Extracts attachments from the email and processes only allowed file types.
 
@@ -353,6 +446,11 @@ def fetch_attachments_and_enqueue(email_message):
 
     If the attachment is a PDF (by extension or MIME type), it is enqueued for upload;
     any other allowed file is enqueued for conversion to PDF.
+
+    Args:
+        email_message: The parsed email message to extract attachments from.
+        owner_id: Optional user identifier forwarded to ``process_document`` /
+                  ``convert_to_pdf`` for multi-tenant attribution.
 
     Returns True if at least one allowed attachment was processed.
     """
@@ -381,11 +479,11 @@ def fetch_attachments_and_enqueue(email_message):
 
         # If it's a PDF by MIME type or extension, process it directly
         if mime_type == "application/pdf" or is_pdf_by_extension:
-            process_document.delay(file_path)
+            process_document.delay(file_path, owner_id=owner_id)
             logger.info("Enqueued PDF for upload: %s (MIME: %s)", filename, mime_type)
         elif mime_type in ALLOWED_MIME_TYPES:
             # Other allowed files are sent for conversion
-            convert_to_pdf.delay(file_path)
+            convert_to_pdf.delay(file_path, owner_id=owner_id)
             logger.info("Enqueued file for conversion to PDF: %s", filename)
 
         has_attachment = True
