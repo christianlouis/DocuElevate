@@ -637,3 +637,50 @@ class ApiToken(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class UserNotificationTarget(Base):
+    """Per-user notification target (email or webhook channel)."""
+
+    __tablename__ = "user_notification_targets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(String, nullable=False, index=True)
+    channel_type = Column(String(20), nullable=False)  # "email" or "webhook"
+    name = Column(String(255), nullable=False)  # Human-readable label
+    config = Column(Text, nullable=True)  # JSON: smtp config or webhook url
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class UserNotificationPreference(Base):
+    """Mapping: which user events trigger which notification channel."""
+
+    __tablename__ = "user_notification_preferences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(String, nullable=False, index=True)
+    event_type = Column(String(50), nullable=False)  # "document.processed", "document.failed"
+    channel_type = Column(String(20), nullable=False)  # "in_app", "email", "webhook"
+    target_id = Column(Integer, nullable=True)  # NULL = in_app, else UserNotificationTarget.id
+    is_enabled = Column(Boolean, nullable=False, default=True)
+
+    __table_args__ = (UniqueConstraint("owner_id", "event_type", "channel_type", "target_id"),)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class InAppNotification(Base):
+    """In-app notification record for the bell icon / inbox."""
+
+    __tablename__ = "in_app_notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(String, nullable=False, index=True)
+    event_type = Column(String(50), nullable=False)  # "document.processed", "document.failed"
+    title = Column(String(255), nullable=False)
+    message = Column(Text, nullable=True)
+    is_read = Column(Boolean, nullable=False, default=False, index=True)
+    file_id = Column(Integer, nullable=True)  # Optional link to FileRecord
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)

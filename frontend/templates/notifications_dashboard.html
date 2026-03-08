@@ -1,0 +1,979 @@
+{% extends "base.html" %}
+{% block title %}Notifications – DocuElevate{% endblock %}
+
+{% block content %}
+<div
+  class="container mx-auto px-4 py-8"
+  x-data="notificationsDashboard()"
+  x-init="init()"
+>
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <div class="mb-6">
+    <h1 class="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+      <i class="fas fa-bell text-blue-500" aria-hidden="true"></i>
+      Notifications
+    </h1>
+    <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">
+      Manage your notification inbox, targets, and event preferences.
+    </p>
+  </div>
+
+  <!-- ── Tab nav ────────────────────────────────────────────────────────── -->
+  <div class="border-b border-gray-200 dark:border-gray-700 mb-6" role="tablist" aria-label="Notification sections">
+    <nav class="-mb-px flex space-x-6">
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="activeTab === 'inbox'"
+        :tabindex="activeTab === 'inbox' ? 0 : -1"
+        @click="activeTab = 'inbox'"
+        :class="activeTab === 'inbox'
+          ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400'"
+        class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        aria-controls="panel-inbox"
+        id="tab-inbox"
+        style="min-height:44px;"
+      >
+        <i class="fas fa-inbox mr-1" aria-hidden="true"></i>
+        Inbox
+        <template x-if="unreadCount > 0">
+          <span
+            class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700"
+            aria-label="unread notifications"
+            x-text="unreadCount > 99 ? '99+' : unreadCount"
+          ></span>
+        </template>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="activeTab === 'settings'"
+        :tabindex="activeTab === 'settings' ? 0 : -1"
+        @click="activeTab = 'settings'"
+        :class="activeTab === 'settings'
+          ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400'"
+        class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        aria-controls="panel-settings"
+        id="tab-settings"
+        style="min-height:44px;"
+      >
+        <i class="fas fa-sliders-h mr-1" aria-hidden="true"></i>
+        Settings
+      </button>
+    </nav>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       INBOX PANEL
+  ══════════════════════════════════════════════════════════════════════ -->
+  <div
+    role="tabpanel"
+    id="panel-inbox"
+    aria-labelledby="tab-inbox"
+    x-show="activeTab === 'inbox'"
+  >
+    <!-- Toolbar -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+      <div class="flex items-center gap-3">
+        <label for="inboxFilter" class="text-sm font-medium text-gray-700 dark:text-gray-300">Show:</label>
+        <select
+          id="inboxFilter"
+          x-model="inboxFilter"
+          @change="loadInbox()"
+          class="text-sm border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          aria-label="Filter notifications"
+        >
+          <option value="all">All</option>
+          <option value="unread">Unread only</option>
+          <option value="read">Read only</option>
+        </select>
+      </div>
+      <button
+        type="button"
+        @click="markAllRead()"
+        :disabled="unreadCount === 0"
+        class="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+        style="min-height:44px;"
+        aria-label="Mark all notifications as read"
+      >
+        <i class="fas fa-check-double mr-1" aria-hidden="true"></i> Mark all read
+      </button>
+    </div>
+
+    <!-- Loading state -->
+    <template x-if="inboxLoading">
+      <div class="text-center py-12 text-gray-400" role="status" aria-live="polite">
+        <i class="fas fa-spinner fa-spin text-2xl" aria-hidden="true"></i>
+        <p class="mt-2 text-sm">Loading notifications…</p>
+      </div>
+    </template>
+
+    <!-- Empty state -->
+    <template x-if="!inboxLoading && filteredNotifications().length === 0">
+      <div class="text-center py-12 text-gray-400" role="status">
+        <i class="fas fa-bell-slash text-4xl mb-3" aria-hidden="true"></i>
+        <p class="text-sm">No notifications found.</p>
+      </div>
+    </template>
+
+    <!-- Notifications list -->
+    <template x-if="!inboxLoading && filteredNotifications().length > 0">
+      <ul class="space-y-2" role="list" aria-label="Notification items">
+        <template x-for="notif in filteredNotifications()" :key="notif.id">
+          <li
+            class="flex items-start gap-3 p-4 rounded-lg border transition-colors"
+            :class="notif.is_read
+              ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+              : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'"
+          >
+            <!-- Event icon -->
+            <div
+              class="flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center"
+              :class="notif.event_type === 'document.failed'
+                ? 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400'
+                : 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400'"
+              aria-hidden="true"
+            >
+              <i :class="notif.event_type === 'document.failed' ? 'fas fa-times-circle' : 'fas fa-check-circle'"></i>
+            </div>
+
+            <!-- Content -->
+            <div class="flex-1 min-w-0">
+              <p
+                class="text-sm font-medium text-gray-900 dark:text-white"
+                :class="notif.is_read ? '' : 'font-semibold'"
+                x-text="notif.title"
+              ></p>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5" x-text="notif.message"></p>
+              <p class="text-xs text-gray-400 dark:text-gray-500 mt-1" x-text="formatDate(notif.created_at)"></p>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex-shrink-0 flex items-center gap-2">
+              <template x-if="notif.file_id">
+                <a
+                  :href="`/files/${notif.file_id}`"
+                  class="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                  :aria-label="`View file for: ${notif.title}`"
+                >
+                  <i class="fas fa-external-link-alt" aria-hidden="true"></i>
+                </a>
+              </template>
+              <template x-if="!notif.is_read">
+                <button
+                  type="button"
+                  @click="markRead(notif)"
+                  class="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded p-1"
+                  :aria-label="`Mark as read: ${notif.title}`"
+                  style="min-height:44px;min-width:44px;"
+                  title="Mark as read"
+                >
+                  <i class="fas fa-check" aria-hidden="true"></i>
+                </button>
+              </template>
+            </div>
+          </li>
+        </template>
+      </ul>
+    </template>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       SETTINGS PANEL
+  ══════════════════════════════════════════════════════════════════════ -->
+  <div
+    role="tabpanel"
+    id="panel-settings"
+    aria-labelledby="tab-settings"
+    x-show="activeTab === 'settings'"
+  >
+
+    <!-- ── Notification Targets ──────────────────────────────────────────── -->
+    <section aria-labelledby="targets-heading" class="mb-10">
+      <div class="flex items-center justify-between mb-4">
+        <h2 id="targets-heading" class="text-xl font-semibold text-gray-900 dark:text-white">
+          <i class="fas fa-satellite-dish mr-2 text-indigo-500" aria-hidden="true"></i>Notification Targets
+        </h2>
+        <button
+          type="button"
+          @click="openAddTarget()"
+          class="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md bg-indigo-600 hover:bg-indigo-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          style="min-height:44px;"
+          aria-label="Add notification target"
+        >
+          <i class="fas fa-plus mr-1" aria-hidden="true"></i> Add Target
+        </button>
+      </div>
+
+      <template x-if="targetsLoading">
+        <div class="text-center py-8 text-gray-400" role="status" aria-live="polite">
+          <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+          <span class="sr-only">Loading targets…</span>
+        </div>
+      </template>
+
+      <template x-if="!targetsLoading && targets.length === 0">
+        <div class="text-center py-8 text-gray-400 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
+          <i class="fas fa-satellite-dish text-3xl mb-2" aria-hidden="true"></i>
+          <p class="text-sm">No notification targets configured.</p>
+          <p class="text-xs mt-1">Add an email or webhook target to receive notifications outside the app.</p>
+        </div>
+      </template>
+
+      <template x-if="!targetsLoading && targets.length > 0">
+        <div class="space-y-3" role="list" aria-label="Notification targets">
+          <template x-for="target in targets" :key="target.id">
+            <div
+              class="flex items-center gap-3 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
+              role="listitem"
+            >
+              <!-- Type icon -->
+              <div
+                class="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center"
+                :class="target.channel_type === 'email'
+                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
+                  : 'bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400'"
+                aria-hidden="true"
+              >
+                <i :class="target.channel_type === 'email' ? 'fas fa-envelope' : 'fas fa-globe'"></i>
+              </div>
+
+              <!-- Info -->
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-gray-900 dark:text-white" x-text="target.name"></p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 capitalize" x-text="target.channel_type"></p>
+              </div>
+
+              <!-- Active badge -->
+              <span
+                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                :class="target.is_active
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                  : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'"
+                x-text="target.is_active ? 'Active' : 'Inactive'"
+              ></span>
+
+              <!-- Actions -->
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  @click="testTarget(target)"
+                  class="p-2 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
+                  :aria-label="`Test target: ${target.name}`"
+                  style="min-height:44px;min-width:44px;"
+                  title="Send test notification"
+                >
+                  <i class="fas fa-paper-plane" aria-hidden="true"></i>
+                </button>
+                <button
+                  type="button"
+                  @click="openEditTarget(target)"
+                  class="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                  :aria-label="`Edit target: ${target.name}`"
+                  style="min-height:44px;min-width:44px;"
+                  title="Edit target"
+                >
+                  <i class="fas fa-pencil-alt" aria-hidden="true"></i>
+                </button>
+                <button
+                  type="button"
+                  @click="deleteTarget(target)"
+                  class="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 rounded"
+                  :aria-label="`Delete target: ${target.name}`"
+                  style="min-height:44px;min-width:44px;"
+                  title="Delete target"
+                >
+                  <i class="fas fa-trash" aria-hidden="true"></i>
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </template>
+    </section>
+
+    <!-- ── Event Preferences ─────────────────────────────────────────────── -->
+    <section aria-labelledby="prefs-heading">
+      <div class="flex items-center justify-between mb-4">
+        <h2 id="prefs-heading" class="text-xl font-semibold text-gray-900 dark:text-white">
+          <i class="fas fa-sliders-h mr-2 text-green-500" aria-hidden="true"></i>Event Preferences
+        </h2>
+        <button
+          type="button"
+          @click="savePreferences()"
+          :disabled="prefsSaving"
+          class="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+          style="min-height:44px;"
+          aria-label="Save notification preferences"
+        >
+          <template x-if="prefsSaving">
+            <i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i>
+          </template>
+          <template x-if="!prefsSaving">
+            <i class="fas fa-save mr-1" aria-hidden="true"></i>
+          </template>
+          Save Preferences
+        </button>
+      </div>
+
+      <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700" aria-label="Notification event preferences">
+            <thead class="bg-gray-50 dark:bg-gray-900">
+              <tr>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Event
+                </th>
+                <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  In-App
+                </th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Email
+                </th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Webhook
+                </th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+              <template x-for="eventType in eventTypes" :key="eventType">
+                <tr>
+                  <!-- Event label -->
+                  <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white" x-text="eventLabels[eventType] || eventType"></td>
+
+                  <!-- In-App (always enabled, non-editable) -->
+                  <td class="px-4 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked
+                      disabled
+                      class="h-4 w-4 text-blue-600 rounded opacity-60 cursor-not-allowed"
+                      :aria-label="`In-app notification for ${eventLabels[eventType] || eventType} (always enabled)`"
+                      title="In-app notifications are always enabled"
+                    />
+                  </td>
+
+                  <!-- Email channel -->
+                  <td class="px-4 py-3">
+                    <div class="flex flex-col gap-1">
+                      <template x-for="target in emailTargets()" :key="target.id">
+                        <label class="inline-flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            :checked="isPrefEnabled(eventType, 'email', target.id)"
+                            @change="togglePref(eventType, 'email', target.id, $event.target.checked)"
+                            class="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
+                            :aria-label="`Email via ${target.name} for ${eventLabels[eventType] || eventType}`"
+                          />
+                          <span class="text-xs text-gray-600 dark:text-gray-300" x-text="target.name"></span>
+                        </label>
+                      </template>
+                      <template x-if="emailTargets().length === 0">
+                        <span class="text-xs text-gray-400 italic">No email targets</span>
+                      </template>
+                    </div>
+                  </td>
+
+                  <!-- Webhook channel -->
+                  <td class="px-4 py-3">
+                    <div class="flex flex-col gap-1">
+                      <template x-for="target in webhookTargets()" :key="target.id">
+                        <label class="inline-flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            :checked="isPrefEnabled(eventType, 'webhook', target.id)"
+                            @change="togglePref(eventType, 'webhook', target.id, $event.target.checked)"
+                            class="h-4 w-4 text-purple-600 rounded focus:ring-purple-500"
+                            :aria-label="`Webhook via ${target.name} for ${eventLabels[eventType] || eventType}`"
+                          />
+                          <span class="text-xs text-gray-600 dark:text-gray-300" x-text="target.name"></span>
+                        </label>
+                      </template>
+                      <template x-if="webhookTargets().length === 0">
+                        <span class="text-xs text-gray-400 italic">No webhook targets</span>
+                      </template>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       TARGET MODAL (Add / Edit)
+  ══════════════════════════════════════════════════════════════════════ -->
+  <div
+    x-show="targetModalOpen"
+    x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="transition ease-in duration-150"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
+    role="dialog"
+    aria-modal="true"
+    :aria-labelledby="targetModalMode === 'edit' ? 'modal-edit-title' : 'modal-add-title'"
+    @keydown.escape.window="targetModalOpen = false"
+  >
+    <div
+      class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg"
+      @click.stop
+    >
+      <!-- Modal header -->
+      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <h3
+          :id="targetModalMode === 'edit' ? 'modal-edit-title' : 'modal-add-title'"
+          class="text-lg font-semibold text-gray-900 dark:text-white"
+          x-text="targetModalMode === 'edit' ? 'Edit Notification Target' : 'Add Notification Target'"
+        ></h3>
+        <button
+          type="button"
+          @click="targetModalOpen = false"
+          class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+          aria-label="Close modal"
+          style="min-height:44px;min-width:44px;"
+        >
+          <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <!-- Modal body -->
+      <form @submit.prevent="submitTargetForm()" class="px-6 py-5 space-y-4">
+        <!-- Channel type (only for new targets) -->
+        <template x-if="targetModalMode === 'add'">
+          <div>
+            <label for="modal-channel-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Channel Type <span class="text-red-500" aria-hidden="true">*</span>
+            </label>
+            <select
+              id="modal-channel-type"
+              x-model="targetForm.channel_type"
+              class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              required
+              aria-required="true"
+            >
+              <option value="email">Email (SMTP)</option>
+              <option value="webhook">Webhook (HTTP POST)</option>
+            </select>
+          </div>
+        </template>
+
+        <!-- Name -->
+        <div>
+          <label for="modal-target-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Name <span class="text-red-500" aria-hidden="true">*</span>
+          </label>
+          <input
+            type="text"
+            id="modal-target-name"
+            x-model="targetForm.name"
+            class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="e.g. My Gmail, Production Webhook"
+            required
+            aria-required="true"
+            maxlength="255"
+          />
+        </div>
+
+        <!-- Email-specific fields -->
+        <template x-if="targetForm.channel_type === 'email'">
+          <div class="space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="modal-smtp-host" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SMTP Host</label>
+                <input
+                  type="text"
+                  id="modal-smtp-host"
+                  x-model="targetForm.config.smtp_host"
+                  class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="smtp.example.com"
+                />
+              </div>
+              <div>
+                <label for="modal-smtp-port" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SMTP Port</label>
+                <input
+                  type="number"
+                  id="modal-smtp-port"
+                  x-model.number="targetForm.config.smtp_port"
+                  class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="587"
+                  min="1"
+                  max="65535"
+                />
+              </div>
+            </div>
+            <div>
+              <label for="modal-smtp-username" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SMTP Username</label>
+              <input
+                type="text"
+                id="modal-smtp-username"
+                x-model="targetForm.config.smtp_username"
+                class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="user@example.com"
+                autocomplete="off"
+              />
+            </div>
+            <div>
+              <label for="modal-smtp-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SMTP Password</label>
+              <input
+                type="password"
+                id="modal-smtp-password"
+                x-model="targetForm.config.smtp_password"
+                class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="Leave blank to keep existing"
+                autocomplete="new-password"
+              />
+            </div>
+            <div>
+              <label for="modal-recipient-email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Recipient Email</label>
+              <input
+                type="email"
+                id="modal-recipient-email"
+                x-model="targetForm.config.recipient_email"
+                class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="you@example.com"
+              />
+            </div>
+            <div>
+              <label for="modal-sender-email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sender Email (optional)</label>
+              <input
+                type="email"
+                id="modal-sender-email"
+                x-model="targetForm.config.sender_email"
+                class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="noreply@docuelevate.local"
+              />
+            </div>
+            <label class="inline-flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                x-model="targetForm.config.smtp_use_tls"
+                class="h-4 w-4 text-indigo-600 rounded focus:ring-indigo-500"
+                aria-label="Use STARTTLS"
+              />
+              <span class="text-sm text-gray-700 dark:text-gray-300">Use STARTTLS</span>
+            </label>
+          </div>
+        </template>
+
+        <!-- Webhook-specific fields -->
+        <template x-if="targetForm.channel_type === 'webhook'">
+          <div class="space-y-3">
+            <div>
+              <label for="modal-webhook-url" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Webhook URL</label>
+              <input
+                type="url"
+                id="modal-webhook-url"
+                x-model="targetForm.config.url"
+                class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="https://hooks.example.com/..."
+              />
+            </div>
+            <div>
+              <label for="modal-webhook-secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Secret (optional)
+              </label>
+              <input
+                type="password"
+                id="modal-webhook-secret"
+                x-model="targetForm.config.secret"
+                class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="Sent as X-DocuElevate-Secret header"
+                autocomplete="new-password"
+              />
+            </div>
+          </div>
+        </template>
+
+        <!-- Active toggle (edit mode) -->
+        <template x-if="targetModalMode === 'edit'">
+          <label class="inline-flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              x-model="targetForm.is_active"
+              class="h-4 w-4 text-indigo-600 rounded focus:ring-indigo-500"
+              aria-label="Target is active"
+            />
+            <span class="text-sm text-gray-700 dark:text-gray-300">Active</span>
+          </label>
+        </template>
+
+        <!-- Error -->
+        <template x-if="targetFormError">
+          <p class="text-sm text-red-600 dark:text-red-400" role="alert" x-text="targetFormError"></p>
+        </template>
+
+        <!-- Footer -->
+        <div class="flex justify-end gap-3 pt-2">
+          <button
+            type="button"
+            @click="targetModalOpen = false"
+            class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            style="min-height:44px;"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            :disabled="targetFormSaving"
+            class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            style="min-height:44px;"
+          >
+            <template x-if="targetFormSaving">
+              <i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i>
+            </template>
+            <span x-text="targetModalMode === 'edit' ? 'Save Changes' : 'Add Target'"></span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Global toast ───────────────────────────────────────────────────── -->
+  <div
+    x-show="toast.visible"
+    x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0 translate-y-2"
+    x-transition:enter-end="opacity-100 translate-y-0"
+    x-transition:leave="transition ease-in duration-150"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    class="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg shadow-lg px-4 py-3 text-white text-sm font-medium"
+    :class="toast.type === 'error' ? 'bg-red-600' : 'bg-green-600'"
+    role="status"
+    aria-live="polite"
+    x-text="toast.message"
+  ></div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function notificationsDashboard() {
+  return {
+    // Tab state
+    activeTab: 'inbox',
+
+    // Inbox
+    notifications: [],
+    inboxLoading: false,
+    inboxFilter: 'all',
+    unreadCount: 0,
+
+    // Targets
+    targets: [],
+    targetsLoading: false,
+
+    // Preferences
+    eventTypes: [],
+    eventLabels: {},
+    prefs: {},  // event_type -> channel_type -> {is_enabled, target_id}
+    prefsSaving: false,
+
+    // Target modal
+    targetModalOpen: false,
+    targetModalMode: 'add',
+    editingTargetId: null,
+    targetForm: {
+      channel_type: 'email',
+      name: '',
+      is_active: true,
+      config: { smtp_use_tls: true, smtp_port: 587 },
+    },
+    targetFormSaving: false,
+    targetFormError: '',
+
+    // Toast
+    toast: { visible: false, message: '', type: 'success' },
+
+    async init() {
+      await Promise.all([this.loadInbox(), this.loadTargets(), this.loadPreferences()]);
+    },
+
+    // ── Inbox ────────────────────────────────────────────────────────────
+
+    async loadInbox() {
+      this.inboxLoading = true;
+      try {
+        const resp = await fetch('/api/user-notifications/inbox?limit=100');
+        if (!resp.ok) throw new Error('Failed to load');
+        this.notifications = await resp.json();
+        this.unreadCount = this.notifications.filter(n => !n.is_read).length;
+      } catch (e) {
+        this.showToast('Failed to load notifications', 'error');
+      } finally {
+        this.inboxLoading = false;
+      }
+    },
+
+    filteredNotifications() {
+      if (this.inboxFilter === 'unread') return this.notifications.filter(n => !n.is_read);
+      if (this.inboxFilter === 'read') return this.notifications.filter(n => n.is_read);
+      return this.notifications;
+    },
+
+    async markRead(notif) {
+      try {
+        const resp = await fetch(`/api/user-notifications/inbox/${notif.id}/read`, { method: 'POST' });
+        if (!resp.ok) throw new Error('Failed');
+        notif.is_read = true;
+        this.unreadCount = Math.max(0, this.unreadCount - 1);
+        this.updateBadge();
+      } catch (e) {
+        this.showToast('Failed to mark as read', 'error');
+      }
+    },
+
+    async markAllRead() {
+      try {
+        const resp = await fetch('/api/user-notifications/inbox/read-all', { method: 'POST' });
+        if (!resp.ok) throw new Error('Failed');
+        this.notifications.forEach(n => { n.is_read = true; });
+        this.unreadCount = 0;
+        this.updateBadge();
+        this.showToast('All notifications marked as read');
+      } catch (e) {
+        this.showToast('Failed to mark all as read', 'error');
+      }
+    },
+
+    updateBadge() {
+      const badge = document.getElementById('notificationBadge');
+      if (!badge) return;
+      if (this.unreadCount > 0) {
+        badge.textContent = this.unreadCount > 99 ? '99+' : this.unreadCount;
+        badge.classList.remove('hidden');
+        badge.setAttribute('aria-label', this.unreadCount + ' unread notifications');
+      } else {
+        badge.classList.add('hidden');
+      }
+    },
+
+    formatDate(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return d.toLocaleString();
+    },
+
+    // ── Targets ──────────────────────────────────────────────────────────
+
+    async loadTargets() {
+      this.targetsLoading = true;
+      try {
+        const resp = await fetch('/api/user-notifications/targets');
+        if (!resp.ok) throw new Error('Failed to load targets');
+        this.targets = await resp.json();
+      } catch (e) {
+        this.showToast('Failed to load notification targets', 'error');
+      } finally {
+        this.targetsLoading = false;
+      }
+    },
+
+    emailTargets() {
+      return this.targets.filter(t => t.channel_type === 'email' && t.is_active);
+    },
+
+    webhookTargets() {
+      return this.targets.filter(t => t.channel_type === 'webhook' && t.is_active);
+    },
+
+    openAddTarget() {
+      this.targetModalMode = 'add';
+      this.editingTargetId = null;
+      this.targetForm = {
+        channel_type: 'email',
+        name: '',
+        is_active: true,
+        config: { smtp_use_tls: true, smtp_port: 587 },
+      };
+      this.targetFormError = '';
+      this.targetModalOpen = true;
+    },
+
+    openEditTarget(target) {
+      this.targetModalMode = 'edit';
+      this.editingTargetId = target.id;
+      this.targetForm = {
+        channel_type: target.channel_type,
+        name: target.name,
+        is_active: target.is_active,
+        config: Object.assign({}, target.config),
+      };
+      this.targetFormError = '';
+      this.targetModalOpen = true;
+    },
+
+    async submitTargetForm() {
+      this.targetFormSaving = true;
+      this.targetFormError = '';
+      try {
+        let url, method, body;
+        if (this.targetModalMode === 'add') {
+          url = '/api/user-notifications/targets';
+          method = 'POST';
+          body = {
+            channel_type: this.targetForm.channel_type,
+            name: this.targetForm.name,
+            is_active: this.targetForm.is_active,
+            config: this.targetForm.config,
+          };
+        } else {
+          url = `/api/user-notifications/targets/${this.editingTargetId}`;
+          method = 'PUT';
+          body = {
+            name: this.targetForm.name,
+            is_active: this.targetForm.is_active,
+            config: this.targetForm.config,
+          };
+        }
+        const resp = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.detail || 'Failed to save target');
+        }
+        await this.loadTargets();
+        this.targetModalOpen = false;
+        this.showToast(this.targetModalMode === 'edit' ? 'Target updated' : 'Target created');
+      } catch (e) {
+        this.targetFormError = e.message;
+      } finally {
+        this.targetFormSaving = false;
+      }
+    },
+
+    async deleteTarget(target) {
+      if (!confirm(`Delete notification target "${target.name}"? Associated preferences will also be removed.`)) return;
+      try {
+        const resp = await fetch(`/api/user-notifications/targets/${target.id}`, { method: 'DELETE' });
+        if (!resp.ok) throw new Error('Failed to delete');
+        await this.loadTargets();
+        await this.loadPreferences();
+        this.showToast('Target deleted');
+      } catch (e) {
+        this.showToast('Failed to delete target', 'error');
+      }
+    },
+
+    async testTarget(target) {
+      try {
+        const resp = await fetch(`/api/user-notifications/targets/${target.id}/test`, { method: 'POST' });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.detail || 'Test failed');
+        }
+        this.showToast('Test notification sent!');
+      } catch (e) {
+        this.showToast(`Test failed: ${e.message}`, 'error');
+      }
+    },
+
+    // ── Preferences ──────────────────────────────────────────────────────
+
+    async loadPreferences() {
+      try {
+        const resp = await fetch('/api/user-notifications/preferences');
+        if (!resp.ok) throw new Error('Failed to load preferences');
+        const data = await resp.json();
+        this.eventTypes = data.event_types || [];
+        this.eventLabels = data.event_labels || {};
+        this.prefs = data.preferences || {};
+        // Build flat list for isPrefEnabled lookups
+        this._prefsList = [];
+        for (const [et, channelMap] of Object.entries(this.prefs)) {
+          for (const [ct, item] of Object.entries(channelMap)) {
+            this._prefsList.push({
+              event_type: et,
+              channel_type: ct,
+              target_id: item.target_id,
+              is_enabled: item.is_enabled,
+            });
+          }
+        }
+      } catch (e) {
+        this.showToast('Failed to load preferences', 'error');
+      }
+    },
+
+    isPrefEnabled(eventType, channelType, targetId) {
+      const entry = this._prefKey(eventType, channelType, targetId);
+      return entry ? entry.is_enabled : false;
+    },
+
+    _prefKey(eventType, channelType, targetId) {
+      if (!this._prefsList) return null;
+      return this._prefsList.find(
+        p => p.event_type === eventType && p.channel_type === channelType && p.target_id === targetId
+      ) || null;
+    },
+
+    // Store pending pref changes as a dict: `${eventType}|${channelType}|${targetId}` -> is_enabled
+    _pendingPrefs: {},
+    _prefsList: [],
+
+    togglePref(eventType, channelType, targetId, enabled) {
+      const k = `${eventType}|${channelType}|${targetId}`;
+      this._pendingPrefs[k] = { event_type: eventType, channel_type: channelType, target_id: targetId, is_enabled: enabled };
+      // Update in _prefsList for immediate UI feedback
+      const idx = this._prefsList.findIndex(
+        p => p.event_type === eventType && p.channel_type === channelType && p.target_id === targetId
+      );
+      if (idx >= 0) {
+        this._prefsList[idx].is_enabled = enabled;
+      } else {
+        this._prefsList.push({ event_type: eventType, channel_type: channelType, target_id: targetId, is_enabled: enabled });
+      }
+    },
+
+    async savePreferences() {
+      this.prefsSaving = true;
+      try {
+        // Build flat list from all pending changes
+        const prefsList = Object.values(this._pendingPrefs).map(entry => ({
+          event_type: entry.event_type,
+          channel_type: entry.channel_type,
+          target_id: entry.target_id,
+          is_enabled: entry.is_enabled,
+        }));
+        const resp = await fetch('/api/user-notifications/preferences', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ preferences: prefsList }),
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.detail || 'Failed to save');
+        }
+        this._pendingPrefs = {};
+        await this.loadPreferences();
+        this.showToast('Preferences saved');
+      } catch (e) {
+        this.showToast(`Failed to save preferences: ${e.message}`, 'error');
+      } finally {
+        this.prefsSaving = false;
+      }
+    },
+
+    // ── Toast ─────────────────────────────────────────────────────────────
+
+    showToast(message, type = 'success') {
+      this.toast = { visible: true, message, type };
+      setTimeout(() => { this.toast.visible = false; }, 3500);
+    },
+  };
+}
+</script>
+{% endblock %}
