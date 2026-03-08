@@ -55,7 +55,7 @@ router = APIRouter()
 def get_current_user(request: Request):
     # Check for Bearer token auth first (API tokens)
     api_user = getattr(request.state, "api_token_user", None)
-    if api_user:
+    if isinstance(api_user, dict):
         return api_user
     return request.session.get("user")
 
@@ -71,11 +71,11 @@ def _resolve_bearer_user(request: Request, db: Session) -> dict | None:
         A user dict or ``None`` if no valid Bearer token is present.
     """
     auth_header = request.headers.get("authorization", "")
-    if not auth_header.startswith("Bearer "):
+    if not isinstance(auth_header, str) or not auth_header.startswith("Bearer "):
         return None
 
     raw_token = auth_header[7:]
-    if not raw_token:
+    if not raw_token or not isinstance(raw_token, str):
         return None
 
     from app.models import ApiToken
@@ -145,13 +145,16 @@ def require_login(func):
         # Fall back to Bearer token auth for API endpoints
         url_path = urlparse(str(request.url)).path
         if url_path.startswith("/api/"):
-            from app.database import SessionLocal
-
-            db = SessionLocal()
             try:
-                api_user = _resolve_bearer_user(request, db)
-            finally:
-                db.close()
+                from app.database import SessionLocal
+
+                db = SessionLocal()
+                try:
+                    api_user = _resolve_bearer_user(request, db)
+                finally:
+                    db.close()
+            except Exception:
+                api_user = None
 
             if api_user:
                 request.state.api_token_user = api_user

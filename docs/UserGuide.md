@@ -165,6 +165,7 @@ The **Integrations** page (`/integrations`) provides a unified view of all your 
    - **Email Forward** — recipient email address
    - **Watch Folder** — folder path
    - **Paperless NGX** — URL and API token
+   - **Webhook** — no configuration needed; the form shows a quick-start guide with sample `curl` and Python snippets for uploading documents via the API
 5. Click **Test Connection** to verify the settings before saving.
 6. Click **Save** to persist the integration.
 
@@ -192,6 +193,52 @@ This is the recommended approach for:
 DocuElevate can poll an FTP or SFTP directory for new files. Enable this with `FTP_INGEST_ENABLED` or `SFTP_INGEST_ENABLED` and set the corresponding ingest folder. DocuElevate downloads new files, enqueues them for processing, and optionally deletes them from the remote server.
 
 See [Configuration Guide — Watch Folder Ingestion](ConfigurationGuide.md#watch-folder-ingestion) for full setup instructions.
+
+### Webhook Ingestion (API Upload)
+
+Webhook integrations allow external systems to push documents directly into DocuElevate
+via the REST API. Instead of DocuElevate polling for new files, **your application sends
+files to DocuElevate** using an HTTP request with an API token for authentication.
+
+This is ideal for:
+- **CI/CD pipelines** — upload build artifacts or generated reports
+- **Scanner integrations** — push scanned documents from network scanners
+- **Automation scripts** — send documents from any system with HTTP support
+
+To set up webhook ingestion:
+
+1. Go to **Integrations** and add a new **Source → Webhook** integration.
+   The integration form shows copy-ready code snippets.
+2. Go to **API Tokens** (in your user menu) and create a personal API token.
+3. Use the token to upload documents:
+
+```bash
+curl -X POST "https://your-instance/api/files/ui-upload" \
+  -H "Authorization: Bearer de_your_token_here" \
+  -F "file=@/path/to/document.pdf"
+```
+
+See the [API Documentation](API.md#api-tokens) for detailed API token management.
+
+### API Tokens
+
+API tokens provide secure, programmatic access to the DocuElevate API. Each user
+can create multiple tokens, each with a descriptive name.
+
+**Features:**
+- **Multiple tokens** — create separate tokens for different scripts or integrations
+- **Usage tracking** — see when each token was last used and from which IP address
+- **Revocation** — instantly disable a compromised token without affecting others
+
+**Managing tokens:**
+
+1. Click your avatar in the top navigation and select **API Tokens**, or go to `/api-tokens`.
+2. Enter a descriptive name and click **Create Token**.
+3. Copy the token immediately — it is shown only once.
+4. To revoke a token, click **Revoke** next to it in the token list.
+
+> **Security tip:** Create a dedicated token for each integration and revoke it
+> immediately if compromised. Never share tokens or commit them to source control.
 
 ## Managing Documents
 
