@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.88.2 (2026-03-08)
+
+### Bug Fixes
+
+- **auth**: Prevent None==None admin credential bypass creating phantom admin user
+  ([`b95f552`](https://github.com/christianlouis/DocuElevate/commit/b95f552ed231d660303116b608b8f07b6a89fdc4))
+
+
 ## v0.88.1 (2026-03-08)
 
 ### Bug Fixes
