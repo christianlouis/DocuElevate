@@ -1,6 +1,5 @@
 """Tests for the personal API tokens feature (app/api/api_tokens.py + auth integration)."""
 
-
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
