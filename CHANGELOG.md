@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.91.0 (2026-03-08)
+
+### Features
+
+- **backup**: Extend backup and restore to PostgreSQL and MySQL/MariaDB
+  ([`a0f5ba1`](https://github.com/christianlouis/DocuElevate/commit/a0f5ba179978d7c63bbdb8c564a32eaf3f78e5ad))
+
+
 ## v0.90.3 (2026-03-08)
 
 ### Bug Fixes
