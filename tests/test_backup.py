@@ -1046,3 +1046,1095 @@ class TestBackupView:
         with TestClient(app, base_url="http://localhost", raise_server_exceptions=False) as client:
             resp = client.get("/admin/backup", follow_redirects=False)
         assert resp.status_code in (302, 303)
+
+
+# ---------------------------------------------------------------------------
+# Additional coverage tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestDumpPostgresqlBranches:
+    """Tests for branch coverage in _dump_postgresql."""
+
+    def test_dump_postgresql_no_password(self, tmp_path):
+        """_dump_postgresql() works with a URL that has no password."""
+        from app.tasks.backup_tasks import _dump_postgresql
+
+        dest = tmp_path / "dump.pgsql.gz"
+        fake_sql = b"-- PostgreSQL dump\n"
+
+        mock_proc = MagicMock()
+        mock_proc.stdout.read.side_effect = [fake_sql, b""]
+        mock_proc.stderr.read.return_value = b""
+        mock_proc.returncode = 0
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc):
+            _dump_postgresql("postgresql://localhost/testdb", dest)
+
+        assert dest.exists()
+
+    def test_dump_postgresql_with_port(self, tmp_path):
+        """_dump_postgresql() includes -p when URL has a port."""
+        from app.tasks.backup_tasks import _dump_postgresql
+
+        dest = tmp_path / "dump.pgsql.gz"
+        mock_proc = MagicMock()
+        mock_proc.stdout.read.side_effect = [b"data", b""]
+        mock_proc.stderr.read.return_value = b""
+        mock_proc.returncode = 0
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc) as mock_popen:
+            _dump_postgresql("postgresql://user:pass@localhost:5433/testdb", dest)
+
+        cmd = mock_popen.call_args[0][0]
+        assert "-p" in cmd
+        assert "5433" in cmd
+
+    def test_dump_postgresql_no_host_no_port_no_user_no_db(self, tmp_path):
+        """_dump_postgresql() works with minimal URL (no host/port/user/db)."""
+        from app.tasks.backup_tasks import _dump_postgresql
+
+        dest = tmp_path / "dump.pgsql.gz"
+        mock_proc = MagicMock()
+        mock_proc.stdout.read.side_effect = [b"data", b""]
+        mock_proc.stderr.read.return_value = b""
+        mock_proc.returncode = 0
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc) as mock_popen:
+            # Minimal URL: no host, no port, no username, no database
+            _dump_postgresql("postgresql:///", dest)
+
+        cmd = mock_popen.call_args[0][0]
+        # Should only have the base command args
+        assert "-h" not in cmd
+        assert "-p" not in cmd
+        assert "-U" not in cmd
+
+
+@pytest.mark.unit
+class TestDumpMysqlBranches:
+    """Tests for branch coverage in _dump_mysql."""
+
+    def test_dump_mysql_no_password(self, tmp_path):
+        """_dump_mysql() works with a URL that has no password."""
+        from app.tasks.backup_tasks import _dump_mysql
+
+        dest = tmp_path / "dump.mysql.gz"
+        fake_sql = b"-- MySQL dump\n"
+
+        mock_proc = MagicMock()
+        mock_proc.stdout.read.side_effect = [fake_sql, b""]
+        mock_proc.stderr.read.return_value = b""
+        mock_proc.returncode = 0
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc):
+            _dump_mysql("mysql+pymysql://localhost/testdb", dest)
+
+        assert dest.exists()
+
+    def test_dump_mysql_with_port(self, tmp_path):
+        """_dump_mysql() includes -P when URL has a port."""
+        from app.tasks.backup_tasks import _dump_mysql
+
+        dest = tmp_path / "dump.mysql.gz"
+        mock_proc = MagicMock()
+        mock_proc.stdout.read.side_effect = [b"data", b""]
+        mock_proc.stderr.read.return_value = b""
+        mock_proc.returncode = 0
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc) as mock_popen:
+            _dump_mysql("mysql+pymysql://user:pass@localhost:3307/testdb", dest)
+
+        cmd = mock_popen.call_args[0][0]
+        assert "-P" in cmd
+        assert "3307" in cmd
+
+    def test_dump_mysql_no_host_no_user_no_db(self, tmp_path):
+        """_dump_mysql() works with minimal URL."""
+        from app.tasks.backup_tasks import _dump_mysql
+
+        dest = tmp_path / "dump.mysql.gz"
+        mock_proc = MagicMock()
+        mock_proc.stdout.read.side_effect = [b"data", b""]
+        mock_proc.stderr.read.return_value = b""
+        mock_proc.returncode = 0
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc) as mock_popen:
+            _dump_mysql("mysql:///", dest)
+
+        cmd = mock_popen.call_args[0][0]
+        assert "-h" not in cmd
+        assert "-P" not in cmd
+        assert "-u" not in cmd
+
+
+@pytest.mark.unit
+class TestRestoreSqliteBranches:
+    """Tests for error paths in _restore_sqlite."""
+
+    def test_restore_sqlite_shutil_copy_failure(self, tmp_path):
+        """_restore_sqlite() logs warning when pre-restore copy fails but continues."""
+        from app.tasks.backup_tasks import _restore_sqlite
+
+        db_file = tmp_path / "test.db"
+        # Create a real sqlite db file
+        conn = sqlite3.connect(str(db_file))
+        conn.execute("CREATE TABLE orig (id INTEGER)")
+        conn.commit()
+        conn.close()
+
+        # Valid dump archive
+        sql = "BEGIN TRANSACTION;\nCREATE TABLE restored (x TEXT);\nCOMMIT;\n"
+        archive = tmp_path / "dump.db.gz"
+        with gzip.open(str(archive), "wt") as gz:
+            gz.write(sql)
+
+        with patch("shutil.copy2", side_effect=OSError("disk full")):
+            # Should complete without raising despite the copy failure
+            _restore_sqlite(db_file, archive)
+
+        # The restore still ran (new table exists)
+        conn2 = sqlite3.connect(str(db_file))
+        tables = [r[0] for r in conn2.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        conn2.close()
+        assert "restored" in tables
+
+    def test_restore_sqlite_runtime_error_with_rollback(self, tmp_path):
+        """_restore_sqlite() raises RuntimeError and attempts rollback when restore fails."""
+        from app.tasks.backup_tasks import _restore_sqlite
+
+        db_file = tmp_path / "test.db"
+        conn = sqlite3.connect(str(db_file))
+        conn.execute("CREATE TABLE original (id INTEGER)")
+        conn.commit()
+        conn.close()
+
+        # Valid dump archive that passes validation
+        sql = "BEGIN TRANSACTION;\nCREATE TABLE new_tbl (x TEXT);\nCOMMIT;\n"
+        archive = tmp_path / "dump.db.gz"
+        with gzip.open(str(archive), "wt") as gz:
+            gz.write(sql)
+
+        real_connect = sqlite3.connect
+
+        def mock_connect(path, *args, **kwargs):
+            if path == ":memory:":
+                # Allow the validation connect
+                return real_connect(path, *args, **kwargs)
+            # Fail the live restore connection
+            raise sqlite3.Error("disk error")
+
+        with patch("sqlite3.connect", side_effect=mock_connect):
+            with pytest.raises(RuntimeError, match="SQLite restore failed"):
+                _restore_sqlite(db_file, archive)
+
+    def test_restore_sqlite_rollback_failure_logged(self, tmp_path):
+        """_restore_sqlite() logs an error when rollback also fails."""
+        from app.tasks.backup_tasks import _restore_sqlite
+
+        db_file = tmp_path / "test.db"
+        conn = sqlite3.connect(str(db_file))
+        conn.execute("CREATE TABLE original (id INTEGER)")
+        conn.commit()
+        conn.close()
+
+        sql = "BEGIN TRANSACTION;\nCREATE TABLE new_tbl (x TEXT);\nCOMMIT;\n"
+        archive = tmp_path / "dump.db.gz"
+        with gzip.open(str(archive), "wt") as gz:
+            gz.write(sql)
+
+        # Create the pre_restore backup file so os.path.exists returns True
+        bak = str(db_file) + ".pre_restore"
+        Path(bak).write_bytes(b"original")
+
+        real_connect = sqlite3.connect
+
+        def mock_connect(path, *args, **kwargs):
+            if path == ":memory:":
+                return real_connect(path, *args, **kwargs)
+            raise sqlite3.Error("disk error")
+
+        with (
+            patch("sqlite3.connect", side_effect=mock_connect),
+            # pre-restore shutil.copy2 fails → logs warning; rollback copy2 also fails → logs error
+            patch("shutil.copy2", side_effect=OSError("io error")),
+            patch("app.tasks.backup_tasks.os.path.exists", return_value=True),
+        ):
+            with pytest.raises(RuntimeError, match="SQLite restore failed"):
+                _restore_sqlite(db_file, archive)
+
+    def test_restore_sqlite_rollback_no_bak_file(self, tmp_path):
+        """_restore_sqlite() raises RuntimeError when bak file is missing (no rollback needed)."""
+        from app.tasks.backup_tasks import _restore_sqlite
+
+        db_file = tmp_path / "test.db"
+        conn = sqlite3.connect(str(db_file))
+        conn.execute("CREATE TABLE original (id INTEGER)")
+        conn.commit()
+        conn.close()
+
+        sql = "BEGIN TRANSACTION;\nCREATE TABLE new_tbl (x TEXT);\nCOMMIT;\n"
+        archive = tmp_path / "dump.db.gz"
+        with gzip.open(str(archive), "wt") as gz:
+            gz.write(sql)
+
+        real_connect = sqlite3.connect
+
+        def mock_connect(path, *args, **kwargs):
+            if path == ":memory:":
+                return real_connect(path, *args, **kwargs)
+            raise sqlite3.Error("disk error")
+
+        with (
+            patch("sqlite3.connect", side_effect=mock_connect),
+            # Make os.path.exists return False so the rollback bak-file check fails
+            patch("app.tasks.backup_tasks.os.path.exists", return_value=False),
+        ):
+            with pytest.raises(RuntimeError, match="SQLite restore failed"):
+                _restore_sqlite(db_file, archive)
+
+
+@pytest.mark.unit
+class TestRestorePostgresqlBranches:
+    """Tests for URL branch coverage in _restore_postgresql."""
+
+    def test_restore_postgresql_no_password(self, tmp_path):
+        """_restore_postgresql() works with a URL that has no password."""
+        from app.tasks.backup_tasks import _restore_postgresql
+
+        archive = tmp_path / "dump.pgsql.gz"
+        with gzip.open(str(archive), "wb") as gz:
+            gz.write(b"SELECT 1;")
+
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = (b"", b"")
+        mock_proc.returncode = 0
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc):
+            _restore_postgresql("postgresql://localhost/testdb", archive)
+
+    def test_restore_postgresql_with_port(self, tmp_path):
+        """_restore_postgresql() includes -p when URL has a port."""
+        from app.tasks.backup_tasks import _restore_postgresql
+
+        archive = tmp_path / "dump.pgsql.gz"
+        with gzip.open(str(archive), "wb") as gz:
+            gz.write(b"SELECT 1;")
+
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = (b"", b"")
+        mock_proc.returncode = 0
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc) as mock_popen:
+            _restore_postgresql("postgresql://user:pass@localhost:5433/testdb", archive)
+
+        cmd = mock_popen.call_args[0][0]
+        assert "-p" in cmd
+        assert "5433" in cmd
+
+    def test_restore_postgresql_no_host_no_user_no_db(self, tmp_path):
+        """_restore_postgresql() works with minimal URL."""
+        from app.tasks.backup_tasks import _restore_postgresql
+
+        archive = tmp_path / "dump.pgsql.gz"
+        with gzip.open(str(archive), "wb") as gz:
+            gz.write(b"SELECT 1;")
+
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = (b"", b"")
+        mock_proc.returncode = 0
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc) as mock_popen:
+            _restore_postgresql("postgresql:///", archive)
+
+        cmd = mock_popen.call_args[0][0]
+        assert "-h" not in cmd
+        assert "-p" not in cmd
+        assert "-U" not in cmd
+
+
+@pytest.mark.unit
+class TestRestoreMysqlBranches:
+    """Tests for URL branch coverage in _restore_mysql."""
+
+    def test_restore_mysql_no_password(self, tmp_path):
+        """_restore_mysql() works with a URL that has no password."""
+        from app.tasks.backup_tasks import _restore_mysql
+
+        archive = tmp_path / "dump.mysql.gz"
+        with gzip.open(str(archive), "wb") as gz:
+            gz.write(b"SELECT 1;")
+
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = (b"", b"")
+        mock_proc.returncode = 0
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc):
+            _restore_mysql("mysql+pymysql://localhost/testdb", archive)
+
+    def test_restore_mysql_with_port(self, tmp_path):
+        """_restore_mysql() includes -P when URL has a port."""
+        from app.tasks.backup_tasks import _restore_mysql
+
+        archive = tmp_path / "dump.mysql.gz"
+        with gzip.open(str(archive), "wb") as gz:
+            gz.write(b"SELECT 1;")
+
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = (b"", b"")
+        mock_proc.returncode = 0
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc) as mock_popen:
+            _restore_mysql("mysql+pymysql://user:pass@localhost:3307/testdb", archive)
+
+        cmd = mock_popen.call_args[0][0]
+        assert "-P" in cmd
+        assert "3307" in cmd
+
+    def test_restore_mysql_no_host_no_user_no_db(self, tmp_path):
+        """_restore_mysql() works with minimal URL."""
+        from app.tasks.backup_tasks import _restore_mysql
+
+        archive = tmp_path / "dump.mysql.gz"
+        with gzip.open(str(archive), "wb") as gz:
+            gz.write(b"SELECT 1;")
+
+        mock_proc = MagicMock()
+        mock_proc.communicate.return_value = (b"", b"")
+        mock_proc.returncode = 0
+
+        with patch("app.tasks.backup_tasks.subprocess.Popen", return_value=mock_proc) as mock_popen:
+            _restore_mysql("mysql:///", archive)
+
+        cmd = mock_popen.call_args[0][0]
+        assert "-h" not in cmd
+        assert "-P" not in cmd
+        assert "-u" not in cmd
+
+
+@pytest.mark.unit
+class TestApplyRetentionOSError:
+    """Tests for OSError path in _apply_retention."""
+
+    def test_apply_retention_oserror_on_remove(self, tmp_path, db_session):
+        """_apply_retention() logs a warning when os.remove fails."""
+        from app.tasks.backup_tasks import _apply_retention
+
+        # Create 3 records; retain only 1 → 2 will be pruned
+        for i in range(3):
+            f = tmp_path / f"bkp_{i}.db.gz"
+            f.write_bytes(b"x")
+            db_session.add(
+                BackupRecord(
+                    filename=f"bkp_{i}.db.gz",
+                    local_path=str(f),
+                    backup_type="daily",
+                    size_bytes=1,
+                    status="ok",
+                    created_at=datetime(2026, 1, i + 1, tzinfo=timezone.utc),
+                )
+            )
+        db_session.commit()
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("app.tasks.backup_tasks.os.remove", side_effect=OSError("permission denied")),
+        ):
+            mock_settings.backup_retain_daily = 1
+            _apply_retention("daily", db_session)
+
+        # Records without remote_path should still be deleted
+        remaining = db_session.query(BackupRecord).filter_by(backup_type="daily").all()
+        assert len(remaining) <= 1
+
+    def test_apply_retention_keeps_record_with_remote(self, tmp_path, db_session):
+        """_apply_retention() keeps DB record when record still has a remote copy."""
+        from app.tasks.backup_tasks import _apply_retention
+
+        # Create 2 records: 1 new, 1 old with remote path
+        db_session.add(
+            BackupRecord(
+                filename="bkp_new.db.gz",
+                backup_type="weekly",
+                size_bytes=1,
+                status="ok",
+                created_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+            )
+        )
+        old = BackupRecord(
+            filename="bkp_old.db.gz",
+            local_path=str(tmp_path / "bkp_old.db.gz"),
+            backup_type="weekly",
+            size_bytes=1,
+            status="ok",
+            remote_path="backups/bkp_old.db.gz",
+            remote_destination="s3",
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        db_session.add(old)
+        db_session.commit()
+
+        with patch("app.tasks.backup_tasks.settings") as mock_settings:
+            mock_settings.backup_retain_weekly = 1
+            _apply_retention("weekly", db_session)
+
+        # Old record should still exist because it has a remote copy
+        still_there = db_session.query(BackupRecord).filter_by(filename="bkp_old.db.gz").first()
+        assert still_there is not None
+        assert still_there.local_path is None  # local path cleared
+
+
+@pytest.mark.unit
+class TestPruneRemoteBackups:
+    """Tests for _prune_remote_backups."""
+
+    def test_prune_remote_backups_deletes_old_remote(self, db_session):
+        """_prune_remote_backups() deletes remote copies beyond the retention limit."""
+        from app.tasks.backup_tasks import _prune_remote_backups
+
+        for i in range(3):
+            db_session.add(
+                BackupRecord(
+                    filename=f"bkp_{i}.db.gz",
+                    backup_type="hourly",
+                    size_bytes=1,
+                    status="ok",
+                    remote_destination="s3",
+                    remote_path=f"backups/bkp_{i}.db.gz",
+                    created_at=datetime(2026, 1, i + 1, tzinfo=timezone.utc),
+                )
+            )
+        db_session.commit()
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("app.tasks.backup_tasks._delete_remote_copy") as mock_delete,
+        ):
+            mock_settings.backup_retain_hourly = 2
+            _prune_remote_backups("hourly", db_session)
+
+        # Oldest record should have been passed to _delete_remote_copy
+        mock_delete.assert_called_once()
+
+    def test_prune_remote_backups_no_remote_records(self, db_session):
+        """_prune_remote_backups() is a no-op when no records have remote paths."""
+        from app.tasks.backup_tasks import _prune_remote_backups
+
+        for i in range(3):
+            db_session.add(
+                BackupRecord(
+                    filename=f"bkp_noremote_{i}.db.gz",
+                    backup_type="daily",
+                    size_bytes=1,
+                    status="ok",
+                    # No remote_path
+                    created_at=datetime(2026, 1, i + 1, tzinfo=timezone.utc),
+                )
+            )
+        db_session.commit()
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("app.tasks.backup_tasks._delete_remote_copy") as mock_delete,
+        ):
+            mock_settings.backup_retain_daily = 1
+            _prune_remote_backups("daily", db_session)
+
+        mock_delete.assert_not_called()
+
+    def test_prune_remote_backups_deletes_record_no_local(self, db_session):
+        """_prune_remote_backups() deletes the DB record when no local path remains."""
+        from app.tasks.backup_tasks import _prune_remote_backups
+
+        # 2 new records + 1 old one without local path
+        for i in range(2):
+            db_session.add(
+                BackupRecord(
+                    filename=f"bkp_new_{i}.db.gz",
+                    backup_type="weekly",
+                    size_bytes=1,
+                    status="ok",
+                    remote_destination="s3",
+                    remote_path=f"backups/bkp_new_{i}.db.gz",
+                    created_at=datetime(2026, 1, i + 2, tzinfo=timezone.utc),
+                )
+            )
+        old = BackupRecord(
+            filename="bkp_old_nolocal.db.gz",
+            local_path=None,
+            backup_type="weekly",
+            size_bytes=1,
+            status="ok",
+            remote_destination="s3",
+            remote_path="backups/bkp_old_nolocal.db.gz",
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        db_session.add(old)
+        db_session.commit()
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("app.tasks.backup_tasks._delete_remote_copy"),
+        ):
+            mock_settings.backup_retain_weekly = 2
+            _prune_remote_backups("weekly", db_session)
+
+        gone = db_session.query(BackupRecord).filter_by(filename="bkp_old_nolocal.db.gz").first()
+        assert gone is None
+
+    def test_prune_remote_backups_keeps_record_with_local(self, db_session):
+        """_prune_remote_backups() keeps the DB record when local_path still exists."""
+        from app.tasks.backup_tasks import _prune_remote_backups
+
+        # 2 new records + 1 old one WITH a local path
+        for i in range(2):
+            db_session.add(
+                BackupRecord(
+                    filename=f"bkp_new2_{i}.db.gz",
+                    backup_type="hourly",
+                    size_bytes=1,
+                    status="ok",
+                    remote_destination="s3",
+                    remote_path=f"backups/bkp_new2_{i}.db.gz",
+                    created_at=datetime(2026, 1, i + 2, tzinfo=timezone.utc),
+                )
+            )
+        old_with_local = BackupRecord(
+            filename="bkp_old_withlocal.db.gz",
+            local_path="/tmp/bkp_old_withlocal.db.gz",
+            backup_type="hourly",
+            size_bytes=1,
+            status="ok",
+            remote_destination="s3",
+            remote_path="backups/bkp_old_withlocal.db.gz",
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        db_session.add(old_with_local)
+        db_session.commit()
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("app.tasks.backup_tasks._delete_remote_copy"),
+        ):
+            mock_settings.backup_retain_hourly = 2
+            _prune_remote_backups("hourly", db_session)
+
+        # Record should still exist because local_path is set
+        still_there = db_session.query(BackupRecord).filter_by(filename="bkp_old_withlocal.db.gz").first()
+        assert still_there is not None
+        assert still_there.remote_path is None  # remote path cleared
+
+
+@pytest.mark.unit
+class TestDeleteRemoteCopy:
+    """Tests for _delete_remote_copy."""
+
+    def test_delete_remote_copy_s3(self):
+        """_delete_remote_copy() calls s3.delete_object for S3 destination."""
+        from app.tasks.backup_tasks import _delete_remote_copy
+
+        rec = BackupRecord(
+            filename="x.db.gz",
+            backup_type="hourly",
+            remote_destination="s3",
+            remote_path="backups/x.db.gz",
+        )
+
+        mock_s3 = MagicMock()
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("boto3.client", return_value=mock_s3),
+        ):
+            mock_settings.aws_region = "us-east-1"
+            mock_settings.aws_access_key_id = "key"
+            mock_settings.aws_secret_access_key = "secret"
+            mock_settings.s3_bucket_name = "my-bucket"
+            _delete_remote_copy(rec)
+
+        mock_s3.delete_object.assert_called_once_with(Bucket="my-bucket", Key="backups/x.db.gz")
+
+    def test_delete_remote_copy_s3_exception_logged(self):
+        """_delete_remote_copy() logs warning on S3 deletion failure."""
+        from app.tasks.backup_tasks import _delete_remote_copy
+
+        rec = BackupRecord(
+            filename="x.db.gz",
+            backup_type="hourly",
+            remote_destination="s3",
+            remote_path="backups/x.db.gz",
+        )
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("boto3.client", side_effect=Exception("S3 connection error")),
+        ):
+            mock_settings.aws_region = "us-east-1"
+            mock_settings.aws_access_key_id = "key"
+            mock_settings.aws_secret_access_key = "secret"
+            mock_settings.s3_bucket_name = "my-bucket"
+            # Should not raise
+            _delete_remote_copy(rec)
+
+    def test_delete_remote_copy_dropbox(self):
+        """_delete_remote_copy() calls files_delete_v2 for Dropbox destination."""
+        from app.tasks.backup_tasks import _delete_remote_copy
+
+        rec = BackupRecord(
+            filename="x.db.gz",
+            backup_type="hourly",
+            remote_destination="dropbox",
+            remote_path="/backups/x.db.gz",
+        )
+
+        mock_dbx = MagicMock()
+        mock_dbx_module = MagicMock()
+        mock_dbx_module.Dropbox.return_value = mock_dbx
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch.dict("sys.modules", {"dropbox": mock_dbx_module}),
+        ):
+            mock_settings.dropbox_refresh_token = "token123"
+            _delete_remote_copy(rec)
+
+        mock_dbx.files_delete_v2.assert_called_once_with("/backups/x.db.gz")
+
+    def test_delete_remote_copy_email_not_implemented(self):
+        """_delete_remote_copy() logs debug for email (not implemented) destination."""
+        from app.tasks.backup_tasks import _delete_remote_copy
+
+        rec = BackupRecord(
+            filename="x.db.gz",
+            backup_type="hourly",
+            remote_destination="email",
+            remote_path="email:x.db.gz",
+        )
+        # Should not raise
+        _delete_remote_copy(rec)
+
+    def test_delete_remote_copy_nextcloud_not_implemented(self):
+        """_delete_remote_copy() logs debug for nextcloud (not implemented) destination."""
+        from app.tasks.backup_tasks import _delete_remote_copy
+
+        rec = BackupRecord(
+            filename="x.db.gz",
+            backup_type="hourly",
+            remote_destination="nextcloud",
+            remote_path="http://nc.example.com/remote.php/dav/backups/x.db.gz",
+        )
+        _delete_remote_copy(rec)
+
+    def test_delete_remote_copy_webdav_not_implemented(self):
+        """_delete_remote_copy() logs debug for webdav (not implemented) destination."""
+        from app.tasks.backup_tasks import _delete_remote_copy
+
+        rec = BackupRecord(
+            filename="x.db.gz",
+            backup_type="hourly",
+            remote_destination="webdav",
+            remote_path="http://dav.example.com/backups/x.db.gz",
+        )
+        _delete_remote_copy(rec)
+
+    def test_delete_remote_copy_unknown_dest(self):
+        """_delete_remote_copy() silently does nothing for an unknown/unrecognized destination."""
+        from app.tasks.backup_tasks import _delete_remote_copy
+
+        rec = BackupRecord(
+            filename="x.db.gz",
+            backup_type="hourly",
+            remote_destination="unknown_provider",
+            remote_path="somewhere/x.db.gz",
+        )
+        # Should not raise; the try block exits without matching any if/elif
+        _delete_remote_copy(rec)
+
+
+@pytest.mark.unit
+class TestUploadRemote:
+    """Tests for _upload_remote covering all destination branches."""
+
+    def test_upload_remote_s3_success(self, tmp_path):
+        """_upload_remote() returns (dest, key) for S3 upload."""
+        from app.tasks.backup_tasks import _upload_remote
+
+        f = tmp_path / "bkp.db.gz"
+        f.write_bytes(b"data")
+
+        mock_s3 = MagicMock()
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("boto3.client", return_value=mock_s3),
+        ):
+            mock_settings.backup_remote_destination = "s3"
+            mock_settings.backup_remote_folder = "backups"
+            mock_settings.aws_region = "us-east-1"
+            mock_settings.aws_access_key_id = "key"
+            mock_settings.aws_secret_access_key = "secret"
+            mock_settings.s3_bucket_name = "my-bucket"
+            result = _upload_remote(f, "bkp.db.gz")
+
+        assert result == ("s3", "backups/bkp.db.gz")
+        mock_s3.upload_fileobj.assert_called_once()
+
+    def test_upload_remote_s3_exception(self, tmp_path):
+        """_upload_remote() returns None when S3 upload fails."""
+        from app.tasks.backup_tasks import _upload_remote
+
+        f = tmp_path / "bkp.db.gz"
+        f.write_bytes(b"data")
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("boto3.client", side_effect=Exception("S3 error")),
+        ):
+            mock_settings.backup_remote_destination = "s3"
+            mock_settings.backup_remote_folder = "backups"
+            mock_settings.aws_region = "us-east-1"
+            mock_settings.aws_access_key_id = "key"
+            mock_settings.aws_secret_access_key = "secret"
+            mock_settings.s3_bucket_name = "my-bucket"
+            result = _upload_remote(f, "bkp.db.gz")
+
+        assert result is None
+
+    def test_upload_remote_dropbox_success(self, tmp_path):
+        """_upload_remote() returns (dest, path) for Dropbox upload."""
+        from app.tasks.backup_tasks import _upload_remote
+
+        f = tmp_path / "bkp.db.gz"
+        f.write_bytes(b"data")
+
+        mock_dbx = MagicMock()
+        mock_dbx_module = MagicMock()
+        mock_dbx_module.Dropbox.return_value = mock_dbx
+        mock_dbx_module.files.WriteMode = MagicMock(return_value="overwrite")
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch.dict("sys.modules", {"dropbox": mock_dbx_module}),
+        ):
+            mock_settings.backup_remote_destination = "dropbox"
+            mock_settings.backup_remote_folder = "backups"
+            mock_settings.dropbox_refresh_token = "token"
+            result = _upload_remote(f, "bkp.db.gz")
+
+        assert result == ("dropbox", "/backups/bkp.db.gz")
+
+    def test_upload_remote_email_success(self, tmp_path):
+        """_upload_remote() returns (dest, email_path) for email destination."""
+        from app.tasks.backup_tasks import _upload_remote
+
+        f = tmp_path / "bkp.db.gz"
+        f.write_bytes(b"data")
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("app.tasks.backup_tasks._email_backup") as mock_email,
+        ):
+            mock_settings.backup_remote_destination = "email"
+            mock_settings.backup_remote_folder = "backups"
+            result = _upload_remote(f, "bkp.db.gz")
+
+        assert result == ("email", "email:bkp.db.gz")
+        mock_email.assert_called_once_with(f, "bkp.db.gz")
+
+    def test_upload_remote_nextcloud_success(self, tmp_path):
+        """_upload_remote() returns (dest, url) for Nextcloud upload."""
+        from app.tasks.backup_tasks import _upload_remote
+
+        f = tmp_path / "bkp.db.gz"
+        f.write_bytes(b"data")
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("requests.put", return_value=mock_resp),
+        ):
+            mock_settings.backup_remote_destination = "nextcloud"
+            mock_settings.backup_remote_folder = "backups"
+            mock_settings.nextcloud_upload_url = "https://nc.example.com/remote.php/dav"
+            mock_settings.nextcloud_username = "user"
+            mock_settings.nextcloud_password = "pass"
+            result = _upload_remote(f, "bkp.db.gz")
+
+        assert result == ("nextcloud", "https://nc.example.com/remote.php/dav/backups/bkp.db.gz")
+
+    def test_upload_remote_webdav_success(self, tmp_path):
+        """_upload_remote() returns (dest, url) for WebDAV upload."""
+        from app.tasks.backup_tasks import _upload_remote
+
+        f = tmp_path / "bkp.db.gz"
+        f.write_bytes(b"data")
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("requests.put", return_value=mock_resp),
+        ):
+            mock_settings.backup_remote_destination = "webdav"
+            mock_settings.backup_remote_folder = "backups"
+            mock_settings.webdav_url = "https://dav.example.com"
+            mock_settings.webdav_username = "user"
+            mock_settings.webdav_password = "pass"
+            mock_settings.webdav_verify_ssl = True
+            result = _upload_remote(f, "bkp.db.gz")
+
+        assert result == ("webdav", "https://dav.example.com/backups/bkp.db.gz")
+
+    def test_upload_remote_default_folder(self, tmp_path):
+        """_upload_remote() defaults to 'backups' folder when backup_remote_folder is None."""
+        from app.tasks.backup_tasks import _upload_remote
+
+        f = tmp_path / "bkp.db.gz"
+        f.write_bytes(b"data")
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("requests.put", return_value=mock_resp),
+        ):
+            mock_settings.backup_remote_destination = "webdav"
+            mock_settings.backup_remote_folder = None  # Should default to "backups"
+            mock_settings.webdav_url = "https://dav.example.com"
+            mock_settings.webdav_username = "user"
+            mock_settings.webdav_password = "pass"
+            mock_settings.webdav_verify_ssl = True
+            result = _upload_remote(f, "bkp.db.gz")
+
+        assert result is not None
+        assert "backups/bkp.db.gz" in result[1]
+
+
+@pytest.mark.unit
+class TestEmailBackup:
+    """Tests for _email_backup."""
+
+    def test_email_backup_no_recipient_raises(self, tmp_path):
+        """_email_backup() raises ValueError when email_default_recipient is not set."""
+        from app.tasks.backup_tasks import _email_backup
+
+        f = tmp_path / "bkp.db.gz"
+        f.write_bytes(b"data")
+
+        with patch("app.tasks.backup_tasks.settings") as mock_settings:
+            mock_settings.email_default_recipient = None
+            with pytest.raises(ValueError, match="email_default_recipient"):
+                _email_backup(f, "bkp.db.gz")
+
+    def test_email_backup_success(self, tmp_path):
+        """_email_backup() sends email via SMTP."""
+        from app.tasks.backup_tasks import _email_backup
+
+        f = tmp_path / "bkp.db.gz"
+        with gzip.open(str(f), "wb") as gz:
+            gz.write(b"data")
+
+        mock_smtp_instance = MagicMock()
+        mock_smtp_ctx = MagicMock()
+        mock_smtp_ctx.__enter__ = MagicMock(return_value=mock_smtp_instance)
+        mock_smtp_ctx.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("smtplib.SMTP", return_value=mock_smtp_ctx),
+        ):
+            mock_settings.email_default_recipient = "admin@example.com"
+            mock_settings.email_sender = "noreply@example.com"
+            mock_settings.email_username = "user"
+            mock_settings.email_password = "pass"
+            mock_settings.email_host = "smtp.example.com"
+            mock_settings.email_port = 587
+            mock_settings.email_use_tls = True
+            _email_backup(f, "bkp.db.gz")
+
+        mock_smtp_instance.starttls.assert_called_once()
+        mock_smtp_instance.login.assert_called_once_with("user", "pass")
+        mock_smtp_instance.sendmail.assert_called_once()
+
+    def test_email_backup_no_tls_no_auth(self, tmp_path):
+        """_email_backup() skips TLS and auth when not configured."""
+        from app.tasks.backup_tasks import _email_backup
+
+        f = tmp_path / "bkp.db.gz"
+        with gzip.open(str(f), "wb") as gz:
+            gz.write(b"data")
+
+        mock_smtp_instance = MagicMock()
+        mock_smtp_ctx = MagicMock()
+        mock_smtp_ctx.__enter__ = MagicMock(return_value=mock_smtp_instance)
+        mock_smtp_ctx.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("smtplib.SMTP", return_value=mock_smtp_ctx),
+        ):
+            mock_settings.email_default_recipient = "admin@example.com"
+            mock_settings.email_sender = None
+            mock_settings.email_username = None
+            mock_settings.email_password = None
+            mock_settings.email_host = "smtp.example.com"
+            mock_settings.email_port = 25
+            mock_settings.email_use_tls = False
+            _email_backup(f, "bkp.db.gz")
+
+        mock_smtp_instance.starttls.assert_not_called()
+        mock_smtp_instance.login.assert_not_called()
+        mock_smtp_instance.sendmail.assert_called_once()
+
+
+@pytest.mark.unit
+class TestCreateBackupAdditional:
+    """Additional tests for create_backup edge cases."""
+
+    def test_create_backup_dump_exception(self, tmp_path):
+        """create_backup records failure and returns error when dump raises."""
+        from app.tasks.backup_tasks import create_backup
+
+        db_file = tmp_path / "test.db"
+        conn = sqlite3.connect(str(db_file))
+        conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY)")
+        conn.close()
+
+        backup_dir = tmp_path / "backups"
+        backup_dir.mkdir()
+
+        mock_db = MagicMock()
+        mock_db_ctx = MagicMock()
+        mock_db_ctx.__enter__ = MagicMock(return_value=mock_db)
+        mock_db_ctx.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("app.tasks.backup_tasks._db_path", return_value=db_file),
+            patch("app.tasks.backup_tasks._backup_dir", return_value=backup_dir),
+            patch("app.tasks.backup_tasks._dump_sqlite", side_effect=RuntimeError("dump error")),
+            patch("app.tasks.backup_tasks.SessionLocal", return_value=mock_db_ctx),
+        ):
+            mock_settings.backup_enabled = True
+            mock_settings.database_url = f"sqlite:///{db_file}"
+            result = create_backup("hourly")
+
+        assert result["status"] == "error"
+        assert "dump error" in result["detail"]
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()
+
+    def test_create_backup_with_remote_upload(self, tmp_path):
+        """create_backup records remote_destination and prunes remote backups."""
+        from app.tasks.backup_tasks import create_backup
+
+        db_file = tmp_path / "test.db"
+        conn = sqlite3.connect(str(db_file))
+        conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY)")
+        conn.close()
+
+        backup_dir = tmp_path / "backups"
+        backup_dir.mkdir()
+
+        mock_db = MagicMock()
+        mock_sl = MagicMock()
+        mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
+        mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("app.tasks.backup_tasks._db_path", return_value=db_file),
+            patch("app.tasks.backup_tasks._backup_dir", return_value=backup_dir),
+            patch("app.tasks.backup_tasks._upload_remote", return_value=("s3", "backups/test.db.gz")),
+            patch("app.tasks.backup_tasks._apply_retention"),
+            patch("app.tasks.backup_tasks._prune_remote_backups") as mock_prune,
+            patch("app.tasks.backup_tasks.SessionLocal", mock_sl),
+        ):
+            mock_settings.backup_enabled = True
+            mock_settings.database_url = f"sqlite:///{db_file}"
+            result = create_backup("daily")
+
+        assert result["status"] == "ok"
+        assert result["remote_destination"] == "s3"
+        mock_prune.assert_called_once()
+
+    def test_create_backup_postgresql_dump_failure(self, tmp_path):
+        """create_backup handles PostgreSQL dump failure."""
+        from app.tasks.backup_tasks import create_backup
+
+        backup_dir = tmp_path / "backups"
+        backup_dir.mkdir()
+
+        mock_db = MagicMock()
+        mock_db_ctx = MagicMock()
+        mock_db_ctx.__enter__ = MagicMock(return_value=mock_db)
+        mock_db_ctx.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("app.tasks.backup_tasks._backup_dir", return_value=backup_dir),
+            patch("app.tasks.backup_tasks._dump_postgresql", side_effect=FileNotFoundError("pg_dump not found")),
+            patch("app.tasks.backup_tasks.SessionLocal", return_value=mock_db_ctx),
+        ):
+            mock_settings.backup_enabled = True
+            mock_settings.database_url = "postgresql://user:pass@localhost/testdb"
+            result = create_backup("hourly")
+
+        assert result["status"] == "error"
+        assert "pg_dump not found" in result["detail"]
+
+    def test_create_backup_mysql_dump_failure(self, tmp_path):
+        """create_backup handles MySQL dump failure."""
+        from app.tasks.backup_tasks import create_backup
+
+        backup_dir = tmp_path / "backups"
+        backup_dir.mkdir()
+
+        mock_db = MagicMock()
+        mock_db_ctx = MagicMock()
+        mock_db_ctx.__enter__ = MagicMock(return_value=mock_db)
+        mock_db_ctx.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("app.tasks.backup_tasks._backup_dir", return_value=backup_dir),
+            patch("app.tasks.backup_tasks._dump_mysql", side_effect=RuntimeError("mysqldump failed")),
+            patch("app.tasks.backup_tasks.SessionLocal", return_value=mock_db_ctx),
+        ):
+            mock_settings.backup_enabled = True
+            mock_settings.database_url = "mysql+pymysql://user:pass@localhost/testdb"
+            result = create_backup("weekly")
+
+        assert result["status"] == "error"
+        assert "mysqldump failed" in result["detail"]
+
+
+@pytest.mark.unit
+class TestCleanupOldBackupsTask:
+    """Tests for the cleanup_old_backups Celery task."""
+
+    def test_cleanup_old_backups_returns_ok(self):
+        """cleanup_old_backups() calls _apply_retention and _prune_remote_backups for all tiers."""
+        from app.tasks.backup_tasks import cleanup_old_backups
+
+        mock_db = MagicMock()
+        mock_sl = MagicMock()
+        mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
+        mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch("app.tasks.backup_tasks.SessionLocal", mock_sl),
+            patch("app.tasks.backup_tasks._apply_retention") as mock_apply,
+            patch("app.tasks.backup_tasks._prune_remote_backups") as mock_prune,
+        ):
+            result = cleanup_old_backups()
+
+        assert result == {"status": "ok"}
+        assert mock_apply.call_count == 3
+        assert mock_prune.call_count == 3
+        for btype in ("hourly", "daily", "weekly"):
+            mock_apply.assert_any_call(btype, mock_db)
+            mock_prune.assert_any_call(btype, mock_db)
