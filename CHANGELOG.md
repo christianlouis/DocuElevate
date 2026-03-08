@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.102.0 (2026-03-08)
+
+### Features
+
+- **support**: Auto-fill Zammad chat and ticket widgets with user context
+  ([`209e82f`](https://github.com/christianlouis/DocuElevate/commit/209e82f7e5435773a6ed34d58632c9295b65c772))
+
+### Testing
+
+- **support**: Improve Zammad user context tests with meaningful assertions
+  ([`8098856`](https://github.com/christianlouis/DocuElevate/commit/80988561860f14403436355979e4a48c10115999))
+
+
 ## v0.101.0 (2026-03-08)
 
 ### Features
