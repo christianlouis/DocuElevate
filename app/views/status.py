@@ -6,7 +6,8 @@ import logging
 import os
 from datetime import datetime
 
-from fastapi import Request
+from fastapi import Request, status
+from fastapi.responses import RedirectResponse
 
 from app.utils.config_validator import get_provider_status
 from app.views.base import APIRouter, require_login, settings, templates
@@ -15,12 +16,25 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _require_admin(request: Request):
+    """Return the session user if they are an admin, else return None."""
+    user = request.session.get("user")
+    if not user or not user.get("is_admin"):
+        user_email = user.get("email", "anonymous") if user else "anonymous"
+        logger.warning(f"Non-admin user {user_email} attempted to access /status")
+        return None
+    return user
+
+
 @router.get("/status")
 @require_login
 async def status_dashboard(request: Request):
     """
-    Status dashboard showing all configured integration targets
+    Status dashboard showing all configured integration targets (admin only).
     """
+    user = _require_admin(request)
+    if user is None:
+        return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
     # Get provider status
     providers = get_provider_status()
 
