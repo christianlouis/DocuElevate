@@ -10,6 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.99.0 (2026-03-08)
+
+### Bug Fixes
+
+- **billing**: Address code review - remove duplicate mode logic, accessibility improvements, robust
+  test assertions
+  ([`002cdf3`](https://github.com/christianlouis/DocuElevate/commit/002cdf312b6ef45864d89d9bdbf3030ef18e3ba6))
+
+- **billing**: Cast plan.name to str to fix mypy typeddict-item error
+  ([`9627667`](https://github.com/christianlouis/DocuElevate/commit/9627667d82aa4d9c5130aa1cf755a0a00fe08b1e))
+
+### Features
+
+- **billing**: Expose Stripe price IDs in plan API, add Stripe Setup Wizard and sync endpoints
+  ([`223539b`](https://github.com/christianlouis/DocuElevate/commit/223539bebb7c7fa928bd4437796397c8ec19f99e))
+
+
 ## v0.98.0 (2026-03-08)
 
 ### Bug Fixes
