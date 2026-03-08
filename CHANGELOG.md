@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Continuous Integration
+
+- Restore javascript-typescript CodeQL config alongside javascript
+  ([`1fe6f86`](https://github.com/christianlouis/DocuElevate/commit/1fe6f86cc0d10047349825122d2582304a03beee))
+
+
 ## v0.104.0 (2026-03-08)
 
 ### Bug Fixes
