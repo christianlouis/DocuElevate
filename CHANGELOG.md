@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.100.0 (2026-03-08)
+
+### Bug Fixes
+
+- Update docs endpoint test and add Zammad settings metadata
+  ([`351d6f3`](https://github.com/christianlouis/DocuElevate/commit/351d6f3f4fc7d4128230b357fc0b4662c539645c))
+
+- **security**: Add SRI to jQuery CDN, escape chat ID, use server-side hostname
+  ([`883f123`](https://github.com/christianlouis/DocuElevate/commit/883f1231387a511e046c56484961267e32517939))
+
+### Features
+
+- **help**: Restructure /help as user-facing Help Center with Zammad integration
+  ([`af3eed4`](https://github.com/christianlouis/DocuElevate/commit/af3eed4040b9513a5331be9c5163a505940dda9d))
+
+
 ## v0.99.0 (2026-03-08)
 
 ### Bug Fixes
