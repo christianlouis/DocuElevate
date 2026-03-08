@@ -209,6 +209,9 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
         linksDiv.appendChild(
           _makeMenuLink('/subscription', 'fas fa-layer-group text-indigo-400', 'My Subscription', 'text-gray-700')
         );
+        linksDiv.appendChild(
+          _makeMenuLink('/api-tokens', 'fas fa-key text-yellow-500', 'API Tokens', 'text-gray-700')
+        );
 
         // Divider + Sign Out
         const divider = document.createElement('div');
@@ -277,6 +280,18 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
         subLink.appendChild(subIcon);
         subLink.appendChild(document.createTextNode('My Subscription'));
         mobileAuthSection.appendChild(subLink);
+
+        // API Tokens link
+        const tokensLink = document.createElement('a');
+        tokensLink.href = '/api-tokens';
+        tokensLink.className =
+          'flex items-center px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50';
+        const tokensIcon = document.createElement('i');
+        tokensIcon.className = 'fas fa-key mr-2 text-yellow-500';
+        tokensIcon.setAttribute('aria-hidden', 'true');
+        tokensLink.appendChild(tokensIcon);
+        tokensLink.appendChild(document.createTextNode('API Tokens'));
+        mobileAuthSection.appendChild(tokensLink);
 
         // Logout link
         const logoutLink = document.createElement('a');

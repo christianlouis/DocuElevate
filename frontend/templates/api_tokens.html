@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+
+{% block title %}API Tokens – DocuElevate{% endblock %}
+
+{% block content %}
+<div x-data="apiTokens()" x-init="loadTokens()" class="container mx-auto px-4 py-8 max-w-4xl">
+  <header class="mb-8">
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+      <i class="fas fa-key text-yellow-500" aria-hidden="true"></i>
+      API Tokens
+    </h1>
+    <p class="mt-2 text-gray-600 dark:text-gray-400 text-sm leading-relaxed max-w-2xl">
+      Create personal API tokens to interact with the DocuElevate API programmatically.
+      Use tokens for webhook uploads, CI/CD pipelines, or any script that needs to upload
+      or retrieve documents.
+    </p>
+  </header>
+
+  <!-- Create token section -->
+  <section class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6" aria-labelledby="create-token-heading">
+    <h2 id="create-token-heading" class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Create New Token</h2>
+    <form @submit.prevent="createToken()" class="flex flex-col sm:flex-row gap-3">
+      <div class="flex-1">
+        <label for="token-name" class="sr-only">Token name</label>
+        <input
+          id="token-name"
+          type="text"
+          x-model="newTokenName"
+          placeholder="e.g. CI Pipeline, Webhook Upload, My Script"
+          required
+          minlength="1"
+          maxlength="255"
+          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm
+                 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm"
+          aria-required="true"
+        />
+      </div>
+      <button
+        type="submit"
+        :disabled="creating || !newTokenName.trim()"
+        class="inline-flex items-center px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md
+               hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50
+               transition-colors"
+        style="min-height:40px; min-width:44px;"
+      >
+        <i class="fas fa-plus mr-2" aria-hidden="true"></i>
+        <span x-text="creating ? 'Creating…' : 'Create Token'"></span>
+      </button>
+    </form>
+
+    <!-- Newly created token display -->
+    <template x-if="newlyCreatedToken">
+      <div class="mt-4 bg-green-50 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg p-4" role="alert">
+        <div class="flex items-start gap-3">
+          <i class="fas fa-check-circle text-green-600 dark:text-green-400 mt-0.5 text-lg" aria-hidden="true"></i>
+          <div class="flex-1">
+            <p class="font-semibold text-green-800 dark:text-green-200 text-sm">Token created successfully!</p>
+            <p class="text-green-700 dark:text-green-300 text-xs mt-1">
+              Copy this token now — it will <strong>not be shown again</strong>.
+            </p>
+            <div class="mt-3 flex items-center gap-2">
+              <code
+                class="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-3 py-2
+                       text-sm font-mono text-gray-900 dark:text-gray-100 select-all break-all"
+                x-text="newlyCreatedToken"
+              ></code>
+              <button
+                type="button"
+                @click="copyToken()"
+                class="inline-flex items-center px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300
+                       dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200
+                       hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500
+                       transition-colors"
+                style="min-height:40px; min-width:44px;"
+                :aria-label="copied ? 'Copied!' : 'Copy token to clipboard'"
+              >
+                <i :class="copied ? 'fas fa-check text-green-600' : 'fas fa-copy'" aria-hidden="true"></i>
+                <span class="ml-1 hidden sm:inline" x-text="copied ? 'Copied!' : 'Copy'"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+  </section>
+
+  <!-- Usage example section -->
+  <section class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6" aria-labelledby="usage-heading">
+    <h2 id="usage-heading" class="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+      <i class="fas fa-code text-blue-500 mr-2" aria-hidden="true"></i>
+      Usage Example
+    </h2>
+    <p class="text-gray-600 dark:text-gray-400 text-sm mb-3">
+      Use your API token in the <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded text-xs">Authorization</code>
+      header with any API request:
+    </p>
+    <div class="relative">
+      <pre class="bg-gray-900 text-green-400 rounded-lg p-4 text-sm overflow-x-auto font-mono leading-relaxed"><code>curl -X POST "<span x-text="baseUrl"></span>/api/files/ui-upload" \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -F "file=@/path/to/document.pdf"</code></pre>
+      <button
+        type="button"
+        @click="copySnippet('upload')"
+        class="absolute top-2 right-2 px-2 py-1 bg-gray-700 text-gray-300 rounded text-xs hover:bg-gray-600
+               focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
+        style="min-height:30px; min-width:30px;"
+        aria-label="Copy upload example to clipboard"
+      >
+        <i class="fas fa-copy" aria-hidden="true"></i>
+      </button>
+    </div>
+  </section>
+
+  <!-- Tokens list -->
+  <section class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden" aria-labelledby="tokens-heading">
+    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+      <h2 id="tokens-heading" class="text-lg font-semibold text-gray-900 dark:text-white">Your Tokens</h2>
+    </div>
+
+    <!-- Loading state -->
+    <template x-if="loading">
+      <div class="p-8 text-center text-gray-500 dark:text-gray-400">
+        <i class="fas fa-spinner fa-spin text-2xl mb-2" aria-hidden="true"></i>
+        <p class="text-sm">Loading tokens…</p>
+      </div>
+    </template>
+
+    <!-- Empty state -->
+    <template x-if="!loading && tokens.length === 0">
+      <div class="p-8 text-center text-gray-500 dark:text-gray-400">
+        <i class="fas fa-key text-4xl mb-3 text-gray-300 dark:text-gray-600" aria-hidden="true"></i>
+        <p class="font-medium">No API tokens yet</p>
+        <p class="text-sm mt-1">Create your first token above to get started.</p>
+      </div>
+    </template>
+
+    <!-- Tokens table -->
+    <template x-if="!loading && tokens.length > 0">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" aria-label="API Tokens">
+          <thead>
+            <tr class="bg-gray-50 dark:bg-gray-750 text-left">
+              <th scope="col" class="px-6 py-3 font-medium text-gray-500 dark:text-gray-400 uppercase text-xs tracking-wider">Name</th>
+              <th scope="col" class="px-6 py-3 font-medium text-gray-500 dark:text-gray-400 uppercase text-xs tracking-wider">Token Prefix</th>
+              <th scope="col" class="px-6 py-3 font-medium text-gray-500 dark:text-gray-400 uppercase text-xs tracking-wider">Created</th>
+              <th scope="col" class="px-6 py-3 font-medium text-gray-500 dark:text-gray-400 uppercase text-xs tracking-wider">Last Used</th>
+              <th scope="col" class="px-6 py-3 font-medium text-gray-500 dark:text-gray-400 uppercase text-xs tracking-wider">Last IP</th>
+              <th scope="col" class="px-6 py-3 font-medium text-gray-500 dark:text-gray-400 uppercase text-xs tracking-wider">Status</th>
+              <th scope="col" class="px-6 py-3 font-medium text-gray-500 dark:text-gray-400 uppercase text-xs tracking-wider sr-only">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            <template x-for="token in tokens" :key="token.id">
+              <tr class="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class="font-medium text-gray-900 dark:text-white" x-text="token.name"></span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <code class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-mono" x-text="token.token_prefix + '…'"></code>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400" x-text="formatDate(token.created_at)"></td>
+                <td class="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400" x-text="token.last_used_at ? formatDate(token.last_used_at) : 'Never'"></td>
+                <td class="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">
+                  <code x-show="token.last_used_ip" class="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-xs font-mono" x-text="token.last_used_ip"></code>
+                  <span x-show="!token.last_used_ip" class="text-gray-400">—</span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span
+                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                    :class="token.is_active ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'"
+                    x-text="token.is_active ? 'Active' : 'Revoked'"
+                  ></span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right">
+                  <button
+                    x-show="token.is_active"
+                    type="button"
+                    @click="revokeToken(token)"
+                    :disabled="revoking === token.id"
+                    class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-800
+                           dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md
+                           focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 transition-colors"
+                    style="min-height:36px; min-width:44px;"
+                    :aria-label="'Revoke token ' + token.name"
+                  >
+                    <i :class="revoking === token.id ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'" class="mr-1" aria-hidden="true"></i>
+                    Revoke
+                  </button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </template>
+
+    <!-- Error display -->
+    <template x-if="error">
+      <div class="m-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-3 rounded text-sm" role="alert">
+        <i class="fas fa-exclamation-triangle mr-1" aria-hidden="true"></i>
+        <span x-text="error"></span>
+      </div>
+    </template>
+  </section>
+</div>
+
+<script>
+function apiTokens() {
+  const csrfToken = '{{ csrf_token | default("") }}';
+  return {
+    tokens: [],
+    loading: true,
+    creating: false,
+    revoking: null,
+    error: null,
+    newTokenName: '',
+    newlyCreatedToken: null,
+    copied: false,
+    baseUrl: window.location.origin,
+
+    async loadTokens() {
+      this.loading = true;
+      this.error = null;
+      try {
+        const res = await fetch('/api/api-tokens/', {
+          headers: { 'X-CSRF-Token': csrfToken }
+        });
+        if (!res.ok) throw new Error('Failed to load tokens');
+        this.tokens = await res.json();
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async createToken() {
+      if (!this.newTokenName.trim()) return;
+      this.creating = true;
+      this.error = null;
+      this.newlyCreatedToken = null;
+      try {
+        const res = await fetch('/api/api-tokens/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken,
+          },
+          body: JSON.stringify({ name: this.newTokenName.trim() }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.detail || 'Failed to create token');
+        }
+        const data = await res.json();
+        this.newlyCreatedToken = data.token;
+        this.newTokenName = '';
+        await this.loadTokens();
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.creating = false;
+      }
+    },
+
+    async revokeToken(token) {
+      if (!confirm(`Revoke token "${token.name}"? This cannot be undone.`)) return;
+      this.revoking = token.id;
+      this.error = null;
+      try {
+        const res = await fetch(`/api/api-tokens/${token.id}`, {
+          method: 'DELETE',
+          headers: { 'X-CSRF-Token': csrfToken },
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.detail || 'Failed to revoke token');
+        }
+        await this.loadTokens();
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.revoking = null;
+      }
+    },
+
+    copyToken() {
+      if (this.newlyCreatedToken) {
+        navigator.clipboard.writeText(this.newlyCreatedToken);
+        this.copied = true;
+        setTimeout(() => { this.copied = false; }, 2000);
+      }
+    },
+
+    copySnippet(type) {
+      const snippets = {
+        upload: `curl -X POST "${this.baseUrl}/api/files/ui-upload" \\\n  -H "Authorization: Bearer YOUR_API_TOKEN" \\\n  -F "file=@/path/to/document.pdf"`,
+      };
+      navigator.clipboard.writeText(snippets[type] || '');
+    },
+
+    formatDate(d) {
+      if (!d) return '—';
+      const dt = new Date(d);
+      return dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) +
+        ' ' + dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    },
+  };
+}
+</script>
+{% endblock %}
