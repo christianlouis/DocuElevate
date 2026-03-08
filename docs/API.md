@@ -2,6 +2,9 @@
 
 DocuElevate provides a powerful REST API for programmatic access to all its features. This document serves as a reference for the available endpoints and their usage.
 
+> **Looking for a quick way to script against DocuElevate?**
+> The built-in [CLI tool](./CLIGuide.md) wraps the API and is ready to use from a terminal or shell script — no HTTP client code required.
+
 ## API Overview
 
 - Base URL: `http://<your-docuelevate-instance>/api`
