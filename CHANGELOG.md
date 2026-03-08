@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.90.2 (2026-03-08)
+
+### Bug Fixes
+
+- **tasks**: Remove erroneous in_progress log that regressed finalize_document_storage status when
+  PDF/A archival is enabled
+  ([`ff1310c`](https://github.com/christianlouis/DocuElevate/commit/ff1310c23ed6080f95957bf19fdb7cc179d10ecb))
+
+
 ## v0.90.1 (2026-03-08)
 
 ### Bug Fixes
