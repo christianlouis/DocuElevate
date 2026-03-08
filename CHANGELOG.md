@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.95.0 (2026-03-08)
+
+### Bug Fixes
+
+- **auth**: Cache request body in CSRF middleware to prevent login failures
+  ([`087f3c1`](https://github.com/christianlouis/DocuElevate/commit/087f3c10e9e09d2953f30c9e362ae1017a5ca272))
+
+- **imap**: Address code review feedback - named constants, error context in JS, security docs
+  ([`73727dc`](https://github.com/christianlouis/DocuElevate/commit/73727dc56a9a5dc46d49c9f96065dd4bec7681b7))
+
+### Features
+
+- **imap**: Add per-user IMAP ingestion accounts with quota enforcement
+  ([`43bcfe5`](https://github.com/christianlouis/DocuElevate/commit/43bcfe56539929ebd91a5a43be7c4f79d1a262a2))
+
+
 ## v0.94.0 (2026-03-08)
 
 ### Documentation
