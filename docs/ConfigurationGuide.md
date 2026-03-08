@@ -1178,6 +1178,31 @@ When a user is logged in, DocuElevate automatically passes their identity to the
 
 No additional configuration is required — the auto-fill uses the authenticated session data (OAuth, local login, or admin credentials). Anonymous visitors see the standard Zammad widgets without pre-filled data.
 
+## Observability – Sentry
+
+DocuElevate integrates with [Sentry](https://sentry.io) for real-time error tracking and performance monitoring.  See [SentrySetup.md](./SentrySetup.md) for a full setup guide.
+
+| Variable | Description | Default |
+|---|---|---|
+| `SENTRY_DSN` | Sentry DSN URL.  When set, error reporting and performance tracing are enabled automatically.  Leave blank to disable. | *(unset)* |
+| `SENTRY_ENVIRONMENT` | Environment label attached to every Sentry event (`development`, `staging`, `production`, …). | `production` |
+| `SENTRY_TRACES_SAMPLE_RATE` | Fraction of requests captured for performance tracing (0.0 – 1.0).  `0.0` disables tracing entirely. | `0.1` |
+| `SENTRY_PROFILES_SAMPLE_RATE` | Fraction of profiled transactions sent to Sentry (0.0 – 1.0).  Only active when traces > 0. | `0.0` |
+| `SENTRY_SEND_DEFAULT_PII` | Attach PII (IP addresses, user agents) to Sentry events.  Disabled by default for GDPR/CCPA compliance. | `false` |
+
+```bash
+# Minimal example
+SENTRY_DSN=https://<key>@o<org>.ingest.sentry.io/<project>
+SENTRY_ENVIRONMENT=production
+
+# Optional tuning
+SENTRY_TRACES_SAMPLE_RATE=0.1
+SENTRY_PROFILES_SAMPLE_RATE=0.0
+SENTRY_SEND_DEFAULT_PII=false
+```
+
+> **Note:** Sentry is completely opt-in — if `SENTRY_DSN` is not set, the SDK is never initialised and no data leaves your infrastructure.
+
 ## Duplicate Document Detection
 
 DocuElevate detects and flags documents that share the same content, even if they arrive as separate uploads.

@@ -48,3 +48,6 @@ pdf2image>=1.17.0  # Convert PDF pages to images (used by Tesseract and EasyOCR 
 ocrmypdf>=16.0.0,<18.0.0  # Post-processing: embeds searchable text layers into PDFs via Tesseract
 meilisearch>=0.31.0  # Full-text search engine client
 stripe>=7.0.0,<15.0.0  # Stripe billing SDK (MIT license)
+
+# Error and performance monitoring
+sentry-sdk[fastapi,celery,sqlalchemy]>=2.20.0,<3.0.0
