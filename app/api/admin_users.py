@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models import FileRecord, LocalUser, UserProfile
 from app.utils.local_auth import generate_token, hash_password, send_password_reset_email
@@ -393,7 +394,8 @@ def update_local_user(local_user_id: int, body: LocalUserUpdate, db: DbSession, 
         user.email = body.email
 
     if body.display_name is not None:
-        user.display_name = body.display_name
+        # Normalise empty string to None so that clearing the field removes the display name
+        user.display_name = body.display_name or None
 
     if body.is_admin is not None:
         user.is_admin = body.is_admin
@@ -431,9 +433,7 @@ def update_local_user(local_user_id: int, body: LocalUserUpdate, db: DbSession, 
     status_code=status.HTTP_200_OK,
     summary="Send a password reset email to a local user",
 )
-def admin_send_password_reset(
-    local_user_id: int, request: Request, db: DbSession, _admin: AdminUser
-) -> dict[str, Any]:
+def admin_send_password_reset(local_user_id: int, request: Request, db: DbSession, _admin: AdminUser) -> dict[str, Any]:
     """Generate a password reset token and email the reset link to the local user.
 
     This is a last-resort tool for admins to help users who are locked out.
@@ -443,13 +443,11 @@ def admin_send_password_reset(
     Raises:
         404: Local user not found.
     """
-    from app.config import settings as _settings
-
     user = db.query(LocalUser).filter(LocalUser.id == local_user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Local user not found.")
 
-    if not _settings.email_host:
+    if not settings.email_host:
         logger.warning("Admin requested password reset for %s but SMTP is not configured", user.email)
         return {"sent": False, "reason": "SMTP is not configured on this server."}
 
@@ -500,10 +498,10 @@ def admin_set_password(
         db.rollback()
         raise
 
-    logger.info(
-        "[SECURITY] ADMIN_SET_PASSWORD user=%s admin=%s", user.email, _admin.get("email", "unknown")
-    )
+    logger.info("[SECURITY] ADMIN_SET_PASSWORD user=%s admin=%s", user.email, _admin.get("email", "unknown"))
     return {"updated": True, "email": user.email}
+
+
 def get_user(user_id: str, db: DbSession, _admin: AdminUser) -> dict[str, Any]:
     """Return profile and document statistics for a specific user."""
     doc_count = db.query(func.count(FileRecord.id)).filter(FileRecord.owner_id == user_id).scalar() or 0

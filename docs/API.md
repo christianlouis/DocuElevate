@@ -844,6 +844,131 @@ problem.
 
 ---
 
+**GET** `/api/admin/users/local`
+
+List all local (email/password) user accounts with basic metadata.
+
+---
+
+**POST** `/api/admin/users/local`
+
+Create a new local user account (admin-only, immediately active — no email verification required).
+
+**Request body**:
+```json
+{
+  "email": "user@example.com",
+  "username": "alice",
+  "display_name": "Alice Smith",
+  "password": "securepassword",
+  "is_admin": false
+}
+```
+
+---
+
+**PATCH** `/api/admin/users/local/{local_user_id}`
+
+Update an existing local user account. Only the provided (non-null) fields are modified.
+If the email is changed, the associated `UserProfile.user_id` is also updated automatically.
+
+**Request body** (all fields optional):
+```json
+{
+  "email": "newemail@example.com",
+  "display_name": "Alice Wonderland",
+  "is_admin": true,
+  "is_active": false
+}
+```
+
+**Error Responses**:
+- `404`: Local user not found
+- `409`: New email already taken by another account
+
+---
+
+**POST** `/api/admin/users/local/{local_user_id}/send-password-reset`
+
+Send a password reset email to a local user on their behalf. Useful when a user is locked out.
+Returns `{"sent": true}` on success or `{"sent": false, "reason": "..."}` when SMTP is not
+configured or sending fails (never returns an error status so the admin always gets feedback).
+
+**Error Responses**:
+- `404`: Local user not found
+
+---
+
+**POST** `/api/admin/users/local/{local_user_id}/set-password`
+
+Directly set a new password for a local user without requiring an email token (last resort when
+email delivery is unavailable). The user should be advised to change their password after logging in.
+
+**Request body**:
+```json
+{
+  "password": "temporarypassword"
+}
+```
+
+**Error Responses**:
+- `404`: Local user not found
+- `422`: Password shorter than 8 characters
+
+---
+
+**DELETE** `/api/admin/users/local/{local_user_id}`
+
+Delete a local user account by numeric ID. The associated `UserProfile` is also removed. Documents
+owned by this user are **not** deleted. Returns `204 No Content` on success.
+
+---
+
+### Local Authentication (self-service)
+
+These endpoints are for local (email/password) users and do not require authentication.
+
+**POST** `/api/auth/request-password-reset`
+
+Send a password reset email. Always returns 200 to avoid leaking whether an email is registered.
+
+**Request body**:
+```json
+{ "email": "user@example.com" }
+```
+
+---
+
+**POST** `/api/auth/reset-password`
+
+Set a new password using a valid reset token (received via email).
+
+**Request body**:
+```json
+{
+  "token": "the-token-from-email",
+  "new_password": "newpassword",
+  "new_password_confirm": "newpassword"
+}
+```
+
+**Error Responses**:
+- `400`: Token is invalid or expired
+- `422`: Passwords do not match
+
+---
+
+**POST** `/api/auth/forgot-username`
+
+Send a username reminder email. Always returns 200 to avoid leaking whether an email is registered.
+
+**Request body**:
+```json
+{ "email": "user@example.com" }
+```
+
+---
+
 ### Settings Suggestions (Autocomplete)
 
 **GET** `/api/settings/{key}/suggestions`

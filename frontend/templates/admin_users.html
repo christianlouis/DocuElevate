@@ -1122,7 +1122,7 @@ function adminUsersApp() {
           },
           body: JSON.stringify({
             email: this.editLocalUserModal.form.email || null,
-            display_name: this.editLocalUserModal.form.display_name || null,
+            display_name: this.editLocalUserModal.form.display_name,
             is_admin: this.editLocalUserModal.form.is_admin,
             is_active: this.editLocalUserModal.form.is_active,
           }),
