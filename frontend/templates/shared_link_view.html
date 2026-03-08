@@ -185,11 +185,13 @@
           return;
         }
 
-        // Attempt download — if password is wrong the server returns 403.
-        const url = `${DOWNLOAD_URL}?password=${encodeURIComponent(pwd)}`;
-
-        // Use a hidden iframe trick to detect errors vs. successful binary downloads.
-        fetch(url)
+        // Send the password in the POST body (never in the URL) to prevent it
+        // appearing in server access logs, browser history, or Referer headers.
+        fetch(DOWNLOAD_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pwd }),
+        })
           .then(async (resp) => {
             if (resp.ok) {
               errEl.classList.add('hidden');

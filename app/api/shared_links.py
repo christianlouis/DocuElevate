@@ -36,10 +36,10 @@ DbSession = Annotated[Session, Depends(get_db)]
 # Constants
 # ---------------------------------------------------------------------------
 
-#: PBKDF2 salt for shared-link password hashing (not secret, but fixed).
-_PWD_HASH_SALT = b"shared-link-v1"
-#: PBKDF2 iteration count.
-_PWD_HASH_ITERATIONS = 100_000
+#: PBKDF2 iteration count — matches OWASP 2023 recommendation for PBKDF2-HMAC-SHA256.
+_PWD_HASH_ITERATIONS = 600_000
+#: Length of the random per-password salt in bytes (128-bit entropy).
+_PWD_SALT_BYTES = 16
 
 # Valid expiry durations (in hours) presented in the UI.
 EXPIRY_OPTIONS: dict[str, int] = {
@@ -81,26 +81,52 @@ def _generate_token() -> str:
 
 
 def _hash_password(password: str) -> str:
-    """Return a PBKDF2-HMAC-SHA256 hex digest of *password*.
+    """Hash *password* with PBKDF2-HMAC-SHA256 and a random per-password salt.
+
+    The returned string uses the format ``{salt_hex}:{dk_hex}`` so that
+    both the salt and the digest can be recovered from a single column.
 
     Args:
         password: Plaintext password string.
 
     Returns:
-        128-character lowercase hex string.
+        String in the form ``<32-char salt hex>:<64-char digest hex>``,
+        totalling 97 characters (well within the 128-char column limit).
     """
+    salt = secrets.token_bytes(_PWD_SALT_BYTES)
     dk = hashlib.pbkdf2_hmac(
         "sha256",
         password.encode("utf-8"),
-        _PWD_HASH_SALT,
+        salt,
         _PWD_HASH_ITERATIONS,
     )
-    return dk.hex()
+    return f"{salt.hex()}:{dk.hex()}"
 
 
 def _verify_password(password: str, stored_hash: str) -> bool:
-    """Check *password* against *stored_hash* using constant-time comparison."""
-    return secrets.compare_digest(_hash_password(password), stored_hash)
+    """Verify *password* against a hash produced by :func:`_hash_password`.
+
+    Uses constant-time comparison to prevent timing attacks.
+
+    Args:
+        password: Plaintext password to check.
+        stored_hash: The value previously returned by :func:`_hash_password`.
+
+    Returns:
+        ``True`` if *password* matches, ``False`` otherwise.
+    """
+    try:
+        salt_hex, dk_hex = stored_hash.split(":", 1)
+        salt = bytes.fromhex(salt_hex)
+    except (ValueError, TypeError):
+        return False
+    dk = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt,
+        _PWD_HASH_ITERATIONS,
+    )
+    return secrets.compare_digest(dk.hex(), dk_hex)
 
 
 def _is_link_valid(link: SharedLink) -> bool:
@@ -369,13 +395,40 @@ def get_shared_link_info(
 def download_via_shared_link(
     token: str,
     db: DbSession,
-    password: str | None = Query(None, description="Password (if the link is password-protected)"),
 ) -> FileResponse:
-    """Download a file via a shared link (no authentication required).
+    """Download a file via a shared link that does NOT require a password.
+
+    For password-protected links use ``POST /api/share/{token}/download``
+    with ``{"password": "<value>"}`` in the JSON body instead.
 
     Increments the view counter and validates expiry / view limit before
     serving the file.
     """
+    return _serve_shared_file(token, db, password=None)
+
+
+class PasswordBody(BaseModel):
+    """Request body for password-protected shared link downloads."""
+
+    password: str = Field(..., min_length=1, max_length=128, description="Password for the shared link")
+
+
+@public_router.post("/share/{token}/download")
+def download_via_shared_link_with_password(
+    token: str,
+    body: PasswordBody,
+    db: DbSession,
+) -> FileResponse:
+    """Download a password-protected file via a shared link.
+
+    Accepts the password in the JSON request body to avoid it appearing in
+    server access logs, browser history, or ``Referer`` headers.
+    """
+    return _serve_shared_file(token, db, password=body.password)
+
+
+def _serve_shared_file(token: str, db: Session, password: str | None) -> FileResponse:
+    """Core download logic shared by the GET and POST download endpoints."""
     link = db.query(SharedLink).filter(SharedLink.token == token).first()
     if not link:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Link not found or expired")
@@ -401,13 +454,18 @@ def download_via_shared_link(
     if not file_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not available on disk")
 
-    # Increment view count (best-effort — don't fail the request if this errors).
+    # Increment view count — fail the request if this cannot be persisted so
+    # that view-limited links are not bypassed during temporary DB outages.
     try:
         link.view_count = (link.view_count or 0) + 1
         db.commit()
     except Exception:
         db.rollback()
-        logger.warning("Failed to increment view_count for shared link id=%s", link.id)
+        logger.error("Failed to increment view_count for shared link id=%s — aborting download", link.id)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service temporarily unavailable. Please try again.",
+        )
 
     return FileResponse(
         path=file_path,

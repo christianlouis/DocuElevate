@@ -154,7 +154,12 @@ class TestCreateSharedLink:
                 db_link = sess.query(SharedLink).filter(SharedLink.token == data["token"]).first()
                 assert db_link is not None
                 assert db_link.password_hash != "secret"
-                assert len(db_link.password_hash) == 64  # hex digest length
+                # Hash format is "{salt_hex}:{dk_hex}" — check it can verify correctly.
+                assert ":" in db_link.password_hash
+                from app.api.shared_links import _verify_password
+
+                assert _verify_password("secret", db_link.password_hash) is True
+                assert _verify_password("wrong", db_link.password_hash) is False
         finally:
             _cleanup(app)
 
@@ -627,7 +632,7 @@ class TestPublicDownload:
 
     @pytest.mark.unit
     def test_download_password_required(self, sl_engine, sl_session):
-        """Download endpoint returns 401 when password is required but not supplied."""
+        """GET download endpoint returns 401 when password is required but not supplied."""
         from app.api.shared_links import _hash_password
 
         link = SharedLink(
@@ -655,6 +660,7 @@ class TestPublicDownload:
         app.dependency_overrides[get_db] = _override_db
         client = TestClient(app, base_url="http://localhost", raise_server_exceptions=False)
         try:
+            # GET without password returns 401
             resp = client.get("/api/share/pwdlink111/download")
             assert resp.status_code == 401
         finally:
@@ -662,7 +668,7 @@ class TestPublicDownload:
 
     @pytest.mark.unit
     def test_download_wrong_password(self, sl_engine, sl_session):
-        """Download endpoint returns 403 for wrong password."""
+        """POST download endpoint returns 403 for wrong password."""
         from app.api.shared_links import _hash_password
 
         link = SharedLink(
@@ -690,7 +696,8 @@ class TestPublicDownload:
         app.dependency_overrides[get_db] = _override_db
         client = TestClient(app, base_url="http://localhost", raise_server_exceptions=False)
         try:
-            resp = client.get("/api/share/pwdlink222/download?password=wrong")
+            # Password is supplied via POST body, not URL query param.
+            resp = client.post("/api/share/pwdlink222/download", json={"password": "wrong"})
             assert resp.status_code == 403
         finally:
             app.dependency_overrides.clear()
@@ -747,12 +754,17 @@ class TestHelpers:
 
     @pytest.mark.unit
     def test_hash_password_deterministic(self):
-        """Hashing the same password always produces the same hex digest."""
-        from app.api.shared_links import _hash_password
+        """Two calls with the same password produce different hashes (random salt)."""
+        from app.api.shared_links import _hash_password, _verify_password
 
-        h = _hash_password("mysecret")
-        assert h == _hash_password("mysecret")
-        assert len(h) == 64
+        h1 = _hash_password("mysecret")
+        h2 = _hash_password("mysecret")
+        # Salt is random, so hashes differ — but both verify correctly.
+        assert h1 != h2
+        assert _verify_password("mysecret", h1) is True
+        assert _verify_password("mysecret", h2) is True
+        # Format is "{salt_hex}:{dk_hex}"
+        assert ":" in h1
 
     @pytest.mark.unit
     def test_verify_password_correct(self):
