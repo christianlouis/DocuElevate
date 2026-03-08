@@ -6,7 +6,7 @@ import os
 from app.celery_app import celery
 from app.config import settings
 from app.database import SessionLocal
-from app.models import FileRecord
+from app.models import FileRecord, IntegrationDirection, UserIntegration
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.tasks.upload_to_dropbox import upload_to_dropbox
 from app.tasks.upload_to_email import upload_to_email
@@ -261,3 +261,123 @@ def send_to_all_destinations(self, file_path: str, use_validator=True, file_id: 
     log_task_progress(task_id, "send_to_all_destinations", "success", f"Queued {queued_count} uploads", file_id=file_id)
 
     return {"status": "Queued", "file_path": file_path, "tasks": results}
+
+
+@celery.task(base=BaseTaskWithRetry, bind=True)
+def send_to_user_destinations(self, file_path: str, owner_id: str, file_id: int | None = None):
+    """Dispatch uploads to all active DESTINATION UserIntegrations for *owner_id*.
+
+    This is the user-specific counterpart of :func:`send_to_all_destinations`.
+    It queries the ``user_integrations`` table for records where:
+
+    * ``owner_id`` matches the document owner,
+    * ``direction == "DESTINATION"``, and
+    * ``is_active == True``.
+
+    One :func:`upload_to_user_integration` Celery task is queued for each
+    matching integration so that uploads proceed asynchronously and
+    independently.
+
+    Args:
+        file_path: Absolute path to the processed document file.
+        owner_id: The stable user identifier from ``FileRecord.owner_id``.
+        file_id: Optional ``FileRecord.id`` used for progress logging.
+
+    Returns:
+        A dict summarising how many integrations were queued.
+    """
+    from app.tasks.upload_to_user_integration import upload_to_user_integration
+
+    task_id = self.request.id
+    filename = os.path.basename(file_path)
+
+    if not os.path.exists(file_path):
+        error_msg = f"File not found: {file_path}"
+        logger.error("[%s] %s", task_id, error_msg)
+        log_task_progress(task_id, "send_to_user_destinations", "failure", error_msg, file_id=file_id)
+        raise FileNotFoundError(error_msg)
+
+    logger.info("[%s] Sending %s to user destinations for owner=%s", task_id, filename, owner_id)
+    log_task_progress(
+        task_id,
+        "send_to_user_destinations",
+        "in_progress",
+        f"Distributing {filename} to user integrations",
+        file_id=file_id,
+    )
+
+    with SessionLocal() as db:
+        integrations = (
+            db.query(UserIntegration)
+            .filter(
+                UserIntegration.owner_id == owner_id,
+                UserIntegration.direction == IntegrationDirection.DESTINATION,
+                UserIntegration.is_active.is_(True),
+            )
+            .all()
+        )
+        # Snapshot the IDs so we don't keep the session open
+        integration_ids = [(i.id, i.name, i.integration_type) for i in integrations]
+
+    queued = 0
+    task_results: dict[str, str] = {}
+
+    for int_id, int_name, int_type in integration_ids:
+        logger.info("[%s] Queueing upload for integration %d (%s '%s')", task_id, int_id, int_type, int_name)
+        log_task_progress(
+            task_id,
+            f"queue_user_integration_{int_id}",
+            "in_progress",
+            f"Queueing upload to {int_type} '{int_name}'",
+            file_id=file_id,
+        )
+        try:
+            celery_task = upload_to_user_integration.delay(file_path, int_id, file_id)
+            task_results[f"integration_{int_id}_task_id"] = celery_task.id
+            queued += 1
+            log_task_progress(
+                task_id,
+                f"queue_user_integration_{int_id}",
+                "success",
+                f"Queued upload to {int_type} '{int_name}'",
+                file_id=file_id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            error_msg = str(exc)
+            logger.error("[%s] Failed to queue upload for integration %d: %s", task_id, int_id, error_msg)
+            task_results[f"integration_{int_id}_error"] = error_msg
+            log_task_progress(
+                task_id,
+                f"queue_user_integration_{int_id}",
+                "failure",
+                f"Failed to queue {int_type} '{int_name}': {error_msg}",
+                file_id=file_id,
+            )
+
+    logger.info("[%s] Queued %d user-integration upload(s) for owner=%s", task_id, queued, owner_id)
+    log_task_progress(
+        task_id,
+        "send_to_user_destinations",
+        "success",
+        f"Queued {queued} user-integration upload(s)",
+        file_id=file_id,
+    )
+    return {"status": "Queued", "file_path": file_path, "queued": queued, "tasks": task_results}
+
+
+def get_user_destination_count(owner_id: str) -> int:
+    """Return the number of active DESTINATION integrations for *owner_id*.
+
+    A count of zero means no user-specific destinations are configured and
+    the caller should fall back to the global :func:`send_to_all_destinations`.
+    """
+    with SessionLocal() as db:
+        return (
+            db.query(UserIntegration)
+            .filter(
+                UserIntegration.owner_id == owner_id,
+                UserIntegration.direction == IntegrationDirection.DESTINATION,
+                UserIntegration.is_active.is_(True),
+            )
+            .count()
+        )

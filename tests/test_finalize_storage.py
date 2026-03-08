@@ -6,13 +6,33 @@ import pytest
 
 from app.tasks.finalize_document_storage import finalize_document_storage
 
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_file_record(file_id: int = 123, owner_id=None):
+    """Return a lightweight MagicMock that mimics a FileRecord."""
+    rec = MagicMock()
+    rec.id = file_id
+    rec.owner_id = owner_id
+    return rec
+
 
 @pytest.mark.unit
 class TestFinalizeDocumentStorage:
     """Tests for finalize_document_storage Celery task."""
 
+    @pytest.fixture(autouse=True)
+    def _patch_celery_tasks(self, mocker):
+        """Prevent all lazy-imported Celery tasks from actually connecting to Redis."""
+        mocker.patch("app.tasks.compute_embedding.compute_document_embedding")
+        mocker.patch("app.tasks.convert_to_pdfa.convert_to_pdfa", create=True)
+
     @patch("app.tasks.finalize_document_storage.notify_file_processed")
+    @patch("app.tasks.finalize_document_storage.send_to_user_destinations")
     @patch("app.tasks.finalize_document_storage.send_to_all_destinations")
+    @patch("app.tasks.finalize_document_storage.get_user_destination_count", return_value=0)
     @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
     @patch("app.tasks.finalize_document_storage.log_task_progress")
     @patch("app.tasks.finalize_document_storage.SessionLocal")
@@ -21,11 +41,12 @@ class TestFinalizeDocumentStorage:
         mock_session_local,
         mock_log_progress,
         mock_get_services,
+        mock_get_dest_count,
         mock_send_all,
+        mock_send_user,
         mock_notify,
     ):
         """Test successful document finalization with all services configured."""
-        # Mock configured services
         mock_get_services.return_value = {
             "dropbox": True,
             "google_drive": True,
@@ -33,14 +54,11 @@ class TestFinalizeDocumentStorage:
             "s3": True,
         }
 
-        # Mock database session
         mock_db = MagicMock()
         mock_session_local.return_value.__enter__.return_value = mock_db
-        mock_file_record = MagicMock()
-        mock_file_record.id = 123
+        mock_file_record = _make_file_record(123, owner_id=None)
         mock_db.query.return_value.filter.return_value.first.return_value = mock_file_record
 
-        # Mock file existence and size
         with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=True):
             with patch("app.tasks.finalize_document_storage.os.path.getsize", return_value=102400):
                 with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="test_document.pdf"):
@@ -59,10 +77,10 @@ class TestFinalizeDocumentStorage:
                         file_id=123,
                     )
 
-                    # Verify send_to_all_destinations was queued
+                    # owner_id=None → global routing
                     mock_send_all.delay.assert_called_once_with("/workdir/processed/test_document.pdf", True, 123)
+                    mock_send_user.delay.assert_not_called()
 
-                    # Verify notification was sent
                     mock_notify.assert_called_once()
                     notify_args = mock_notify.call_args[1]
                     assert notify_args["filename"] == "test_document.pdf"
@@ -72,12 +90,13 @@ class TestFinalizeDocumentStorage:
                     assert "Google Drive" in notify_args["destinations"]
                     assert "S3" in notify_args["destinations"]
 
-                    # Verify result
                     assert result["status"] == "Completed"
                     assert result["file"] == "/workdir/processed/test_document.pdf"
 
     @patch("app.tasks.finalize_document_storage.notify_file_processed")
+    @patch("app.tasks.finalize_document_storage.send_to_user_destinations")
     @patch("app.tasks.finalize_document_storage.send_to_all_destinations")
+    @patch("app.tasks.finalize_document_storage.get_user_destination_count", return_value=0)
     @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
     @patch("app.tasks.finalize_document_storage.log_task_progress")
     @patch("app.tasks.finalize_document_storage.SessionLocal")
@@ -86,17 +105,17 @@ class TestFinalizeDocumentStorage:
         mock_session_local,
         mock_log_progress,
         mock_get_services,
+        mock_get_dest_count,
         mock_send_all,
+        mock_send_user,
         mock_notify,
     ):
         """Test file_id retrieval from database when not provided."""
         mock_get_services.return_value = {"dropbox": True}
 
-        # Mock database session to return a file record
         mock_db = MagicMock()
         mock_session_local.return_value.__enter__.return_value = mock_db
-        mock_file_record = MagicMock()
-        mock_file_record.id = 456
+        mock_file_record = _make_file_record(456, owner_id=None)
         mock_db.query.return_value.filter.return_value.first.return_value = mock_file_record
 
         with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=True):
@@ -121,11 +140,13 @@ class TestFinalizeDocumentStorage:
                             # Verify database was queried
                             mock_db.query.assert_called_once()
 
-                            # Verify send_to_all was called with retrieved file_id
+                            # Verify send_to_all was called (global routing — no user destinations)
                             mock_send_all.delay.assert_called_once()
 
     @patch("app.tasks.finalize_document_storage.notify_file_processed")
+    @patch("app.tasks.finalize_document_storage.send_to_user_destinations")
     @patch("app.tasks.finalize_document_storage.send_to_all_destinations")
+    @patch("app.tasks.finalize_document_storage.get_user_destination_count", return_value=0)
     @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
     @patch("app.tasks.finalize_document_storage.log_task_progress")
     @patch("app.tasks.finalize_document_storage.SessionLocal")
@@ -134,11 +155,12 @@ class TestFinalizeDocumentStorage:
         mock_session_local,
         mock_log_progress,
         mock_get_services,
+        mock_get_dest_count,
         mock_send_all,
+        mock_send_user,
         mock_notify,
     ):
         """Test handles case when no services are configured."""
-        # No services configured
         mock_get_services.return_value = {
             "dropbox": False,
             "google_drive": False,
@@ -162,17 +184,17 @@ class TestFinalizeDocumentStorage:
                         file_id=789,
                     )
 
-                    # Should still queue uploads (even if none configured)
+                    # Should still queue global uploads (even if none configured)
                     mock_send_all.delay.assert_called_once()
 
-                    # Should still send notification
                     mock_notify.assert_called_once()
                     notify_args = mock_notify.call_args[1]
-                    # No services configured means empty destinations list
                     assert notify_args["destinations"] == []
 
     @patch("app.tasks.finalize_document_storage.notify_file_processed")
+    @patch("app.tasks.finalize_document_storage.send_to_user_destinations")
     @patch("app.tasks.finalize_document_storage.send_to_all_destinations")
+    @patch("app.tasks.finalize_document_storage.get_user_destination_count", return_value=0)
     @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
     @patch("app.tasks.finalize_document_storage.log_task_progress")
     @patch("app.tasks.finalize_document_storage.SessionLocal")
@@ -181,11 +203,12 @@ class TestFinalizeDocumentStorage:
         mock_session_local,
         mock_log_progress,
         mock_get_services,
+        mock_get_dest_count,
         mock_send_all,
+        mock_send_user,
         mock_notify,
     ):
         """Test handles exception when getting configured services."""
-        # Simulate exception
         mock_get_services.side_effect = Exception("Service validation failed")
 
         mock_db = MagicMock()
@@ -204,16 +227,16 @@ class TestFinalizeDocumentStorage:
                         file_id=101,
                     )
 
-                    # Should still complete successfully
                     assert result["status"] == "Completed"
 
-                    # Should use fallback destinations
                     mock_notify.assert_called_once()
                     notify_args = mock_notify.call_args[1]
                     assert "configured destinations" in notify_args["destinations"]
 
     @patch("app.tasks.finalize_document_storage.notify_file_processed")
+    @patch("app.tasks.finalize_document_storage.send_to_user_destinations")
     @patch("app.tasks.finalize_document_storage.send_to_all_destinations")
+    @patch("app.tasks.finalize_document_storage.get_user_destination_count", return_value=0)
     @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
     @patch("app.tasks.finalize_document_storage.log_task_progress")
     @patch("app.tasks.finalize_document_storage.SessionLocal")
@@ -222,7 +245,9 @@ class TestFinalizeDocumentStorage:
         mock_session_local,
         mock_log_progress,
         mock_get_services,
+        mock_get_dest_count,
         mock_send_all,
+        mock_send_user,
         mock_notify,
     ):
         """Test handles notification failure gracefully."""
@@ -232,7 +257,6 @@ class TestFinalizeDocumentStorage:
         mock_session_local.return_value.__enter__.return_value = mock_db
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        # Simulate notification failure
         mock_notify.side_effect = Exception("Notification service unavailable")
 
         with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=True):
@@ -247,14 +271,13 @@ class TestFinalizeDocumentStorage:
                         file_id=202,
                     )
 
-                    # Should still complete successfully despite notification failure
                     assert result["status"] == "Completed"
-
-                    # Should still queue uploads
                     mock_send_all.delay.assert_called_once()
 
     @patch("app.tasks.finalize_document_storage.notify_file_processed")
+    @patch("app.tasks.finalize_document_storage.send_to_user_destinations")
     @patch("app.tasks.finalize_document_storage.send_to_all_destinations")
+    @patch("app.tasks.finalize_document_storage.get_user_destination_count", return_value=0)
     @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
     @patch("app.tasks.finalize_document_storage.log_task_progress")
     @patch("app.tasks.finalize_document_storage.SessionLocal")
@@ -263,7 +286,9 @@ class TestFinalizeDocumentStorage:
         mock_session_local,
         mock_log_progress,
         mock_get_services,
+        mock_get_dest_count,
         mock_send_all,
+        mock_send_user,
         mock_notify,
     ):
         """Test handles case when processed file doesn't exist."""
@@ -273,7 +298,6 @@ class TestFinalizeDocumentStorage:
         mock_session_local.return_value.__enter__.return_value = mock_db
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        # File doesn't exist
         with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=False):
             with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="missing.pdf"):
                 finalize_document_storage.request.id = "test-task-id"
@@ -285,16 +309,16 @@ class TestFinalizeDocumentStorage:
                     file_id=303,
                 )
 
-                # Should still queue uploads (send_to_all handles missing files)
                 mock_send_all.delay.assert_called_once()
 
-                # Notification should use file_size = 0
                 mock_notify.assert_called_once()
                 notify_args = mock_notify.call_args[1]
                 assert notify_args["file_size"] == 0
 
     @patch("app.tasks.finalize_document_storage.notify_file_processed")
+    @patch("app.tasks.finalize_document_storage.send_to_user_destinations")
     @patch("app.tasks.finalize_document_storage.send_to_all_destinations")
+    @patch("app.tasks.finalize_document_storage.get_user_destination_count", return_value=0)
     @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
     @patch("app.tasks.finalize_document_storage.log_task_progress")
     @patch("app.tasks.finalize_document_storage.SessionLocal")
@@ -303,11 +327,12 @@ class TestFinalizeDocumentStorage:
         mock_session_local,
         mock_log_progress,
         mock_get_services,
+        mock_get_dest_count,
         mock_send_all,
+        mock_send_user,
         mock_notify,
     ):
         """Test that service names are formatted correctly for display."""
-        # Mock services with underscores in names
         mock_get_services.return_value = {
             "google_drive": True,
             "one_drive": True,
@@ -330,16 +355,17 @@ class TestFinalizeDocumentStorage:
                         file_id=404,
                     )
 
-                    # Verify service names are formatted with spaces and title case
                     mock_notify.assert_called_once()
                     notify_args = mock_notify.call_args[1]
                     destinations = notify_args["destinations"]
                     assert "Google Drive" in destinations
                     assert "One Drive" in destinations
-                    assert "Next Cloud" not in destinations  # Not configured
+                    assert "Next Cloud" not in destinations
 
     @patch("app.tasks.finalize_document_storage.notify_file_processed")
+    @patch("app.tasks.finalize_document_storage.send_to_user_destinations")
     @patch("app.tasks.finalize_document_storage.send_to_all_destinations")
+    @patch("app.tasks.finalize_document_storage.get_user_destination_count", return_value=0)
     @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
     @patch("app.tasks.finalize_document_storage.log_task_progress")
     @patch("app.tasks.finalize_document_storage.SessionLocal")
@@ -348,7 +374,9 @@ class TestFinalizeDocumentStorage:
         mock_session_local,
         mock_log_progress,
         mock_get_services,
+        mock_get_dest_count,
         mock_send_all,
+        mock_send_user,
         mock_notify,
     ):
         """Test that delete_after flag is correctly passed to send_to_all_destinations."""
@@ -370,11 +398,12 @@ class TestFinalizeDocumentStorage:
                         file_id=505,
                     )
 
-                    # Verify send_to_all was called with delete_after=True
                     mock_send_all.delay.assert_called_once_with("/workdir/processed/file.pdf", True, 505)
 
     @patch("app.tasks.finalize_document_storage.notify_file_processed")
+    @patch("app.tasks.finalize_document_storage.send_to_user_destinations")
     @patch("app.tasks.finalize_document_storage.send_to_all_destinations")
+    @patch("app.tasks.finalize_document_storage.get_user_destination_count", return_value=0)
     @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
     @patch("app.tasks.finalize_document_storage.log_task_progress")
     @patch("app.tasks.finalize_document_storage.SessionLocal")
@@ -383,17 +412,14 @@ class TestFinalizeDocumentStorage:
         mock_session_local,
         mock_log_progress,
         mock_get_services,
+        mock_get_dest_count,
         mock_send_all,
+        mock_send_user,
         mock_notify,
     ):
         """
         Regression test: when PDF/A conversion is enabled, the finalize_document_storage
         step must NOT be logged as in_progress after it has already been logged as success.
-
-        Previously, a second log_task_progress call with status="in_progress" was made for
-        "finalize_document_storage" when queueing PDF/A archival conversion, which overwrote
-        the prior success status and caused the overall file status to appear stuck in
-        processing/failed.
         """
         mock_get_services.return_value = {"dropbox": True}
 
@@ -423,18 +449,191 @@ class TestFinalizeDocumentStorage:
                                 file_id=606,
                             )
 
-                        # Collect all (step_name, status) pairs logged for finalize_document_storage
+                        # Collect all logged calls for finalize_document_storage step
                         finalize_calls = [
-                            call
-                            for call in mock_log_progress.call_args_list
-                            if call.args[1] == "finalize_document_storage"
+                            c for c in mock_log_progress.call_args_list if c.args[1] == "finalize_document_storage"
                         ]
 
-                        # After the success log, no in_progress log should follow for this step
-                        statuses = [call.args[2] for call in finalize_calls]
+                        statuses = [c.args[2] for c in finalize_calls]
                         assert "success" in statuses, "finalize_document_storage must be logged as success"
-                        # The last status logged must be success, not in_progress
                         assert statuses[-1] == "success", (
                             "finalize_document_storage must not be regressed to in_progress after success; "
                             f"got statuses: {statuses}"
                         )
+
+
+@pytest.mark.unit
+class TestFinalizeDocumentStorageUserRouting:
+    """Tests for user-specific destination routing in finalize_document_storage."""
+
+    @pytest.fixture(autouse=True)
+    def _patch_celery_tasks(self, mocker):
+        """Prevent all lazy-imported Celery tasks from actually connecting to Redis."""
+        mocker.patch("app.tasks.compute_embedding.compute_document_embedding")
+        mocker.patch("app.tasks.convert_to_pdfa.convert_to_pdfa", create=True)
+
+    @patch("app.tasks.finalize_document_storage.notify_file_processed")
+    @patch("app.tasks.finalize_document_storage.send_to_user_destinations")
+    @patch("app.tasks.finalize_document_storage.send_to_all_destinations")
+    @patch("app.tasks.finalize_document_storage.get_user_destination_count", return_value=2)
+    @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
+    @patch("app.tasks.finalize_document_storage.log_task_progress")
+    @patch("app.tasks.finalize_document_storage.SessionLocal")
+    def test_routes_to_user_destinations_when_owner_has_integrations(
+        self,
+        mock_session_local,
+        mock_log_progress,
+        mock_get_services,
+        mock_get_dest_count,
+        mock_send_all,
+        mock_send_user,
+        mock_notify,
+    ):
+        """When a user has active DESTINATION integrations, use them instead of global config."""
+        mock_get_services.return_value = {"dropbox": True}
+
+        mock_db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = mock_db
+        mock_file_record = _make_file_record(100, owner_id="alice@example.com")
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_file_record
+
+        with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=True):
+            with patch("app.tasks.finalize_document_storage.os.path.getsize", return_value=1024):
+                with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="doc.pdf"):
+                    finalize_document_storage.request.id = "test-task-id"
+
+                    result = finalize_document_storage.__wrapped__(
+                        original_file="/tmp/original.pdf",
+                        processed_file="/workdir/processed/doc.pdf",
+                        metadata={"filename": "doc.pdf"},
+                        file_id=100,
+                    )
+
+        mock_send_user.delay.assert_called_once_with("/workdir/processed/doc.pdf", "alice@example.com", 100)
+        mock_send_all.delay.assert_not_called()
+        assert result["status"] == "Completed"
+
+    @patch("app.tasks.finalize_document_storage.notify_file_processed")
+    @patch("app.tasks.finalize_document_storage.send_to_user_destinations")
+    @patch("app.tasks.finalize_document_storage.send_to_all_destinations")
+    @patch("app.tasks.finalize_document_storage.get_user_destination_count", return_value=0)
+    @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
+    @patch("app.tasks.finalize_document_storage.log_task_progress")
+    @patch("app.tasks.finalize_document_storage.SessionLocal")
+    def test_falls_back_to_global_when_owner_has_no_integrations(
+        self,
+        mock_session_local,
+        mock_log_progress,
+        mock_get_services,
+        mock_get_dest_count,
+        mock_send_all,
+        mock_send_user,
+        mock_notify,
+    ):
+        """When a user has no active DESTINATION integrations, fall back to global config."""
+        mock_get_services.return_value = {"s3": True}
+
+        mock_db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = mock_db
+        mock_file_record = _make_file_record(200, owner_id="bob@example.com")
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_file_record
+
+        with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=True):
+            with patch("app.tasks.finalize_document_storage.os.path.getsize", return_value=2048):
+                with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="file.pdf"):
+                    finalize_document_storage.request.id = "test-task-id"
+
+                    result = finalize_document_storage.__wrapped__(
+                        original_file="/tmp/original.pdf",
+                        processed_file="/workdir/processed/file.pdf",
+                        metadata={"filename": "file.pdf"},
+                        file_id=200,
+                    )
+
+        mock_send_all.delay.assert_called_once_with("/workdir/processed/file.pdf", True, 200)
+        mock_send_user.delay.assert_not_called()
+        assert result["status"] == "Completed"
+
+    @patch("app.tasks.finalize_document_storage.notify_file_processed")
+    @patch("app.tasks.finalize_document_storage.send_to_user_destinations")
+    @patch("app.tasks.finalize_document_storage.send_to_all_destinations")
+    @patch("app.tasks.finalize_document_storage.get_user_destination_count", return_value=0)
+    @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
+    @patch("app.tasks.finalize_document_storage.log_task_progress")
+    @patch("app.tasks.finalize_document_storage.SessionLocal")
+    def test_falls_back_to_global_when_no_owner(
+        self,
+        mock_session_local,
+        mock_log_progress,
+        mock_get_services,
+        mock_get_dest_count,
+        mock_send_all,
+        mock_send_user,
+        mock_notify,
+    ):
+        """When a document has no owner (single-user mode), global destinations are used."""
+        mock_get_services.return_value = {"nextcloud": True}
+
+        mock_db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = mock_db
+        mock_file_record = _make_file_record(300, owner_id=None)
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_file_record
+
+        with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=True):
+            with patch("app.tasks.finalize_document_storage.os.path.getsize", return_value=512):
+                with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="scan.pdf"):
+                    finalize_document_storage.request.id = "test-task-id"
+
+                    result = finalize_document_storage.__wrapped__(
+                        original_file="/tmp/original.pdf",
+                        processed_file="/workdir/processed/scan.pdf",
+                        metadata={"filename": "scan.pdf"},
+                        file_id=300,
+                    )
+
+        mock_send_all.delay.assert_called_once_with("/workdir/processed/scan.pdf", True, 300)
+        mock_send_user.delay.assert_not_called()
+        # get_user_destination_count must NOT be called when owner_id is None
+        mock_get_dest_count.assert_not_called()
+
+    @patch("app.tasks.finalize_document_storage.notify_file_processed")
+    @patch("app.tasks.finalize_document_storage.send_to_user_destinations")
+    @patch("app.tasks.finalize_document_storage.send_to_all_destinations")
+    @patch("app.tasks.finalize_document_storage.get_user_destination_count")
+    @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
+    @patch("app.tasks.finalize_document_storage.log_task_progress")
+    @patch("app.tasks.finalize_document_storage.SessionLocal")
+    def test_falls_back_to_global_when_count_lookup_fails(
+        self,
+        mock_session_local,
+        mock_log_progress,
+        mock_get_services,
+        mock_get_dest_count,
+        mock_send_all,
+        mock_send_user,
+        mock_notify,
+    ):
+        """When get_user_destination_count raises, fall back to global routing gracefully."""
+        mock_get_services.return_value = {"s3": True}
+        mock_get_dest_count.side_effect = Exception("DB connection error")
+
+        mock_db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = mock_db
+        mock_file_record = _make_file_record(400, owner_id="charlie@example.com")
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_file_record
+
+        with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=True):
+            with patch("app.tasks.finalize_document_storage.os.path.getsize", return_value=4096):
+                with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="file.pdf"):
+                    finalize_document_storage.request.id = "test-task-id"
+
+                    result = finalize_document_storage.__wrapped__(
+                        original_file="/tmp/original.pdf",
+                        processed_file="/workdir/processed/file.pdf",
+                        metadata={"filename": "file.pdf"},
+                        file_id=400,
+                    )
+
+        mock_send_all.delay.assert_called_once_with("/workdir/processed/file.pdf", True, 400)
+        mock_send_user.delay.assert_not_called()
+        assert result["status"] == "Completed"
