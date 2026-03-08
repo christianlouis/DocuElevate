@@ -306,8 +306,6 @@ async def stripe_status(request: Request, db: Session = Depends(get_db)) -> dict
     connection_status = "ok"
     try:
         account = client.accounts.retrieve("me")  # type: ignore[arg-type]
-        mode = "live" if getattr(account, "livemode", True) is not False else "test"
-        # stripe returns livemode=False in test mode
         livemode = getattr(account, "livemode", None)
         if livemode is True:
             mode = "live"

@@ -40,6 +40,7 @@
               @click="currentStep = i"
               class="flex items-center focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400 rounded"
               :aria-current="currentStep === i ? 'step' : null"
+              :aria-label="'Step ' + (i + 1) + ': ' + step.title"
             >
               <span
                 class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold border-2 transition"
@@ -139,7 +140,8 @@
 
       <!-- Plan grid -->
       <div x-show="status && status.plans && status.plans.length > 0">
-        <table class="min-w-full text-sm divide-y divide-gray-200" aria-label="Plan sync status">
+        <table class="min-w-full text-sm divide-y divide-gray-200">
+          <caption class="sr-only">Plan sync status</caption>
           <thead class="bg-gray-50">
             <tr>
               <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>
@@ -300,7 +302,7 @@
 
       <!-- Local testing -->
       <details class="border border-gray-200 rounded-md">
-        <summary class="px-4 py-3 text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-50">
+        <summary class="px-4 py-3 text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400 rounded-md">
           <i class="fas fa-terminal mr-1" aria-hidden="true"></i> Local testing with Stripe CLI
         </summary>
         <div class="px-4 pb-4 pt-2 bg-gray-50 rounded-b-md">

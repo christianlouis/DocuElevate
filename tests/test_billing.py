@@ -664,12 +664,11 @@ def test_stripe_sync_plans_creates_prices(bill_client, bill_session):
     assert db_plan.stripe_price_id_monthly == "price_monthly_pro_new"
     assert db_plan.stripe_price_id_yearly == "price_yearly_pro_new"
 
-    # Verify correct amounts were passed to Stripe
+    # Verify correct amounts were passed to Stripe, matching by interval (order-independent)
     price_calls = mock_client.prices.create.call_args_list
-    assert price_calls[0][1]["params"]["unit_amount"] == 1900  # $19.00 → 1900 cents
-    assert price_calls[1][1]["params"]["unit_amount"] == 19000  # $190.00 → 19000 cents
-    assert price_calls[0][1]["params"]["recurring"]["interval"] == "month"
-    assert price_calls[1][1]["params"]["recurring"]["interval"] == "year"
+    by_interval = {call[1]["params"]["recurring"]["interval"]: call[1]["params"] for call in price_calls}
+    assert by_interval["month"]["unit_amount"] == 1900  # $19.00 → 1900 cents
+    assert by_interval["year"]["unit_amount"] == 19000  # $190.00 → 19000 cents
 
 
 @pytest.mark.integration
