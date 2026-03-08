@@ -312,20 +312,51 @@ async def auth(request: Request, db: Session = Depends(get_db)):
     username = form_data.get("username")
     password = form_data.get("password")
 
+    logger.debug(
+        "[AUTH] Login attempt: username=%r password_provided=%s multi_user_enabled=%s",
+        username,
+        bool(password),
+        settings.multi_user_enabled,
+    )
+
     # --- LocalUser check (multi-user mode only) ---
     if settings.multi_user_enabled:
+        if not username:
+            logger.warning(
+                "[AUTH] LOGIN_FAILURE reason=empty_username multi_user_enabled=%s form_keys=%s content_type=%s",
+                settings.multi_user_enabled,
+                list(form_data.keys()),
+                request.headers.get("content-type", "<missing>"),
+            )
+            return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
+
         local_user = (
             db.query(_LocalUser).filter((_LocalUser.username == username) | (_LocalUser.email == username)).first()
         )
+        logger.debug(
+            "[AUTH] LocalUser lookup: username=%r found=%s",
+            username,
+            local_user is not None,
+        )
         if local_user is not None:
             if not local_user.is_active:
-                logger.warning("[SECURITY] LOCAL_LOGIN_UNVERIFIED user=%s", username)
+                logger.warning(
+                    "[SECURITY] LOCAL_LOGIN_UNVERIFIED user=%s is_active=%s",
+                    username,
+                    local_user.is_active,
+                )
                 return RedirectResponse(
                     url="/login?error=Please+verify+your+email+address+before+logging+in",
                     status_code=302,
                 )
-            if not _verify_password(password or "", local_user.hashed_password):
-                logger.warning("[SECURITY] LOCAL_LOGIN_FAILURE user=%s", username)
+            pw_ok = _verify_password(password or "", local_user.hashed_password)
+            logger.debug(
+                "[AUTH] Password verification: user=%s ok=%s",
+                username,
+                pw_ok,
+            )
+            if not pw_ok:
+                logger.warning("[SECURITY] LOCAL_LOGIN_FAILURE reason=wrong_password user=%s", username)
                 return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
             user_data = _build_session_user(local_user)
             request.session["user"] = user_data
@@ -339,12 +370,25 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             redirect_url = request.session.pop("redirect_after_login", "/upload")
             return RedirectResponse(url=redirect_url, status_code=302)
 
+        # Local user not found; fall through to admin credential check below.
+        logger.debug(
+            "[AUTH] No LocalUser matched username=%r; falling through to admin credential check",
+            username,
+        )
+
     # --- Admin credentials (always available as a fallback / single-user mode) ---
     # Guard: only attempt the match when credentials are actually configured.
     # Without this guard, Python's `None == None` would be True when neither
     # ADMIN_USERNAME nor ADMIN_PASSWORD is set, allowing any request that omits
     # those form fields to be authenticated as an admin — creating a phantom
     # "None@local.docuelevate" admin profile with full privileges.
+    admin_configured = bool(settings.admin_username and settings.admin_password)
+    logger.debug(
+        "[AUTH] Admin credential check: admin_configured=%s username_match=%s multi_user_enabled=%s",
+        admin_configured,
+        username == settings.admin_username if admin_configured else False,
+        settings.multi_user_enabled,
+    )
     if (
         settings.admin_username
         and settings.admin_password
@@ -365,7 +409,14 @@ async def auth(request: Request, db: Session = Depends(get_db)):
         redirect_url = request.session.pop("redirect_after_login", "/upload")
         return RedirectResponse(url=redirect_url, status_code=302)
     else:
-        logger.warning("[SECURITY] LOCAL_LOGIN_FAILURE user=%s", username)
+        logger.warning(
+            "[SECURITY] LOCAL_LOGIN_FAILURE reason=no_match user=%r "
+            "multi_user_enabled=%s admin_configured=%s form_empty=%s",
+            username,
+            settings.multi_user_enabled,
+            admin_configured,
+            not username and not password,
+        )
         return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
 
 

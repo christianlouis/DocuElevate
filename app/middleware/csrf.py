@@ -148,10 +148,16 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 
         # 2. For URL-encoded form bodies only (plain HTML form submissions).
         content_type = request.headers.get("content-type", "")
+        logger.debug("CSRF: content_type=%r method=%s path=%s", content_type, request.method, request.url.path)
         if "application/x-www-form-urlencoded" in content_type:
             try:
                 form = await request.form()
                 token = form.get("csrf_token")
+                logger.debug(
+                    "CSRF: form_keys=%s csrf_token_present=%s",
+                    list(form.keys()),
+                    bool(token),
+                )
                 if token:
                     return str(token)
             except Exception as exc:
