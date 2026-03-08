@@ -2223,6 +2223,47 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Support / Help Center – Zammad integration
+    "zammad_url": {
+        "category": "Support",
+        "description": "Base URL of your Zammad instance (e.g. https://zammad.example.com). Required for the chat widget and feedback form.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "zammad_chat_enabled": {
+        "category": "Support",
+        "description": "Show a Zammad live-chat widget on the Help Center page.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "zammad_chat_id": {
+        "category": "Support",
+        "description": "Zammad chat topic ID (see Channels → Chat → Topics in Zammad admin). Default: 1.",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "zammad_form_enabled": {
+        "category": "Support",
+        "description": "Show a 'Submit a Ticket' feedback form on the Help Center page.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "support_email": {
+        "category": "Support",
+        "description": "Support e-mail address displayed on the Help Center page.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
 }
 
 
