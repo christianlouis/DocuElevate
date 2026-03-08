@@ -128,18 +128,112 @@ pytest -m integration
 #### Codecov - Coverage Tracking
 
 **What it does:**
-- Visualizes test coverage trends
-- Comments on PRs with coverage changes
-- Tracks coverage over time
-- Provides coverage badges
+- Visualizes test coverage trends over time
+- Comments on PRs with a per-file coverage diff
+- Enforces project-level and patch-level coverage thresholds
+- Provides embeddable coverage badges
+- Annotates PR diff lines with coverage status
 
 **Why we chose it:**
-- Free for open-source
-- Excellent PR integration
-- Clear coverage visualization
-- Industry standard
+- Free for open-source projects
+- Excellent GitHub PR integration
+- Clear coverage visualization and trend graphs
+- Industry standard with broad toolchain support
 
-**Configuration:** Integrated in `.github/workflows/tests.yaml`
+**Configuration files:**
+- `codecov.yml` — repository-level settings (thresholds, flags, PR comments)
+- `.github/workflows/ci.yml` (`run-tests` job) — uploads `coverage.xml` via `codecov/codecov-action@v5`
+- `pyproject.toml` (`[tool.coverage.*]`) — what pytest-cov measures and omits
+
+##### Initial Setup (Repository Admins)
+
+1. **Sign in to Codecov** at <https://app.codecov.io> using your GitHub account.
+2. **Add the repository**: click *Add new repository* and select `DocuElevate`.
+3. **Copy the upload token** shown on the repository settings page.
+4. **Store the token as a GitHub Actions secret**:
+   - Navigate to *Settings → Secrets and variables → Actions → New repository secret*
+   - Name: `CODECOV_TOKEN`
+   - Value: paste the token copied in step 3
+5. **Push a commit** to trigger CI. The `run-tests` job will upload `coverage.xml` and Codecov will begin reporting.
+
+##### Adjusting Coverage Thresholds
+
+Edit `codecov.yml` at the repository root:
+
+```yaml
+coverage:
+  status:
+    project:
+      default:
+        target: 60%      # Minimum overall project coverage
+        threshold: 2%    # Allowed drop compared to base branch
+    patch:
+      default:
+        target: 70%      # Minimum coverage of lines changed in a PR
+        threshold: 5%    # Allowed slack on patch coverage
+```
+
+Commit and push the change — Codecov picks it up automatically.
+
+##### Using Coverage Flags
+
+Flags let you track unit and integration coverage separately.
+The `run-tests` job in `ci.yml` uploads a single unified report; to split it add a
+`flags` parameter to the upload step for each job:
+
+```yaml
+- name: Upload Unified Coverage to Codecov
+  uses: codecov/codecov-action@v5
+  with:
+    token: ${{ secrets.CODECOV_TOKEN }}
+    files: ./coverage.xml
+    flags: unittests       # matches flag_management in codecov.yml
+    fail_ci_if_error: true
+```
+
+The flag names (`unittests`, `integration`) are defined in `codecov.yml` under
+`flag_management.individual_flags`.
+
+##### Embedding the Coverage Badge
+
+Add the following Markdown to `README.md`, replacing `<owner>` and `<repo>`:
+
+```markdown
+<!-- Public repository (no token needed) -->
+[![codecov](https://codecov.io/gh/<owner>/<repo>/graph/badge.svg)](https://codecov.io/gh/<owner>/<repo>)
+
+<!-- Private repository (include token for badge access) -->
+[![codecov](https://codecov.io/gh/<owner>/<repo>/graph/badge.svg?token=<TOKEN>)](https://codecov.io/gh/<owner>/<repo>)
+```
+
+The exact badge snippet (with the correct token pre-filled) is shown on the Codecov repository overview page under *Settings → Badge*.
+
+##### Accessing Coverage Reports
+
+| Where | What you see |
+|-------|-------------|
+| Codecov dashboard (<https://app.codecov.io>) | Full report, trend graphs, file explorer |
+| GitHub PR comment | Per-file diff, overall Δ, patch coverage |
+| GitHub Checks tab | Pass/fail status for project and patch thresholds |
+| CI artifacts | `coverage.xml` (machine-readable), HTML report (human-readable) |
+
+To view the HTML report locally:
+
+```bash
+pytest --cov=app --cov-report=html
+open htmlcov/index.html
+```
+
+##### Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| "Token is invalid" upload error | `CODECOV_TOKEN` secret missing or wrong | Re-copy the token from Codecov settings and update the secret |
+| No PR comment posted | Repository is private and token not set | Set `CODECOV_TOKEN` — required for private repos |
+| Coverage always 0% | `coverage.xml` not generated | Confirm pytest runs with `--cov=app --cov-report=xml:coverage.xml` |
+| CI fails with "coverage decreased" | Patch coverage dropped below threshold | Improve test coverage for the changed lines, or adjust `threshold` in `codecov.yml` |
+| Codecov not picking up `codecov.yml` | YAML syntax error | Validate the file locally with `python3 -c "import yaml; yaml.safe_load(open('codecov.yml'))"`, or use the web validator at the Codecov dashboard (*Settings → YAML*) |
+| Flags not appearing in dashboard | Flag name mismatch | Ensure the `flags:` value in the upload step matches an entry in `codecov.yml` |
 
 #### Pre-commit - Local Quality Gates
 
