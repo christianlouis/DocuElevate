@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
-from app.models import UserIntegration
+from app.models import SubscriptionPlan, UserIntegration, UserProfile
 
 # ---------------------------------------------------------------------------
 # Test data constants
@@ -43,6 +43,37 @@ _S3_DESTINATION = {
 # ---------------------------------------------------------------------------
 
 
+def _make_profile(session, owner: str = _OWNER, tier: str = "business") -> UserProfile:
+    """Create a UserProfile row for the given user and tier."""
+    profile = UserProfile(user_id=owner, subscription_tier=tier)
+    session.add(profile)
+    session.commit()
+    session.refresh(profile)
+    return profile
+
+
+def _make_plan(
+    session,
+    tier: str = "business",
+    max_storage_destinations: int = 10,
+    max_mailboxes: int = 0,
+) -> SubscriptionPlan:
+    """Create a SubscriptionPlan row."""
+    plan = SubscriptionPlan(
+        plan_id=tier,
+        name=tier.title(),
+        price_monthly=7.99,
+        price_yearly=76.99,
+        max_storage_destinations=max_storage_destinations,
+        max_mailboxes=max_mailboxes,
+        is_active=True,
+    )
+    session.add(plan)
+    session.commit()
+    session.refresh(plan)
+    return plan
+
+
 @pytest.fixture()
 def int_engine():
     """In-memory SQLite engine for integration tests."""
@@ -65,10 +96,40 @@ def int_session(int_engine):
     session.close()
 
 
+def _seed_default_plan(engine, owner_id: str = _OWNER) -> None:
+    """Seed a generous (business-tier) plan and profile for the given user.
+
+    Called automatically by ``_make_client`` so that existing CRUD tests keep
+    working after quota enforcement was added.
+    """
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    try:
+        if not session.query(SubscriptionPlan).filter(SubscriptionPlan.plan_id == "business").first():
+            session.add(
+                SubscriptionPlan(
+                    plan_id="business",
+                    name="Power",
+                    price_monthly=7.99,
+                    price_yearly=76.99,
+                    max_storage_destinations=10,
+                    max_mailboxes=0,  # 0 = unlimited for paid tiers
+                    is_active=True,
+                )
+            )
+        if not session.query(UserProfile).filter(UserProfile.user_id == owner_id).first():
+            session.add(UserProfile(user_id=owner_id, subscription_tier="business"))
+        session.commit()
+    finally:
+        session.close()
+
+
 def _make_client(int_engine, owner_id: str = _OWNER):
     """Return a TestClient with *owner_id* injected as the authenticated user."""
     from app.api.integrations import _get_owner_id
     from app.main import app
+
+    _seed_default_plan(int_engine, owner_id)
 
     def override_db():
         Session = sessionmaker(bind=int_engine)
@@ -546,5 +607,440 @@ class TestImapPasswordEncryption:
                 assert acct.password != "plaintext_password"
                 assert acct.password.startswith("enc:")
                 verify_session.close()
+        finally:
+            app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# Quota enforcement tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestQuotaEnforcementDestinations:
+    """Tests for destination quota enforcement on POST /api/integrations/."""
+
+    def test_create_destination_blocked_at_limit(self, int_engine, int_session):
+        """Users at the destination quota limit receive a 403."""
+        _make_profile(int_session, tier="starter")
+        _make_plan(int_session, tier="starter", max_storage_destinations=1, max_mailboxes=1)
+
+        from app.api.integrations import _get_owner_id
+        from app.main import app
+
+        def override_db():
+            Session = sessionmaker(bind=int_engine)
+            session = Session()
+            try:
+                yield session
+            finally:
+                session.close()
+
+        app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[_get_owner_id] = lambda: _OWNER
+
+        try:
+            with TestClient(app, base_url="http://localhost", raise_server_exceptions=False) as client:
+                # First destination should succeed
+                resp1 = client.post("/api/integrations/", json=_S3_DESTINATION)
+                assert resp1.status_code == 201
+
+                # Second destination should be blocked
+                second = dict(_S3_DESTINATION, name="Second Bucket")
+                resp2 = client.post("/api/integrations/", json=second)
+                assert resp2.status_code == 403
+                assert "limit" in resp2.json()["detail"].lower()
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_create_destination_allowed_under_limit(self, int_engine, int_session):
+        """Users under the destination quota can create integrations."""
+        _make_profile(int_session, tier="professional")
+        _make_plan(int_session, tier="professional", max_storage_destinations=5, max_mailboxes=3)
+
+        from app.api.integrations import _get_owner_id
+        from app.main import app
+
+        def override_db():
+            Session = sessionmaker(bind=int_engine)
+            session = Session()
+            try:
+                yield session
+            finally:
+                session.close()
+
+        app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[_get_owner_id] = lambda: _OWNER
+
+        try:
+            with TestClient(app, base_url="http://localhost", raise_server_exceptions=False) as client:
+                resp = client.post("/api/integrations/", json=_S3_DESTINATION)
+                assert resp.status_code == 201
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_free_tier_allows_one_destination(self, int_engine, int_session):
+        """Free tier allows exactly 1 destination."""
+        _make_profile(int_session, tier="free")
+        _make_plan(int_session, tier="free", max_storage_destinations=1, max_mailboxes=0)
+
+        from app.api.integrations import _get_owner_id
+        from app.main import app
+
+        def override_db():
+            Session = sessionmaker(bind=int_engine)
+            session = Session()
+            try:
+                yield session
+            finally:
+                session.close()
+
+        app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[_get_owner_id] = lambda: _OWNER
+
+        try:
+            with TestClient(app, base_url="http://localhost", raise_server_exceptions=False) as client:
+                resp1 = client.post("/api/integrations/", json=_S3_DESTINATION)
+                assert resp1.status_code == 201
+
+                second = dict(_S3_DESTINATION, name="Second")
+                resp2 = client.post("/api/integrations/", json=second)
+                assert resp2.status_code == 403
+        finally:
+            app.dependency_overrides.clear()
+
+
+@pytest.mark.integration
+class TestQuotaEnforcementSources:
+    """Tests for IMAP source quota enforcement on POST /api/integrations/."""
+
+    def test_create_imap_source_blocked_on_free_tier(self, int_engine, int_session):
+        """Free-tier users cannot add IMAP source integrations."""
+        _make_profile(int_session, tier="free")
+        _make_plan(int_session, tier="free", max_storage_destinations=1, max_mailboxes=0)
+
+        from app.api.integrations import _get_owner_id
+        from app.main import app
+
+        def override_db():
+            Session = sessionmaker(bind=int_engine)
+            session = Session()
+            try:
+                yield session
+            finally:
+                session.close()
+
+        app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[_get_owner_id] = lambda: _OWNER
+
+        try:
+            with TestClient(app, base_url="http://localhost", raise_server_exceptions=False) as client:
+                resp = client.post("/api/integrations/", json=_IMAP_SOURCE)
+                assert resp.status_code == 403
+                assert "plan" in resp.json()["detail"].lower()
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_create_imap_source_blocked_at_limit(self, int_engine, int_session):
+        """Starter-tier users with 1 IMAP source cannot add a second."""
+        _make_profile(int_session, tier="starter")
+        _make_plan(int_session, tier="starter", max_storage_destinations=2, max_mailboxes=1)
+
+        from app.api.integrations import _get_owner_id
+        from app.main import app
+
+        def override_db():
+            Session = sessionmaker(bind=int_engine)
+            session = Session()
+            try:
+                yield session
+            finally:
+                session.close()
+
+        app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[_get_owner_id] = lambda: _OWNER
+
+        try:
+            with TestClient(app, base_url="http://localhost", raise_server_exceptions=False) as client:
+                resp1 = client.post("/api/integrations/", json=_IMAP_SOURCE)
+                assert resp1.status_code == 201
+
+                second = dict(_IMAP_SOURCE, name="Second Mailbox")
+                resp2 = client.post("/api/integrations/", json=second)
+                assert resp2.status_code == 403
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_create_imap_source_unlimited_on_power_tier(self, int_engine, int_session):
+        """Power-tier users can add multiple IMAP sources (unlimited)."""
+        _make_profile(int_session, tier="business")
+        _make_plan(int_session, tier="business", max_storage_destinations=10, max_mailboxes=0)
+
+        from app.api.integrations import _get_owner_id
+        from app.main import app
+
+        def override_db():
+            Session = sessionmaker(bind=int_engine)
+            session = Session()
+            try:
+                yield session
+            finally:
+                session.close()
+
+        app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[_get_owner_id] = lambda: _OWNER
+
+        try:
+            with TestClient(app, base_url="http://localhost", raise_server_exceptions=False) as client:
+                resp1 = client.post("/api/integrations/", json=_IMAP_SOURCE)
+                resp2 = client.post("/api/integrations/", json=dict(_IMAP_SOURCE, name="Second"))
+                resp3 = client.post("/api/integrations/", json=dict(_IMAP_SOURCE, name="Third"))
+            assert resp1.status_code == 201
+            assert resp2.status_code == 201
+            assert resp3.status_code == 201
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_watch_folder_source_not_quota_limited(self, int_engine, int_session):
+        """WATCH_FOLDER sources are not subject to mailbox quota limits."""
+        _make_profile(int_session, tier="free")
+        _make_plan(int_session, tier="free", max_storage_destinations=1, max_mailboxes=0)
+
+        from app.api.integrations import _get_owner_id
+        from app.main import app
+
+        def override_db():
+            Session = sessionmaker(bind=int_engine)
+            session = Session()
+            try:
+                yield session
+            finally:
+                session.close()
+
+        app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[_get_owner_id] = lambda: _OWNER
+
+        try:
+            with TestClient(app, base_url="http://localhost", raise_server_exceptions=False) as client:
+                payload = {
+                    "direction": "SOURCE",
+                    "integration_type": "WATCH_FOLDER",
+                    "name": "My Folder",
+                    "config": {"path": "/tmp/watch"},
+                    "is_active": True,
+                }
+                resp = client.post("/api/integrations/", json=payload)
+                assert resp.status_code == 201
+        finally:
+            app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# Quota helpers unit tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestQuotaHelpers:
+    """Unit tests for the quota helper functions."""
+
+    def test_get_max_destinations_free_tier(self):
+        from app.api.integrations import _get_max_destinations
+
+        assert _get_max_destinations({"id": "free", "max_storage_destinations": 1}) == 1
+
+    def test_get_max_destinations_paid_explicit(self):
+        from app.api.integrations import _get_max_destinations
+
+        assert _get_max_destinations({"id": "starter", "max_storage_destinations": 2}) == 2
+
+    def test_get_max_destinations_paid_unlimited(self):
+        from app.api.integrations import _get_max_destinations
+
+        assert _get_max_destinations({"id": "business", "max_storage_destinations": 0}) is None
+
+    def test_get_max_sources_free_tier(self):
+        from app.api.integrations import _get_max_sources
+
+        assert _get_max_sources({"id": "free", "max_mailboxes": 0}) == 0
+
+    def test_get_max_sources_paid_explicit(self):
+        from app.api.integrations import _get_max_sources
+
+        assert _get_max_sources({"id": "starter", "max_mailboxes": 1}) == 1
+
+    def test_get_max_sources_paid_unlimited(self):
+        from app.api.integrations import _get_max_sources
+
+        assert _get_max_sources({"id": "business", "max_mailboxes": 0}) is None
+
+
+# ---------------------------------------------------------------------------
+# Connection test endpoint tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestConnectionTestEndpoint:
+    """Tests for POST /api/integrations/test."""
+
+    def test_test_unsupported_type(self, int_client):
+        """Unsupported integration types return a helpful non-error message."""
+        payload = {
+            "integration_type": "DROPBOX",
+            "config": {},
+            "credentials": {"token": "abc"},
+        }
+        resp = int_client.post("/api/integrations/test", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert "not yet supported" in data["message"]
+
+    def test_test_invalid_type_returns_400(self, int_client):
+        """Invalid integration_type returns 400."""
+        payload = {
+            "integration_type": "INVALID",
+            "config": {},
+        }
+        resp = int_client.post("/api/integrations/test", json=payload)
+        assert resp.status_code == 400
+
+    def test_test_imap_missing_fields(self, int_client):
+        """IMAP test with missing fields returns failure."""
+        payload = {
+            "integration_type": "IMAP",
+            "config": {"host": ""},
+            "credentials": {},
+        }
+        resp = int_client.post("/api/integrations/test", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert "Missing" in data["message"]
+
+    def test_test_s3_missing_bucket(self, int_client):
+        """S3 test with missing bucket returns failure."""
+        payload = {
+            "integration_type": "S3",
+            "config": {},
+            "credentials": {"access_key_id": "AKIA", "secret_access_key": "secret"},
+        }
+        resp = int_client.post("/api/integrations/test", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert "bucket" in data["message"].lower()
+
+    def test_test_webdav_missing_url(self, int_client):
+        """WebDAV test with missing URL returns failure."""
+        payload = {
+            "integration_type": "WEBDAV",
+            "config": {},
+            "credentials": {"username": "u", "password": "p"},
+        }
+        resp = int_client.post("/api/integrations/test", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert "url" in data["message"].lower()
+
+    def test_test_webdav_blocks_private_ip(self, int_client):
+        """WebDAV test blocks requests to private/internal IPs (SSRF protection)."""
+        payload = {
+            "integration_type": "WEBDAV",
+            "config": {"url": "http://127.0.0.1/webdav"},
+            "credentials": {"username": "u", "password": "p"},
+        }
+        resp = int_client.post("/api/integrations/test", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert "internal" in data["message"].lower() or "private" in data["message"].lower()
+
+    def test_test_webdav_blocks_localhost(self, int_client):
+        """WebDAV test blocks requests to localhost."""
+        payload = {
+            "integration_type": "WEBDAV",
+            "config": {"url": "http://localhost/webdav"},
+            "credentials": {},
+        }
+        resp = int_client.post("/api/integrations/test", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert "localhost" in data["message"].lower()
+
+    def test_test_webdav_blocks_file_scheme(self, int_client):
+        """WebDAV test blocks file:// scheme."""
+        payload = {
+            "integration_type": "WEBDAV",
+            "config": {"url": "file:///etc/passwd"},
+            "credentials": {},
+        }
+        resp = int_client.post("/api/integrations/test", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert "scheme" in data["message"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Quota endpoint tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestQuotaEndpoint:
+    """Tests for GET /api/integrations/quota/."""
+
+    def test_quota_returns_tier_info(self, int_client):
+        """Quota endpoint returns tier information and counts."""
+        resp = int_client.get("/api/integrations/quota/")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "tier_id" in data
+        assert "tier_name" in data
+        assert "destinations" in data
+        assert "sources" in data
+        assert "current_count" in data["destinations"]
+        assert "max_allowed" in data["destinations"]
+        assert "can_add" in data["destinations"]
+
+    def test_quota_reflects_created_integrations(self, int_client):
+        """Quota counts update after creating integrations."""
+        int_client.post("/api/integrations/", json=_S3_DESTINATION)
+        resp = int_client.get("/api/integrations/quota/")
+        data = resp.json()
+        assert data["destinations"]["current_count"] == 1
+
+    def test_quota_free_tier(self, int_engine, int_session):
+        """Free tier shows correct quota limits."""
+        _make_profile(int_session, tier="free")
+        _make_plan(int_session, tier="free", max_storage_destinations=1, max_mailboxes=0)
+
+        from app.api.integrations import _get_owner_id
+        from app.main import app
+
+        def override_db():
+            Session = sessionmaker(bind=int_engine)
+            session = Session()
+            try:
+                yield session
+            finally:
+                session.close()
+
+        app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[_get_owner_id] = lambda: _OWNER
+
+        try:
+            with TestClient(app, base_url="http://localhost", raise_server_exceptions=False) as client:
+                resp = client.get("/api/integrations/quota/")
+                data = resp.json()
+                assert data["tier_id"] == "free"
+                assert data["destinations"]["max_allowed"] == 1
+                assert data["destinations"]["can_add"] is True
+                assert data["sources"]["max_allowed"] == 0
+                assert data["sources"]["can_add"] is False
         finally:
             app.dependency_overrides.clear()
