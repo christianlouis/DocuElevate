@@ -3,9 +3,11 @@ import inspect
 import logging
 import pathlib
 from functools import wraps
+from urllib.parse import urlparse
 
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from starlette.responses import RedirectResponse
@@ -81,6 +83,17 @@ def require_login(func):
     @wraps(func)
     async def wrapper(request: Request, *args, **kwargs):
         if not request.session.get("user"):
+            # For API endpoints return 401 instead of storing the URL in the session
+            # and redirecting to /login.  Without this guard, the /api/auth/whoami
+            # probe issued by common.js on every page load would overwrite
+            # redirect_after_login with the API URL, causing the post-login redirect
+            # to land on a JSON endpoint rather than the original page.
+            url_path = urlparse(str(request.url)).path
+            if url_path.startswith("/api/"):
+                return JSONResponse(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    content={"error": "Not authenticated"},
+                )
             request.session["redirect_after_login"] = str(request.url)
             return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
         # Check if the wrapped function is a coroutine function
