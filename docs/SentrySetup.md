@@ -13,7 +13,7 @@ When a **Sentry DSN** is configured, every unhandled exception in the FastAPI we
    ```
    https://<public_key>@o<org_id>.ingest.sentry.io/<project_id>
    ```
-3. Set the DSN in your environment:
+3. Set the DSN in your environment **or** via the **Settings → Observability** section of the DocuElevate admin UI:
    ```bash
    SENTRY_DSN=https://<public_key>@o<org_id>.ingest.sentry.io/<project_id>
    ```
@@ -31,7 +31,7 @@ When a **Sentry DSN** is configured, every unhandled exception in the FastAPI we
 | `SENTRY_PROFILES_SAMPLE_RATE` | `0.0` | Fraction of profiled transactions sent to Sentry (0.0 – 1.0).  Only active when traces > 0. |
 | `SENTRY_SEND_DEFAULT_PII` | `false` | Attach PII (IP addresses, user agents) to events.  Disable for GDPR / CCPA compliance. |
 
-All variables can alternatively be managed through the **Settings → Observability** section of the DocuElevate admin UI.
+All variables can alternatively be managed through the **Settings → Observability** section of the DocuElevate admin UI.  Settings stored in the database are applied before Sentry initialises on every startup, so changes made via the UI take effect after a restart without requiring any changes to environment variables or `.env` files.
 
 ---
 
@@ -151,7 +151,7 @@ DocuElevate uses [`sentry-sdk`](https://pypi.org/project/sentry-sdk/) `>=2.20.0,
 ### No events appear in Sentry
 
 1. Verify the DSN is correct and the Sentry project is active.
-2. Check the application logs for the `Sentry initialised` message at startup.  If it is absent, the DSN is not being read — confirm the environment variable name is `SENTRY_DSN`.
+2. Check the application logs for the `Sentry initialised` message at startup.  If it is absent, the DSN is not being read — confirm the environment variable name is `SENTRY_DSN`, or check the **Settings → Observability** section of the admin UI if you configured it there.
 3. Test with `SENTRY_TRACES_SAMPLE_RATE=1.0` so that every request is sent.
 
 ### `sentry-sdk` import error

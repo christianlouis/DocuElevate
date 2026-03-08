@@ -48,6 +48,7 @@ class TestLifespanEvents:
             patch("app.utils.notification.init_apprise"),
             patch("app.utils.notification.notify_startup"),
             patch("app.utils.notification.notify_shutdown"),
+            patch("app.utils.sentry.init_sentry"),
         ):
             # Mock database session
             mock_db = MagicMock()
@@ -74,6 +75,7 @@ class TestLifespanEvents:
             patch("app.utils.notification.init_apprise"),
             patch("app.utils.notification.notify_startup"),
             patch("app.utils.notification.notify_shutdown"),
+            patch("app.utils.sentry.init_sentry"),
             patch("logging.warning") as mock_warning,
         ):
             mock_db = MagicMock()
@@ -101,6 +103,7 @@ class TestLifespanEvents:
             patch("app.utils.notification.init_apprise"),
             patch("app.utils.notification.notify_startup"),
             patch("app.utils.notification.notify_shutdown"),
+            patch("app.utils.sentry.init_sentry"),
             patch("logging.error") as mock_error,
         ):
             mock_db = MagicMock()
@@ -113,6 +116,34 @@ class TestLifespanEvents:
                 pass
 
             mock_error.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_lifespan_calls_init_sentry_after_db_settings_load(self):
+        """Test that init_sentry is called inside lifespan after load_settings_from_db."""
+
+        with (
+            patch("app.database.init_db"),
+            patch("app.database.SessionLocal") as mock_session_cls,
+            patch("app.utils.config_loader.load_settings_from_db") as mock_load_settings,
+            patch("app.utils.config_validator.dump_all_settings"),
+            patch("app.utils.config_validator.check_all_configs", return_value={"email": [], "storage": {}}),
+            patch("app.utils.notification.init_apprise"),
+            patch("app.utils.notification.notify_startup"),
+            patch("app.utils.notification.notify_shutdown"),
+            patch("app.main.init_sentry") as mock_init_sentry,
+        ):
+            mock_db = MagicMock()
+            mock_session_cls.return_value = mock_db
+
+            from app.main import app, lifespan
+
+            async with lifespan(app):
+                pass
+
+            # init_sentry must have been called exactly once during startup
+            mock_init_sentry.assert_called_once()
+            # load_settings_from_db must also have been called
+            mock_load_settings.assert_called_once()
 
 
 @pytest.mark.unit
