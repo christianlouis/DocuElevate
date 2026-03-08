@@ -1,0 +1,510 @@
+{% extends "base.html" %}
+{% block title %}Help Center – DocuElevate{% endblock %}
+
+{% block head_extra %}
+<!-- SEO meta tags -->
+<meta name="description" content="DocuElevate Help Center – learn how to upload, process, and route your documents automatically. Get started with sources, destinations, workflows, and integrations.">
+<meta name="keywords" content="DocuElevate, help, support, document processing, OCR, cloud storage, workflow automation, SaaS">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://{{ request.headers.get('host', 'app.docuelevate.com') }}/help">
+
+<!-- Open Graph -->
+<meta property="og:title" content="Help Center – DocuElevate">
+<meta property="og:description" content="Everything you need to get started with DocuElevate: upload documents, automate workflows, and connect your favourite cloud storage.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://{{ request.headers.get('host', 'app.docuelevate.com') }}/help">
+
+<!-- Structured data (JSON-LD) for FAQ rich results -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "How do I upload documents to DocuElevate?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Navigate to the Upload page, drag-and-drop your files or click Choose File, and DocuElevate will automatically process them with OCR and AI metadata extraction."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Which cloud storage providers does DocuElevate support?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "DocuElevate integrates with Dropbox, Google Drive, OneDrive, Amazon S3, Nextcloud, WebDAV, SFTP, FTP, and Paperless-ngx."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I automatically ingest documents from email?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. Configure one or more IMAP mailboxes under Email Ingestion and DocuElevate will poll for new attachments and process them automatically."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do processing pipelines work?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Pipelines let you chain processing steps (OCR, AI extraction, format conversion) and route the result to one or more destinations. Create and manage them from the Pipelines page."
+      }
+    }
+  ]
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-10 max-w-6xl">
+
+  <!-- ═══════════════════════ Hero Section ═══════════════════════ -->
+  <header class="text-center mb-14">
+    <h1 class="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
+      <i class="fas fa-life-ring text-blue-500 mr-2" aria-hidden="true"></i>Help Center
+    </h1>
+    <p class="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
+      Everything you need to get the most out of DocuElevate.
+      Browse topics below or search for what you need.
+    </p>
+  </header>
+
+  <!-- ═══════════════════════ Quick-start Cards ═══════════════════════ -->
+  <section aria-labelledby="quickstart-heading" class="mb-16">
+    <h2 id="quickstart-heading" class="text-2xl font-bold text-gray-800 mb-6">
+      <i class="fas fa-rocket text-blue-500 mr-2" aria-hidden="true"></i>Quick Start
+    </h2>
+    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+
+      <!-- Card: Upload -->
+      <article class="bg-white shadow rounded-lg p-6 hover:shadow-lg transition-shadow">
+        <div class="flex items-center mb-3">
+          <span class="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-600 mr-3" aria-hidden="true">
+            <i class="fas fa-cloud-arrow-up"></i>
+          </span>
+          <h3 class="text-lg font-semibold text-gray-800">Upload Documents</h3>
+        </div>
+        <p class="text-gray-600 text-sm leading-relaxed">
+          Drag &amp; drop files onto the <strong>Upload</strong> page or click <em>Choose File</em>.
+          DocuElevate converts images and office documents to PDF, runs OCR, and extracts metadata automatically.
+        </p>
+      </article>
+
+      <!-- Card: Connect Storage -->
+      <article class="bg-white shadow rounded-lg p-6 hover:shadow-lg transition-shadow">
+        <div class="flex items-center mb-3">
+          <span class="flex items-center justify-center w-10 h-10 rounded-full bg-green-100 text-green-600 mr-3" aria-hidden="true">
+            <i class="fas fa-plug"></i>
+          </span>
+          <h3 class="text-lg font-semibold text-gray-800">Connect Storage</h3>
+        </div>
+        <p class="text-gray-600 text-sm leading-relaxed">
+          Head to <strong>Settings → Integrations</strong> and link your cloud accounts.
+          Processed documents are automatically routed to every destination you configure.
+        </p>
+      </article>
+
+      <!-- Card: Automate -->
+      <article class="bg-white shadow rounded-lg p-6 hover:shadow-lg transition-shadow">
+        <div class="flex items-center mb-3">
+          <span class="flex items-center justify-center w-10 h-10 rounded-full bg-purple-100 text-purple-600 mr-3" aria-hidden="true">
+            <i class="fas fa-wand-magic-sparkles"></i>
+          </span>
+          <h3 class="text-lg font-semibold text-gray-800">Automate Workflows</h3>
+        </div>
+        <p class="text-gray-600 text-sm leading-relaxed">
+          Create <strong>Pipelines</strong> to define multi-step processing and routing rules.
+          Combine OCR, AI extraction, format conversion, and delivery in a single flow.
+        </p>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ Sources ═══════════════════════ -->
+  <section aria-labelledby="sources-heading" class="mb-16">
+    <h2 id="sources-heading" class="text-2xl font-bold text-gray-800 mb-6">
+      <i class="fas fa-arrow-right-to-bracket text-blue-500 mr-2" aria-hidden="true"></i>Sources – Getting Documents In
+    </h2>
+    <div class="grid gap-6 sm:grid-cols-2">
+
+      <article class="bg-white shadow rounded-lg p-6">
+        <h3 class="font-semibold text-gray-800 mb-2"><i class="fas fa-upload mr-2 text-gray-400" aria-hidden="true"></i>Web Upload</h3>
+        <p class="text-gray-600 text-sm">
+          The fastest way to get started. Open the <strong>Upload</strong> page, drop one or more files, and DocuElevate takes care of the rest.
+          Supported formats include PDF, JPEG, PNG, TIFF, DOCX, XLSX, and more.
+        </p>
+      </article>
+
+      <article class="bg-white shadow rounded-lg p-6">
+        <h3 class="font-semibold text-gray-800 mb-2"><i class="fas fa-envelope-open-text mr-2 text-gray-400" aria-hidden="true"></i>Email Ingestion (IMAP)</h3>
+        <p class="text-gray-600 text-sm">
+          Forward documents to a dedicated mailbox. Under <strong>Email Ingestion</strong>, add one or more IMAP accounts.
+          DocuElevate polls for new messages and processes attachments automatically.
+        </p>
+      </article>
+
+      <article class="bg-white shadow rounded-lg p-6">
+        <h3 class="font-semibold text-gray-800 mb-2"><i class="fas fa-code mr-2 text-gray-400" aria-hidden="true"></i>REST API</h3>
+        <p class="text-gray-600 text-sm">
+          Integrate programmatically by <code class="bg-gray-100 px-1 rounded text-xs">POST</code>-ing files to <code class="bg-gray-100 px-1 rounded text-xs">/api/upload</code>.
+          Ideal for scripts, watched folders, scanners, or third-party tools like Zapier and n8n.
+        </p>
+      </article>
+
+      <article class="bg-white shadow rounded-lg p-6">
+        <h3 class="font-semibold text-gray-800 mb-2"><i class="fas fa-print mr-2 text-gray-400" aria-hidden="true"></i>Scanner &amp; Mobile</h3>
+        <p class="text-gray-600 text-sm">
+          Point network scanners (HP, Fujitsu ScanSnap, Brother) at DocuElevate's upload endpoint or
+          use any mobile scanning app that supports custom HTTP destinations.
+        </p>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ Destinations ═══════════════════════ -->
+  <section aria-labelledby="destinations-heading" class="mb-16">
+    <h2 id="destinations-heading" class="text-2xl font-bold text-gray-800 mb-6">
+      <i class="fas fa-arrow-right-from-bracket text-blue-500 mr-2" aria-hidden="true"></i>Destinations – Where Documents Go
+    </h2>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
+      <div class="flex items-start bg-white shadow rounded-lg p-5">
+        <i class="fab fa-dropbox text-blue-500 text-xl mr-3 mt-0.5" aria-hidden="true"></i>
+        <div>
+          <h3 class="font-semibold text-gray-800 text-sm">Dropbox</h3>
+          <p class="text-gray-500 text-xs">OAuth-linked. Files land in your chosen folder.</p>
+        </div>
+      </div>
+
+      <div class="flex items-start bg-white shadow rounded-lg p-5">
+        <i class="fab fa-google-drive text-green-500 text-xl mr-3 mt-0.5" aria-hidden="true"></i>
+        <div>
+          <h3 class="font-semibold text-gray-800 text-sm">Google Drive</h3>
+          <p class="text-gray-500 text-xs">Service account or OAuth. Supports shared drives.</p>
+        </div>
+      </div>
+
+      <div class="flex items-start bg-white shadow rounded-lg p-5">
+        <i class="fab fa-microsoft text-blue-600 text-xl mr-3 mt-0.5" aria-hidden="true"></i>
+        <div>
+          <h3 class="font-semibold text-gray-800 text-sm">OneDrive</h3>
+          <p class="text-gray-500 text-xs">Microsoft Graph API integration.</p>
+        </div>
+      </div>
+
+      <div class="flex items-start bg-white shadow rounded-lg p-5">
+        <i class="fab fa-aws text-yellow-600 text-xl mr-3 mt-0.5" aria-hidden="true"></i>
+        <div>
+          <h3 class="font-semibold text-gray-800 text-sm">Amazon S3</h3>
+          <p class="text-gray-500 text-xs">Any S3-compatible bucket (AWS, MinIO, Wasabi).</p>
+        </div>
+      </div>
+
+      <div class="flex items-start bg-white shadow rounded-lg p-5">
+        <i class="fas fa-cloud text-blue-400 text-xl mr-3 mt-0.5" aria-hidden="true"></i>
+        <div>
+          <h3 class="font-semibold text-gray-800 text-sm">Nextcloud / WebDAV</h3>
+          <p class="text-gray-500 text-xs">Self-hosted cloud storage via WebDAV.</p>
+        </div>
+      </div>
+
+      <div class="flex items-start bg-white shadow rounded-lg p-5">
+        <i class="fas fa-leaf text-green-600 text-xl mr-3 mt-0.5" aria-hidden="true"></i>
+        <div>
+          <h3 class="font-semibold text-gray-800 text-sm">Paperless-ngx</h3>
+          <p class="text-gray-500 text-xs">Push documents straight into Paperless for archival.</p>
+        </div>
+      </div>
+
+      <div class="flex items-start bg-white shadow rounded-lg p-5">
+        <i class="fas fa-server text-gray-500 text-xl mr-3 mt-0.5" aria-hidden="true"></i>
+        <div>
+          <h3 class="font-semibold text-gray-800 text-sm">SFTP / FTP</h3>
+          <p class="text-gray-500 text-xs">Secure file transfer to any server.</p>
+        </div>
+      </div>
+
+      <div class="flex items-start bg-white shadow rounded-lg p-5">
+        <i class="fas fa-envelope text-red-400 text-xl mr-3 mt-0.5" aria-hidden="true"></i>
+        <div>
+          <h3 class="font-semibold text-gray-800 text-sm">Email Forwarding</h3>
+          <p class="text-gray-500 text-xs">Processed files sent as SMTP attachments.</p>
+        </div>
+      </div>
+
+      <div class="flex items-start bg-white shadow rounded-lg p-5">
+        <i class="fas fa-link text-indigo-500 text-xl mr-3 mt-0.5" aria-hidden="true"></i>
+        <div>
+          <h3 class="font-semibold text-gray-800 text-sm">Webhook</h3>
+          <p class="text-gray-500 text-xs">POST metadata to any external endpoint.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ Workflows / Pipelines ═══════════════════════ -->
+  <section aria-labelledby="workflows-heading" class="mb-16">
+    <h2 id="workflows-heading" class="text-2xl font-bold text-gray-800 mb-6">
+      <i class="fas fa-diagram-project text-blue-500 mr-2" aria-hidden="true"></i>Workflows &amp; Pipelines
+    </h2>
+    <div class="bg-white shadow rounded-lg p-6">
+      <div class="grid gap-6 md:grid-cols-2">
+        <div>
+          <h3 class="font-semibold text-gray-800 mb-2">What is a Pipeline?</h3>
+          <p class="text-gray-600 text-sm leading-relaxed mb-4">
+            A <strong>Pipeline</strong> is a series of processing steps that run automatically whenever a document is ingested.
+            Each step can transform, enrich, or route the document.
+          </p>
+          <h3 class="font-semibold text-gray-800 mb-2">Typical Steps</h3>
+          <ol class="list-decimal list-inside text-gray-600 text-sm space-y-1">
+            <li>Convert to PDF (Gotenberg)</li>
+            <li>OCR – extract text (Azure, Tesseract, Mistral …)</li>
+            <li>AI metadata extraction (OpenAI, Claude, Gemini …)</li>
+            <li>Deliver to one or more destinations</li>
+          </ol>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-800 mb-2">Creating a Pipeline</h3>
+          <ol class="list-decimal list-inside text-gray-600 text-sm space-y-2 leading-relaxed">
+            <li>Go to <strong>Pipelines</strong> in the main menu.</li>
+            <li>Click <em>New Pipeline</em> and give it a name.</li>
+            <li>Add the processing steps you need.</li>
+            <li>Choose one or more delivery destinations.</li>
+            <li>Save – new documents will be processed through this pipeline automatically.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ Data Ingestion Tools ═══════════════════════ -->
+  <section aria-labelledby="ingestion-heading" class="mb-16">
+    <h2 id="ingestion-heading" class="text-2xl font-bold text-gray-800 mb-6">
+      <i class="fas fa-toolbox text-blue-500 mr-2" aria-hidden="true"></i>Ingesting Data with Standard Tools
+    </h2>
+    <div class="bg-white shadow rounded-lg p-6 space-y-6">
+
+      <article>
+        <h3 class="font-semibold text-gray-800 mb-1"><i class="fas fa-terminal mr-2 text-gray-400" aria-hidden="true"></i>cURL</h3>
+        <p class="text-gray-600 text-sm mb-2">Upload a file from any terminal:</p>
+        <pre class="bg-gray-50 text-sm rounded p-3 overflow-x-auto"><code>curl -X POST https://your-instance/api/upload \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "file=@/path/to/document.pdf"</code></pre>
+      </article>
+
+      <article>
+        <h3 class="font-semibold text-gray-800 mb-1"><i class="fas fa-folder-open mr-2 text-gray-400" aria-hidden="true"></i>Watched Folders</h3>
+        <p class="text-gray-600 text-sm">
+          Use <strong>inotifywait</strong> (Linux), <strong>fswatch</strong> (macOS), or any file-watcher script to
+          <code class="bg-gray-100 px-1 rounded text-xs">POST</code> new files as soon as they appear in a local directory.
+        </p>
+      </article>
+
+      <article>
+        <h3 class="font-semibold text-gray-800 mb-1"><i class="fas fa-print mr-2 text-gray-400" aria-hidden="true"></i>Network Scanners</h3>
+        <p class="text-gray-600 text-sm">
+          Configure your HP, Fujitsu ScanSnap, or Brother scanner to use DocuElevate's upload URL as a
+          <em>Scan-to-Network</em> destination. Scans are processed the moment they arrive.
+        </p>
+      </article>
+
+      <article>
+        <h3 class="font-semibold text-gray-800 mb-1"><i class="fas fa-mobile-screen-button mr-2 text-gray-400" aria-hidden="true"></i>Mobile Scanning Apps</h3>
+        <p class="text-gray-600 text-sm">
+          Apps like <strong>Adobe Scan</strong>, <strong>Microsoft Lens</strong>, or <strong>Genius Scan</strong>
+          can export to a custom HTTP endpoint. Point them at <code class="bg-gray-100 px-1 rounded text-xs">/api/upload</code>.
+        </p>
+      </article>
+
+      <article>
+        <h3 class="font-semibold text-gray-800 mb-1"><i class="fas fa-shuffle mr-2 text-gray-400" aria-hidden="true"></i>Zapier / n8n / Make</h3>
+        <p class="text-gray-600 text-sm">
+          Connect DocuElevate to thousands of other apps via integration platforms.
+          Use the HTTP/Webhook module to <code class="bg-gray-100 px-1 rounded text-xs">POST</code> files to the upload API.
+        </p>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ FAQ ═══════════════════════ -->
+  <section aria-labelledby="faq-heading" class="mb-16">
+    <h2 id="faq-heading" class="text-2xl font-bold text-gray-800 mb-6">
+      <i class="fas fa-circle-question text-blue-500 mr-2" aria-hidden="true"></i>Frequently Asked Questions
+    </h2>
+    <div class="space-y-4" x-data="{ open: null }">
+
+      <div class="bg-white shadow rounded-lg">
+        <button type="button"
+                class="w-full flex justify-between items-center px-6 py-4 text-left font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-lg"
+                @click="open = open === 1 ? null : 1"
+                :aria-expanded="open === 1 ? 'true' : 'false'"
+                aria-controls="faq-1">
+          <span>How do I upload documents?</span>
+          <i class="fas fa-chevron-down text-gray-400 transition-transform" :class="{ 'rotate-180': open === 1 }" aria-hidden="true"></i>
+        </button>
+        <div id="faq-1" x-show="open === 1" x-collapse class="px-6 pb-4 text-gray-600 text-sm leading-relaxed">
+          Navigate to the <strong>Upload</strong> page, drag-and-drop your files or click <em>Choose File</em>.
+          DocuElevate converts images and office documents to PDF, runs OCR, and extracts metadata automatically.
+        </div>
+      </div>
+
+      <div class="bg-white shadow rounded-lg">
+        <button type="button"
+                class="w-full flex justify-between items-center px-6 py-4 text-left font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-lg"
+                @click="open = open === 2 ? null : 2"
+                :aria-expanded="open === 2 ? 'true' : 'false'"
+                aria-controls="faq-2">
+          <span>Which file formats are supported?</span>
+          <i class="fas fa-chevron-down text-gray-400 transition-transform" :class="{ 'rotate-180': open === 2 }" aria-hidden="true"></i>
+        </button>
+        <div id="faq-2" x-show="open === 2" x-collapse class="px-6 pb-4 text-gray-600 text-sm leading-relaxed">
+          PDF, JPEG, PNG, TIFF, BMP, GIF, DOCX, XLSX, PPTX, ODT, ODS, TXT, RTF, and HTML.
+          Non-PDF files are automatically converted to PDF before processing.
+        </div>
+      </div>
+
+      <div class="bg-white shadow rounded-lg">
+        <button type="button"
+                class="w-full flex justify-between items-center px-6 py-4 text-left font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-lg"
+                @click="open = open === 3 ? null : 3"
+                :aria-expanded="open === 3 ? 'true' : 'false'"
+                aria-controls="faq-3">
+          <span>Can I ingest documents from email?</span>
+          <i class="fas fa-chevron-down text-gray-400 transition-transform" :class="{ 'rotate-180': open === 3 }" aria-hidden="true"></i>
+        </button>
+        <div id="faq-3" x-show="open === 3" x-collapse class="px-6 pb-4 text-gray-600 text-sm leading-relaxed">
+          Yes. Go to <strong>Email Ingestion</strong>, add an IMAP account, and DocuElevate will poll for new
+          messages and process attachments automatically.
+        </div>
+      </div>
+
+      <div class="bg-white shadow rounded-lg">
+        <button type="button"
+                class="w-full flex justify-between items-center px-6 py-4 text-left font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-lg"
+                @click="open = open === 4 ? null : 4"
+                :aria-expanded="open === 4 ? 'true' : 'false'"
+                aria-controls="faq-4">
+          <span>How do processing pipelines work?</span>
+          <i class="fas fa-chevron-down text-gray-400 transition-transform" :class="{ 'rotate-180': open === 4 }" aria-hidden="true"></i>
+        </button>
+        <div id="faq-4" x-show="open === 4" x-collapse class="px-6 pb-4 text-gray-600 text-sm leading-relaxed">
+          Pipelines let you chain processing steps – OCR, AI extraction, format conversion – and route the
+          result to one or more destinations. Create and manage them from the <strong>Pipelines</strong> page.
+        </div>
+      </div>
+
+      <div class="bg-white shadow rounded-lg">
+        <button type="button"
+                class="w-full flex justify-between items-center px-6 py-4 text-left font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-lg"
+                @click="open = open === 5 ? null : 5"
+                :aria-expanded="open === 5 ? 'true' : 'false'"
+                aria-controls="faq-5">
+          <span>Is my data secure?</span>
+          <i class="fas fa-chevron-down text-gray-400 transition-transform" :class="{ 'rotate-180': open === 5 }" aria-hidden="true"></i>
+        </button>
+        <div id="faq-5" x-show="open === 5" x-collapse class="px-6 pb-4 text-gray-600 text-sm leading-relaxed">
+          DocuElevate encrypts credentials at rest, communicates over TLS, and never stores your documents
+          longer than necessary. See the <a href="/privacy" class="text-blue-600 hover:underline">Privacy Notice</a> for full details.
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ Contact / Support ═══════════════════════ -->
+  <section aria-labelledby="support-heading" class="mb-10">
+    <h2 id="support-heading" class="text-2xl font-bold text-gray-800 mb-6">
+      <i class="fas fa-headset text-blue-500 mr-2" aria-hidden="true"></i>Contact Support
+    </h2>
+
+    <div class="grid gap-6 md:grid-cols-2">
+
+      <!-- Left column: info -->
+      <div class="bg-white shadow rounded-lg p-6 space-y-4">
+        <p class="text-gray-600 text-sm leading-relaxed">
+          Can't find what you're looking for? Our support team is here to help.
+        </p>
+
+        {% if support_email %}
+        <div class="flex items-center text-sm text-gray-700">
+          <i class="fas fa-envelope text-blue-500 mr-2" aria-hidden="true"></i>
+          <a href="mailto:{{ support_email }}" class="text-blue-600 hover:underline">{{ support_email }}</a>
+        </div>
+        {% endif %}
+
+        {% if zammad_chat_enabled and zammad_url %}
+        <div class="flex items-center text-sm text-gray-700">
+          <i class="fas fa-comments text-blue-500 mr-2" aria-hidden="true"></i>
+          <span>Live chat available – look for the chat bubble in the bottom-right corner.</span>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Right column: Zammad ticket form -->
+      {% if zammad_form_enabled and zammad_url %}
+      <div class="bg-white shadow rounded-lg p-6">
+        <h3 class="font-semibold text-gray-800 mb-3">
+          <i class="fas fa-ticket mr-2 text-gray-400" aria-hidden="true"></i>Open a Support Ticket
+        </h3>
+        <p class="text-gray-600 text-sm mb-4">
+          Describe your issue below and we'll get back to you as soon as possible.
+        </p>
+        <button id="zammad-feedback-form"
+                type="button"
+                class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-5 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]">
+          <i class="fas fa-paper-plane mr-2" aria-hidden="true"></i>Submit a Ticket
+        </button>
+      </div>
+      {% elif not zammad_form_enabled and not support_email and not zammad_chat_enabled %}
+      <div class="bg-white shadow rounded-lg p-6 flex flex-col items-center justify-center text-center">
+        <i class="fas fa-info-circle text-blue-400 text-2xl mb-2" aria-hidden="true"></i>
+        <p class="text-gray-500 text-sm">
+          Contact your administrator for support information.
+        </p>
+      </div>
+      {% endif %}
+
+    </div>
+  </section>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if zammad_url and zammad_form_enabled %}
+<!-- Zammad Feedback Form -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script id="zammad_form_script" src="{{ zammad_url }}/assets/form/form.js"></script>
+<script>
+$(function() {
+  $('#zammad-feedback-form').ZammadForm({
+    messageTitle: 'DocuElevate Support',
+    messageSubmit: 'Submit',
+    messageThankYou: 'Thank you for your request (#%s)! We will get back to you shortly.',
+    modal: true
+  });
+});
+</script>
+{% endif %}
+
+{% if zammad_url and zammad_chat_enabled %}
+<!-- Zammad Live Chat Widget -->
+<script src="{{ zammad_url }}/assets/chat/chat-no-jquery.min.js"></script>
+<script>
+(function() {
+  new ZammadChat({
+    fontSize: '12px',
+    flat: true,
+    chatId: {{ zammad_chat_id }},
+    title: '<strong>Chat</strong> with us!'
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

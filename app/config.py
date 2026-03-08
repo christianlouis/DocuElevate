@@ -914,6 +914,33 @@ class Settings(BaseSettings):
         description="Allowed request headers for CORS. Use ['*'] to allow all headers.",
     )
 
+    # ---------------------------------------------------------------------------
+    # Support / Help Center – Zammad integration
+    # ---------------------------------------------------------------------------
+    zammad_url: Optional[str] = Field(
+        default=None,
+        description=(
+            "Base URL of your Zammad instance (e.g. https://zammad.example.com). "
+            "Required for the chat widget and feedback form on the Help Center page."
+        ),
+    )
+    zammad_chat_enabled: bool = Field(
+        default=False,
+        description="Show the Zammad live-chat widget on the Help Center page.",
+    )
+    zammad_chat_id: int = Field(
+        default=1,
+        description="Zammad chat topic ID to use for the live-chat widget.",
+    )
+    zammad_form_enabled: bool = Field(
+        default=False,
+        description="Show the Zammad feedback / ticket form on the Help Center page.",
+    )
+    support_email: Optional[str] = Field(
+        default=None,
+        description="Support e-mail address displayed on the Help Center page.",
+    )
+
     @model_validator(mode="before")
     @classmethod
     def strip_outer_quotes(cls, data: Any) -> Any:

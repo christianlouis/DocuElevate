@@ -137,7 +137,12 @@ async def lifespan(app: FastAPI):
     notify_shutdown()
 
 
-app = FastAPI(title="DocuElevate", lifespan=lifespan)
+app = FastAPI(
+    title="DocuElevate",
+    lifespan=lifespan,
+    docs_url="/admin/api-docs",
+    redoc_url="/admin/api-redoc",
+)
 
 # Initialize rate limiter and attach to app state
 limiter = create_limiter(redis_url=settings.redis_url, enabled=settings.rate_limiting_enabled)
@@ -202,14 +207,16 @@ if os.path.exists(static_dir):
 else:
     print(f"WARNING: Static directory not found at {static_dir}. Static files will not be served.")
 
-# Mount the built MkDocs documentation site at /help/
+# Mount the built MkDocs developer documentation at /developer-docs/
+# These docs target administrators and developers, not end-users.
+# The user-facing Help Center is served by the /help view instead.
 # The docs are pre-built into docs_build/ during the Docker image build.
 # When running locally, run `mkdocs build` from the repo root first.
 docs_build_dir = pathlib.Path(__file__).parents[1] / "docs_build"
 if os.path.exists(docs_build_dir):
-    app.mount("/help", StaticFiles(directory=str(docs_build_dir), html=True), name="help_docs")
+    app.mount("/developer-docs", StaticFiles(directory=str(docs_build_dir), html=True), name="developer_docs")
 else:
-    print(f"INFO: Help docs not found at {docs_build_dir}. Run 'mkdocs build' to generate them.")
+    print(f"INFO: Developer docs not found at {docs_build_dir}. Run 'mkdocs build' to generate them.")
 
 
 # Custom exception handlers that return JSON for API routes and HTML for frontend routes
