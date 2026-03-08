@@ -229,7 +229,7 @@ class TestPrepareRecipients:
     @patch("app.tasks.upload_to_email.settings")
     def test_uses_default_recipient_when_none_provided(self, mock_settings):
         """Test uses default recipient when none provided."""
-        mock_settings.email_default_recipient = "default@example.com"
+        mock_settings.dest_email_default_recipient = "default@example.com"
 
         result, error = _prepare_recipients(None)
 
@@ -239,7 +239,7 @@ class TestPrepareRecipients:
     @patch("app.tasks.upload_to_email.settings")
     def test_returns_error_when_no_recipients_and_no_default(self, mock_settings):
         """Test returns error when no recipients and no default."""
-        mock_settings.email_default_recipient = None
+        mock_settings.dest_email_default_recipient = None
 
         result, error = _prepare_recipients(None)
 
@@ -256,11 +256,11 @@ class TestSendEmailWithSMTP:
     @patch("app.tasks.upload_to_email.settings")
     def test_sends_email_successfully(self, mock_settings, mock_gethostbyname, mock_smtp):
         """Test sends email successfully."""
-        mock_settings.email_host = "smtp.example.com"
-        mock_settings.email_port = 587
-        mock_settings.email_use_tls = True
-        mock_settings.email_username = "user@example.com"
-        mock_settings.email_password = "password"
+        mock_settings.dest_email_host = "smtp.example.com"
+        mock_settings.dest_email_port = 587
+        mock_settings.dest_email_use_tls = True
+        mock_settings.dest_email_username = "user@example.com"
+        mock_settings.dest_email_password = "password"
 
         mock_server = MagicMock()
         mock_smtp.return_value.__enter__.return_value = mock_server
@@ -292,8 +292,8 @@ class TestSendEmailWithSMTP:
     @patch("app.tasks.upload_to_email.settings")
     def test_handles_connection_refused_error(self, mock_settings, mock_gethostbyname, mock_smtp):
         """Test handles connection refused error."""
-        mock_settings.email_host = "smtp.example.com"
-        mock_settings.email_port = 587
+        mock_settings.dest_email_host = "smtp.example.com"
+        mock_settings.dest_email_port = 587
 
         mock_smtp.return_value.__enter__.side_effect = ConnectionRefusedError("Connection refused")
 
@@ -309,11 +309,11 @@ class TestSendEmailWithSMTP:
     @patch("app.tasks.upload_to_email.settings")
     def test_sends_email_without_tls(self, mock_settings, mock_gethostbyname, mock_smtp):
         """Test sends email without TLS."""
-        mock_settings.email_host = "smtp.example.com"
-        mock_settings.email_port = 25
-        mock_settings.email_use_tls = False
-        mock_settings.email_username = "user@example.com"
-        mock_settings.email_password = "password"
+        mock_settings.dest_email_host = "smtp.example.com"
+        mock_settings.dest_email_port = 25
+        mock_settings.dest_email_use_tls = False
+        mock_settings.dest_email_username = "user@example.com"
+        mock_settings.dest_email_password = "password"
 
         mock_server = MagicMock()
         mock_smtp.return_value.__enter__.return_value = mock_server
@@ -333,11 +333,11 @@ class TestSendEmailWithSMTP:
     @patch("app.tasks.upload_to_email.settings")
     def test_sends_email_without_authentication(self, mock_settings, mock_gethostbyname, mock_smtp):
         """Test sends email without authentication credentials."""
-        mock_settings.email_host = "smtp.example.com"
-        mock_settings.email_port = 25
-        mock_settings.email_use_tls = False
-        mock_settings.email_username = None
-        mock_settings.email_password = None
+        mock_settings.dest_email_host = "smtp.example.com"
+        mock_settings.dest_email_port = 25
+        mock_settings.dest_email_use_tls = False
+        mock_settings.dest_email_username = None
+        mock_settings.dest_email_password = None
 
         mock_server = MagicMock()
         mock_smtp.return_value.__enter__.return_value = mock_server
@@ -356,8 +356,8 @@ class TestSendEmailWithSMTP:
     @patch("app.tasks.upload_to_email.settings")
     def test_handles_timeout_error(self, mock_settings, mock_gethostbyname, mock_smtp):
         """Test handles timeout error."""
-        mock_settings.email_host = "smtp.example.com"
-        mock_settings.email_port = 587
+        mock_settings.dest_email_host = "smtp.example.com"
+        mock_settings.dest_email_port = 587
 
         mock_smtp.return_value.__enter__.side_effect = TimeoutError("Connection timeout")
 
@@ -392,10 +392,10 @@ class TestUploadToEmailTask:
     @patch("app.tasks.upload_to_email.os.path.exists")
     @patch("app.tasks.upload_to_email.settings")
     def test_skips_when_email_host_not_configured(self, mock_settings, mock_exists, mock_log, mock_basename):
-        """Test skips when email host not configured."""
+        """Test skips when email destination host not configured."""
         mock_exists.return_value = True
         mock_basename.return_value = "test.pdf"
-        mock_settings.email_host = None
+        mock_settings.dest_email_host = None
 
         mock_self = Mock()
         mock_self.request.id = "test-task-id"
@@ -403,7 +403,7 @@ class TestUploadToEmailTask:
         result = upload_to_email(mock_self, "/tmp/test.pdf")
 
         assert result["status"] == "Skipped"
-        assert "Email host is not configured" in result["reason"]
+        assert "DEST_EMAIL_HOST" in result["reason"]
 
     @patch("app.tasks.upload_to_email.os.path.basename")
     @patch("app.tasks.upload_to_email._prepare_recipients")
@@ -414,7 +414,7 @@ class TestUploadToEmailTask:
         """Test skips when no valid recipients."""
         mock_exists.return_value = True
         mock_basename.return_value = "test.pdf"
-        mock_settings.email_host = "smtp.example.com"
+        mock_settings.dest_email_host = "smtp.example.com"
         mock_prepare.return_value = (None, "No recipients specified")
 
         mock_self = Mock()

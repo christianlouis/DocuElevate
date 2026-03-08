@@ -120,10 +120,10 @@ class TestShouldUploadFunctions:
     @patch("app.tasks.send_to_all.settings")
     def test_should_upload_to_email_configured(self, mock_settings):
         """Test email upload check."""
-        mock_settings.email_host = "smtp.example.com"
-        mock_settings.email_username = "user"
-        mock_settings.email_password = "pass"
-        mock_settings.email_default_recipient = "recipient@example.com"
+        mock_settings.dest_email_host = "smtp.example.com"
+        mock_settings.dest_email_username = "user"
+        mock_settings.dest_email_password = "pass"
+        mock_settings.dest_email_default_recipient = "recipient@example.com"
 
         assert _should_upload_to_email() is True
 

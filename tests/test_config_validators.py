@@ -75,13 +75,13 @@ class TestValidateStorageConfigs:
             assert "Neither SFTP_KEY_PATH nor SFTP_PASSWORD is configured" in result["sftp"]
 
     def test_email_storage_missing_config(self):
-        """Test validation when email storage config is missing."""
+        """Test validation when email destination storage config is missing."""
         with patch("app.utils.config_validator.validators.settings") as mock_settings:
-            mock_settings.email_host = None
-            mock_settings.email_default_recipient = None
+            mock_settings.dest_email_host = None
+            mock_settings.dest_email_default_recipient = None
             result = validate_storage_configs()
-            assert "EMAIL_HOST is not configured" in result["email"]
-            assert "EMAIL_DEFAULT_RECIPIENT is not configured" in result["email"]
+            assert "DEST_EMAIL_HOST is not configured" in result["email"]
+            assert "DEST_EMAIL_DEFAULT_RECIPIENT is not configured" in result["email"]
 
 
 @pytest.mark.unit
@@ -438,8 +438,8 @@ class TestValidateStorageConfigsEdgeCases:
             # Configure all services
             mock_settings.sftp_host = "sftp.example.com"
             mock_settings.sftp_password = "pass"
-            mock_settings.email_host = "smtp.example.com"
-            mock_settings.email_default_recipient = "test@example.com"
+            mock_settings.dest_email_host = "smtp.example.com"
+            mock_settings.dest_email_default_recipient = "test@example.com"
             mock_settings.s3_bucket_name = "my-bucket"
             mock_settings.aws_access_key_id = "key"
             mock_settings.aws_secret_access_key = "secret"

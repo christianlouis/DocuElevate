@@ -954,7 +954,11 @@ For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveS
 | `SFTP_PRIVATE_KEY`           | Path to private key file for authentication (optional). |
 | `SFTP_PRIVATE_KEY_PASSPHRASE`| Passphrase for private key if required (optional).     |
 
-### Email
+### Email (shared SMTP – password reset & verification)
+
+> **Note:** These settings configure the shared SMTP connection used for system emails such as
+> password resets and account verification. They do **not** enable the email delivery destination.
+> To send processed documents via email, configure the dedicated `DEST_EMAIL_*` variables below.
 
 | **Variable**                | **Description**                                           |
 |----------------------------|----------------------------------------------------------|
@@ -964,7 +968,22 @@ For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveS
 | `EMAIL_PASSWORD`           | SMTP authentication password.                             |
 | `EMAIL_USE_TLS`            | Whether to use TLS (default: `True`).                     |
 | `EMAIL_SENDER`             | From address (e.g., `"DocuElevate <docuelevate@example.com>"`). |
-| `EMAIL_DEFAULT_RECIPIENT`  | Default recipient email if none specified in the task.    |
+
+### Email Destination (document delivery)
+
+> **Note:** These settings are intentionally separate from the shared `EMAIL_*` settings above.
+> Configuring `EMAIL_HOST` for password resets does **not** automatically activate the email
+> delivery destination. You must set `DEST_EMAIL_HOST` to enable it.
+
+| **Variable**                     | **Description**                                                     |
+|----------------------------------|---------------------------------------------------------------------|
+| `DEST_EMAIL_HOST`               | SMTP server hostname for document delivery.                          |
+| `DEST_EMAIL_PORT`               | SMTP port for document delivery (default: `587`).                    |
+| `DEST_EMAIL_USERNAME`           | SMTP authentication username for document delivery.                  |
+| `DEST_EMAIL_PASSWORD`           | SMTP authentication password for document delivery.                  |
+| `DEST_EMAIL_USE_TLS`            | Whether to use TLS for document delivery (default: `True`).          |
+| `DEST_EMAIL_SENDER`             | From address for delivered documents (e.g., `"DocuElevate Delivery <docuelevate@example.com>"`). |
+| `DEST_EMAIL_DEFAULT_RECIPIENT`  | Fallback recipient email when none is specified for a delivery task.  |
 
 ### OneDrive / Microsoft Graph
 
@@ -1362,14 +1381,22 @@ SFTP_FOLDER=/Documents/Uploads
 # SFTP_PRIVATE_KEY=/path/to/key.pem
 # SFTP_PRIVATE_KEY_PASSPHRASE=passphrase
 
-# Email
+# Email (shared SMTP – password reset & verification)
 EMAIL_HOST=smtp.example.com
 EMAIL_PORT=587
 EMAIL_USERNAME=docuelevate@example.com
 EMAIL_PASSWORD=password
 EMAIL_USE_TLS=True
 EMAIL_SENDER=DocuElevate System <docuelevate@example.com>
-EMAIL_DEFAULT_RECIPIENT=recipient@example.com
+
+# Email Destination (document delivery – separate from shared email above)
+DEST_EMAIL_HOST=smtp.example.com
+DEST_EMAIL_PORT=587
+DEST_EMAIL_USERNAME=docuelevate@example.com
+DEST_EMAIL_PASSWORD=password
+DEST_EMAIL_USE_TLS=True
+DEST_EMAIL_SENDER=DocuElevate Delivery <docuelevate@example.com>
+DEST_EMAIL_DEFAULT_RECIPIENT=recipient@example.com
 
 # Notification Settings
 # Configure notification services using Apprise URL format
