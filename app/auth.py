@@ -83,11 +83,14 @@ def require_login(func):
         if not request.session.get("user"):
             request.session["redirect_after_login"] = str(request.url)
             return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
-        # Check if the wrapped function is a coroutine function
+        # Pass request as a keyword argument so that endpoints whose first
+        # parameter is a path variable (e.g. pipeline_id) are not accidentally
+        # bound to the request object when FastAPI supplies all arguments as
+        # keyword arguments.
         if inspect.iscoroutinefunction(func):
-            return await func(request, *args, **kwargs)
+            return await func(*args, request=request, **kwargs)
         else:
-            return func(request, *args, **kwargs)
+            return func(*args, request=request, **kwargs)
 
     return wrapper
 
