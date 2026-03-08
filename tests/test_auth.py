@@ -817,6 +817,76 @@ class TestAuthFunction:
             assert isinstance(result, RedirectResponse)
             assert result.headers["location"] == "/settings"
 
+    @pytest.mark.asyncio
+    async def test_auth_none_credentials_not_configured_blocks_login(self):
+        """Login must fail when admin_username and admin_password are None (not configured).
+
+        Regression test: Python's ``None == None`` would previously evaluate to
+        ``True``, allowing any request that omits the form fields to be
+        authenticated as admin and creating a phantom "None@local.docuelevate"
+        profile with full admin privileges.
+        """
+        from app.auth import auth
+
+        mock_request = MagicMock(spec=Request)
+        # Form fields both absent → form_data.get() returns None
+        form_data = {}
+        mock_request.form = AsyncMock(return_value=form_data)
+        mock_request.session = {}
+
+        with patch("app.auth.settings") as mock_settings:
+            mock_settings.admin_username = None
+            mock_settings.admin_password = None
+            mock_settings.multi_user_enabled = False
+
+            result = await auth(mock_request, db=self._make_mock_db())
+
+            assert isinstance(result, RedirectResponse)
+            assert "/login?error=Invalid+username+or+password" in result.headers["location"]
+            assert "user" not in mock_request.session
+
+    @pytest.mark.asyncio
+    async def test_auth_empty_string_credentials_not_configured_blocks_login(self):
+        """Login must fail when admin_username and admin_password are empty strings."""
+        from app.auth import auth
+
+        mock_request = MagicMock(spec=Request)
+        form_data = {"username": "", "password": ""}
+        mock_request.form = AsyncMock(return_value=form_data)
+        mock_request.session = {}
+
+        with patch("app.auth.settings") as mock_settings:
+            mock_settings.admin_username = ""
+            mock_settings.admin_password = ""
+            mock_settings.multi_user_enabled = False
+
+            result = await auth(mock_request, db=self._make_mock_db())
+
+            assert isinstance(result, RedirectResponse)
+            assert "/login?error=Invalid+username+or+password" in result.headers["location"]
+            assert "user" not in mock_request.session
+
+    @pytest.mark.asyncio
+    async def test_auth_none_password_not_configured_blocks_login(self):
+        """Login must fail when only admin_password is None (not configured)."""
+        from app.auth import auth
+
+        mock_request = MagicMock(spec=Request)
+        form_data = {"username": "admin"}
+        mock_request.form = AsyncMock(return_value=form_data)
+        mock_request.session = {}
+
+        with patch("app.auth.settings") as mock_settings:
+            mock_settings.admin_username = "admin"
+            mock_settings.admin_password = None
+            mock_settings.multi_user_enabled = False
+
+            result = await auth(mock_request, db=self._make_mock_db())
+
+            assert isinstance(result, RedirectResponse)
+            assert "/login?error=Invalid+username+or+password" in result.headers["location"]
+            assert "user" not in mock_request.session
+
 
 @pytest.mark.unit
 class TestLogoutFunction:
