@@ -509,9 +509,11 @@ def _test_imap_connection(config: dict[str, Any] | None, credentials: dict[str, 
         mail.logout()
         return {"success": True, "message": "IMAP connection successful"}
     except OSError as exc:
-        return {"success": False, "message": f"Connection error: {exc}"}
+        logger.warning("IMAP network error for %s@%s: %s", username, host, exc)
+        return {"success": False, "message": "IMAP connection failed — check host, port, and network connectivity"}
     except Exception as exc:  # noqa: BLE001
-        return {"success": False, "message": f"IMAP error: {exc}"}
+        logger.warning("IMAP error for %s@%s: %s", username, host, exc)
+        return {"success": False, "message": "IMAP authentication or connection failed"}
 
 
 def _test_s3_connection(config: dict[str, Any] | None, credentials: dict[str, Any] | None) -> dict[str, Any]:
@@ -541,9 +543,11 @@ def _test_s3_connection(config: dict[str, Any] | None, credentials: dict[str, An
         client.head_bucket(Bucket=bucket)
         return {"success": True, "message": f"S3 bucket '{bucket}' is accessible"}
     except (BotoCoreError, ClientError) as exc:
-        return {"success": False, "message": f"S3 error: {exc}"}
+        logger.warning("S3 connection error for bucket '%s': %s", bucket, exc)
+        return {"success": False, "message": "S3 connection failed — check bucket name, region, and credentials"}
     except Exception as exc:  # noqa: BLE001
-        return {"success": False, "message": f"Unexpected error: {exc}"}
+        logger.warning("S3 unexpected error for bucket '%s': %s", bucket, exc)
+        return {"success": False, "message": "S3 connection failed"}
 
 
 def _test_webdav_connection(config: dict[str, Any] | None, credentials: dict[str, Any] | None) -> dict[str, Any]:
@@ -560,11 +564,24 @@ def _test_webdav_connection(config: dict[str, Any] | None, credentials: dict[str
         return {"success": False, "message": "Missing required field: url"}
 
     # Only allow http/https to prevent file:// or other custom scheme attacks
+    import ipaddress
     from urllib.parse import urlparse
 
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
         return {"success": False, "message": "URL must use http or https scheme"}
+
+    # Block requests to private/internal IPs to prevent SSRF
+    hostname = parsed.hostname or ""
+    if hostname:
+        try:
+            addr = ipaddress.ip_address(hostname)
+            if addr.is_private or addr.is_loopback or addr.is_link_local:
+                return {"success": False, "message": "URLs pointing to internal or private networks are not allowed"}
+        except ValueError:
+            # Hostname is not an IP literal — allow DNS names through
+            if hostname in ("localhost", "localhost.localdomain"):
+                return {"success": False, "message": "URLs pointing to localhost are not allowed"}
 
     try:
         import base64
@@ -579,7 +596,8 @@ def _test_webdav_connection(config: dict[str, Any] | None, credentials: dict[str
                 return {"success": True, "message": "WebDAV connection successful"}
             return {"success": False, "message": f"WebDAV returned HTTP {resp.status}"}
     except Exception as exc:  # noqa: BLE001
-        return {"success": False, "message": f"WebDAV error: {exc}"}
+        logger.warning("WebDAV connection error for %s: %s", hostname, exc)
+        return {"success": False, "message": "WebDAV connection failed — check URL and credentials"}
 
 
 _CONNECTION_TESTERS: dict[str, Any] = {

@@ -945,6 +945,45 @@ class TestConnectionTestEndpoint:
         assert data["success"] is False
         assert "url" in data["message"].lower()
 
+    def test_test_webdav_blocks_private_ip(self, int_client):
+        """WebDAV test blocks requests to private/internal IPs (SSRF protection)."""
+        payload = {
+            "integration_type": "WEBDAV",
+            "config": {"url": "http://127.0.0.1/webdav"},
+            "credentials": {"username": "u", "password": "p"},
+        }
+        resp = int_client.post("/api/integrations/test", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert "internal" in data["message"].lower() or "private" in data["message"].lower()
+
+    def test_test_webdav_blocks_localhost(self, int_client):
+        """WebDAV test blocks requests to localhost."""
+        payload = {
+            "integration_type": "WEBDAV",
+            "config": {"url": "http://localhost/webdav"},
+            "credentials": {},
+        }
+        resp = int_client.post("/api/integrations/test", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert "localhost" in data["message"].lower()
+
+    def test_test_webdav_blocks_file_scheme(self, int_client):
+        """WebDAV test blocks file:// scheme."""
+        payload = {
+            "integration_type": "WEBDAV",
+            "config": {"url": "file:///etc/passwd"},
+            "credentials": {},
+        }
+        resp = int_client.post("/api/integrations/test", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert "scheme" in data["message"].lower()
+
 
 # ---------------------------------------------------------------------------
 # Quota endpoint tests
