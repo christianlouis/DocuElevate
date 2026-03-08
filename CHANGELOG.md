@@ -10,6 +10,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.103.0 (2026-03-08)
+
+### Bug Fixes
+
+- **ui**: Correct OAuth setup page links in integrations dashboard
+  ([`ba387b8`](https://github.com/christianlouis/DocuElevate/commit/ba387b8e8bdf8f8732ae237397083072d280977e))
+
+### Documentation
+
+- **config**: Document per-user IMAP and watch folder integration polling
+  ([`fc453be`](https://github.com/christianlouis/DocuElevate/commit/fc453be71fe650e091ebd819c09735a9cdb8af43))
+
+### Features
+
+- **auth**: Make OAuth credentials user-specific via UserIntegration records
+  ([`cfc52fd`](https://github.com/christianlouis/DocuElevate/commit/cfc52fd355c54655a7a2619a97f01206b3c7820a))
+
+- **auth**: Save OAuth credentials per-user to UserIntegration records
+  ([`73119e0`](https://github.com/christianlouis/DocuElevate/commit/73119e0cef6a50e23784267e8d68ec965a5bc70d))
+
+- **tasks**: Refactor IMAP and watch folder polling to support multi-tenant user attribution
+  ([`019807d`](https://github.com/christianlouis/DocuElevate/commit/019807d0f551da3a8f99609a6d5a662d02df6966))
+
+### Testing
+
+- **tasks**: Add comprehensive tests for multi-tenant polling functions
+  ([`4f9f458`](https://github.com/christianlouis/DocuElevate/commit/4f9f458151b8d2aa0b1fcea33fa80d9b9226c099))
+
+
 ## v0.102.0 (2026-03-08)
 
 ### Features
