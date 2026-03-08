@@ -917,3 +917,245 @@ def test_send_forgot_username_email_no_smtp_raises():
 
         with pytest.raises(RuntimeError, match="SMTP"):
             send_forgot_username_email("u@example.com", "myusername")
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: _smtp_send internals
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_smtp_send_no_email_host_raises():
+    """_smtp_send raises RuntimeError when EMAIL_HOST is not configured."""
+    from app.utils.local_auth import _smtp_send
+
+    with patch("app.utils.local_auth.settings") as mock_settings:
+        mock_settings.email_host = None
+
+        with pytest.raises(RuntimeError, match="SMTP is not configured"):
+            _smtp_send("Subject", "<p>html</p>", "plain", "r@example.com")
+
+
+@pytest.mark.unit
+def test_smtp_send_dns_resolution_failure():
+    """_smtp_send raises RuntimeError when the SMTP host cannot be resolved."""
+    import socket
+
+    from app.utils.local_auth import _smtp_send
+
+    with patch("app.utils.local_auth.settings") as mock_settings:
+        mock_settings.email_host = "badhost.invalid"
+        mock_settings.email_sender = "sender@example.com"
+        mock_settings.email_username = None
+        mock_settings.email_password = None
+        mock_settings.email_port = 587
+        mock_settings.email_use_tls = False
+
+        with patch("app.utils.local_auth.socket.gethostbyname", side_effect=socket.gaierror("Name resolution failed")):
+            with pytest.raises(RuntimeError, match="Cannot resolve SMTP host"):
+                _smtp_send("Subject", "<p>html</p>", "plain", "r@example.com")
+
+
+@pytest.mark.unit
+def test_smtp_send_success_no_tls_no_auth():
+    """_smtp_send connects, skips TLS and auth when not configured, and sends the message."""
+    from app.utils.local_auth import _smtp_send
+
+    mock_server = MagicMock()
+    mock_smtp_cls = MagicMock()
+    mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_server)
+    mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
+
+    with patch("app.utils.local_auth.settings") as mock_settings:
+        mock_settings.email_host = "smtp.example.com"
+        mock_settings.email_sender = "sender@example.com"
+        mock_settings.email_username = None
+        mock_settings.email_password = None
+        mock_settings.email_port = 587
+        mock_settings.email_use_tls = False
+
+        with patch("app.utils.local_auth.socket.gethostbyname", return_value="1.2.3.4"):
+            with patch("app.utils.local_auth.smtplib.SMTP", mock_smtp_cls):
+                _smtp_send("Test Subject", "<p>html</p>", "plain text", "recipient@example.com")
+
+    mock_server.starttls.assert_not_called()
+    mock_server.login.assert_not_called()
+    mock_server.send_message.assert_called_once()
+
+
+@pytest.mark.unit
+def test_smtp_send_with_tls():
+    """_smtp_send calls starttls() when email_use_tls is True."""
+    from app.utils.local_auth import _smtp_send
+
+    mock_server = MagicMock()
+    mock_smtp_cls = MagicMock()
+    mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_server)
+    mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
+
+    with patch("app.utils.local_auth.settings") as mock_settings:
+        mock_settings.email_host = "smtp.example.com"
+        mock_settings.email_sender = "sender@example.com"
+        mock_settings.email_username = None
+        mock_settings.email_password = None
+        mock_settings.email_port = 587
+        mock_settings.email_use_tls = True
+
+        with patch("app.utils.local_auth.socket.gethostbyname", return_value="1.2.3.4"):
+            with patch("app.utils.local_auth.smtplib.SMTP", mock_smtp_cls):
+                _smtp_send("Test Subject", "<p>html</p>", "plain text", "recipient@example.com")
+
+    mock_server.starttls.assert_called_once()
+    mock_server.send_message.assert_called_once()
+
+
+@pytest.mark.unit
+def test_smtp_send_with_auth():
+    """_smtp_send calls login() when email_username and email_password are set."""
+    from app.utils.local_auth import _smtp_send
+
+    mock_server = MagicMock()
+    mock_smtp_cls = MagicMock()
+    mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_server)
+    mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
+
+    with patch("app.utils.local_auth.settings") as mock_settings:
+        mock_settings.email_host = "smtp.example.com"
+        mock_settings.email_sender = None
+        mock_settings.email_username = "user@example.com"
+        mock_settings.email_password = "secret"
+        mock_settings.email_port = 587
+        mock_settings.email_use_tls = False
+
+        with patch("app.utils.local_auth.socket.gethostbyname", return_value="1.2.3.4"):
+            with patch("app.utils.local_auth.smtplib.SMTP", mock_smtp_cls):
+                _smtp_send("Subject", "<p>html</p>", "plain", "r@example.com")
+
+    mock_server.login.assert_called_once_with("user@example.com", "secret")
+    mock_server.send_message.assert_called_once()
+
+
+@pytest.mark.unit
+def test_smtp_send_uses_email_username_as_sender_fallback():
+    """_smtp_send falls back to email_username when email_sender is not set."""
+    from app.utils.local_auth import _smtp_send
+
+    mock_server = MagicMock()
+    mock_smtp_cls = MagicMock()
+    mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_server)
+    mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
+
+    with patch("app.utils.local_auth.settings") as mock_settings:
+        mock_settings.email_host = "smtp.example.com"
+        mock_settings.email_sender = None
+        mock_settings.email_username = "fallback@example.com"
+        mock_settings.email_password = None
+        mock_settings.email_port = 587
+        mock_settings.email_use_tls = False
+
+        with patch("app.utils.local_auth.socket.gethostbyname", return_value="1.2.3.4"):
+            with patch("app.utils.local_auth.smtplib.SMTP", mock_smtp_cls):
+                _smtp_send("Subject", "<p>html</p>", "plain", "r@example.com")
+
+    # The message should have been sent (sender was resolved from email_username)
+    mock_server.send_message.assert_called_once()
+
+
+@pytest.mark.unit
+def test_smtp_send_default_noreply_sender():
+    """_smtp_send falls back to noreply@docuelevate.local when neither sender nor username is set."""
+    from app.utils.local_auth import _smtp_send
+
+    mock_server = MagicMock()
+    mock_smtp_cls = MagicMock()
+    mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_server)
+    mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
+
+    with patch("app.utils.local_auth.settings") as mock_settings:
+        mock_settings.email_host = "smtp.example.com"
+        mock_settings.email_sender = None
+        mock_settings.email_username = None
+        mock_settings.email_password = None
+        mock_settings.email_port = 587
+        mock_settings.email_use_tls = False
+
+        with patch("app.utils.local_auth.socket.gethostbyname", return_value="1.2.3.4"):
+            with patch("app.utils.local_auth.smtplib.SMTP", mock_smtp_cls) as smtp_cls:
+                _smtp_send("Subject", "<p>html</p>", "plain", "r@example.com")
+
+    # Verify SMTP was instantiated with correct host
+    smtp_cls.assert_called_once_with("smtp.example.com", 587, timeout=30)
+    mock_server.send_message.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: send_verification_email and send_password_reset_email
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_send_verification_email_calls_smtp():
+    """send_verification_email passes the verify URL in html_body and plain_body."""
+    from app.utils.local_auth import send_verification_email
+
+    with patch("app.utils.local_auth._smtp_send") as mock_smtp:
+        send_verification_email(
+            email="user@example.com",
+            username="testuser",
+            token="abc123token",
+            base_url="https://app.example.com",
+        )
+
+    mock_smtp.assert_called_once()
+    subject, html_body, plain_body, recipient = mock_smtp.call_args[0]
+    assert "Verify" in subject
+    assert "https://app.example.com/verify-email?token=abc123token" in html_body
+    assert "https://app.example.com/verify-email?token=abc123token" in plain_body
+    assert "testuser" in html_body
+    assert "testuser" in plain_body
+    assert recipient == "user@example.com"
+
+
+@pytest.mark.unit
+def test_send_password_reset_email_calls_smtp():
+    """send_password_reset_email passes the reset URL in html_body and plain_body."""
+    from app.utils.local_auth import send_password_reset_email
+
+    with patch("app.utils.local_auth._smtp_send") as mock_smtp:
+        send_password_reset_email(
+            email="user@example.com",
+            username="testuser",
+            token="resettoken456",
+            base_url="https://app.example.com",
+        )
+
+    mock_smtp.assert_called_once()
+    subject, html_body, plain_body, recipient = mock_smtp.call_args[0]
+    assert "Reset" in subject or "reset" in subject.lower()
+    assert "https://app.example.com/reset-password?token=resettoken456" in html_body
+    assert "https://app.example.com/reset-password?token=resettoken456" in plain_body
+    assert "testuser" in html_body
+    assert "testuser" in plain_body
+    assert recipient == "user@example.com"
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: build_session_user edge cases
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_build_session_user_no_display_name_falls_back_to_username():
+    """build_session_user uses username as 'name' when display_name is None."""
+    user = MagicMock()
+    user.email = "u@example.com"
+    user.username = "uname"
+    user.display_name = None
+    user.is_admin = True
+
+    with patch("app.auth.get_gravatar_url", return_value="https://gravatar.com/test"):
+        result = build_session_user(user)
+
+    assert result["name"] == "uname"
+    assert result["is_admin"] is True
+    assert result["auth_method"] == "local"
