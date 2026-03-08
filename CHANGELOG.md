@@ -15,6 +15,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - **changelog**: Update changelog [skip ci]
+  ([`8db0093`](https://github.com/christianlouis/DocuElevate/commit/8db0093562789925bb460300e83f2bd7c02753a2))
+
+- **changelog**: Update changelog [skip ci]
+  ([`2be09ef`](https://github.com/christianlouis/DocuElevate/commit/2be09efd99020b295a05da2c49a1611a70616579))
+
+### Testing
+
+- Increase app/api/google_drive.py coverage to 100%
+  ([`14c9432`](https://github.com/christianlouis/DocuElevate/commit/14c94326402aed375a8178198ccd045f91765d74))
+
+- Increase coverage for app/views/pipelines.py to 100%
+  ([`344d20e`](https://github.com/christianlouis/DocuElevate/commit/344d20e4e63260e671118375ddfa811937b52c0c))
+
+- Increase url_upload.py test coverage to 100%
+  ([`afe4227`](https://github.com/christianlouis/DocuElevate/commit/afe42270bb7dcbc23b4a8d7994899a18b0127d61))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
   ([`2be09ef`](https://github.com/christianlouis/DocuElevate/commit/2be09efd99020b295a05da2c49a1611a70616579))
 
 ### Testing
