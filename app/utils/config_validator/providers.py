@@ -154,23 +154,23 @@ def get_provider_status() -> dict[str, dict[str, object]]:
         },
     }
 
-    # Add Email configuration
+    # Add Email destination configuration (dedicated settings for document delivery)
     providers["Email"] = {
         "name": "Email",
         "icon": "fa-solid fa-envelope",
         "configured": bool(
-            getattr(settings, "email_host", None) and getattr(settings, "email_default_recipient", None)
+            getattr(settings, "dest_email_host", None) and getattr(settings, "dest_email_default_recipient", None)
         ),
         "enabled": True,
         "description": "Send documents via email",
         "details": {
-            "host": getattr(settings, "email_host", "Not set"),
-            "port": getattr(settings, "email_port", "Not set"),
-            "username": getattr(settings, "email_username", "Not set"),
-            "password": mask_sensitive_value(getattr(settings, "email_password", None)),
-            "use_tls": getattr(settings, "email_use_tls", "Not set"),
-            "sender": getattr(settings, "email_sender", "Not set"),
-            "default_recipient": getattr(settings, "email_default_recipient", "Not set"),
+            "host": getattr(settings, "dest_email_host", "Not set"),
+            "port": getattr(settings, "dest_email_port", "Not set"),
+            "username": getattr(settings, "dest_email_username", "Not set"),
+            "password": mask_sensitive_value(getattr(settings, "dest_email_password", None)),
+            "use_tls": getattr(settings, "dest_email_use_tls", "Not set"),
+            "sender": getattr(settings, "dest_email_sender", "Not set"),
+            "default_recipient": getattr(settings, "dest_email_default_recipient", "Not set"),
         },
     }
 

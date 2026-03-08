@@ -364,12 +364,12 @@ def test_upload_to_email_accepts_file_id(sample_text_file):
         patch("app.tasks.upload_to_email.attach_logo") as mock_logo,
     ):
         # Setup settings
-        mock_settings.email_host = "smtp.example.com"
-        mock_settings.email_port = 587
-        mock_settings.email_username = "test@example.com"
-        mock_settings.email_password = _TEST_CREDENTIAL
-        mock_settings.email_use_tls = True
-        mock_settings.email_sender = "sender@example.com"
+        mock_settings.dest_email_host = "smtp.example.com"
+        mock_settings.dest_email_port = 587
+        mock_settings.dest_email_username = "test@example.com"
+        mock_settings.dest_email_password = _TEST_CREDENTIAL
+        mock_settings.dest_email_use_tls = True
+        mock_settings.dest_email_sender = "sender@example.com"
         mock_settings.external_hostname = "docuelevate.example.com"
 
         # Setup mocks
@@ -503,7 +503,7 @@ def test_send_to_all_calls_upload_tasks_with_keyword_argument():
             mock_settings.webdav_url = None
             mock_settings.ftp_host = None
             mock_settings.sftp_host = None
-            mock_settings.email_host = None
+            mock_settings.dest_email_host = None
             mock_settings.onedrive_client_id = None
             mock_settings.workdir = "/tmp"
 

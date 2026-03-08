@@ -107,12 +107,12 @@ def validate_storage_configs() -> dict[str, list[str]]:
 
     issues["sftp"] = sftp_issues
 
-    # Validate Email sending
+    # Validate Email sending (destination-specific settings)
     email_issues = []
-    if not getattr(settings, "email_host", None):
-        email_issues.append("EMAIL_HOST is not configured")
-    if not getattr(settings, "email_default_recipient", None):
-        email_issues.append("EMAIL_DEFAULT_RECIPIENT is not configured")
+    if not getattr(settings, "dest_email_host", None):
+        email_issues.append("DEST_EMAIL_HOST is not configured")
+    if not getattr(settings, "dest_email_default_recipient", None):
+        email_issues.append("DEST_EMAIL_DEFAULT_RECIPIENT is not configured")
     issues["email"] = email_issues
 
     # Validate S3

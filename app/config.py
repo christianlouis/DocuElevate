@@ -432,7 +432,7 @@ class Settings(BaseSettings):
     # In development/testing, set to True to disable verification (not recommended)
     sftp_disable_host_key_verification: bool = False  # Default enforces host key verification
 
-    # Email settings
+    # Email settings (shared SMTP – used for password reset, verification emails, etc.)
     email_host: Optional[str] = None
     email_port: Optional[int] = 587
     email_username: Optional[str] = None
@@ -440,6 +440,15 @@ class Settings(BaseSettings):
     email_use_tls: bool = True
     email_sender: Optional[str] = None  # From address, defaults to email_username if not set
     email_default_recipient: Optional[str] = None
+
+    # Email destination settings (dedicated SMTP for document delivery – decoupled from shared email above)
+    dest_email_host: Optional[str] = None
+    dest_email_port: Optional[int] = 587
+    dest_email_username: Optional[str] = None
+    dest_email_password: Optional[str] = None
+    dest_email_use_tls: bool = True
+    dest_email_sender: Optional[str] = None  # From address for delivered documents
+    dest_email_default_recipient: Optional[str] = None  # Fallback recipient for document delivery
 
     # OneDrive settings
     onedrive_client_id: Optional[str] = None

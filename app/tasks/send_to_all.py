@@ -64,7 +64,10 @@ def _should_upload_to_sftp():
 
 def _should_upload_to_email():
     return bool(
-        settings.email_host and settings.email_username and settings.email_password and settings.email_default_recipient
+        settings.dest_email_host
+        and settings.dest_email_username
+        and settings.dest_email_password
+        and settings.dest_email_default_recipient
     )
 
 
