@@ -941,6 +941,50 @@ class Settings(BaseSettings):
         description="Support e-mail address displayed on the Help Center page.",
     )
 
+    # ---------------------------------------------------------------------------
+    # Observability – Sentry error & performance monitoring
+    # ---------------------------------------------------------------------------
+    sentry_dsn: Optional[str] = Field(
+        default=None,
+        description=(
+            "Sentry Data Source Name (DSN).  When set, error reporting and "
+            "performance tracing are enabled automatically.  Leave blank (or unset) "
+            "to disable Sentry entirely."
+        ),
+    )
+    sentry_environment: str = Field(
+        default="production",
+        description=(
+            "Environment tag sent to Sentry (e.g. 'development', 'staging', 'production'). "
+            "Helps you filter events in the Sentry dashboard."
+        ),
+    )
+    sentry_traces_sample_rate: float = Field(
+        default=0.1,
+        description=(
+            "Fraction of transactions to capture for performance monitoring (0.0–1.0). "
+            "Set to 0.0 to disable tracing, 1.0 to capture every transaction. "
+            "Values above 0 may increase Sentry quota usage."
+        ),
+    )
+    sentry_profiles_sample_rate: float = Field(
+        default=0.0,
+        description=(
+            "Fraction of profiled transactions to send to Sentry (0.0–1.0). "
+            "Profiling is only active when traces_sample_rate > 0. "
+            "Defaults to 0.0 (disabled) to minimise overhead."
+        ),
+    )
+    sentry_send_default_pii: bool = Field(
+        default=False,
+        description=(
+            "Whether to attach personally identifiable information (PII) – such as "
+            "IP addresses and user agents – to Sentry events.  Disabled by default "
+            "for privacy compliance (GDPR / CCPA).  Enable only if your Sentry "
+            "project is configured to handle PII."
+        ),
+    )
+
     @model_validator(mode="before")
     @classmethod
     def strip_outer_quotes(cls, data: Any) -> Any:

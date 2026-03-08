@@ -27,6 +27,7 @@ from app.middleware.request_size_limit import RequestSizeLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.utils.config_validator import check_all_configs
 from app.utils.notification import init_apprise, notify_shutdown, notify_startup
+from app.utils.sentry import init_sentry
 
 # Import the routers - now using views directly instead of frontend
 from app.views import router as frontend_router
@@ -46,6 +47,9 @@ if settings.auth_enabled and not settings.session_secret:
 SESSION_SECRET = (
     settings.session_secret or "INSECURE_DEFAULT_FOR_DEVELOPMENT_ONLY_DO_NOT_USE_IN_PRODUCTION_MINIMUM_32_CHARS"
 )
+
+# Initialise Sentry as early as possible so that any startup errors are captured
+init_sentry()
 
 
 @asynccontextmanager

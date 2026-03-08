@@ -2264,6 +2264,64 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Observability – Sentry
+    "sentry_dsn": {
+        "category": "Observability",
+        "description": (
+            "Sentry DSN (Data Source Name) URL. When set, runtime errors and "
+            "performance traces are automatically sent to Sentry. "
+            "Leave blank to disable Sentry entirely."
+        ),
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "sentry_environment": {
+        "category": "Observability",
+        "description": (
+            "Environment label attached to every Sentry event "
+            "(e.g. 'development', 'staging', 'production'). "
+            "Helps you filter events in the Sentry dashboard. Default: 'production'."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "sentry_traces_sample_rate": {
+        "category": "Observability",
+        "description": (
+            "Fraction of transactions captured for Sentry performance monitoring (0.0–1.0). "
+            "0.0 disables tracing; 1.0 captures every request. Default: 0.1 (10%)."
+        ),
+        "type": "float",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "sentry_profiles_sample_rate": {
+        "category": "Observability",
+        "description": (
+            "Fraction of profiled transactions sent to Sentry (0.0–1.0). "
+            "Only active when sentry_traces_sample_rate > 0. Default: 0.0 (disabled)."
+        ),
+        "type": "float",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "sentry_send_default_pii": {
+        "category": "Observability",
+        "description": (
+            "Attach personally identifiable information (PII) such as IP addresses "
+            "to Sentry events. Disabled by default for GDPR/CCPA compliance."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
 }
 
 

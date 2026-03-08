@@ -1,7 +1,7 @@
 # app/celery_app.py
 
 from celery import Celery
-from celery.signals import task_failure
+from celery.signals import task_failure, worker_ready
 
 from app.config import settings
 
@@ -20,6 +20,14 @@ celery.conf.task_default_queue = "document_processor"
 celery.conf.task_routes = {
     "app.tasks.*": {"queue": "document_processor"},
 }
+
+
+@worker_ready.connect
+def init_sentry_on_worker_ready(**kwargs):
+    """Initialise Sentry SDK in the Celery worker process."""
+    from app.utils.sentry import init_sentry
+
+    init_sentry(integrations_extra=["celery"])
 
 
 @task_failure.connect
