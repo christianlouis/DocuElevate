@@ -519,12 +519,49 @@ Processing pipelines let you define exactly what happens to your documents when 
 |-----------|-------------|
 | `convert_to_pdf` | Convert non-PDF files to PDF using Gotenberg |
 | `check_duplicates` | Detect duplicate files by content hash |
-| `ocr` | Extract text with Azure Document Intelligence or local Tesseract |
+| `ocr` | Extract text with OCR (supports multi-language configuration, see below) |
 | `extract_metadata` | Extract structured metadata (type, sender, tags) with AI |
 | `embed_metadata` | Write extracted metadata into the PDF document properties |
 | `compute_embedding` | Compute semantic embeddings for similarity search |
 | `send_to_destinations` | Upload the processed document to all configured storage destinations |
 | `classify` | Classify the document type with AI |
+
+#### OCR step options
+
+The `ocr` step supports two optional configuration fields:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `force_cloud_ocr` | boolean | `false` | Always run cloud OCR even if the PDF already has embedded text |
+| `ocr_language` | string | `"auto"` | Language(s) to use for OCR text extraction (see below) |
+
+**`ocr_language` — per-pipeline language override**
+
+This option enables manual language control per pipeline, overriding the global Tesseract/EasyOCR language settings for all documents processed by that pipeline. The following values are supported (28 languages total):
+
+| Value | Language | Value | Language |
+|-------|----------|-------|----------|
+| `auto` | Auto (use system default) | `jpn` | Japanese |
+| `ara` | Arabic | `kor` | Korean |
+| `chi_sim` | Chinese (Simplified) | `nor` | Norwegian |
+| `chi_tra` | Chinese (Traditional) | `pol` | Polish |
+| `ces` | Czech | `por` | Portuguese |
+| `dan` | Danish | `ron` | Romanian |
+| `nld` | Dutch | `rus` | Russian |
+| `eng` | English | `spa` | Spanish |
+| `fin` | Finnish | `swe` | Swedish |
+| `fra` | French | `tha` | Thai |
+| `deu` | German | `tur` | Turkish |
+| `ell` | Greek | `ukr` | Ukrainian |
+| `heb` | Hebrew | `vie` | Vietnamese |
+| `hin` | Hindi | | |
+| `hun` | Hungarian | | |
+| `ita` | Italian | | |
+
+> **Notes:**
+> - The language override applies to **Tesseract** and **EasyOCR** providers. **Azure Document Intelligence** and **Mistral OCR** perform automatic language detection regardless of this setting.
+> - For multi-language documents with Tesseract, combine codes with `+`, e.g. `eng+deu`.
+> - Setting `ocr_language` to `auto` or leaving it unset uses the global `TESSERACT_LANGUAGE` / `EASYOCR_LANGUAGES` environment variables.
 
 ### Assigning a pipeline to a file
 

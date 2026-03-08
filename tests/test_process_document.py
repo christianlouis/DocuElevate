@@ -842,3 +842,182 @@ startxref
         mock_init_steps.assert_called_once()
         called_file_id = mock_init_steps.call_args[0][1]
         assert called_file_id == result["file_id"]
+
+
+# ---------------------------------------------------------------------------
+# _get_pipeline_ocr_language helper
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_get_pipeline_ocr_language_returns_none_when_no_pipeline(db_session):
+    """Returns None when no pipeline exists in the database."""
+    from app.tasks.process_document import _get_pipeline_ocr_language
+
+    # FileRecord with no pipeline_id
+    file_record = FileRecord(
+        filehash="abc123",
+        original_filename="test.pdf",
+        local_filename="/tmp/test.pdf",
+        file_size=1024,
+        mime_type="application/pdf",
+        is_duplicate=False,
+    )
+    db_session.add(file_record)
+    db_session.commit()
+
+    result = _get_pipeline_ocr_language(db_session, file_record, owner_id=None)
+    assert result is None
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_get_pipeline_ocr_language_returns_language_from_system_default(db_session):
+    """Returns ocr_language from the system default pipeline's OCR step config."""
+    import json
+
+    from app.models import Pipeline, PipelineStep
+    from app.tasks.process_document import _get_pipeline_ocr_language
+
+    # Create system default pipeline with OCR step configured to "deu"
+    pipeline = Pipeline(
+        owner_id=None,
+        name="System Default",
+        is_default=True,
+        is_active=True,
+    )
+    db_session.add(pipeline)
+    db_session.commit()
+
+    ocr_step = PipelineStep(
+        pipeline_id=pipeline.id,
+        position=0,
+        step_type="ocr",
+        config=json.dumps({"force_cloud_ocr": False, "ocr_language": "deu"}),
+        enabled=True,
+    )
+    db_session.add(ocr_step)
+    db_session.commit()
+
+    file_record = FileRecord(
+        filehash="def456",
+        original_filename="doc.pdf",
+        local_filename="/tmp/doc.pdf",
+        file_size=512,
+        mime_type="application/pdf",
+        is_duplicate=False,
+    )
+    db_session.add(file_record)
+    db_session.commit()
+
+    result = _get_pipeline_ocr_language(db_session, file_record, owner_id=None)
+    assert result == "deu"
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_get_pipeline_ocr_language_auto_returns_none(db_session):
+    """Returns None when ocr_language is 'auto' (should use global settings)."""
+    import json
+
+    from app.models import Pipeline, PipelineStep
+    from app.tasks.process_document import _get_pipeline_ocr_language
+
+    pipeline = Pipeline(
+        owner_id=None,
+        name="Auto Lang Pipeline",
+        is_default=True,
+        is_active=True,
+    )
+    db_session.add(pipeline)
+    db_session.commit()
+
+    ocr_step = PipelineStep(
+        pipeline_id=pipeline.id,
+        position=0,
+        step_type="ocr",
+        config=json.dumps({"ocr_language": "auto"}),
+        enabled=True,
+    )
+    db_session.add(ocr_step)
+    db_session.commit()
+
+    file_record = FileRecord(
+        filehash="ghi789",
+        original_filename="auto.pdf",
+        local_filename="/tmp/auto.pdf",
+        file_size=128,
+        mime_type="application/pdf",
+        is_duplicate=False,
+    )
+    db_session.add(file_record)
+    db_session.commit()
+
+    result = _get_pipeline_ocr_language(db_session, file_record, owner_id=None)
+    assert result is None
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_get_pipeline_ocr_language_explicit_pipeline_takes_priority(db_session):
+    """Explicit pipeline_id on file takes priority over system default pipeline."""
+    import json
+
+    from app.models import Pipeline, PipelineStep
+    from app.tasks.process_document import _get_pipeline_ocr_language
+
+    # System default pipeline with "eng"
+    sys_pipeline = Pipeline(
+        owner_id=None,
+        name="System Default",
+        is_default=True,
+        is_active=True,
+    )
+    db_session.add(sys_pipeline)
+    db_session.commit()
+
+    sys_step = PipelineStep(
+        pipeline_id=sys_pipeline.id,
+        position=0,
+        step_type="ocr",
+        config=json.dumps({"ocr_language": "eng"}),
+        enabled=True,
+    )
+    db_session.add(sys_step)
+    db_session.commit()
+
+    # Explicit pipeline with "fra"
+    explicit_pipeline = Pipeline(
+        owner_id="user1",
+        name="French Pipeline",
+        is_default=False,
+        is_active=True,
+    )
+    db_session.add(explicit_pipeline)
+    db_session.commit()
+
+    explicit_step = PipelineStep(
+        pipeline_id=explicit_pipeline.id,
+        position=0,
+        step_type="ocr",
+        config=json.dumps({"ocr_language": "fra"}),
+        enabled=True,
+    )
+    db_session.add(explicit_step)
+    db_session.commit()
+
+    file_record = FileRecord(
+        filehash="jkl012",
+        original_filename="french.pdf",
+        local_filename="/tmp/french.pdf",
+        file_size=256,
+        mime_type="application/pdf",
+        is_duplicate=False,
+        pipeline_id=explicit_pipeline.id,
+    )
+    db_session.add(file_record)
+    db_session.commit()
+
+    result = _get_pipeline_ocr_language(db_session, file_record, owner_id="user1")
+    assert result == "fra"

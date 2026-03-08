@@ -51,7 +51,48 @@ PIPELINE_STEP_TYPES: dict[str, dict[str, Any]] = {
                 "type": "boolean",
                 "default": False,
                 "description": "Always use cloud OCR even if the PDF already has embedded text.",
-            }
+            },
+            "ocr_language": {
+                "type": "select",
+                "default": "auto",
+                "description": (
+                    "Language(s) used for OCR text extraction.  Applies to Tesseract and EasyOCR "
+                    "providers; Azure and Mistral perform auto-detection by default.  "
+                    "Use Tesseract codes such as 'eng', 'deu', or 'eng+deu' for multi-language "
+                    "documents.  'auto' falls back to the global system setting."
+                ),
+                "options": [
+                    {"value": "auto", "label": "Auto (use system default)"},
+                    {"value": "ara", "label": "Arabic"},
+                    {"value": "chi_sim", "label": "Chinese (Simplified)"},
+                    {"value": "chi_tra", "label": "Chinese (Traditional)"},
+                    {"value": "ces", "label": "Czech"},
+                    {"value": "dan", "label": "Danish"},
+                    {"value": "nld", "label": "Dutch"},
+                    {"value": "eng", "label": "English"},
+                    {"value": "fin", "label": "Finnish"},
+                    {"value": "fra", "label": "French"},
+                    {"value": "deu", "label": "German"},
+                    {"value": "ell", "label": "Greek"},
+                    {"value": "heb", "label": "Hebrew"},
+                    {"value": "hin", "label": "Hindi"},
+                    {"value": "hun", "label": "Hungarian"},
+                    {"value": "ita", "label": "Italian"},
+                    {"value": "jpn", "label": "Japanese"},
+                    {"value": "kor", "label": "Korean"},
+                    {"value": "nor", "label": "Norwegian"},
+                    {"value": "pol", "label": "Polish"},
+                    {"value": "por", "label": "Portuguese"},
+                    {"value": "ron", "label": "Romanian"},
+                    {"value": "rus", "label": "Russian"},
+                    {"value": "spa", "label": "Spanish"},
+                    {"value": "swe", "label": "Swedish"},
+                    {"value": "tha", "label": "Thai"},
+                    {"value": "tur", "label": "Turkish"},
+                    {"value": "ukr", "label": "Ukrainian"},
+                    {"value": "vie", "label": "Vietnamese"},
+                ],
+            },
         },
     },
     "extract_metadata": {
