@@ -48,6 +48,7 @@ SESSION_SECRET = (
     settings.session_secret or "INSECURE_DEFAULT_FOR_DEVELOPMENT_ONLY_DO_NOT_USE_IN_PRODUCTION_MINIMUM_32_CHARS"
 )
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """

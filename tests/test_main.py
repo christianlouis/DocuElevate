@@ -120,7 +120,6 @@ class TestLifespanEvents:
     @pytest.mark.asyncio
     async def test_lifespan_calls_init_sentry_after_db_settings_load(self):
         """Test that init_sentry is called inside lifespan after load_settings_from_db."""
-        from unittest.mock import call
 
         with (
             patch("app.database.init_db"),
