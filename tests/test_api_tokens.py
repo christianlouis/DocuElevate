@@ -1,6 +1,5 @@
 """Tests for the personal API tokens feature (app/api/api_tokens.py + auth integration)."""
 
-import hashlib
 
 import pytest
 from fastapi.testclient import TestClient
@@ -103,14 +102,15 @@ class TestTokenCreate:
 
     @pytest.mark.unit
     def test_create_token_stored_as_hash(self, tok_engine, tok_session):
-        """The database should only store a SHA-256 hash, never the plaintext."""
+        """The database should only store a PBKDF2-HMAC-SHA256 hash, never the plaintext."""
+        from app.api.api_tokens import hash_token
         from app.main import app
 
         client = _make_client(tok_engine)
         try:
             resp = client.post("/api/api-tokens/", json={"name": "Hash Check"})
             token_plaintext = resp.json()["token"]
-            expected_hash = hashlib.sha256(token_plaintext.encode()).hexdigest()
+            expected_hash = hash_token(token_plaintext)
 
             db_token = tok_session.query(ApiToken).first()
             assert db_token is not None

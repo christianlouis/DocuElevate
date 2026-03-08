@@ -190,15 +190,15 @@ def create_saved_search(
         db.add(saved_search)
         db.commit()
         db.refresh(saved_search)
-    except Exception as exc:
+    except Exception:
         db.rollback()
-        logger.exception(f"Failed to create saved search for user={user_id}: {exc}")
+        logger.exception("Failed to create saved search for user=%s", user_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to save search",
         )
 
-    logger.info(f"Saved search created: user={user_id}, name={name!r}")
+    logger.info("Saved search created: user=%s, name=%r", user_id, name)
     return _serialize_saved_search(saved_search)
 
 
@@ -263,15 +263,15 @@ def update_saved_search(
     try:
         db.commit()
         db.refresh(saved_search)
-    except Exception as exc:
+    except Exception:
         db.rollback()
-        logger.exception(f"Failed to update saved search id={search_id}, user={user_id}: {exc}")
+        logger.exception("Failed to update saved search id=%s, user=%s", search_id, user_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update saved search",
         )
 
-    logger.info(f"Saved search updated: id={search_id}, user={user_id}")
+    logger.info("Saved search updated: id=%s, user=%s", search_id, user_id)
     return _serialize_saved_search(saved_search)
 
 
@@ -294,12 +294,12 @@ def delete_saved_search(search_id: int, request: Request, db: DbSession):
     try:
         db.delete(saved_search)
         db.commit()
-    except Exception as exc:
+    except Exception:
         db.rollback()
-        logger.exception(f"Failed to delete saved search id={search_id}, user={user_id}: {exc}")
+        logger.exception("Failed to delete saved search id=%s, user=%s", search_id, user_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete saved search",
         )
 
-    logger.info(f"Saved search deleted: id={search_id}, user={user_id}")
+    logger.info("Saved search deleted: id=%s, user=%s", search_id, user_id)

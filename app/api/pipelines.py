@@ -291,15 +291,15 @@ def create_pipeline(request: Request, db: DbSession, body: PipelineCreate) -> di
         db.add(pipeline)
         db.commit()
         db.refresh(pipeline)
-    except Exception as exc:
+    except Exception:
         db.rollback()
-        logger.exception(f"Failed to create pipeline user={user_id}: {exc}")
+        logger.exception("Failed to create pipeline user=%s", user_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create pipeline",
         )
 
-    logger.info(f"Pipeline created: id={pipeline.id}, owner={user_id}, name={name!r}")
+    logger.info("Pipeline created: id=%s, owner=%s, name=%r", pipeline.id, user_id, name)
     return _serialize_pipeline(pipeline)
 
 
@@ -387,15 +387,15 @@ def update_pipeline(pipeline_id: int, request: Request, db: DbSession, body: Pip
     try:
         db.commit()
         db.refresh(pipeline)
-    except Exception as exc:
+    except Exception:
         db.rollback()
-        logger.exception(f"Failed to update pipeline id={pipeline_id}: {exc}")
+        logger.exception("Failed to update pipeline id=%s", pipeline_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update pipeline",
         )
 
-    logger.info(f"Pipeline updated: id={pipeline_id}, user={user_id}")
+    logger.info("Pipeline updated: id=%s, user=%s", pipeline_id, user_id)
     return _serialize_pipeline(pipeline, include_steps=True, db=db)
 
 
@@ -425,15 +425,15 @@ def delete_pipeline(pipeline_id: int, request: Request, db: DbSession) -> None:
         db.query(PipelineStep).filter(PipelineStep.pipeline_id == pipeline_id).delete()
         db.delete(pipeline)
         db.commit()
-    except Exception as exc:
+    except Exception:
         db.rollback()
-        logger.exception(f"Failed to delete pipeline id={pipeline_id}: {exc}")
+        logger.exception("Failed to delete pipeline id=%s", pipeline_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete pipeline",
         )
 
-    logger.info(f"Pipeline deleted: id={pipeline_id}, user={user_id}")
+    logger.info("Pipeline deleted: id=%s, user=%s", pipeline_id, user_id)
 
 
 # ---------------------------------------------------------------------------

@@ -6,8 +6,8 @@ uploads, scripted integrations).
 
 Tokens use ``secrets.token_urlsafe`` from the Python standard library
 (no extra dependencies) and are prefixed with ``de_`` for easy
-identification.  Only a SHA-256 hash is persisted; the plaintext is
-returned exactly once at creation time.
+identification.  Only a PBKDF2-HMAC-SHA256 hash is persisted; the
+plaintext is returned exactly once at creation time.
 """
 
 import hashlib

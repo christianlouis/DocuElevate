@@ -78,9 +78,10 @@ def _resolve_bearer_user(request: Request, db: Session) -> dict | None:
     if not raw_token or not isinstance(raw_token, str):
         return None
 
+    from app.api.api_tokens import hash_token
     from app.models import ApiToken
 
-    token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+    token_hash = hash_token(raw_token)
     db_token = db.query(ApiToken).filter(ApiToken.token_hash == token_hash, ApiToken.is_active.is_(True)).first()
     if db_token is None:
         return None
