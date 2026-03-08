@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Shared Document – DocuElevate</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Tailwind CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+          integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA=="
+          crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+      body { font-family: system-ui, sans-serif; }
+    </style>
+  </head>
+  <body class="bg-gray-50 min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="w-full max-w-md">
+      <!-- Card -->
+      <div class="bg-white rounded-2xl shadow-lg p-8 space-y-6" id="share-card">
+
+        <!-- Brand header -->
+        <div class="flex items-center justify-center gap-2 mb-2">
+          <i class="fas fa-file-alt text-blue-500 text-xl" aria-hidden="true"></i>
+          <span class="text-lg font-bold text-gray-700">DocuElevate</span>
+        </div>
+
+        <!-- Loading state -->
+        <div id="loading-state" class="text-center py-4">
+          <i class="fas fa-spinner fa-spin text-blue-400 text-2xl" aria-hidden="true"></i>
+          <p class="mt-2 text-sm text-gray-500">Loading link…</p>
+        </div>
+
+        <!-- Valid link state (hidden initially) -->
+        <div id="valid-state" class="hidden space-y-5">
+          <div class="text-center">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
+              <i class="fas fa-file-download text-blue-500 text-2xl" aria-hidden="true"></i>
+            </div>
+            <h1 class="text-xl font-bold text-gray-900" id="file-title">Document</h1>
+            <p class="text-sm text-gray-500 mt-1" id="link-label"></p>
+          </div>
+
+          <!-- Expiry / view info -->
+          <div id="meta-info" class="bg-gray-50 rounded-lg p-3 text-sm text-gray-600 space-y-1"></div>
+
+          <!-- Password gate -->
+          <div id="password-section" class="hidden space-y-3">
+            <label for="pwd-input" class="block text-sm font-medium text-gray-700">
+              <i class="fas fa-lock text-yellow-500 mr-1" aria-hidden="true"></i>
+              This link is password-protected
+            </label>
+            <div class="flex gap-2">
+              <input
+                id="pwd-input"
+                type="password"
+                placeholder="Enter password"
+                autocomplete="current-password"
+                class="flex-1 px-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                id="pwd-submit"
+                type="button"
+                onclick="downloadWithPassword()"
+                class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style="min-height:40px;min-width:44px;"
+              >
+                Download
+              </button>
+            </div>
+            <p id="pwd-error" class="text-xs text-red-600 hidden" role="alert">Incorrect password. Please try again.</p>
+          </div>
+
+          <!-- Direct download button (shown when no password) -->
+          <div id="download-section" class="hidden">
+            <a
+              id="download-btn"
+              href="#"
+              class="flex items-center justify-center gap-2 w-full px-5 py-3 bg-blue-600 text-white font-medium rounded-lg
+                     hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              style="min-height:48px;"
+            >
+              <i class="fas fa-download" aria-hidden="true"></i>
+              Download
+            </a>
+          </div>
+        </div>
+
+        <!-- Expired / invalid state (hidden initially) -->
+        <div id="invalid-state" class="hidden text-center space-y-3">
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100">
+            <i class="fas fa-link-slash text-red-500 text-2xl" aria-hidden="true"></i>
+          </div>
+          <h1 class="text-xl font-bold text-gray-900">Link Unavailable</h1>
+          <p id="invalid-reason" class="text-sm text-gray-500">This link has expired or been revoked.</p>
+        </div>
+
+      </div>
+
+      <p class="text-center text-xs text-gray-400 mt-6">
+        Shared via <a href="/" class="underline hover:text-gray-600">DocuElevate</a>
+      </p>
+    </div>
+
+    <script>
+      const TOKEN = {{ token | tojson }};
+      const INFO_URL = `/api/share/${TOKEN}/info`;
+      const DOWNLOAD_URL = `/api/share/${TOKEN}/download`;
+
+      async function loadLinkInfo() {
+        try {
+          const resp = await fetch(INFO_URL);
+          const data = await resp.json();
+
+          document.getElementById('loading-state').classList.add('hidden');
+
+          if (!resp.ok || !data.is_valid) {
+            showInvalid(data.is_valid === false ? null : data.detail);
+            return;
+          }
+
+          showValid(data);
+        } catch (err) {
+          document.getElementById('loading-state').classList.add('hidden');
+          showInvalid('Could not load link information.');
+        }
+      }
+
+      function showValid(data) {
+        document.getElementById('valid-state').classList.remove('hidden');
+
+        // File name / title
+        const titleEl = document.getElementById('file-title');
+        titleEl.textContent = data.original_filename || 'Document';
+
+        // Label
+        const labelEl = document.getElementById('link-label');
+        if (data.label) {
+          labelEl.textContent = data.label;
+        } else {
+          labelEl.classList.add('hidden');
+        }
+
+        // Meta info
+        const metaEl = document.getElementById('meta-info');
+        const rows = [];
+        if (data.expires_at) {
+          const d = new Date(data.expires_at);
+          rows.push(`<div><i class="fas fa-clock mr-1 text-gray-400" aria-hidden="true"></i> Expires: ${d.toLocaleDateString(undefined, {year:'numeric',month:'short',day:'numeric'})} ${d.toLocaleTimeString(undefined, {hour:'2-digit',minute:'2-digit'})}</div>`);
+        }
+        if (data.max_views) {
+          const remaining = data.max_views - data.view_count;
+          rows.push(`<div><i class="fas fa-download mr-1 text-gray-400" aria-hidden="true"></i> ${remaining} download${remaining !== 1 ? 's' : ''} remaining</div>`);
+        }
+        if (rows.length > 0) {
+          metaEl.innerHTML = rows.join('');
+        } else {
+          metaEl.classList.add('hidden');
+        }
+
+        if (data.has_password) {
+          document.getElementById('password-section').classList.remove('hidden');
+        } else {
+          const dlBtn = document.getElementById('download-btn');
+          dlBtn.href = DOWNLOAD_URL;
+          document.getElementById('download-section').classList.remove('hidden');
+        }
+      }
+
+      function showInvalid(reason) {
+        const el = document.getElementById('invalid-state');
+        el.classList.remove('hidden');
+        if (reason) {
+          document.getElementById('invalid-reason').textContent = reason;
+        }
+      }
+
+      function downloadWithPassword() {
+        const pwd = document.getElementById('pwd-input').value;
+        const errEl = document.getElementById('pwd-error');
+        if (!pwd) {
+          errEl.classList.remove('hidden');
+          errEl.textContent = 'Please enter the password.';
+          return;
+        }
+
+        // Attempt download — if password is wrong the server returns 403.
+        const url = `${DOWNLOAD_URL}?password=${encodeURIComponent(pwd)}`;
+
+        // Use a hidden iframe trick to detect errors vs. successful binary downloads.
+        fetch(url)
+          .then(async (resp) => {
+            if (resp.ok) {
+              errEl.classList.add('hidden');
+              // Trigger download via blob URL.
+              const blob = await resp.blob();
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              const disposition = resp.headers.get('content-disposition') || '';
+              const match = disposition.match(/filename="([^"]+)"/);
+              a.download = match ? match[1] : 'document';
+              document.body.appendChild(a);
+              a.click();
+              setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+            } else if (resp.status === 403) {
+              errEl.classList.remove('hidden');
+              errEl.textContent = 'Incorrect password. Please try again.';
+            } else {
+              errEl.classList.remove('hidden');
+              errEl.textContent = 'Download failed. The link may have expired.';
+            }
+          })
+          .catch(() => {
+            errEl.classList.remove('hidden');
+            errEl.textContent = 'Network error. Please try again.';
+          });
+      }
+
+      // Allow pressing Enter in the password field.
+      document.addEventListener('DOMContentLoaded', function () {
+        const pwdInput = document.getElementById('pwd-input');
+        if (pwdInput) {
+          pwdInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') downloadWithPassword();
+          });
+        }
+        loadLinkInfo();
+      });
+    </script>
+  </body>
+</html>

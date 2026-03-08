@@ -637,3 +637,50 @@ class ApiToken(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class SharedLink(Base):
+    """Shareable, time-limited or view-limited document link.
+
+    A ``SharedLink`` grants unauthenticated access to one ``FileRecord``
+    via a cryptographically random URL token.  The link may optionally
+    expire after a given datetime, be limited to a fixed number of views,
+    and require a password.  Only a PBKDF2-HMAC-SHA256 hash of the
+    password is stored.
+
+    Owners can view and revoke their active links from the management UI.
+    """
+
+    __tablename__ = "shared_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Unique URL-safe token — forms the public /share/<token> URL.
+    token = Column(String(64), nullable=False, unique=True, index=True)
+
+    # File this link grants access to.
+    file_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=False, index=True)
+
+    # Owner who created the link (matches FileRecord.owner_id).
+    owner_id = Column(String, nullable=False, index=True)
+
+    # Optional human-readable description chosen by the creator.
+    label = Column(String(255), nullable=True)
+
+    # Time-based expiration (NULL = never expires).
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+
+    # View-count limit (NULL = unlimited).
+    max_views = Column(Integer, nullable=True)
+
+    # Cumulative view count (incremented on every successful access).
+    view_count = Column(Integer, nullable=False, default=0)
+
+    # Optional password protection — stores PBKDF2-HMAC-SHA256 hex digest.
+    password_hash = Column(String(128), nullable=True)
+
+    # Whether the link is still valid (set to False to revoke immediately).
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    revoked_at = Column(DateTime(timezone=True), nullable=True)

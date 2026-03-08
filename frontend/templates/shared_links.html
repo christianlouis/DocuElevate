@@ -1,0 +1,451 @@
+{% extends "base.html" %}
+
+{% block title %}Shared Links – DocuElevate{% endblock %}
+
+{% block content %}
+<div x-data="sharedLinks()" x-init="init(); loadLinks()" class="container mx-auto px-4 py-8 max-w-5xl">
+  <header class="mb-8">
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+      <i class="fas fa-share-alt text-blue-500" aria-hidden="true"></i>
+      Shared Links
+    </h1>
+    <p class="mt-2 text-gray-600 dark:text-gray-400 text-sm leading-relaxed max-w-2xl">
+      Share documents with anyone via a time-limited or view-limited link.
+      Recipients do not need a DocuElevate account.  Links can be password-protected
+      and revoked at any time.
+    </p>
+  </header>
+
+  <!-- Create link section -->
+  <section class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6" aria-labelledby="create-link-heading">
+    <h2 id="create-link-heading" class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Create New Shared Link</h2>
+
+    <form @submit.prevent="createLink()" class="space-y-4">
+      <!-- File ID -->
+      <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+        <div class="flex-1">
+          <label for="file-id-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            File ID <span class="text-red-500" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="file-id-input"
+            type="number"
+            x-model.number="newLink.file_id"
+            placeholder="e.g. 42"
+            required
+            min="1"
+            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm
+                   focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+            aria-required="true"
+          />
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Find the file ID on the <a href="/files" class="underline hover:text-blue-600">Files</a> page or in the document detail URL.
+          </p>
+        </div>
+
+        <!-- Label (optional) -->
+        <div class="flex-1">
+          <label for="link-label-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Label <span class="text-gray-400 font-normal">(optional)</span>
+          </label>
+          <input
+            id="link-label-input"
+            type="text"
+            x-model="newLink.label"
+            placeholder="e.g. Shared with Bob"
+            maxlength="255"
+            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm
+                   focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+          />
+        </div>
+      </div>
+
+      <!-- Expiry + max views row -->
+      <div class="flex flex-col sm:flex-row gap-4">
+        <!-- Expiry -->
+        <div class="flex-1">
+          <label for="expires-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Expiry
+          </label>
+          <select
+            id="expires-select"
+            x-model.number="newLink.expires_in_hours"
+            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm
+                   focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+          >
+            <option :value="null">Never</option>
+            <option value="1">1 hour</option>
+            <option value="6">6 hours</option>
+            <option value="12">12 hours</option>
+            <option value="24">24 hours (1 day)</option>
+            <option value="72">3 days</option>
+            <option value="168">7 days</option>
+            <option value="336">14 days</option>
+            <option value="720">30 days</option>
+          </select>
+        </div>
+
+        <!-- Max views -->
+        <div class="flex-1">
+          <label for="max-views-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Max downloads <span class="text-gray-400 font-normal">(optional)</span>
+          </label>
+          <input
+            id="max-views-input"
+            type="number"
+            x-model.number="newLink.max_views"
+            placeholder="Unlimited"
+            min="1"
+            max="10000"
+            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm
+                   focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+          />
+        </div>
+
+        <!-- Password -->
+        <div class="flex-1">
+          <label for="link-password-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Password <span class="text-gray-400 font-normal">(optional)</span>
+          </label>
+          <input
+            id="link-password-input"
+            type="password"
+            x-model="newLink.password"
+            placeholder="Leave blank for no password"
+            maxlength="128"
+            autocomplete="new-password"
+            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm
+                   focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+          />
+        </div>
+      </div>
+
+      <!-- Error message -->
+      <template x-if="createError">
+        <p class="text-sm text-red-600 dark:text-red-400" role="alert" x-text="createError"></p>
+      </template>
+
+      <div class="flex justify-end">
+        <button
+          type="submit"
+          :disabled="creating || !newLink.file_id"
+          class="inline-flex items-center px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-md
+                 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50
+                 transition-colors"
+          style="min-height:40px; min-width:44px;"
+        >
+          <i class="fas fa-share-alt mr-2" aria-hidden="true"></i>
+          <span x-text="creating ? 'Creating…' : 'Create Link'"></span>
+        </button>
+      </div>
+    </form>
+
+    <!-- Newly created link display -->
+    <template x-if="newlyCreatedLink">
+      <div class="mt-4 bg-green-50 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg p-4" role="alert">
+        <div class="flex items-start gap-3">
+          <i class="fas fa-check-circle text-green-600 dark:text-green-400 mt-0.5 text-lg" aria-hidden="true"></i>
+          <div class="flex-1">
+            <p class="font-semibold text-green-800 dark:text-green-200 text-sm">Shared link created!</p>
+            <p class="text-green-700 dark:text-green-300 text-xs mt-1">
+              Copy and send this link to the recipient.
+            </p>
+            <div class="mt-3 flex items-center gap-2">
+              <code
+                class="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-3 py-2
+                       text-sm font-mono text-gray-900 dark:text-gray-100 select-all break-all"
+                x-text="newlyCreatedLink.share_url"
+              ></code>
+              <button
+                type="button"
+                @click="copyLink()"
+                class="inline-flex items-center px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300
+                       dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200
+                       hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500
+                       transition-colors"
+                style="min-height:40px; min-width:44px;"
+                :aria-label="copied ? 'Copied!' : 'Copy link to clipboard'"
+              >
+                <i :class="copied ? 'fas fa-check text-green-600' : 'fas fa-copy'" aria-hidden="true"></i>
+                <span class="ml-1 hidden sm:inline" x-text="copied ? 'Copied!' : 'Copy'"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+  </section>
+
+  <!-- Active links table -->
+  <section class="bg-white dark:bg-gray-800 shadow rounded-lg p-6" aria-labelledby="links-heading">
+    <div class="flex items-center justify-between mb-4">
+      <h2 id="links-heading" class="text-lg font-semibold text-gray-900 dark:text-white">
+        Your Shared Links
+        <span
+          x-show="links.length > 0"
+          class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+          x-text="links.length"
+          aria-label="number of links"
+        ></span>
+      </h2>
+      <button
+        @click="loadLinks()"
+        type="button"
+        class="text-sm text-blue-600 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+        aria-label="Refresh shared links list"
+      >
+        <i class="fas fa-sync-alt mr-1" aria-hidden="true"></i>Refresh
+      </button>
+    </div>
+
+    <!-- Loading state -->
+    <template x-if="loading">
+      <p class="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">
+        <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Loading…
+      </p>
+    </template>
+
+    <!-- Empty state -->
+    <template x-if="!loading && links.length === 0">
+      <div class="text-center py-10 text-gray-400 dark:text-gray-500">
+        <i class="fas fa-share-alt text-3xl mb-3" aria-hidden="true"></i>
+        <p class="text-sm">No shared links yet. Create one above to get started.</p>
+      </div>
+    </template>
+
+    <!-- Links list -->
+    <template x-if="!loading && links.length > 0">
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm" aria-label="Shared links">
+          <thead>
+            <tr class="text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th scope="col" class="pb-3 pr-4">File / Label</th>
+              <th scope="col" class="pb-3 pr-4">Link</th>
+              <th scope="col" class="pb-3 pr-4">Expiry</th>
+              <th scope="col" class="pb-3 pr-4">Views</th>
+              <th scope="col" class="pb-3 pr-4">Status</th>
+              <th scope="col" class="pb-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="link in links" :key="link.id">
+              <tr class="hover:bg-gray-50 dark:hover:bg-gray-750">
+                <!-- File / Label -->
+                <td class="py-3 pr-4 max-w-xs">
+                  <p class="font-medium text-gray-800 dark:text-gray-200 truncate" x-text="link.original_filename || ('File #' + link.file_id)"></p>
+                  <p x-show="link.label" class="text-xs text-gray-500 dark:text-gray-400 truncate" x-text="link.label"></p>
+                  <p x-show="link.has_password" class="text-xs text-yellow-600 dark:text-yellow-400 mt-0.5">
+                    <i class="fas fa-lock text-xs" aria-hidden="true"></i> Password protected
+                  </p>
+                </td>
+                <!-- Link -->
+                <td class="py-3 pr-4">
+                  <div class="flex items-center gap-1">
+                    <code class="text-xs text-blue-600 dark:text-blue-400 truncate max-w-[140px]" x-text="link.share_url"></code>
+                    <button
+                      type="button"
+                      @click="copyUrl(link.share_url)"
+                      class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded"
+                      aria-label="Copy link"
+                      title="Copy link"
+                      style="min-height:32px;min-width:32px;"
+                    >
+                      <i class="fas fa-copy text-xs" aria-hidden="true"></i>
+                    </button>
+                    <a
+                      :href="link.share_url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="p-1 text-gray-400 hover:text-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded"
+                      aria-label="Open shared link"
+                      title="Open in new tab"
+                      style="min-height:32px;min-width:32px;"
+                    >
+                      <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
+                    </a>
+                  </div>
+                </td>
+                <!-- Expiry -->
+                <td class="py-3 pr-4 whitespace-nowrap text-gray-600 dark:text-gray-400">
+                  <span x-text="formatExpiry(link)"></span>
+                </td>
+                <!-- Views -->
+                <td class="py-3 pr-4 whitespace-nowrap text-gray-600 dark:text-gray-400">
+                  <span x-text="link.view_count"></span>
+                  <span x-show="link.max_views" x-text="' / ' + link.max_views"></span>
+                </td>
+                <!-- Status badge -->
+                <td class="py-3 pr-4 whitespace-nowrap">
+                  <template x-if="!link.is_active">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                      Revoked
+                    </span>
+                  </template>
+                  <template x-if="link.is_active && isExpired(link)">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300">
+                      Expired
+                    </span>
+                  </template>
+                  <template x-if="link.is_active && isViewLimitReached(link)">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
+                      Limit reached
+                    </span>
+                  </template>
+                  <template x-if="link.is_active && !isExpired(link) && !isViewLimitReached(link)">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                      Active
+                    </span>
+                  </template>
+                </td>
+                <!-- Actions -->
+                <td class="py-3 whitespace-nowrap">
+                  <button
+                    x-show="link.is_active"
+                    type="button"
+                    @click="revokeLink(link.id)"
+                    class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400
+                           border border-red-300 dark:border-red-700 rounded hover:bg-red-50 dark:hover:bg-red-900/20
+                           focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
+                    style="min-height:32px;min-width:44px;"
+                    :aria-label="'Revoke shared link for ' + (link.original_filename || 'file')"
+                  >
+                    <i class="fas fa-ban mr-1" aria-hidden="true"></i> Revoke
+                  </button>
+                  <span x-show="!link.is_active" class="text-xs text-gray-400 dark:text-gray-500">—</span>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </template>
+  </section>
+</div>
+
+<script>
+function sharedLinks() {
+  return {
+    links: [],
+    loading: false,
+    creating: false,
+    createError: null,
+    newlyCreatedLink: null,
+    copied: false,
+    newLink: {
+      file_id: null,
+      label: '',
+      expires_in_hours: null,
+      max_views: null,
+      password: '',
+    },
+
+    init() {
+      // Pre-fill file_id from URL query parameter ?file_id=N
+      const params = new URLSearchParams(window.location.search);
+      const fid = params.get('file_id');
+      if (fid) this.newLink.file_id = parseInt(fid, 10);
+    },
+
+    async loadLinks() {
+      this.loading = true;
+      try {
+        const resp = await fetch('/api/shared-links/', {
+          headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '' },
+        });
+        if (!resp.ok) throw new Error('Failed to load links');
+        this.links = await resp.json();
+      } catch (err) {
+        console.error('Failed to load shared links', err);
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async createLink() {
+      this.creating = true;
+      this.createError = null;
+      this.newlyCreatedLink = null;
+      try {
+        const body = {
+          file_id: this.newLink.file_id,
+        };
+        if (this.newLink.label && this.newLink.label.trim()) body.label = this.newLink.label.trim();
+        if (this.newLink.expires_in_hours) body.expires_in_hours = parseInt(this.newLink.expires_in_hours);
+        if (this.newLink.max_views) body.max_views = parseInt(this.newLink.max_views);
+        if (this.newLink.password && this.newLink.password.trim()) body.password = this.newLink.password;
+
+        const resp = await fetch('/api/shared-links/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '',
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          this.createError = err.detail || 'Failed to create link';
+          return;
+        }
+
+        const data = await resp.json();
+        this.newlyCreatedLink = data;
+        this.newLink = { file_id: null, label: '', expires_in_hours: null, max_views: null, password: '' };
+        await this.loadLinks();
+      } finally {
+        this.creating = false;
+      }
+    },
+
+    async revokeLink(id) {
+      if (!confirm('Revoke this link? Recipients will no longer be able to use it.')) return;
+      try {
+        const resp = await fetch(`/api/shared-links/${id}`, {
+          method: 'DELETE',
+          headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '' },
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          alert(err.detail || 'Failed to revoke link');
+          return;
+        }
+        await this.loadLinks();
+      } catch (err) {
+        alert('Error revoking link');
+      }
+    },
+
+    copyLink() {
+      if (!this.newlyCreatedLink) return;
+      navigator.clipboard.writeText(this.newlyCreatedLink.share_url).then(() => {
+        this.copied = true;
+        setTimeout(() => { this.copied = false; }, 2000);
+      });
+    },
+
+    copyUrl(url) {
+      navigator.clipboard.writeText(url).then(() => {
+        // Brief visual feedback handled by the button icon change.
+      });
+    },
+
+    formatExpiry(link) {
+      if (!link.expires_at) return 'Never';
+      const d = new Date(link.expires_at);
+      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) +
+        ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    },
+
+    isExpired(link) {
+      if (!link.expires_at) return false;
+      return new Date(link.expires_at) < new Date();
+    },
+
+    isViewLimitReached(link) {
+      return link.max_views !== null && link.view_count >= link.max_views;
+    },
+  };
+}
+</script>
+{% endblock %}

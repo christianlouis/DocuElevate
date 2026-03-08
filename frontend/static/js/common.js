@@ -212,6 +212,9 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
         linksDiv.appendChild(
           _makeMenuLink('/api-tokens', 'fas fa-key text-yellow-500', 'API Tokens', 'text-gray-700')
         );
+        linksDiv.appendChild(
+          _makeMenuLink('/shared-links', 'fas fa-share-alt text-blue-400', 'Shared Links', 'text-gray-700')
+        );
 
         // Divider + Sign Out
         const divider = document.createElement('div');
@@ -292,6 +295,18 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
         tokensLink.appendChild(tokensIcon);
         tokensLink.appendChild(document.createTextNode('API Tokens'));
         mobileAuthSection.appendChild(tokensLink);
+
+        // Shared Links link
+        const sharedLinksLink = document.createElement('a');
+        sharedLinksLink.href = '/shared-links';
+        sharedLinksLink.className =
+          'flex items-center px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50';
+        const sharedLinksIcon = document.createElement('i');
+        sharedLinksIcon.className = 'fas fa-share-alt mr-2 text-blue-400';
+        sharedLinksIcon.setAttribute('aria-hidden', 'true');
+        sharedLinksLink.appendChild(sharedLinksIcon);
+        sharedLinksLink.appendChild(document.createTextNode('Shared Links'));
+        mobileAuthSection.appendChild(sharedLinksLink);
 
         // Logout link
         const logoutLink = document.createElement('a');
