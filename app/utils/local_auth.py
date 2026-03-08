@@ -32,8 +32,12 @@ def hash_password(plain: str) -> str:
 def verify_password(plain: str, hashed: str) -> bool:
     """Return True when *plain* matches the stored bcrypt *hashed* string."""
     try:
-        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
-    except Exception:
+        result = bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+        if not result:
+            logger.debug("verify_password: mismatch password_provided=%s", bool(plain))
+        return result
+    except Exception as exc:
+        logger.warning("verify_password: exception type=%s msg=%s", type(exc).__name__, exc)
         return False
 
 
