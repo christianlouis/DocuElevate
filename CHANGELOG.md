@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.90.1 (2026-03-08)
+
+### Bug Fixes
+
+- **auth**: Return 401 for API paths in require_login to prevent wrong post-login redirect
+  ([`3aa5364`](https://github.com/christianlouis/DocuElevate/commit/3aa5364e0ca3eaceb37616bb9b3a9a55fc08b223))
+
+
 ## v0.90.0 (2026-03-08)
 
 ### Features
