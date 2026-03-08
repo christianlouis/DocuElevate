@@ -175,6 +175,61 @@ class TestRequireLogin:
             assert result["message"] == "sync"
             assert result["param"] == "test_value"
 
+    @pytest.mark.asyncio
+    async def test_returns_401_for_api_paths_when_not_authenticated(self):
+        """Test that require_login returns 401 (not redirect) for /api/* paths.
+
+        This prevents the /api/auth/whoami JS probe from overwriting
+        redirect_after_login with an API URL, which would send the user to a
+        JSON endpoint after login instead of the page they actually wanted.
+        """
+        from fastapi.responses import JSONResponse
+
+        with patch("app.auth.AUTH_ENABLED", True):
+            from app.auth import require_login
+
+            @require_login
+            async def api_endpoint(request: Request):
+                return {"message": "success"}
+
+            mock_request = MagicMock(spec=Request)
+            mock_request.session = {}
+            mock_request.url = MagicMock()
+            mock_request.url.__str__ = MagicMock(return_value="http://test.com/api/auth/whoami")
+
+            result = await api_endpoint(mock_request)
+
+            assert isinstance(result, JSONResponse)
+            assert result.status_code == status.HTTP_401_UNAUTHORIZED
+            # Redirect URL must NOT be stored for API paths
+            assert "redirect_after_login" not in mock_request.session
+
+    @pytest.mark.asyncio
+    async def test_does_not_save_redirect_for_api_paths(self):
+        """Test that redirect_after_login is never set for any /api/* request."""
+        from fastapi.responses import JSONResponse
+
+        with patch("app.auth.AUTH_ENABLED", True):
+            from app.auth import require_login
+
+            @require_login
+            async def api_endpoint(request: Request):
+                return {"data": "ok"}
+
+            for api_path in ["/api/documents/upload", "/api/v1/resource", "/api/users/me"]:
+                mock_request = MagicMock(spec=Request)
+                mock_request.session = {}
+                mock_request.url = MagicMock()
+                mock_request.url.__str__ = MagicMock(return_value=f"http://test.com{api_path}")
+
+                result = await api_endpoint(mock_request)
+
+                assert isinstance(result, JSONResponse), f"Expected JSONResponse for {api_path}"
+                assert result.status_code == status.HTTP_401_UNAUTHORIZED
+                assert "redirect_after_login" not in mock_request.session, (
+                    f"redirect_after_login must not be set for {api_path}"
+                )
+
 
 @pytest.mark.integration
 class TestWhoamiEndpoint:
