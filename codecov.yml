@@ -1,0 +1,71 @@
+# Codecov Configuration for DocuElevate
+# Documentation: https://docs.codecov.com/docs/codecov-yaml
+#
+# SETUP INSTRUCTIONS:
+# 1. Go to https://app.codecov.io and sign in with GitHub
+# 2. Add the DocuElevate repository
+# 3. Copy the repository upload token
+# 4. Add it as a GitHub Actions secret named CODECOV_TOKEN
+#    (Settings → Secrets and variables → Actions → New repository secret)
+# 5. Push to trigger CI — Codecov will begin reporting coverage
+
+# ── Coverage thresholds ────────────────────────────────────────────────────
+coverage:
+  # Minimum acceptable overall project coverage
+  # CI will fail if the total drops below this percentage
+  status:
+    project:
+      default:
+        # Fail if overall project coverage drops below 60%
+        target: 60%
+        # Allow up to 2% drop compared to the base branch before failing
+        threshold: 2%
+        # Branches to enforce the threshold against
+        branches:
+          - main
+          - develop
+    patch:
+      default:
+        # Fail if the lines changed in a PR are covered below 70%
+        target: 70%
+        # Allow up to 5% slack on patch coverage (newly added/changed lines)
+        threshold: 5%
+
+  # Lines that are never counted toward coverage (mirrors pyproject.toml)
+  ignore:
+    - "migrations/**"
+    - "tests/**"
+    - "frontend/**"
+    - "docs/**"
+    - "scripts/**"
+    - "**/__pycache__/**"
+    - "**/conftest.py"
+
+# ── Pull-request comments ─────────────────────────────────────────────────
+comment:
+  # Post a coverage summary comment on every PR
+  layout: "condensed_header, condensed_files, condensed_footer"
+  behavior: default          # update the existing comment instead of posting a new one
+  require_changes: false     # always post, even if coverage hasn't changed
+  require_base: false        # post even when there is no base report to compare against
+  require_head: true         # only post when a head report is available
+  hide_project_coverage: false
+
+# ── Upload settings ───────────────────────────────────────────────────────
+# Flags let you split coverage by test type and track each independently
+# Each flag maps to the `flags` parameter in the codecov/codecov-action step
+flag_management:
+  individual_flags:
+    - name: unittests
+      paths:
+        - app/
+      carryforward: true
+    - name: integration
+      paths:
+        - app/
+      carryforward: true
+
+# ── Miscellaneous ─────────────────────────────────────────────────────────
+github_checks:
+  # Annotate individual lines in PR diffs with coverage status
+  annotations: true
