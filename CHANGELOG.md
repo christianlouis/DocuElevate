@@ -15,6 +15,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - **changelog**: Update changelog [skip ci]
+  ([`195febf`](https://github.com/christianlouis/DocuElevate/commit/195febfb097162ba53f60108289853d52e58f54e))
+
+- **changelog**: Update changelog [skip ci]
+  ([`cc6acc1`](https://github.com/christianlouis/DocuElevate/commit/cc6acc1f03e5f31a15c092d7376be6be6eba7ddd))
+
+### Testing
+
+- Increase backup_tasks.py coverage to 99.79%
+  ([`9a95d5c`](https://github.com/christianlouis/DocuElevate/commit/9a95d5cfd55a766d0d8e1d71c03c5c845c6a3293))
+
+- Increase watch_folder_tasks coverage from 37% to 98%
+  ([`3ac5a97`](https://github.com/christianlouis/DocuElevate/commit/3ac5a97467d3ebae703b31d689bde2c4ca18468d))
+
+- **backup**: Add comprehensive unit tests for app/views/backup.py
+  ([`19b4ea4`](https://github.com/christianlouis/DocuElevate/commit/19b4ea4f6b0ff6c5ebcf2b560fb533f0aabe8a34))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
   ([`cc6acc1`](https://github.com/christianlouis/DocuElevate/commit/cc6acc1f03e5f31a15c092d7376be6be6eba7ddd))
 
 ### Testing
