@@ -114,7 +114,7 @@
         <!-- CTA button -->
         <div class="p-6 pt-0">
           {% if tier.id == 'free' %}
-          <a href="/login"
+          <a href="{{ '/signup' if allow_signup else '/login' }}"
              class="block w-full text-center py-3 px-4 rounded-lg border-2 border-blue-600 text-blue-600 font-semibold hover:bg-blue-50 transition"
           >{{ tier.cta }}</a>
           {% elif tier.stripe_price_id_monthly or tier.stripe_price_id_yearly %}
@@ -125,11 +125,11 @@
              style="min-height:44px;"
           >{{ tier.cta }}</button>
           {% elif tier.highlight %}
-          <a href="/login"
+          <a href="{{ '/signup' if allow_signup else '/login' }}"
              class="block w-full text-center py-3 px-4 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition shadow-md"
           >{{ tier.cta }}</a>
           {% else %}
-          <a href="/login"
+          <a href="{{ '/signup' if allow_signup else '/login' }}"
              class="block w-full text-center py-3 px-4 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
           >{{ tier.cta }}</a>
           {% endif %}
@@ -375,9 +375,9 @@
     <div class="mt-20 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-10 text-center shadow-xl">
       <h2 class="text-2xl font-bold mb-2">Ready to get started?</h2>
       <p class="text-indigo-100 mb-6">Start with the free tier — no credit card required.</p>
-      <a href="/login"
+      <a href="{{ '/signup' if allow_signup else '/login' }}"
          class="inline-block bg-white text-indigo-700 font-bold px-8 py-3 rounded-lg hover:bg-indigo-50 transition shadow">
-        Create your free account
+        {% if allow_signup %}Create your free account{% else %}Sign in{% endif %}
       </a>
     </div>
 
