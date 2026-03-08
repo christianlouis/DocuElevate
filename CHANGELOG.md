@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Testing
+
+- Increase backup_tasks.py coverage to 99.79%
+  ([`9a95d5c`](https://github.com/christianlouis/DocuElevate/commit/9a95d5cfd55a766d0d8e1d71c03c5c845c6a3293))
+
+
 ## v0.93.1 (2026-03-08)
 
 ### Bug Fixes
