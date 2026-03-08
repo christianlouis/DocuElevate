@@ -76,6 +76,33 @@ class TestIntegrationsDashboardView:
         assert "return '/google-drive'" not in body.replace("/google-drive-setup", "")
         assert "return '/onedrive'" not in body.replace("/onedrive-setup", "")
 
+    def test_integrations_page_contains_authorize_button(self, client):
+        """GET /integrations page includes per-user Authorize button for OAuth types."""
+        response = client.get("/integrations")
+        assert response.status_code == 200
+        body = response.text
+        assert "isOAuthType" in body
+        assert "Authorize" in body
+        assert "integration_id=" in body
+
+    def test_integrations_page_contains_oauth_types_constant(self, client):
+        """GET /integrations includes OAUTH_TYPES Set constant."""
+        response = client.get("/integrations")
+        assert response.status_code == 200
+        body = response.text
+        assert "OAUTH_TYPES" in body
+        assert "'DROPBOX'" in body
+        assert "'GOOGLE_DRIVE'" in body
+        assert "'ONEDRIVE'" in body
+
+    def test_integrations_page_modal_info_box_per_user(self, client):
+        """The create modal info box instructs to save first then authorize."""
+        response = client.get("/integrations")
+        assert response.status_code == 200
+        body = response.text
+        assert "Save this integration first" in body
+        assert "personal integration record" in body
+
     def test_integrations_page_contains_quota_indicators(self, client):
         """GET /integrations page includes quota labels."""
         response = client.get("/integrations")
