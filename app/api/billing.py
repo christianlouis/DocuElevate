@@ -448,7 +448,14 @@ async def stripe_sync_plans(request: Request, db: Session = Depends(get_db)) -> 
         except Exception as exc:
             db.rollback()
             logger.error("Stripe sync failed for plan %s: %s", plan.plan_id, exc)
-            results.append({"plan_id": plan.plan_id, "name": plan.name, "status": "error", "detail": str(exc)})
+            results.append(
+                {
+                    "plan_id": plan.plan_id,
+                    "name": plan.name,
+                    "status": "error",
+                    "detail": "Internal error while syncing this plan with Stripe.",
+                }
+            )
 
     return {"results": results}
 
