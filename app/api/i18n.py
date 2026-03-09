@@ -24,7 +24,7 @@ from app.utils.i18n import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/i18n", tags=["i18n"])
+router = APIRouter(prefix="/i18n", tags=["i18n"])
 
 
 class LanguageInfo(BaseModel):
@@ -103,7 +103,7 @@ async def set_language(
     _persist_language_to_profile(request, db, lang)
 
     language_name = next(
-        (l["native"] for l in SUPPORTED_LANGUAGES if l["code"] == lang),
+        (entry["native"] for entry in SUPPORTED_LANGUAGES if entry["code"] == lang),
         lang,
     )
     logger.info("Language preference set to '%s'", lang)

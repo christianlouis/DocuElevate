@@ -225,8 +225,8 @@ def _parse_accept_language(header: str) -> str | None:
         return None
 
     entries: list[tuple[float, str]] = []
-    for part in header.split(","):
-        part = part.strip()
+    for raw_part in header.split(","):
+        part = raw_part.strip()
         if not part:
             continue
         if ";q=" in part:
