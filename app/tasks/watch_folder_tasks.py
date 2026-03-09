@@ -16,6 +16,7 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import redis
 from celery import shared_task
@@ -1429,7 +1430,7 @@ def _scan_user_watch_folder(
 # ---------------------------------------------------------------------------
 
 # Maps source_type values to their per-user scan functions.
-_USER_WF_CLOUD_HANDLERS: dict[str, callable] = {}  # populated after function defs
+_USER_WF_CLOUD_HANDLERS: dict[str, Any] = {}  # populated after function defs
 
 
 def _scan_user_s3_folder(

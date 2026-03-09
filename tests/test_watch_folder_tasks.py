@@ -3950,7 +3950,9 @@ class TestPullUserIntegrationWatchFolders:
     @patch("app.tasks.watch_folder_tasks._scan_user_watch_folder", return_value=4)
     @patch("app.tasks.watch_folder_tasks._load_cache", return_value={})
     @patch("app.tasks.watch_folder_tasks._save_cache")
-    def test_local_source_type_uses_local_scanner(self, mock_save, mock_load, mock_scan_local, mock_session_factory):
+    def test_local_source_type_dispatches_to_local_scanner(
+        self, mock_save, mock_load, mock_scan_local, mock_session_factory
+    ):
         """Explicit source_type 'local' should use the local filesystem scanner."""
         from app.tasks.watch_folder_tasks import _pull_user_integration_watch_folders
 
