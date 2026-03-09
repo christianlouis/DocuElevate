@@ -688,6 +688,59 @@ class TestPullInbox:
         mock_label.assert_called_once_with(mock_mail, b"1", label="Ingested")
 
     @patch("app.tasks.imap_tasks.email_already_has_label")
+    @patch("app.tasks.imap_tasks.mark_as_processed_with_label")
+    @patch("app.tasks.imap_tasks.mark_as_processed_with_star")
+    @patch("app.tasks.imap_tasks.fetch_attachments_and_enqueue")
+    @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
+    @patch("app.tasks.imap_tasks.load_processed_emails")
+    @patch("app.tasks.imap_tasks.save_processed_emails")
+    @patch("app.tasks.imap_tasks.settings")
+    def test_gmail_labels_disabled_when_gmail_apply_labels_false(
+        self,
+        mock_settings,
+        mock_save,
+        mock_load,
+        mock_imap_class,
+        mock_fetch,
+        mock_star,
+        mock_label,
+        mock_has_label,
+    ):
+        """Gmail star/label operations should be skipped when gmail_apply_labels=False."""
+        mock_settings.workdir = "/tmp"
+        mock_settings.imap_readonly_mode = False
+        mock_load.return_value = {}
+        mock_mail = MagicMock()
+        mock_imap_class.return_value = mock_mail
+
+        import email
+
+        msg = email.message.EmailMessage()
+        msg["Message-ID"] = "<test-no-labels@gmail.com>"
+        raw_email = msg.as_bytes()
+
+        mock_mail.login.return_value = ("OK", [])
+        mock_mail.select.return_value = ("OK", [])
+        mock_mail.search.return_value = ("OK", [b"1"])
+        mock_mail.fetch.return_value = ("OK", [[None, raw_email]])
+
+        pull_inbox(
+            mailbox_key="imap2",
+            host="imap.gmail.com",
+            port=993,
+            username="user@gmail.com",
+            password=_TEST_CREDENTIAL,
+            use_ssl=True,
+            delete_after_process=False,
+            gmail_apply_labels=False,
+        )
+
+        mock_star.assert_not_called()
+        mock_label.assert_not_called()
+        mock_has_label.assert_not_called()
+        mock_fetch.assert_called()
+
+    @patch("app.tasks.imap_tasks.email_already_has_label")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.settings")

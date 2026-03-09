@@ -3843,6 +3843,134 @@ class TestPullUserIntegrationWatchFolders:
         result = _pull_user_integration_watch_folders()
         assert result["status"] == "ok"
 
+    @patch("app.tasks.watch_folder_tasks._get_db_session")
+    @patch("app.tasks.watch_folder_tasks._load_cache", return_value={})
+    @patch("app.tasks.watch_folder_tasks._save_cache")
+    def test_dispatches_s3_source_type(self, mock_save, mock_load, mock_session_factory):
+        """WATCH_FOLDER with source_type 's3' should dispatch to _scan_user_s3_folder."""
+        from app.tasks.watch_folder_tasks import (
+            _USER_WF_CLOUD_HANDLERS,
+            _pull_user_integration_watch_folders,
+        )
+
+        mock_integ = MagicMock()
+        mock_integ.id = 30
+        mock_integ.owner_id = "owner-s3"
+        mock_integ.config = (
+            '{"source_type": "s3", "bucket": "test-bucket", "prefix": "inbox/", "delete_after_process": false}'
+        )
+        mock_integ.is_active = True
+        mock_integ.credentials = "encrypted-s3-creds"
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        mock_s3_handler = MagicMock(return_value=3)
+        original_handler = _USER_WF_CLOUD_HANDLERS.get("s3")
+        _USER_WF_CLOUD_HANDLERS["s3"] = mock_s3_handler
+        try:
+            with patch(
+                "app.utils.encryption.decrypt_value",
+                return_value='{"access_key_id": "AKI", "secret_access_key": "SK"}',
+            ):
+                result = _pull_user_integration_watch_folders()
+
+            assert result["status"] == "ok"
+            assert result["files_enqueued"] == 3
+            mock_s3_handler.assert_called_once()
+            args = mock_s3_handler.call_args
+            assert args[0][0]["source_type"] == "s3"
+            assert args[0][4] == "owner-s3"
+        finally:
+            if original_handler is not None:
+                _USER_WF_CLOUD_HANDLERS["s3"] = original_handler
+
+    @patch("app.tasks.watch_folder_tasks._get_db_session")
+    @patch("app.tasks.watch_folder_tasks._load_cache", return_value={})
+    @patch("app.tasks.watch_folder_tasks._save_cache")
+    def test_dispatches_dropbox_source_type(self, mock_save, mock_load, mock_session_factory):
+        """WATCH_FOLDER with source_type 'dropbox' should dispatch to _scan_user_dropbox_folder."""
+        from app.tasks.watch_folder_tasks import (
+            _USER_WF_CLOUD_HANDLERS,
+            _pull_user_integration_watch_folders,
+        )
+
+        mock_integ = MagicMock()
+        mock_integ.id = 31
+        mock_integ.owner_id = "owner-dbx"
+        mock_integ.config = '{"source_type": "dropbox", "folder_path": "/Inbox", "delete_after_process": false}'
+        mock_integ.is_active = True
+        mock_integ.credentials = "encrypted-dbx-creds"
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        mock_dbx_handler = MagicMock(return_value=5)
+        original_handler = _USER_WF_CLOUD_HANDLERS.get("dropbox")
+        _USER_WF_CLOUD_HANDLERS["dropbox"] = mock_dbx_handler
+        try:
+            with patch(
+                "app.utils.encryption.decrypt_value",
+                return_value='{"refresh_token": "tok", "app_key": "ak", "app_secret": "as"}',
+            ):
+                result = _pull_user_integration_watch_folders()
+
+            assert result["status"] == "ok"
+            assert result["files_enqueued"] == 5
+            mock_dbx_handler.assert_called_once()
+            args = mock_dbx_handler.call_args
+            assert args[0][0]["source_type"] == "dropbox"
+            assert args[0][4] == "owner-dbx"
+        finally:
+            if original_handler is not None:
+                _USER_WF_CLOUD_HANDLERS["dropbox"] = original_handler
+
+    @patch("app.tasks.watch_folder_tasks._get_db_session")
+    def test_unknown_source_type_skipped(self, mock_session_factory):
+        """Unknown source_type should be skipped gracefully."""
+        from app.tasks.watch_folder_tasks import _pull_user_integration_watch_folders
+
+        mock_integ = MagicMock()
+        mock_integ.id = 32
+        mock_integ.owner_id = "owner-unknown"
+        mock_integ.config = '{"source_type": "unknown_provider", "delete_after_process": false}'
+        mock_integ.is_active = True
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        result = _pull_user_integration_watch_folders()
+        assert result["status"] == "ok"
+        assert result["files_enqueued"] == 0
+
+    @patch("app.tasks.watch_folder_tasks._get_db_session")
+    @patch("app.tasks.watch_folder_tasks._scan_user_watch_folder", return_value=4)
+    @patch("app.tasks.watch_folder_tasks._load_cache", return_value={})
+    @patch("app.tasks.watch_folder_tasks._save_cache")
+    def test_local_source_type_uses_local_scanner(self, mock_save, mock_load, mock_scan_local, mock_session_factory):
+        """Explicit source_type 'local' should use the local filesystem scanner."""
+        from app.tasks.watch_folder_tasks import _pull_user_integration_watch_folders
+
+        mock_integ = MagicMock()
+        mock_integ.id = 33
+        mock_integ.owner_id = "owner-local"
+        mock_integ.config = '{"source_type": "local", "folder_path": "/data/scans", "delete_after_process": false}'
+        mock_integ.is_active = True
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        result = _pull_user_integration_watch_folders()
+        assert result["status"] == "ok"
+        assert result["files_enqueued"] == 4
+        mock_scan_local.assert_called_once()
+        assert mock_scan_local.call_args[0][0] == "/data/scans"
+        assert mock_scan_local.call_args[0][3] == "owner-local"
+
 
 @pytest.mark.unit
 class TestScanAllWatchFoldersIncludesUserIntegrations:
