@@ -182,6 +182,37 @@ class TestGoogleDriveViews:
         # Should render user mode without errors despite the bad config
         assert b"Back to Integrations" in response.content
 
+    def test_google_drive_setup_user_mode_none_config(self, client, db_session):
+        """Test user-mode renders correctly when integration.config is None (no folder ID)."""
+        owner_id = "user_gd_none_cfg@example.com"
+        integration = UserIntegration(
+            owner_id=owner_id,
+            direction="DESTINATION",
+            integration_type="GOOGLE_DRIVE",
+            name="My GDrive (no cfg)",
+            config=None,
+            is_active=True,
+        )
+        db_session.add(integration)
+        db_session.commit()
+        db_session.refresh(integration)
+
+        with patch("app.views.google_drive.get_current_owner_id", return_value=owner_id):
+            response = client.get(f"/google-drive-setup?integration_id={integration.id}")
+
+        assert response.status_code == 200
+        # Should render user mode without errors, with empty folder_id
+        assert b"Back to Integrations" in response.content
+
+    def test_google_drive_setup_user_mode_integration_not_found(self, client, db_session):
+        """Test user-mode falls back to admin mode when integration not owned by user."""
+        with patch("app.views.google_drive.get_current_owner_id", return_value="other_user@example.com"):
+            response = client.get("/google-drive-setup?integration_id=999999")
+
+        assert response.status_code == 200
+        # Falls back to admin mode (no "Back to Integrations" link)
+        assert b"Google Drive Integration Setup" in response.content
+
     def test_google_drive_setup_user_mode_valid_config(self, client, db_session):
         """Test user-mode correctly loads folder ID from integration config."""
         owner_id = "user_gd_valid_cfg@example.com"

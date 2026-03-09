@@ -16,14 +16,28 @@ This guide explains how to set up the Google Drive integration for DocuElevate.
 
 For a complete list of configuration options, see the [Configuration Guide](ConfigurationGuide.md).
 
-## Authentication Methods
+## Authentication Methods and Setup Flows
 
 DocuElevate supports two authentication methods for Google Drive:
 
 1. **OAuth Authentication (Recommended)** - User-based authentication that provides better security and control. Recommended for most deployments.
 2. **Service Account Authentication** - Server-to-server authentication that doesn't require user interaction. Useful for specific enterprise deployments.
 
-## Method 1: OAuth Authentication Setup (Recommended)
+### Per-User OAuth Flow (Integrations Dashboard)
+
+End users can authorize their own Google Drive integration directly from the **Integrations** dashboard — no admin involvement required:
+
+1. Navigate to `/integrations` and click **+ Add Destination** (or **+ Add Source** for Watch Folder).
+2. Create a Google Drive destination integration (or a Watch Folder with `source_type = google_drive`).
+3. Click the **Authorize** button — it opens the OAuth wizard pre-loaded with your integration's configuration.
+4. Enter your Google OAuth Client ID and Client Secret in the wizard.
+5. Click **Start Authentication Flow** and authorize access in Google.
+6. Credentials are saved automatically to your personal integration record; the page redirects back to `/integrations`.
+7. Re-authorization is available at any time via the **Re-Authorize** button.
+
+> **Note:** Credentials are stored encrypted per-integration. Each user can hold multiple Google Drive integrations with independent tokens targeting different folders or accounts.
+
+## Method 1: OAuth Authentication Setup (System-Level)
 
 The OAuth method is preferred as it:
 - Provides better security with token expiration and refresh

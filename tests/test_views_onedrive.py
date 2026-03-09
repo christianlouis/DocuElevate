@@ -70,6 +70,59 @@ class TestOnedriveViews:
         # Should render user mode without errors despite the bad config
         assert b"Back to Integrations" in response.content
 
+    def test_onedrive_setup_user_mode_none_config(self, client, db_session):
+        """Test user-mode renders correctly when integration.config is None (no folder path)."""
+        owner_id = "user_od_none_cfg@example.com"
+        integration = UserIntegration(
+            owner_id=owner_id,
+            direction="DESTINATION",
+            integration_type="ONEDRIVE",
+            name="My OneDrive (no cfg)",
+            config=None,
+            is_active=True,
+        )
+        db_session.add(integration)
+        db_session.commit()
+        db_session.refresh(integration)
+
+        with patch("app.views.onedrive.get_current_owner_id", return_value=owner_id):
+            response = client.get(f"/onedrive-setup?integration_id={integration.id}")
+
+        assert response.status_code == 200
+        # Should render user mode without errors, with empty folder_path
+        assert b"Back to Integrations" in response.content
+
+    def test_onedrive_setup_user_mode_watchfolder_config(self, client, db_session):
+        """Test user-mode correctly loads folder_path from WATCH_FOLDER source config."""
+        owner_id = "user_od_wf_cfg@example.com"
+        integration = UserIntegration(
+            owner_id=owner_id,
+            direction="SOURCE",
+            integration_type="WATCH_FOLDER",
+            name="My OneDrive Watch",
+            config=json.dumps({"source_type": "onedrive", "folder_path": "Work/Inbox"}),
+            is_active=True,
+        )
+        db_session.add(integration)
+        db_session.commit()
+        db_session.refresh(integration)
+
+        with patch("app.views.onedrive.get_current_owner_id", return_value=owner_id):
+            response = client.get(f"/onedrive-setup?integration_id={integration.id}")
+
+        assert response.status_code == 200
+        assert b"Work/Inbox" in response.content
+        assert b"Back to Integrations" in response.content
+
+    def test_onedrive_setup_user_mode_integration_not_found(self, client, db_session):
+        """Test user-mode falls back to admin mode when integration not owned by user."""
+        with patch("app.views.onedrive.get_current_owner_id", return_value="other_user@example.com"):
+            response = client.get("/onedrive-setup?integration_id=999999")
+
+        assert response.status_code == 200
+        # Falls back to admin mode (no "Back to Integrations" link)
+        assert b"OneDrive Integration Setup" in response.content
+
     def test_onedrive_setup_user_mode_valid_config(self, client, db_session):
         """Test user-mode correctly loads folder path from integration config."""
         owner_id = "user_od_valid_cfg@example.com"
