@@ -146,6 +146,20 @@ async def lifespan(app: FastAPI):
     except Exception:
         logging.debug("Scheduled jobs seeding skipped — DB may not be ready yet")  # noqa: S110
 
+    # Seed the built-in compliance templates (GDPR, HIPAA, SOC2) so they
+    # are available in the admin compliance dashboard on first startup.
+    try:
+        from app.database import SessionLocal as _SessionLocal  # noqa: F811
+        from app.utils.compliance_service import seed_compliance_templates as _seed_compliance
+
+        _db_compliance = _SessionLocal()
+        try:
+            _seed_compliance(_db_compliance)
+        finally:
+            _db_compliance.close()
+    except Exception:
+        logging.debug("Compliance template seeding skipped — DB may not be ready yet")  # noqa: S110
+
     # Application is now running
     yield
 

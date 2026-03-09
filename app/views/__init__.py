@@ -7,6 +7,7 @@ from fastapi import APIRouter
 from app.views.admin_users import router as admin_users_router
 from app.views.api_tokens import router as api_tokens_router
 from app.views.backup import router as backup_router
+from app.views.compliance import router as compliance_router
 from app.views.db_wizard import router as db_wizard_router
 from app.views.dropbox import router as dropbox_router
 from app.views.filemanager import router as filemanager_router
@@ -61,3 +62,4 @@ router.include_router(integrations_router)  # Unified integrations dashboard
 router.include_router(notifications_router)  # User notification dashboard
 router.include_router(scheduled_jobs_router)  # Admin scheduled batch jobs
 router.include_router(help_router)  # Built-in help / How-To docs
+router.include_router(compliance_router)  # Compliance templates dashboard

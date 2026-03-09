@@ -833,3 +833,26 @@ class ScheduledJob(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class ComplianceTemplate(Base):
+    """Pre-built compliance configuration templates (GDPR, HIPAA, SOC2).
+
+    Each row represents an applied compliance template.  The ``settings_json``
+    column stores the concrete setting key/value pairs that were written when
+    the template was applied.  ``status`` tracks the current compliance posture.
+    """
+
+    __tablename__ = "compliance_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), unique=True, nullable=False, index=True)  # GDPR, HIPAA, SOC2
+    display_name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    settings_json = Column(Text, nullable=False, default="{}")  # JSON of applied settings
+    enabled = Column(Boolean, nullable=False, default=False)
+    status = Column(String(20), nullable=False, default="not_applied")  # not_applied, compliant, partial, non_compliant
+    applied_at = Column(DateTime(timezone=True), nullable=True)
+    applied_by = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

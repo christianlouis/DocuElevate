@@ -484,6 +484,14 @@ class Settings(BaseSettings):
 
     # Feature flags
     allow_file_delete: bool = True  # Default to allowing file deletion from database
+    compliance_enabled: bool = Field(
+        default=True,
+        description=(
+            "Enable the compliance templates dashboard (GDPR, HIPAA, SOC 2). "
+            "When enabled, admins can view compliance status and apply "
+            "pre-built regulatory configurations. Default: True."
+        ),
+    )
 
     # PDF/A archival conversion settings
     enable_pdfa_conversion: bool = Field(
