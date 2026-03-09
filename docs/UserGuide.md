@@ -662,12 +662,17 @@ based on their properties — no manual pipeline selection required.
 | `regex` | Full Python regex match (case-insensitive) |
 | `gt` / `lt` / `gte` / `lte` | Numeric comparison (greater/less than) |
 
-**Example:** Route all invoices over 1 MB to a dedicated pipeline:
+**Example:** Route invoices to one pipeline and large files to another:
 
 ```
 Rule 1: field=document_type, operator=equals, value=Invoice, target_pipeline=3
 Rule 2: field=size,          operator=gt,     value=1048576, target_pipeline=5
 ```
+
+With first-match-wins logic, an invoice of any size matches Rule 1 and is
+routed to pipeline 3.  A non-invoice file larger than 1 MB matches Rule 2
+and is routed to pipeline 5.  Everything else falls back to the default
+pipeline.
 
 You can test your rules without actually routing a document using the
 **evaluate** endpoint (`POST /api/routing-rules/evaluate`).  For the full

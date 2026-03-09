@@ -170,18 +170,16 @@ def list_routing_rules(request: Request, db: DbSession) -> list[dict[str, Any]]:
     Rules are sorted by position.
     """
     user_id = _get_user_id(request)
-    admin = _is_admin(request)
 
-    query = db.query(PipelineRoutingRule)
-    if admin:
-        query = query.filter((PipelineRoutingRule.owner_id == user_id) | (PipelineRoutingRule.owner_id.is_(None)))
-    else:
-        query = query.filter((PipelineRoutingRule.owner_id == user_id) | (PipelineRoutingRule.owner_id.is_(None)))
-
-    rules = query.order_by(
-        PipelineRoutingRule.owner_id.is_(None).asc(),
-        PipelineRoutingRule.position.asc(),
-    ).all()
+    rules = (
+        db.query(PipelineRoutingRule)
+        .filter((PipelineRoutingRule.owner_id == user_id) | (PipelineRoutingRule.owner_id.is_(None)))
+        .order_by(
+            PipelineRoutingRule.owner_id.is_(None).asc(),
+            PipelineRoutingRule.position.asc(),
+        )
+        .all()
+    )
 
     return [_serialize_rule(r) for r in rules]
 
