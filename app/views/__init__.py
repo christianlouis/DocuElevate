@@ -24,6 +24,7 @@ from app.views.onedrive import router as onedrive_router
 from app.views.pipelines import router as pipelines_router  # Processing pipelines
 from app.views.plans import router as plans_router  # Admin Plan Designer
 from app.views.queue import router as queue_router
+from app.views.scheduled_jobs import router as scheduled_jobs_router  # Scheduled batch jobs
 from app.views.search import router as search_router
 from app.views.settings import router as settings_router
 from app.views.share import router as share_router
@@ -58,4 +59,5 @@ router.include_router(pipelines_router)  # Processing pipelines
 router.include_router(imap_accounts_router)  # Per-user IMAP ingestion accounts
 router.include_router(integrations_router)  # Unified integrations dashboard
 router.include_router(notifications_router)  # User notification dashboard
+router.include_router(scheduled_jobs_router)  # Admin scheduled batch jobs
 router.include_router(help_router)  # Built-in help / How-To docs

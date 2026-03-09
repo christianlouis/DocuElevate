@@ -144,6 +144,99 @@ DEFAULT_JOBS: list[dict[str, Any]] = [
         "cron_month_of_year": "*",
         "interval_seconds": None,
     },
+    {
+        "name": "expire-shared-links",
+        "display_name": "Expire Stale Shared Links",
+        "description": (
+            "Marks shared document links as inactive when their expiry time has passed. "
+            "Access is already blocked at request time, but this task keeps the "
+            "management UI counts accurate. Runs daily at 01:00 UTC by default."
+        ),
+        "task_name": "app.tasks.batch_tasks.expire_shared_links",
+        "enabled": True,
+        "schedule_type": "cron",
+        "cron_minute": "0",
+        "cron_hour": "1",
+        "cron_day_of_week": "*",
+        "cron_day_of_month": "*",
+        "cron_month_of_year": "*",
+        "interval_seconds": None,
+    },
+    {
+        "name": "prune-processing-logs",
+        "display_name": "Prune Old Processing Logs",
+        "description": (
+            "Deletes processing log entries and settings audit log entries older than "
+            "30 days to prevent unbounded database growth. "
+            "Runs weekly on Sunday at 04:00 UTC by default."
+        ),
+        "task_name": "app.tasks.batch_tasks.prune_processing_logs",
+        "enabled": True,
+        "schedule_type": "cron",
+        "cron_minute": "0",
+        "cron_hour": "4",
+        "cron_day_of_week": "0",
+        "cron_day_of_month": "*",
+        "cron_month_of_year": "*",
+        "interval_seconds": None,
+    },
+    {
+        "name": "prune-old-notifications",
+        "display_name": "Prune Old Notifications",
+        "description": (
+            "Deletes read in-app notifications older than 30 days. "
+            "Unread notifications are never deleted. "
+            "Runs weekly on Sunday at 04:30 UTC by default."
+        ),
+        "task_name": "app.tasks.batch_tasks.prune_old_notifications",
+        "enabled": True,
+        "schedule_type": "cron",
+        "cron_minute": "30",
+        "cron_hour": "4",
+        "cron_day_of_week": "0",
+        "cron_day_of_month": "*",
+        "cron_month_of_year": "*",
+        "interval_seconds": None,
+    },
+    {
+        "name": "backfill-missing-metadata",
+        "display_name": "Backfill Missing AI Metadata",
+        "description": (
+            "Re-triggers AI metadata extraction for documents that have extracted "
+            "text but no AI metadata yet (e.g., processed before an AI provider "
+            "was configured). Processes up to 50 documents per run. "
+            "Runs every 6 hours by default."
+        ),
+        "task_name": "app.tasks.batch_tasks.backfill_missing_metadata",
+        "enabled": True,
+        "schedule_type": "cron",
+        "cron_minute": "0",
+        "cron_hour": "*/6",
+        "cron_day_of_week": "*",
+        "cron_day_of_month": "*",
+        "cron_month_of_year": "*",
+        "interval_seconds": None,
+    },
+    {
+        "name": "sync-search-index",
+        "display_name": "Sync Search Index",
+        "description": (
+            "Indexes documents that have OCR text or AI metadata but are missing "
+            "from the Meilisearch search index. Useful after enabling search on "
+            "an existing installation or after an index rebuild. "
+            "Processes up to 100 documents per run. "
+            "Runs hourly by default."
+        ),
+        "task_name": "app.tasks.batch_tasks.sync_search_index",
+        "enabled": True,
+        "schedule_type": "cron",
+        "cron_minute": "15",
+        "cron_hour": "*/1",
+        "cron_day_of_week": "*",
+        "cron_day_of_month": "*",
+        "cron_month_of_year": "*",
+        "interval_seconds": None,
+    },
 ]
 
 
