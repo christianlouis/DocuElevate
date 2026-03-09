@@ -1584,6 +1584,55 @@ class TestPullUserIntegrationImap:
         assert mock_integ.last_error is None
         assert mock_integ.last_used_at is not None
 
+    @patch("app.tasks.imap_tasks._get_db_session")
+    @patch("app.tasks.imap_tasks.pull_inbox")
+    def test_passes_gmail_apply_labels_config_to_pull_inbox(self, mock_pull, mock_session_factory):
+        """gmail_apply_labels config should be forwarded to pull_inbox."""
+        from app.tasks.imap_tasks import _pull_user_integration_imap
+
+        mock_integ = MagicMock()
+        mock_integ.id = 14
+        mock_integ.owner_id = "owner-gmail"
+        mock_integ.config = (
+            '{"host": "imap.gmail.com", "port": 993, "username": "u@gmail.com",'
+            ' "use_ssl": true, "gmail_apply_labels": false}'
+        )
+        mock_integ.credentials = "enc:encrypted"
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        with patch("app.utils.encryption.decrypt_value", return_value='{"password": "p"}'):
+            _pull_user_integration_imap()
+
+        mock_pull.assert_called_once()
+        call_kwargs = mock_pull.call_args
+        assert call_kwargs.kwargs.get("gmail_apply_labels") is False
+
+    @patch("app.tasks.imap_tasks._get_db_session")
+    @patch("app.tasks.imap_tasks.pull_inbox")
+    def test_gmail_apply_labels_defaults_to_true(self, mock_pull, mock_session_factory):
+        """Config without gmail_apply_labels should default to True."""
+        from app.tasks.imap_tasks import _pull_user_integration_imap
+
+        mock_integ = MagicMock()
+        mock_integ.id = 15
+        mock_integ.owner_id = "owner-gmail2"
+        mock_integ.config = '{"host": "imap.gmail.com", "port": 993, "username": "u@gmail.com", "use_ssl": true}'
+        mock_integ.credentials = "enc:encrypted"
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        with patch("app.utils.encryption.decrypt_value", return_value='{"password": "p"}'):
+            _pull_user_integration_imap()
+
+        mock_pull.assert_called_once()
+        call_kwargs = mock_pull.call_args
+        assert call_kwargs.kwargs.get("gmail_apply_labels") is True
+
 
 @pytest.mark.unit
 class TestPullAllInboxesCallsIntegrations:

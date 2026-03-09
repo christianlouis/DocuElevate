@@ -3973,6 +3973,1857 @@ class TestPullUserIntegrationWatchFolders:
         assert mock_scan_local.call_args[0][0] == "/data/scans"
         assert mock_scan_local.call_args[0][3] == "owner-local"
 
+    @patch("app.tasks.watch_folder_tasks._get_db_session")
+    @patch("app.tasks.watch_folder_tasks._load_cache", return_value={})
+    @patch("app.tasks.watch_folder_tasks._save_cache")
+    def test_dispatches_google_drive_source_type(self, mock_save, mock_load, mock_session_factory):
+        """WATCH_FOLDER with source_type 'google_drive' should dispatch to handler."""
+        from app.tasks.watch_folder_tasks import (
+            _USER_WF_CLOUD_HANDLERS,
+            _pull_user_integration_watch_folders,
+        )
+
+        mock_integ = MagicMock()
+        mock_integ.id = 34
+        mock_integ.owner_id = "owner-gd"
+        mock_integ.config = '{"source_type": "google_drive", "folder_id": "abc123", "delete_after_process": false}'
+        mock_integ.is_active = True
+        mock_integ.credentials = "encrypted-gd-creds"
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        mock_gd_handler = MagicMock(return_value=2)
+        original_handler = _USER_WF_CLOUD_HANDLERS.get("google_drive")
+        _USER_WF_CLOUD_HANDLERS["google_drive"] = mock_gd_handler
+        try:
+            with patch(
+                "app.utils.encryption.decrypt_value",
+                return_value='{"credentials_json": "{}"}',
+            ):
+                result = _pull_user_integration_watch_folders()
+
+            assert result["status"] == "ok"
+            assert result["files_enqueued"] == 2
+            mock_gd_handler.assert_called_once()
+            args = mock_gd_handler.call_args
+            assert args[0][0]["source_type"] == "google_drive"
+            assert args[0][4] == "owner-gd"
+        finally:
+            if original_handler is not None:
+                _USER_WF_CLOUD_HANDLERS["google_drive"] = original_handler
+
+    @patch("app.tasks.watch_folder_tasks._get_db_session")
+    @patch("app.tasks.watch_folder_tasks._load_cache", return_value={})
+    @patch("app.tasks.watch_folder_tasks._save_cache")
+    def test_dispatches_onedrive_source_type(self, mock_save, mock_load, mock_session_factory):
+        """WATCH_FOLDER with source_type 'onedrive' should dispatch to handler."""
+        from app.tasks.watch_folder_tasks import (
+            _USER_WF_CLOUD_HANDLERS,
+            _pull_user_integration_watch_folders,
+        )
+
+        mock_integ = MagicMock()
+        mock_integ.id = 35
+        mock_integ.owner_id = "owner-od"
+        mock_integ.config = '{"source_type": "onedrive", "folder_path": "/Documents", "delete_after_process": false}'
+        mock_integ.is_active = True
+        mock_integ.credentials = "encrypted-od-creds"
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        mock_od_handler = MagicMock(return_value=7)
+        original_handler = _USER_WF_CLOUD_HANDLERS.get("onedrive")
+        _USER_WF_CLOUD_HANDLERS["onedrive"] = mock_od_handler
+        try:
+            with patch(
+                "app.utils.encryption.decrypt_value",
+                return_value='{"refresh_token": "rt", "client_id": "ci", "client_secret": "cs"}',
+            ):
+                result = _pull_user_integration_watch_folders()
+
+            assert result["status"] == "ok"
+            assert result["files_enqueued"] == 7
+            mock_od_handler.assert_called_once()
+            args = mock_od_handler.call_args
+            assert args[0][0]["source_type"] == "onedrive"
+            assert args[0][4] == "owner-od"
+        finally:
+            if original_handler is not None:
+                _USER_WF_CLOUD_HANDLERS["onedrive"] = original_handler
+
+    @patch("app.tasks.watch_folder_tasks._get_db_session")
+    @patch("app.tasks.watch_folder_tasks._load_cache", return_value={})
+    @patch("app.tasks.watch_folder_tasks._save_cache")
+    def test_dispatches_nextcloud_source_type(self, mock_save, mock_load, mock_session_factory):
+        """WATCH_FOLDER with source_type 'nextcloud' should dispatch to handler."""
+        from app.tasks.watch_folder_tasks import (
+            _USER_WF_CLOUD_HANDLERS,
+            _pull_user_integration_watch_folders,
+        )
+
+        mock_integ = MagicMock()
+        mock_integ.id = 36
+        mock_integ.owner_id = "owner-nc"
+        mock_integ.config = (
+            '{"source_type": "nextcloud", "url": "https://nc.example.com",'
+            ' "folder_path": "/inbox", "delete_after_process": false}'
+        )
+        mock_integ.is_active = True
+        mock_integ.credentials = "encrypted-nc-creds"
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        mock_nc_handler = MagicMock(return_value=1)
+        original_handler = _USER_WF_CLOUD_HANDLERS.get("nextcloud")
+        _USER_WF_CLOUD_HANDLERS["nextcloud"] = mock_nc_handler
+        try:
+            with patch(
+                "app.utils.encryption.decrypt_value",
+                return_value='{"username": "u", "password": "p"}',
+            ):
+                result = _pull_user_integration_watch_folders()
+
+            assert result["status"] == "ok"
+            assert result["files_enqueued"] == 1
+            mock_nc_handler.assert_called_once()
+            args = mock_nc_handler.call_args
+            assert args[0][0]["source_type"] == "nextcloud"
+            assert args[0][4] == "owner-nc"
+        finally:
+            if original_handler is not None:
+                _USER_WF_CLOUD_HANDLERS["nextcloud"] = original_handler
+
+    @patch("app.tasks.watch_folder_tasks._get_db_session")
+    @patch("app.tasks.watch_folder_tasks._load_cache", return_value={})
+    @patch("app.tasks.watch_folder_tasks._save_cache")
+    def test_dispatches_webdav_source_type(self, mock_save, mock_load, mock_session_factory):
+        """WATCH_FOLDER with source_type 'webdav' should dispatch to handler."""
+        from app.tasks.watch_folder_tasks import (
+            _USER_WF_CLOUD_HANDLERS,
+            _pull_user_integration_watch_folders,
+        )
+
+        mock_integ = MagicMock()
+        mock_integ.id = 37
+        mock_integ.owner_id = "owner-dav"
+        mock_integ.config = (
+            '{"source_type": "webdav", "url": "https://dav.example.com",'
+            ' "folder_path": "/inbox", "delete_after_process": false}'
+        )
+        mock_integ.is_active = True
+        mock_integ.credentials = "encrypted-dav-creds"
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        mock_dav_handler = MagicMock(return_value=6)
+        original_handler = _USER_WF_CLOUD_HANDLERS.get("webdav")
+        _USER_WF_CLOUD_HANDLERS["webdav"] = mock_dav_handler
+        try:
+            with patch(
+                "app.utils.encryption.decrypt_value",
+                return_value='{"username": "u", "password": "p"}',
+            ):
+                result = _pull_user_integration_watch_folders()
+
+            assert result["status"] == "ok"
+            assert result["files_enqueued"] == 6
+            mock_dav_handler.assert_called_once()
+            args = mock_dav_handler.call_args
+            assert args[0][0]["source_type"] == "webdav"
+            assert args[0][4] == "owner-dav"
+        finally:
+            if original_handler is not None:
+                _USER_WF_CLOUD_HANDLERS["webdav"] = original_handler
+
+
+@pytest.mark.unit
+class TestScanUserS3Folder:
+    """Tests for _scan_user_s3_folder per-user S3 scanning."""
+
+    def test_returns_zero_when_bucket_not_configured(self):
+        """Empty bucket config should return 0 immediately."""
+        mock_boto3 = MagicMock()
+        mock_botocore = MagicMock()
+        mock_botocore_exc = MagicMock()
+        with patch.dict(
+            "sys.modules", {"boto3": mock_boto3, "botocore": mock_botocore, "botocore.exceptions": mock_botocore_exc}
+        ):
+            from app.tasks.watch_folder_tasks import _scan_user_s3_folder
+
+            result = _scan_user_s3_folder(
+                cfg={"prefix": "inbox/"},
+                creds={"access_key_id": "AKI", "secret_access_key": "SK"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+        assert result == 0
+
+    def test_returns_zero_when_credentials_incomplete(self):
+        """Missing access_key_id or secret_access_key should return 0."""
+        mock_boto3 = MagicMock()
+        mock_botocore = MagicMock()
+        mock_botocore_exc = MagicMock()
+        with patch.dict(
+            "sys.modules", {"boto3": mock_boto3, "botocore": mock_botocore, "botocore.exceptions": mock_botocore_exc}
+        ):
+            from app.tasks.watch_folder_tasks import _scan_user_s3_folder
+
+            result = _scan_user_s3_folder(
+                cfg={"bucket": "my-bucket"},
+                creds={"access_key_id": "AKI"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+        assert result == 0
+
+    def test_returns_zero_when_client_creation_fails(self):
+        """boto3.client raising should return 0."""
+        mock_boto3 = MagicMock()
+        mock_boto3.client.side_effect = Exception("Bad credentials")
+        mock_botocore = MagicMock()
+        mock_botocore_exc = MagicMock()
+        with patch.dict(
+            "sys.modules", {"boto3": mock_boto3, "botocore": mock_botocore, "botocore.exceptions": mock_botocore_exc}
+        ):
+            from app.tasks.watch_folder_tasks import _scan_user_s3_folder
+
+            result = _scan_user_s3_folder(
+                cfg={"bucket": "my-bucket"},
+                creds={"access_key_id": "AKI", "secret_access_key": "SK"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+        assert result == 0
+
+    def test_returns_zero_when_pagination_fails(self):
+        """Paginator raising should return 0."""
+        mock_boto3 = MagicMock()
+        mock_s3 = MagicMock()
+        mock_boto3.client.return_value = mock_s3
+        mock_paginator = MagicMock()
+        mock_s3.get_paginator.return_value = mock_paginator
+        mock_paginator.paginate.side_effect = Exception("Access denied")
+        mock_botocore = MagicMock()
+        mock_botocore_exc = MagicMock()
+        with patch.dict(
+            "sys.modules", {"boto3": mock_boto3, "botocore": mock_botocore, "botocore.exceptions": mock_botocore_exc}
+        ):
+            from app.tasks.watch_folder_tasks import _scan_user_s3_folder
+
+            result = _scan_user_s3_folder(
+                cfg={"bucket": "my-bucket"},
+                creds={"access_key_id": "AKI", "secret_access_key": "SK"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+        assert result == 0
+
+    def test_downloads_and_enqueues_new_file(self, tmp_path):
+        """Successful S3 download should enqueue file and return 1."""
+        mock_boto3 = MagicMock()
+        mock_s3 = MagicMock()
+        mock_boto3.client.return_value = mock_s3
+        mock_paginator = MagicMock()
+        mock_s3.get_paginator.return_value = mock_paginator
+        mock_paginator.paginate.return_value = [{"Contents": [{"Key": "inbox/doc.pdf"}]}]
+        mock_botocore = MagicMock()
+        mock_botocore_exc = MagicMock()
+        mock_botocore_exc.ClientError = type("ClientError", (Exception,), {})
+
+        with (
+            patch.dict(
+                "sys.modules",
+                {"boto3": mock_boto3, "botocore": mock_botocore, "botocore.exceptions": mock_botocore_exc},
+            ),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._mark_processed") as mock_mark,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            from app.tasks.watch_folder_tasks import _scan_user_s3_folder
+
+            result = _scan_user_s3_folder(
+                cfg={"bucket": "my-bucket", "prefix": "inbox/"},
+                creds={"access_key_id": "AKI", "secret_access_key": "SK"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert result == 1
+        mock_enqueue.assert_called_once()
+        mock_mark.assert_called_once()
+
+    def test_skips_cached_file(self, tmp_path):
+        """Files already in cache should be skipped."""
+        mock_boto3 = MagicMock()
+        mock_s3 = MagicMock()
+        mock_boto3.client.return_value = mock_s3
+        mock_paginator = MagicMock()
+        mock_s3.get_paginator.return_value = mock_paginator
+        mock_paginator.paginate.return_value = [{"Contents": [{"Key": "inbox/doc.pdf"}]}]
+        mock_botocore = MagicMock()
+        mock_botocore_exc = MagicMock()
+
+        with (
+            patch.dict(
+                "sys.modules",
+                {"boto3": mock_boto3, "botocore": mock_botocore, "botocore.exceptions": mock_botocore_exc},
+            ),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            from app.tasks.watch_folder_tasks import _scan_user_s3_folder
+
+            result = _scan_user_s3_folder(
+                cfg={"bucket": "my-bucket", "prefix": "inbox/"},
+                creds={"access_key_id": "AKI", "secret_access_key": "SK"},
+                cache={"s3:my-bucket/inbox/doc.pdf": "done"},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert result == 0
+        mock_enqueue.assert_not_called()
+
+    def test_skips_disallowed_file_type(self, tmp_path):
+        """Non-allowed files (e.g. .exe) should be skipped."""
+        mock_boto3 = MagicMock()
+        mock_s3 = MagicMock()
+        mock_boto3.client.return_value = mock_s3
+        mock_paginator = MagicMock()
+        mock_s3.get_paginator.return_value = mock_paginator
+        mock_paginator.paginate.return_value = [{"Contents": [{"Key": "inbox/virus.exe"}]}]
+        mock_botocore = MagicMock()
+        mock_botocore_exc = MagicMock()
+
+        with (
+            patch.dict(
+                "sys.modules",
+                {"boto3": mock_boto3, "botocore": mock_botocore, "botocore.exceptions": mock_botocore_exc},
+            ),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=False),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            from app.tasks.watch_folder_tasks import _scan_user_s3_folder
+
+            result = _scan_user_s3_folder(
+                cfg={"bucket": "my-bucket", "prefix": "inbox/"},
+                creds={"access_key_id": "AKI", "secret_access_key": "SK"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert result == 0
+        mock_enqueue.assert_not_called()
+
+    def test_deletes_after_download(self, tmp_path):
+        """delete_after=True should call delete_object on the S3 key."""
+        mock_boto3 = MagicMock()
+        mock_s3 = MagicMock()
+        mock_boto3.client.return_value = mock_s3
+        mock_paginator = MagicMock()
+        mock_s3.get_paginator.return_value = mock_paginator
+        mock_paginator.paginate.return_value = [{"Contents": [{"Key": "inbox/doc.pdf"}]}]
+        mock_botocore = MagicMock()
+        mock_botocore_exc = MagicMock()
+        mock_botocore_exc.ClientError = type("ClientError", (Exception,), {})
+
+        with (
+            patch.dict(
+                "sys.modules",
+                {"boto3": mock_boto3, "botocore": mock_botocore, "botocore.exceptions": mock_botocore_exc},
+            ),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file"),
+            patch("app.tasks.watch_folder_tasks._mark_processed"),
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            from app.tasks.watch_folder_tasks import _scan_user_s3_folder
+
+            result = _scan_user_s3_folder(
+                cfg={"bucket": "my-bucket", "prefix": "inbox/"},
+                creds={"access_key_id": "AKI", "secret_access_key": "SK"},
+                cache={},
+                delete_after=True,
+                owner_id="u1",
+            )
+
+        assert result == 1
+        mock_s3.delete_object.assert_called_once_with(Bucket="my-bucket", Key="inbox/doc.pdf")
+
+    def test_handles_download_failure(self, tmp_path):
+        """ClientError on download_file should skip the file and continue."""
+        mock_boto3 = MagicMock()
+        mock_s3 = MagicMock()
+        mock_boto3.client.return_value = mock_s3
+        mock_paginator = MagicMock()
+        mock_s3.get_paginator.return_value = mock_paginator
+        mock_paginator.paginate.return_value = [{"Contents": [{"Key": "inbox/doc.pdf"}]}]
+
+        mock_botocore = MagicMock()
+        mock_botocore_exc = MagicMock()
+        FakeClientError = type("ClientError", (Exception,), {})
+        mock_botocore_exc.ClientError = FakeClientError
+        mock_s3.download_file.side_effect = FakeClientError("403 Forbidden")
+
+        with (
+            patch.dict(
+                "sys.modules",
+                {"boto3": mock_boto3, "botocore": mock_botocore, "botocore.exceptions": mock_botocore_exc},
+            ),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            from app.tasks.watch_folder_tasks import _scan_user_s3_folder
+
+            result = _scan_user_s3_folder(
+                cfg={"bucket": "my-bucket", "prefix": "inbox/"},
+                creds={"access_key_id": "AKI", "secret_access_key": "SK"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert result == 0
+        mock_enqueue.assert_not_called()
+
+    def test_handles_delete_failure_gracefully(self, tmp_path):
+        """delete_object raising should log warning but not crash."""
+        mock_boto3 = MagicMock()
+        mock_s3 = MagicMock()
+        mock_boto3.client.return_value = mock_s3
+        mock_paginator = MagicMock()
+        mock_s3.get_paginator.return_value = mock_paginator
+        mock_paginator.paginate.return_value = [{"Contents": [{"Key": "inbox/doc.pdf"}]}]
+        mock_s3.delete_object.side_effect = Exception("Delete denied")
+        mock_botocore = MagicMock()
+        mock_botocore_exc = MagicMock()
+        mock_botocore_exc.ClientError = type("ClientError", (Exception,), {})
+
+        with (
+            patch.dict(
+                "sys.modules",
+                {"boto3": mock_boto3, "botocore": mock_botocore, "botocore.exceptions": mock_botocore_exc},
+            ),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file"),
+            patch("app.tasks.watch_folder_tasks._mark_processed"),
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            from app.tasks.watch_folder_tasks import _scan_user_s3_folder
+
+            result = _scan_user_s3_folder(
+                cfg={"bucket": "my-bucket", "prefix": "inbox/"},
+                creds={"access_key_id": "AKI", "secret_access_key": "SK"},
+                cache={},
+                delete_after=True,
+                owner_id="u1",
+            )
+
+        assert result == 1
+
+
+@pytest.mark.unit
+class TestScanUserDropboxFolder:
+    """Tests for _scan_user_dropbox_folder per-user Dropbox scanning."""
+
+    def _make_dropbox_mocks(self):
+        """Create standard dropbox mock module and helper types."""
+        mock_dropbox_mod = MagicMock()
+        FakeFileMeta = type("FileMetadata", (), {})
+        FakeFolderMeta = type("FolderMetadata", (), {})
+        mock_dropbox_mod.files.FileMetadata = FakeFileMeta
+        mock_dropbox_mod.files.FolderMetadata = FakeFolderMeta
+        return mock_dropbox_mod, FakeFileMeta, FakeFolderMeta
+
+    def test_returns_zero_when_credentials_incomplete(self):
+        """Missing refresh_token/app_key/app_secret should return 0."""
+        mock_dropbox_mod, _, _ = self._make_dropbox_mocks()
+        with patch.dict("sys.modules", {"dropbox": mock_dropbox_mod}):
+            from app.tasks.watch_folder_tasks import _scan_user_dropbox_folder
+
+            result = _scan_user_dropbox_folder(
+                cfg={"folder_path": "/inbox"},
+                creds={"refresh_token": "tok", "app_key": ""},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+        assert result == 0
+
+    def test_returns_zero_when_folder_path_empty(self):
+        """Empty folder_path should return 0."""
+        mock_dropbox_mod, _, _ = self._make_dropbox_mocks()
+        with patch.dict("sys.modules", {"dropbox": mock_dropbox_mod}):
+            from app.tasks.watch_folder_tasks import _scan_user_dropbox_folder
+
+            result = _scan_user_dropbox_folder(
+                cfg={"folder_path": ""},
+                creds={"refresh_token": "tok", "app_key": "ak", "app_secret": "as"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+        assert result == 0
+
+    def test_returns_zero_when_auth_fails(self):
+        """Dropbox constructor raising should return 0."""
+        mock_dropbox_mod, _, _ = self._make_dropbox_mocks()
+        mock_dropbox_mod.Dropbox.side_effect = Exception("Auth error")
+        with patch.dict("sys.modules", {"dropbox": mock_dropbox_mod}):
+            from app.tasks.watch_folder_tasks import _scan_user_dropbox_folder
+
+            result = _scan_user_dropbox_folder(
+                cfg={"folder_path": "/inbox"},
+                creds={"refresh_token": "tok", "app_key": "ak", "app_secret": "as"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+        assert result == 0
+
+    def test_returns_zero_when_listing_fails(self):
+        """files_list_folder raising should return 0."""
+        mock_dropbox_mod, _, _ = self._make_dropbox_mocks()
+        mock_dbx_client = MagicMock()
+        mock_dropbox_mod.Dropbox.return_value = mock_dbx_client
+        mock_dbx_client.files_list_folder.side_effect = Exception("API error")
+
+        with patch.dict("sys.modules", {"dropbox": mock_dropbox_mod}):
+            from app.tasks.watch_folder_tasks import _scan_user_dropbox_folder
+
+            result = _scan_user_dropbox_folder(
+                cfg={"folder_path": "/inbox"},
+                creds={"refresh_token": "tok", "app_key": "ak", "app_secret": "as"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+        assert result == 0
+
+    def test_downloads_and_enqueues_new_file(self, tmp_path):
+        """Successful Dropbox download should enqueue file and return 1."""
+        mock_dropbox_mod, FakeFileMeta, _ = self._make_dropbox_mocks()
+        entry = FakeFileMeta()
+        entry.name = "doc.pdf"
+        entry.id = "id:abc123"
+        entry.path_lower = "/inbox/doc.pdf"
+
+        mock_dbx_client = MagicMock()
+        mock_dropbox_mod.Dropbox.return_value = mock_dbx_client
+        result_obj = MagicMock()
+        result_obj.entries = [entry]
+        result_obj.has_more = False
+        mock_dbx_client.files_list_folder.return_value = result_obj
+
+        mock_response = MagicMock()
+        mock_response.content = b"%PDF-1.4 test"
+        mock_dbx_client.files_download.return_value = (MagicMock(), mock_response)
+
+        with (
+            patch.dict("sys.modules", {"dropbox": mock_dropbox_mod}),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._mark_processed") as mock_mark,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            from app.tasks.watch_folder_tasks import _scan_user_dropbox_folder
+
+            count = _scan_user_dropbox_folder(
+                cfg={"folder_path": "/inbox"},
+                creds={"refresh_token": "tok", "app_key": "ak", "app_secret": "as"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 1
+        mock_enqueue.assert_called_once()
+        mock_mark.assert_called_once()
+
+    def test_skips_cached_file(self, tmp_path):
+        """Files already in cache should be skipped."""
+        mock_dropbox_mod, FakeFileMeta, _ = self._make_dropbox_mocks()
+        entry = FakeFileMeta()
+        entry.name = "doc.pdf"
+        entry.id = "id:abc123"
+        entry.path_lower = "/inbox/doc.pdf"
+
+        mock_dbx_client = MagicMock()
+        mock_dropbox_mod.Dropbox.return_value = mock_dbx_client
+        result_obj = MagicMock()
+        result_obj.entries = [entry]
+        result_obj.has_more = False
+        mock_dbx_client.files_list_folder.return_value = result_obj
+
+        with (
+            patch.dict("sys.modules", {"dropbox": mock_dropbox_mod}),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            from app.tasks.watch_folder_tasks import _scan_user_dropbox_folder
+
+            count = _scan_user_dropbox_folder(
+                cfg={"folder_path": "/inbox"},
+                creds={"refresh_token": "tok", "app_key": "ak", "app_secret": "as"},
+                cache={"dropbox:id:abc123": "done"},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 0
+        mock_enqueue.assert_not_called()
+
+    def test_skips_non_file_entries(self, tmp_path):
+        """FolderMetadata entries should be skipped."""
+        mock_dropbox_mod, _, FakeFolderMeta = self._make_dropbox_mocks()
+        folder_entry = FakeFolderMeta()
+        folder_entry.name = "subfolder"
+
+        mock_dbx_client = MagicMock()
+        mock_dropbox_mod.Dropbox.return_value = mock_dbx_client
+        result_obj = MagicMock()
+        result_obj.entries = [folder_entry]
+        result_obj.has_more = False
+        mock_dbx_client.files_list_folder.return_value = result_obj
+
+        with (
+            patch.dict("sys.modules", {"dropbox": mock_dropbox_mod}),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            from app.tasks.watch_folder_tasks import _scan_user_dropbox_folder
+
+            count = _scan_user_dropbox_folder(
+                cfg={"folder_path": "/inbox"},
+                creds={"refresh_token": "tok", "app_key": "ak", "app_secret": "as"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 0
+        mock_enqueue.assert_not_called()
+
+    def test_deletes_after_download(self, tmp_path):
+        """delete_after=True should call files_delete_v2."""
+        mock_dropbox_mod, FakeFileMeta, _ = self._make_dropbox_mocks()
+        entry = FakeFileMeta()
+        entry.name = "doc.pdf"
+        entry.id = "id:abc123"
+        entry.path_lower = "/inbox/doc.pdf"
+
+        mock_dbx_client = MagicMock()
+        mock_dropbox_mod.Dropbox.return_value = mock_dbx_client
+        result_obj = MagicMock()
+        result_obj.entries = [entry]
+        result_obj.has_more = False
+        mock_dbx_client.files_list_folder.return_value = result_obj
+
+        mock_response = MagicMock()
+        mock_response.content = b"%PDF-1.4 test"
+        mock_dbx_client.files_download.return_value = (MagicMock(), mock_response)
+
+        with (
+            patch.dict("sys.modules", {"dropbox": mock_dropbox_mod}),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file"),
+            patch("app.tasks.watch_folder_tasks._mark_processed"),
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            from app.tasks.watch_folder_tasks import _scan_user_dropbox_folder
+
+            count = _scan_user_dropbox_folder(
+                cfg={"folder_path": "/inbox"},
+                creds={"refresh_token": "tok", "app_key": "ak", "app_secret": "as"},
+                cache={},
+                delete_after=True,
+                owner_id="u1",
+            )
+
+        assert count == 1
+        mock_dbx_client.files_delete_v2.assert_called_once_with("/inbox/doc.pdf")
+
+    def test_handles_download_failure(self, tmp_path):
+        """Download failure should skip the file and continue."""
+        mock_dropbox_mod, FakeFileMeta, _ = self._make_dropbox_mocks()
+        entry = FakeFileMeta()
+        entry.name = "doc.pdf"
+        entry.id = "id:abc123"
+        entry.path_lower = "/inbox/doc.pdf"
+
+        mock_dbx_client = MagicMock()
+        mock_dropbox_mod.Dropbox.return_value = mock_dbx_client
+        result_obj = MagicMock()
+        result_obj.entries = [entry]
+        result_obj.has_more = False
+        mock_dbx_client.files_list_folder.return_value = result_obj
+        mock_dbx_client.files_download.side_effect = Exception("Download failed")
+
+        with (
+            patch.dict("sys.modules", {"dropbox": mock_dropbox_mod}),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            from app.tasks.watch_folder_tasks import _scan_user_dropbox_folder
+
+            count = _scan_user_dropbox_folder(
+                cfg={"folder_path": "/inbox"},
+                creds={"refresh_token": "tok", "app_key": "ak", "app_secret": "as"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 0
+        mock_enqueue.assert_not_called()
+
+
+@pytest.mark.unit
+class TestScanUserGoogleDriveFolder:
+    """Tests for _scan_user_google_drive_folder per-user Google Drive scanning."""
+
+    def _make_google_mocks(self):
+        """Create Google API mock modules for sys.modules patching."""
+        mock_sa_mod = MagicMock()
+        mock_gapi_disc = MagicMock()
+        mock_gapi_http = MagicMock()
+
+        mock_service = MagicMock()
+        mock_gapi_disc.build.return_value = mock_service
+        mock_sa_mod.Credentials.from_service_account_info.return_value = MagicMock()
+
+        # Wire parent-child module attributes so `from X.Y import Z` resolves correctly
+        mock_google_oauth2 = MagicMock()
+        mock_google_oauth2.service_account = mock_sa_mod
+        mock_google = MagicMock()
+        mock_google.oauth2 = mock_google_oauth2
+
+        mock_gapi = MagicMock()
+        mock_gapi.discovery = mock_gapi_disc
+        mock_gapi.http = mock_gapi_http
+
+        modules = {
+            "google": mock_google,
+            "google.oauth2": mock_google_oauth2,
+            "google.oauth2.service_account": mock_sa_mod,
+            "googleapiclient": mock_gapi,
+            "googleapiclient.discovery": mock_gapi_disc,
+            "googleapiclient.http": mock_gapi_http,
+        }
+        return modules, mock_service, mock_gapi_http, mock_sa_mod
+
+    def test_returns_zero_when_credentials_json_empty(self):
+        """Empty credentials_json should return 0."""
+        modules, _, _, _ = self._make_google_mocks()
+        with patch.dict("sys.modules", modules):
+            from app.tasks.watch_folder_tasks import _scan_user_google_drive_folder
+
+            result = _scan_user_google_drive_folder(
+                cfg={"folder_id": "abc"},
+                creds={"credentials_json": ""},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+        assert result == 0
+
+    def test_returns_zero_when_folder_id_empty(self):
+        """Empty folder_id should return 0."""
+        modules, _, _, _ = self._make_google_mocks()
+        with patch.dict("sys.modules", modules):
+            from app.tasks.watch_folder_tasks import _scan_user_google_drive_folder
+
+            result = _scan_user_google_drive_folder(
+                cfg={"folder_id": ""},
+                creds={"credentials_json": '{"type": "service_account"}'},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+        assert result == 0
+
+    def test_returns_zero_when_auth_fails(self):
+        """service_account.Credentials raising should return 0."""
+        modules, _, _, mock_sa_mod = self._make_google_mocks()
+        mock_sa_mod.Credentials.from_service_account_info.side_effect = Exception("Bad SA key")
+        with patch.dict("sys.modules", modules):
+            from app.tasks.watch_folder_tasks import _scan_user_google_drive_folder
+
+            result = _scan_user_google_drive_folder(
+                cfg={"folder_id": "abc"},
+                creds={"credentials_json": '{"type": "service_account"}'},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+        assert result == 0
+
+    def test_downloads_and_enqueues_new_file(self, tmp_path):
+        """Successful Google Drive download should enqueue file and return 1."""
+        modules, mock_service, mock_gapi_http, _ = self._make_google_mocks()
+
+        mock_service.files.return_value.list.return_value.execute.return_value = {
+            "files": [{"id": "f1", "name": "doc.pdf", "mimeType": "application/pdf"}],
+        }
+
+        mock_downloader = MagicMock()
+        mock_downloader.next_chunk.return_value = (None, True)
+        mock_gapi_http.MediaIoBaseDownload.return_value = mock_downloader
+
+        with (
+            patch.dict("sys.modules", modules),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._mark_processed") as mock_mark,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            from app.tasks.watch_folder_tasks import _scan_user_google_drive_folder
+
+            count = _scan_user_google_drive_folder(
+                cfg={"folder_id": "abc"},
+                creds={"credentials_json": '{"type": "service_account"}'},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 1
+        mock_enqueue.assert_called_once()
+        mock_mark.assert_called_once()
+
+    def test_skips_cached_file(self, tmp_path):
+        """Files already in cache should be skipped."""
+        modules, mock_service, _, _ = self._make_google_mocks()
+
+        mock_service.files.return_value.list.return_value.execute.return_value = {
+            "files": [{"id": "f1", "name": "doc.pdf", "mimeType": "application/pdf"}],
+        }
+
+        with (
+            patch.dict("sys.modules", modules),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            from app.tasks.watch_folder_tasks import _scan_user_google_drive_folder
+
+            count = _scan_user_google_drive_folder(
+                cfg={"folder_id": "abc"},
+                creds={"credentials_json": '{"type": "service_account"}'},
+                cache={"gdrive:f1": "done"},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 0
+        mock_enqueue.assert_not_called()
+
+    def test_deletes_after_download(self, tmp_path):
+        """delete_after=True should call files().delete()."""
+        modules, mock_service, mock_gapi_http, _ = self._make_google_mocks()
+
+        mock_service.files.return_value.list.return_value.execute.return_value = {
+            "files": [{"id": "f1", "name": "doc.pdf", "mimeType": "application/pdf"}],
+        }
+        mock_downloader = MagicMock()
+        mock_downloader.next_chunk.return_value = (None, True)
+        mock_gapi_http.MediaIoBaseDownload.return_value = mock_downloader
+
+        with (
+            patch.dict("sys.modules", modules),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file"),
+            patch("app.tasks.watch_folder_tasks._mark_processed"),
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            from app.tasks.watch_folder_tasks import _scan_user_google_drive_folder
+
+            count = _scan_user_google_drive_folder(
+                cfg={"folder_id": "abc"},
+                creds={"credentials_json": '{"type": "service_account"}'},
+                cache={},
+                delete_after=True,
+                owner_id="u1",
+            )
+
+        assert count == 1
+        mock_service.files.return_value.delete.assert_called_once_with(fileId="f1")
+
+    def test_handles_download_failure(self, tmp_path):
+        """Download failure should skip the file and continue."""
+        modules, mock_service, mock_gapi_http, _ = self._make_google_mocks()
+
+        mock_service.files.return_value.list.return_value.execute.return_value = {
+            "files": [{"id": "f1", "name": "doc.pdf", "mimeType": "application/pdf"}],
+        }
+        mock_gapi_http.MediaIoBaseDownload.side_effect = Exception("Download failed")
+
+        with (
+            patch.dict("sys.modules", modules),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            from app.tasks.watch_folder_tasks import _scan_user_google_drive_folder
+
+            count = _scan_user_google_drive_folder(
+                cfg={"folder_id": "abc"},
+                creds={"credentials_json": '{"type": "service_account"}'},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 0
+        mock_enqueue.assert_not_called()
+
+    def test_handles_listing_failure(self, tmp_path):
+        """Listing failure should break and return 0."""
+        modules, mock_service, _, _ = self._make_google_mocks()
+
+        mock_service.files.return_value.list.return_value.execute.side_effect = Exception("API error")
+
+        with (
+            patch.dict("sys.modules", modules),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            from app.tasks.watch_folder_tasks import _scan_user_google_drive_folder
+
+            count = _scan_user_google_drive_folder(
+                cfg={"folder_id": "abc"},
+                creds={"credentials_json": '{"type": "service_account"}'},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 0
+        mock_enqueue.assert_not_called()
+
+
+@pytest.mark.unit
+class TestScanUserOneDriveFolder:
+    """Tests for _scan_user_onedrive_folder per-user OneDrive scanning."""
+
+    def test_returns_zero_when_credentials_incomplete(self):
+        """Missing refresh_token/client_id/client_secret should return 0."""
+        from app.tasks.watch_folder_tasks import _scan_user_onedrive_folder
+
+        result = _scan_user_onedrive_folder(
+            cfg={"folder_path": "/Documents"},
+            creds={"refresh_token": "tok", "client_id": ""},
+            cache={},
+            delete_after=False,
+            owner_id="u1",
+        )
+        assert result == 0
+
+    def test_returns_zero_when_folder_path_empty(self):
+        """Empty folder_path should return 0."""
+        from app.tasks.watch_folder_tasks import _scan_user_onedrive_folder
+
+        result = _scan_user_onedrive_folder(
+            cfg={"folder_path": ""},
+            creds={"refresh_token": "tok", "client_id": "ci", "client_secret": "cs"},
+            cache={},
+            delete_after=False,
+            owner_id="u1",
+        )
+        assert result == 0
+
+    def test_returns_zero_when_token_exchange_fails(self):
+        """Token exchange failure should return 0."""
+        from app.tasks.watch_folder_tasks import _scan_user_onedrive_folder
+
+        with patch("requests.post") as mock_post:
+            mock_post.side_effect = Exception("Token error")
+
+            result = _scan_user_onedrive_folder(
+                cfg={"folder_path": "/Documents"},
+                creds={"refresh_token": "tok", "client_id": "ci", "client_secret": "cs"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+        assert result == 0
+
+    def test_downloads_and_enqueues_new_file(self, tmp_path):
+        """Successful OneDrive download should enqueue file and return 1."""
+        from app.tasks.watch_folder_tasks import _scan_user_onedrive_folder
+
+        mock_token_resp = MagicMock()
+        mock_token_resp.json.return_value = {"access_token": "tok123"}
+
+        mock_list_resp = MagicMock()
+        mock_list_resp.json.return_value = {
+            "value": [
+                {
+                    "name": "doc.pdf",
+                    "id": "item1",
+                    "@microsoft.graph.downloadUrl": "https://dl.example.com/doc.pdf",
+                }
+            ],
+        }
+
+        mock_dl_resp = MagicMock()
+        mock_dl_resp.content = b"%PDF-1.4"
+
+        with (
+            patch("requests.post", return_value=mock_token_resp),
+            patch("requests.get", side_effect=[mock_list_resp, mock_dl_resp]),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._mark_processed") as mock_mark,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+
+            count = _scan_user_onedrive_folder(
+                cfg={"folder_path": "/Documents"},
+                creds={"refresh_token": "tok", "client_id": "ci", "client_secret": "cs"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 1
+        mock_enqueue.assert_called_once()
+        mock_mark.assert_called_once()
+
+    def test_skips_folders(self, tmp_path):
+        """Items with 'folder' key should be skipped."""
+        from app.tasks.watch_folder_tasks import _scan_user_onedrive_folder
+
+        mock_token_resp = MagicMock()
+        mock_token_resp.json.return_value = {"access_token": "tok123"}
+
+        mock_list_resp = MagicMock()
+        mock_list_resp.json.return_value = {
+            "value": [{"name": "subfolder", "id": "fold1", "folder": {"childCount": 3}}],
+        }
+
+        with (
+            patch("requests.post", return_value=mock_token_resp),
+            patch("requests.get", return_value=mock_list_resp),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+
+            count = _scan_user_onedrive_folder(
+                cfg={"folder_path": "/Documents"},
+                creds={"refresh_token": "tok", "client_id": "ci", "client_secret": "cs"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 0
+        mock_enqueue.assert_not_called()
+
+    def test_skips_cached_file(self, tmp_path):
+        """Files already in cache should be skipped."""
+        from app.tasks.watch_folder_tasks import _scan_user_onedrive_folder
+
+        mock_token_resp = MagicMock()
+        mock_token_resp.json.return_value = {"access_token": "tok123"}
+
+        mock_list_resp = MagicMock()
+        mock_list_resp.json.return_value = {
+            "value": [
+                {
+                    "name": "doc.pdf",
+                    "id": "item1",
+                    "@microsoft.graph.downloadUrl": "https://dl.example.com/doc.pdf",
+                }
+            ],
+        }
+
+        with (
+            patch("requests.post", return_value=mock_token_resp),
+            patch("requests.get", return_value=mock_list_resp),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+
+            count = _scan_user_onedrive_folder(
+                cfg={"folder_path": "/Documents"},
+                creds={"refresh_token": "tok", "client_id": "ci", "client_secret": "cs"},
+                cache={"onedrive:item1": "done"},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 0
+        mock_enqueue.assert_not_called()
+
+    def test_skips_items_without_download_url(self, tmp_path):
+        """Items missing @microsoft.graph.downloadUrl should be skipped."""
+        from app.tasks.watch_folder_tasks import _scan_user_onedrive_folder
+
+        mock_token_resp = MagicMock()
+        mock_token_resp.json.return_value = {"access_token": "tok123"}
+
+        mock_list_resp = MagicMock()
+        mock_list_resp.json.return_value = {
+            "value": [{"name": "doc.pdf", "id": "item1"}],
+        }
+
+        with (
+            patch("requests.post", return_value=mock_token_resp),
+            patch("requests.get", return_value=mock_list_resp),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+
+            count = _scan_user_onedrive_folder(
+                cfg={"folder_path": "/Documents"},
+                creds={"refresh_token": "tok", "client_id": "ci", "client_secret": "cs"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 0
+        mock_enqueue.assert_not_called()
+
+    def test_deletes_after_download(self, tmp_path):
+        """delete_after=True should call requests.delete on the item."""
+        from app.tasks.watch_folder_tasks import _scan_user_onedrive_folder
+
+        mock_token_resp = MagicMock()
+        mock_token_resp.json.return_value = {"access_token": "tok123"}
+
+        mock_list_resp = MagicMock()
+        mock_list_resp.json.return_value = {
+            "value": [
+                {
+                    "name": "doc.pdf",
+                    "id": "item1",
+                    "@microsoft.graph.downloadUrl": "https://dl.example.com/doc.pdf",
+                }
+            ],
+        }
+
+        mock_dl_resp = MagicMock()
+        mock_dl_resp.content = b"%PDF-1.4"
+        mock_del_resp = MagicMock()
+
+        with (
+            patch("requests.post", return_value=mock_token_resp),
+            patch("requests.get", side_effect=[mock_list_resp, mock_dl_resp]),
+            patch("requests.delete", return_value=mock_del_resp) as mock_delete,
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file"),
+            patch("app.tasks.watch_folder_tasks._mark_processed"),
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+
+            count = _scan_user_onedrive_folder(
+                cfg={"folder_path": "/Documents"},
+                creds={"refresh_token": "tok", "client_id": "ci", "client_secret": "cs"},
+                cache={},
+                delete_after=True,
+                owner_id="u1",
+            )
+
+        assert count == 1
+        mock_delete.assert_called_once()
+
+    def test_handles_download_failure(self, tmp_path):
+        """Download failure should skip the file and continue."""
+        from app.tasks.watch_folder_tasks import _scan_user_onedrive_folder
+
+        mock_token_resp = MagicMock()
+        mock_token_resp.json.return_value = {"access_token": "tok123"}
+
+        mock_list_resp = MagicMock()
+        mock_list_resp.json.return_value = {
+            "value": [
+                {
+                    "name": "doc.pdf",
+                    "id": "item1",
+                    "@microsoft.graph.downloadUrl": "https://dl.example.com/doc.pdf",
+                }
+            ],
+        }
+
+        mock_dl_resp = MagicMock()
+        mock_dl_resp.raise_for_status.side_effect = Exception("Download failed")
+
+        with (
+            patch("requests.post", return_value=mock_token_resp),
+            patch("requests.get", side_effect=[mock_list_resp, mock_dl_resp]),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+
+            count = _scan_user_onedrive_folder(
+                cfg={"folder_path": "/Documents"},
+                creds={"refresh_token": "tok", "client_id": "ci", "client_secret": "cs"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 0
+        mock_enqueue.assert_not_called()
+
+    def test_handles_listing_failure(self, tmp_path):
+        """Listing failure should break and return 0."""
+        from app.tasks.watch_folder_tasks import _scan_user_onedrive_folder
+
+        mock_token_resp = MagicMock()
+        mock_token_resp.json.return_value = {"access_token": "tok123"}
+
+        mock_list_resp = MagicMock()
+        mock_list_resp.raise_for_status.side_effect = Exception("Listing failed")
+
+        with (
+            patch("requests.post", return_value=mock_token_resp),
+            patch("requests.get", return_value=mock_list_resp),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+
+            count = _scan_user_onedrive_folder(
+                cfg={"folder_path": "/Documents"},
+                creds={"refresh_token": "tok", "client_id": "ci", "client_secret": "cs"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 0
+        mock_enqueue.assert_not_called()
+
+
+def _build_propfind_xml(href_paths: list[str]) -> str:
+    """Build a minimal PROPFIND multi-status XML response for testing."""
+    responses = ""
+    for href in href_paths:
+        responses += f"""
+        <d:response>
+            <d:href>{href}</d:href>
+            <d:propstat>
+                <d:prop><d:getcontentlength>1024</d:getcontentlength></d:prop>
+                <d:status>HTTP/1.1 200 OK</d:status>
+            </d:propstat>
+        </d:response>"""
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+    <d:multistatus xmlns:d="DAV:">
+        {responses}
+    </d:multistatus>"""
+
+
+@pytest.mark.unit
+class TestScanUserNextcloudFolder:
+    """Tests for _scan_user_nextcloud_folder per-user Nextcloud scanning."""
+
+    def test_returns_zero_when_settings_incomplete(self):
+        """Missing url, username, or password should return 0."""
+        from app.tasks.watch_folder_tasks import _scan_user_nextcloud_folder
+
+        result = _scan_user_nextcloud_folder(
+            cfg={"url": "", "folder_path": "/inbox"},
+            creds={"username": "u", "password": "p"},
+            cache={},
+            delete_after=False,
+            owner_id="u1",
+        )
+        assert result == 0
+
+    def test_returns_zero_when_propfind_fails(self):
+        """PROPFIND failure should return 0."""
+        from app.tasks.watch_folder_tasks import _scan_user_nextcloud_folder
+
+        with patch("requests.request") as mock_request:
+            mock_request.side_effect = Exception("Connection refused")
+
+            result = _scan_user_nextcloud_folder(
+                cfg={"url": "https://nc.example.com/remote.php/dav/files/user", "folder_path": "inbox"},
+                creds={"username": "u", "password": "p"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+        assert result == 0
+
+    def test_returns_zero_when_xml_parse_fails(self):
+        """Invalid XML response should return 0."""
+        from app.tasks.watch_folder_tasks import _scan_user_nextcloud_folder
+
+        mock_resp = MagicMock()
+        mock_resp.text = "not valid xml <<<"
+
+        with patch("requests.request", return_value=mock_resp):
+            result = _scan_user_nextcloud_folder(
+                cfg={"url": "https://nc.example.com/remote.php/dav/files/user", "folder_path": "inbox"},
+                creds={"username": "u", "password": "p"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+        assert result == 0
+
+    def test_downloads_and_enqueues_new_file(self, tmp_path):
+        """Successful Nextcloud download should enqueue file and return 1."""
+        from app.tasks.watch_folder_tasks import _scan_user_nextcloud_folder
+
+        propfind_xml = _build_propfind_xml(
+            [
+                "/remote.php/dav/files/user/inbox/",
+                "/remote.php/dav/files/user/inbox/doc.pdf",
+            ]
+        )
+
+        mock_propfind_resp = MagicMock()
+        mock_propfind_resp.text = propfind_xml
+
+        mock_dl_resp = MagicMock()
+        mock_dl_resp.content = b"%PDF-1.4"
+
+        with (
+            patch("requests.request", return_value=mock_propfind_resp),
+            patch("requests.get", return_value=mock_dl_resp),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._mark_processed") as mock_mark,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+
+            count = _scan_user_nextcloud_folder(
+                cfg={"url": "https://nc.example.com/remote.php/dav/files/user", "folder_path": "inbox"},
+                creds={"username": "u", "password": "p"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 1
+        mock_enqueue.assert_called_once()
+        mock_mark.assert_called_once()
+
+    def test_skips_folder_self_entry(self, tmp_path):
+        """The folder itself (self entry) should be skipped."""
+        from app.tasks.watch_folder_tasks import _scan_user_nextcloud_folder
+
+        propfind_xml = _build_propfind_xml(["/remote.php/dav/files/user/inbox/"])
+
+        mock_propfind_resp = MagicMock()
+        mock_propfind_resp.text = propfind_xml
+
+        with (
+            patch("requests.request", return_value=mock_propfind_resp),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+
+            count = _scan_user_nextcloud_folder(
+                cfg={"url": "https://nc.example.com/remote.php/dav/files/user", "folder_path": "inbox"},
+                creds={"username": "u", "password": "p"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 0
+        mock_enqueue.assert_not_called()
+
+    def test_skips_cached_file(self, tmp_path):
+        """Files already in cache should be skipped."""
+        from app.tasks.watch_folder_tasks import _scan_user_nextcloud_folder
+
+        propfind_xml = _build_propfind_xml(
+            [
+                "/remote.php/dav/files/user/inbox/",
+                "/remote.php/dav/files/user/inbox/doc.pdf",
+            ]
+        )
+
+        mock_propfind_resp = MagicMock()
+        mock_propfind_resp.text = propfind_xml
+
+        with (
+            patch("requests.request", return_value=mock_propfind_resp),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+
+            count = _scan_user_nextcloud_folder(
+                cfg={"url": "https://nc.example.com/remote.php/dav/files/user", "folder_path": "inbox"},
+                creds={"username": "u", "password": "p"},
+                cache={"nextcloud:/remote.php/dav/files/user/inbox/doc.pdf": "done"},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 0
+        mock_enqueue.assert_not_called()
+
+    def test_deletes_after_download(self, tmp_path):
+        """delete_after=True should send DELETE request."""
+        from app.tasks.watch_folder_tasks import _scan_user_nextcloud_folder
+
+        propfind_xml = _build_propfind_xml(
+            [
+                "/remote.php/dav/files/user/inbox/",
+                "/remote.php/dav/files/user/inbox/doc.pdf",
+            ]
+        )
+
+        mock_propfind_resp = MagicMock()
+        mock_propfind_resp.text = propfind_xml
+
+        mock_dl_resp = MagicMock()
+        mock_dl_resp.content = b"%PDF-1.4"
+
+        mock_del_resp = MagicMock()
+
+        with (
+            patch("requests.request", side_effect=[mock_propfind_resp, mock_del_resp]) as mock_request,
+            patch("requests.get", return_value=mock_dl_resp),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file"),
+            patch("app.tasks.watch_folder_tasks._mark_processed"),
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+
+            count = _scan_user_nextcloud_folder(
+                cfg={"url": "https://nc.example.com/remote.php/dav/files/user", "folder_path": "inbox"},
+                creds={"username": "u", "password": "p"},
+                cache={},
+                delete_after=True,
+                owner_id="u1",
+            )
+
+        assert count == 1
+        assert mock_request.call_count == 2
+        delete_call = mock_request.call_args_list[1]
+        assert delete_call[0][0] == "DELETE"
+
+    def test_handles_download_failure(self, tmp_path):
+        """Download failure should skip the file and continue."""
+        from app.tasks.watch_folder_tasks import _scan_user_nextcloud_folder
+
+        propfind_xml = _build_propfind_xml(
+            [
+                "/remote.php/dav/files/user/inbox/",
+                "/remote.php/dav/files/user/inbox/doc.pdf",
+            ]
+        )
+
+        mock_propfind_resp = MagicMock()
+        mock_propfind_resp.text = propfind_xml
+
+        with (
+            patch("requests.request", return_value=mock_propfind_resp),
+            patch("requests.get") as mock_get,
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+            mock_get.side_effect = Exception("Download failed")
+
+            count = _scan_user_nextcloud_folder(
+                cfg={"url": "https://nc.example.com/remote.php/dav/files/user", "folder_path": "inbox"},
+                creds={"username": "u", "password": "p"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 0
+        mock_enqueue.assert_not_called()
+
+    def test_handles_absolute_href_url(self, tmp_path):
+        """Absolute href URLs should be used directly for download."""
+        from app.tasks.watch_folder_tasks import _scan_user_nextcloud_folder
+
+        propfind_xml = _build_propfind_xml(
+            [
+                "/remote.php/dav/files/user/inbox/",
+                "https://nc.example.com/remote.php/dav/files/user/inbox/doc.pdf",
+            ]
+        )
+
+        mock_propfind_resp = MagicMock()
+        mock_propfind_resp.text = propfind_xml
+
+        mock_dl_resp = MagicMock()
+        mock_dl_resp.content = b"%PDF-1.4"
+
+        with (
+            patch("requests.request", return_value=mock_propfind_resp),
+            patch("requests.get", return_value=mock_dl_resp) as mock_get,
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._mark_processed"),
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+
+            count = _scan_user_nextcloud_folder(
+                cfg={"url": "https://nc.example.com/remote.php/dav/files/user", "folder_path": "inbox"},
+                creds={"username": "u", "password": "p"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 1
+        mock_enqueue.assert_called_once()
+        download_url = mock_get.call_args[0][0]
+        assert download_url.startswith("https://")
+
+
+@pytest.mark.unit
+class TestScanUserWebdavFolder:
+    """Tests for _scan_user_webdav_folder per-user WebDAV scanning."""
+
+    def test_returns_zero_when_url_not_configured(self):
+        """Missing URL should return 0."""
+        from app.tasks.watch_folder_tasks import _scan_user_webdav_folder
+
+        result = _scan_user_webdav_folder(
+            cfg={"url": "", "folder_path": "/inbox"},
+            creds={"username": "u", "password": "p"},
+            cache={},
+            delete_after=False,
+            owner_id="u1",
+        )
+        assert result == 0
+
+    def test_returns_zero_when_propfind_fails(self):
+        """PROPFIND failure should return 0."""
+        from app.tasks.watch_folder_tasks import _scan_user_webdav_folder
+
+        with patch("requests.request") as mock_request:
+            mock_request.side_effect = Exception("Connection refused")
+
+            result = _scan_user_webdav_folder(
+                cfg={"url": "https://dav.example.com", "folder_path": "inbox"},
+                creds={"username": "u", "password": "p"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+        assert result == 0
+
+    def test_returns_zero_when_xml_parse_fails(self):
+        """Invalid XML response should return 0."""
+        from app.tasks.watch_folder_tasks import _scan_user_webdav_folder
+
+        mock_resp = MagicMock()
+        mock_resp.text = "not valid xml <<<"
+
+        with patch("requests.request", return_value=mock_resp):
+            result = _scan_user_webdav_folder(
+                cfg={"url": "https://dav.example.com", "folder_path": "inbox"},
+                creds={"username": "u", "password": "p"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+        assert result == 0
+
+    def test_downloads_and_enqueues_new_file(self, tmp_path):
+        """Successful WebDAV download should enqueue file and return 1."""
+        from app.tasks.watch_folder_tasks import _scan_user_webdav_folder
+
+        propfind_xml = _build_propfind_xml(
+            [
+                "/inbox/",
+                "/inbox/doc.pdf",
+            ]
+        )
+
+        mock_propfind_resp = MagicMock()
+        mock_propfind_resp.text = propfind_xml
+
+        mock_dl_resp = MagicMock()
+        mock_dl_resp.content = b"%PDF-1.4"
+
+        with (
+            patch("requests.request", return_value=mock_propfind_resp),
+            patch("requests.get", return_value=mock_dl_resp),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._mark_processed") as mock_mark,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+
+            count = _scan_user_webdav_folder(
+                cfg={"url": "https://dav.example.com", "folder_path": "inbox"},
+                creds={"username": "u", "password": "p"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 1
+        mock_enqueue.assert_called_once()
+        mock_mark.assert_called_once()
+
+    def test_skips_directory_entries(self, tmp_path):
+        """Entries ending with / should be skipped (directories)."""
+        from app.tasks.watch_folder_tasks import _scan_user_webdav_folder
+
+        propfind_xml = _build_propfind_xml(
+            [
+                "/inbox/",
+                "/inbox/subdir/",
+            ]
+        )
+
+        mock_propfind_resp = MagicMock()
+        mock_propfind_resp.text = propfind_xml
+
+        with (
+            patch("requests.request", return_value=mock_propfind_resp),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+
+            count = _scan_user_webdav_folder(
+                cfg={"url": "https://dav.example.com", "folder_path": "inbox"},
+                creds={"username": "u", "password": "p"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 0
+        mock_enqueue.assert_not_called()
+
+    def test_skips_cached_file(self, tmp_path):
+        """Files already in cache should be skipped."""
+        from app.tasks.watch_folder_tasks import _scan_user_webdav_folder
+
+        propfind_xml = _build_propfind_xml(
+            [
+                "/inbox/",
+                "/inbox/doc.pdf",
+            ]
+        )
+
+        mock_propfind_resp = MagicMock()
+        mock_propfind_resp.text = propfind_xml
+
+        with (
+            patch("requests.request", return_value=mock_propfind_resp),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+
+            count = _scan_user_webdav_folder(
+                cfg={"url": "https://dav.example.com", "folder_path": "inbox"},
+                creds={"username": "u", "password": "p"},
+                cache={"webdav:/inbox/doc.pdf": "done"},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 0
+        mock_enqueue.assert_not_called()
+
+    def test_deletes_after_download(self, tmp_path):
+        """delete_after=True should send DELETE request."""
+        from app.tasks.watch_folder_tasks import _scan_user_webdav_folder
+
+        propfind_xml = _build_propfind_xml(
+            [
+                "/inbox/",
+                "/inbox/doc.pdf",
+            ]
+        )
+
+        mock_propfind_resp = MagicMock()
+        mock_propfind_resp.text = propfind_xml
+
+        mock_dl_resp = MagicMock()
+        mock_dl_resp.content = b"%PDF-1.4"
+
+        mock_del_resp = MagicMock()
+
+        with (
+            patch("requests.request", side_effect=[mock_propfind_resp, mock_del_resp]) as mock_request,
+            patch("requests.get", return_value=mock_dl_resp),
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file"),
+            patch("app.tasks.watch_folder_tasks._mark_processed"),
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+
+            count = _scan_user_webdav_folder(
+                cfg={"url": "https://dav.example.com", "folder_path": "inbox"},
+                creds={"username": "u", "password": "p"},
+                cache={},
+                delete_after=True,
+                owner_id="u1",
+            )
+
+        assert count == 1
+        assert mock_request.call_count == 2
+        delete_call = mock_request.call_args_list[1]
+        assert delete_call[0][0] == "DELETE"
+
+    def test_handles_download_failure(self, tmp_path):
+        """Download failure should skip the file and continue."""
+        from app.tasks.watch_folder_tasks import _scan_user_webdav_folder
+
+        propfind_xml = _build_propfind_xml(
+            [
+                "/inbox/",
+                "/inbox/doc.pdf",
+            ]
+        )
+
+        mock_propfind_resp = MagicMock()
+        mock_propfind_resp.text = propfind_xml
+
+        with (
+            patch("requests.request", return_value=mock_propfind_resp),
+            patch("requests.get") as mock_get,
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+            mock_get.side_effect = Exception("Download failed")
+
+            count = _scan_user_webdav_folder(
+                cfg={"url": "https://dav.example.com", "folder_path": "inbox"},
+                creds={"username": "u", "password": "p"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 0
+        mock_enqueue.assert_not_called()
+
+    def test_handles_absolute_href_url(self, tmp_path):
+        """Absolute href URLs should be used directly for download."""
+        from app.tasks.watch_folder_tasks import _scan_user_webdav_folder
+
+        propfind_xml = _build_propfind_xml(
+            [
+                "/inbox/",
+                "https://dav.example.com/inbox/doc.pdf",
+            ]
+        )
+
+        mock_propfind_resp = MagicMock()
+        mock_propfind_resp.text = propfind_xml
+
+        mock_dl_resp = MagicMock()
+        mock_dl_resp.content = b"%PDF-1.4"
+
+        with (
+            patch("requests.request", return_value=mock_propfind_resp),
+            patch("requests.get", return_value=mock_dl_resp) as mock_get,
+            patch("app.tasks.watch_folder_tasks.settings") as mock_settings,
+            patch("app.tasks.watch_folder_tasks._enqueue_file") as mock_enqueue,
+            patch("app.tasks.watch_folder_tasks._mark_processed"),
+            patch("app.tasks.watch_folder_tasks._is_allowed_file", return_value=True),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.http_request_timeout = 30
+
+            count = _scan_user_webdav_folder(
+                cfg={"url": "https://dav.example.com", "folder_path": "inbox"},
+                creds={"username": "u", "password": "p"},
+                cache={},
+                delete_after=False,
+                owner_id="u1",
+            )
+
+        assert count == 1
+        mock_enqueue.assert_called_once()
+        download_url = mock_get.call_args[0][0]
+        assert download_url == "https://dav.example.com/inbox/doc.pdf"
+
 
 @pytest.mark.unit
 class TestScanAllWatchFoldersIncludesUserIntegrations:
