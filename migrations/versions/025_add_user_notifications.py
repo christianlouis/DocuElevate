@@ -1,7 +1,7 @@
 """Add user notification tables (targets, preferences, in-app inbox)
 
 Revision ID: 025_add_user_notifications
-Revises: 024_add_api_tokens
+Revises: 025_add_shared_links
 Create Date: 2026-03-09
 """
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "025_add_user_notifications"
-down_revision: Union[str, None] = "024_add_api_tokens"
+down_revision: Union[str, None] = "025_add_shared_links"
 depends_on: Union[str, None] = None
 
 
