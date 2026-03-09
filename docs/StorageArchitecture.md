@@ -295,6 +295,78 @@ with SessionLocal() as db:
         pass
 ```
 
+## User-Specific Destination Routing
+
+### Overview
+
+When a document has an identified owner (non-anonymous user), DocuElevate
+routes the processed file to **that user's own configured destinations** instead
+of the system-wide global destinations.  This enables true multi-tenant
+operation: each user's documents are stored where *they* configured, using
+*their* OAuth tokens or API credentials.
+
+### Routing Decision
+
+The routing decision is made in `finalize_document_storage` after all
+processing steps are complete:
+
+```
+Document owner has active DESTINATION integrations?
+    ├── YES → send_to_user_destinations (user-specific routing)
+    └── NO  → send_to_all_destinations  (global fallback)
+```
+
+"Active DESTINATION integrations" means rows in the `user_integrations` table
+where `owner_id` matches, `direction = "DESTINATION"`, and `is_active = True`.
+
+### User Integrations as Destinations
+
+Users configure their own upload targets via the **Integrations** dashboard
+(`/integrations`).  A DESTINATION integration stores:
+
+- **Config** (`config` column, JSON): non-sensitive settings such as bucket
+  name, remote folder, SMTP host, etc.
+- **Credentials** (`credentials` column, Fernet-encrypted JSON): sensitive
+  values such as OAuth refresh tokens, API keys, and passwords.
+
+When uploading, credentials are decrypted at task execution time and passed
+directly to the appropriate upload handler — they never appear in plain text
+in task messages or logs.
+
+### Supported Destination Types
+
+| Integration Type | Upload Method |
+|-----------------|--------------|
+| `DROPBOX`       | Dropbox SDK, OAuth refresh-token flow |
+| `S3`            | boto3 `upload_file`, per-user access key |
+| `GOOGLE_DRIVE`  | Google Drive API v3, OAuth or service account |
+| `ONEDRIVE`      | Microsoft Graph API, MSAL confidential-client |
+| `WEBDAV`        | HTTP PUT request, Basic Auth |
+| `NEXTCLOUD`     | WebDAV (same as WEBDAV, Nextcloud-compatible path) |
+| `FTP`           | ftplib FTPS (TLS preferred, plaintext configurable) |
+| `SFTP`          | Paramiko, password or private-key auth |
+| `PAPERLESS`     | Paperless-ngx REST API, API token |
+| `EMAIL`         | SMTP/STARTTLS, file as attachment |
+| `RCLONE`        | `rclone copyto` subprocess, per-user rclone config |
+
+### Multiple Destinations
+
+If a user configures multiple active DESTINATION integrations, the file is
+uploaded to **each one asynchronously and independently**.  Success or failure
+per destination is logged separately so a single failing destination does not
+block the others.
+
+### Fallback to Global Destinations
+
+Global destinations (configured via environment variables / admin settings)
+are used whenever:
+
+- The document has no owner (`owner_id` is `None`), e.g., uploaded in
+  single-user / anonymous mode.
+- The owner exists but has **zero** active DESTINATION integrations.
+
+This ensures backward compatibility with existing single-user deployments.
+
 ## See Also
 
 - [API Documentation](API.md) - API endpoints for file operations
