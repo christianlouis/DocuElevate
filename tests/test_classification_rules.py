@@ -104,7 +104,7 @@ class TestFilenamePatternMatching:
         result = classify_document(filename="Payment_Receipt.pdf")
         assert result.category == "receipt"
 
-    def test_unrecognised_filename(self):
+    def test_unrecognized_filename(self):
         """A generic filename with no keywords should return 'unknown'."""
         result = classify_document(filename="document_12345.pdf")
         assert result.category == "unknown"

@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # Pre-built categories
 # ---------------------------------------------------------------------------
 
-#: Canonical category names recognised by the system.  Users may also define
+#: Canonical category names recognized by the system.  Users may also define
 #: their own categories via custom rules.
 BUILTIN_CATEGORIES: dict[str, str] = {
     "invoice": "Invoice",
