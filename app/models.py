@@ -777,3 +777,59 @@ class InAppNotification(Base):
     is_read = Column(Boolean, nullable=False, default=False, index=True)
     file_id = Column(Integer, nullable=True)  # Optional link to FileRecord
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class ScheduledJob(Base):
+    """
+    Configuration record for an admin-managed scheduled batch processing job.
+
+    Each row represents one recurring job entry.  The Celery Beat schedule is
+    built from these rows at worker startup; changes take effect after the
+    worker process is restarted.
+
+    Schedule types
+    --------------
+    - ``"cron"``     – standard cron expression fields (minute/hour/…)
+    - ``"interval"`` – fixed interval in seconds (e.g. 3600 for hourly)
+    """
+
+    __tablename__ = "scheduled_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Unique machine-readable key used as the Celery Beat schedule entry name.
+    name = Column(String(100), unique=True, nullable=False, index=True)
+
+    # Human-readable display name shown in the admin UI.
+    display_name = Column(String(255), nullable=False)
+
+    # Short description of what the job does.
+    description = Column(Text, nullable=True)
+
+    # Fully-qualified Celery task name, e.g. "app.tasks.batch_tasks.process_new_documents".
+    task_name = Column(String(255), nullable=False)
+
+    # Whether the job is active.  Inactive jobs are excluded from the beat schedule.
+    enabled = Column(Boolean, nullable=False, default=True)
+
+    # Schedule type: "cron" or "interval".
+    schedule_type = Column(String(20), nullable=False, default="cron")
+
+    # --- Cron fields (used when schedule_type == "cron") ---
+    cron_minute = Column(String(50), nullable=False, default="0")
+    cron_hour = Column(String(50), nullable=False, default="*")
+    cron_day_of_week = Column(String(50), nullable=False, default="*")
+    cron_day_of_month = Column(String(50), nullable=False, default="*")
+    cron_month_of_year = Column(String(50), nullable=False, default="*")
+
+    # --- Interval field (used when schedule_type == "interval") ---
+    # Interval in seconds; e.g. 3600 = hourly, 86400 = daily.
+    interval_seconds = Column(Integer, nullable=True)
+
+    # Timestamps populated by the worker after each execution.
+    last_run_at = Column(DateTime(timezone=True), nullable=True)
+    last_run_status = Column(String(20), nullable=True)  # "success", "failed", "running"
+    last_run_detail = Column(Text, nullable=True)  # Brief result summary or error
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

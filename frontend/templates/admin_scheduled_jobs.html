@@ -1,0 +1,558 @@
+{% extends "base.html" %}
+{% block title %}Scheduled Jobs – Admin – DocuElevate{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8" x-data="scheduledJobsApp()">
+
+  <!-- ── Header ─────────────────────────────────────────────────────────────── -->
+  <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <h1 class="text-3xl font-bold text-gray-900 flex items-center gap-2">
+        <i class="fas fa-clock text-indigo-500" aria-hidden="true"></i>
+        Scheduled Jobs
+        <span class="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded px-2 py-0.5 ml-1">Admin Only</span>
+      </h1>
+      <p class="text-gray-500 text-sm mt-1">
+        Manage and trigger scheduled batch processing jobs. Schedule changes take effect after the worker restarts.
+      </p>
+    </div>
+    <button
+      type="button"
+      @click="fetchJobs()"
+      class="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400"
+      aria-label="Refresh job list"
+    >
+      <i class="fas fa-sync-alt mr-2" aria-hidden="true"></i> Refresh
+    </button>
+  </div>
+
+  <!-- ── Alert banner ───────────────────────────────────────────────────────── -->
+  <div x-show="alert.show" x-transition class="mb-4" role="alert" :aria-live="alert.type === 'error' ? 'assertive' : 'polite'">
+    <div
+      :class="alert.type === 'success'
+        ? 'bg-green-50 border-green-400 text-green-800'
+        : 'bg-red-50 border-red-400 text-red-800'"
+      class="border-l-4 p-4 rounded"
+    >
+      <p class="font-semibold" x-text="alert.title"></p>
+      <p class="text-sm mt-1" x-text="alert.message"></p>
+    </div>
+  </div>
+
+  <!-- ── Info box ───────────────────────────────────────────────────────────── -->
+  <div class="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800 flex items-start gap-3">
+    <i class="fas fa-info-circle mt-0.5 flex-shrink-0" aria-hidden="true"></i>
+    <div>
+      <strong>How scheduling works:</strong>
+      These jobs are executed by the Celery Beat scheduler running inside the worker container.
+      Schedule changes (cron / interval) and enable / disable toggles are persisted immediately,
+      but the Celery Beat process reads the schedule only at startup — so changes take effect
+      after the worker is restarted.  You can always trigger any job <strong>right now</strong>
+      using the <em>Run Now</em> button without restarting.
+    </div>
+  </div>
+
+  <!-- ── Loading spinner ────────────────────────────────────────────────────── -->
+  <div x-show="loading" class="flex justify-center py-12" aria-live="polite" aria-label="Loading scheduled jobs">
+    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" role="status">
+      <span class="sr-only">Loading…</span>
+    </div>
+  </div>
+
+  <!-- ── Jobs list ──────────────────────────────────────────────────────────── -->
+  <div x-show="!loading" class="space-y-4">
+    <template x-if="jobs.length === 0">
+      <div class="text-center py-12 text-gray-500">
+        <i class="fas fa-clock text-4xl mb-3 opacity-30" aria-hidden="true"></i>
+        <p>No scheduled jobs found.</p>
+      </div>
+    </template>
+
+    <template x-for="job in jobs" :key="job.id">
+      <div class="bg-white shadow rounded-lg overflow-hidden">
+        <!-- Card header -->
+        <div class="px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-gray-100">
+          <div class="flex items-center gap-3">
+            <!-- Enable / disable toggle -->
+            <button
+              type="button"
+              @click="toggleEnabled(job)"
+              :aria-label="job.enabled ? 'Disable job ' + job.display_name : 'Enable job ' + job.display_name"
+              :aria-pressed="job.enabled"
+              class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+              :class="job.enabled ? 'bg-indigo-600' : 'bg-gray-200'"
+            >
+              <span
+                class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                :class="job.enabled ? 'translate-x-5' : 'translate-x-0'"
+              ></span>
+            </button>
+            <div>
+              <h2 class="text-base font-semibold text-gray-900" x-text="job.display_name"></h2>
+              <p class="text-xs text-gray-500 mt-0.5" x-text="job.description"></p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 flex-wrap">
+            <!-- Status badge -->
+            <span
+              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+              :class="{
+                'bg-green-100 text-green-800': job.enabled,
+                'bg-gray-100 text-gray-600': !job.enabled
+              }"
+            >
+              <span
+                class="w-1.5 h-1.5 rounded-full mr-1.5"
+                :class="job.enabled ? 'bg-green-500' : 'bg-gray-400'"
+              ></span>
+              <span x-text="job.enabled ? 'Active' : 'Disabled'"></span>
+            </span>
+
+            <!-- Run Now button -->
+            <button
+              type="button"
+              @click="runNow(job)"
+              :disabled="runningJobIds.includes(job.id)"
+              class="inline-flex items-center px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              :aria-label="'Run job ' + job.display_name + ' now'"
+            >
+              <template x-if="runningJobIds.includes(job.id)">
+                <i class="fas fa-spinner fa-spin mr-1.5" aria-hidden="true"></i>
+              </template>
+              <template x-if="!runningJobIds.includes(job.id)">
+                <i class="fas fa-play mr-1.5" aria-hidden="true"></i>
+              </template>
+              Run Now
+            </button>
+
+            <!-- Edit button -->
+            <button
+              type="button"
+              @click="openEditModal(job)"
+              class="inline-flex items-center px-3 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              :aria-label="'Edit schedule for ' + job.display_name"
+            >
+              <i class="fas fa-edit mr-1.5" aria-hidden="true"></i> Edit Schedule
+            </button>
+          </div>
+        </div>
+
+        <!-- Card body: schedule info + last run -->
+        <div class="px-6 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+
+          <!-- Schedule type -->
+          <div>
+            <span class="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Schedule Type</span>
+            <span
+              class="inline-flex items-center gap-1 font-medium text-gray-700"
+              x-text="job.schedule_type === 'cron' ? 'Cron' : 'Interval'"
+            ></span>
+          </div>
+
+          <!-- Schedule expression -->
+          <div>
+            <span class="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Schedule</span>
+            <code
+              class="text-xs bg-gray-100 rounded px-1.5 py-0.5 font-mono text-gray-800"
+              x-text="formatSchedule(job)"
+            ></code>
+          </div>
+
+          <!-- Last run -->
+          <div>
+            <span class="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Last Run</span>
+            <span
+              class="text-gray-700"
+              x-text="job.last_run_at ? formatDate(job.last_run_at) : 'Never'"
+            ></span>
+          </div>
+
+          <!-- Last result -->
+          <div>
+            <span class="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Last Result</span>
+            <template x-if="job.last_run_status">
+              <span
+                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                :class="{
+                  'bg-green-100 text-green-800': job.last_run_status === 'success',
+                  'bg-red-100 text-red-800': job.last_run_status === 'failed',
+                  'bg-yellow-100 text-yellow-800': job.last_run_status === 'running'
+                }"
+              >
+                <i
+                  :class="{
+                    'fas fa-check-circle': job.last_run_status === 'success',
+                    'fas fa-exclamation-circle': job.last_run_status === 'failed',
+                    'fas fa-spinner fa-spin': job.last_run_status === 'running'
+                  }"
+                  aria-hidden="true"
+                ></i>
+                <span x-text="job.last_run_status.charAt(0).toUpperCase() + job.last_run_status.slice(1)"></span>
+              </span>
+            </template>
+            <template x-if="!job.last_run_status">
+              <span class="text-gray-400 text-xs">—</span>
+            </template>
+            <template x-if="job.last_run_detail">
+              <p class="text-xs text-gray-500 mt-1" x-text="job.last_run_detail"></p>
+            </template>
+          </div>
+
+        </div>
+
+        <!-- Task name (collapsed) -->
+        <div class="px-6 pb-4">
+          <details class="text-xs text-gray-400">
+            <summary class="cursor-pointer hover:text-gray-600 select-none">Technical details</summary>
+            <div class="mt-2 space-y-1">
+              <p><span class="font-medium">Task:</span> <code class="bg-gray-100 rounded px-1" x-text="job.task_name"></code></p>
+              <p><span class="font-medium">Job key:</span> <code class="bg-gray-100 rounded px-1" x-text="job.name"></code></p>
+            </div>
+          </details>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- ── Edit schedule modal ────────────────────────────────────────────────── -->
+  <div
+    x-show="editModal.open"
+    x-transition:enter="ease-out duration-200"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="ease-in duration-150"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    class="fixed inset-0 z-50 overflow-y-auto"
+    role="dialog"
+    aria-modal="true"
+    :aria-labelledby="'edit-modal-title-' + (editModal.job ? editModal.job.id : '')"
+    x-cloak
+  >
+    <div class="flex items-center justify-center min-h-screen px-4 py-8">
+      <!-- Backdrop -->
+      <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeEditModal()" aria-hidden="true"></div>
+
+      <!-- Panel -->
+      <div
+        class="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6 z-10"
+        @click.stop
+      >
+        <div class="mb-4 flex items-center justify-between">
+          <h2
+            :id="'edit-modal-title-' + (editModal.job ? editModal.job.id : '')"
+            class="text-lg font-semibold text-gray-900"
+            x-text="'Edit Schedule: ' + (editModal.job ? editModal.job.display_name : '')"
+          ></h2>
+          <button
+            type="button"
+            @click="closeEditModal()"
+            class="text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
+            aria-label="Close edit modal"
+          >
+            <i class="fas fa-times" aria-hidden="true"></i>
+          </button>
+        </div>
+
+        <form @submit.prevent="saveSchedule()" novalidate>
+
+          <!-- Schedule type -->
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="scheduleType">Schedule Type</label>
+            <select
+              id="scheduleType"
+              x-model="editModal.form.schedule_type"
+              class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            >
+              <option value="cron">Cron</option>
+              <option value="interval">Interval</option>
+            </select>
+          </div>
+
+          <!-- Cron fields -->
+          <div x-show="editModal.form.schedule_type === 'cron'" class="space-y-3 mb-4">
+            <p class="text-xs text-gray-500">
+              Standard cron expressions. Use <code class="bg-gray-100 px-1 rounded">*</code> for every value,
+              <code class="bg-gray-100 px-1 rounded">*/n</code> for every n-th value,
+              <code class="bg-gray-100 px-1 rounded">0,6</code> for specific values.
+            </p>
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1" for="cronMinute">Minute</label>
+                <input id="cronMinute" type="text" x-model="editModal.form.cron_minute"
+                  class="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  placeholder="0" required />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1" for="cronHour">Hour</label>
+                <input id="cronHour" type="text" x-model="editModal.form.cron_hour"
+                  class="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  placeholder="*" required />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1" for="cronDow">Day of Week</label>
+                <input id="cronDow" type="text" x-model="editModal.form.cron_day_of_week"
+                  class="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  placeholder="*" required />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1" for="cronDom">Day of Month</label>
+                <input id="cronDom" type="text" x-model="editModal.form.cron_day_of_month"
+                  class="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  placeholder="*" required />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1" for="cronMoy">Month</label>
+                <input id="cronMoy" type="text" x-model="editModal.form.cron_month_of_year"
+                  class="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  placeholder="*" required />
+              </div>
+            </div>
+          </div>
+
+          <!-- Interval field -->
+          <div x-show="editModal.form.schedule_type === 'interval'" class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="intervalSeconds">Interval (seconds)</label>
+            <input
+              id="intervalSeconds"
+              type="number"
+              min="60"
+              x-model.number="editModal.form.interval_seconds"
+              class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              placeholder="3600"
+            />
+            <p class="text-xs text-gray-500 mt-1">Minimum 60 seconds. Examples: 3600 = hourly, 86400 = daily.</p>
+          </div>
+
+          <!-- Form errors -->
+          <div x-show="editModal.error" class="mb-4 bg-red-50 border border-red-300 text-red-700 rounded p-3 text-sm" x-text="editModal.error" role="alert"></div>
+
+          <!-- Actions -->
+          <div class="flex justify-end gap-3">
+            <button
+              type="button"
+              @click="closeEditModal()"
+              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              :disabled="editModal.saving"
+              class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <i x-show="editModal.saving" class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function scheduledJobsApp() {
+  return {
+    jobs: [],
+    loading: true,
+    runningJobIds: [],
+    alert: { show: false, type: 'success', title: '', message: '' },
+    editModal: {
+      open: false,
+      job: null,
+      saving: false,
+      error: null,
+      form: {
+        schedule_type: 'cron',
+        cron_minute: '0',
+        cron_hour: '*',
+        cron_day_of_week: '*',
+        cron_day_of_month: '*',
+        cron_month_of_year: '*',
+        interval_seconds: 3600,
+      },
+    },
+
+    init() {
+      this.fetchJobs();
+    },
+
+    async fetchJobs() {
+      this.loading = true;
+      try {
+        const resp = await fetch('/api/admin/scheduled-jobs', { credentials: 'same-origin' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        this.jobs = await resp.json();
+      } catch (err) {
+        this.showAlert('error', 'Failed to load jobs', err.message);
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async toggleEnabled(job) {
+      const newValue = !job.enabled;
+      try {
+        const resp = await fetch(`/api/admin/scheduled-jobs/${job.id}`, {
+          method: 'PATCH',
+          headers: this._headers(),
+          body: JSON.stringify({ enabled: newValue }),
+          credentials: 'same-origin',
+        });
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          throw new Error(body.detail || `HTTP ${resp.status}`);
+        }
+        const updated = await resp.json();
+        const idx = this.jobs.findIndex(j => j.id === job.id);
+        if (idx !== -1) this.jobs[idx] = updated;
+        this.showAlert(
+          'success',
+          updated.enabled ? 'Job enabled' : 'Job disabled',
+          `"${updated.display_name}" has been ${updated.enabled ? 'enabled' : 'disabled'}. Restart the worker for changes to take effect.`
+        );
+      } catch (err) {
+        this.showAlert('error', 'Update failed', err.message);
+      }
+    },
+
+    async runNow(job) {
+      if (this.runningJobIds.includes(job.id)) return;
+      this.runningJobIds.push(job.id);
+      try {
+        const resp = await fetch(`/api/admin/scheduled-jobs/${job.id}/run-now`, {
+          method: 'POST',
+          headers: this._headers(),
+          credentials: 'same-origin',
+        });
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          throw new Error(body.detail || `HTTP ${resp.status}`);
+        }
+        const data = await resp.json();
+        this.showAlert(
+          'success',
+          'Job dispatched',
+          `"${job.display_name}" has been queued (task ID: ${data.task_id}). Refresh to see the updated last-run status.`
+        );
+        // Refresh after a short delay so the status can update.
+        setTimeout(() => this.fetchJobs(), 3000);
+      } catch (err) {
+        this.showAlert('error', 'Failed to dispatch job', err.message);
+      } finally {
+        this.runningJobIds = this.runningJobIds.filter(id => id !== job.id);
+      }
+    },
+
+    openEditModal(job) {
+      this.editModal.job = job;
+      this.editModal.error = null;
+      this.editModal.saving = false;
+      this.editModal.form = {
+        schedule_type: job.schedule_type,
+        cron_minute: job.cron_minute,
+        cron_hour: job.cron_hour,
+        cron_day_of_week: job.cron_day_of_week,
+        cron_day_of_month: job.cron_day_of_month,
+        cron_month_of_year: job.cron_month_of_year,
+        interval_seconds: job.interval_seconds || 3600,
+      };
+      this.editModal.open = true;
+    },
+
+    closeEditModal() {
+      this.editModal.open = false;
+      this.editModal.job = null;
+      this.editModal.error = null;
+    },
+
+    async saveSchedule() {
+      if (!this.editModal.job) return;
+      this.editModal.saving = true;
+      this.editModal.error = null;
+
+      const payload = { schedule_type: this.editModal.form.schedule_type };
+      if (this.editModal.form.schedule_type === 'cron') {
+        payload.cron_minute = this.editModal.form.cron_minute;
+        payload.cron_hour = this.editModal.form.cron_hour;
+        payload.cron_day_of_week = this.editModal.form.cron_day_of_week;
+        payload.cron_day_of_month = this.editModal.form.cron_day_of_month;
+        payload.cron_month_of_year = this.editModal.form.cron_month_of_year;
+      } else {
+        const secs = parseInt(this.editModal.form.interval_seconds, 10);
+        if (!secs || secs < 60) {
+          this.editModal.error = 'Interval must be at least 60 seconds.';
+          this.editModal.saving = false;
+          return;
+        }
+        payload.interval_seconds = secs;
+      }
+
+      try {
+        const resp = await fetch(`/api/admin/scheduled-jobs/${this.editModal.job.id}`, {
+          method: 'PATCH',
+          headers: this._headers(),
+          body: JSON.stringify(payload),
+          credentials: 'same-origin',
+        });
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          throw new Error(body.detail || `HTTP ${resp.status}`);
+        }
+        const updated = await resp.json();
+        const idx = this.jobs.findIndex(j => j.id === this.editModal.job.id);
+        if (idx !== -1) this.jobs[idx] = updated;
+        this.closeEditModal();
+        this.showAlert(
+          'success',
+          'Schedule updated',
+          `"${updated.display_name}" schedule saved. Restart the worker for changes to take effect.`
+        );
+      } catch (err) {
+        this.editModal.error = err.message;
+      } finally {
+        this.editModal.saving = false;
+      }
+    },
+
+    formatSchedule(job) {
+      if (job.schedule_type === 'interval') {
+        const s = job.interval_seconds || 0;
+        if (s >= 86400) return `Every ${s / 86400}d`;
+        if (s >= 3600) return `Every ${s / 3600}h`;
+        if (s >= 60) return `Every ${s / 60}m`;
+        return `Every ${s}s`;
+      }
+      return `${job.cron_minute} ${job.cron_hour} ${job.cron_day_of_month} ${job.cron_month_of_year} ${job.cron_day_of_week}`;
+    },
+
+    formatDate(isoStr) {
+      try {
+        return new Date(isoStr).toLocaleString(undefined, {
+          dateStyle: 'short', timeStyle: 'short'
+        });
+      } catch {
+        return isoStr;
+      }
+    },
+
+    showAlert(type, title, message) {
+      this.alert = { show: true, type, title, message };
+      setTimeout(() => { this.alert.show = false; }, 6000);
+    },
+
+    _headers() {
+      const meta = document.querySelector('meta[name="csrf-token"]');
+      const headers = { 'Content-Type': 'application/json' };
+      if (meta) headers['X-CSRF-Token'] = meta.content;
+      return headers;
+    },
+  };
+}
+</script>
+{% endblock %}

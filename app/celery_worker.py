@@ -9,6 +9,11 @@ from app import tasks  # noqa: F401 - Imports app/tasks.py so Celery can registe
 from app.celery_app import celery
 from app.config import settings
 from app.tasks.backup_tasks import cleanup_old_backups, create_backup  # noqa: F401
+from app.tasks.batch_tasks import (  # noqa: F401
+    cleanup_temp_files,
+    process_new_documents,
+    reprocess_failed_documents,
+)
 from app.tasks.check_credentials import check_credentials
 from app.tasks.compute_embedding import backfill_missing_embeddings, compute_document_embedding  # noqa: F401
 from app.tasks.convert_to_pdf import convert_to_pdf  # noqa: F401
