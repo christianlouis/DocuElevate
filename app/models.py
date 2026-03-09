@@ -544,8 +544,54 @@ class UserIntegration(Base):
     IMAP:
       config      = {"host": "imap.example.com", "port": 993,
                      "username": "user@example.com", "use_ssl": true,
-                     "delete_after_process": false}
+                     "delete_after_process": false,
+                     "gmail_apply_labels": true}
       credentials = {"password": "secret"}
+
+    WATCH_FOLDER (local):
+      config      = {"source_type": "local",
+                     "folder_path": "/data/inbox",
+                     "delete_after_process": false}
+
+    WATCH_FOLDER (s3):
+      config      = {"source_type": "s3", "bucket": "my-bucket",
+                     "region": "us-east-1", "prefix": "inbox/",
+                     "endpoint_url": null, "delete_after_process": false}
+      credentials = {"access_key_id": "AKI…", "secret_access_key": "…"}
+
+    WATCH_FOLDER (dropbox):
+      config      = {"source_type": "dropbox",
+                     "folder_path": "/Inbox/Scanner",
+                     "delete_after_process": false}
+      credentials = {"refresh_token": "…", "app_key": "…",
+                     "app_secret": "…"}
+
+    WATCH_FOLDER (google_drive):
+      config      = {"source_type": "google_drive",
+                     "folder_id": "1abc…",
+                     "delete_after_process": false}
+      credentials = {"credentials_json": "{…service-account…}"}
+
+    WATCH_FOLDER (onedrive):
+      config      = {"source_type": "onedrive",
+                     "folder_path": "/Documents/Inbox",
+                     "delete_after_process": false}
+      credentials = {"refresh_token": "…", "client_id": "…",
+                     "client_secret": "…"}
+
+    WATCH_FOLDER (nextcloud):
+      config      = {"source_type": "nextcloud",
+                     "url": "https://cloud.example.com",
+                     "folder_path": "/Documents/Inbox",
+                     "delete_after_process": false}
+      credentials = {"username": "user", "password": "secret"}
+
+    WATCH_FOLDER (webdav):
+      config      = {"source_type": "webdav",
+                     "url": "https://webdav.example.com/dav/",
+                     "folder_path": "/remote.php/webdav/Inbox",
+                     "delete_after_process": false}
+      credentials = {"username": "user", "password": "secret"}
 
     S3:
       config      = {"bucket": "my-bucket", "region": "us-east-1",

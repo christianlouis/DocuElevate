@@ -461,16 +461,28 @@
               <label for="imap-password" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Password <span class="text-red-500" aria-hidden="true">*</span></label>
               <input id="imap-password" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.password" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
             </div>
-            <div class="flex items-center gap-4">
+            <div class="flex flex-wrap items-center gap-4">
               <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
                 <input type="checkbox" x-model="form.config.use_ssl" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                 Use SSL
+              </label>
+              <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
+                <input type="checkbox" x-model="form.config.delete_after_process" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                Delete emails after processing
+              </label>
+              <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
+                <input type="checkbox" x-model="form.config.gmail_apply_labels" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                Apply Gmail labels &amp; star
               </label>
               <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
                 <input type="checkbox" x-model="showPassword" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                 Show password
               </label>
             </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
+              Gmail labels &amp; star: when enabled, processed emails are starred and tagged with an "Ingested" label in Gmail. Only applies to Gmail servers.
+            </p>
           </div>
         </template>
 
@@ -603,8 +615,182 @@
           <div class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
             <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Watch Folder Settings</p>
             <div>
-              <label for="wf-path" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder Path <span class="text-red-500" aria-hidden="true">*</span></label>
-              <input id="wf-path" type="text" x-model="form.config.path" placeholder="/data/inbox" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+              <label for="wf-source-type" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Source Type <span class="text-red-500" aria-hidden="true">*</span></label>
+              <select id="wf-source-type" x-model="form.config.source_type" @change="onWatchFolderSourceTypeChange()" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true">
+                <option value="local">Local Filesystem</option>
+                <option value="s3">Amazon S3</option>
+                <option value="dropbox">Dropbox</option>
+                <option value="google_drive">Google Drive</option>
+                <option value="onedrive">OneDrive</option>
+                <option value="nextcloud">Nextcloud</option>
+                <option value="webdav">WebDAV</option>
+              </select>
+            </div>
+
+            <!-- Local filesystem fields -->
+            <template x-if="form.config.source_type === 'local'">
+              <div>
+                <label for="wf-path" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder Path <span class="text-red-500" aria-hidden="true">*</span></label>
+                <input id="wf-path" type="text" x-model="form.config.folder_path" placeholder="/data/inbox" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+              </div>
+            </template>
+
+            <!-- S3 fields -->
+            <template x-if="form.config.source_type === 's3'">
+              <div class="space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label for="wf-s3-bucket" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Bucket <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="wf-s3-bucket" type="text" x-model="form.config.bucket" placeholder="my-bucket" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+                  </div>
+                  <div>
+                    <label for="wf-s3-region" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Region</label>
+                    <input id="wf-s3-region" type="text" x-model="form.config.region" placeholder="us-east-1" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label for="wf-s3-prefix" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Prefix (folder path)</label>
+                  <input id="wf-s3-prefix" type="text" x-model="form.config.prefix" placeholder="inbox/" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+                </div>
+                <div>
+                  <label for="wf-s3-endpoint" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Endpoint URL <span class="text-xs text-gray-400">(optional, for S3-compatible)</span></label>
+                  <input id="wf-s3-endpoint" type="text" x-model="form.config.endpoint_url" placeholder="https://s3.example.com" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label for="wf-s3-ak" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Access Key ID <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="wf-s3-ak" type="text" x-model="form.credentials.access_key_id" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+                  </div>
+                  <div>
+                    <label for="wf-s3-sk" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Secret Access Key <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="wf-s3-sk" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.secret_access_key" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Dropbox fields -->
+            <template x-if="form.config.source_type === 'dropbox'">
+              <div class="space-y-3">
+                <div>
+                  <label for="wf-dbx-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder Path <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <input id="wf-dbx-folder" type="text" x-model="form.config.folder_path" placeholder="/Inbox/Scanner" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+                </div>
+                <div>
+                  <label for="wf-dbx-token" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Refresh Token <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <input id="wf-dbx-token" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.refresh_token" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label for="wf-dbx-key" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">App Key <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="wf-dbx-key" type="text" x-model="form.credentials.app_key" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+                  </div>
+                  <div>
+                    <label for="wf-dbx-secret" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">App Secret <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="wf-dbx-secret" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.app_secret" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Google Drive fields -->
+            <template x-if="form.config.source_type === 'google_drive'">
+              <div class="space-y-3">
+                <div>
+                  <label for="wf-gd-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder ID <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <input id="wf-gd-folder" type="text" x-model="form.config.folder_id" placeholder="1ABCdef..." required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+                </div>
+                <div>
+                  <label for="wf-gd-creds" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Service Account JSON <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <textarea id="wf-gd-creds" x-model="form.credentials.credentials_json" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" rows="3" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm font-mono"></textarea>
+                </div>
+              </div>
+            </template>
+
+            <!-- OneDrive fields -->
+            <template x-if="form.config.source_type === 'onedrive'">
+              <div class="space-y-3">
+                <div>
+                  <label for="wf-od-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder Path <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <input id="wf-od-folder" type="text" x-model="form.config.folder_path" placeholder="/Documents/Inbox" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+                </div>
+                <div>
+                  <label for="wf-od-token" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Refresh Token <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <input id="wf-od-token" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.refresh_token" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label for="wf-od-cid" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Client ID <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="wf-od-cid" type="text" x-model="form.credentials.client_id" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+                  </div>
+                  <div>
+                    <label for="wf-od-cs" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Client Secret <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="wf-od-cs" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.client_secret" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Nextcloud fields -->
+            <template x-if="form.config.source_type === 'nextcloud'">
+              <div class="space-y-3">
+                <div>
+                  <label for="wf-nc-url" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Nextcloud URL <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <input id="wf-nc-url" type="url" x-model="form.config.url" placeholder="https://cloud.example.com" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+                </div>
+                <div>
+                  <label for="wf-nc-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder Path <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <input id="wf-nc-folder" type="text" x-model="form.config.folder_path" placeholder="/Documents/Inbox" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label for="wf-nc-user" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Username <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="wf-nc-user" type="text" x-model="form.credentials.username" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+                  </div>
+                  <div>
+                    <label for="wf-nc-pass" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Password <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="wf-nc-pass" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.password" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- WebDAV fields -->
+            <template x-if="form.config.source_type === 'webdav'">
+              <div class="space-y-3">
+                <div>
+                  <label for="wf-dav-url" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">WebDAV URL <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <input id="wf-dav-url" type="url" x-model="form.config.url" placeholder="https://webdav.example.com/dav/" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+                </div>
+                <div>
+                  <label for="wf-dav-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder Path <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <input id="wf-dav-folder" type="text" x-model="form.config.folder_path" placeholder="/remote.php/webdav/Inbox" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label for="wf-dav-user" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Username <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="wf-dav-user" type="text" x-model="form.credentials.username" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+                  </div>
+                  <div>
+                    <label for="wf-dav-pass" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Password <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="wf-dav-pass" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.password" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Common watch folder options -->
+            <div class="flex flex-wrap items-center gap-4 pt-2">
+              <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
+                <input type="checkbox" x-model="form.config.delete_after_process" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                Delete files after processing
+              </label>
+              <template x-if="form.config.source_type !== 'local'">
+                <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
+                  <input type="checkbox" x-model="showPassword" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                  Show secrets
+                </label>
+              </template>
             </div>
           </div>
         </template>
@@ -995,7 +1181,7 @@ function integrationsDashboard() {
       this.testResult = null;
       // Set sensible defaults
       if (this.form.integration_type === 'IMAP') {
-        this.form.config = { host: '', port: 993, username: '', use_ssl: true };
+        this.form.config = { host: '', port: 993, username: '', use_ssl: true, delete_after_process: false, gmail_apply_labels: true };
         this.form.credentials = { password: '' };
       } else if (this.form.integration_type === 'S3') {
         this.form.config = { bucket: '', region: 'us-east-1', folder_prefix: '', endpoint_url: '' };
@@ -1013,11 +1199,38 @@ function integrationsDashboard() {
         this.form.config = { recipient: '' };
         this.form.credentials = {};
       } else if (this.form.integration_type === 'WATCH_FOLDER') {
-        this.form.config = { path: '' };
+        this.form.config = { source_type: 'local', folder_path: '', delete_after_process: false };
         this.form.credentials = {};
       } else if (this.form.integration_type === 'PAPERLESS') {
         this.form.config = { url: '' };
         this.form.credentials = { api_token: '' };
+      }
+    },
+
+    onWatchFolderSourceTypeChange() {
+      const st = this.form.config.source_type;
+      const dap = this.form.config.delete_after_process || false;
+      this.form.credentials = {};
+      if (st === 'local') {
+        this.form.config = { source_type: st, folder_path: '', delete_after_process: dap };
+      } else if (st === 's3') {
+        this.form.config = { source_type: st, bucket: '', region: 'us-east-1', prefix: '', endpoint_url: '', delete_after_process: dap };
+        this.form.credentials = { access_key_id: '', secret_access_key: '' };
+      } else if (st === 'dropbox') {
+        this.form.config = { source_type: st, folder_path: '', delete_after_process: dap };
+        this.form.credentials = { refresh_token: '', app_key: '', app_secret: '' };
+      } else if (st === 'google_drive') {
+        this.form.config = { source_type: st, folder_id: '', delete_after_process: dap };
+        this.form.credentials = { credentials_json: '' };
+      } else if (st === 'onedrive') {
+        this.form.config = { source_type: st, folder_path: '', delete_after_process: dap };
+        this.form.credentials = { refresh_token: '', client_id: '', client_secret: '' };
+      } else if (st === 'nextcloud') {
+        this.form.config = { source_type: st, url: '', folder_path: '', delete_after_process: dap };
+        this.form.credentials = { username: '', password: '' };
+      } else if (st === 'webdav') {
+        this.form.config = { source_type: st, url: '', folder_path: '', delete_after_process: dap };
+        this.form.credentials = { username: '', password: '' };
       }
     },
 

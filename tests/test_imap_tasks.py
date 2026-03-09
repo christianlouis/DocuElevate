@@ -688,6 +688,59 @@ class TestPullInbox:
         mock_label.assert_called_once_with(mock_mail, b"1", label="Ingested")
 
     @patch("app.tasks.imap_tasks.email_already_has_label")
+    @patch("app.tasks.imap_tasks.mark_as_processed_with_label")
+    @patch("app.tasks.imap_tasks.mark_as_processed_with_star")
+    @patch("app.tasks.imap_tasks.fetch_attachments_and_enqueue")
+    @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
+    @patch("app.tasks.imap_tasks.load_processed_emails")
+    @patch("app.tasks.imap_tasks.save_processed_emails")
+    @patch("app.tasks.imap_tasks.settings")
+    def test_gmail_labels_disabled_when_gmail_apply_labels_false(
+        self,
+        mock_settings,
+        mock_save,
+        mock_load,
+        mock_imap_class,
+        mock_fetch,
+        mock_star,
+        mock_label,
+        mock_has_label,
+    ):
+        """Gmail star/label operations should be skipped when gmail_apply_labels=False."""
+        mock_settings.workdir = "/tmp"
+        mock_settings.imap_readonly_mode = False
+        mock_load.return_value = {}
+        mock_mail = MagicMock()
+        mock_imap_class.return_value = mock_mail
+
+        import email
+
+        msg = email.message.EmailMessage()
+        msg["Message-ID"] = "<test-no-labels@gmail.com>"
+        raw_email = msg.as_bytes()
+
+        mock_mail.login.return_value = ("OK", [])
+        mock_mail.select.return_value = ("OK", [])
+        mock_mail.search.return_value = ("OK", [b"1"])
+        mock_mail.fetch.return_value = ("OK", [[None, raw_email]])
+
+        pull_inbox(
+            mailbox_key="imap2",
+            host="imap.gmail.com",
+            port=993,
+            username="user@gmail.com",
+            password=_TEST_CREDENTIAL,
+            use_ssl=True,
+            delete_after_process=False,
+            gmail_apply_labels=False,
+        )
+
+        mock_star.assert_not_called()
+        mock_label.assert_not_called()
+        mock_has_label.assert_not_called()
+        mock_fetch.assert_called()
+
+    @patch("app.tasks.imap_tasks.email_already_has_label")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.settings")
@@ -1530,6 +1583,55 @@ class TestPullUserIntegrationImap:
 
         assert mock_integ.last_error is None
         assert mock_integ.last_used_at is not None
+
+    @patch("app.tasks.imap_tasks._get_db_session")
+    @patch("app.tasks.imap_tasks.pull_inbox")
+    def test_passes_gmail_apply_labels_config_to_pull_inbox(self, mock_pull, mock_session_factory):
+        """gmail_apply_labels config should be forwarded to pull_inbox."""
+        from app.tasks.imap_tasks import _pull_user_integration_imap
+
+        mock_integ = MagicMock()
+        mock_integ.id = 14
+        mock_integ.owner_id = "owner-gmail"
+        mock_integ.config = (
+            '{"host": "imap.gmail.com", "port": 993, "username": "u@gmail.com",'
+            ' "use_ssl": true, "gmail_apply_labels": false}'
+        )
+        mock_integ.credentials = "enc:encrypted"
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        with patch("app.utils.encryption.decrypt_value", return_value='{"password": "p"}'):
+            _pull_user_integration_imap()
+
+        mock_pull.assert_called_once()
+        call_kwargs = mock_pull.call_args
+        assert call_kwargs.kwargs.get("gmail_apply_labels") is False
+
+    @patch("app.tasks.imap_tasks._get_db_session")
+    @patch("app.tasks.imap_tasks.pull_inbox")
+    def test_gmail_apply_labels_defaults_to_true(self, mock_pull, mock_session_factory):
+        """Config without gmail_apply_labels should default to True."""
+        from app.tasks.imap_tasks import _pull_user_integration_imap
+
+        mock_integ = MagicMock()
+        mock_integ.id = 15
+        mock_integ.owner_id = "owner-gmail2"
+        mock_integ.config = '{"host": "imap.gmail.com", "port": 993, "username": "u@gmail.com", "use_ssl": true}'
+        mock_integ.credentials = "enc:encrypted"
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        mock_session_factory.return_value = mock_db
+
+        with patch("app.utils.encryption.decrypt_value", return_value='{"password": "p"}'):
+            _pull_user_integration_imap()
+
+        mock_pull.assert_called_once()
+        call_kwargs = mock_pull.call_args
+        assert call_kwargs.kwargs.get("gmail_apply_labels") is True
 
 
 @pytest.mark.unit
