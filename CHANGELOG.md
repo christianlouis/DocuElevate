@@ -10,6 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.114.0 (2026-03-09)
+
+### Bug Fixes
+
+- 100% coverage, WCAG accessibility fixes, and documentation updates for per-user OAuth wizards
+  ([`0529ae5`](https://github.com/christianlouis/DocuElevate/commit/0529ae53ff9367dc5390c1137896b2eea33ceb64))
+
+- **templates**: Remove orphan </div> in google_drive.html causing HTML accessibility lint failure
+  ([`256d9cb`](https://github.com/christianlouis/DocuElevate/commit/256d9cb674429bd7beebacd320d4701dafec6831))
+
+### Features
+
+- **integrations**: Add per-user OAuth wizard with user-mode for Dropbox, OneDrive, Google Drive
+  ([`c71f33a`](https://github.com/christianlouis/DocuElevate/commit/c71f33a214272badb5c719f7a91d46a352caa2d0))
+
+### Testing
+
+- **views**: Add user-mode coverage tests and fix dashboard helper duplication
+  ([`2d01e71`](https://github.com/christianlouis/DocuElevate/commit/2d01e71afd1a5f86ca47bc326216bc73d94095fb))
+
+
 ## v0.113.0 (2026-03-09)
 
 ### Bug Fixes
