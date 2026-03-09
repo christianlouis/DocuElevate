@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.111.1 (2026-03-09)
+
+### Bug Fixes
+
+- **migrations**: Resolve duplicate Alembic heads causing test failures
+  ([`c374ba3`](https://github.com/christianlouis/DocuElevate/commit/c374ba3ae973a4472968247d7d3b66d13b32f254))
+
+
 ## v0.111.0 (2026-03-09)
 
 ### Bug Fixes
