@@ -11,6 +11,7 @@ from app.api.api_tokens import router as api_tokens_router
 from app.api.azure import router as azure_router
 from app.api.backup import router as backup_router
 from app.api.billing import router as billing_router
+from app.api.classification_rules import router as classification_rules_router
 from app.api.database import router as database_router
 from app.api.diagnostic import router as diagnostic_router
 from app.api.dropbox import router as dropbox_router
@@ -82,3 +83,4 @@ router.include_router(imap_accounts_router)
 router.include_router(integrations_router)
 router.include_router(notifications_router)
 router.include_router(scheduled_jobs_router)
+router.include_router(classification_rules_router)
