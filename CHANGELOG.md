@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.113.0 (2026-03-09)
+
+### Bug Fixes
+
+- Code standards audit — 100% coverage, Pydantic v2 model_config, asyncio.run(), targeted edge-case
+  tests
+  ([`ec77c51`](https://github.com/christianlouis/DocuElevate/commit/ec77c51cb5ed538d346eebe809cc4e8cf580c94c))
+
+### Features
+
+- **tasks**: Add 5 additional scheduled jobs (expire_shared_links, prune_processing_logs,
+  prune_old_notifications, backfill_missing_metadata, sync_search_index)
+  ([`5bc1fac`](https://github.com/christianlouis/DocuElevate/commit/5bc1fac79cd1f4079df76e565c366c461457cb1a))
+
+- **tasks**: Add scheduled batch processing infrastructure (model, migration, tasks, API, view,
+  template)
+  ([`c2d56d7`](https://github.com/christianlouis/DocuElevate/commit/c2d56d74754703e2f6cff71161f0bfd33eec20a8))
+
+
 ## v0.112.0 (2026-03-09)
 
 ### Bug Fixes
