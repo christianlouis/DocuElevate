@@ -10,6 +10,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.112.0 (2026-03-09)
+
+### Bug Fixes
+
+- Address code review feedback - fix type hint and rename test
+  ([`4acad71`](https://github.com/christianlouis/DocuElevate/commit/4acad71c8f9179bb93226bf1aff778d3a3ff5178))
+
+- **imap**: Normalize CRLF line endings to LF in imap_tasks.py
+  ([`9a342af`](https://github.com/christianlouis/DocuElevate/commit/9a342af609b27caeb021f782d4c6e3febdd56623))
+
+### Documentation
+
+- **integrations**: Update UserGuide and ConfigurationGuide for new IMAP and Watch Folder features
+  ([`8c62a6b`](https://github.com/christianlouis/DocuElevate/commit/8c62a6b714d6de8516b748c1b52282c2a1f6cfa8))
+
+### Features
+
+- **integrations**: Add IMAP Gmail labels/delete and Watch Folder cloud source support
+  ([`e7d1289`](https://github.com/christianlouis/DocuElevate/commit/e7d1289f1b96168460e60612d23bb9e0b644d6e4))
+
+### Testing
+
+- Add tests for gmail_apply_labels=False and cloud source type dispatching
+  ([`79fc11b`](https://github.com/christianlouis/DocuElevate/commit/79fc11b45203ade500a35e58a7f2ffd1f6f64c7a))
+
+- **integrations**: Add tests for gmail_apply_labels and cloud watch folder dispatch
+  ([`8c62a6b`](https://github.com/christianlouis/DocuElevate/commit/8c62a6b714d6de8516b748c1b52282c2a1f6cfa8))
+
+- **tasks**: Add comprehensive tests for per-user cloud scan functions and gmail_apply_labels
+  ([`1741ab1`](https://github.com/christianlouis/DocuElevate/commit/1741ab1011866e7ec2131d7504c41dbcb1b52fb6))
+
+
 ## v0.111.1 (2026-03-09)
 
 ### Bug Fixes
