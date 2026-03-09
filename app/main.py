@@ -132,6 +132,20 @@ async def lifespan(app: FastAPI):
     except Exception:
         logging.debug("Default pipeline seeding skipped — DB may not be ready yet")  # noqa: S110
 
+    # Seed the default scheduled batch processing jobs so they appear in the
+    # admin UI (/admin/scheduled-jobs) on first startup.
+    try:
+        from app.api.scheduled_jobs import seed_default_scheduled_jobs as _seed_jobs
+        from app.database import SessionLocal as _SessionLocal  # noqa: F811
+
+        _db_jobs = _SessionLocal()
+        try:
+            _seed_jobs(_db_jobs)
+        finally:
+            _db_jobs.close()
+    except Exception:
+        logging.debug("Scheduled jobs seeding skipped — DB may not be ready yet")  # noqa: S110
+
     # Application is now running
     yield
 

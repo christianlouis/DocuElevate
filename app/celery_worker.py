@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import logging
+
 from celery.schedules import crontab
 
 # Ensure tasks are loaded
@@ -9,6 +11,16 @@ from app import tasks  # noqa: F401 - Imports app/tasks.py so Celery can registe
 from app.celery_app import celery
 from app.config import settings
 from app.tasks.backup_tasks import cleanup_old_backups, create_backup  # noqa: F401
+from app.tasks.batch_tasks import (  # noqa: F401
+    backfill_missing_metadata,
+    cleanup_temp_files,
+    expire_shared_links,
+    process_new_documents,
+    prune_old_notifications,
+    prune_processing_logs,
+    reprocess_failed_documents,
+    sync_search_index,
+)
 from app.tasks.check_credentials import check_credentials
 from app.tasks.compute_embedding import backfill_missing_embeddings, compute_document_embedding  # noqa: F401
 from app.tasks.convert_to_pdf import convert_to_pdf  # noqa: F401
@@ -47,6 +59,8 @@ from app.tasks.webhook_tasks import deliver_webhook_task  # noqa: F401
 
 # Register the settings reload signal handler so workers pick up config changes
 from app.utils.settings_sync import register_settings_reload_signal
+
+logger = logging.getLogger(__name__)
 
 register_settings_reload_signal()
 
@@ -159,3 +173,66 @@ celery.conf.beat_schedule = {
 
 # Remove None entries from beat_schedule
 celery.conf.beat_schedule = {k: v for k, v in celery.conf.beat_schedule.items() if v is not None}
+
+# ---------------------------------------------------------------------------
+# Load admin-managed scheduled jobs from the database
+# ---------------------------------------------------------------------------
+# These jobs are defined in the ``scheduled_jobs`` table (seeded by
+# ``app.api.scheduled_jobs.seed_default_scheduled_jobs``) and can be
+# enabled/disabled and rescheduled via the admin UI at /admin/scheduled-jobs.
+# The schedule is read once at worker startup; changes take effect after
+# the worker is restarted.
+
+
+def _load_db_scheduled_jobs() -> None:
+    """
+    Extend ``celery.conf.beat_schedule`` with entries from the ``scheduled_jobs``
+    database table.
+
+    Only rows with ``enabled=True`` are added.  Rows whose ``name`` key
+    already exists in the static schedule (defined above) are skipped so
+    that hardcoded entries cannot be overridden accidentally.
+
+    Failures are logged as warnings and do not prevent the worker from
+    starting.
+    """
+    try:
+        from app.database import SessionLocal
+        from app.models import ScheduledJob
+
+        with SessionLocal() as db:
+            jobs = db.query(ScheduledJob).filter(ScheduledJob.enabled.is_(True)).all()
+
+        added = 0
+        for job in jobs:
+            if job.name in celery.conf.beat_schedule:
+                # Static entry takes precedence; skip silently.
+                continue
+
+            if job.schedule_type == "interval" and job.interval_seconds:
+                from celery.schedules import schedule as interval_schedule
+
+                sched = interval_schedule(run_every=job.interval_seconds)
+            else:
+                # Default to cron.
+                sched = crontab(
+                    minute=job.cron_minute,
+                    hour=job.cron_hour,
+                    day_of_week=job.cron_day_of_week,
+                    day_of_month=job.cron_day_of_month,
+                    month_of_year=job.cron_month_of_year,
+                )
+
+            celery.conf.beat_schedule[job.name] = {
+                "task": job.task_name,
+                "schedule": sched,
+                "options": {"expires": 3600},
+            }
+            added += 1
+
+        logger.info("Loaded %d scheduled job(s) from database into Celery Beat.", added)
+    except Exception as exc:
+        logger.warning("Could not load scheduled jobs from database: %s", exc)
+
+
+_load_db_scheduled_jobs()
