@@ -10,6 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.111.0 (2026-03-09)
+
+### Bug Fixes
+
+- **tasks**: Address code review - SMTP TLS cert validation, rclone input validation, consolidated
+  test fixture
+  ([`01a9511`](https://github.com/christianlouis/DocuElevate/commit/01a9511dcfc4a5753722df944d231954b8bf2f43))
+
+- **tasks**: Register upload_to_user_integration in celery_worker and add handler tests
+  ([`5fb11b9`](https://github.com/christianlouis/DocuElevate/commit/5fb11b978c5b05992bb0647da42bfc7e7889a71a))
+
+### Features
+
+- **tasks**: Dynamic routing to user-specific destination integrations
+  ([`89bf07d`](https://github.com/christianlouis/DocuElevate/commit/89bf07d2eff9a09bd758e882c27c8f9e31d04240))
+
+
 ## v0.110.1 (2026-03-08)
 
 ### Bug Fixes
