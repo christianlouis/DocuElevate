@@ -64,6 +64,7 @@ from app.models import (  # noqa: F401, E402
     DocumentMetadata,
     FileRecord,
     Pipeline,
+    PipelineRoutingRule,
     PipelineStep,
     ProcessingLog,
     SavedSearch,
