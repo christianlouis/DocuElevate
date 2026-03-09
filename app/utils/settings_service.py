@@ -2065,6 +2065,78 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "audit_siem_enabled": {
+        "category": "Security",
+        "description": "Enable forwarding of audit events to an external SIEM system (Syslog, Splunk, Logstash, etc.).",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "audit_siem_transport": {
+        "category": "Security",
+        "description": (
+            "Transport used to forward audit events. 'syslog' sends RFC 5424 messages over UDP/TCP. "
+            "'http' sends JSON POST payloads to a webhook URL (Splunk HEC, Logstash, Grafana Loki, etc.)."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "options": ["syslog", "http"],
+    },
+    "audit_siem_syslog_host": {
+        "category": "Security",
+        "description": "Hostname or IP of the syslog receiver.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "audit_siem_syslog_port": {
+        "category": "Security",
+        "description": "Port of the syslog receiver. Default: 514.",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "audit_siem_syslog_protocol": {
+        "category": "Security",
+        "description": "Protocol for syslog transport: 'udp' or 'tcp'. Default: udp.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "options": ["udp", "tcp"],
+    },
+    "audit_siem_http_url": {
+        "category": "Security",
+        "description": (
+            "HTTP endpoint URL for SIEM webhook delivery. Supports Splunk HEC, "
+            "Logstash HTTP input, Grafana Loki push API, or any JSON-accepting endpoint."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "audit_siem_http_token": {
+        "category": "Security",
+        "description": "Bearer / HEC token included in the Authorization header of SIEM HTTP requests.",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "audit_siem_http_custom_headers": {
+        "category": "Security",
+        "description": "Comma-separated 'Key:Value' pairs of extra headers for SIEM HTTP requests.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Rate Limiting
     "rate_limiting_enabled": {
         "category": "Security",
