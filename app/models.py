@@ -256,6 +256,10 @@ class UserProfile(Base):
     preferred_destination = Column(String(50), nullable=True)
     stripe_customer_id = Column(String(64), nullable=True)
 
+    # UI language preference for i18n (ISO 639-1 code, e.g. "en", "de", "fr")
+    # NULL means "auto-detect from browser Accept-Language header"
+    preferred_language = Column(String(10), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

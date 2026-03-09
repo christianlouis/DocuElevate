@@ -17,6 +17,7 @@ from app.api.dropbox import router as dropbox_router
 from app.api.duplicates import router as duplicates_router
 from app.api.files import router as files_router
 from app.api.google_drive import router as google_drive_router
+from app.api.i18n import router as i18n_router
 from app.api.imap_accounts import router as imap_accounts_router
 from app.api.integrations import router as integrations_router
 from app.api.logs import router as logs_router
@@ -82,3 +83,4 @@ router.include_router(imap_accounts_router)
 router.include_router(integrations_router)
 router.include_router(notifications_router)
 router.include_router(scheduled_jobs_router)
+router.include_router(i18n_router)
