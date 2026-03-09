@@ -1,9 +1,12 @@
 """Tests for app/views/google_drive.py module."""
 
+import json
 import urllib.parse
 from unittest.mock import patch
 
 import pytest
+
+from app.models import UserIntegration
 
 
 @pytest.mark.integration
@@ -156,3 +159,47 @@ class TestGoogleDriveViews:
 
         response = client.get("/google-drive-setup")
         assert response.status_code == 200
+
+    def test_google_drive_setup_user_mode_invalid_json_config(self, client, db_session):
+        """Test user-mode renders correctly when integration.config is invalid JSON."""
+        owner_id = "user_gd_invalid_json@example.com"
+        integration = UserIntegration(
+            owner_id=owner_id,
+            direction="DESTINATION",
+            integration_type="GOOGLE_DRIVE",
+            name="My GDrive (bad cfg)",
+            config="{INVALID JSON}",
+            is_active=True,
+        )
+        db_session.add(integration)
+        db_session.commit()
+        db_session.refresh(integration)
+
+        with patch("app.views.google_drive.get_current_owner_id", return_value=owner_id):
+            response = client.get(f"/google-drive-setup?integration_id={integration.id}")
+
+        assert response.status_code == 200
+        # Should render user mode without errors despite the bad config
+        assert b"Back to Integrations" in response.content
+
+    def test_google_drive_setup_user_mode_valid_config(self, client, db_session):
+        """Test user-mode correctly loads folder ID from integration config."""
+        owner_id = "user_gd_valid_cfg@example.com"
+        integration = UserIntegration(
+            owner_id=owner_id,
+            direction="DESTINATION",
+            integration_type="GOOGLE_DRIVE",
+            name="My Google Drive",
+            config=json.dumps({"folder_id": "1abc2def3ghi"}),
+            is_active=True,
+        )
+        db_session.add(integration)
+        db_session.commit()
+        db_session.refresh(integration)
+
+        with patch("app.views.google_drive.get_current_owner_id", return_value=owner_id):
+            response = client.get(f"/google-drive-setup?integration_id={integration.id}")
+
+        assert response.status_code == 200
+        assert b"1abc2def3ghi" in response.content
+        assert b"Back to Integrations" in response.content

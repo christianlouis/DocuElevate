@@ -1,6 +1,11 @@
 """Tests for app/views/dropbox.py module."""
 
+import json
+from unittest.mock import patch
+
 import pytest
+
+from app.models import UserIntegration
 
 
 @pytest.mark.integration
@@ -44,3 +49,47 @@ class TestDropboxViews:
         assert "oauth_integration_id" in body  # The JS code is always present
         # But integration_id template var should be empty
         assert 'const integrationId = ""' in body
+
+    def test_dropbox_setup_user_mode_invalid_json_config(self, client, db_session):
+        """Test user-mode renders correctly when integration.config is invalid JSON."""
+        owner_id = "user_invalid_json@example.com"
+        integration = UserIntegration(
+            owner_id=owner_id,
+            direction="DESTINATION",
+            integration_type="DROPBOX",
+            name="My Dropbox (bad cfg)",
+            config="{INVALID JSON}",
+            is_active=True,
+        )
+        db_session.add(integration)
+        db_session.commit()
+        db_session.refresh(integration)
+
+        with patch("app.views.dropbox.get_current_owner_id", return_value=owner_id):
+            response = client.get(f"/dropbox-setup?integration_id={integration.id}")
+
+        assert response.status_code == 200
+        # Should render user mode without errors despite the bad config
+        assert b"user_mode" not in response.content or b"Back to Integrations" in response.content
+
+    def test_dropbox_setup_user_mode_valid_config(self, client, db_session):
+        """Test user-mode correctly loads folder path from integration config."""
+        owner_id = "user_valid_cfg@example.com"
+        integration = UserIntegration(
+            owner_id=owner_id,
+            direction="DESTINATION",
+            integration_type="DROPBOX",
+            name="My Dropbox",
+            config=json.dumps({"folder": "/Documents/Uploads"}),
+            is_active=True,
+        )
+        db_session.add(integration)
+        db_session.commit()
+        db_session.refresh(integration)
+
+        with patch("app.views.dropbox.get_current_owner_id", return_value=owner_id):
+            response = client.get(f"/dropbox-setup?integration_id={integration.id}")
+
+        assert response.status_code == 200
+        assert b"/Documents/Uploads" in response.content
+        assert b"Back to Integrations" in response.content

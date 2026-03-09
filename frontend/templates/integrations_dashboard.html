@@ -1139,16 +1139,18 @@ function integrationsDashboard() {
     typeLabel(t) { return TYPE_LABELS[t] || t; },
     typeIcon(t) { return TYPE_ICONS[t] || 'fa-plug text-gray-400'; },
     hasFormFields(t) { return TYPES_WITH_FORM_FIELDS.has(t); },
+    _watchFolderOAuthSource(intg) {
+      if (intg.integration_type !== 'WATCH_FOLDER') return null;
+      const src = ((intg.config || {}).source_type || '').toLowerCase();
+      if (src === 'dropbox' || src === 'onedrive' || src === 'google_drive') return src;
+      return null;
+    },
+
     isOAuthType(intg) {
       // Direct OAuth types: DROPBOX, GOOGLE_DRIVE, ONEDRIVE
       if (OAUTH_TYPES.has(intg.integration_type)) return true;
-      // WATCH_FOLDER with an OAuth-backed source type (dropbox, onedrive, google_drive)
-      if (intg.integration_type === 'WATCH_FOLDER') {
-        const cfg = intg.config || {};
-        const src = (cfg.source_type || '').toLowerCase();
-        return src === 'dropbox' || src === 'onedrive' || src === 'google_drive';
-      }
-      return false;
+      // WATCH_FOLDER with an OAuth-backed source type
+      return this._watchFolderOAuthSource(intg) !== null;
     },
 
     oauthLink(intg) {
@@ -1156,13 +1158,10 @@ function integrationsDashboard() {
       if (t === 'DROPBOX') return '/dropbox-setup';
       if (t === 'GOOGLE_DRIVE') return '/google-drive-setup';
       if (t === 'ONEDRIVE') return '/onedrive-setup';
-      if (t === 'WATCH_FOLDER') {
-        const cfg = intg.config || {};
-        const src = (cfg.source_type || '').toLowerCase();
-        if (src === 'dropbox') return '/dropbox-setup';
-        if (src === 'onedrive') return '/onedrive-setup';
-        if (src === 'google_drive') return '/google-drive-setup';
-      }
+      const src = this._watchFolderOAuthSource(intg);
+      if (src === 'dropbox') return '/dropbox-setup';
+      if (src === 'onedrive') return '/onedrive-setup';
+      if (src === 'google_drive') return '/google-drive-setup';
       return '#';
     },
 
