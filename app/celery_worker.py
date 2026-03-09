@@ -22,6 +22,7 @@ from app.tasks.batch_tasks import (  # noqa: F401
     sync_search_index,
 )
 from app.tasks.check_credentials import check_credentials
+from app.tasks.classify_document import classify_document_task  # noqa: F401
 from app.tasks.compute_embedding import backfill_missing_embeddings, compute_document_embedding  # noqa: F401
 from app.tasks.convert_to_pdf import convert_to_pdf  # noqa: F401
 from app.tasks.convert_to_pdfa import convert_to_pdfa  # noqa: F401
