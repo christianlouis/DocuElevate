@@ -272,10 +272,16 @@ DocuElevate can poll a WebDAV folder for new files. It reuses the existing WebDA
 In addition to system-level watch folders, each user can configure personal watch folder sources through the **Integrations** dashboard (`/integrations`). Documents ingested from per-user watch folder integrations are automatically attributed to the owning user's `owner_id`.
 
 Per-user watch folder integrations are stored in the `user_integrations` table with `integration_type='WATCH_FOLDER'` and `direction='SOURCE'`. The `config` JSON field stores:
-- `folder_path` — absolute path to the directory to scan
+- `source_type` — the type of source to scan (`local`, `s3`, `dropbox`, `google_drive`, `onedrive`, `nextcloud`, `webdav`; default: `local`)
+- `folder_path` — path to the directory/folder to scan (used by local, Dropbox, OneDrive, Nextcloud, WebDAV)
 - `delete_after_process` — whether to remove source files after ingestion (default: `false`)
 
-> **Security**: Path traversal protection is enforced on user-configured watch folder paths. Relative paths, `..` components, and symlink escapes are rejected to prevent access to files outside the intended directory.
+Additional type-specific config fields:
+- **S3**: `bucket`, `region`, `prefix`, `endpoint_url`
+- **Google Drive**: `folder_id`
+- **Nextcloud / WebDAV**: `url`, `folder_path`
+
+> **Security**: Path traversal protection is enforced on local watch folder paths. Relative paths, `..` components, and symlink escapes are rejected. Cloud source types use per-user encrypted credentials instead.
 
 - Individual scan failures are handled gracefully and recorded on the integration's `last_error` field without interrupting the scanning of other integrations.
 - The scan runs alongside the system-level watch folder polling cycle.
@@ -302,7 +308,15 @@ DocuElevate can automatically pull document attachments from IMAP mailboxes — 
 
 In addition to system-level mailboxes, each user can configure personal IMAP sources through the **Integrations** dashboard (`/integrations`). Documents ingested from per-user IMAP integrations are automatically attributed to the owning user's `owner_id`.
 
-Per-user IMAP integrations are stored in the `user_integrations` table with `integration_type='IMAP'` and `direction='SOURCE'`. Credentials are encrypted at rest using Fernet encryption.
+Per-user IMAP integrations are stored in the `user_integrations` table with `integration_type='IMAP'` and `direction='SOURCE'`. The `config` JSON field stores:
+- `host` — IMAP server hostname (required)
+- `port` — IMAP server port (default: `993`)
+- `username` — IMAP login username (required)
+- `use_ssl` — whether to use SSL/TLS (default: `true`)
+- `delete_after_process` — whether to delete emails from the mailbox after processing (default: `false`)
+- `gmail_apply_labels` — whether to apply Gmail-specific labels and stars to processed emails (default: `true`). When enabled, processed emails are starred and tagged with an "Ingested" label. Only applies to Gmail hosts.
+
+Credentials are encrypted at rest using Fernet encryption.
 
 - Individual connection failures are handled gracefully and recorded on the integration's `last_error` field without interrupting the polling of other integrations.
 - The polling loop runs every minute and processes all active IMAP sources (system-level and per-user) in sequence.

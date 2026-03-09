@@ -157,13 +157,13 @@ The **Integrations** page (`/integrations`) provides a unified view of all your 
 2. Choose a **Direction** — Source (ingestion) or Destination (storage).
 3. Choose an **Integration Type** (e.g. IMAP, S3, Dropbox, WebDAV).
 4. Fill in the type-specific fields — the form adapts dynamically based on your choice:
-   - **IMAP** — host, port, username, password, SSL toggle
+   - **IMAP** — host, port, username, password, SSL toggle, delete after processing, Gmail labels & star toggle
    - **S3** — bucket, region, access key, secret key
    - **WebDAV / Nextcloud** — URL, folder, username, password
    - **FTP / SFTP** — host, port, remote path, username, password
    - **Dropbox / Google Drive / OneDrive** — folder path, with a link to the OAuth setup page
    - **Email Forward** — recipient email address
-   - **Watch Folder** — folder path
+   - **Watch Folder** — source type (Local, S3, Dropbox, Google Drive, OneDrive, Nextcloud, WebDAV), per-type config fields, delete after processing toggle
    - **Paperless NGX** — URL and API token
    - **Webhook** — no configuration needed; the form shows a quick-start guide with sample `curl` and Python snippets for uploading documents via the API
 5. Click **Test Connection** to verify the settings before saving.
