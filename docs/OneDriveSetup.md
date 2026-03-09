@@ -16,22 +16,36 @@ For a complete list of configuration options, see the [Configuration Guide](Conf
 
 ## Setup Methods
 
-You can set up OneDrive integration in two ways:
+DocuElevate supports two distinct OneDrive OAuth flows:
 
-1. **Using the Auth Wizard (Recommended)**: An interactive setup experience available at `/onedrive-setup` in the web interface
-2. **Manual Setup**: Following the step-by-step instructions in this document
+1. **Per-User Integration Wizard (Recommended for end users)**: Triggered from the Integrations dashboard (`/integrations`) by clicking **Authorize** on a OneDrive destination or OneDrive-backed Watch Folder. Credentials are saved securely to your personal integration record.
+2. **System-Level Setup Wizard**: Available at `/onedrive-setup` for administrators configuring the global system-wide OneDrive connection.
+3. **Manual Setup**: Following the step-by-step instructions in this document.
 
-## Using the Auth Wizard
+## Per-User OAuth Flow (Integrations Dashboard)
 
-The easiest way to set up OneDrive integration is to use the built-in auth wizard:
+End users authorize their own OneDrive integration from the **Integrations** dashboard:
 
-1. Register an application in Azure AD (see steps below)
-2. Navigate to the OneDrive Setup page at `/onedrive-setup`
-3. Enter your Client ID and other required information
-4. Click "Start Authentication Flow"
-5. Complete the Microsoft authentication process
-6. The system will automatically exchange the authorization code for a refresh token
-7. Copy the generated environment variables for your worker nodes
+1. Navigate to `/integrations` and click **+ Add Destination** (or **+ Add Source** for Watch Folder).
+2. Create a OneDrive destination integration (or a Watch Folder with `source_type = onedrive`).
+3. Click the **Authorize** button next to the integration — it links directly to the OAuth wizard pre-loaded with your integration's configuration.
+4. Enter your Azure AD Client ID and Client Secret in the wizard.
+5. Click **Start Authentication Flow**, authorize access via Microsoft, and the refresh token is automatically saved to your personal integration record.
+6. The page redirects back to `/integrations` on success. Re-authorization is available at any time via the **Re-Authorize** button.
+
+> **Note:** Your credentials are stored encrypted per-integration and are never mixed with other users' data. Each user can have multiple OneDrive integrations with independent tokens.
+
+## Using the System-Level Auth Wizard (Admin)
+
+The easiest way to configure the global OneDrive integration is to use the built-in auth wizard:
+
+1. Register an application in Azure AD (see steps below).
+2. Navigate to the OneDrive Setup page at `/onedrive-setup`.
+3. Enter your Client ID and other required information.
+4. Click **Start Authentication Flow**.
+5. Complete the Microsoft authentication process.
+6. The system will automatically exchange the authorization code for a refresh token.
+7. Copy the generated environment variables for your worker nodes.
 
 The auth wizard handles all the token exchange steps and provides you with the exact configuration needed for your environment.
 

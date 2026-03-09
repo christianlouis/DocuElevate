@@ -15,23 +15,37 @@ For a complete list of configuration options, see the [Configuration Guide](Conf
 
 ## Setup Methods
 
-You can set up Dropbox integration in two ways:
+DocuElevate supports two distinct Dropbox OAuth flows:
 
-1. **Using the Built-in Setup Wizard (Recommended)**: An interactive setup experience available at `/dropbox-setup` in the web interface
-2. **Manual Setup**: Following the step-by-step instructions in this document
+1. **Per-User Integration Wizard (Recommended for end users)**: Triggered from the Integrations dashboard (`/integrations`) by clicking **Authorize** on a Dropbox destination or Dropbox-backed Watch Folder. Credentials are saved securely to your personal integration record — global settings are never exposed.
+2. **System-Level Setup Wizard**: Available at `/dropbox-setup` for administrators configuring the global system-wide Dropbox connection. Generates environment variables for all worker nodes.
+3. **Manual Setup**: Following the step-by-step instructions in this document.
 
-## Using the Setup Wizard
+## Per-User OAuth Flow (Integrations Dashboard)
 
-The easiest way to set up Dropbox integration is to use the built-in setup wizard:
+End users authorize their own Dropbox integration from the **Integrations** dashboard:
 
-1. Navigate to the `/dropbox-setup` page in your DocuElevate instance
-2. Follow the on-screen instructions to create a Dropbox app
-3. Enter your App Key and App Secret in the wizard
-4. Optionally specify a custom folder path for uploads
-5. Click "Start Authentication Flow" to begin the authorization process
-6. Complete the Dropbox authentication process
-7. The system will automatically exchange the authorization code for a refresh token
-8. Copy the generated environment variables for your worker nodes
+1. Navigate to `/integrations` and click **+ Add Destination** (or **+ Add Source** for Watch Folder).
+2. Create a Dropbox destination integration (or a Watch Folder with `source_type = dropbox`).
+3. Click the **Authorize** button next to the integration — it links directly to the OAuth wizard pre-loaded with your integration's configuration.
+4. Enter your Dropbox App Key and App Secret in the wizard (or use the global admin credentials if pre-configured).
+5. Click **Start Authentication Flow**, authorize access in Dropbox, and the refresh token is automatically saved to your personal integration record.
+6. The page redirects back to `/integrations` on success. Re-authorization is available at any time via the **Re-Authorize** button.
+
+> **Note:** Your credentials are stored encrypted per-integration and are never mixed with other users' data. Each user can have multiple Dropbox integrations with independent tokens.
+
+## Using the System-Level Setup Wizard (Admin)
+
+The easiest way to configure the global Dropbox integration is to use the built-in setup wizard:
+
+1. Navigate to the `/dropbox-setup` page in your DocuElevate instance.
+2. Follow the on-screen instructions to create a Dropbox app.
+3. Enter your App Key and App Secret in the wizard.
+4. Optionally specify a custom folder path for uploads.
+5. Click **Start Authentication Flow** to begin the authorization process.
+6. Complete the Dropbox authentication process.
+7. The system will automatically exchange the authorization code for a refresh token.
+8. Copy the generated environment variables for your worker nodes.
 
 The wizard handles all the token exchange steps and provides you with the exact configuration needed for your environment.
 

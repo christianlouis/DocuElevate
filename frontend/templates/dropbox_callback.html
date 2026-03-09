@@ -5,7 +5,7 @@
 <div class="container mx-auto px-4 py-8">
   <div class="bg-white shadow-md rounded-lg p-6">
     <div class="text-center mb-6">
-      <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
       </svg>
       <h2 class="text-2xl font-bold mt-4">Processing Authorization</h2>
@@ -13,18 +13,18 @@
     </div>
 
     <div class="flex justify-center my-6">
-      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" role="status" aria-label="Loading"></div>
     </div>
 
-    <div id="processing-message" class="text-center text-gray-700">
+    <div id="processing-message" class="text-center text-gray-700" aria-live="polite">
       <p>Exchanging authorization code for refresh token...</p>
     </div>
 
-    <div id="error-container" class="hidden mt-6">
+    <div id="error-container" class="hidden mt-6" role="alert" aria-live="assertive">
       <div class="bg-red-50 border-l-4 border-red-400 p-4">
         <div class="flex">
           <div class="flex-shrink-0">
-            <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
             </svg>
           </div>
@@ -37,17 +37,17 @@
         </div>
       </div>
       <div class="mt-4">
-        <a href="/dropbox-setup" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+        <a id="return-to-setup-link" href="/dropbox-setup" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
           Return to Setup
         </a>
       </div>
     </div>
 
-    <div id="success-container" class="hidden mt-6">
+    <div id="success-container" class="hidden mt-6" aria-live="polite">
       <div class="rounded-md bg-green-50 p-4">
         <div class="flex">
           <div class="flex-shrink-0">
-            <svg class="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <svg class="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
             </svg>
           </div>
@@ -99,6 +99,14 @@ document.addEventListener('DOMContentLoaded', function() {
   const folderPath = sessionStorage.getItem('dropbox_folder_path') || "{{ folder_path }}" || '/Documents/Uploads';
   const integrationId = sessionStorage.getItem('oauth_integration_id');
 
+  // In user mode, point the "Return to Setup" link back to the wizard with integration_id
+  if (integrationId) {
+    const returnLink = document.getElementById('return-to-setup-link');
+    if (returnLink) {
+      returnLink.href = `/dropbox-setup?integration_id=${encodeURIComponent(integrationId)}`;
+    }
+  }
+
   const redirectUri = window.location.origin + "/dropbox-callback";
 
   // Automatically exchange the code for a refresh token
@@ -145,11 +153,10 @@ document.addEventListener('DOMContentLoaded', function() {
             app_key: appKey,
             app_secret: appSecret,
           };
-          const cfgUpdate = {};
-          if (folderPath) cfgUpdate.folder = folderPath;
 
+          // Only send credentials — the integration's config (folder, source_type, etc.)
+          // is already set and must not be overwritten here.
           const body = { credentials: creds };
-          if (Object.keys(cfgUpdate).length > 0) body.config = cfgUpdate;
 
           document.getElementById('processing-message').innerHTML =
             '<p>Saving credentials to your integration...</p>';

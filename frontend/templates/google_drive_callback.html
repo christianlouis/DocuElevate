@@ -5,7 +5,7 @@
 <div class="container mx-auto px-4 py-8">
   <div class="bg-white shadow-md rounded-lg p-6">
     <div class="text-center mb-6">
-      <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
       </svg>
       <h2 class="text-2xl font-bold mt-4">Processing Authorization</h2>
@@ -13,18 +13,18 @@
     </div>
 
     <div class="flex justify-center my-6">
-      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" role="status" aria-label="Loading"></div>
     </div>
 
-    <div id="processing-message" class="text-center text-gray-700">
+    <div id="processing-message" class="text-center text-gray-700" aria-live="polite">
       <p>Exchanging authorization code for refresh token...</p>
     </div>
 
-    <div id="error-container" class="hidden mt-6">
+    <div id="error-container" class="hidden mt-6" role="alert" aria-live="assertive">
       <div class="bg-red-50 border-l-4 border-red-400 p-4">
         <div class="flex">
           <div class="flex-shrink-0">
-            <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
             </svg>
           </div>
@@ -37,17 +37,17 @@
         </div>
       </div>
       <div class="mt-4">
-        <a href="/google-drive-setup" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+        <a id="return-to-setup-link" href="/google-drive-setup" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
           Return to Setup
         </a>
       </div>
     </div>
 
-    <div id="folder-selection-container" class="hidden mt-6">
+    <div id="folder-selection-container" class="hidden mt-6" aria-live="polite">
       <div class="rounded-md bg-blue-50 p-4 mb-6">
         <div class="flex">
           <div class="flex-shrink-0">
-            <svg class="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <svg class="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
             </svg>
           </div>
@@ -65,7 +65,7 @@
           <div class="mt-1 flex rounded-md shadow-sm">
             <input type="text" id="folder-id-input" class="focus:ring-indigo-500 focus:border-indigo-500 flex-1 block w-full rounded-md sm:text-sm border-gray-300" placeholder="Enter Google Drive folder ID">
             <button id="folder-select-picker-btn" type="button" class="ml-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-              <svg class="h-4 w-4 mr-1 text-white-100" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <svg class="h-4 w-4 mr-1 text-white-100" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1H8a3 3 0 00-3 3v1.5a1.5 1.5 0 01-3 0V6z" clip-rule="evenodd" />
               </svg>
               Select Folder
@@ -84,11 +84,11 @@
       </div>
     </div>
 
-    <div id="success-container" class="hidden mt-6">
+    <div id="success-container" class="hidden mt-6" aria-live="polite">
       <div class="rounded-md bg-green-50 p-4">
         <div class="flex">
           <div class="flex-shrink-0">
-            <svg class="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <svg class="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
             </svg>
           </div>
@@ -139,6 +139,14 @@ document.addEventListener('DOMContentLoaded', function() {
   const clientSecret = sessionStorage.getItem('google_drive_client_secret');
   const folderId = sessionStorage.getItem('google_drive_folder_id');
   const integrationId = sessionStorage.getItem('oauth_integration_id');
+
+  // In user mode, point the "Return to Setup" link back to the wizard with integration_id
+  if (integrationId) {
+    const returnLink = document.getElementById('return-to-setup-link');
+    if (returnLink) {
+      returnLink.href = `/google-drive-setup?integration_id=${encodeURIComponent(integrationId)}`;
+    }
+  }
 
   const redirectUri = window.location.origin + "/google-drive-callback";
 
@@ -200,11 +208,10 @@ document.addEventListener('DOMContentLoaded', function() {
             client_secret: clientSecret,
             refresh_token: data.refresh_token,
           };
-          const cfgUpdate = {};
-          if (folderId) cfgUpdate.folder_id = folderId;
 
+          // Only send credentials — the integration's config (folder_id, etc.)
+          // is already set and must not be overwritten here.
           const body = { credentials: creds };
-          if (Object.keys(cfgUpdate).length > 0) body.config = cfgUpdate;
 
           document.getElementById('processing-message').innerHTML =
             '<p>Saving credentials to your integration...</p>';

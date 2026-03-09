@@ -4,6 +4,37 @@
 {% block content %}
 <div class="container mx-auto px-4 py-8">
   <div class="mb-8">
+    {% if user_mode %}
+    <!-- ── User-mode header ──────────────────────────────────────────── -->
+    <div class="mb-4">
+      <a href="/integrations" class="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800">
+        <i class="fas fa-arrow-left mr-1" aria-hidden="true"></i> Back to Integrations
+      </a>
+    </div>
+    <h1 class="text-3xl font-bold mb-2">
+      Connect OneDrive
+      {% if integration_name %}<span class="text-gray-500 text-2xl font-normal">— {{ integration_name }}</span>{% endif %}
+    </h1>
+    <p class="text-gray-600 mb-4">
+      Authorize DocuElevate to access your OneDrive account. Your credentials are stored securely in your personal integration record.
+    </p>
+    {% if is_configured %}
+    <div class="bg-green-50 border-l-4 border-green-500 text-green-700 p-4 my-4" role="alert">
+      <p class="font-semibold">✓ Already authorized</p>
+      <p class="text-sm mt-1">This integration already has credentials. You can re-authorize below to refresh or update them.
+      {% if folder_path %}<br><strong>Folder:</strong> {{ folder_path }}{% endif %}
+      </p>
+    </div>
+    {% else %}
+    <div class="bg-blue-50 border-l-4 border-blue-500 text-blue-700 p-4 my-4" role="alert">
+      <p class="font-semibold">Authorization required</p>
+      <p class="text-sm mt-1">Complete the wizard below to grant access to your OneDrive account.
+      {% if folder_path %}<br><strong>Target folder:</strong> {{ folder_path }}{% endif %}
+      </p>
+    </div>
+    {% endif %}
+    {% else %}
+    <!-- ── Admin-mode header ─────────────────────────────────────────── -->
     <h1 class="text-3xl font-bold mb-2">OneDrive Integration Setup</h1>
     <p class="text-gray-600 mb-4">
       Configure the Microsoft OneDrive integration for DocuElevate using our setup wizard.
@@ -37,6 +68,7 @@
         </div>
       </div>
     </div>
+    {% endif %}
   </div>
 
   <div class="bg-white shadow-md rounded-lg p-6 mb-8">
@@ -93,16 +125,18 @@
   </div>
 
   <div class="bg-white shadow-md rounded-lg p-6 mb-8">
-    <h2 class="text-2xl font-semibold mb-4">Complete Setup with Wizard</h2>
+    <h2 class="text-2xl font-semibold mb-4">
+      {% if user_mode %}OAuth Wizard{% else %}Complete Setup with Wizard{% endif %}
+    </h2>
 
     <div class="space-y-4">
       <div>
-        <label for="client-id" class="block text-sm font-medium text-gray-700">Client ID</label>
+        <label for="client-id" class="block text-sm font-medium text-gray-700">Client ID <span class="text-red-500" aria-hidden="true">*</span></label>
         <input type="text" id="client-id" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Azure AD application client ID" value="{{ client_id_value }}">
       </div>
 
       <div>
-        <label for="client-secret" class="block text-sm font-medium text-gray-700">Client Secret</label>
+        <label for="client-secret" class="block text-sm font-medium text-gray-700">Client Secret <span class="text-red-500" aria-hidden="true">*</span></label>
         <input type="password" id="client-secret" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Azure AD application client secret" value="{{ client_secret_value }}">
       </div>
 
@@ -112,11 +146,20 @@
         <p class="text-xs text-gray-500 mt-1">Use "common" for personal accounts or your organization's Tenant ID for corporate accounts</p>
       </div>
 
+      {% if not user_mode %}
       <div>
         <label for="folder-path" class="block text-sm font-medium text-gray-700">Folder Path (Optional)</label>
         <input type="text" id="folder-path" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Documents/Uploads" value="{{ folder_path }}">
         <p class="text-xs text-gray-500 mt-1">Enter the folder path where files should be uploaded (e.g., Documents/Uploads)</p>
       </div>
+      {% else %}
+      {% if folder_path %}
+      <div class="bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+        <p class="text-xs text-gray-500">Target folder (from integration settings)</p>
+        <p class="text-sm font-mono text-gray-700">{{ folder_path }}</p>
+      </div>
+      {% endif %}
+      {% endif %}
 
       <div>
         <button id="start-auth-flow" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
@@ -124,7 +167,8 @@
         </button>
       </div>
 
-      <!-- Token validation and status -->
+      <!-- Token validation and status (admin mode only) -->
+      {% if not user_mode %}
       <div id="token-status" class="mt-6 {{ 'hidden' if not is_configured else '' }}">
         <div class="rounded-md {{ 'bg-green-50' if is_configured else 'bg-yellow-50' }} p-4">
           <div class="flex">
@@ -160,7 +204,7 @@
           </button>
         </div>
 
-        <!-- Configuration for Worker Nodes section -->
+        <!-- Configuration for Worker Nodes section (admin only) -->
         <div class="mt-6 p-4 bg-gray-100 rounded-md">
           <h3 class="font-medium text-lg mb-2">Configuration for Worker Nodes</h3>
           <p class="text-sm text-gray-600 mb-3">
@@ -184,6 +228,7 @@ ONEDRIVE_FOLDER_PATH={{ folder_path|default('Documents/Uploads', true) }}</code>
           </p>
         </div>
       </div>
+      {% endif %}
     </div>
   </div>
 
@@ -205,13 +250,19 @@ ONEDRIVE_FOLDER_PATH={{ folder_path|default('Documents/Uploads', true) }}</code>
   </div>
 
   <div class="mt-8">
+    {% if user_mode %}
+    <a href="/integrations" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+      <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> Back to Integrations
+    </a>
+    {% else %}
     <a href="/status" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
       Back to Status
     </a>
+    {% endif %}
   </div>
 
   <!-- Result Modal -->
-  <div id="resultModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50" aria-modal="true" role="dialog">
+  <div id="resultModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50" aria-modal="true" role="dialog" aria-labelledby="modalTitle">
     <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 lg:w-1/3 shadow-lg rounded-md bg-white">
       <div class="mt-3 text-center">
         <div id="modalIcon" class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
@@ -237,6 +288,8 @@ ONEDRIVE_FOLDER_PATH={{ folder_path|default('Documents/Uploads', true) }}</code>
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  const userMode = {{ 'true' if user_mode else 'false' }};
+
   // Store integration_id if provided (for per-user OAuth flow)
   const integrationId = "{{ integration_id or '' }}";
   if (integrationId) {
@@ -302,7 +355,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const clientSecret = clientSecretInput.value.trim();
     const redirectUri = window.location.origin + "/onedrive-callback";
     const tenantId = document.getElementById('tenant-id').value.trim() || 'common';
-    const folderPath = document.getElementById('folder-path') ? document.getElementById('folder-path').value.trim() : '';
 
     if (!clientId) {
       showModal('error', 'Validation Error', 'Please enter your Client ID');
@@ -319,8 +371,12 @@ document.addEventListener('DOMContentLoaded', function() {
     sessionStorage.setItem('onedrive_client_secret', clientSecret);
     sessionStorage.setItem('onedrive_tenant_id', tenantId);
 
-    if (folderPath) {
-      sessionStorage.setItem('onedrive_folder_path', folderPath);
+    // In admin mode also store folder path; in user mode the config is already set
+    if (!userMode) {
+      const folderPathEl = document.getElementById('folder-path');
+      if (folderPathEl && folderPathEl.value.trim()) {
+        sessionStorage.setItem('onedrive_folder_path', folderPathEl.value.trim());
+      }
     }
 
     // Generate the authorization URL with .default scope
@@ -330,7 +386,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.location.href = authUrl;
   });
 
-  // Test Token button click
+  // Test Token button click (admin mode only)
   if (testTokenBtn) {
     testTokenBtn.addEventListener('click', function() {
       testTokenBtn.innerHTML = '<span class="animate-spin inline-block mr-2">⟳</span> Testing...';
@@ -367,7 +423,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Refresh Token button click
+  // Refresh Token button click (admin mode only)
   if (refreshTokenBtn) {
     refreshTokenBtn.addEventListener('click', function() {
       showModal('info', 'Confirm', 'This will start a new authentication flow to obtain a fresh token from Microsoft. Continue?');
@@ -398,7 +454,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Copy Environment Variables Button
+  // Copy Environment Variables Button (admin mode only)
   const copyEnvVarsBtn = document.getElementById('copy-env-vars');
   if (copyEnvVarsBtn) {
     copyEnvVarsBtn.addEventListener('click', function() {
@@ -437,14 +493,8 @@ document.addEventListener('DOMContentLoaded', function() {
     tenantIdInput.value = sessionStorage.getItem('onedrive_tenant_id');
   }
 
-  // Check for folder path in session storage
-  const folderPathInput = document.getElementById('folder-path');
-  if (folderPathInput && !folderPathInput.value && sessionStorage.getItem('onedrive_folder_path')) {
-    folderPathInput.value = sessionStorage.getItem('onedrive_folder_path');
-  }
-
-  // If token is not configured but we have a client ID, show the token status section
-  if (document.getElementById('client-id').value && !tokenStatus.classList.contains('hidden')) {
+  // If token is configured and we have a client ID, show the token status section (admin mode)
+  if (tokenStatus && document.getElementById('client-id').value && !tokenStatus.classList.contains('hidden')) {
     tokenStatus.classList.remove('hidden');
   }
 });

@@ -2,47 +2,90 @@
 Google Drive integration views for setup and OAuth callback.
 """
 
+import json
 import urllib.parse
 
 from fastapi import Query, Request
 from fastapi.responses import RedirectResponse
+from sqlalchemy.orm import Session
 
-from app.views.base import APIRouter, require_login, settings, templates
+from app.models import UserIntegration
+from app.utils.user_scope import get_current_owner_id
+from app.views.base import APIRouter, Depends, get_db, require_login, settings, templates
 
 router = APIRouter()
 
 
 @router.get("/google-drive-setup")
 @require_login
-async def google_drive_setup_page(request: Request, integration_id: int | None = Query(None)):
+async def google_drive_setup_page(
+    request: Request,
+    integration_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+):
     """
     Setup page for the Google Drive integration.
-    Shows configuration status and setup instructions.
+
+    When ``integration_id`` is provided the page operates in **user mode**:
+    the OAuth wizard saves credentials to the named per-user integration
+    record rather than to the global application settings.
     """
-    # Check if using OAuth
+    if integration_id is not None:
+        owner_id = get_current_owner_id(request)
+        integration = (
+            db.query(UserIntegration)
+            .filter(UserIntegration.id == integration_id, UserIntegration.owner_id == owner_id)
+            .first()
+        )
+        if integration:
+            cfg: dict = {}
+            if integration.config:
+                try:
+                    cfg = json.loads(integration.config)
+                except (json.JSONDecodeError, TypeError):
+                    cfg = {}
+            folder_id = cfg.get("folder_id", "")
+            return templates.TemplateResponse(
+                "google_drive.html",
+                {
+                    "request": request,
+                    "user_mode": True,
+                    "is_configured": bool(integration.credentials),
+                    "integration_id": integration_id,
+                    "integration_name": integration.name,
+                    "integration_type": integration.integration_type,
+                    "folder_id": folder_id,
+                    "use_oauth": True,
+                    "oauth_configured": bool(integration.credentials),
+                    "sa_configured": False,
+                    "client_id": False,
+                    "client_id_value": "",
+                    "client_secret": False,
+                    "client_secret_value": "",
+                    "refresh_token": False,
+                    "refresh_token_value": "",
+                    "has_credentials_json": False,
+                },
+            )
+
+    # ── Admin / global mode ──────────────────────────────────────────────────
     use_oauth = getattr(settings, "google_drive_use_oauth", False)
 
-    # Check Google Drive OAuth configuration
     oauth_configured = bool(
         settings.google_drive_client_id and settings.google_drive_client_secret and settings.google_drive_refresh_token
     )
-
-    # Check Google Drive service account configuration
     sa_configured = bool(settings.google_drive_credentials_json)
-
-    # Overall configuration status
     is_configured = (use_oauth and oauth_configured) or (not use_oauth and sa_configured)
-
     if settings.google_drive_folder_id:
         is_configured = is_configured and True
     else:
         is_configured = False
 
-    # Get configuration values to display status (hide sensitive values)
     return templates.TemplateResponse(
         "google_drive.html",
         {
             "request": request,
+            "user_mode": False,
             "is_configured": is_configured,
             "use_oauth": use_oauth,
             "oauth_configured": oauth_configured,
@@ -56,6 +99,8 @@ async def google_drive_setup_page(request: Request, integration_id: int | None =
             "folder_id": settings.google_drive_folder_id or "",
             "has_credentials_json": bool(settings.google_drive_credentials_json),
             "integration_id": integration_id,
+            "integration_name": None,
+            "integration_type": None,
         },
     )
 
