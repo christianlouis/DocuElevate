@@ -1960,6 +1960,160 @@ Pass no `pipeline_id` query parameter (or omit it) to clear the assignment.
 ```
 
 
+## Routing Rules
+
+Routing rules let you conditionally assign documents to different pipelines
+based on file properties such as type, size, filename, or AI-extracted
+metadata.  Rules are evaluated in **position order** (lowest first); the first
+rule that matches wins.  If no rule matches, the system falls back to the
+owner's (or global) default pipeline.
+
+### Supported operators and fields
+
+```bash
+GET /api/routing-rules/operators
+```
+
+Returns the catalogue of valid operators and built-in fields so UIs can
+populate dropdowns without hard-coding values.
+
+**Response (200):**
+```json
+{
+  "operators": ["contains", "equals", "gt", "gte", "lt", "lte", "not_contains", "not_equals", "regex"],
+  "builtin_fields": ["category", "document_type", "file_type", "filename", "size"],
+  "metadata_prefix": "metadata."
+}
+```
+
+> **Tip:** For AI metadata fields use the `metadata.` prefix, e.g.
+> `metadata.sender`, `metadata.amount`.
+
+### List routing rules
+
+```bash
+GET /api/routing-rules
+```
+
+Returns the current user's rules **plus** any system-wide rules
+(`owner_id = null`), ordered by position.
+
+**Response (200):**
+```json
+[
+  {
+    "id": 1,
+    "owner_id": "alice",
+    "name": "Route invoices",
+    "position": 0,
+    "field": "document_type",
+    "operator": "equals",
+    "value": "Invoice",
+    "target_pipeline_id": 3,
+    "is_active": true,
+    "created_at": "2026-03-09T12:00:00+00:00",
+    "updated_at": "2026-03-09T12:00:00+00:00"
+  }
+]
+```
+
+### Create routing rule
+
+```bash
+POST /api/routing-rules
+Content-Type: application/json
+
+{
+  "name": "Route invoices",
+  "field": "document_type",
+  "operator": "equals",
+  "value": "Invoice",
+  "target_pipeline_id": 3
+}
+```
+
+Optional fields: `position` (auto-assigned if omitted), `is_active` (default `true`).
+
+**Response (201 Created):** The created rule object.
+
+### Get routing rule
+
+```bash
+GET /api/routing-rules/{rule_id}
+```
+
+**Response (200):** A single rule object.
+
+### Update routing rule
+
+```bash
+PUT /api/routing-rules/{rule_id}
+Content-Type: application/json
+
+{ "name": "Renamed rule", "operator": "contains", "is_active": false }
+```
+
+Only the supplied fields are updated.
+
+**Response (200):** The updated rule object.
+
+### Delete routing rule
+
+```bash
+DELETE /api/routing-rules/{rule_id}
+```
+
+Returns **204 No Content**.
+
+### Reorder routing rules
+
+```bash
+PUT /api/routing-rules/reorder
+Content-Type: application/json
+
+{ "rule_ids": [3, 1, 2] }
+```
+
+Provide the complete ordered list of your rule IDs.  Positions are reassigned
+0, 1, 2, … in the given order.
+
+### Evaluate rules (dry run)
+
+```bash
+POST /api/routing-rules/evaluate
+Content-Type: application/json
+
+{
+  "file_type": "application/pdf",
+  "filename": "invoice_2024.pdf",
+  "size": 204800,
+  "document_type": "Invoice",
+  "metadata": { "sender": "Acme Corp" }
+}
+```
+
+Tests which rule (if any) would match the given properties **without**
+actually routing a document.
+
+**Response (200) – match found:**
+```json
+{
+  "matched": true,
+  "rule": { "id": 1, "name": "Route invoices", "..." : "..." },
+  "target_pipeline": { "id": 3, "name": "Invoice Pipeline", "is_active": true }
+}
+```
+
+**Response (200) – no match:**
+```json
+{
+  "matched": false,
+  "rule": null,
+  "target_pipeline": null
+}
+```
+
+
 ## API Tokens
 
 Personal API tokens allow programmatic access to the DocuElevate API without

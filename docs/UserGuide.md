@@ -626,6 +626,53 @@ Pass no `pipeline_id` to clear the assignment and fall back to the system defaul
 
 Admins can create **system pipelines** that appear in every user's pipeline list. These can be set as the global default so all users benefit from a consistent processing baseline. Navigate to **Pipelines** and check the **System pipeline** box when creating a new one (admin only).
 
+### Conditional routing rules
+
+Routing rules automatically assign incoming documents to the right pipeline
+based on their properties — no manual pipeline selection required.
+
+**How it works:**
+
+1. Define one or more routing rules via the API
+   (`POST /api/routing-rules`).
+2. Each rule specifies a **field** to inspect, an **operator** (condition),
+   a **value** to compare against, and a **target pipeline**.
+3. When a document is processed, rules are evaluated **in position order**
+   (lowest first).  The first matching rule wins and the document is routed
+   to that pipeline.
+4. If no rule matches, the document is processed by the default pipeline.
+
+**Available fields:**
+
+| Field | Description |
+|-------|-------------|
+| `file_type` | MIME type, e.g. `application/pdf` |
+| `filename` | Original filename |
+| `size` | File size in bytes |
+| `document_type` | AI-classified type (Invoice, Contract, …) |
+| `category` | Alias for `document_type` |
+| `metadata.<key>` | Any key from the AI-extracted metadata JSON |
+
+**Available operators:**
+
+| Operator | Description |
+|----------|-------------|
+| `equals` / `not_equals` | Exact match (case-insensitive) |
+| `contains` / `not_contains` | Substring match (case-insensitive) |
+| `regex` | Full Python regex match (case-insensitive) |
+| `gt` / `lt` / `gte` / `lte` | Numeric comparison (greater/less than) |
+
+**Example:** Route all invoices over 1 MB to a dedicated pipeline:
+
+```
+Rule 1: field=document_type, operator=equals, value=Invoice, target_pipeline=3
+Rule 2: field=size,          operator=gt,     value=1048576, target_pipeline=5
+```
+
+You can test your rules without actually routing a document using the
+**evaluate** endpoint (`POST /api/routing-rules/evaluate`).  For the full
+API reference, see [API Documentation](API.md#routing-rules).
+
 ## API Access
 
 For programmatic access, DocuElevate provides a comprehensive REST API:
