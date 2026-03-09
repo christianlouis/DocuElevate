@@ -12,6 +12,7 @@ Supported SIEM transports:
 
 import json
 import logging
+import re
 import socket
 import threading
 from datetime import datetime, timezone
@@ -297,13 +298,24 @@ def _send_http(payload: dict[str, Any]) -> None:
         headers["Authorization"] = f"Bearer {token}"
 
     # Parse custom headers (comma-separated "Key:Value" pairs).
+    # Reject headers that could override security-critical ones already set,
+    # and validate that header names contain only RFC 7230 token characters.
+    _PROTECTED_HEADERS = {"authorization", "content-type", "host"}
+    _VALID_HEADER_NAME = re.compile(r"^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$")
     raw_custom = settings.audit_siem_http_custom_headers
     if raw_custom:
         for raw_pair in raw_custom.split(","):
             pair = raw_pair.strip()
             if ":" in pair:
                 k, _, v = pair.partition(":")
-                headers[k.strip()] = v.strip()
+                name = k.strip()
+                if not name or not _VALID_HEADER_NAME.match(name):
+                    logger.warning("Skipping invalid SIEM custom header name: %r", name)
+                    continue
+                if name.lower() in _PROTECTED_HEADERS:
+                    logger.warning("Skipping protected SIEM custom header: %r", name)
+                    continue
+                headers[name] = v.strip()
 
     # Wrap in Splunk HEC-style envelope when URL contains ``/services/collector``.
     body: dict[str, Any]
