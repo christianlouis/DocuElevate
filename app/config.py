@@ -617,6 +617,12 @@ class Settings(BaseSettings):
         description="Enable webhook delivery for document events",
     )
 
+    # Automation hooks (Zapier / Make.com)
+    automation_hooks_enabled: bool = Field(
+        default=True,
+        description="Enable Zapier / Make.com automation hook subscriptions and delivery",
+    )
+
     # ── Backup / restore settings ──────────────────────────────────────────────
     backup_enabled: bool = Field(
         default=True,
