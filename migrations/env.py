@@ -21,6 +21,7 @@ from app.database import Base
 # Ensure all models are imported so Base.metadata is populated.
 from app.models import (  # noqa: F401
     ApplicationSettings,
+    AuditLog,
     DocumentMetadata,
     FileProcessingStep,
     FileRecord,
