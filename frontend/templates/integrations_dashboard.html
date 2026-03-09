@@ -206,14 +206,17 @@
               </div>
               <!-- Actions -->
               <div class="flex items-center gap-2 shrink-0">
-                <template x-if="isOAuthType(intg.integration_type) && !intg.has_credentials">
+                <template x-if="isOAuthType(intg)">
                   <a
-                    :href="oauthLink(intg.integration_type) + '?integration_id=' + intg.id"
-                    class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-yellow-400 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    :href="oauthLink(intg) + '?integration_id=' + intg.id"
+                    :class="intg.has_credentials
+                      ? 'inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
+                      : 'inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-yellow-400 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-yellow-500'"
                     style="min-height:36px;"
-                    :aria-label="`Authorize ${intg.name}`"
+                    :aria-label="`${intg.has_credentials ? 'Re-authorize' : 'Authorize'} ${intg.name}`"
                   >
-                    <i class="fas fa-key mr-1" aria-hidden="true"></i>Authorize
+                    <i class="fas fa-key mr-1" aria-hidden="true"></i>
+                    <span x-text="intg.has_credentials ? 'Re-Authorize' : 'Authorize'"></span>
                   </a>
                 </template>
                 <button
@@ -289,14 +292,17 @@
               </div>
               <!-- Actions -->
               <div class="flex items-center gap-2 shrink-0">
-                <template x-if="isOAuthType(intg.integration_type) && !intg.has_credentials">
+                <template x-if="isOAuthType(intg)">
                   <a
-                    :href="oauthLink(intg.integration_type) + '?integration_id=' + intg.id"
-                    class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-yellow-400 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    :href="oauthLink(intg) + '?integration_id=' + intg.id"
+                    :class="intg.has_credentials
+                      ? 'inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
+                      : 'inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-yellow-400 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-yellow-500'"
                     style="min-height:36px;"
-                    :aria-label="`Authorize ${intg.name}`"
+                    :aria-label="`${intg.has_credentials ? 'Re-authorize' : 'Authorize'} ${intg.name}`"
                   >
-                    <i class="fas fa-key mr-1" aria-hidden="true"></i>Authorize
+                    <i class="fas fa-key mr-1" aria-hidden="true"></i>
+                    <span x-text="intg.has_credentials ? 'Re-Authorize' : 'Authorize'"></span>
                   </a>
                 </template>
                 <button
@@ -1133,12 +1139,30 @@ function integrationsDashboard() {
     typeLabel(t) { return TYPE_LABELS[t] || t; },
     typeIcon(t) { return TYPE_ICONS[t] || 'fa-plug text-gray-400'; },
     hasFormFields(t) { return TYPES_WITH_FORM_FIELDS.has(t); },
-    isOAuthType(t) { return OAUTH_TYPES.has(t); },
+    isOAuthType(intg) {
+      // Direct OAuth types: DROPBOX, GOOGLE_DRIVE, ONEDRIVE
+      if (OAUTH_TYPES.has(intg.integration_type)) return true;
+      // WATCH_FOLDER with an OAuth-backed source type (dropbox, onedrive, google_drive)
+      if (intg.integration_type === 'WATCH_FOLDER') {
+        const cfg = intg.config || {};
+        const src = (cfg.source_type || '').toLowerCase();
+        return src === 'dropbox' || src === 'onedrive' || src === 'google_drive';
+      }
+      return false;
+    },
 
-    oauthLink(t) {
+    oauthLink(intg) {
+      const t = intg.integration_type;
       if (t === 'DROPBOX') return '/dropbox-setup';
       if (t === 'GOOGLE_DRIVE') return '/google-drive-setup';
       if (t === 'ONEDRIVE') return '/onedrive-setup';
+      if (t === 'WATCH_FOLDER') {
+        const cfg = intg.config || {};
+        const src = (cfg.source_type || '').toLowerCase();
+        if (src === 'dropbox') return '/dropbox-setup';
+        if (src === 'onedrive') return '/onedrive-setup';
+        if (src === 'google_drive') return '/google-drive-setup';
+      }
       return '#';
     },
 

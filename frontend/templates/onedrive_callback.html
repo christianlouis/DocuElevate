@@ -149,11 +149,10 @@ document.addEventListener('DOMContentLoaded', function() {
             refresh_token: data.refresh_token,
             tenant_id: tenantId,
           };
-          const cfgUpdate = {};
-          if (folderPath) cfgUpdate.folder_path = folderPath;
 
+          // Only send credentials — the integration's config (folder_path, source_type, etc.)
+          // is already set and must not be overwritten here.
           const body = { credentials: creds };
-          if (Object.keys(cfgUpdate).length > 0) body.config = cfgUpdate;
 
           document.getElementById('processing-message').innerHTML =
             '<p>Saving credentials to your integration...</p>';

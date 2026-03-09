@@ -200,11 +200,10 @@ document.addEventListener('DOMContentLoaded', function() {
             client_secret: clientSecret,
             refresh_token: data.refresh_token,
           };
-          const cfgUpdate = {};
-          if (folderId) cfgUpdate.folder_id = folderId;
 
+          // Only send credentials — the integration's config (folder_id, etc.)
+          // is already set and must not be overwritten here.
           const body = { credentials: creds };
-          if (Object.keys(cfgUpdate).length > 0) body.config = cfgUpdate;
 
           document.getElementById('processing-message').innerHTML =
             '<p>Saving credentials to your integration...</p>';
