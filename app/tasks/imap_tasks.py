@@ -249,6 +249,7 @@ def _pull_user_integration_imap() -> None:
                     password = creds.get("password")
                     use_ssl = cfg.get("use_ssl", True)
                     delete_after = cfg.get("delete_after_process", False)
+                    gmail_labels = cfg.get("gmail_apply_labels", True)
 
                     if not (host and username and password):
                         logger.warning(
@@ -267,6 +268,7 @@ def _pull_user_integration_imap() -> None:
                         use_ssl=use_ssl,
                         delete_after_process=delete_after,
                         owner_id=integ.owner_id,
+                        gmail_apply_labels=gmail_labels,
                     )
                     integ.last_used_at = datetime.now(timezone.utc)
                     integ.last_error = None
@@ -317,7 +319,17 @@ def check_and_pull_mailbox(
     )
 
 
-def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_after_process, owner_id=None):
+def pull_inbox(
+    mailbox_key,
+    host,
+    port,
+    username,
+    password,
+    use_ssl,
+    delete_after_process,
+    owner_id=None,
+    gmail_apply_labels=True,
+):
     """
     Connects to the IMAP inbox, fetches new unread emails from the last 3 days,
     and processes attachments while preserving the original unread status.
@@ -331,6 +343,8 @@ def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_afte
     Args:
         owner_id: Optional user identifier. When provided, ingested documents are
                   attributed to this user via ``process_document`` / ``convert_to_pdf``.
+        gmail_apply_labels: Whether to apply Gmail-specific labels and stars to
+                  processed emails. Only relevant for Gmail hosts. Defaults to True.
     """
     logger.info("Connecting to %s at %s:%s (SSL=%s)", mailbox_key, host, port, use_ssl)
     processed_emails = load_processed_emails()
@@ -386,7 +400,7 @@ def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_afte
                 continue
 
             # For Gmail, check if the email already has the "Ingested" label.
-            if is_gmail_host:
+            if is_gmail_host and gmail_apply_labels:
                 if email_already_has_label(mail, num, "Ingested"):
                     logger.info("Skipping email %s in %s, already labeled 'Ingested'.", msg_id, mailbox_key)
                     continue
@@ -398,7 +412,7 @@ def pull_inbox(mailbox_key, host, port, username, password, use_ssl, delete_afte
             if settings.imap_readonly_mode:
                 logger.info("Readonly mode: skipping mailbox modifications for %s in %s", msg_id, mailbox_key)
             else:
-                if is_gmail_host:
+                if is_gmail_host and gmail_apply_labels:
                     mark_as_processed_with_star(mail, num)
                     mark_as_processed_with_label(mail, num, label="Ingested")
 
