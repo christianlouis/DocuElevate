@@ -275,7 +275,7 @@ class TestScheduledJobsView:
 
         import asyncio
 
-        result = asyncio.get_event_loop().run_until_complete(scheduled_jobs_page(mock_request))
+        result = asyncio.run(scheduled_jobs_page(mock_request))
         assert result.status_code == 302
         assert result.headers["location"] == "/"
 
@@ -288,7 +288,7 @@ class TestScheduledJobsView:
 
         import asyncio
 
-        result = asyncio.get_event_loop().run_until_complete(scheduled_jobs_page(mock_request))
+        result = asyncio.run(scheduled_jobs_page(mock_request))
         assert result.status_code == 302
 
     def test_returns_template_for_admin(self):
@@ -303,7 +303,7 @@ class TestScheduledJobsView:
             mock_templates.TemplateResponse.return_value = mock_template_response
             import asyncio
 
-            result = asyncio.get_event_loop().run_until_complete(scheduled_jobs_page(mock_request))
+            result = asyncio.run(scheduled_jobs_page(mock_request))
 
         mock_templates.TemplateResponse.assert_called_once()
         call_args = mock_templates.TemplateResponse.call_args[0]
@@ -322,7 +322,7 @@ class TestScheduledJobsView:
             import asyncio
 
             with pytest.raises(HTTPException) as exc_info:
-                asyncio.get_event_loop().run_until_complete(scheduled_jobs_page(mock_request))
+                asyncio.run(scheduled_jobs_page(mock_request))
 
         assert exc_info.value.status_code == 500
         assert "Failed to load scheduled jobs page" in exc_info.value.detail
@@ -1038,3 +1038,588 @@ class TestUpdateJobStatus:
 
             # Should not raise.
             _update_job_status("nonexistent-job", "success", "Done.")
+
+
+# ===========================================================================
+# Additional coverage tests
+# ===========================================================================
+
+
+@pytest.mark.unit
+class TestRequireAdminSuccess:
+    """Tests for the _require_admin success path."""
+
+    def test_returns_user_for_admin(self):
+        """_require_admin returns the user dict when the user is an admin."""
+        from app.api.scheduled_jobs import _require_admin
+
+        admin_user = {"email": "admin@example.com", "is_admin": True}
+        mock_request = MagicMock()
+        mock_request.session = {"user": admin_user}
+
+        result = _require_admin(mock_request)
+        assert result == admin_user
+
+
+@pytest.mark.unit
+class TestSeedDefaultScheduledJobsErrors:
+    """Tests for error handling in seed_default_scheduled_jobs."""
+
+    def test_rolls_back_on_db_error(self, sj_session):
+        """seed_default_scheduled_jobs rolls back and logs on commit failure."""
+        from app.api.scheduled_jobs import seed_default_scheduled_jobs
+
+        with patch.object(sj_session, "commit", side_effect=RuntimeError("DB commit error")):
+            with patch("app.api.scheduled_jobs.logger") as mock_logger:
+                seed_default_scheduled_jobs(sj_session)
+                mock_logger.error.assert_called_once()
+
+
+@pytest.mark.unit
+class TestUpdateScheduledJobErrors:
+    """Tests for update_scheduled_job DB error handling."""
+
+    def test_returns_500_on_commit_failure(self, sj_session):
+        """Returns 500 when the DB commit fails during update."""
+        from fastapi import HTTPException
+
+        from app.api.scheduled_jobs import ScheduledJobUpdate, update_scheduled_job
+
+        job = _make_job(sj_session, name="job-to-fail")
+
+        mock_request = MagicMock()
+        mock_request.session = {"user": {"email": "admin@example.com", "is_admin": True}}
+
+        # Patch the session's commit to raise after the job is found.
+        with patch.object(sj_session, "commit", side_effect=RuntimeError("commit error")):
+            with pytest.raises(HTTPException) as exc_info:
+                update_scheduled_job(
+                    job_id=job.id,
+                    payload=ScheduledJobUpdate(enabled=False),
+                    request=mock_request,
+                    db=sj_session,
+                    _admin={"email": "admin@example.com", "is_admin": True},
+                )
+
+        assert exc_info.value.status_code == 500
+        assert "Failed to update scheduled job" in exc_info.value.detail
+
+
+@pytest.mark.unit
+class TestProcessNewDocumentsQueuing:
+    """Tests for the file-queuing path of process_new_documents."""
+
+    def test_queues_file_that_exists(self, sj_engine, tmp_path):
+        """A file with no processing steps whose path exists is queued."""
+        from app.tasks.batch_tasks import process_new_documents
+
+        Session = sessionmaker(bind=sj_engine)
+        session = Session()
+        real_file = tmp_path / "real.pdf"
+        real_file.write_bytes(b"%PDF")
+        _make_file_record(session, filehash="hash_real_q", local_filename=str(real_file))
+        session.close()
+
+        dispatched = []
+
+        with (
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks._update_job_status"),
+        ):
+            real_session = sessionmaker(bind=sj_engine)()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+
+            # Patch process_document.delay inside the function module.
+            with patch("app.tasks.process_document.process_document") as mock_pd:
+                mock_pd.delay = MagicMock(side_effect=lambda *a, **kw: dispatched.append((a, kw)))
+                result = process_new_documents()
+
+            real_session.close()
+
+        # The file has no steps so it should be queued.
+        assert result["queued"] == 1
+        assert result["skipped"] == 0
+
+
+@pytest.mark.unit
+class TestReprocessFailedDocumentsQueuing:
+    """Tests for the file-queuing path of reprocess_failed_documents."""
+
+    def test_queues_failed_file_that_exists(self, sj_engine, tmp_path):
+        """A file with a failed step whose path exists is re-queued."""
+        from app.tasks.batch_tasks import reprocess_failed_documents
+
+        Session = sessionmaker(bind=sj_engine)
+        session = Session()
+        real_file = tmp_path / "fail.pdf"
+        real_file.write_bytes(b"%PDF")
+        record = _make_file_record(session, filehash="hash_fail_q", local_filename=str(real_file))
+
+        # Add a failed processing step.
+        from app.models import FileProcessingStep
+
+        step = FileProcessingStep(
+            file_id=record.id,
+            step_name="extract_metadata_with_gpt",
+            status="failure",
+        )
+        session.add(step)
+        session.commit()
+        session.close()
+
+        dispatched = []
+
+        with (
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks._update_job_status"),
+        ):
+            real_session = sessionmaker(bind=sj_engine)()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+
+            with patch("app.tasks.process_document.process_document") as mock_pd:
+                mock_pd.delay = MagicMock(side_effect=lambda *a, **kw: dispatched.append((a, kw)))
+                result = reprocess_failed_documents()
+
+            real_session.close()
+
+        assert result["queued"] == 1
+        assert result["skipped"] == 0
+
+
+@pytest.mark.unit
+class TestCleanupTempFilesEdgeCases:
+    """Additional edge-case tests for cleanup_temp_files."""
+
+    def test_increments_errors_on_unlink_failure(self, tmp_path):
+        """OSError during file deletion increments the errors counter."""
+        from app.tasks.batch_tasks import cleanup_temp_files
+
+        tmp_dir = tmp_path / "tmp"
+        tmp_dir.mkdir()
+        old_file = tmp_dir / "locked.pdf"
+        old_file.write_bytes(b"data")
+
+        old_mtime = (datetime.now(timezone.utc) - timedelta(hours=48)).timestamp()
+        os.utime(old_file, (old_mtime, old_mtime))
+
+        with (
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks._update_job_status") as mock_update,
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+            patch("pathlib.Path.unlink", side_effect=OSError("Permission denied")),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_db = MagicMock()
+            mock_db.__enter__ = MagicMock(return_value=mock_db)
+            mock_db.__exit__ = MagicMock(return_value=False)
+            mock_db.query.return_value.join.return_value.filter.return_value.distinct.return_value.all.return_value = []
+            mock_db.query.return_value.filter.return_value.all.return_value = []
+            mock_sl.return_value = mock_db
+
+            result = cleanup_temp_files(max_age_hours=24)
+
+        assert result["errors"] == 1
+        assert result["deleted"] == 0
+        # When errors > 0 and deleted == 0, status should be "failed".
+        mock_update.assert_called_once_with(
+            "cleanup-temp-files", "failed", pytest.approx(mock_update.call_args[0][2], abs=1e9)
+        )
+
+    def test_status_success_when_both_deleted_and_errors(self, tmp_path):
+        """Status is 'success' when at least one file was deleted even if some had errors."""
+        from app.tasks.batch_tasks import cleanup_temp_files
+
+        tmp_dir = tmp_path / "tmp"
+        tmp_dir.mkdir()
+
+        for name in ["good.pdf", "bad.pdf"]:
+            f = tmp_dir / name
+            f.write_bytes(b"data")
+            old_mtime = (datetime.now(timezone.utc) - timedelta(hours=48)).timestamp()
+            os.utime(f, (old_mtime, old_mtime))
+
+        # First unlink call succeeds (returns None); second raises OSError.
+        unlink_calls = {"n": 0}
+
+        def side_effect(*_args, **_kwargs):
+            unlink_calls["n"] += 1
+            if unlink_calls["n"] > 1:
+                raise OSError("Permission denied")
+
+        with (
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks._update_job_status") as mock_update,
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+            patch("pathlib.Path.unlink", side_effect=side_effect),
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_db = MagicMock()
+            mock_db.__enter__ = MagicMock(return_value=mock_db)
+            mock_db.__exit__ = MagicMock(return_value=False)
+            mock_db.query.return_value.join.return_value.filter.return_value.distinct.return_value.all.return_value = []
+            mock_db.query.return_value.filter.return_value.all.return_value = []
+            mock_sl.return_value = mock_db
+
+            result = cleanup_temp_files(max_age_hours=24)
+
+        # deleted=1, errors=1 → status must be "success" (errors only → "failed").
+        assert result["deleted"] == 1
+        assert result["errors"] == 1
+        assert mock_update.call_args[0][1] == "success"
+
+    def test_skips_non_file_entries(self, tmp_path):
+        """Subdirectories inside workdir/tmp are skipped (not counted as deleted)."""
+        from app.tasks.batch_tasks import cleanup_temp_files
+
+        tmp_dir = tmp_path / "tmp"
+        tmp_dir.mkdir()
+        subdir = tmp_dir / "subdir"
+        subdir.mkdir()
+
+        with (
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks._update_job_status"),
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_db = MagicMock()
+            mock_db.__enter__ = MagicMock(return_value=mock_db)
+            mock_db.__exit__ = MagicMock(return_value=False)
+            mock_db.query.return_value.join.return_value.filter.return_value.distinct.return_value.all.return_value = []
+            mock_db.query.return_value.filter.return_value.all.return_value = []
+            mock_sl.return_value = mock_db
+
+            result = cleanup_temp_files(max_age_hours=24)
+
+        assert result["deleted"] == 0
+        assert subdir.exists()
+
+    def test_outer_exception_returns_error_dict(self, tmp_path):
+        """An unexpected exception in cleanup returns an error dict and sets status failed."""
+        from app.tasks.batch_tasks import cleanup_temp_files
+
+        with (
+            patch("app.tasks.batch_tasks.SessionLocal", side_effect=RuntimeError("session error")),
+            patch("app.tasks.batch_tasks._update_job_status") as mock_update,
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+        ):
+            mock_settings.workdir = str(tmp_path)
+            # Make tmp_dir exist so the early-return doesn't fire.
+            (tmp_path / "tmp").mkdir()
+            result = cleanup_temp_files(max_age_hours=24)
+
+        assert "error" in result
+        mock_update.assert_called_once()
+        assert mock_update.call_args[0][1] == "failed"
+
+
+@pytest.mark.unit
+class TestSyncSearchIndexAdditional:
+    """Additional coverage tests for sync_search_index."""
+
+    def test_counts_skipped_on_indexing_failure(self, sj_engine):
+        """When index_document returns False, the document is counted as skipped."""
+        from app.tasks.batch_tasks import sync_search_index
+
+        Session = sessionmaker(bind=sj_engine)
+        session = Session()
+        _make_file_record(session, filehash="hash_idx_fail", ocr_text="text", ai_metadata=None)
+        session.close()
+
+        mock_client = MagicMock()
+        mock_index = MagicMock()
+        mock_client.get_index.return_value = mock_index
+        get_docs_result = MagicMock()
+        get_docs_result.results = []
+        mock_index.get_documents.return_value = get_docs_result
+
+        with (
+            patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client),
+            patch("app.utils.meilisearch_client.index_document", return_value=False),
+            patch("app.tasks.batch_tasks._update_job_status") as mock_update,
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+        ):
+            mock_settings.meilisearch_index_name = "documents"
+            real_session = sessionmaker(bind=sj_engine)()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = sync_search_index(batch_size=10)
+            real_session.close()
+
+        assert result["skipped"] == 1
+        assert result["indexed"] == 0
+        mock_update.assert_called_once()
+        assert mock_update.call_args[0][1] == "success"
+
+    def test_handles_invalid_ai_metadata_json(self, sj_engine):
+        """Invalid ai_metadata JSON is handled gracefully — metadata defaults to {}."""
+        from app.tasks.batch_tasks import sync_search_index
+
+        Session = sessionmaker(bind=sj_engine)
+        session = Session()
+        _make_file_record(
+            session,
+            filehash="hash_bad_json",
+            ocr_text="some text",
+            ai_metadata="{invalid-json}",
+        )
+        session.close()
+
+        mock_client = MagicMock()
+        mock_index = MagicMock()
+        mock_client.get_index.return_value = mock_index
+        get_docs_result = MagicMock()
+        get_docs_result.results = []
+        mock_index.get_documents.return_value = get_docs_result
+
+        with (
+            patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client),
+            patch("app.utils.meilisearch_client.index_document", return_value=True) as mock_idx,
+            patch("app.tasks.batch_tasks._update_job_status") as mock_update,
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+        ):
+            mock_settings.meilisearch_index_name = "documents"
+            real_session = sessionmaker(bind=sj_engine)()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = sync_search_index(batch_size=10)
+            real_session.close()
+
+        # The record should still be indexed with empty metadata.
+        assert result["indexed"] == 1
+        call_args = mock_idx.call_args
+        assert call_args[0][2] == {}  # metadata is empty dict
+        mock_update.assert_called_once()
+        assert mock_update.call_args[0][1] == "success"
+
+
+@pytest.mark.unit
+class TestReprocessFailedDocumentsMissingFile:
+    """Test reprocess_failed_documents when file exists as candidate but not on disk."""
+
+    def test_skips_failed_file_with_missing_path(self, sj_engine):
+        """A file with a failed step but no file on disk is counted as skipped."""
+        from app.tasks.batch_tasks import reprocess_failed_documents
+
+        Session = sessionmaker(bind=sj_engine)
+        session = Session()
+        record = _make_file_record(
+            session,
+            filehash="hash_fail_skip",
+            local_filename="/nonexistent/fail.pdf",
+        )
+        from app.models import FileProcessingStep
+
+        step = FileProcessingStep(
+            file_id=record.id,
+            step_name="extract_metadata_with_gpt",
+            status="failure",
+        )
+        session.add(step)
+        session.commit()
+        session.close()
+
+        with (
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks._update_job_status") as mock_update,
+        ):
+            real_session = sessionmaker(bind=sj_engine)()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = reprocess_failed_documents()
+            real_session.close()
+
+        assert result["skipped"] == 1
+        assert result["queued"] == 0
+        mock_update.assert_called_once()
+        assert mock_update.call_args[0][1] == "success"
+
+
+@pytest.mark.unit
+class TestCleanupTempFilesProtectedByActivity:
+    """Tests for cleanup_temp_files protection via in-progress and active tmp records."""
+
+    def test_protects_file_referenced_by_in_progress_step(self, tmp_path, sj_engine):
+        """A file with an in-progress step is not deleted."""
+        from app.tasks.batch_tasks import cleanup_temp_files
+
+        tmp_dir = tmp_path / "tmp"
+        tmp_dir.mkdir()
+        protected = tmp_dir / "inprogress.pdf"
+        protected.write_bytes(b"data")
+        old_mtime = (datetime.now(timezone.utc) - timedelta(hours=48)).timestamp()
+        os.utime(protected, (old_mtime, old_mtime))
+
+        Session = sessionmaker(bind=sj_engine)()
+        record = _make_file_record(
+            Session,
+            filehash="hash_ip",
+            local_filename=str(protected),
+        )
+        from app.models import FileProcessingStep
+
+        step = FileProcessingStep(
+            file_id=record.id,
+            step_name="extract_text",
+            status="in_progress",
+        )
+        Session.add(step)
+        Session.commit()
+        Session.close()
+
+        with (
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks._update_job_status"),
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+        ):
+            mock_settings.workdir = str(tmp_path)
+            real_session = sessionmaker(bind=sj_engine)()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = cleanup_temp_files(max_age_hours=24)
+            real_session.close()
+
+        # File should NOT have been deleted.
+        assert protected.exists()
+        assert result["deleted"] == 0
+
+    def test_protects_file_referenced_by_active_tmp_record(self, tmp_path, sj_engine):
+        """A file listed in FileRecord.local_filename pointing into tmp is not deleted."""
+        from app.tasks.batch_tasks import cleanup_temp_files
+
+        tmp_dir = tmp_path / "tmp"
+        tmp_dir.mkdir()
+        active_file = tmp_dir / "active.pdf"
+        active_file.write_bytes(b"data")
+        old_mtime = (datetime.now(timezone.utc) - timedelta(hours=48)).timestamp()
+        os.utime(active_file, (old_mtime, old_mtime))
+
+        Session = sessionmaker(bind=sj_engine)()
+        _make_file_record(
+            Session,
+            filehash="hash_active_tmp",
+            local_filename=str(active_file),
+        )
+        Session.close()
+
+        with (
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks._update_job_status"),
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+        ):
+            mock_settings.workdir = str(tmp_path)
+            real_session = sessionmaker(bind=sj_engine)()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = cleanup_temp_files(max_age_hours=24)
+            real_session.close()
+
+        assert active_file.exists()
+        assert result["deleted"] == 0
+
+
+@pytest.mark.unit
+class TestSyncSearchIndexOuterException:
+    """Tests for the outer exception handler in sync_search_index."""
+
+    def test_handles_exception_during_db_query(self):
+        """If the DB query itself raises, the outer except sets status failed."""
+        from app.tasks.batch_tasks import sync_search_index
+
+        mock_client = MagicMock()
+        mock_index = MagicMock()
+        mock_client.get_index.return_value = mock_index
+        get_docs_result = MagicMock()
+        get_docs_result.results = []
+        mock_index.get_documents.return_value = get_docs_result
+
+        with (
+            patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client),
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks._update_job_status") as mock_update,
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+        ):
+            mock_settings.meilisearch_index_name = "documents"
+            # Make the DB query raise.
+            mock_sl.return_value.__enter__ = MagicMock(side_effect=RuntimeError("DB down"))
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+
+            result = sync_search_index()
+
+        assert "error" in result
+        mock_update.assert_called_once()
+        assert mock_update.call_args[0][1] == "failed"
+
+
+@pytest.mark.unit
+class TestCleanupTempFilesNullLocalFilename:
+    """Tests for null local_filename rows in cleanup_temp_files inner loops."""
+
+    def _make_null_row(self):
+        """Return a mock Row with local_filename=None (as SQLAlchemy returns for NULL cols)."""
+        row = MagicMock()
+        row.local_filename = None
+        return row
+
+    def test_skips_null_local_filename_in_in_progress_records(self, tmp_path):
+        """In-progress rows with null local_filename do not crash and are ignored."""
+        from app.tasks.batch_tasks import cleanup_temp_files
+
+        tmp_dir = tmp_path / "tmp"
+        tmp_dir.mkdir()
+
+        null_row = self._make_null_row()
+
+        with (
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks._update_job_status"),
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_db = MagicMock()
+            mock_db.__enter__ = MagicMock(return_value=mock_db)
+            mock_db.__exit__ = MagicMock(return_value=False)
+            # in_progress_records returns one row with local_filename=None.
+            mock_db.query.return_value.join.return_value.filter.return_value.distinct.return_value.all.return_value = [
+                null_row
+            ]
+            # active_records returns empty.
+            mock_db.query.return_value.filter.return_value.all.return_value = []
+            mock_sl.return_value = mock_db
+
+            result = cleanup_temp_files(max_age_hours=24)
+
+        # No crash; the null row is simply ignored.
+        assert result["deleted"] == 0
+
+    def test_skips_null_local_filename_in_active_tmp_records(self, tmp_path):
+        """Active-tmp rows with null local_filename do not crash and are ignored."""
+        from app.tasks.batch_tasks import cleanup_temp_files
+
+        tmp_dir = tmp_path / "tmp"
+        tmp_dir.mkdir()
+
+        null_row = self._make_null_row()
+
+        with (
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks._update_job_status"),
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_db = MagicMock()
+            mock_db.__enter__ = MagicMock(return_value=mock_db)
+            mock_db.__exit__ = MagicMock(return_value=False)
+            # in_progress_records returns empty.
+            mock_db.query.return_value.join.return_value.filter.return_value.distinct.return_value.all.return_value = []
+            # active_records returns one row with local_filename=None.
+            mock_db.query.return_value.filter.return_value.all.return_value = [null_row]
+            mock_sl.return_value = mock_db
+
+            result = cleanup_temp_files(max_age_hours=24)
+
+        assert result["deleted"] == 0

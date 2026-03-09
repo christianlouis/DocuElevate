@@ -307,7 +307,7 @@ def cleanup_temp_files(max_age_hours: int = _TEMP_FILE_MAX_AGE_HOURS) -> dict:
             # Check modification time.
             try:
                 mtime = datetime.fromtimestamp(entry.stat().st_mtime, tz=timezone.utc)
-            except OSError:
+            except OSError:  # pragma: no cover – only reachable if file vanishes between iterdir() and stat()
                 skipped += 1
                 continue
 

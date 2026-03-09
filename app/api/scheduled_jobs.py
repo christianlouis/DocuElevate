@@ -68,8 +68,7 @@ class ScheduledJobResponse(BaseModel):
     created_at: datetime | None
     updated_at: datetime | None
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class ScheduledJobUpdate(BaseModel):
