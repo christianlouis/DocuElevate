@@ -231,7 +231,7 @@ class TestDeliverAutomationHookTask:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 class TestWebhookDispatchIntegration:
     """Test that dispatch_webhook_event also triggers automation hooks."""
 

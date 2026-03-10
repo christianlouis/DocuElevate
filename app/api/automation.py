@@ -274,12 +274,17 @@ def action_upload(
     if not file.filename:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Filename is required")
 
+    # Sanitise filename to prevent path traversal attacks
+    safe_filename = os.path.basename(file.filename)
+    if not safe_filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Filename is required")
+
     owner_id = user.get("preferred_username") or user.get("email") or user.get("id", "automation")
     workdir = settings.workdir or tempfile.gettempdir()
     upload_dir = os.path.join(workdir, "uploads")
     os.makedirs(upload_dir, exist_ok=True)
 
-    dest_path = os.path.join(upload_dir, file.filename)
+    dest_path = os.path.join(upload_dir, safe_filename)
     try:
         contents = file.file.read()
         with open(dest_path, "wb") as f:
@@ -295,12 +300,12 @@ def action_upload(
 
         result = process_document.delay(dest_path, owner_id)
         task_id = result.id
-        logger.info("Automation upload queued: file=%s, task=%s, owner=%s", file.filename, task_id, owner_id)
+        logger.info("Automation upload queued: file=%s, task=%s, owner=%s", safe_filename, task_id, owner_id)
     except Exception as exc:
         logger.warning("Could not queue processing task (Celery may be unavailable): %s", exc)
 
     return {
         "status": "accepted",
-        "filename": file.filename,
+        "filename": safe_filename,
         "task_id": task_id,
     }
