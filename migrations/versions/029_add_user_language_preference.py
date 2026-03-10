@@ -1,7 +1,7 @@
 """Add preferred_language column to user_profiles for i18n support.
 
-Revision ID: 027_add_user_language_preference
-Revises: 026_add_scheduled_jobs
+Revision ID: 029_add_user_language_preference
+Revises: 028_add_audit_logs
 Create Date: 2026-03-09
 """
 
@@ -10,8 +10,8 @@ from typing import Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "027_add_user_language_preference"
-down_revision: Union[str, None] = "026_add_scheduled_jobs"
+revision: str = "029_add_user_language_preference"
+down_revision: Union[str, None] = "028_add_audit_logs"
 depends_on: Union[str, None] = None
 
 

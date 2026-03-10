@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from app.views.admin_users import router as admin_users_router
 from app.views.api_tokens import router as api_tokens_router
+from app.views.audit_logs import router as audit_logs_router
 from app.views.backup import router as backup_router
 from app.views.db_wizard import router as db_wizard_router
 from app.views.dropbox import router as dropbox_router
@@ -60,4 +61,5 @@ router.include_router(imap_accounts_router)  # Per-user IMAP ingestion accounts
 router.include_router(integrations_router)  # Unified integrations dashboard
 router.include_router(notifications_router)  # User notification dashboard
 router.include_router(scheduled_jobs_router)  # Admin scheduled batch jobs
+router.include_router(audit_logs_router)  # Comprehensive audit log viewer
 router.include_router(help_router)  # Built-in help / How-To docs

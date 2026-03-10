@@ -171,6 +171,9 @@
                   <a href="/admin/backup" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                     <i class="fas fa-database w-4 mr-2 text-green-600" aria-hidden="true"></i> {{ _("nav.backup_restore") }}
                   </a>
+                  <a href="/admin/audit-logs" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    <i class="fas fa-shield-halved w-4 mr-2 text-indigo-500" aria-hidden="true"></i> Audit Logs
+                  </a>
                   <a href="/status" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                      {% if request and request.url.path == '/status' %}aria-current="page"{% endif %}>
                     <i class="fas fa-circle-dot w-4 mr-2 text-gray-500" aria-hidden="true"></i> {{ _("nav.status") }}

@@ -10,6 +10,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Testing
+
+- **views**: Add comprehensive coverage tests for 11 view modules
+  ([`c8987d9`](https://github.com/christianlouis/DocuElevate/commit/c8987d966bd949634d222a7809ec52c3ed258f81))
+
+- **views**: Boost coverage for 11 view modules toward 100%
+  ([`6fb1df1`](https://github.com/christianlouis/DocuElevate/commit/6fb1df1aade8a8c98c27fe50dbe44045cba1724d))
+
+
+## v0.115.0 (2026-03-10)
+
+
+## v0.114.1 (2026-03-10)
+
+### Bug Fixes
+
+- **db**: Add migration to create shared_links table for databases that skipped 025
+  ([`289dcc3`](https://github.com/christianlouis/DocuElevate/commit/289dcc375c111c8d71bd04ef31f184a0e6a3f6f2))
+
+
 ## v0.114.0 (2026-03-09)
 
 ### Bug Fixes
