@@ -6,8 +6,6 @@ import pytest
 from fastapi import Request, status
 from starlette.responses import RedirectResponse
 
-_TEST_SECRET = "test-secret-value"  # noqa: S105
-
 
 @pytest.mark.unit
 class TestSocialProviders:
@@ -311,6 +309,8 @@ class TestSocialCallback:
 
             assert isinstance(result, RedirectResponse)
             assert "/login?error=Social+login+failed" in result.headers["location"]
+            # Ensure internal exception details are not exposed to the user
+            assert "Exception" not in result.headers["location"]
 
 
 @pytest.mark.unit

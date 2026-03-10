@@ -305,7 +305,8 @@ def _normalize_social_userinfo(provider: str, token: dict, raw_userinfo: dict | 
 
     Args:
         provider: The social provider key (google, microsoft, apple, dropbox).
-        token: The OAuth token response from the provider.
+        token: The OAuth token response from the provider. Included for future
+            provider-specific claim extraction (e.g. ``id_token`` claims).
         raw_userinfo: The raw userinfo dict (may be None for providers without standard OIDC userinfo).
 
     Returns:
@@ -415,7 +416,7 @@ async def social_callback(request: Request, provider: str, db: Session = Depends
     except Exception as e:
         logger.warning("[SECURITY] SOCIAL_LOGIN_FAILURE provider=%s error=%s", provider, type(e).__name__)
         return RedirectResponse(
-            url=f"/login?error=Social+login+failed:+{type(e).__name__}", status_code=status.HTTP_302_FOUND
+            url="/login?error=Social+login+failed.+Please+try+again.", status_code=status.HTTP_302_FOUND
         )
 
 
