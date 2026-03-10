@@ -296,6 +296,28 @@ def get_provider_status() -> dict[str, dict[str, object]]:
         },
     }
 
+    # Check SharePoint configuration
+    providers["SharePoint"] = {
+        "name": "SharePoint",
+        "icon": "fa-brands fa-microsoft",
+        "configured": bool(
+            getattr(settings, "sharepoint_client_id", None)
+            and getattr(settings, "sharepoint_client_secret", None)
+            and getattr(settings, "sharepoint_site_url", None)
+        ),
+        "enabled": True,
+        "description": "Store documents in Microsoft SharePoint Online",
+        "details": {
+            "client_id": getattr(settings, "sharepoint_client_id", "Not set"),
+            "client_secret": mask_sensitive_value(getattr(settings, "sharepoint_client_secret", None)),
+            "tenant_id": getattr(settings, "sharepoint_tenant_id", "Not set"),
+            "refresh_token": mask_sensitive_value(getattr(settings, "sharepoint_refresh_token", None)),
+            "site_url": getattr(settings, "sharepoint_site_url", "Not set"),
+            "document_library": getattr(settings, "sharepoint_document_library", "Not set"),
+            "folder_path": getattr(settings, "sharepoint_folder_path", "Not set"),
+        },
+    }
+
     # Check S3 configuration
     providers["S3 Storage"] = {
         "name": "S3 Storage",
