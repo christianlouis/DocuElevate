@@ -34,6 +34,7 @@ _TABLE_ORDER = [
     "settings_audit_log",
     "saved_searches",
     "webhook_configs",
+    "shared_links",
 ]
 
 
