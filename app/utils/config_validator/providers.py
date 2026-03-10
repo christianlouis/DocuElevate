@@ -373,4 +373,19 @@ def get_provider_status() -> dict[str, dict[str, object]]:
         },
     }
 
+    # Check iCloud Drive configuration
+    providers["iCloud Drive"] = {
+        "name": "iCloud Drive",
+        "icon": "fa-brands fa-apple",
+        "configured": bool(getattr(settings, "icloud_username", None) and getattr(settings, "icloud_password", None)),
+        "enabled": True,
+        "description": "Store documents in Apple iCloud Drive",
+        "details": {
+            "username": getattr(settings, "icloud_username", "Not set"),
+            "password": mask_sensitive_value(getattr(settings, "icloud_password", None)),
+            "folder": getattr(settings, "icloud_folder", "Not set"),
+            "cookie_directory": getattr(settings, "icloud_cookie_directory", "Not set"),
+        },
+    }
+
     return providers

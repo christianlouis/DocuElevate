@@ -838,6 +838,39 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Storage Providers - iCloud Drive
+    "icloud_username": {
+        "category": "Storage Providers",
+        "description": "Apple ID email address for iCloud Drive authentication",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "icloud_password": {
+        "category": "Storage Providers",
+        "description": "App-specific password for iCloud Drive (generate at https://appleid.apple.com)",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "icloud_folder": {
+        "category": "Storage Providers",
+        "description": "Target folder path in iCloud Drive (e.g. Documents/Uploads)",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "icloud_cookie_directory": {
+        "category": "Storage Providers",
+        "description": "Directory for persisting iCloud session cookies (default: ~/.pyicloud)",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Storage Providers - AWS S3
     "aws_access_key_id": {
         "category": "Storage Providers",
