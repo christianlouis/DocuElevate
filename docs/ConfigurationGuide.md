@@ -1144,6 +1144,26 @@ Configurations are stored in the database and managed through the API (see [API 
 
 Webhook URLs, secrets, and subscribed events are configured per-webhook via the `/api/webhooks/` endpoints (admin access required). Each delivery includes an optional HMAC-SHA256 signature for verification and is retried with exponential backoff on failure.
 
+### Automation Hooks (Zapier / Make.com)
+
+Automation hooks enable integration with external automation platforms such as
+[Zapier](https://zapier.com) and [Make.com](https://make.com) (formerly Integromat).
+
+| **Variable**               | **Description**                                                                                | **Default** |
+|----------------------------|------------------------------------------------------------------------------------------------|-------------|
+| `AUTOMATION_HOOKS_ENABLED` | Enable or disable Zapier / Make.com automation hook subscriptions and delivery (`True`/`False`) | `True`      |
+
+When enabled, external platforms can:
+
+- **Subscribe** to DocuElevate events via `POST /api/automation/hooks/subscribe` (outgoing triggers)
+- **Send documents** to DocuElevate via `POST /api/automation/actions/upload` (incoming actions)
+- **Discover fields** via `GET /api/automation/triggers/sample/{event}` (Zapier field mapping)
+
+Automation hooks share the same event types as webhooks (`document.uploaded`, `document.processed`,
+`document.failed`, `user.signup`, `user.plan_changed`, `user.payment_issue`) and use a flat
+Zapier-compatible JSON payload format.  See the [API docs](API.md#automation-zapier--makecom) for
+endpoint details and payload examples.
+
 ### Backup & Restore
 
 DocuElevate automatically backs up the database on a scheduled basis.
