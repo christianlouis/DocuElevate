@@ -20,6 +20,7 @@ from app.api.google_drive import router as google_drive_router
 from app.api.imap_accounts import router as imap_accounts_router
 from app.api.integrations import router as integrations_router
 from app.api.logs import router as logs_router
+from app.api.mobile import router as mobile_router
 from app.api.notifications import router as notifications_router
 from app.api.onboarding import router as onboarding_router
 from app.api.onedrive import router as onedrive_router
@@ -82,3 +83,4 @@ router.include_router(imap_accounts_router)
 router.include_router(integrations_router)
 router.include_router(notifications_router)
 router.include_router(scheduled_jobs_router)
+router.include_router(mobile_router)

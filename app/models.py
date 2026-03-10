@@ -833,3 +833,37 @@ class ScheduledJob(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class MobileDevice(Base):
+    """Registered mobile device for push notifications.
+
+    Stores the push token (Expo push token, FCM token, or APNs token) for a
+    specific user device so that document-processing events can be forwarded
+    as push notifications to the native mobile app.
+    """
+
+    __tablename__ = "mobile_devices"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # User that owns this device registration.
+    owner_id = Column(String, nullable=False, index=True)
+
+    # Human-readable name the user gave this device (e.g. "John's iPhone").
+    device_name = Column(String(255), nullable=True)
+
+    # Platform: "ios", "android", or "web".
+    platform = Column(String(20), nullable=False, default="ios")
+
+    # Expo push token (ExponentPushToken[…]) or raw FCM/APNs token.
+    push_token = Column(String(512), nullable=False)
+
+    # Whether push notifications are enabled for this device.
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    # Timestamps.
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (UniqueConstraint("owner_id", "push_token", name="uq_mobile_device_owner_token"),)
