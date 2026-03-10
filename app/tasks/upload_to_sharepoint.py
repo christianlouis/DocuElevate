@@ -335,4 +335,4 @@ def upload_to_sharepoint(self, file_path: str, file_id: int = None, folder_overr
         error_msg = f"Failed to upload {filename} to SharePoint: {str(e)}"
         logger.error("[%s] %s", task_id, error_msg)
         log_task_progress(task_id, "upload_to_sharepoint", "failure", error_msg, file_id=file_id)
-        raise Exception(error_msg)
+        raise RuntimeError(error_msg) from e
