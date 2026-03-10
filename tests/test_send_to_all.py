@@ -300,6 +300,7 @@ class TestSendToAllDestinations:
         mock_sftp.return_value = False
         mock_email.return_value = False
         mock_onedrive.return_value = False
+        mock_icloud.return_value = False
         mock_dropbox_upload.delay.return_value = MagicMock(id="dropbox-task")
         mock_s3_upload.delay.return_value = MagicMock(id="s3-task")
 

@@ -12,6 +12,7 @@ from app.tasks.upload_to_dropbox import upload_to_dropbox
 from app.tasks.upload_to_email import upload_to_email
 from app.tasks.upload_to_ftp import upload_to_ftp
 from app.tasks.upload_to_google_drive import upload_to_google_drive
+from app.tasks.upload_to_icloud import upload_to_icloud
 from app.tasks.upload_to_nextcloud import upload_to_nextcloud
 from app.tasks.upload_to_onedrive import upload_to_onedrive
 from app.tasks.upload_to_paperless import upload_to_paperless
@@ -79,6 +80,10 @@ def _should_upload_to_s3():
     return bool(settings.s3_bucket_name and settings.aws_access_key_id and settings.aws_secret_access_key)
 
 
+def _should_upload_to_icloud():
+    return bool(settings.icloud_username and settings.icloud_password)
+
+
 def get_configured_services_from_validator():
     """
     Use the config validator to determine which services are configured properly.
@@ -98,6 +103,7 @@ def get_configured_services_from_validator():
         "Email": "email",
         "OneDrive": "onedrive",
         "S3 Storage": "s3",
+        "iCloud Drive": "icloud",
     }
 
     result = {}
@@ -205,6 +211,11 @@ def send_to_all_destinations(self, file_path: str, use_validator=True, file_id: 
             "name": "s3",
             "should_upload": _should_upload_to_s3,
             "upload_func": upload_to_s3,
+        },
+        {
+            "name": "icloud",
+            "should_upload": _should_upload_to_icloud,
+            "upload_func": upload_to_icloud,
         },
     ]
 

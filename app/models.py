@@ -505,6 +505,7 @@ class IntegrationType:
     EMAIL = "EMAIL"
     PAPERLESS = "PAPERLESS"
     RCLONE = "RCLONE"
+    ICLOUD = "ICLOUD"
 
     ALL = {
         IMAP,
@@ -521,6 +522,7 @@ class IntegrationType:
         EMAIL,
         PAPERLESS,
         RCLONE,
+        ICLOUD,
     }
 
 
