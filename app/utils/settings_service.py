@@ -675,6 +675,63 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Storage Providers - SharePoint
+    "sharepoint_client_id": {
+        "category": "Storage Providers",
+        "description": "SharePoint Azure AD application (client) ID",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_client_secret": {
+        "category": "Storage Providers",
+        "description": "SharePoint Azure AD client secret",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_tenant_id": {
+        "category": "Storage Providers",
+        "description": "SharePoint Azure AD tenant ID (use 'common' for multi-tenant apps)",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_refresh_token": {
+        "category": "Storage Providers",
+        "description": "SharePoint OAuth refresh token",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_site_url": {
+        "category": "Storage Providers",
+        "description": "SharePoint site URL (e.g. https://tenant.sharepoint.com/sites/sitename)",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_document_library": {
+        "category": "Storage Providers",
+        "description": "SharePoint document library name (default: 'Documents')",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_folder_path": {
+        "category": "Storage Providers",
+        "description": "Subfolder path inside the SharePoint document library",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Storage Providers - WebDAV
     "webdav_url": {
         "category": "Storage Providers",
@@ -1618,14 +1675,26 @@ SETTING_METADATA = {
         "category": "Backup",
         "description": (
             "Storage provider for remote backup copies. "
-            "Accepted values: s3, dropbox, google_drive, onedrive, nextcloud, webdav, ftp, sftp, email. "
+            "Accepted values: s3, dropbox, google_drive, onedrive, sharepoint, nextcloud, webdav, ftp, sftp, email. "
             "Leave empty to keep backups local only."
         ),
         "type": "string",
         "sensitive": False,
         "required": False,
         "restart_required": False,
-        "options": ["", "s3", "dropbox", "google_drive", "onedrive", "nextcloud", "webdav", "ftp", "sftp", "email"],
+        "options": [
+            "",
+            "s3",
+            "dropbox",
+            "google_drive",
+            "onedrive",
+            "sharepoint",
+            "nextcloud",
+            "webdav",
+            "ftp",
+            "sftp",
+            "email",
+        ],
     },
     "backup_remote_folder": {
         "category": "Backup",

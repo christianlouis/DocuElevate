@@ -457,6 +457,15 @@ class Settings(BaseSettings):
     onedrive_refresh_token: Optional[str] = None  # Required for personal accounts
     onedrive_folder_path: Optional[str] = None
 
+    # SharePoint settings
+    sharepoint_client_id: Optional[str] = None
+    sharepoint_client_secret: Optional[str] = None
+    sharepoint_tenant_id: Optional[str] = "common"
+    sharepoint_refresh_token: Optional[str] = None
+    sharepoint_site_url: Optional[str] = None  # e.g. https://tenant.sharepoint.com/sites/sitename
+    sharepoint_document_library: Optional[str] = "Documents"  # Document library name
+    sharepoint_folder_path: Optional[str] = None  # Subfolder inside the library
+
     # AWS S3 settings
     aws_access_key_id: Optional[str] = None
     aws_secret_access_key: Optional[str] = None
