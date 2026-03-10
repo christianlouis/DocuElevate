@@ -9,6 +9,7 @@ from app.tasks.send_to_all import (
     _should_upload_to_email,
     _should_upload_to_ftp,
     _should_upload_to_google_drive,
+    _should_upload_to_icloud,
     _should_upload_to_nextcloud,
     _should_upload_to_onedrive,
     _should_upload_to_paperless,
@@ -144,6 +145,22 @@ class TestShouldUploadFunctions:
         mock_settings.aws_secret_access_key = "secret_key"
 
         assert _should_upload_to_s3() is True
+
+    @patch("app.tasks.send_to_all.settings")
+    def test_should_upload_to_icloud_configured(self, mock_settings):
+        """Test iCloud upload check."""
+        mock_settings.icloud_username = "user@example.com"
+        mock_settings.icloud_password = "app-specific-password"
+
+        assert _should_upload_to_icloud() is True
+
+    @patch("app.tasks.send_to_all.settings")
+    def test_should_upload_to_icloud_not_configured(self, mock_settings):
+        """Test iCloud upload check when not configured."""
+        mock_settings.icloud_username = None
+        mock_settings.icloud_password = None
+
+        assert _should_upload_to_icloud() is False
 
 
 @pytest.mark.unit
