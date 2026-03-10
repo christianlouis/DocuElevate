@@ -494,6 +494,7 @@ class TestPushNotificationUtility:
             with patch("app.utils.push_notification.send_expo_push_notification") as mock_send:
                 send_push_to_owner("user@example.com", "Title", "Body")
                 mock_send.assert_not_called()
+                mock_session.close.assert_called_once()
 
     def test_send_push_to_owner_with_devices(self):
         """send_push_to_owner calls send_expo_push_notification with device tokens."""

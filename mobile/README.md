@@ -43,7 +43,7 @@ npm install -g eas-cli
 # Log in to Expo
 eas login
 
-# Configure your project (one-time)
+# Configure your project (one-time) – updates app.json with the EAS project ID
 eas init
 
 # Build for iOS
@@ -56,16 +56,21 @@ eas build --platform android
 eas build --platform all
 ```
 
+> **After running `eas init`:** update the `extra.eas.projectId` field in `app.json` with the value printed by the command.
+
 ### iOS-specific
 
 - An Apple Developer account is required for TestFlight and App Store distribution
-- Update `eas.json` with your `appleId`, `ascAppId`, and `appleTeamId`
+- Update `eas.json` → `submit.production.ios` with:
+  - `appleId`: your Apple ID email address
+  - `ascAppId`: App Store Connect → App Information → Apple ID
+  - `appleTeamId`: Apple Developer portal → Membership → Team ID
 - Camera, photo library, and push notification usage descriptions are configured in `app.json`
 
 ### Android-specific
 
 - Add a `google-services.json` file (from Firebase Console) to the `mobile/` directory for push notification support
-- Update `eas.json` with the path to your Google Play service account key
+- For Play Store submission: create a service account in Google Play Console, download the JSON key as `google-play-service-account.json`, and update `eas.json`
 
 ## Configuration
 
