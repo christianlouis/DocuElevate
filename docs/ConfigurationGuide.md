@@ -335,6 +335,28 @@ Credentials are encrypted at rest using Fernet encryption.
 | `AUTHENTIK_CONFIG_URL`  | Configuration URL for Authentik OpenID Connect.             |
 | `OAUTH_PROVIDER_NAME`   | Display name for the OAuth provider button.                  |
 
+### Social Login Providers
+
+Social login lets users sign in with their existing Google, Microsoft, Apple, or Dropbox accounts. Each provider is independently enabled and configured. For detailed setup instructions see the [Social Login Setup Guide](SocialLoginSetup.md).
+
+| **Variable** | **Description** | **Default** |
+|---|---|---|
+| `SOCIAL_AUTH_GOOGLE_ENABLED` | Enable Google Sign-In. | `false` |
+| `SOCIAL_AUTH_GOOGLE_CLIENT_ID` | Google OAuth2 client ID from the Google Cloud Console. | *(empty)* |
+| `SOCIAL_AUTH_GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret. | *(empty)* |
+| `SOCIAL_AUTH_MICROSOFT_ENABLED` | Enable Microsoft Sign-In (Azure AD / Microsoft Entra ID). | `false` |
+| `SOCIAL_AUTH_MICROSOFT_CLIENT_ID` | Microsoft application (client) ID from Azure App Registrations. | *(empty)* |
+| `SOCIAL_AUTH_MICROSOFT_CLIENT_SECRET` | Microsoft client secret. | *(empty)* |
+| `SOCIAL_AUTH_MICROSOFT_TENANT` | Azure AD tenant: `common`, `organizations`, `consumers`, or a tenant GUID. | `common` |
+| `SOCIAL_AUTH_APPLE_ENABLED` | Enable Sign in with Apple. | `false` |
+| `SOCIAL_AUTH_APPLE_CLIENT_ID` | Apple Services ID (e.g. `com.example.docuelevate`). | *(empty)* |
+| `SOCIAL_AUTH_APPLE_TEAM_ID` | Apple Developer Team ID. | *(empty)* |
+| `SOCIAL_AUTH_APPLE_KEY_ID` | Apple Sign-In private key ID. | *(empty)* |
+| `SOCIAL_AUTH_APPLE_PRIVATE_KEY` | Apple Sign-In private key (PEM format). | *(empty)* |
+| `SOCIAL_AUTH_DROPBOX_ENABLED` | Enable Dropbox Sign-In. | `false` |
+| `SOCIAL_AUTH_DROPBOX_CLIENT_ID` | Dropbox OAuth2 App Key. | *(empty)* |
+| `SOCIAL_AUTH_DROPBOX_CLIENT_SECRET` | Dropbox OAuth2 App Secret. | *(empty)* |
+
 ### Multi-User Mode
 
 When multi-user mode is enabled, each authenticated user gets their own isolated document space.

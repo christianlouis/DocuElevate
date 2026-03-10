@@ -182,6 +182,153 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    # Social Login Providers
+    "social_auth_google_enabled": {
+        "category": "Social Login",
+        "description": (
+            "Enable Google Sign-In. Requires SOCIAL_AUTH_GOOGLE_CLIENT_ID and "
+            "SOCIAL_AUTH_GOOGLE_CLIENT_SECRET from the Google Cloud Console."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+        "help_link": "https://console.cloud.google.com/apis/credentials",
+        "help_link_label": "Google Cloud Console",
+    },
+    "social_auth_google_client_id": {
+        "category": "Social Login",
+        "description": "Google OAuth2 client ID from the Google Cloud Console.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_google_client_secret": {
+        "category": "Social Login",
+        "description": "Google OAuth2 client secret from the Google Cloud Console.",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_microsoft_enabled": {
+        "category": "Social Login",
+        "description": (
+            "Enable Microsoft Sign-In (Azure AD / Microsoft Entra ID). Requires "
+            "SOCIAL_AUTH_MICROSOFT_CLIENT_ID and SOCIAL_AUTH_MICROSOFT_CLIENT_SECRET "
+            "from Azure App Registrations."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+        "help_link": "https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade",
+        "help_link_label": "Azure Portal",
+    },
+    "social_auth_microsoft_client_id": {
+        "category": "Social Login",
+        "description": "Microsoft OAuth2 application (client) ID from Azure App Registrations.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_microsoft_client_secret": {
+        "category": "Social Login",
+        "description": "Microsoft OAuth2 client secret from Azure App Registrations.",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_microsoft_tenant": {
+        "category": "Social Login",
+        "description": (
+            "Azure AD tenant ID or one of 'common', 'organizations', 'consumers'. "
+            "Use 'common' to allow any Microsoft account. Use a specific GUID to "
+            "restrict to a single organization."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_apple_enabled": {
+        "category": "Social Login",
+        "description": (
+            "Enable Sign in with Apple. Requires an Apple Developer account with "
+            "a Services ID configured for Sign in with Apple."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+        "help_link": "https://developer.apple.com/account/resources/identifiers/list/serviceId",
+        "help_link_label": "Apple Developer Portal",
+    },
+    "social_auth_apple_client_id": {
+        "category": "Social Login",
+        "description": "Apple Services ID (e.g. com.example.docuelevate).",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_apple_team_id": {
+        "category": "Social Login",
+        "description": "Apple Developer Team ID (10-character alphanumeric string).",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_apple_key_id": {
+        "category": "Social Login",
+        "description": "Apple Sign-In private key ID from the Apple Developer Portal.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_apple_private_key": {
+        "category": "Social Login",
+        "description": (
+            "Apple Sign-In private key (PEM format). Generate this in the Apple Developer Portal. "
+            "Paste the entire key content including BEGIN/END headers."
+        ),
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_dropbox_enabled": {
+        "category": "Social Login",
+        "description": (
+            "Enable Dropbox Sign-In. Uses the same Dropbox App you may already have "
+            "configured for storage, or a separate one."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_dropbox_client_id": {
+        "category": "Social Login",
+        "description": "Dropbox OAuth2 App Key from the Dropbox App Console.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_dropbox_client_secret": {
+        "category": "Social Login",
+        "description": "Dropbox OAuth2 App Secret from the Dropbox App Console.",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
     # AI Services
     "openai_api_key": {
         "category": "AI Services",

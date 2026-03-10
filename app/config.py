@@ -166,11 +166,43 @@ class Settings(BaseSettings):
         ),
     )
 
-    # Authentik
+    # Authentik / Generic OIDC
     authentik_client_id: Optional[str] = None
     authentik_client_secret: Optional[str] = None
     authentik_config_url: Optional[str] = None
     oauth_provider_name: Optional[str] = None  # Name to display for the OAuth provider
+
+    # Social Login Providers
+    # Google OAuth2
+    social_auth_google_enabled: bool = False
+    social_auth_google_client_id: Optional[str] = None
+    social_auth_google_client_secret: Optional[str] = None
+
+    # Microsoft OAuth2 (Azure AD / Microsoft Entra ID)
+    social_auth_microsoft_enabled: bool = False
+    social_auth_microsoft_client_id: Optional[str] = None
+    social_auth_microsoft_client_secret: Optional[str] = None
+    social_auth_microsoft_tenant: str = Field(
+        default="common",
+        description=(
+            "Azure AD tenant ID or one of 'common', 'organizations', 'consumers'. "
+            "Use 'common' to allow any Microsoft account and any Azure AD org. "
+            "Use a specific tenant ID (GUID) to restrict to a single organization. "
+            "Default: common."
+        ),
+    )
+
+    # Apple Sign-In
+    social_auth_apple_enabled: bool = False
+    social_auth_apple_client_id: Optional[str] = None
+    social_auth_apple_team_id: Optional[str] = None
+    social_auth_apple_key_id: Optional[str] = None
+    social_auth_apple_private_key: Optional[str] = None
+
+    # Dropbox OAuth2
+    social_auth_dropbox_enabled: bool = False
+    social_auth_dropbox_client_id: Optional[str] = None
+    social_auth_dropbox_client_secret: Optional[str] = None
 
     # Local user signup
     allow_local_signup: bool = Field(
