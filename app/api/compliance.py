@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.utils.compliance_service import (
+    COMPLIANCE_TEMPLATES,
     apply_template,
     evaluate_template_status,
     get_all_templates,
@@ -153,6 +154,9 @@ async def apply_compliance_template(name: str, db: DbSession, admin: AdminUser) 
     Writes all template settings to the database and evaluates the resulting
     compliance status.
     """
+    if name not in COMPLIANCE_TEMPLATES:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Template '{name}' not found")
+
     template = get_template_by_name(db, name)
     if template is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Template '{name}' not found")

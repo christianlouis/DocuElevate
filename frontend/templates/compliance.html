@@ -155,9 +155,11 @@
           </button>
           <button @click="applyTemplate(tmpl.name)"
                   :disabled="tmpl._applying"
+                  :aria-busy="tmpl._applying"
                   class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 min-h-[44px] min-w-[44px]"
                   :class="tmpl._applying ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'"
-                  :aria-label="'Apply ' + tmpl.display_name + ' template'">
+                  :aria-label="'Apply ' + tmpl.display_name + ' template'"
+                  aria-live="polite">>
             <i class="fas mr-1.5" :class="tmpl._applying ? 'fa-spinner animate-spin' : 'fa-bolt'" aria-hidden="true"></i>
             <span x-text="tmpl._applying ? 'Applying…' : 'Apply Template'"></span>
           </button>

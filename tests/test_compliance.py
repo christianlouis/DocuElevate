@@ -14,6 +14,7 @@ import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -163,7 +164,7 @@ class TestComplianceTemplateModel:
             settings_json="{}",
         )
         ct_session.add(t2)
-        with pytest.raises(Exception):
+        with pytest.raises(IntegrityError):
             ct_session.commit()
         ct_session.rollback()
 
