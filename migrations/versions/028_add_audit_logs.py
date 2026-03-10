@@ -1,7 +1,7 @@
 """Add audit_logs table for comprehensive compliance audit logging.
 
-Revision ID: 027_add_audit_logs
-Revises: 026_add_scheduled_jobs
+Revision ID: 028_add_audit_logs
+Revises: 027_ensure_shared_links_table
 Create Date: 2026-03-09
 """
 
@@ -10,8 +10,8 @@ from typing import Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "027_add_audit_logs"
-down_revision: Union[str, None] = "026_add_scheduled_jobs"
+revision: str = "028_add_audit_logs"
+down_revision: Union[str, None] = "027_ensure_shared_links_table"
 depends_on: Union[str, None] = None
 
 
