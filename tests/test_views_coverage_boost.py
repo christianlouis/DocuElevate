@@ -4,9 +4,7 @@ Covers: api_tokens, notifications, shared_links, share, plans,
 imap_accounts, integrations, general, filemanager, files, help.
 """
 
-import asyncio
 import os
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -19,7 +17,6 @@ from sqlalchemy.pool import StaticPool
 from app.config import settings as app_settings
 from app.database import Base, get_db
 from app.main import app
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -213,6 +210,18 @@ class TestIntegrationsView:
         assert resp.status_code == 500
 
     @pytest.mark.unit
+    def test_integrations_dashboard_http_exception_passthrough(self, client_fresh: TestClient):
+        """An HTTPException inside the dashboard is re-raised, not wrapped in 500."""
+        from fastapi import HTTPException
+
+        with patch(
+            "app.views.integrations.get_current_owner_id",
+            side_effect=HTTPException(status_code=403, detail="Forbidden"),
+        ):
+            resp = client_fresh.get("/integrations")
+        assert resp.status_code == 403
+
+    @pytest.mark.unit
     def test_get_max_destinations_free_default(self):
         from app.views.integrations import _get_max_destinations
 
@@ -263,43 +272,65 @@ class TestIntegrationsView:
 class TestGeneralViewMultiUser:
     """Cover the multi_user_enabled subscription branch (lines 96-105)."""
 
+    @staticmethod
+    def _signed_session(user_data: dict) -> str:
+        """Create a signed Starlette session cookie containing user_data."""
+        import json
+        from base64 import b64encode
+
+        from itsdangerous import TimestampSigner
+
+        secret = os.environ.get(
+            "SESSION_SECRET",
+            "test_secret_key_for_testing_must_be_at_least_32_characters_long",
+        )
+        signer = TimestampSigner(secret)
+        data = {"user": user_data}
+        return signer.sign(b64encode(json.dumps(data).encode("utf-8"))).decode("utf-8")
+
     @pytest.mark.unit
     def test_home_page_multi_user_with_subscription(self, _fresh_db, client_fresh: TestClient):
-        """When multi_user_enabled is True and user has owner_id, subscription info is fetched."""
+        """When multi_user_enabled is True and user has owner_id, subscription info is fetched.
+
+        Lines 96-103: Exercises the subscription lookup path.
+        """
+        cookie_val = self._signed_session({"username": "testuser", "email": "test@example.com", "is_admin": False})
+        tier_mock = {
+            "id": "starter",
+            "name": "Starter",
+            "lifetime_file_limit": 1000,
+            "daily_upload_limit": 50,
+            "monthly_upload_limit": 500,
+        }
+        usage_mock = {"lifetime": 10, "today": 2, "month": 8}
         with (
             patch.object(app_settings, "multi_user_enabled", True),
             patch("app.utils.setup_wizard.is_setup_required", return_value=False),
             patch("app.views.general.get_provider_status", return_value={}),
             patch("app.views.general.validate_storage_configs", return_value={}),
-            patch(
-                "app.utils.subscription.get_user_tier_id",
-                return_value="starter",
-            ),
-            patch(
-                "app.utils.subscription.get_tier",
-                return_value={"id": "starter", "name": "Starter"},
-            ),
-            patch(
-                "app.utils.subscription.get_user_usage",
-                return_value={"pages": 10},
-            ),
+            patch("app.utils.subscription.get_user_tier_id", return_value="starter"),
+            patch("app.utils.subscription.get_tier", return_value=tier_mock),
+            patch("app.utils.subscription.get_user_usage", return_value=usage_mock),
         ):
+            client_fresh.cookies.set("session", cookie_val)
             resp = client_fresh.get("/?setup=complete")
         assert resp.status_code == 200
 
     @pytest.mark.unit
     def test_home_page_multi_user_subscription_error(self, _fresh_db, client_fresh: TestClient):
-        """When subscription lookup fails, error is logged but page still renders."""
+        """When subscription lookup fails, error is logged but page still renders.
+
+        Lines 104-105: Exercises the exception handling branch.
+        """
+        cookie_val = self._signed_session({"username": "testuser", "email": "test@example.com", "is_admin": False})
         with (
             patch.object(app_settings, "multi_user_enabled", True),
             patch("app.utils.setup_wizard.is_setup_required", return_value=False),
             patch("app.views.general.get_provider_status", return_value={}),
             patch("app.views.general.validate_storage_configs", return_value={}),
-            patch(
-                "app.utils.subscription.get_user_tier_id",
-                side_effect=RuntimeError("DB error"),
-            ),
+            patch("app.utils.subscription.get_user_tier_id", side_effect=RuntimeError("boom")),
         ):
+            client_fresh.cookies.set("session", cookie_val)
             resp = client_fresh.get("/?setup=complete")
         assert resp.status_code == 200
 
@@ -523,7 +554,8 @@ class TestHelpViewCoverageGaps:
         assert resp.status_code == 200
 
     @pytest.mark.unit
-    def test_help_page_request_without_session(self):
+    @pytest.mark.asyncio
+    async def test_help_page_request_without_session(self):
         """Direct function call where request has no session attribute.
 
         Branch 34->37: when hasattr(request, 'session') is False.
@@ -537,7 +569,7 @@ class TestHelpViewCoverageGaps:
 
         with patch("app.views.help.templates") as mock_templates:
             mock_templates.TemplateResponse.return_value = "ok"
-            result = asyncio.get_event_loop().run_until_complete(help_center(mock_request))
+            await help_center(mock_request)
 
         # Template should be called with empty user context
         call_args = mock_templates.TemplateResponse.call_args
@@ -545,3 +577,32 @@ class TestHelpViewCoverageGaps:
         assert ctx["user_name"] == ""
         assert ctx["user_email"] == ""
         assert ctx["user_id"] == ""
+
+    @pytest.mark.unit
+    def test_help_page_with_logged_in_user(self, client_fresh: TestClient):
+        """When session has user data, Zammad widget fields are populated.
+
+        Covers lines 41-43 (user_name, user_email, user_id extraction).
+        """
+        import json
+        from base64 import b64encode
+
+        from itsdangerous import TimestampSigner
+
+        secret = os.environ.get(
+            "SESSION_SECRET",
+            "test_secret_key_for_testing_must_be_at_least_32_characters_long",
+        )
+        signer = TimestampSigner(secret)
+        session_data = {
+            "user": {
+                "name": "Jane Doe",
+                "email": "jane@example.com",
+                "preferred_username": "janedoe",
+            }
+        }
+        cookie_val = signer.sign(b64encode(json.dumps(session_data).encode("utf-8"))).decode("utf-8")
+        client_fresh.cookies.set("session", cookie_val)
+
+        resp = client_fresh.get("/help")
+        assert resp.status_code == 200
