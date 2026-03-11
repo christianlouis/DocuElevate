@@ -223,16 +223,19 @@ def detect_language(request: Request) -> str:
     # 1. User session preference
     if hasattr(request, "session"):
         session_lang = request.session.get("preferred_language")
-        if session_lang and session_lang in SUPPORTED_LANGUAGE_CODES:
+        if isinstance(session_lang, str) and session_lang in SUPPORTED_LANGUAGE_CODES:
             return session_lang
 
     # 2. Cookie
-    cookie_lang = request.cookies.get("docuelevate_lang")
-    if cookie_lang and cookie_lang in SUPPORTED_LANGUAGE_CODES:
-        return cookie_lang
+    if hasattr(request, "cookies"):
+        cookie_lang = request.cookies.get("docuelevate_lang")
+        if isinstance(cookie_lang, str) and cookie_lang in SUPPORTED_LANGUAGE_CODES:
+            return cookie_lang
 
     # 3. Accept-Language header
-    accept = request.headers.get("accept-language", "")
+    accept = ""
+    if hasattr(request, "headers"):
+        accept = request.headers.get("accept-language", "")
     lang = _parse_accept_language(accept)
     if lang:
         return lang

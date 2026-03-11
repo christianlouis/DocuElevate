@@ -3,12 +3,11 @@
 from fastapi import Request
 from fastapi.responses import HTMLResponse
 from fastapi.routing import APIRouter
-from fastapi.templating import Jinja2Templates
 
 from app.auth import require_login
+from app.views.base import templates
 
 router = APIRouter()
-templates = Jinja2Templates(directory="frontend/templates")
 
 
 @router.get("/admin/plans", response_class=HTMLResponse)
