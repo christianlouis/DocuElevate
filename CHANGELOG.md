@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.118.0 (2026-03-11)
+
+### Features
+
+- **api**: Add GraphQL endpoint at /graphql with Strawberry
+  ([`a41ded5`](https://github.com/christianlouis/DocuElevate/commit/a41ded535f32d4892199208e1cab54cc189fde13))
+
+
 ## v0.117.1 (2026-03-11)
 
 ### Bug Fixes
