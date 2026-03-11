@@ -17,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Opt into Node.js 24 for all GitHub Actions workflows
   ([`c306d80`](https://github.com/christianlouis/DocuElevate/commit/c306d80755193e4b12222c73ed4da442a2d5e23c))
 
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`eb22a58`](https://github.com/christianlouis/DocuElevate/commit/eb22a580651b4de477b3b5cc945581776a6775fa))
+
+
+## Unreleased
+
+### Continuous Integration
+
+- Opt into Node.js 24 for all GitHub Actions workflows
+  ([`c306d80`](https://github.com/christianlouis/DocuElevate/commit/c306d80755193e4b12222c73ed4da442a2d5e23c))
+
 
 ## v0.116.0 (2026-03-11)
 
