@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.116.0 (2026-03-11)
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`d6fb787`](https://github.com/christianlouis/DocuElevate/commit/d6fb78715ae550f25a925bdc629eb2945f455009))
+
+### Testing
+
+- **views**: Add comprehensive coverage tests for 11 view modules
+  ([`c8987d9`](https://github.com/christianlouis/DocuElevate/commit/c8987d966bd949634d222a7809ec52c3ed258f81))
+
+- **views**: Boost coverage for 11 view modules toward 100%
+  ([`6fb1df1`](https://github.com/christianlouis/DocuElevate/commit/6fb1df1aade8a8c98c27fe50dbe44045cba1724d))
+
+
 ## Unreleased
 
 ### Testing
