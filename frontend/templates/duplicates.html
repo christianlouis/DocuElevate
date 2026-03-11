@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Duplicate Documents - DocuElevate{% endblock %}
+{% block title %}{{ _("duplicates.page_title") }}{% endblock %}
 
 {% block head_extra %}
 <style>
@@ -88,22 +88,20 @@
 
 {% block content %}
 <main id="main-content" class="dup-container px-4 py-8">
-  <h1 class="text-2xl font-bold mb-2">Duplicate Documents</h1>
+  <h1 class="text-2xl font-bold mb-2">{{ _("duplicates.heading") }}</h1>
   <p class="text-gray-500 mb-6 text-sm">
-    Documents with identical content (same SHA-256 hash) are shown as
-    <span class="dup-badge dup-badge-exact">exact duplicates</span>.
-    Use the <strong>Near-Duplicate Finder</strong> tab to detect documents with the
-    same scanned content but different hashes — for example, a document scanned
-    twice.
+    {{ _("duplicates.subtitle_1") }}
+    <span class="dup-badge dup-badge-exact">{{ _("duplicates.exact_duplicates_badge") }}</span>.
+    {{ _("duplicates.subtitle_2_pre") }} <strong>{{ _("duplicates.tab_near") }}</strong> {{ _("duplicates.subtitle_2_post") }}
   </p>
 
   <!-- Tabs -->
-  <div class="tabs" role="tablist" aria-label="Duplicate detection tabs">
+  <div class="tabs" role="tablist" aria-label="{{ _('duplicates.tabs_aria') }}">
     <button class="tab-btn active" role="tab" aria-selected="true"
             aria-controls="tab-exact" id="btn-exact"
             onclick="switchTab('exact')">
       <i class="fas fa-clone mr-1" aria-hidden="true"></i>
-      Exact Duplicates
+      {{ _("duplicates.tab_exact") }}
       {% if total_groups is defined %}
         <span class="ml-1 text-xs bg-red-100 text-red-700 font-bold px-1.5 rounded-full">
           {{ total_groups }}
@@ -114,7 +112,7 @@
             aria-controls="tab-near" id="btn-near"
             onclick="switchTab('near')">
       <i class="fas fa-layer-group mr-1" aria-hidden="true"></i>
-      Near-Duplicate Finder
+      {{ _("duplicates.tab_near") }}
     </button>
   </div>
 
@@ -123,12 +121,12 @@
 
     {% if groups %}
       <p class="text-sm text-gray-500 mb-4">
-        Found <strong>{{ total_groups }}</strong> duplicate group(s) with
-        <strong>{{ total_duplicate_files }}</strong> duplicate file(s) total.
+        {{ _("duplicates.found_prefix") }} <strong>{{ total_groups }}</strong> {{ _("duplicates.found_groups") }}
+        <strong>{{ total_duplicate_files }}</strong> {{ _("duplicates.found_files") }}
       </p>
 
       {% for group in groups %}
-      <section class="dup-group" aria-label="Duplicate group {{ loop.index }}">
+      <section class="dup-group" aria-label="{{ _('duplicates.group_aria') }} {{ loop.index }}">
         <div class="dup-group-header">
           <i class="fas fa-fingerprint text-gray-400" aria-hidden="true"></i>
           <span class="text-xs font-mono text-gray-500" title="SHA-256 hash">
@@ -136,14 +134,14 @@
           </span>
           <span class="dup-badge dup-badge-exact">
             <i class="fas fa-copy" aria-hidden="true"></i>
-            {{ group.duplicate_count }} duplicate{{ 's' if group.duplicate_count != 1 else '' }}
+            {{ group.duplicate_count }} {{ _("duplicates.dup_singular") if group.duplicate_count == 1 else _("duplicates.dup_plural") }}
           </span>
         </div>
 
         <!-- Original file -->
         {% if group.original %}
         <div class="dup-file-row original">
-          <span class="dup-role-tag tag-original">Original</span>
+          <span class="dup-role-tag tag-original">{{ _("duplicates.role_original") }}</span>
           <div class="flex-1 min-w-0">
             <div class="dup-filename">
               <a href="/files/{{ group.original.id }}"
@@ -164,8 +162,8 @@
           <div class="dup-actions">
             <a href="/files/{{ group.original.id }}"
                class="text-sm text-blue-600 hover:underline"
-               aria-label="View original file {{ group.original.original_filename }}">
-              <i class="fas fa-external-link-alt" aria-hidden="true"></i> View
+               aria-label="{{ _('duplicates.view_original_aria') }} {{ group.original.original_filename }}">
+              <i class="fas fa-external-link-alt" aria-hidden="true"></i> {{ _("common.view") }}
             </a>
           </div>
         </div>
@@ -174,7 +172,7 @@
         <!-- Duplicate files -->
         {% for dup in group.duplicates %}
         <div class="dup-file-row duplicate">
-          <span class="dup-role-tag tag-duplicate">Duplicate</span>
+          <span class="dup-role-tag tag-duplicate">{{ _("duplicates.role_duplicate") }}</span>
           <div class="flex-1 min-w-0">
             <div class="dup-filename">
               <a href="/files/{{ dup.id }}" class="hover:text-blue-600">
@@ -194,8 +192,8 @@
           <div class="dup-actions">
             <a href="/files/{{ dup.id }}"
                class="text-sm text-blue-600 hover:underline"
-               aria-label="View duplicate file {{ dup.original_filename }}">
-              <i class="fas fa-external-link-alt" aria-hidden="true"></i> View
+               aria-label="{{ _('duplicates.view_dup_aria') }} {{ dup.original_filename }}">
+              <i class="fas fa-external-link-alt" aria-hidden="true"></i> {{ _("common.view") }}
             </a>
           </div>
         </div>
@@ -205,23 +203,23 @@
 
       <!-- Pagination -->
       {% if pagination.pages > 1 %}
-      <nav class="pagination" aria-label="Pagination">
+      <nav class="pagination" aria-label="{{ _('duplicates.pagination_aria') }}">
         <button class="page-btn" onclick="changePage({{ pagination.page - 1 }})"
                 {% if pagination.page <= 1 %}disabled{% endif %}
-                aria-label="Previous page">
+                aria-label="{{ _('common.prev_page') }}">
           <i class="fas fa-chevron-left" aria-hidden="true"></i>
         </button>
         {% for p in range(1, pagination.pages + 1) %}
           <button class="page-btn {% if p == pagination.page %}current{% endif %}"
                   onclick="changePage({{ p }})"
-                  aria-label="Page {{ p }}"
+                  aria-label="{{ _('common.page') }} {{ p }}"
                   {% if p == pagination.page %}aria-current="page"{% endif %}>
             {{ p }}
           </button>
         {% endfor %}
         <button class="page-btn" onclick="changePage({{ pagination.page + 1 }})"
                 {% if pagination.page >= pagination.pages %}disabled{% endif %}
-                aria-label="Next page">
+                aria-label="{{ _('common.next_page') }}">
           <i class="fas fa-chevron-right" aria-hidden="true"></i>
         </button>
       </nav>
@@ -230,11 +228,9 @@
     {% else %}
       <div class="empty-state">
         <i class="fas fa-check-circle text-green-400" aria-hidden="true"></i>
-        <p class="font-semibold text-lg text-gray-700">No exact duplicates found</p>
+        <p class="font-semibold text-lg text-gray-700">{{ _("duplicates.no_exact_heading") }}</p>
         <p class="text-sm mt-1">
-          Every file in the system has a unique SHA-256 hash.
-          Use the <strong>Near-Duplicate Finder</strong> tab to check for
-          re-scanned documents.
+          {{ _("duplicates.no_exact_detail_pre") }} <strong>{{ _("duplicates.tab_near") }}</strong> {{ _("duplicates.no_exact_detail_post") }}
         </p>
       </div>
     {% endif %}
@@ -246,32 +242,29 @@
     <div class="near-dup-search">
       <h3>
         <i class="fas fa-search mr-1 text-yellow-500" aria-hidden="true"></i>
-        Find Near-Duplicates for a Document
+        {{ _("duplicates.near_dup_heading") }}
       </h3>
       <p class="text-sm text-gray-500 mb-4">
-        Select a document to check whether any other files contain the same (or very
-        similar) content — even if they were scanned at different times and have
-        different SHA-256 hashes.  Similarity is computed from OCR text embeddings;
-        documents without extracted text cannot be compared.
+        {{ _("duplicates.near_dup_desc") }}
       </p>
 
       <form id="nearDupForm" onsubmit="findNearDups(event)">
         <div class="nd-form">
           <div class="flex flex-col gap-1">
-            <label for="ndFileId">File ID</label>
+            <label for="ndFileId">{{ _("duplicates.file_id_label") }}</label>
             <input type="number" id="ndFileId" name="file_id" min="1"
-                   placeholder="e.g. 42" required
+                   placeholder="{{ _('duplicates.file_id_placeholder') }}" required
                    style="min-height:44px;">
           </div>
           <div class="flex flex-col gap-1">
-            <label for="ndThreshold">Similarity threshold</label>
+            <label for="ndThreshold">{{ _("duplicates.threshold_label") }}</label>
             <input type="number" id="ndThreshold" name="threshold"
                    min="0" max="1" step="0.05"
                    value="{{ near_duplicate_threshold }}"
                    style="min-height:44px;">
           </div>
           <div class="flex flex-col gap-1">
-            <label for="ndLimit">Max results</label>
+            <label for="ndLimit">{{ _("duplicates.max_results_label") }}</label>
             <select id="ndLimit" name="limit" style="min-height:44px;">
               <option value="5" selected>5</option>
               <option value="10">10</option>
@@ -282,7 +275,7 @@
                   class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold
                          px-5 rounded-lg transition-colors"
                   style="min-height:44px;">
-            <i class="fas fa-search mr-1" aria-hidden="true"></i> Find
+            <i class="fas fa-search mr-1" aria-hidden="true"></i> {{ _("duplicates.find_btn") }}
           </button>
         </div>
       </form>
@@ -296,20 +289,14 @@
     <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
       <p class="font-semibold mb-1">
         <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
-        How near-duplicate detection works
+        {{ _("duplicates.how_it_works_heading") }}
       </p>
       <ul class="list-disc ml-5 space-y-1">
-        <li>After OCR processes a document, its text is converted to a numeric
-            <em>embedding vector</em> using an AI language model.</li>
-        <li>Near-duplicate detection compares these vectors using <em>cosine
-            similarity</em>: a score of 1.0 means identical content, 0.0 means
-            completely different.</li>
-        <li>A threshold of <strong>{{ near_duplicate_threshold }}</strong> means
-            documents must share at least
-            {{ (near_duplicate_threshold * 100)|round|int }}% semantic similarity
-            to be flagged.</li>
-        <li>Documents scanned twice (even with slight differences) will typically
-            score <strong>&gt; 0.90</strong>.</li>
+        <li>{{ _("duplicates.how_step1_pre") }} <em>{{ _("duplicates.embedding_vector") }}</em> {{ _("duplicates.how_step1_post") }}</li>
+        <li>{{ _("duplicates.how_step2_pre") }} <em>{{ _("duplicates.cosine_similarity") }}</em>{{ _("duplicates.how_step2_post") }}</li>
+        <li>{{ _("duplicates.how_step3_pre") }} <strong>{{ near_duplicate_threshold }}</strong> {{ _("duplicates.how_step3_mid") }}
+            {{ (near_duplicate_threshold * 100)|round|int }}% {{ _("duplicates.how_step3_post") }}</li>
+        <li>{{ _("duplicates.how_step4") }} <strong>&gt; 0.90</strong>.</li>
       </ul>
     </div>
   </div><!-- /tab-near -->
