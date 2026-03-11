@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Audit Logs - DocuElevate{% endblock %}
+{% block title %}{{ _("audit.page_title") }}{% endblock %}
 
 {% block content %}
 <div x-data="auditLogs()" x-init="fetchLogs()" class="container mx-auto px-4 py-8 max-w-7xl">
@@ -9,69 +9,69 @@
   <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
     <div>
       <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
-        <i class="fas fa-shield-halved mr-2 text-indigo-600" aria-hidden="true"></i>Audit Logs
+        <i class="fas fa-shield-halved mr-2 text-indigo-600" aria-hidden="true"></i>{{ _("audit.title") }}
       </h1>
       <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-        Comprehensive, append-only record of all significant actions.
+        {{ _("audit.subtitle") }}
       </p>
     </div>
     <div class="mt-3 md:mt-0 flex items-center gap-3">
       {% if siem_enabled %}
       <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100"
-            title="Events are being forwarded to {{ siem_transport|upper }}">
+            title="{{ _('audit.siem_enabled_title') ~ (siem_transport|upper) }}">
         <i class="fas fa-tower-broadcast mr-1" aria-hidden="true"></i>SIEM: {{ siem_transport|upper }}
       </span>
       {% else %}
       <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
-            title="SIEM forwarding is disabled">
-        <i class="fas fa-tower-broadcast mr-1" aria-hidden="true"></i>SIEM: Off
+            title="{{ _('audit.siem_disabled_title') }}">
+        <i class="fas fa-tower-broadcast mr-1" aria-hidden="true"></i>{{ _("audit.siem_off") }}
       </span>
       {% endif %}
       <button @click="fetchLogs()" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600 min-h-[44px] min-w-[44px]"
-              aria-label="Refresh audit logs">
-        <i class="fas fa-arrows-rotate mr-1" aria-hidden="true"></i>Refresh
+              aria-label="{{ _('audit.refresh_label') }}">
+        <i class="fas fa-arrows-rotate mr-1" aria-hidden="true"></i>{{ _("common.refresh") }}
       </button>
     </div>
   </div>
 
   <!-- Filters -->
-  <section class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 mb-6" aria-label="Audit log filters">
+  <section class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 mb-6" aria-label="{{ _('audit.filters_section_label') }}">
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <div>
-        <label for="filter-action" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Action</label>
+        <label for="filter-action" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{{ _("audit.filter_action") }}</label>
         <select id="filter-action" x-model="filters.action" @change="fetchLogs()"
                 class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm">
-          <option value="">All actions</option>
+          <option value="">{{ _("audit.filter_all_actions") }}</option>
           <template x-for="a in distinctActions" :key="a">
             <option :value="a" x-text="a"></option>
           </template>
         </select>
       </div>
       <div>
-        <label for="filter-user" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">User</label>
+        <label for="filter-user" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{{ _("audit.filter_user") }}</label>
         <select id="filter-user" x-model="filters.user" @change="fetchLogs()"
                 class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm">
-          <option value="">All users</option>
+          <option value="">{{ _("audit.filter_all_users") }}</option>
           <template x-for="u in distinctUsers" :key="u">
             <option :value="u" x-text="u"></option>
           </template>
         </select>
       </div>
       <div>
-        <label for="filter-severity" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Severity</label>
+        <label for="filter-severity" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{{ _("audit.filter_severity") }}</label>
         <select id="filter-severity" x-model="filters.severity" @change="fetchLogs()"
                 class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm">
-          <option value="">All</option>
-          <option value="info">Info</option>
-          <option value="warning">Warning</option>
-          <option value="error">Error</option>
-          <option value="critical">Critical</option>
+          <option value="">{{ _("common.all") }}</option>
+          <option value="info">{{ _("common.info") }}</option>
+          <option value="warning">{{ _("common.warning") }}</option>
+          <option value="error">{{ _("common.error") }}</option>
+          <option value="critical">{{ _("audit.critical") }}</option>
         </select>
       </div>
       <div>
-        <label for="filter-resource" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Resource Type</label>
+        <label for="filter-resource" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{{ _("audit.filter_resource_type") }}</label>
         <input id="filter-resource" type="text" x-model.debounce.300ms="filters.resource_type" @input="fetchLogs()"
-               placeholder="e.g. document, user"
+               placeholder="{{ _('audit.filter_resource_placeholder') }}"
                class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm min-h-[44px]">
       </div>
     </div>
@@ -80,22 +80,22 @@
   <!-- Results summary -->
   <div class="flex items-center justify-between mb-3 text-sm text-gray-500 dark:text-gray-400" aria-live="polite">
     <span x-show="!loading" x-text="total + ' event' + (total !== 1 ? 's' : '') + ' found'"></span>
-    <span x-show="loading"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i>Loading…</span>
+    <span x-show="loading"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i>{{ _("common.loading") }}</span>
   </div>
 
   <!-- Table -->
   <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
     <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700" aria-label="Audit log events">
+      <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700" aria-label="{{ _('audit.table_label') }}">
         <thead class="bg-gray-50 dark:bg-gray-700">
           <tr>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Timestamp</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Severity</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">User</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Action</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Resource</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">IP</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Details</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{{ _("audit.col_timestamp") }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{{ _("audit.filter_severity") }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{{ _("audit.filter_user") }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{{ _("audit.filter_action") }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{{ _("audit.col_resource") }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{{ _("audit.col_ip") }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{{ _("common.details") }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -118,8 +118,8 @@
           <tr x-show="!loading && entries.length === 0">
             <td colspan="7" class="px-4 py-8 text-center text-gray-400 dark:text-gray-500">
               <i class="fas fa-inbox text-3xl mb-2" aria-hidden="true"></i>
-              <p class="text-lg">No audit events recorded yet.</p>
-              <p class="text-sm mt-1">Significant actions (logins, document operations, settings changes) will appear here.</p>
+              <p class="text-lg">{{ _("audit.no_events") }}</p>
+              <p class="text-sm mt-1">{{ _("audit.no_events_hint") }}</p>
             </td>
           </tr>
         </tbody>
@@ -128,17 +128,17 @@
   </div>
 
   <!-- Pagination -->
-  <nav class="flex items-center justify-between mt-4" aria-label="Audit log pagination" x-show="total > filters.limit">
+  <nav class="flex items-center justify-between mt-4" aria-label="{{ _('audit.pagination_label') }}" x-show="total > filters.limit">
     <button @click="prevPage()" :disabled="filters.offset === 0"
             class="px-3 py-1.5 rounded-md text-sm border border-gray-300 dark:border-gray-600 disabled:opacity-50 min-h-[44px] min-w-[44px]"
-            aria-label="Previous page">
-      <i class="fas fa-chevron-left mr-1" aria-hidden="true"></i>Prev
+            aria-label="{{ _('audit.prev_label') }}">
+      <i class="fas fa-chevron-left mr-1" aria-hidden="true"></i>{{ _("audit.prev") }}
     </button>
     <span class="text-sm text-gray-500 dark:text-gray-400" x-text="'Page ' + currentPage + ' of ' + totalPages"></span>
     <button @click="nextPage()" :disabled="filters.offset + filters.limit >= total"
             class="px-3 py-1.5 rounded-md text-sm border border-gray-300 dark:border-gray-600 disabled:opacity-50 min-h-[44px] min-w-[44px]"
-            aria-label="Next page">
-      Next<i class="fas fa-chevron-right ml-1" aria-hidden="true"></i>
+            aria-label="{{ _('audit.next_label') }}">
+      {{ _("audit.next") }}<i class="fas fa-chevron-right ml-1" aria-hidden="true"></i>
     </button>
   </nav>
 
