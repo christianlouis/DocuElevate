@@ -29,6 +29,7 @@ from app.models import (  # noqa: F401
     FileRecord,
     InAppNotification,
     LocalUser,
+    MobileDevice,
     Pipeline,
     PipelineStep,
     ProcessingLog,

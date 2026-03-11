@@ -2063,3 +2063,72 @@ print(response.json())
 ## Further Assistance
 
 For additional help with the API, please contact our support team or refer to the [Development Guide](../CONTRIBUTING.md).
+
+## Mobile App API
+
+The mobile API provides endpoints used by the native iOS and Android app.  All endpoints require authentication (Bearer token or active session cookie).
+
+For full mobile app documentation see [MobileApp.md](./MobileApp.md).
+
+### POST /api/mobile/generate-token
+
+Exchange an active web session for a long-lived API token scoped to the mobile app.
+
+**Request:**
+```json
+{ "device_name": "John's iPhone" }
+```
+
+**Response (201 Created):**
+```json
+{
+  "token": "de_AbCdEfGhIjKl...",
+  "token_id": 42,
+  "name": "Mobile App – John's iPhone",
+  "created_at": "2026-03-10T09:30:00Z"
+}
+```
+
+> The `token` is shown **once only**.
+
+### POST /api/mobile/register-device
+
+Register an Expo push token to receive push notifications.
+
+**Request:**
+```json
+{
+  "push_token": "ExponentPushToken[xxxxxx]",
+  "device_name": "John's iPhone",
+  "platform": "ios"
+}
+```
+
+**Response (201 Created):** Device record with `id`, `platform`, `is_active`, `created_at`.
+
+### GET /api/mobile/devices
+
+List all registered push-notification devices for the current user.
+
+**Response (200 OK):** Array of device records.
+
+### DELETE /api/mobile/devices/{device_id}
+
+Deactivate a push-notification device.  The device will no longer receive push notifications.
+
+**Response (204 No Content)**
+
+### GET /api/mobile/whoami
+
+Return basic profile information for the authenticated user.
+
+**Response (200 OK):**
+```json
+{
+  "owner_id": "john@example.com",
+  "display_name": "John Doe",
+  "email": "john@example.com",
+  "avatar_url": "https://www.gravatar.com/avatar/...",
+  "is_admin": false
+}
+```
