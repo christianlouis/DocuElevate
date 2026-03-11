@@ -326,11 +326,43 @@ class TestSupportedLanguages:
 
     @pytest.mark.unit
     def test_ten_languages_supported(self) -> None:
-        assert len(SUPPORTED_LANGUAGES) == 10
+        assert len(SUPPORTED_LANGUAGES) == 31
 
     @pytest.mark.unit
     def test_supported_codes_set(self) -> None:
-        expected = {"en", "de", "fr", "es", "it", "pt", "nl", "pl", "zh", "ru"}
+        expected = {
+            "en",
+            "de",
+            "fr",
+            "es",
+            "it",
+            "pt",
+            "nl",
+            "pl",
+            "zh",
+            "ru",
+            "nb",
+            "da",
+            "sv",
+            "fi",
+            "is",
+            "ga",
+            "lb",
+            "ca",
+            "cs",
+            "sk",
+            "hu",
+            "sl",
+            "hr",
+            "ro",
+            "bg",
+            "el",
+            "et",
+            "lv",
+            "lt",
+            "tr",
+            "uk",
+        }
         assert SUPPORTED_LANGUAGE_CODES == expected
 
     @pytest.mark.unit
@@ -353,7 +385,7 @@ class TestI18nAPI:
         assert response.status_code == 200
         data = response.json()
         assert "languages" in data
-        assert len(data["languages"]) == 10
+        assert len(data["languages"]) == 31
         assert data["default"] == "en"
         # Verify each language has required fields
         for lang in data["languages"]:

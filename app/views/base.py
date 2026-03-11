@@ -35,9 +35,12 @@ templates.env.globals["max"] = max
 # The _() function is available in every template to translate UI strings.
 # Usage: {{ _("nav.dashboard") }} or {{ _("upload.max_size", size="10 MB") }}
 # The locale is automatically resolved from the request context.
+# A default English implementation is registered as a global so error handlers
+# that don't go through _inject_global_context still have the function available.
 # ---------------------------------------------------------------------------
 
 templates.env.globals["supported_languages"] = SUPPORTED_LANGUAGES
+templates.env.globals["_"] = lambda key, **kwargs: translate(key, "en", **kwargs)
 
 # Customize Jinja2Templates to include app_version in all templates
 original_template_response = templates.TemplateResponse
