@@ -82,6 +82,8 @@ class TestGetConfiguredDestinations:
         cfg.sftp_username = None
         cfg.ftp_host = None
         cfg.ftp_username = None
+        cfg.icloud_username = None
+        cfg.icloud_password = None
 
         result = _get_configured_destinations(cfg)
         assert result == []
@@ -107,6 +109,8 @@ class TestGetConfiguredDestinations:
         cfg.sftp_username = None
         cfg.ftp_host = None
         cfg.ftp_username = None
+        cfg.icloud_username = None
+        cfg.icloud_password = None
 
         result = _get_configured_destinations(cfg)
         ids = [d["id"] for d in result]
@@ -133,6 +137,8 @@ class TestGetConfiguredDestinations:
         cfg.sftp_username = None
         cfg.ftp_host = None
         cfg.ftp_username = None
+        cfg.icloud_username = None
+        cfg.icloud_password = None
 
         result = _get_configured_destinations(cfg)
         ids = [d["id"] for d in result]
@@ -159,6 +165,8 @@ class TestGetConfiguredDestinations:
         cfg.sftp_username = None
         cfg.ftp_host = None
         cfg.ftp_username = None
+        cfg.icloud_username = None
+        cfg.icloud_password = None
 
         result = _get_configured_destinations(cfg)
         ids = [d["id"] for d in result]
@@ -185,6 +193,8 @@ class TestGetConfiguredDestinations:
         cfg.sftp_username = None
         cfg.ftp_host = None
         cfg.ftp_username = None
+        cfg.icloud_username = None
+        cfg.icloud_password = None
 
         result = _get_configured_destinations(cfg)
         ids = [d["id"] for d in result]
@@ -211,6 +221,8 @@ class TestGetConfiguredDestinations:
         cfg.sftp_username = None
         cfg.ftp_host = None
         cfg.ftp_username = None
+        cfg.icloud_username = None
+        cfg.icloud_password = None
 
         result = _get_configured_destinations(cfg)
         ids = [d["id"] for d in result]
@@ -237,6 +249,8 @@ class TestGetConfiguredDestinations:
         cfg.sftp_username = None
         cfg.ftp_host = None
         cfg.ftp_username = None
+        cfg.icloud_username = None
+        cfg.icloud_password = None
 
         result = _get_configured_destinations(cfg)
         ids = [d["id"] for d in result]
@@ -263,6 +277,8 @@ class TestGetConfiguredDestinations:
         cfg.sftp_username = None
         cfg.ftp_host = None
         cfg.ftp_username = None
+        cfg.icloud_username = None
+        cfg.icloud_password = None
 
         result = _get_configured_destinations(cfg)
         ids = [d["id"] for d in result]
@@ -289,6 +305,8 @@ class TestGetConfiguredDestinations:
         cfg.sftp_username = "user"
         cfg.ftp_host = None
         cfg.ftp_username = None
+        cfg.icloud_username = None
+        cfg.icloud_password = None
 
         result = _get_configured_destinations(cfg)
         ids = [d["id"] for d in result]
@@ -315,6 +333,8 @@ class TestGetConfiguredDestinations:
         cfg.sftp_username = None
         cfg.ftp_host = "ftp.example.com"
         cfg.ftp_username = "user"
+        cfg.icloud_username = None
+        cfg.icloud_password = None
 
         result = _get_configured_destinations(cfg)
         ids = [d["id"] for d in result]
@@ -341,6 +361,8 @@ class TestGetConfiguredDestinations:
         cfg.sftp_username = "sftpuser"
         cfg.ftp_host = "ftp.example.com"
         cfg.ftp_username = "ftpuser"
+        cfg.icloud_username = "user@example.com"
+        cfg.icloud_password = "app-pass"
 
         result = _get_configured_destinations(cfg)
         assert len(result) == len(_DESTINATION_META)
@@ -366,6 +388,8 @@ class TestGetConfiguredDestinations:
         cfg.sftp_username = None
         cfg.ftp_host = None
         cfg.ftp_username = None
+        cfg.icloud_username = None
+        cfg.icloud_password = None
 
         result = _get_configured_destinations(cfg)
         assert len(result) == 1
@@ -393,6 +417,8 @@ class TestGetConfiguredDestinations:
         cfg.sftp_username = None
         cfg.ftp_host = None
         cfg.ftp_username = None
+        cfg.icloud_username = None
+        cfg.icloud_password = None
 
         result = _get_configured_destinations(cfg)
         ids = [d["id"] for d in result]

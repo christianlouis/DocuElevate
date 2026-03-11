@@ -59,7 +59,7 @@ def _get_icloud_api(
         ImportError: If ``pyicloud`` is not installed.
         ValueError: If authentication fails or 2FA is required interactively.
     """
-    from pyicloud import PyiCloudService  # noqa: S404 – trusted first-party usage
+    from pyicloud import PyiCloudService  # noqa: S404 – unofficial third-party iCloud client
 
     kwargs: dict = {}
     if cookie_directory:
@@ -174,4 +174,4 @@ def upload_to_icloud(self, file_path: str, file_id: int = None, folder_override:
         error_msg = f"Error uploading {filename} to iCloud Drive: {e}"
         logger.error(f"[{task_id}] {error_msg}")
         log_task_progress(task_id, "upload_to_icloud", "failure", error_msg, file_id=file_id)
-        raise Exception(error_msg) from e
+        raise RuntimeError(error_msg) from e
