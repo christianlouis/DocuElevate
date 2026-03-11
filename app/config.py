@@ -849,6 +849,49 @@ class Settings(BaseSettings):
         ),
     )
 
+    # SIEM / External Audit Log Forwarding
+    # Forward audit events to external SIEM systems for centralised monitoring.
+    audit_siem_enabled: bool = Field(
+        default=False,
+        description="Enable forwarding of audit events to an external SIEM system.",
+    )
+    audit_siem_transport: str = Field(
+        default="syslog",
+        description=(
+            "Transport used to forward audit events. "
+            "Options: 'syslog' (RFC 5424 over UDP/TCP), 'http' (JSON POST to a webhook URL, "
+            "compatible with Splunk HEC, Logstash HTTP input, Grafana Loki, etc.)."
+        ),
+    )
+    audit_siem_syslog_host: str = Field(
+        default="localhost",
+        description="Hostname or IP of the syslog receiver.",
+    )
+    audit_siem_syslog_port: int = Field(
+        default=514,
+        description="Port of the syslog receiver.",
+    )
+    audit_siem_syslog_protocol: str = Field(
+        default="udp",
+        description="Protocol for syslog transport: 'udp' or 'tcp'.",
+    )
+    audit_siem_http_url: str = Field(
+        default="",
+        description=(
+            "HTTP endpoint URL for SIEM webhook delivery. "
+            "Supports Splunk HEC (https://splunk:8088/services/collector/event), "
+            "Logstash HTTP input, Grafana Loki push API, or any JSON-accepting endpoint."
+        ),
+    )
+    audit_siem_http_token: str = Field(
+        default="",
+        description="Bearer / HEC token included in the Authorization header of SIEM HTTP requests.",
+    )
+    audit_siem_http_custom_headers: str = Field(
+        default="",
+        description="Comma-separated 'Key:Value' pairs of extra headers for SIEM HTTP requests.",
+    )
+
     # UI / Appearance
     ui_default_color_scheme: str = Field(
         default="system",

@@ -146,6 +146,27 @@ class SettingsAuditLog(Base):
     action = Column(String, nullable=False)  # "update" or "delete"
 
 
+class AuditLog(Base):
+    """Comprehensive audit log for compliance tracking.
+
+    Records all significant actions: login/logout, document CRUD, settings
+    changes, and administrative operations.  Rows are append-only; the API
+    and service layer never update or delete entries.
+    """
+
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    user = Column(String, nullable=False, index=True)  # Username or "anonymous" / "system"
+    action = Column(String, nullable=False, index=True)  # e.g. "login", "document.create", "settings.update"
+    resource_type = Column(String, nullable=True, index=True)  # e.g. "document", "user", "settings"
+    resource_id = Column(String, nullable=True)  # ID of the affected resource
+    ip_address = Column(String, nullable=True)  # Client IP address
+    details = Column(Text, nullable=True)  # JSON-encoded extra context
+    severity = Column(String(16), nullable=False, server_default="info")  # info / warning / error / critical
+
+
 class SavedSearch(Base):
     """User-defined saved search filters for quick access to frequently used filter combinations."""
 
@@ -255,6 +276,10 @@ class UserProfile(Base):
     contact_email = Column(String(255), nullable=True)
     preferred_destination = Column(String(50), nullable=True)
     stripe_customer_id = Column(String(64), nullable=True)
+
+    # UI language preference for i18n (ISO 639-1 code, e.g. "en", "de", "fr")
+    # NULL means "auto-detect from browser Accept-Language header"
+    preferred_language = Column(String(10), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

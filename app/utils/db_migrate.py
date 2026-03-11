@@ -32,8 +32,10 @@ _TABLE_ORDER = [
     "processing_logs",
     "application_settings",
     "settings_audit_log",
+    "audit_logs",
     "saved_searches",
     "webhook_configs",
+    "shared_links",
 ]
 
 

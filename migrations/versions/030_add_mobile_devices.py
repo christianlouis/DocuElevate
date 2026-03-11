@@ -1,7 +1,7 @@
 """Add mobile_devices table for push notification device registration.
 
-Revision ID: 027_add_mobile_devices
-Revises: 026_add_scheduled_jobs
+Revision ID: 030_add_mobile_devices
+Revises: 029_add_user_language_preference
 Create Date: 2026-03-10
 """
 
@@ -10,8 +10,8 @@ from typing import Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "027_add_mobile_devices"
-down_revision: Union[str, None] = "026_add_scheduled_jobs"
+revision: str = "030_add_mobile_devices"
+down_revision: Union[str, None] = "029_add_user_language_preference"
 depends_on: Union[str, None] = None
 
 
