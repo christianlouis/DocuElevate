@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{% if multi_user_enabled and not is_logged_in %}DocuElevate – Intelligent Document Processing{% else %}Dashboard – DocuElevate{% endif %}{% endblock %}
+{% block title %}{% if multi_user_enabled and not is_logged_in %}{{ _("index.page_title_public") }}{% else %}{{ _("index.page_title_dashboard") }}{% endif %}{% endblock %}
 
 {% block content %}
 <div class="{% if multi_user_enabled and not is_logged_in %}bg-gray-50 min-h-screen{% else %}container mx-auto px-4 py-8{% endif %}">
@@ -13,30 +13,29 @@
   <div class="bg-gradient-to-br from-blue-700 via-indigo-700 to-purple-700 text-white py-20 px-4">
     <div class="max-w-4xl mx-auto text-center">
       <span class="inline-block bg-white/20 text-white text-xs font-semibold uppercase tracking-widest px-3 py-1 rounded-full mb-4">
-        Intelligent Document Processing
+        {{ _("index.badge_intelligent") }}
       </span>
       <h1 class="text-4xl sm:text-5xl font-extrabold mb-4 leading-tight">
-        From upload to insight — automatically.
+        {{ _("index.hero_heading") }}
       </h1>
       <p class="text-indigo-100 text-lg max-w-2xl mx-auto mb-8">
-        DocuElevate ingests your documents, runs OCR, extracts metadata with AI, and routes files to
-        Dropbox, Google Drive, OneDrive, S3, Nextcloud, and more — all in one seamless pipeline.
+        {{ _("index.hero_description") }}
       </p>
       <div class="flex flex-wrap justify-center gap-4">
         {% if allow_signup %}
         <a href="/signup"
            class="bg-white text-indigo-700 hover:bg-indigo-50 font-bold py-3 px-8 rounded-xl shadow-lg transition duration-200 flex items-center min-h-[44px]">
-          <i class="fas fa-user-plus mr-2" aria-hidden="true"></i> Get Started — it's free
+          <i class="fas fa-user-plus mr-2" aria-hidden="true"></i> {{ _("index.hero_signup") }}
         </a>
         {% else %}
         <a href="/login"
            class="bg-white text-indigo-700 hover:bg-indigo-50 font-bold py-3 px-8 rounded-xl shadow-lg transition duration-200 flex items-center min-h-[44px]">
-          <i class="fas fa-sign-in-alt mr-2" aria-hidden="true"></i> Log In
+          <i class="fas fa-sign-in-alt mr-2" aria-hidden="true"></i> {{ _("index.hero_login") }}
         </a>
         {% endif %}
         <a href="/pricing"
            class="bg-transparent border-2 border-white text-white hover:bg-white hover:text-indigo-700 font-bold py-3 px-8 rounded-xl transition duration-200 flex items-center min-h-[44px]">
-          <i class="fas fa-tags mr-2" aria-hidden="true"></i> View Plans &amp; Pricing
+          <i class="fas fa-tags mr-2" aria-hidden="true"></i> {{ _("index.hero_pricing") }}
         </a>
       </div>
     </div>
@@ -44,7 +43,7 @@
 
   <!-- Feature grid -->
   <div class="max-w-6xl mx-auto px-4 py-16">
-    <h2 class="text-2xl font-bold text-center text-gray-800 mb-10">Everything you need for smart document workflows</h2>
+    <h2 class="text-2xl font-bold text-center text-gray-800 mb-10">{{ _("index.feature_section_title") }}</h2>
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
 
       <div class="bg-white rounded-2xl shadow p-6 flex gap-4">
@@ -52,8 +51,8 @@
           <i class="fas fa-file-alt text-blue-600 text-xl" aria-hidden="true"></i>
         </div>
         <div>
-          <h3 class="font-semibold text-gray-800 mb-1">OCR &amp; Text Extraction</h3>
-          <p class="text-gray-500 text-sm">Azure Document Intelligence converts scanned PDFs and images into fully searchable text automatically.</p>
+          <h3 class="font-semibold text-gray-800 mb-1">{{ _("index.feature_ocr") }}</h3>
+          <p class="text-gray-500 text-sm">{{ _("index.feature_ocr_desc") }}</p>
         </div>
       </div>
 
@@ -62,8 +61,8 @@
           <i class="fas fa-brain text-indigo-600 text-xl" aria-hidden="true"></i>
         </div>
         <div>
-          <h3 class="font-semibold text-gray-800 mb-1">AI Metadata Extraction</h3>
-          <p class="text-gray-500 text-sm">OpenAI, Claude, Gemini, and other pluggable AI providers classify documents and pull out key fields like dates, amounts, and subjects.</p>
+          <h3 class="font-semibold text-gray-800 mb-1">{{ _("index.feature_ai") }}</h3>
+          <p class="text-gray-500 text-sm">{{ _("index.feature_ai_desc") }}</p>
         </div>
       </div>
 
@@ -72,8 +71,8 @@
           <i class="fas fa-cloud-upload-alt text-green-600 text-xl" aria-hidden="true"></i>
         </div>
         <div>
-          <h3 class="font-semibold text-gray-800 mb-1">Multi-Cloud Storage</h3>
-          <p class="text-gray-500 text-sm">Route processed files to Dropbox, Google Drive, OneDrive, Amazon S3, Nextcloud, Paperless NGX, WebDAV, FTP/SFTP, and more.</p>
+          <h3 class="font-semibold text-gray-800 mb-1">{{ _("index.feature_cloud") }}</h3>
+          <p class="text-gray-500 text-sm">{{ _("index.feature_cloud_desc") }}</p>
         </div>
       </div>
 
@@ -82,8 +81,8 @@
           <i class="fas fa-mail-bulk text-yellow-600 text-xl" aria-hidden="true"></i>
         </div>
         <div>
-          <h3 class="font-semibold text-gray-800 mb-1">Email &amp; IMAP Ingestion</h3>
-          <p class="text-gray-500 text-sm">Automatically pull documents from Gmail or any IMAP mailbox — no manual uploads needed.</p>
+          <h3 class="font-semibold text-gray-800 mb-1">{{ _("index.feature_email") }}</h3>
+          <p class="text-gray-500 text-sm">{{ _("index.feature_email_desc") }}</p>
         </div>
       </div>
 
@@ -92,8 +91,8 @@
           <i class="fas fa-search text-purple-600 text-xl" aria-hidden="true"></i>
         </div>
         <div>
-          <h3 class="font-semibold text-gray-800 mb-1">Full-Text Search</h3>
-          <p class="text-gray-500 text-sm">Instantly find any document by content, metadata, or tags across your entire archive.</p>
+          <h3 class="font-semibold text-gray-800 mb-1">{{ _("index.feature_search") }}</h3>
+          <p class="text-gray-500 text-sm">{{ _("index.feature_search_desc") }}</p>
         </div>
       </div>
 
@@ -102,8 +101,8 @@
           <i class="fas fa-project-diagram text-pink-600 text-xl" aria-hidden="true"></i>
         </div>
         <div>
-          <h3 class="font-semibold text-gray-800 mb-1">Custom Pipelines</h3>
-          <p class="text-gray-500 text-sm">Build processing pipelines with configurable steps — OCR, AI extraction, format conversion, and storage routing in any order.</p>
+          <h3 class="font-semibold text-gray-800 mb-1">{{ _("index.feature_pipelines") }}</h3>
+          <p class="text-gray-500 text-sm">{{ _("index.feature_pipelines_desc") }}</p>
         </div>
       </div>
 
@@ -113,23 +112,23 @@
   <!-- CTA banner -->
   <div class="bg-indigo-700 text-white py-14 px-4">
     <div class="max-w-2xl mx-auto text-center">
-      <h2 class="text-3xl font-extrabold mb-4">Ready to elevate your document workflow?</h2>
-      <p class="text-indigo-200 mb-8">Join teams already automating their document processing with DocuElevate.</p>
+      <h2 class="text-3xl font-extrabold mb-4">{{ _("index.cta_heading") }}</h2>
+      <p class="text-indigo-200 mb-8">{{ _("index.cta_description") }}</p>
       <div class="flex flex-wrap justify-center gap-4">
         {% if allow_signup %}
         <a href="/signup"
            class="bg-white text-indigo-700 hover:bg-indigo-50 font-bold py-3 px-8 rounded-xl shadow-lg transition duration-200 flex items-center min-h-[44px]">
-          <i class="fas fa-rocket mr-2" aria-hidden="true"></i> Create a free account
+          <i class="fas fa-rocket mr-2" aria-hidden="true"></i> {{ _("index.cta_signup") }}
         </a>
         {% else %}
         <a href="/login"
            class="bg-white text-indigo-700 hover:bg-indigo-50 font-bold py-3 px-8 rounded-xl shadow-lg transition duration-200 flex items-center min-h-[44px]">
-          <i class="fas fa-sign-in-alt mr-2" aria-hidden="true"></i> Log In
+          <i class="fas fa-sign-in-alt mr-2" aria-hidden="true"></i> {{ _("index.hero_login") }}
         </a>
         {% endif %}
         <a href="/pricing"
            class="bg-transparent border-2 border-white text-white hover:bg-white hover:text-indigo-700 font-bold py-3 px-8 rounded-xl transition duration-200 flex items-center min-h-[44px]">
-          <i class="fas fa-tags mr-2" aria-hidden="true"></i> See pricing
+          <i class="fas fa-tags mr-2" aria-hidden="true"></i> {{ _("index.cta_pricing") }}
         </a>
       </div>
     </div>
@@ -145,16 +144,16 @@
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
       <div>
         <h1 class="text-3xl font-bold mb-1">DocuElevate</h1>
-        <p class="text-blue-100 text-sm">Intelligent document processing &amp; management — built for teams</p>
+        <p class="text-blue-100 text-sm">{{ _("index.dashboard_subtitle_teams") }}</p>
       </div>
       <div class="flex flex-wrap gap-3">
         <a href="/upload"
            class="bg-white text-blue-700 hover:bg-blue-50 font-semibold py-2 px-5 rounded-lg transition duration-200 flex items-center shadow-sm">
-          <i class="fas fa-upload mr-2" aria-hidden="true"></i> Upload
+          <i class="fas fa-upload mr-2" aria-hidden="true"></i> {{ _("index.button_upload") }}
         </a>
         <a href="/files"
            class="bg-transparent border border-white text-white hover:bg-white hover:text-blue-700 font-semibold py-2 px-5 rounded-lg transition duration-200 flex items-center">
-          <i class="fas fa-list mr-2" aria-hidden="true"></i> Browse Files
+          <i class="fas fa-list mr-2" aria-hidden="true"></i> {{ _("index.button_browse_files") }}
         </a>
       </div>
     </div>
@@ -162,7 +161,7 @@
 
   <!-- Platform stats row (admin only) -->
   {% if is_admin %}
-  <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-3">Platform overview</h2>
+  <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-3">{{ _("index.platform_overview") }}</h2>
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
     <div class="bg-white rounded-xl shadow p-5 flex items-center gap-3">
       <div class="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
@@ -170,7 +169,7 @@
       </div>
       <div>
         <p class="text-2xl font-extrabold text-blue-600">{{ stats.processed_files | default(0) }}</p>
-        <p class="text-gray-500 text-xs">Total files</p>
+        <p class="text-gray-500 text-xs">{{ _("index.stat_total_files") }}</p>
       </div>
     </div>
     <div class="bg-white rounded-xl shadow p-5 flex items-center gap-3">
@@ -179,7 +178,7 @@
       </div>
       <div>
         <p class="text-2xl font-extrabold text-green-600">{{ stats.files_today | default(0) }}</p>
-        <p class="text-gray-500 text-xs">Files today</p>
+        <p class="text-gray-500 text-xs">{{ _("index.stat_files_today") }}</p>
       </div>
     </div>
     <div class="bg-white rounded-xl shadow p-5 flex items-center gap-3">
@@ -188,7 +187,7 @@
       </div>
       <div>
         <p class="text-2xl font-extrabold text-indigo-600">{{ stats.files_month | default(0) }}</p>
-        <p class="text-gray-500 text-xs">Files this month</p>
+        <p class="text-gray-500 text-xs">{{ _("index.stat_files_month") }}</p>
       </div>
     </div>
     <div class="bg-white rounded-xl shadow p-5 flex items-center gap-3">
@@ -197,7 +196,7 @@
       </div>
       <div>
         <p class="text-2xl font-extrabold text-purple-600">{{ stats.unique_users | default(0) }}</p>
-        <p class="text-gray-500 text-xs">Active users</p>
+        <p class="text-gray-500 text-xs">{{ _("index.stat_active_users") }}</p>
       </div>
     </div>
   </div>
@@ -205,7 +204,7 @@
 
   <!-- My usage / subscription widget -->
   {% if user_tier and user_usage %}
-  <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-3">My usage</h2>
+  <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-3">{{ _("index.usage_my_usage") }}</h2>
   <div class="bg-white rounded-xl shadow p-6 mb-8">
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
       <div class="flex items-center gap-3">
@@ -220,16 +219,16 @@
             {% elif user_tier.id == 'professional' %}fa-star
             {% else %}fa-building{% endif %}
             mr-1" aria-hidden="true"></i>
-          {{ user_tier.name }} Plan
+          {{ user_tier.name }} {{ _("index.tier_plan") }}
         </span>
         {% if user_tier.id != 'business' %}
         <a href="/pricing" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
-          Upgrade <i class="fas fa-arrow-up-right-from-square ml-0.5 text-xs" aria-hidden="true"></i>
+          {{ _("index.tier_upgrade") }} <i class="fas fa-arrow-up-right-from-square ml-0.5 text-xs" aria-hidden="true"></i>
         </a>
         {% endif %}
       </div>
       <a href="/subscription" class="text-xs text-gray-500 hover:text-gray-700">
-        View full details →
+        {{ _("index.tier_view_details") }} →
       </a>
     </div>
 
@@ -237,7 +236,7 @@
       <!-- Lifetime -->
       <div>
         <div class="flex justify-between text-xs mb-1">
-          <span class="text-gray-500">Lifetime files</span>
+          <span class="text-gray-500">{{ _("index.usage_lifetime") }}</span>
           <span class="font-semibold text-gray-700">
             {{ user_usage.lifetime }}{% if user_tier.lifetime_file_limit > 0 %} / {{ user_tier.lifetime_file_limit }}{% endif %}
           </span>
@@ -250,13 +249,13 @@
                style="width: {{ pct }}%"></div>
         </div>
         {% else %}
-        <div class="text-xs text-green-600">Unlimited</div>
+        <div class="text-xs text-green-600">{{ _("index.usage_unlimited") }}</div>
         {% endif %}
       </div>
       <!-- Today -->
       <div>
         <div class="flex justify-between text-xs mb-1">
-          <span class="text-gray-500">Files today</span>
+          <span class="text-gray-500">{{ _("index.usage_today") }}</span>
           <span class="font-semibold text-gray-700">
             {{ user_usage.today }}{% if user_tier.daily_upload_limit > 0 %} / {{ user_tier.daily_upload_limit }}{% endif %}
           </span>
@@ -269,13 +268,13 @@
                style="width: {{ pct }}%"></div>
         </div>
         {% else %}
-        <div class="text-xs text-green-600">Unlimited</div>
+        <div class="text-xs text-green-600">{{ _("index.usage_unlimited") }}</div>
         {% endif %}
       </div>
       <!-- This month -->
       <div>
         <div class="flex justify-between text-xs mb-1">
-          <span class="text-gray-500">Files this month</span>
+          <span class="text-gray-500">{{ _("index.usage_month") }}</span>
           <span class="font-semibold text-gray-700">
             {{ user_usage.month }}{% if user_tier.monthly_upload_limit > 0 %} / {{ user_tier.monthly_upload_limit }}{% endif %}
           </span>
@@ -288,7 +287,7 @@
                style="width: {{ pct }}%"></div>
         </div>
         {% else %}
-        <div class="text-xs text-green-600">Unlimited</div>
+        <div class="text-xs text-green-600">{{ _("index.usage_unlimited") }}</div>
         {% endif %}
       </div>
     </div>
@@ -300,7 +299,7 @@
     <!-- Quick Actions -->
     <div class="bg-white rounded-xl shadow p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-        <i class="fas fa-bolt text-yellow-500" aria-hidden="true"></i> Quick Actions
+        <i class="fas fa-bolt text-yellow-500" aria-hidden="true"></i> {{ _("index.quick_actions") }}
       </h2>
       <ul class="space-y-2">
         <li>
@@ -309,8 +308,8 @@
               <i class="fas fa-upload text-blue-600 text-sm" aria-hidden="true"></i>
             </span>
             <div>
-              <p class="text-sm font-medium text-gray-800">Upload Document</p>
-              <p class="text-xs text-gray-400">Process a new file</p>
+              <p class="text-sm font-medium text-gray-800">{{ _("index.quick_upload") }}</p>
+              <p class="text-xs text-gray-400">{{ _("index.quick_upload_desc") }}</p>
             </div>
           </a>
         </li>
@@ -320,8 +319,8 @@
               <i class="fas fa-list text-indigo-600 text-sm" aria-hidden="true"></i>
             </span>
             <div>
-              <p class="text-sm font-medium text-gray-800">My Documents</p>
-              <p class="text-xs text-gray-400">Browse your processed files</p>
+              <p class="text-sm font-medium text-gray-800">{{ _("index.quick_documents") }}</p>
+              <p class="text-xs text-gray-400">{{ _("index.quick_documents_desc") }}</p>
             </div>
           </a>
         </li>
@@ -331,8 +330,8 @@
               <i class="fas fa-layer-group text-purple-600 text-sm" aria-hidden="true"></i>
             </span>
             <div>
-              <p class="text-sm font-medium text-gray-800">My Subscription</p>
-              <p class="text-xs text-gray-400">View plan &amp; usage details</p>
+              <p class="text-sm font-medium text-gray-800">{{ _("index.quick_subscription") }}</p>
+              <p class="text-xs text-gray-400">{{ _("index.quick_subscription_desc") }}</p>
             </div>
           </a>
         </li>
@@ -342,8 +341,8 @@
               <i class="fas fa-search text-green-600 text-sm" aria-hidden="true"></i>
             </span>
             <div>
-              <p class="text-sm font-medium text-gray-800">Search</p>
-              <p class="text-xs text-gray-400">Full-text search across documents</p>
+              <p class="text-sm font-medium text-gray-800">{{ _("index.quick_search") }}</p>
+              <p class="text-xs text-gray-400">{{ _("index.quick_search_desc") }}</p>
             </div>
           </a>
         </li>
@@ -353,30 +352,30 @@
     <!-- Processing stats -->
     <div class="bg-white rounded-xl shadow p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-        <i class="fas fa-chart-bar text-blue-500" aria-hidden="true"></i> Processing Stats
+        <i class="fas fa-chart-bar text-blue-500" aria-hidden="true"></i> {{ _("index.processing_stats") }}
       </h2>
       <ul class="space-y-3 text-sm">
         <li class="flex items-center justify-between py-2 border-b border-gray-100">
           <span class="text-gray-600 flex items-center gap-2">
-            <i class="fas fa-file-alt text-blue-400 w-4" aria-hidden="true"></i> Total processed
+            <i class="fas fa-file-alt text-blue-400 w-4" aria-hidden="true"></i> {{ _("index.stat_total_processed") }}
           </span>
           <span class="font-bold text-gray-900">{{ stats.processed_files | default(0) }}</span>
         </li>
         <li class="flex items-center justify-between py-2 border-b border-gray-100">
           <span class="text-gray-600 flex items-center gap-2">
-            <i class="fas fa-eye text-indigo-400 w-4" aria-hidden="true"></i> Files with OCR
+            <i class="fas fa-eye text-indigo-400 w-4" aria-hidden="true"></i> {{ _("index.stat_files_ocr") }}
           </span>
           <span class="font-bold text-gray-900">{{ stats.files_with_ocr | default(0) }}</span>
         </li>
         <li class="flex items-center justify-between py-2 border-b border-gray-100">
           <span class="text-gray-600 flex items-center gap-2">
-            <i class="fas fa-calendar-day text-green-400 w-4" aria-hidden="true"></i> Today
+            <i class="fas fa-calendar-day text-green-400 w-4" aria-hidden="true"></i> {{ _("index.stat_today") }}
           </span>
           <span class="font-bold text-gray-900">{{ stats.files_today | default(0) }}</span>
         </li>
         <li class="flex items-center justify-between py-2">
           <span class="text-gray-600 flex items-center gap-2">
-            <i class="fas fa-calendar-alt text-orange-400 w-4" aria-hidden="true"></i> This month
+            <i class="fas fa-calendar-alt text-orange-400 w-4" aria-hidden="true"></i> {{ _("index.stat_this_month") }}
           </span>
           <span class="font-bold text-gray-900">{{ stats.files_month | default(0) }}</span>
         </li>
@@ -388,39 +387,39 @@
     <div class="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-xl shadow p-6 text-white flex flex-col justify-between">
       <div>
         <h2 class="text-lg font-semibold mb-2 flex items-center gap-2">
-          <i class="fas fa-arrow-up-right-dots" aria-hidden="true"></i> Upgrade your plan
+          <i class="fas fa-arrow-up-right-dots" aria-hidden="true"></i> {{ _("index.upgrade_plan") }}
         </h2>
         <p class="text-indigo-100 text-sm mb-4">
-          Unlock more documents, more destinations and priority support.
+          {{ _("index.upgrade_description") }}
         </p>
         <ul class="space-y-1.5 text-sm text-indigo-100">
-          <li class="flex items-center gap-2"><i class="fas fa-check-circle text-indigo-300" aria-hidden="true"></i> Higher daily &amp; monthly limits</li>
-          <li class="flex items-center gap-2"><i class="fas fa-check-circle text-indigo-300" aria-hidden="true"></i> More storage destinations</li>
-          <li class="flex items-center gap-2"><i class="fas fa-check-circle text-indigo-300" aria-hidden="true"></i> More OCR pages</li>
+          <li class="flex items-center gap-2"><i class="fas fa-check-circle text-indigo-300" aria-hidden="true"></i> {{ _("index.upgrade_daily_limits") }}</li>
+          <li class="flex items-center gap-2"><i class="fas fa-check-circle text-indigo-300" aria-hidden="true"></i> {{ _("index.upgrade_destinations") }}</li>
+          <li class="flex items-center gap-2"><i class="fas fa-check-circle text-indigo-300" aria-hidden="true"></i> {{ _("index.upgrade_ocr_pages") }}</li>
         </ul>
       </div>
       <a href="/pricing"
          class="mt-6 inline-flex items-center justify-center bg-white text-indigo-700 font-semibold px-5 py-2.5 rounded-lg hover:bg-indigo-50 transition shadow">
-        View plans &amp; pricing <i class="fas fa-arrow-right ml-2 text-xs" aria-hidden="true"></i>
+        {{ _("index.upgrade_view_pricing") }} <i class="fas fa-arrow-right ml-2 text-xs" aria-hidden="true"></i>
       </a>
     </div>
     {% else %}
     <div class="bg-white rounded-xl shadow p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-        <i class="fas fa-plug text-green-500" aria-hidden="true"></i> Integrations
+        <i class="fas fa-plug text-green-500" aria-hidden="true"></i> {{ _("index.integrations_title") }}
       </h2>
       <div class="space-y-3 text-sm text-gray-600">
         <div class="flex items-center justify-between">
-          <span>Active integrations</span>
+          <span>{{ _("index.integrations_active") }}</span>
           <span class="font-bold text-green-600">{{ stats.active_integrations | default(0) }}</span>
         </div>
         <div class="flex items-center justify-between">
-          <span>Storage targets</span>
+          <span>{{ _("index.integrations_storage") }}</span>
           <span class="font-bold text-indigo-600">{{ stats.storage_targets | default(0) }}</span>
         </div>
       </div>
       <a href="/status" class="mt-4 inline-flex items-center text-xs text-indigo-600 hover:text-indigo-800">
-        View system status <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
+        {{ _("index.integrations_view_status") }} <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
       </a>
     </div>
     {% endif %}
@@ -435,15 +434,15 @@
   <div class="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl shadow-lg text-white p-8 mb-8">
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
       <div>
-        <h1 class="text-3xl font-bold mb-1">DocuElevate Dashboard</h1>
-        <p class="text-blue-100 text-sm">Intelligent document processing &amp; management</p>
+        <h1 class="text-3xl font-bold mb-1">{{ _("index.single_user_heading") }}</h1>
+        <p class="text-blue-100 text-sm">{{ _("index.dashboard_subtitle") }}</p>
       </div>
       <div class="flex flex-wrap gap-3">
         <a href="/upload" class="bg-white text-blue-700 hover:bg-blue-50 font-semibold py-2 px-5 rounded-lg transition duration-200 flex items-center shadow-sm">
-          <i class="fas fa-upload mr-2" aria-hidden="true"></i> Upload
+          <i class="fas fa-upload mr-2" aria-hidden="true"></i> {{ _("index.button_upload") }}
         </a>
         <a href="/files" class="bg-transparent border border-white text-white hover:bg-white hover:text-blue-700 font-semibold py-2 px-5 rounded-lg transition duration-200 flex items-center">
-          <i class="fas fa-list mr-2" aria-hidden="true"></i> Browse Files
+          <i class="fas fa-list mr-2" aria-hidden="true"></i> {{ _("index.button_browse_files") }}
         </a>
       </div>
     </div>
@@ -457,7 +456,7 @@
       </div>
       <div>
         <p class="text-3xl font-bold text-blue-600">{{ stats.processed_files | default(0) }}</p>
-        <p class="text-gray-500 text-sm">Documents Processed</p>
+        <p class="text-gray-500 text-sm">{{ _("index.stat_documents_processed") }}</p>
       </div>
     </div>
     <div class="bg-white rounded-xl shadow p-6 flex items-center gap-4">
@@ -466,7 +465,7 @@
       </div>
       <div>
         <p class="text-3xl font-bold text-green-600">{{ stats.active_integrations | default(0) }}</p>
-        <p class="text-gray-500 text-sm">Active Integrations</p>
+        <p class="text-gray-500 text-sm">{{ _("index.stat_active_integrations") }}</p>
       </div>
     </div>
     <div class="bg-white rounded-xl shadow p-6 flex items-center gap-4">
@@ -475,7 +474,7 @@
       </div>
       <div>
         <p class="text-3xl font-bold text-indigo-600">{{ stats.storage_targets | default(0) }}</p>
-        <p class="text-gray-500 text-sm">Storage Targets</p>
+        <p class="text-gray-500 text-sm">{{ _("index.stat_storage_targets") }}</p>
       </div>
     </div>
   </div>
@@ -486,7 +485,7 @@
     <!-- Quick Actions Widget -->
     <div class="bg-white rounded-xl shadow p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-        <i class="fas fa-bolt text-yellow-500" aria-hidden="true"></i> Quick Actions
+        <i class="fas fa-bolt text-yellow-500" aria-hidden="true"></i> {{ _("index.quick_actions") }}
       </h2>
       <ul class="space-y-2">
         <li>
@@ -495,8 +494,8 @@
               <i class="fas fa-upload text-blue-600 text-sm" aria-hidden="true"></i>
             </span>
             <div>
-              <p class="text-sm font-medium text-gray-800">Upload Document</p>
-              <p class="text-xs text-gray-400">Process a new file</p>
+              <p class="text-sm font-medium text-gray-800">{{ _("index.quick_upload") }}</p>
+              <p class="text-xs text-gray-400">{{ _("index.quick_upload_desc") }}</p>
             </div>
           </a>
         </li>
@@ -506,8 +505,8 @@
               <i class="fas fa-list text-indigo-600 text-sm" aria-hidden="true"></i>
             </span>
             <div>
-              <p class="text-sm font-medium text-gray-800">View All Files</p>
-              <p class="text-xs text-gray-400">Browse processed documents</p>
+              <p class="text-sm font-medium text-gray-800">{{ _("index.quick_view_files") }}</p>
+              <p class="text-xs text-gray-400">{{ _("index.quick_view_files_desc") }}</p>
             </div>
           </a>
         </li>
@@ -517,8 +516,8 @@
               <i class="fas fa-heartbeat text-green-600 text-sm" aria-hidden="true"></i>
             </span>
             <div>
-              <p class="text-sm font-medium text-gray-800">System Status</p>
-              <p class="text-xs text-gray-400">Check integration health</p>
+              <p class="text-sm font-medium text-gray-800">{{ _("index.quick_system_status") }}</p>
+              <p class="text-xs text-gray-400">{{ _("index.quick_system_status_desc") }}</p>
             </div>
           </a>
         </li>
@@ -528,28 +527,28 @@
     <!-- Capabilities Widget -->
     <div class="bg-white rounded-xl shadow p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-        <i class="fas fa-cubes text-blue-500" aria-hidden="true"></i> Capabilities
+        <i class="fas fa-cubes text-blue-500" aria-hidden="true"></i> {{ _("index.capabilities_title") }}
       </h2>
       <ul class="space-y-3 text-sm text-gray-600">
         <li class="flex items-start gap-2">
           <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
-          <span>OCR &amp; metadata extraction with AI</span>
+          <span>{{ _("index.capabilities_ocr") }}</span>
         </li>
         <li class="flex items-start gap-2">
           <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
-          <span>Cloud storage: Dropbox, OneDrive, Google Drive, NextCloud</span>
+          <span>{{ _("index.capabilities_cloud") }}</span>
         </li>
         <li class="flex items-start gap-2">
           <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
-          <span>Paperless-ngx integration for document management</span>
+          <span>{{ _("index.capabilities_paperless") }}</span>
         </li>
         <li class="flex items-start gap-2">
           <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
-          <span>Email &amp; URL-based document ingestion</span>
+          <span>{{ _("index.capabilities_ingestion") }}</span>
         </li>
         <li class="flex items-start gap-2">
           <i class="fas fa-check-circle text-green-500 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
-          <span>Automated classification &amp; routing workflows</span>
+          <span>{{ _("index.capabilities_workflows") }}</span>
         </li>
       </ul>
     </div>
@@ -558,25 +557,25 @@
     <div class="bg-white rounded-xl shadow p-6 flex flex-col justify-between">
       <div>
         <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <i class="fas fa-compass text-indigo-500" aria-hidden="true"></i> Getting Started
+          <i class="fas fa-compass text-indigo-500" aria-hidden="true"></i> {{ _("index.getting_started") }}
         </h2>
         <ol class="space-y-3 text-sm text-gray-600 list-none">
           <li class="flex items-start gap-2">
             <span class="h-5 w-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center flex-shrink-0 font-bold mt-0.5">1</span>
-            Configure integrations via <a href="/status" class="text-blue-600 hover:underline">System Status</a>
+            {{ _("index.getting_started_1_pre") }}<a href="/status" class="text-blue-600 hover:underline">{{ _("index.quick_system_status") }}</a>
           </li>
           <li class="flex items-start gap-2">
             <span class="h-5 w-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center flex-shrink-0 font-bold mt-0.5">2</span>
-            <a href="/upload" class="text-blue-600 hover:underline">Upload</a> your first document
+            <a href="/upload" class="text-blue-600 hover:underline">{{ _("index.button_upload") }}</a>{{ _("index.getting_started_2_post") }}
           </li>
           <li class="flex items-start gap-2">
             <span class="h-5 w-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center flex-shrink-0 font-bold mt-0.5">3</span>
-            Review results in <a href="/files" class="text-blue-600 hover:underline">Files</a>
+            {{ _("index.getting_started_3_pre") }}<a href="/files" class="text-blue-600 hover:underline">{{ _("index.link_files") }}</a>
           </li>
         </ol>
       </div>
       <a href="/about" class="mt-6 inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 font-medium">
-        Learn more about DocuElevate <i class="fas fa-arrow-right ml-1 text-xs" aria-hidden="true"></i>
+        {{ _("index.getting_started_learn") }} <i class="fas fa-arrow-right ml-1 text-xs" aria-hidden="true"></i>
       </a>
     </div>
   </div>
