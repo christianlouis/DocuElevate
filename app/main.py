@@ -16,6 +16,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api import router as api_router
+from app.api.graphql_api import graphql_router
 from app.api.local_auth import router as local_auth_router
 from app.auth import router as auth_router
 from app.config import settings
@@ -312,3 +313,4 @@ app.include_router(files_router)  # Explicitly include the files router
 app.include_router(auth_router)
 app.include_router(local_auth_router)
 app.include_router(api_router, prefix="/api")
+app.include_router(graphql_router, prefix="/graphql")
