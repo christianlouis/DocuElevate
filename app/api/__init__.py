@@ -12,6 +12,7 @@ from app.api.audit_logs import router as audit_logs_router
 from app.api.azure import router as azure_router
 from app.api.backup import router as backup_router
 from app.api.billing import router as billing_router
+from app.api.compliance import router as compliance_router
 from app.api.database import router as database_router
 from app.api.diagnostic import router as diagnostic_router
 from app.api.dropbox import router as dropbox_router
@@ -88,3 +89,4 @@ router.include_router(scheduled_jobs_router)
 router.include_router(audit_logs_router)
 router.include_router(i18n_router)
 router.include_router(mobile_router)
+router.include_router(compliance_router)

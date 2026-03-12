@@ -1595,6 +1595,18 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "compliance_enabled": {
+        "category": "Feature Flags",
+        "description": (
+            "Enable the compliance templates dashboard (GDPR, HIPAA, SOC 2). "
+            "When enabled, admins can view compliance status and apply "
+            "pre-built regulatory configurations. Default: True."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Backup / Restore
     "backup_enabled": {
         "category": "Backup",
