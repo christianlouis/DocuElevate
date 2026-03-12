@@ -466,6 +466,12 @@ class Settings(BaseSettings):
     s3_storage_class: Optional[str] = "STANDARD"  # Default storage class
     s3_acl: Optional[str] = "private"  # Default ACL
 
+    # iCloud Drive settings
+    icloud_username: Optional[str] = None  # Apple ID email address
+    icloud_password: Optional[str] = None  # App-specific password (required for 2FA accounts)
+    icloud_folder: Optional[str] = None  # Target folder path in iCloud Drive (e.g. "Documents/Uploads")
+    icloud_cookie_directory: Optional[str] = None  # Directory for session cookies (default: ~/.pyicloud)
+
     # Uptime Kuma settings
     uptime_kuma_url: Optional[str] = None
     uptime_kuma_ping_interval: int = 5  # Default ping interval in minutes

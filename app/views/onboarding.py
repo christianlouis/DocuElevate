@@ -27,6 +27,7 @@ _DESTINATION_META: list[dict] = [
     {"id": "webdav", "name": "WebDAV", "icon": "fas fa-server"},
     {"id": "sftp", "name": "SFTP", "icon": "fas fa-terminal"},
     {"id": "ftp", "name": "FTP", "icon": "fas fa-server"},
+    {"id": "icloud", "name": "iCloud Drive", "icon": "fab fa-apple"},
 ]
 
 
@@ -51,6 +52,7 @@ def _get_configured_destinations(cfg: Settings) -> list[dict]:
         "webdav": bool(cfg.webdav_url and cfg.webdav_username),
         "sftp": bool(cfg.sftp_host and cfg.sftp_username),
         "ftp": bool(cfg.ftp_host and cfg.ftp_username),
+        "icloud": bool(cfg.icloud_username and cfg.icloud_password),
     }
     return [meta for meta in _DESTINATION_META if checks.get(meta["id"], False)]
 

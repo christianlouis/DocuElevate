@@ -1108,6 +1108,22 @@ For detailed setup instructions, see the [OneDrive Setup Guide](OneDriveSetup.md
 
 For detailed setup instructions, see the [Amazon S3 Setup Guide](AmazonS3Setup.md).
 
+### iCloud Drive (Apple)
+
+| **Variable**                    | **Description**                                       |
+|---------------------------------|-------------------------------------------------------|
+| `ICLOUD_USERNAME`               | Apple ID email address                                |
+| `ICLOUD_PASSWORD`               | App-specific password (generate at [appleid.apple.com](https://appleid.apple.com/account/manage)) |
+| `ICLOUD_FOLDER`                 | Target folder path in iCloud Drive (e.g. `Documents/Uploads`) |
+| `ICLOUD_COOKIE_DIRECTORY`       | Optional directory for session cookie persistence (default: `~/.pyicloud`) |
+
+> **Note:** Apple does not provide a public REST API for iCloud Drive. This
+> integration uses the [pyicloud](https://github.com/picklepete/pyicloud)
+> library which relies on an unofficial, reverse-engineered protocol. Because
+> most Apple IDs have two-factor authentication enabled, you **must** generate
+> an [app-specific password](https://support.apple.com/en-us/102654) and use
+> it as `ICLOUD_PASSWORD`.
+
 ### Notification System
 
 | **Variable**                | **Description**                                           |
