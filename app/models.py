@@ -281,6 +281,13 @@ class UserProfile(Base):
     # NULL means "auto-detect from browser Accept-Language header"
     preferred_language = Column(String(10), nullable=True)
 
+    # UI colour scheme preference: "light" | "dark" | "system" (NULL = "system")
+    preferred_theme = Column(String(10), nullable=True)
+
+    # Custom profile avatar stored as a base64 data-URL (e.g. "data:image/png;base64,...")
+    # NULL means use the Gravatar fallback derived from the user's e-mail address.
+    avatar_data = Column(Text, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
