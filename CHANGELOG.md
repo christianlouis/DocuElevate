@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Testing
+
+- Improve coverage for app/utils/audit_service.py from 59% to 100%
+  ([`7438551`](https://github.com/christianlouis/DocuElevate/commit/7438551080dfec645a9e9c9ea8ee059764430e90))
+
+
 ## v0.120.0 (2026-03-12)
 
 ### Bug Fixes
