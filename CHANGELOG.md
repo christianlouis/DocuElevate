@@ -10,6 +10,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.121.0 (2026-03-12)
+
+### Bug Fixes
+
+- **auth**: Address code review feedback - sanitize error messages, remove unused import
+  ([`5d716ad`](https://github.com/christianlouis/DocuElevate/commit/5d716ad78fdcd92cafa0a7765580ef290cc842fc))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`04cde33`](https://github.com/christianlouis/DocuElevate/commit/04cde33d01d53877fc34a60b887c6978d167a97e))
+
+### Features
+
+- **auth**: Add social login support for Google, Microsoft, Apple, and Dropbox
+  ([`ac6e052`](https://github.com/christianlouis/DocuElevate/commit/ac6e05278896986ca234e6109e225c599eb982c7))
+
+### Testing
+
+- Improve coverage for app/utils/audit_service.py from 59% to 100%
+  ([`7438551`](https://github.com/christianlouis/DocuElevate/commit/7438551080dfec645a9e9c9ea8ee059764430e90))
+
+- **auth**: Add tests for social login and fix existing config validator tests
+  ([`9c26d41`](https://github.com/christianlouis/DocuElevate/commit/9c26d412d7710dce47d06969270f184411cd6898))
+
+
 ## Unreleased
 
 ### Testing
