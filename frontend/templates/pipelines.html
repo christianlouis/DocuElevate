@@ -317,8 +317,9 @@
             class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 rounded-md"
             style="min-height:44px;"
           >
-              <i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i>
-            </template>
+              <template x-if="pipelineModal.saving">
+                <i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i>
+              </template>
             <span x-text="pipelineModal.editMode ? 'Save Changes' : 'Create'"></span>
           </button>
         </div>
