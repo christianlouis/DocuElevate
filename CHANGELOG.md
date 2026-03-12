@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Testing
+
+- **notifications**: Improve coverage for user_notification.py to 100%
+  ([`78204c2`](https://github.com/christianlouis/DocuElevate/commit/78204c2490ffd9ed0bcb62154c3da54fa9614450))
+
+
 ## v0.121.0 (2026-03-12)
 
 ### Bug Fixes
