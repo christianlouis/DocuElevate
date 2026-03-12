@@ -48,6 +48,15 @@ repos:
             .env.demo
           )$
 
+  # Translation integrity
+  - repo: local
+    hooks:
+      - id: translation-integrity
+        name: translation-integrity
+        entry: python -m pytest tests/test_i18n.py::TestTranslationFiles -q -o addopts=
+        language: system
+        pass_filenames: false
+
   # Conventional commits validation
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v3.0.0

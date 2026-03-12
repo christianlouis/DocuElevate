@@ -1,6 +1,6 @@
 # Internationalization (i18n) & Localization (l10n) Guide
 
-DocuElevate supports **10 languages** for its web UI, with automatic browser
+DocuElevate supports **31 languages** for its web UI, with automatic browser
 language detection, user-preference persistence, and an AI-powered fallback
 translator for strings that haven't been manually translated yet.
 
@@ -19,9 +19,9 @@ translator for strings that haven't been manually translated yet.
 | `zh` | Chinese    | 中文         | Tier 2   |
 | `ru` | Russian    | Русский     | Tier 2   |
 
-> **Tier 1** languages (European priority) have complete, manually-reviewed
-> translations. **Tier 2** languages have complete translations but may
-> receive less frequent updates.
+> DocuElevate currently ships one translation JSON file per supported locale in
+> `frontend/translations/`. English (`en`) is the reference file, and every
+> other locale must keep the exact same keys and placeholders.
 
 ## How Language Is Detected
 
@@ -73,14 +73,12 @@ frontend/translations/
 ├── en.json    # English (base / reference)
 ├── de.json    # German
 ├── fr.json    # French
-├── es.json    # Spanish
-├── it.json    # Italian
-├── pt.json    # Portuguese
-├── nl.json    # Dutch
-├── pl.json    # Polish
-├── zh.json    # Chinese
-└── ru.json    # Russian
+├── ...
+└── uk.json    # Ukrainian
 ```
+
+There are currently **31** locale files. Every locale file must contain the
+same translation keys as `en.json`.
 
 Each file is a flat key-value dictionary with dot-notation namespacing:
 
@@ -145,6 +143,27 @@ format_number(1234.56, "en")                # → "1,234.56"
 1. Add the key and English text to `frontend/translations/en.json`
 2. Add translations for all other languages in their respective files
 3. Use `{{ _("your.new.key") }}` in templates
+
+### Translation Integrity Gate
+
+DocuElevate treats translation completeness as a required quality gate:
+
+```bash
+# Fast validation for translation file hygiene
+python -m pytest tests/test_i18n.py::TestTranslationFiles -q -o addopts=
+
+# Equivalent pre-commit hook
+pre-commit run translation-integrity --all-files
+```
+
+The translation integrity checks enforce that:
+
+- every supported locale file exists
+- every locale has the exact same keys as `en.json`
+- every locale preserves the same placeholders as English
+
+When you remove or rename a key, update **all** locale files in the same PR so
+no locale-specific orphan keys remain.
 
 ### AI Fallback Translation
 

@@ -163,6 +163,14 @@ pytest --tb=short -q
 - Keep JavaScript minimal - prefer server-side rendering
 - Follow existing template structure and patterns
 
+### Internationalization Hygiene
+- Treat every Copilot session that adds, renames, or removes a user-facing string as an i18n/l10n change
+- Update `frontend/translations/en.json` **and every other** `frontend/translations/*.json` file in the same session so all locale variants stay in sync
+- Remove or rename obsolete keys across **all** locale files when strings are deleted or renamed; do not leave locale-specific orphan keys behind
+- Preserve placeholder names exactly across locales (for example, `{year}` and `{version}` must exist in every translation variant)
+- Do not rely on AI fallback translation as a substitute for committed translation updates
+- Run `python -m pytest tests/test_i18n.py::TestTranslationFiles -q -o addopts=` or `pre-commit run translation-integrity --all-files` whenever translation files or user-facing strings change
+
 ### Testing
 - Write tests in `tests/` directory, mirroring `app/` structure
 - Use pytest markers: `@pytest.mark.unit`, `@pytest.mark.integration`, etc.
@@ -185,6 +193,7 @@ pytest --tb=short -q
 - User-facing documentation should be clear and include examples
 - Reference existing docs: `docs/UserGuide.md`, `docs/API.md`, `docs/DeploymentGuide.md`
 - See [AGENTIC_CODING.md](../AGENTIC_CODING.md) for detailed development guide
+- When changing user-facing copy, update the i18n/l10n documentation and translation files in the same PR
 
 ### Error Handling
 - Use custom exceptions defined in application (follow existing patterns)

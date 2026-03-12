@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import date, datetime
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -32,15 +33,31 @@ from app.utils.i18n import (
 class TestTranslationFiles:
     """Verify that all translation JSON files are valid and complete."""
 
+    _PLACEHOLDER_PATTERN = re.compile(r"{([^{}]+)}")
+
     @pytest.fixture(autouse=True)
     def _clear_cache(self) -> None:
         """Clear translation cache before each test."""
         reload_translations()
 
+    @staticmethod
+    def _translations_dir() -> Path:
+        """Return the translations directory path."""
+        return Path(__file__).resolve().parent.parent / "frontend" / "translations"
+
+    def _load_translation_file(self, language_code: str) -> dict[str, str]:
+        """Load the translation file for a supported language."""
+        filepath = self._translations_dir() / f"{language_code}.json"
+        return json.loads(filepath.read_text(encoding="utf-8"))
+
+    def _placeholders(self, value: str) -> set[str]:
+        """Return placeholder names used in a translation string."""
+        return set(self._PLACEHOLDER_PATTERN.findall(value))
+
     @pytest.mark.unit
     def test_all_translation_files_exist(self) -> None:
         """Every supported language must have a corresponding JSON file."""
-        translations_dir = Path(__file__).resolve().parent.parent / "frontend" / "translations"
+        translations_dir = self._translations_dir()
         for lang in SUPPORTED_LANGUAGES:
             filepath = translations_dir / f"{lang['code']}.json"
             assert filepath.is_file(), f"Missing translation file for {lang['code']}"
@@ -48,7 +65,7 @@ class TestTranslationFiles:
     @pytest.mark.unit
     def test_all_translation_files_are_valid_json(self) -> None:
         """All translation files must be parseable JSON."""
-        translations_dir = Path(__file__).resolve().parent.parent / "frontend" / "translations"
+        translations_dir = self._translations_dir()
         for lang in SUPPORTED_LANGUAGES:
             filepath = translations_dir / f"{lang['code']}.json"
             data = json.loads(filepath.read_text(encoding="utf-8"))
@@ -58,17 +75,37 @@ class TestTranslationFiles:
     @pytest.mark.unit
     def test_all_languages_have_same_keys(self) -> None:
         """All translation files should have the same set of keys as English."""
-        translations_dir = Path(__file__).resolve().parent.parent / "frontend" / "translations"
-        en_path = translations_dir / "en.json"
-        en_keys = set(json.loads(en_path.read_text(encoding="utf-8")).keys())
+        english_keys = set(self._load_translation_file("en"))
 
         for lang in SUPPORTED_LANGUAGES:
             if lang["code"] == "en":
                 continue
-            filepath = translations_dir / f"{lang['code']}.json"
-            lang_keys = set(json.loads(filepath.read_text(encoding="utf-8")).keys())
-            missing = en_keys - lang_keys
-            assert not missing, f"{lang['code']}.json missing keys: {missing}"
+            language_keys = set(self._load_translation_file(lang["code"]))
+            missing = sorted(english_keys - language_keys)
+            extra = sorted(language_keys - english_keys)
+            assert not missing and not extra, (
+                f"{lang['code']}.json key mismatch: missing={missing or '[]'} extra={extra or '[]'}"
+            )
+
+    @pytest.mark.unit
+    def test_all_languages_preserve_english_placeholders(self) -> None:
+        """All translations should preserve the same placeholders as English."""
+        english_translations = self._load_translation_file("en")
+
+        for lang in SUPPORTED_LANGUAGES:
+            if lang["code"] == "en":
+                continue
+            translations = self._load_translation_file(lang["code"])
+            mismatches: dict[str, dict[str, list[str]]] = {}
+            for key, english_value in english_translations.items():
+                placeholder_names = self._placeholders(english_value)
+                localized_placeholders = self._placeholders(translations[key])
+                if localized_placeholders != placeholder_names:
+                    mismatches[key] = {
+                        "expected": sorted(placeholder_names),
+                        "actual": sorted(localized_placeholders),
+                    }
+            assert not mismatches, f"{lang['code']}.json placeholder mismatches: {mismatches}"
 
 
 # ---------------------------------------------------------------------------
