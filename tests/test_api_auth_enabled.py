@@ -116,9 +116,13 @@ class TestProtectedAPIEndpoints:
             }
         }
 
+        # Mock DB: no UserProfile found (no custom avatar)
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
         import asyncio
 
-        result = asyncio.run(whoami_handler(mock_request))
+        result = asyncio.run(whoami_handler(mock_request, mock_db))
 
         assert result["id"] == "test123"
         assert result["email"] == "test@example.com"
@@ -135,9 +139,10 @@ class TestProtectedAPIEndpoints:
 
         mock_request = MagicMock()
         mock_request.session = {}
+        mock_db = MagicMock()
 
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.run(whoami_handler(mock_request))
+            asyncio.run(whoami_handler(mock_request, mock_db))
 
         assert exc_info.value.status_code == 401
         assert "Not logged in" in exc_info.value.detail
