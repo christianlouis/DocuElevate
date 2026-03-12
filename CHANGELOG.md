@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.122.0 (2026-03-12)
+
+### Documentation
+
+- **storage**: Document explicit enable/disable flags in ConfigurationGuide and .env.demo
+  ([`fd75961`](https://github.com/christianlouis/DocuElevate/commit/fd7596158064b68a23df4a89201f456df8f28b38))
+
+### Features
+
+- **storage**: Add explicit enable/disable flag for each global storage destination
+  ([`b72ab3b`](https://github.com/christianlouis/DocuElevate/commit/b72ab3b31835ab6ab574067499544427c4101231))
+
+
 ## v0.121.1 (2026-03-12)
 
 ### Bug Fixes
