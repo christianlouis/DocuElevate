@@ -49,18 +49,30 @@ class Settings(BaseSettings):
     debug: bool = False  # Default to False
 
     # Making Dropbox optional
+    dropbox_enabled: bool = Field(
+        default=True,
+        description="Enable Dropbox as an upload destination. Set to False to disable uploads even when credentials are configured.",
+    )
     dropbox_app_key: Optional[str] = None
     dropbox_app_secret: Optional[str] = None
     dropbox_folder: Optional[str] = None
     dropbox_refresh_token: Optional[str] = None
 
     # Making Nextcloud optional
+    nextcloud_enabled: bool = Field(
+        default=True,
+        description="Enable Nextcloud as an upload destination. Set to False to disable uploads even when credentials are configured.",
+    )
     nextcloud_upload_url: Optional[str] = None
     nextcloud_username: Optional[str] = None
     nextcloud_password: Optional[str] = None
     nextcloud_folder: Optional[str] = None
 
     # Making Paperless optional
+    paperless_enabled: bool = Field(
+        default=True,
+        description="Enable Paperless-ngx as an upload destination. Set to False to disable uploads even when credentials are configured.",
+    )
     paperless_ngx_api_token: Optional[str] = None
     paperless_host: Optional[str] = None
     paperless_custom_field_absender: Optional[str] = None  # Name of the "absender" custom field in Paperless
@@ -426,6 +438,10 @@ class Settings(BaseSettings):
     imap2_delete_after_process: bool = False
 
     # Google Drive settings
+    google_drive_enabled: bool = Field(
+        default=True,
+        description="Enable Google Drive as an upload destination. Set to False to disable uploads even when credentials are configured.",
+    )
     google_drive_credentials_json: Optional[str] = ""
     google_drive_folder_id: Optional[str] = ""
     google_drive_delegate_to: Optional[str] = ""  # Optional delegated user email
@@ -437,6 +453,10 @@ class Settings(BaseSettings):
     google_drive_refresh_token: Optional[str] = ""
 
     # WebDAV settings
+    webdav_enabled: bool = Field(
+        default=True,
+        description="Enable WebDAV as an upload destination. Set to False to disable uploads even when credentials are configured.",
+    )
     webdav_url: Optional[str] = None
     webdav_username: Optional[str] = None
     webdav_password: Optional[str] = None
@@ -444,6 +464,10 @@ class Settings(BaseSettings):
     webdav_verify_ssl: bool = True
 
     # FTP settings
+    ftp_enabled: bool = Field(
+        default=True,
+        description="Enable FTP as an upload destination. Set to False to disable uploads even when credentials are configured.",
+    )
     ftp_host: Optional[str] = None
     ftp_port: Optional[int] = 21
     ftp_username: Optional[str] = None
@@ -453,6 +477,10 @@ class Settings(BaseSettings):
     ftp_allow_plaintext: bool = True  # Default to allowing plaintext fallback
 
     # SFTP settings
+    sftp_enabled: bool = Field(
+        default=True,
+        description="Enable SFTP as an upload destination. Set to False to disable uploads even when credentials are configured.",
+    )
     sftp_host: Optional[str] = None
     sftp_port: Optional[int] = 22
     sftp_username: Optional[str] = None
@@ -474,6 +502,10 @@ class Settings(BaseSettings):
     email_default_recipient: Optional[str] = None
 
     # Email destination settings (dedicated SMTP for document delivery – decoupled from shared email above)
+    dest_email_enabled: bool = Field(
+        default=True,
+        description="Enable Email as an upload destination. Set to False to disable document delivery via email even when credentials are configured.",
+    )
     dest_email_host: Optional[str] = None
     dest_email_port: Optional[int] = 587
     dest_email_username: Optional[str] = None
@@ -483,6 +515,10 @@ class Settings(BaseSettings):
     dest_email_default_recipient: Optional[str] = None  # Fallback recipient for document delivery
 
     # OneDrive settings
+    onedrive_enabled: bool = Field(
+        default=True,
+        description="Enable OneDrive as an upload destination. Set to False to disable uploads even when credentials are configured.",
+    )
     onedrive_client_id: Optional[str] = None
     onedrive_client_secret: Optional[str] = None
     onedrive_tenant_id: Optional[str] = "common"  # Default to "common" for personal accounts
@@ -490,6 +526,10 @@ class Settings(BaseSettings):
     onedrive_folder_path: Optional[str] = None
 
     # AWS S3 settings
+    s3_enabled: bool = Field(
+        default=True,
+        description="Enable Amazon S3 as an upload destination. Set to False to disable uploads even when credentials are configured.",
+    )
     aws_access_key_id: Optional[str] = None
     aws_secret_access_key: Optional[str] = None
     aws_region: Optional[str] = "us-east-1"  # Default region
@@ -499,6 +539,10 @@ class Settings(BaseSettings):
     s3_acl: Optional[str] = "private"  # Default ACL
 
     # iCloud Drive settings
+    icloud_enabled: bool = Field(
+        default=True,
+        description="Enable iCloud Drive as an upload destination. Set to False to disable uploads even when credentials are configured.",
+    )
     icloud_username: Optional[str] = None  # Apple ID email address
     icloud_password: Optional[str] = None  # App-specific password (required for 2FA accounts)
     icloud_folder: Optional[str] = None  # Target folder path in iCloud Drive (e.g. "Documents/Uploads")
