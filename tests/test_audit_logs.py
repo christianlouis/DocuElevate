@@ -179,6 +179,104 @@ class TestAuditService:
         assert len(page2) == 3
         assert page1[0].id != page2[0].id
 
+    @patch("app.utils.audit_service.settings")
+    def test_query_events_filter_resource_type(self, mock_settings, audit_db):
+        """query_events filters by resource_type."""
+        mock_settings.audit_siem_enabled = False
+        from app.utils.audit_service import query_events, record_event
+
+        record_event(audit_db, action="create", user="sys", resource_type="document")
+        record_event(audit_db, action="create", user="sys", resource_type="user")
+        results = query_events(audit_db, resource_type="document")
+        assert len(results) == 1
+        assert results[0].resource_type == "document"
+
+    @patch("app.utils.audit_service.settings")
+    def test_query_events_filter_since_and_until(self, mock_settings, audit_db):
+        """query_events filters by since and until timestamps."""
+        mock_settings.audit_siem_enabled = False
+        from app.utils.audit_service import query_events
+
+        # Insert two events directly with distinct timestamps (naive, as SQLite stores them)
+        early = AuditLog(user="sys", action="early", severity="info", timestamp=datetime(2020, 1, 1))
+        late = AuditLog(user="sys", action="late", severity="info", timestamp=datetime(2025, 1, 1))
+        audit_db.add(early)
+        audit_db.add(late)
+        audit_db.commit()
+
+        since_ts = datetime(2022, 1, 1)
+        results = query_events(audit_db, since=since_ts)
+        assert all(r.timestamp >= since_ts for r in results)
+        assert any(r.action == "late" for r in results)
+        assert not any(r.action == "early" for r in results)
+
+        until_ts = datetime(2022, 1, 1)
+        results = query_events(audit_db, until=until_ts)
+        assert all(r.timestamp <= until_ts for r in results)
+        assert any(r.action == "early" for r in results)
+
+    @patch("app.utils.audit_service.settings")
+    def test_count_events_filters(self, mock_settings, audit_db):
+        """count_events filters by user, resource_type, severity, since, and until."""
+        mock_settings.audit_siem_enabled = False
+        from app.utils.audit_service import count_events, record_event
+
+        record_event(audit_db, action="a", user="alice", resource_type="doc", severity="info")
+        record_event(audit_db, action="b", user="bob", resource_type="user", severity="error")
+
+        assert count_events(audit_db, user="alice") == 1
+        assert count_events(audit_db, resource_type="doc") == 1
+        assert count_events(audit_db, severity="error") == 1
+
+        early = AuditLog(user="sys", action="early", severity="info", timestamp=datetime(2020, 1, 1))
+        late = AuditLog(user="sys", action="late", severity="info", timestamp=datetime(2025, 1, 1))
+        audit_db.add(early)
+        audit_db.add(late)
+        audit_db.commit()
+
+        since_ts = datetime(2022, 1, 1)
+        assert count_events(audit_db, since=since_ts) >= 1
+        until_ts = datetime(2022, 1, 1)
+        assert count_events(audit_db, until=until_ts) >= 1
+
+    @patch("app.utils.audit_service._forward_to_siem")
+    @patch("app.utils.audit_service.settings")
+    def test_record_event_siem_enabled(self, mock_settings, mock_forward, audit_db):
+        """record_event starts SIEM forwarding thread when siem is enabled."""
+        mock_settings.audit_siem_enabled = True
+        from app.utils.audit_service import record_event
+
+        entry = record_event(audit_db, action="login", user="alice")
+        assert entry.id is not None
+        mock_forward.assert_called_once()
+
+    @patch("app.utils.audit_service.settings")
+    def test_record_event_from_request(self, mock_settings, audit_db):
+        """record_event_from_request extracts user and IP from the request."""
+        mock_settings.audit_siem_enabled = False
+        from app.utils.audit_service import record_event_from_request
+
+        mock_request = MagicMock()
+        mock_request.session = {"user": {"preferred_username": "carol"}}
+        mock_request.headers = {"X-Forwarded-For": "192.168.1.1"}
+        mock_request.client = MagicMock()
+        mock_request.client.host = "192.168.1.1"
+
+        with (
+            patch("app.utils.audit_service.get_username", return_value="carol"),
+            patch("app.utils.audit_service.get_client_ip", return_value="192.168.1.1"),
+        ):
+            entry = record_event_from_request(
+                audit_db,
+                mock_request,
+                action="document.view",
+                resource_type="document",
+                resource_id="99",
+            )
+        assert entry.user == "carol"
+        assert entry.ip_address == "192.168.1.1"
+        assert entry.action == "document.view"
+
 
 # ---------------------------------------------------------------------------
 # SIEM forwarding tests
@@ -272,6 +370,200 @@ class TestSIEMForwarding:
         body = call_kwargs.kwargs["json"]
         assert "event" in body
         assert body["sourcetype"] == "docuelevate:audit"
+
+    @patch("app.utils.audit_service.settings")
+    @patch("app.utils.audit_service._send_syslog")
+    def test_forward_to_siem_syslog(self, mock_send_syslog, mock_settings):
+        """_forward_to_siem routes to _send_syslog when transport is syslog."""
+        mock_settings.audit_siem_transport = "syslog"
+        from app.utils.audit_service import _forward_to_siem
+
+        payload = {"user": "test", "action": "login", "severity": "info"}
+        _forward_to_siem(payload)
+        mock_send_syslog.assert_called_once_with(payload)
+
+    @patch("app.utils.audit_service.settings")
+    @patch("app.utils.audit_service._send_http")
+    def test_forward_to_siem_http(self, mock_send_http, mock_settings):
+        """_forward_to_siem routes to _send_http when transport is http."""
+        mock_settings.audit_siem_transport = "http"
+        from app.utils.audit_service import _forward_to_siem
+
+        payload = {"user": "test", "action": "login", "severity": "info"}
+        _forward_to_siem(payload)
+        mock_send_http.assert_called_once_with(payload)
+
+    @patch("app.utils.audit_service.settings")
+    def test_forward_to_siem_unknown_transport(self, mock_settings):
+        """_forward_to_siem logs a warning for an unknown transport."""
+        mock_settings.audit_siem_transport = "unknown_proto"
+        from app.utils.audit_service import _forward_to_siem
+
+        # Should not raise; just log a warning
+        _forward_to_siem({"user": "test", "action": "login"})
+
+    @patch("app.utils.audit_service.settings")
+    def test_forward_to_siem_exception_is_caught(self, mock_settings):
+        """_forward_to_siem catches exceptions from transports and logs them."""
+        mock_settings.audit_siem_transport = "syslog"
+        from app.utils.audit_service import _forward_to_siem
+
+        with patch("app.utils.audit_service._send_syslog", side_effect=OSError("network error")):
+            # Must not propagate
+            _forward_to_siem({"user": "test", "action": "login"})
+
+    @patch("app.utils.audit_service.settings")
+    @patch("app.utils.audit_service.socket")
+    def test_send_syslog_tcp(self, mock_socket_mod, mock_settings):
+        """_send_syslog opens a TCP stream socket when protocol is tcp."""
+        mock_settings.audit_siem_syslog_protocol = "tcp"
+        mock_settings.audit_siem_syslog_host = "127.0.0.1"
+        mock_settings.audit_siem_syslog_port = 601
+
+        mock_sock = MagicMock()
+        mock_socket_mod.AF_INET = socket.AF_INET
+        mock_socket_mod.SOCK_STREAM = socket.SOCK_STREAM
+        mock_socket_mod.gethostname.return_value = "test-host"
+        mock_socket_mod.socket.return_value.__enter__ = MagicMock(return_value=mock_sock)
+        mock_socket_mod.socket.return_value.__exit__ = MagicMock(return_value=False)
+
+        from app.utils.audit_service import _send_syslog
+
+        _send_syslog({"user": "test", "action": "login", "severity": "info", "timestamp": "2026-01-01T00:00:00"})
+        mock_sock.connect.assert_called_once()
+        mock_sock.sendall.assert_called_once()
+
+    @patch("app.utils.audit_service.settings")
+    @patch("app.utils.audit_service.httpx")
+    def test_send_http_no_url(self, mock_httpx, mock_settings):
+        """_send_http returns early and logs a warning when no URL is configured."""
+        mock_settings.audit_siem_http_url = ""
+        from app.utils.audit_service import _send_http
+
+        _send_http({"user": "test", "action": "login"})
+        mock_httpx.Client.assert_not_called()
+
+    @patch("app.utils.audit_service.settings")
+    @patch("app.utils.audit_service.httpx")
+    def test_send_http_no_token(self, mock_httpx, mock_settings):
+        """_send_http omits Authorization header when no token is configured."""
+        mock_settings.audit_siem_http_url = "https://siem.example.com/ingest"
+        mock_settings.audit_siem_http_token = ""
+        mock_settings.audit_siem_http_custom_headers = ""
+
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_client.post.return_value = mock_resp
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        from app.utils.audit_service import _send_http
+
+        _send_http({"user": "test", "action": "login"})
+        call_kwargs = mock_client.post.call_args
+        assert "Authorization" not in call_kwargs.kwargs["headers"]
+
+    @patch("app.utils.audit_service.settings")
+    @patch("app.utils.audit_service.httpx")
+    def test_send_http_custom_headers_valid(self, mock_httpx, mock_settings):
+        """_send_http adds valid custom headers."""
+        mock_settings.audit_siem_http_url = "https://siem.example.com/ingest"
+        mock_settings.audit_siem_http_token = ""
+        mock_settings.audit_siem_http_custom_headers = "X-Tenant-ID: acme, X-Source: audit"
+
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_client.post.return_value = mock_resp
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        from app.utils.audit_service import _send_http
+
+        _send_http({"user": "test", "action": "login"})
+        call_kwargs = mock_client.post.call_args
+        headers = call_kwargs.kwargs["headers"]
+        assert headers.get("X-Tenant-ID") == "acme"
+        assert headers.get("X-Source") == "audit"
+
+    @patch("app.utils.audit_service.settings")
+    @patch("app.utils.audit_service.httpx")
+    def test_send_http_custom_headers_invalid_name(self, mock_httpx, mock_settings):
+        """_send_http skips custom headers with invalid names."""
+        mock_settings.audit_siem_http_url = "https://siem.example.com/ingest"
+        mock_settings.audit_siem_http_token = ""
+        mock_settings.audit_siem_http_custom_headers = "Bad Header!: value"
+
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_client.post.return_value = mock_resp
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        from app.utils.audit_service import _send_http
+
+        _send_http({"user": "test", "action": "login"})
+        call_kwargs = mock_client.post.call_args
+        headers = call_kwargs.kwargs["headers"]
+        assert "Bad Header!" not in headers
+
+    @patch("app.utils.audit_service.settings")
+    @patch("app.utils.audit_service.httpx")
+    def test_send_http_custom_headers_protected_name(self, mock_httpx, mock_settings):
+        """_send_http skips custom headers that match protected names."""
+        mock_settings.audit_siem_http_url = "https://siem.example.com/ingest"
+        mock_settings.audit_siem_http_token = ""
+        mock_settings.audit_siem_http_custom_headers = "Authorization: evil-token"
+
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_client.post.return_value = mock_resp
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        from app.utils.audit_service import _send_http
+
+        _send_http({"user": "test", "action": "login"})
+        call_kwargs = mock_client.post.call_args
+        headers = call_kwargs.kwargs["headers"]
+        # Authorization should not have been overwritten by the custom header
+        assert headers.get("Authorization") != "evil-token"
+
+    @patch("app.utils.audit_service.settings")
+    @patch("app.utils.audit_service.httpx")
+    def test_send_http_custom_headers_no_colon(self, mock_httpx, mock_settings):
+        """_send_http ignores custom header entries that contain no colon separator."""
+        mock_settings.audit_siem_http_url = "https://siem.example.com/ingest"
+        mock_settings.audit_siem_http_token = ""
+        mock_settings.audit_siem_http_custom_headers = "MalformedHeader"
+
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_client.post.return_value = mock_resp
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+
+        from app.utils.audit_service import _send_http
+
+        # Should not raise; malformed entry is silently skipped
+        _send_http({"user": "test", "action": "login"})
+        mock_client.post.assert_called_once()
+
+    @patch("app.utils.audit_service.settings")
+    def test_build_siem_payload_no_timestamp(self, mock_settings):
+        """_build_siem_payload uses current UTC time when entry.timestamp is None."""
+        from app.utils.audit_service import _build_siem_payload
+
+        entry = AuditLog(user="admin", action="login", severity="info")
+        entry.timestamp = None  # type: ignore[assignment]
+        payload = _build_siem_payload(entry)
+        assert "timestamp" in payload
+        # Should be a valid ISO timestamp string
+        datetime.fromisoformat(payload["timestamp"])
 
 
 # ---------------------------------------------------------------------------
