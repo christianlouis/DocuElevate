@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.124.0 (2026-03-12)
+
+### Bug Fixes
+
+- **i18n**: Register _ in all Jinja2 template instances, sync translation files, fix pipelines.html
+  ([`b483ed1`](https://github.com/christianlouis/DocuElevate/commit/b483ed16fc01e474468356b3af8c2abaa8f22af6))
+
+
 ## v0.123.1 (2026-03-12)
 
 ### Bug Fixes
