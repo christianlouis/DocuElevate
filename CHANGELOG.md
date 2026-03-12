@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.125.0 (2026-03-12)
+
+### Bug Fixes
+
+- **profile**: Address code review feedback - early size check, CSRF helper, test constants
+  ([`9583d6d`](https://github.com/christianlouis/DocuElevate/commit/9583d6d96f02d3ee105c73a47084661feef3e811))
+
+- **tests**: Pass mock db to whoami_handler in test_api_auth_enabled.py
+  ([`270e1a5`](https://github.com/christianlouis/DocuElevate/commit/270e1a56b51148651ed499780ba9dec5af68b33e))
+
+### Features
+
+- **profile**: Add user self-service profile settings page and API
+  ([`b0d6f1a`](https://github.com/christianlouis/DocuElevate/commit/b0d6f1ab609d5676b71eab20fee8c5cce9201614))
+
+
 ## v0.124.0 (2026-03-12)
 
 ### Bug Fixes
