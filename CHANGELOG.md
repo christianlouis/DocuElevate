@@ -10,6 +10,213 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.123.1 (2026-03-12)
+
+### Bug Fixes
+
+- **tests**: Fix two failing tests - missing DB table and MagicMock IP address
+  ([`be6b49c`](https://github.com/christianlouis/DocuElevate/commit/be6b49c8721445dc8ea870afda87f311acb192e3))
+
+### Code Style
+
+- Fix ruff formatting in tests/test_imap_profiles.py
+  ([`8060a79`](https://github.com/christianlouis/DocuElevate/commit/8060a79b9c5172c40edff87bdcf0e095e177560e))
+
+
+## v0.123.0 (2026-03-12)
+
+### Bug Fixes
+
+- **imap**: Address code review feedback on ingestion profiles
+  ([`2e08773`](https://github.com/christianlouis/DocuElevate/commit/2e087731b92fe554e54955c97166d61fe644bafc))
+
+### Features
+
+- **imap**: Add attachment type filter for IMAP ingestion
+  ([`554bb21`](https://github.com/christianlouis/DocuElevate/commit/554bb21d329ca2cca868a61adf337e29e4284ca4))
+
+- **imap**: Add ImapIngestionProfile model, API, migration and UI
+  ([`c9f5544`](https://github.com/christianlouis/DocuElevate/commit/c9f554465d5bf027a92bb4aa56db244aad4a6ff6))
+
+
+## v0.122.0 (2026-03-12)
+
+### Documentation
+
+- **storage**: Document explicit enable/disable flags in ConfigurationGuide and .env.demo
+  ([`fd75961`](https://github.com/christianlouis/DocuElevate/commit/fd7596158064b68a23df4a89201f456df8f28b38))
+
+### Features
+
+- **storage**: Add explicit enable/disable flag for each global storage destination
+  ([`b72ab3b`](https://github.com/christianlouis/DocuElevate/commit/b72ab3b31835ab6ab574067499544427c4101231))
+
+
+## v0.121.1 (2026-03-12)
+
+### Bug Fixes
+
+- Remove duplicate Audit Logs nav entry and add login/logout audit log events
+  ([`1e8f433`](https://github.com/christianlouis/DocuElevate/commit/1e8f433419c5c7b0c551dffe05f107d2bb5a35a1))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`50ef607`](https://github.com/christianlouis/DocuElevate/commit/50ef6072935083554dd52a11cc6438891f177a8b))
+
+### Testing
+
+- **notifications**: Improve coverage for user_notification.py to 100%
+  ([`78204c2`](https://github.com/christianlouis/DocuElevate/commit/78204c2490ffd9ed0bcb62154c3da54fa9614450))
+
+
+## Unreleased
+
+### Testing
+
+- **notifications**: Improve coverage for user_notification.py to 100%
+  ([`78204c2`](https://github.com/christianlouis/DocuElevate/commit/78204c2490ffd9ed0bcb62154c3da54fa9614450))
+
+
+## v0.121.0 (2026-03-12)
+
+### Bug Fixes
+
+- **auth**: Address code review feedback - sanitize error messages, remove unused import
+  ([`5d716ad`](https://github.com/christianlouis/DocuElevate/commit/5d716ad78fdcd92cafa0a7765580ef290cc842fc))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`04cde33`](https://github.com/christianlouis/DocuElevate/commit/04cde33d01d53877fc34a60b887c6978d167a97e))
+
+### Features
+
+- **auth**: Add social login support for Google, Microsoft, Apple, and Dropbox
+  ([`ac6e052`](https://github.com/christianlouis/DocuElevate/commit/ac6e05278896986ca234e6109e225c599eb982c7))
+
+### Testing
+
+- Improve coverage for app/utils/audit_service.py from 59% to 100%
+  ([`7438551`](https://github.com/christianlouis/DocuElevate/commit/7438551080dfec645a9e9c9ea8ee059764430e90))
+
+- **auth**: Add tests for social login and fix existing config validator tests
+  ([`9c26d41`](https://github.com/christianlouis/DocuElevate/commit/9c26d412d7710dce47d06969270f184411cd6898))
+
+
+## Unreleased
+
+### Testing
+
+- Improve coverage for app/utils/audit_service.py from 59% to 100%
+  ([`7438551`](https://github.com/christianlouis/DocuElevate/commit/7438551080dfec645a9e9c9ea8ee059764430e90))
+
+
+## v0.120.0 (2026-03-12)
+
+### Bug Fixes
+
+- Remove accidental pip artifact file and update docs for iCloud Drive
+  ([`ca84a11`](https://github.com/christianlouis/DocuElevate/commit/ca84a11284a979409db186b20b0381f5025d4fdf))
+
+- Remove accidental pip artifact file and update docs for iCloud Drive
+  ([`528f0a6`](https://github.com/christianlouis/DocuElevate/commit/528f0a624de335b21125b8b86700eb4d85dfed86))
+
+- **tests**: Add iCloud mocks to all test files and address code review feedback
+  ([`50af0ea`](https://github.com/christianlouis/DocuElevate/commit/50af0ea67942e545849bbd745258cbed7822af45))
+
+### Features
+
+- **storage**: Add Apple iCloud Drive storage provider
+  ([`82d67c5`](https://github.com/christianlouis/DocuElevate/commit/82d67c56b34ec5a849bb3fa46aba0182c7f51dcd))
+
+- **storage**: Add Apple iCloud Drive storage provider
+  ([`30f06e0`](https://github.com/christianlouis/DocuElevate/commit/30f06e0b3292d9b01428fc945913ab91888644a3))
+
+### Testing
+
+- **tasks**: Add _should_upload_to_icloud mock to send_to_all tests
+  ([`6e50c61`](https://github.com/christianlouis/DocuElevate/commit/6e50c6197082bbf2de2935cca1b74602789383f4))
+
+- **tasks**: Add _should_upload_to_icloud mock to send_to_all tests
+  ([`9bc23aa`](https://github.com/christianlouis/DocuElevate/commit/9bc23aa40b9c8a9c943cf75f1051fac9e38c24fc))
+
+
+## v0.119.0 (2026-03-12)
+
+
+## v0.118.0 (2026-03-11)
+
+### Features
+
+- **api**: Add GraphQL endpoint at /graphql with Strawberry
+  ([`a41ded5`](https://github.com/christianlouis/DocuElevate/commit/a41ded535f32d4892199208e1cab54cc189fde13))
+
+
+## v0.117.1 (2026-03-11)
+
+### Bug Fixes
+
+- Resolve all 47 failing tests in main
+  ([`df4c91a`](https://github.com/christianlouis/DocuElevate/commit/df4c91a58661e2ecf9fda15500e4ba1259674168))
+
+
+## v0.117.0 (2026-03-11)
+
+### Continuous Integration
+
+- Opt into Node.js 24 for all GitHub Actions workflows
+  ([`c306d80`](https://github.com/christianlouis/DocuElevate/commit/c306d80755193e4b12222c73ed4da442a2d5e23c))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`ab19ae5`](https://github.com/christianlouis/DocuElevate/commit/ab19ae57060ff2be8e9172714c5e3b308c45334d))
+
+- **changelog**: Update changelog [skip ci]
+  ([`c5b67fe`](https://github.com/christianlouis/DocuElevate/commit/c5b67fe36464b0756553cc54614d0f77273772ec))
+
+- **changelog**: Update changelog [skip ci]
+  ([`eb22a58`](https://github.com/christianlouis/DocuElevate/commit/eb22a580651b4de477b3b5cc945581776a6775fa))
+
+
+## Unreleased
+
+### Continuous Integration
+
+- Opt into Node.js 24 for all GitHub Actions workflows
+  ([`c306d80`](https://github.com/christianlouis/DocuElevate/commit/c306d80755193e4b12222c73ed4da442a2d5e23c))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`c5b67fe`](https://github.com/christianlouis/DocuElevate/commit/c5b67fe36464b0756553cc54614d0f77273772ec))
+
+- **changelog**: Update changelog [skip ci]
+  ([`eb22a58`](https://github.com/christianlouis/DocuElevate/commit/eb22a580651b4de477b3b5cc945581776a6775fa))
+
+
+## Unreleased
+
+### Continuous Integration
+
+- Opt into Node.js 24 for all GitHub Actions workflows
+  ([`c306d80`](https://github.com/christianlouis/DocuElevate/commit/c306d80755193e4b12222c73ed4da442a2d5e23c))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`eb22a58`](https://github.com/christianlouis/DocuElevate/commit/eb22a580651b4de477b3b5cc945581776a6775fa))
+
+
+## Unreleased
+
+### Continuous Integration
+
+- Opt into Node.js 24 for all GitHub Actions workflows
+  ([`c306d80`](https://github.com/christianlouis/DocuElevate/commit/c306d80755193e4b12222c73ed4da442a2d5e23c))
+
+
 ## v0.116.0 (2026-03-11)
 
 ### Documentation

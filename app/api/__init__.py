@@ -12,6 +12,7 @@ from app.api.audit_logs import router as audit_logs_router
 from app.api.azure import router as azure_router
 from app.api.backup import router as backup_router
 from app.api.billing import router as billing_router
+from app.api.compliance import router as compliance_router
 from app.api.database import router as database_router
 from app.api.diagnostic import router as diagnostic_router
 from app.api.dropbox import router as dropbox_router
@@ -20,8 +21,10 @@ from app.api.files import router as files_router
 from app.api.google_drive import router as google_drive_router
 from app.api.i18n import router as i18n_router
 from app.api.imap_accounts import router as imap_accounts_router
+from app.api.imap_profiles import router as imap_profiles_router
 from app.api.integrations import router as integrations_router
 from app.api.logs import router as logs_router
+from app.api.mobile import router as mobile_router
 from app.api.notifications import router as notifications_router
 from app.api.onboarding import router as onboarding_router
 from app.api.onedrive import router as onedrive_router
@@ -81,8 +84,11 @@ router.include_router(onboarding_router)
 router.include_router(billing_router)
 router.include_router(pipelines_router)
 router.include_router(imap_accounts_router)
+router.include_router(imap_profiles_router)
 router.include_router(integrations_router)
 router.include_router(notifications_router)
 router.include_router(scheduled_jobs_router)
 router.include_router(audit_logs_router)
 router.include_router(i18n_router)
+router.include_router(mobile_router)
+router.include_router(compliance_router)

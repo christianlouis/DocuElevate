@@ -13,7 +13,11 @@ from celery import shared_task
 from app.config import settings
 from app.tasks.convert_to_pdf import convert_to_pdf  # new conversion task
 from app.tasks.process_document import process_document  # Updated import
-from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES
+from app.utils.allowed_types import (
+    ALL_CATEGORIES,
+    DEFAULT_CATEGORIES,
+    get_allowed_types_for_categories,
+)
 
 # Database session for per-user IMAP accounts (imported lazily to avoid circular imports)
 _db_session_factory = None
@@ -48,6 +52,38 @@ def _decrypt_imap_password(password: str | None) -> str | None:
     from app.utils.encryption import decrypt_value
 
     return decrypt_value(password)
+
+
+def _resolve_categories_for_profile(profile_id: int | None) -> list[str]:
+    """Return the list of allowed categories for a profile ID.
+
+    Loads the profile from the database.  If ``profile_id`` is ``None`` or the
+    profile is not found, falls back to the global ``settings.imap_attachment_filter``
+    string (``'documents_only'`` → default categories; ``'all'`` → all categories).
+    """
+    if profile_id is not None:
+        try:
+            from app.models import ImapIngestionProfile
+
+            db = _get_db_session()
+            try:
+                profile = db.query(ImapIngestionProfile).filter(ImapIngestionProfile.id == profile_id).first()
+                if profile:
+                    return json.loads(profile.allowed_categories)
+            finally:
+                db.close()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Could not load IMAP ingestion profile %d (%s: %s) — using global default",
+                profile_id,
+                type(exc).__name__,
+                exc,
+            )
+
+    # Fall back to global setting
+    if settings.imap_attachment_filter == "all":
+        return ALL_CATEGORIES
+    return DEFAULT_CATEGORIES
 
 
 LOCK_KEY = "imap_lock"  # Unique key for locking
@@ -180,6 +216,7 @@ def _pull_user_imap_accounts() -> None:
                         use_ssl=acct.use_ssl,
                         delete_after_process=acct.delete_after_process,
                         owner_id=acct.owner_id,
+                        allowed_categories=_resolve_categories_for_profile(acct.profile_id),
                     )
                     # Record successful poll
                     acct.last_checked_at = datetime.now(timezone.utc)
@@ -250,6 +287,9 @@ def _pull_user_integration_imap() -> None:
                     use_ssl = cfg.get("use_ssl", True)
                     delete_after = cfg.get("delete_after_process", False)
                     gmail_labels = cfg.get("gmail_apply_labels", True)
+                    # Integrations can store a profile_id in config; fall back to global default
+                    profile_id = cfg.get("profile_id")
+                    allowed_categories = _resolve_categories_for_profile(profile_id)
 
                     if not (host and username and password):
                         logger.warning(
@@ -269,6 +309,7 @@ def _pull_user_integration_imap() -> None:
                         delete_after_process=delete_after,
                         owner_id=integ.owner_id,
                         gmail_apply_labels=gmail_labels,
+                        allowed_categories=allowed_categories,
                     )
                     integ.last_used_at = datetime.now(timezone.utc)
                     integ.last_error = None
@@ -329,6 +370,7 @@ def pull_inbox(
     delete_after_process,
     owner_id=None,
     gmail_apply_labels=True,
+    allowed_categories=None,
 ):
     """
     Connects to the IMAP inbox, fetches new unread emails from the last 3 days,
@@ -345,8 +387,22 @@ def pull_inbox(
                   attributed to this user via ``process_document`` / ``convert_to_pdf``.
         gmail_apply_labels: Whether to apply Gmail-specific labels and stars to
                   processed emails. Only relevant for Gmail hosts. Defaults to True.
+        allowed_categories: List of file-type category keys to ingest (e.g.
+                  ``["pdf", "office", "images"]``).  ``None`` falls back to the
+                  global ``settings.imap_attachment_filter`` mapping.
     """
-    logger.info("Connecting to %s at %s:%s (SSL=%s)", mailbox_key, host, port, use_ssl)
+    if allowed_categories is None:
+        allowed_categories = _resolve_categories_for_profile(None)
+
+    effective_mime_types, effective_extensions = get_allowed_types_for_categories(allowed_categories)
+    logger.info(
+        "Connecting to %s at %s:%s (SSL=%s) — categories: %s",
+        mailbox_key,
+        host,
+        port,
+        use_ssl,
+        allowed_categories,
+    )
     processed_emails = load_processed_emails()
 
     try:
@@ -405,9 +461,13 @@ def pull_inbox(
                     logger.info("Skipping email %s in %s, already labeled 'Ingested'.", msg_id, mailbox_key)
                     continue
 
-            # Process attachments (and convert non-PDF files).
-            # We call the function without assigning its return value since it is not used.
-            fetch_attachments_and_enqueue(email_message, owner_id=owner_id)
+            # Process attachments using the resolved mime types / extensions.
+            fetch_attachments_and_enqueue(
+                email_message,
+                owner_id=owner_id,
+                effective_mime_types=effective_mime_types,
+                effective_extensions=effective_extensions,
+            )
 
             if settings.imap_readonly_mode:
                 logger.info("Readonly mode: skipping mailbox modifications for %s in %s", msg_id, mailbox_key)
@@ -436,27 +496,23 @@ def pull_inbox(
         logger.exception("Error pulling mailbox %s: %s", mailbox_key, e)
 
 
-def fetch_attachments_and_enqueue(email_message, owner_id: str | None = None):
+def fetch_attachments_and_enqueue(
+    email_message,
+    owner_id: str | None = None,
+    effective_mime_types: frozenset[str] | None = None,
+    effective_extensions: frozenset[str] | None = None,
+):
     """
     Extracts attachments from the email and processes only allowed file types.
 
-    Files are accepted if either:
-    1. They have a MIME type from the ALLOWED_MIME_TYPES set, OR
-    2. They have a '.pdf' file extension (regardless of MIME type)
+    The caller is responsible for computing ``effective_mime_types`` and
+    ``effective_extensions`` from the relevant :class:`ImapIngestionProfile` (or
+    the global default) via :func:`app.utils.allowed_types.get_allowed_types_for_categories`
+    before calling this function.  ``pull_inbox`` does this automatically.
 
-    Allowed file types include:
-      - PDF: application/pdf or *.pdf extension
-      - Microsoft Office files:
-          - Word: application/msword,
-            application/vnd.openxmlformats-officedocument.wordprocessingml.document
-          - Excel: application/vnd.ms-excel,
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
-          - PowerPoint: application/vnd.ms-powerpoint,
-            application/vnd.openxmlformats-officedocument.presentationml.presentation
-      - Other meaningful attachments:
-          - Plain text: text/plain
-          - CSV: text/csv
-          - Rich Text Format: application/rtf, text/rtf
+    If either set is ``None`` the function falls back to the default category list
+    so the function still works correctly when called directly in tests or from
+    other contexts.
 
     If the attachment is a PDF (by extension or MIME type), it is enqueued for upload;
     any other allowed file is enqueued for conversion to PDF.
@@ -465,9 +521,14 @@ def fetch_attachments_and_enqueue(email_message, owner_id: str | None = None):
         email_message: The parsed email message to extract attachments from.
         owner_id: Optional user identifier forwarded to ``process_document`` /
                   ``convert_to_pdf`` for multi-tenant attribution.
+        effective_mime_types: Pre-computed frozenset of allowed MIME type strings.
+        effective_extensions: Pre-computed frozenset of allowed file extension strings.
 
     Returns True if at least one allowed attachment was processed.
     """
+    if effective_mime_types is None or effective_extensions is None:
+        effective_mime_types, effective_extensions = get_allowed_types_for_categories(DEFAULT_CATEGORIES)
+
     has_attachment = False
     for part in email_message.walk():
         if part.get_content_maintype() == "multipart":
@@ -482,9 +543,15 @@ def fetch_attachments_and_enqueue(email_message, owner_id: str | None = None):
 
         mime_type = part.get_content_type()
         file_ext = os.path.splitext(filename)[1].lower()
+
         # Accept file if it has an allowed MIME type, an allowed extension, OR is a PDF by extension
-        if mime_type not in ALLOWED_MIME_TYPES and file_ext not in ALLOWED_EXTENSIONS and not is_pdf_by_extension:
-            logger.info("Skipping attachment %s with MIME type %s", filename, mime_type)
+        if mime_type not in effective_mime_types and file_ext not in effective_extensions and not is_pdf_by_extension:
+            logger.info(
+                "Skipping attachment %s (MIME: %s, ext: %s) — not in effective allowed set",
+                filename,
+                mime_type,
+                file_ext,
+            )
             continue
 
         file_path = os.path.join(settings.workdir, filename)
@@ -495,7 +562,7 @@ def fetch_attachments_and_enqueue(email_message, owner_id: str | None = None):
         if mime_type == "application/pdf" or is_pdf_by_extension:
             process_document.delay(file_path, owner_id=owner_id)
             logger.info("Enqueued PDF for upload: %s (MIME: %s)", filename, mime_type)
-        elif mime_type in ALLOWED_MIME_TYPES:
+        elif mime_type in effective_mime_types:
             # Other allowed files are sent for conversion
             convert_to_pdf.delay(file_path, owner_id=owner_id)
             logger.info("Enqueued file for conversion to PDF: %s", filename)

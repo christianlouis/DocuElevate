@@ -613,6 +613,8 @@ async def test_local_login_success(la_session, active_user):
     mock_request = MagicMock(spec=Request)
     mock_request.form = AsyncMock(return_value={"username": "activeuser", "password": "password123"})
     mock_request.session = {}
+    mock_request.headers.get.return_value = None
+    mock_request.client = None
 
     result = await auth(mock_request, db=la_session)
     assert result.status_code == 302
@@ -634,6 +636,8 @@ async def test_local_login_by_email(la_session, active_user):
     mock_request = MagicMock(spec=Request)
     mock_request.form = AsyncMock(return_value={"username": "active@example.com", "password": "password123"})
     mock_request.session = {}
+    mock_request.headers.get.return_value = None
+    mock_request.client = None
 
     result = await auth(mock_request, db=la_session)
     assert result.status_code == 302

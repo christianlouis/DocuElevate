@@ -16,6 +16,7 @@ Configuration is primarily done through environment variables specified in a `.e
 | `GOTENBERG_URL`        | Gotenberg PDF processing URL.                           | `http://gotenberg:3000`        |
 | `EXTERNAL_HOSTNAME`    | The external hostname for the application.             | `docuelevate.example.com`      |
 | `ALLOW_FILE_DELETE`    | Enable file deletion in the web interface (`true`/`false`). | `true`                      |
+| `COMPLIANCE_ENABLED`   | Enable the compliance templates dashboard (GDPR, HIPAA, SOC 2). | `true`                      |
 
 ### Batch Processing Settings
 
@@ -303,6 +304,42 @@ DocuElevate can automatically pull document attachments from IMAP mailboxes — 
 | `IMAP1_SSL`                   | Use SSL (`true`/`false`).                                   | `true`            |
 | `IMAP1_POLL_INTERVAL_MINUTES` | Frequency in minutes to poll for new mail.                  | `5`               |
 | `IMAP_READONLY_MODE`          | When `true`, fetches and processes attachments but does **not** modify the mailbox (no starring, labeling, deleting, or flag changes). Use for pre-production instances sharing a mailbox with production. Default: `false`. | `false` |
+| `IMAP_ATTACHMENT_FILTER`      | System-wide fallback for which attachment types are ingested when no ingestion profile is assigned to a mailbox. `documents_only` (default) ingests PDFs and office files only — images are skipped. `all` ingests every supported file type including images. Individual IMAP accounts can override this using ingestion profiles. | `documents_only` |
+
+#### IMAP Ingestion Profiles
+
+For fine-grained control, DocuElevate supports **Ingestion Profiles** — named configurations that let you choose exactly which file-type categories to accept from each mailbox.
+
+Each profile contains a list of enabled **categories**:
+
+| Category | Description |
+|----------|-------------|
+| `pdf` | PDF documents (`.pdf`) |
+| `office` | Microsoft Office files (Word, Excel, PowerPoint — `.docx`, `.xlsx`, `.pptx`, …) |
+| `opendocument` | LibreOffice/OpenOffice files (`.odt`, `.ods`, `.odp`, …) |
+| `text` | Plain text, CSV and RTF files (`.txt`, `.csv`, `.rtf`) |
+| `web` | HTML and Markdown files (`.html`, `.htm`, `.md`, `.markdown`) |
+| `images` | Image files (`.jpg`, `.png`, `.gif`, `.bmp`, `.tiff`, `.webp`, `.svg`) |
+
+Two built-in system profiles are seeded automatically:
+
+| Profile | Categories |
+|---------|------------|
+| **Documents Only** | pdf, office, opendocument, text, web (no images) |
+| **All Files** | All categories, including images |
+
+Users can create their own custom profiles via the **Email Ingestion** dashboard (`/imap-accounts`) by clicking the **Manage profiles** link or the **+** button next to the profile dropdown. Custom profiles are private to the creating user and can be freely edited or deleted.
+
+**API endpoints for ingestion profiles:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/imap-profiles/` | List all visible profiles (system + user's own) |
+| `POST` | `/api/imap-profiles/` | Create a new profile |
+| `GET` | `/api/imap-profiles/categories` | List available file-type categories |
+| `GET` | `/api/imap-profiles/{id}` | Get a single profile |
+| `PUT` | `/api/imap-profiles/{id}` | Update a profile (not built-in) |
+| `DELETE` | `/api/imap-profiles/{id}` | Delete a profile (not built-in) |
 
 #### Per-User IMAP Integrations
 
@@ -334,6 +371,28 @@ Credentials are encrypted at rest using Fernet encryption.
 | `AUTHENTIK_CLIENT_SECRET` | Client secret for Authentik OAuth2/OIDC authentication.    |
 | `AUTHENTIK_CONFIG_URL`  | Configuration URL for Authentik OpenID Connect.             |
 | `OAUTH_PROVIDER_NAME`   | Display name for the OAuth provider button.                  |
+
+### Social Login Providers
+
+Social login lets users sign in with their existing Google, Microsoft, Apple, or Dropbox accounts. Each provider is independently enabled and configured. For detailed setup instructions see the [Social Login Setup Guide](SocialLoginSetup.md).
+
+| **Variable** | **Description** | **Default** |
+|---|---|---|
+| `SOCIAL_AUTH_GOOGLE_ENABLED` | Enable Google Sign-In. | `false` |
+| `SOCIAL_AUTH_GOOGLE_CLIENT_ID` | Google OAuth2 client ID from the Google Cloud Console. | *(empty)* |
+| `SOCIAL_AUTH_GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret. | *(empty)* |
+| `SOCIAL_AUTH_MICROSOFT_ENABLED` | Enable Microsoft Sign-In (Azure AD / Microsoft Entra ID). | `false` |
+| `SOCIAL_AUTH_MICROSOFT_CLIENT_ID` | Microsoft application (client) ID from Azure App Registrations. | *(empty)* |
+| `SOCIAL_AUTH_MICROSOFT_CLIENT_SECRET` | Microsoft client secret. | *(empty)* |
+| `SOCIAL_AUTH_MICROSOFT_TENANT` | Azure AD tenant: `common`, `organizations`, `consumers`, or a tenant GUID. | `common` |
+| `SOCIAL_AUTH_APPLE_ENABLED` | Enable Sign in with Apple. | `false` |
+| `SOCIAL_AUTH_APPLE_CLIENT_ID` | Apple Services ID (e.g. `com.example.docuelevate`). | *(empty)* |
+| `SOCIAL_AUTH_APPLE_TEAM_ID` | Apple Developer Team ID. | *(empty)* |
+| `SOCIAL_AUTH_APPLE_KEY_ID` | Apple Sign-In private key ID. | *(empty)* |
+| `SOCIAL_AUTH_APPLE_PRIVATE_KEY` | Apple Sign-In private key (PEM format). | *(empty)* |
+| `SOCIAL_AUTH_DROPBOX_ENABLED` | Enable Dropbox Sign-In. | `false` |
+| `SOCIAL_AUTH_DROPBOX_CLIENT_ID` | Dropbox OAuth2 App Key. | *(empty)* |
+| `SOCIAL_AUTH_DROPBOX_CLIENT_SECRET` | Dropbox OAuth2 App Secret. | *(empty)* |
 
 ### Multi-User Mode
 
@@ -942,6 +1001,7 @@ TESSERACT_LANGUAGE=eng+deu
 
 | **Variable**                        | **Description**                                                                                     |
 |-------------------------------------|-----------------------------------------------------------------------------------------------------|
+| `PAPERLESS_ENABLED`                 | Set to `false` to disable Paperless-ngx uploads without removing credentials. Default: `true`       |
 | `PAPERLESS_NGX_API_TOKEN`           | API token for Paperless NGX.                                                                        |
 | `PAPERLESS_HOST`                    | Root URL for Paperless NGX (e.g. `https://paperless.example.com`).                                 |
 | `PAPERLESS_CUSTOM_FIELD_ABSENDER`   | (Optional, Legacy) Name of the custom field in Paperless-ngx to store the sender ("absender") information. If set, the extracted sender will be automatically set as a custom field after document upload. Example: `Absender` or `Sender` |
@@ -984,6 +1044,7 @@ PAPERLESS_CUSTOM_FIELDS_MAPPING='{"absender": "Sender", "empfaenger": "Recipient
 
 | **Variable**            | **Description**                                  |
 |-------------------------|--------------------------------------------------|
+| `DROPBOX_ENABLED`       | Set to `false` to disable Dropbox uploads without removing credentials. Default: `true` |
 | `DROPBOX_APP_KEY`       | Dropbox API app key.                             |
 | `DROPBOX_APP_SECRET`    | Dropbox API app secret.                          |
 | `DROPBOX_REFRESH_TOKEN` | OAuth2 refresh token for Dropbox.                |
@@ -995,6 +1056,7 @@ For detailed setup instructions, see the [Dropbox Setup Guide](DropboxSetup.md).
 
 | **Variable**            | **Description**                                               |
 |-------------------------|---------------------------------------------------------------|
+| `NEXTCLOUD_ENABLED`     | Set to `false` to disable Nextcloud uploads without removing credentials. Default: `true` |
 | `NEXTCLOUD_UPLOAD_URL`  | Nextcloud WebDAV URL (e.g. `https://nc.example.com/remote.php/dav/files/<USERNAME>`). |
 | `NEXTCLOUD_USERNAME`    | Nextcloud login username.                                    |
 | `NEXTCLOUD_PASSWORD`    | Nextcloud login password.                                    |
@@ -1004,6 +1066,7 @@ For detailed setup instructions, see the [Dropbox Setup Guide](DropboxSetup.md).
 
 | **Variable**                    | **Description**                                       |
 |---------------------------------|-------------------------------------------------------|
+| `GOOGLE_DRIVE_ENABLED`          | Set to `false` to disable Google Drive uploads without removing credentials. Default: `true` |
 | `GOOGLE_DRIVE_USE_OAUTH`        | Set to `true` to use OAuth flow (recommended)         |
 | `GOOGLE_DRIVE_CLIENT_ID`        | OAuth Client ID (required if using OAuth flow)        |
 | `GOOGLE_DRIVE_CLIENT_SECRET`    | OAuth Client Secret (required if using OAuth flow)    |
@@ -1020,6 +1083,7 @@ For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveS
 
 | **Variable**            | **Description**                                               |
 |-------------------------|---------------------------------------------------------------|
+| `WEBDAV_ENABLED`        | Set to `false` to disable WebDAV uploads without removing credentials. Default: `true` |
 | `WEBDAV_URL`            | WebDAV server URL (e.g. `https://webdav.example.com/path`).   |
 | `WEBDAV_USERNAME`       | WebDAV authentication username.                               |
 | `WEBDAV_PASSWORD`       | WebDAV authentication password.                               |
@@ -1030,6 +1094,7 @@ For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveS
 
 | **Variable**            | **Description**                                               |
 |-------------------------|---------------------------------------------------------------|
+| `FTP_ENABLED`           | Set to `false` to disable FTP uploads without removing credentials. Default: `true` |
 | `FTP_HOST`              | FTP server hostname or IP address.                            |
 | `FTP_PORT`              | FTP port (default: `21`).                                     |
 | `FTP_USERNAME`          | FTP authentication username.                                  |
@@ -1042,6 +1107,7 @@ For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveS
 
 | **Variable**                  | **Description**                                         |
 |------------------------------|-------------------------------------------------------|
+| `SFTP_ENABLED`               | Set to `false` to disable SFTP uploads without removing credentials. Default: `true` |
 | `SFTP_HOST`                  | SFTP server hostname or IP address.                    |
 | `SFTP_PORT`                  | SFTP port (default: `22`).                             |
 | `SFTP_USERNAME`              | SFTP authentication username.                          |
@@ -1073,6 +1139,7 @@ For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveS
 
 | **Variable**                     | **Description**                                                     |
 |----------------------------------|---------------------------------------------------------------------|
+| `DEST_EMAIL_ENABLED`            | Set to `false` to disable email delivery without removing credentials. Default: `true` |
 | `DEST_EMAIL_HOST`               | SMTP server hostname for document delivery.                          |
 | `DEST_EMAIL_PORT`               | SMTP port for document delivery (default: `587`).                    |
 | `DEST_EMAIL_USERNAME`           | SMTP authentication username for document delivery.                  |
@@ -1085,6 +1152,7 @@ For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveS
 
 | **Variable**                    | **Description**                                       |
 |---------------------------------|-------------------------------------------------------|
+| `ONEDRIVE_ENABLED`              | Set to `false` to disable OneDrive uploads without removing credentials. Default: `true` |
 | `ONEDRIVE_CLIENT_ID`            | Azure AD application client ID                        |
 | `ONEDRIVE_CLIENT_SECRET`        | Azure AD application client secret                    |
 | `ONEDRIVE_TENANT_ID`            | Azure AD tenant ID: use "common" for personal accounts or your tenant ID for corporate accounts |
@@ -1097,6 +1165,7 @@ For detailed setup instructions, see the [OneDrive Setup Guide](OneDriveSetup.md
 
 | **Variable**                    | **Description**                                       |
 |---------------------------------|-------------------------------------------------------|
+| `S3_ENABLED`                    | Set to `false` to disable S3 uploads without removing credentials. Default: `true` |
 | `AWS_ACCESS_KEY_ID`             | AWS IAM access key ID                                 |
 | `AWS_SECRET_ACCESS_KEY`         | AWS IAM secret access key                             |
 | `AWS_REGION`                    | AWS region where your S3 bucket is located (default: `us-east-1`) |
@@ -1106,6 +1175,23 @@ For detailed setup instructions, see the [OneDrive Setup Guide](OneDriveSetup.md
 | `S3_ACL`                        | Access control for uploaded files (default: `private`) |
 
 For detailed setup instructions, see the [Amazon S3 Setup Guide](AmazonS3Setup.md).
+
+### iCloud Drive (Apple)
+
+| **Variable**                    | **Description**                                       |
+|---------------------------------|-------------------------------------------------------|
+| `ICLOUD_ENABLED`                | Set to `false` to disable iCloud uploads without removing credentials. Default: `true` |
+| `ICLOUD_USERNAME`               | Apple ID email address                                |
+| `ICLOUD_PASSWORD`               | App-specific password (generate at [appleid.apple.com](https://appleid.apple.com/account/manage)) |
+| `ICLOUD_FOLDER`                 | Target folder path in iCloud Drive (e.g. `Documents/Uploads`) |
+| `ICLOUD_COOKIE_DIRECTORY`       | Optional directory for session cookie persistence (default: `~/.pyicloud`) |
+
+> **Note:** Apple does not provide a public REST API for iCloud Drive. This
+> integration uses the [pyicloud](https://github.com/picklepete/pyicloud)
+> library which relies on an unofficial, reverse-engineered protocol. Because
+> most Apple IDs have two-factor authentication enabled, you **must** generate
+> an [app-specific password](https://support.apple.com/en-us/102654) and use
+> it as `ICLOUD_PASSWORD`.
 
 ### Notification System
 

@@ -16,6 +16,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api import router as api_router
+from app.api.graphql_api import graphql_router
 from app.api.local_auth import router as local_auth_router
 from app.auth import router as auth_router
 from app.config import settings
@@ -146,6 +147,20 @@ async def lifespan(app: FastAPI):
     except Exception:
         logging.debug("Scheduled jobs seeding skipped — DB may not be ready yet")  # noqa: S110
 
+    # Seed the built-in compliance templates (GDPR, HIPAA, SOC2) so they
+    # are available in the admin compliance dashboard on first startup.
+    try:
+        from app.database import SessionLocal as _SessionLocal  # noqa: F811
+        from app.utils.compliance_service import seed_compliance_templates as _seed_compliance
+
+        _db_compliance = _SessionLocal()
+        try:
+            _seed_compliance(_db_compliance)
+        finally:
+            _db_compliance.close()
+    except Exception:
+        logging.debug("Compliance template seeding skipped — DB may not be ready yet")  # noqa: S110
+
     # Application is now running
     yield
 
@@ -239,6 +254,21 @@ else:
 
 
 # Custom exception handlers that return JSON for API routes and HTML for frontend routes
+# These use their own separate templates instance so that patches in tests on individual
+# view modules do not affect the error handler rendering.
+_error_templates_dir = pathlib.Path(__file__).parents[1] / "frontend" / "templates"
+_error_templates = Jinja2Templates(directory=str(_error_templates_dir))
+# Register the i18n translate helper as a global so error templates can use {{ _("key") }}.
+# Error pages use the default language (English); request-specific locale is not needed here.
+from app.utils.i18n import SUPPORTED_LANGUAGES as _SUPPORTED_LANGUAGES  # noqa: E402
+from app.utils.i18n import translate as _translate_fn  # noqa: E402
+
+_error_templates.env.globals["_"] = lambda key, **kwargs: _translate_fn(key, "en", **kwargs)
+_error_templates.env.globals["min"] = min
+_error_templates.env.globals["max"] = max
+_error_templates.env.globals["supported_languages"] = _SUPPORTED_LANGUAGES
+
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     """
@@ -250,15 +280,15 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
     # For frontend routes, return appropriate HTML templates
-    templates = Jinja2Templates(directory=str(static_dir.parent / "templates"))
-
     # Handle 404 errors with a custom template
     if exc.status_code == 404:
-        return templates.TemplateResponse("404.html", {"request": request}, status_code=status.HTTP_404_NOT_FOUND)
+        return _error_templates.TemplateResponse(
+            "404.html", {"request": request}, status_code=status.HTTP_404_NOT_FOUND
+        )
 
     # For other HTTP errors, we could create specific templates or use a generic one
     # For now, return a simple error page
-    return templates.TemplateResponse(
+    return _error_templates.TemplateResponse(
         "404.html",  # Reuse 404 template for other errors, or create a generic error template
         {"request": request},
         status_code=exc.status_code,
@@ -279,8 +309,7 @@ async def custom_500_handler(request: Request, exc: Exception):
         )
 
     # Serve the 500 template for non-API routes
-    templates = Jinja2Templates(directory=str(static_dir.parent / "templates"))
-    return templates.TemplateResponse(
+    return _error_templates.TemplateResponse(
         "500.html",
         {"request": request, "exc": exc},
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -298,3 +327,4 @@ app.include_router(files_router)  # Explicitly include the files router
 app.include_router(auth_router)
 app.include_router(local_auth_router)
 app.include_router(api_router, prefix="/api")
+app.include_router(graphql_router, prefix="/graphql")

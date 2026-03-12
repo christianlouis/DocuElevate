@@ -348,6 +348,7 @@ in task messages or logs.
 | `PAPERLESS`     | Paperless-ngx REST API, API token |
 | `EMAIL`         | SMTP/STARTTLS, file as attachment |
 | `RCLONE`        | `rclone copyto` subprocess, per-user rclone config |
+| `ICLOUD`        | pyicloud library, Apple ID + app-specific password |
 
 ### Multiple Destinations
 

@@ -1,0 +1,199 @@
+/**
+ * DocuElevate API client for the mobile app.
+ *
+ * All requests authenticate via a Bearer token stored in the device's secure
+ * keychain (via expo-secure-store).  The token is obtained once through the
+ * SSO flow and cached until the user explicitly logs out.
+ */
+
+import * as SecureStore from "expo-secure-store";
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+export const SECURE_STORE_API_TOKEN_KEY = "de_api_token";
+export const SECURE_STORE_BASE_URL_KEY = "de_base_url";
+export const SECURE_STORE_OWNER_ID_KEY = "de_owner_id";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface WhoAmIResponse {
+  owner_id: string;
+  display_name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  is_admin: boolean;
+}
+
+export interface GenerateTokenResponse {
+  token: string;
+  token_id: number;
+  name: string;
+  created_at: string;
+}
+
+export interface DeviceRegistration {
+  push_token: string;
+  device_name?: string;
+  platform: "ios" | "android" | "web";
+}
+
+export interface FileRecord {
+  id: number;
+  filename: string;
+  status: string;
+  created_at: string;
+  file_size: number | null;
+  content_type: string | null;
+  owner_id: string | null;
+}
+
+export interface UploadResponse {
+  task_id: string;
+  status: string;
+  message: string;
+  filename: string;
+}
+
+// ---------------------------------------------------------------------------
+// Base API client
+// ---------------------------------------------------------------------------
+
+class DocuElevateAPI {
+  private baseUrl: string = "";
+
+  async init(baseUrl: string): Promise<void> {
+    this.baseUrl = baseUrl.replace(/\/$/, "");
+    await SecureStore.setItemAsync(SECURE_STORE_BASE_URL_KEY, this.baseUrl);
+  }
+
+  async loadFromStorage(): Promise<boolean> {
+    try {
+      const url = await SecureStore.getItemAsync(SECURE_STORE_BASE_URL_KEY);
+      if (url) {
+        this.baseUrl = url;
+        return true;
+      }
+    } catch {
+      // ignore
+    }
+    return false;
+  }
+
+  getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
+  private async getToken(): Promise<string | null> {
+    try {
+      return await SecureStore.getItemAsync(SECURE_STORE_API_TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  private async request<T>(
+    method: string,
+    path: string,
+    options?: { body?: unknown; formData?: FormData }
+  ): Promise<T> {
+    const token = await this.getToken();
+    const headers: Record<string, string> = {};
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    let body: BodyInit | undefined;
+    if (options?.formData) {
+      body = options.formData;
+      // Let fetch set multipart content-type with boundary automatically
+    } else if (options?.body !== undefined) {
+      headers["Content-Type"] = "application/json";
+      body = JSON.stringify(options.body);
+    }
+
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method,
+      headers,
+      body,
+    });
+
+    if (!response.ok) {
+      let detail = `HTTP ${response.status}`;
+      try {
+        const err = await response.json();
+        detail = err.detail || JSON.stringify(err);
+      } catch {
+        // ignore
+      }
+      throw new Error(detail);
+    }
+
+    if (response.status === 204) {
+      return undefined as unknown as T;
+    }
+
+    return response.json();
+  }
+
+  // -------------------------------------------------------------------------
+  // Auth
+  // -------------------------------------------------------------------------
+
+  /** Exchange the current session (cookie) for a long-lived API token. */
+  async generateMobileToken(deviceName: string): Promise<GenerateTokenResponse> {
+    return this.request<GenerateTokenResponse>("POST", "/api/mobile/generate-token", {
+      body: { device_name: deviceName },
+    });
+  }
+
+  /** Return profile information for the authenticated user. */
+  async whoAmI(): Promise<WhoAmIResponse> {
+    return this.request<WhoAmIResponse>("GET", "/api/mobile/whoami");
+  }
+
+  // -------------------------------------------------------------------------
+  // Push notifications
+  // -------------------------------------------------------------------------
+
+  /** Register a push notification device token. */
+  async registerDevice(data: DeviceRegistration): Promise<void> {
+    await this.request("POST", "/api/mobile/register-device", { body: data });
+  }
+
+  /** Deactivate a device registration. */
+  async deactivateDevice(deviceId: number): Promise<void> {
+    await this.request("DELETE", `/api/mobile/devices/${deviceId}`);
+  }
+
+  // -------------------------------------------------------------------------
+  // Files
+  // -------------------------------------------------------------------------
+
+  /** Upload a file for processing. */
+  async uploadFile(uri: string, filename: string, mimeType?: string): Promise<UploadResponse> {
+    const formData = new FormData();
+    formData.append("file", {
+      uri,
+      name: filename,
+      type: mimeType || "application/octet-stream",
+    } as unknown as Blob);
+
+    return this.request<UploadResponse>("POST", "/api/ui-upload", { formData });
+  }
+
+  /** List recently processed files. */
+  async listFiles(page = 1, pageSize = 20): Promise<FileRecord[]> {
+    return this.request<FileRecord[]>(
+      "GET",
+      `/api/files?page=${page}&page_size=${pageSize}`
+    );
+  }
+}
+
+export const api = new DocuElevateAPI();
+export default api;
