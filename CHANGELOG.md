@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.123.1 (2026-03-12)
+
+### Bug Fixes
+
+- **tests**: Fix two failing tests - missing DB table and MagicMock IP address
+  ([`be6b49c`](https://github.com/christianlouis/DocuElevate/commit/be6b49c8721445dc8ea870afda87f311acb192e3))
+
+### Code Style
+
+- Fix ruff formatting in tests/test_imap_profiles.py
+  ([`8060a79`](https://github.com/christianlouis/DocuElevate/commit/8060a79b9c5172c40edff87bdcf0e095e177560e))
+
+
 ## v0.123.0 (2026-03-12)
 
 ### Bug Fixes
