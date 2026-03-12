@@ -231,6 +231,14 @@ async def upload_avatar(
             detail=f"Unsupported image type '{content_type}'. Allowed: JPEG, PNG, GIF, WebP.",
         )
 
+    # Check declared size first (available when the client sends a Content-Length header)
+    if file.size is not None and file.size > _MAX_AVATAR_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Avatar image must be 2 MB or smaller.",
+        )
+
+    # Read up to one byte past the limit so we can detect oversized uploads
     raw = await file.read(_MAX_AVATAR_BYTES + 1)
     if len(raw) > _MAX_AVATAR_BYTES:
         raise HTTPException(

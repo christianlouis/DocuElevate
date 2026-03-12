@@ -77,8 +77,8 @@
       <!-- Upload controls -->
       <div class="flex-1 space-y-3">
         <p class="text-sm text-gray-600 dark:text-gray-400">
-          Upload a JPEG, PNG, GIF, or WebP image up to 2&thinsp;MB.
-          If no custom picture is set, your <a href="https://gravatar.com" class="underline" target="_blank" rel="noopener noreferrer">Gravatar</a> is shown.
+          Upload a JPEG, PNG, GIF, or WebP image up to 2 MB.
+          If no custom picture is set, your <a href="https://gravatar.com" class="underline" target="_blank" rel="noopener noreferrer" aria-label="Gravatar (opens in new tab)">Gravatar</a> is shown.
         </p>
         <label
           for="avatar-input"
@@ -366,15 +366,20 @@ function profileSettings() {
       }
     },
 
+    // ── CSRF helper ────────────────────────────────────────────────────────
+    _getCSRFToken() {
+      return document.cookie
+        .split('; ')
+        .find(row => row.startsWith('csrf_token='))
+        ?.split('=')[1];
+    },
+
     // ── Save general settings ──────────────────────────────────────────────
     async saveProfile() {
       this.saving = true;
       this._hideBanner();
       try {
-        const csrfToken = document.cookie
-          .split('; ')
-          .find(row => row.startsWith('csrf_token='))
-          ?.split('=')[1];
+        const csrfToken = this._getCSRFToken();
 
         const res = await fetch('/api/profile', {
           method: 'PATCH',
@@ -415,10 +420,7 @@ function profileSettings() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const csrfToken = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('csrf_token='))
-        ?.split('=')[1];
+      const csrfToken = this._getCSRFToken();
 
       try {
         const res = await fetch('/api/profile/avatar', {
@@ -446,10 +448,7 @@ function profileSettings() {
     // ── Remove avatar ──────────────────────────────────────────────────────
     async removeAvatar() {
       this._hideBanner();
-      const csrfToken = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('csrf_token='))
-        ?.split('=')[1];
+      const csrfToken = this._getCSRFToken();
 
       try {
         const res = await fetch('/api/profile/avatar', {
@@ -473,10 +472,7 @@ function profileSettings() {
     async changePassword() {
       this.pwSaving = true;
       this._hideBanner();
-      const csrfToken = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('csrf_token='))
-        ?.split('=')[1];
+      const csrfToken = this._getCSRFToken();
 
       try {
         const res = await fetch('/api/profile/change-password', {

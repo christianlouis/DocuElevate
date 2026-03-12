@@ -20,6 +20,16 @@ from app.database import Base, get_db
 from app.models import LocalUser, UserProfile
 
 # ---------------------------------------------------------------------------
+# Test data constants
+# ---------------------------------------------------------------------------
+
+# Minimal valid 1×1 PNG image (base64-encoded) used across avatar upload tests
+_MINIMAL_VALID_PNG_BASE64 = (
+    b"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/Z+hHgAHggJ/PchI6QAAAABJRU5ErkJggg=="
+)
+_MINIMAL_VALID_PNG_BYTES = base64.b64decode(_MINIMAL_VALID_PNG_BASE64)
+
+# ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
@@ -78,15 +88,15 @@ class TestGravatarUrl:
         from app.api.profile import _gravatar_url
 
         url = _gravatar_url("Test@Example.COM")
-        assert "gravatar.com/avatar/" in url
+        assert url.startswith("https://www.gravatar.com/avatar/")
         assert url.endswith("?d=identicon")
 
     def test_fallback_for_none_email(self):
         from app.api.profile import _gravatar_url
 
         url = _gravatar_url(None)
-        assert "gravatar.com/avatar/" in url
-        assert "?d=identicon" in url
+        assert url.startswith("https://www.gravatar.com/avatar/")
+        assert url.endswith("?d=identicon")
 
 
 @pytest.mark.unit
@@ -164,7 +174,7 @@ class TestGetProfileHandler:
         assert result.display_name == "Alice"
         assert result.preferred_language == "fr"
         assert result.preferred_theme == "dark"
-        assert "gravatar.com" in result.avatar_url
+        assert result.avatar_url.startswith("https://www.gravatar.com/avatar/")
 
     @pytest.mark.asyncio
     async def test_returns_custom_avatar_when_stored(self, prof_session):
@@ -284,13 +294,10 @@ class TestUploadAvatarHandler:
         """upload_avatar stores the image as a data: URI."""
         from app.api.profile import upload_avatar
 
-        png_bytes = base64.b64decode(
-            b"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/Z+hHgAHggJ/PchI6QAAAABJRU5ErkJggg=="
-        )
-
         upload = MagicMock()
         upload.content_type = "image/png"
-        upload.read = AsyncMock(return_value=png_bytes)
+        upload.size = len(_MINIMAL_VALID_PNG_BYTES)
+        upload.read = AsyncMock(return_value=_MINIMAL_VALID_PNG_BYTES)
 
         req = MagicMock()
         req.session = {"user": {"preferred_username": "avataruser", "email": "av@example.com"}}
@@ -305,6 +312,7 @@ class TestUploadAvatarHandler:
 
         upload = MagicMock()
         upload.content_type = "application/pdf"
+        upload.size = 4
         upload.read = AsyncMock(return_value=b"%PDF")
 
         req = MagicMock()
@@ -319,11 +327,12 @@ class TestUploadAvatarHandler:
         """upload_avatar raises 413 when image exceeds 2 MB."""
         from app.api.profile import upload_avatar
 
-        big_data = b"x" * (2 * 1024 * 1024 + 1)
+        big_size = 2 * 1024 * 1024 + 1
 
         upload = MagicMock()
         upload.content_type = "image/png"
-        upload.read = AsyncMock(return_value=big_data)
+        upload.size = big_size  # triggers early size check
+        upload.read = AsyncMock(return_value=b"x" * big_size)
 
         req = MagicMock()
         req.session = {"user": {"preferred_username": "biguser", "email": "big@example.com"}}
@@ -358,7 +367,7 @@ class TestDeleteAvatarHandler:
         req.session = {"user": {"preferred_username": "delavatar", "email": "del@example.com"}}
 
         result = await delete_avatar(req, prof_session)
-        assert "gravatar.com" in result["avatar_url"]
+        assert result["avatar_url"].startswith("https://www.gravatar.com/avatar/")
 
         row = prof_session.query(UserProfile).filter_by(user_id="delavatar").first()
         assert row.avatar_data is None
