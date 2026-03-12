@@ -399,6 +399,61 @@ default overage buffer applied across all plans.
 
 DocuElevate supports HTTP security headers to improve browser-side security. **These headers are disabled by default** since most deployments use a reverse proxy (Traefik, Nginx, etc.) that already adds them. Enable only if deploying directly without a reverse proxy. See [Deployment Guide - Security Headers](DeploymentGuide.md#security-headers) for detailed configuration examples.
 
+### Audit Logging
+
+DocuElevate provides comprehensive audit logging that records significant actions (logins, document CRUD, settings changes) to an append-only database table. Every entry captures the timestamp, user, action, resource, client IP, and optional JSON details.
+
+| **Variable**                   | **Description**                                                                                   | **Default** |
+|--------------------------------|---------------------------------------------------------------------------------------------------|-------------|
+| `AUDIT_LOGGING_ENABLED`       | Enable the HTTP request audit-logging middleware.                                                  | `true`      |
+| `AUDIT_LOG_INCLUDE_CLIENT_IP` | Include the client IP address in audit log entries. Disable for GDPR-sensitive deployments.       | `true`      |
+
+#### SIEM Integration
+
+Audit events can be forwarded in real time to external SIEM systems for centralised monitoring, alerting, and long-term retention. Two transports are supported:
+
+* **Syslog** – RFC 5424 structured-data messages over UDP or TCP. Works with rsyslog, syslog-ng, Graylog, Datadog, etc.
+* **HTTP** – JSON POST payloads compatible with Splunk HEC, Logstash HTTP input, Grafana Loki push API, and any generic webhook.
+
+| **Variable**                        | **Description**                                                                                   | **Default**   |
+|-------------------------------------|---------------------------------------------------------------------------------------------------|---------------|
+| `AUDIT_SIEM_ENABLED`               | Enable forwarding of audit events to an external SIEM system.                                     | `false`       |
+| `AUDIT_SIEM_TRANSPORT`             | Transport: `syslog` or `http`.                                                                    | `syslog`      |
+| `AUDIT_SIEM_SYSLOG_HOST`           | Hostname or IP of the syslog receiver.                                                            | `localhost`   |
+| `AUDIT_SIEM_SYSLOG_PORT`           | Port of the syslog receiver.                                                                      | `514`         |
+| `AUDIT_SIEM_SYSLOG_PROTOCOL`       | Protocol for syslog: `udp` or `tcp`.                                                              | `udp`         |
+| `AUDIT_SIEM_HTTP_URL`              | HTTP endpoint URL for SIEM delivery (e.g. Splunk HEC, Logstash, Loki).                           | *(empty)*     |
+| `AUDIT_SIEM_HTTP_TOKEN`            | Bearer / HEC token for the SIEM HTTP endpoint.                                                    | *(empty)*     |
+| `AUDIT_SIEM_HTTP_CUSTOM_HEADERS`   | Comma-separated `Key:Value` extra headers for SIEM HTTP requests.                                 | *(empty)*     |
+
+**Example – Syslog to rsyslog:**
+
+```bash
+AUDIT_SIEM_ENABLED=true
+AUDIT_SIEM_TRANSPORT=syslog
+AUDIT_SIEM_SYSLOG_HOST=syslog.internal.example.com
+AUDIT_SIEM_SYSLOG_PORT=514
+AUDIT_SIEM_SYSLOG_PROTOCOL=udp
+```
+
+**Example – Splunk HEC:**
+
+```bash
+AUDIT_SIEM_ENABLED=true
+AUDIT_SIEM_TRANSPORT=http
+AUDIT_SIEM_HTTP_URL=https://splunk.example.com:8088/services/collector/event
+AUDIT_SIEM_HTTP_TOKEN=your-hec-token
+```
+
+**Example – Logstash HTTP input:**
+
+```bash
+AUDIT_SIEM_ENABLED=true
+AUDIT_SIEM_TRANSPORT=http
+AUDIT_SIEM_HTTP_URL=https://logstash.example.com:8080
+AUDIT_SIEM_HTTP_TOKEN=
+```
+
 ### Rate Limiting
 
 DocuElevate implements rate limiting to protect against DoS attacks and API abuse. **Rate limiting is enabled by default** and uses Redis for distributed rate limiting across multiple workers.

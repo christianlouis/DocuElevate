@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-color-scheme-default="{{ ui_default_color_scheme | default('system') }}">
+<html lang="{{ current_locale | default('en') }}" data-color-scheme-default="{{ ui_default_color_scheme | default('system') }}">
   <head>
     <meta charset="UTF-8" />
     <title>{% block title %}DocuElevate{% endblock %}</title>
@@ -37,10 +37,10 @@
         data-multi-user="{{ 'true' if multi_user_enabled else 'false' }}"
         data-allow-signup="{{ 'true' if allow_signup else 'false' }}">
     <!-- Skip to main content link for keyboard/screen reader users -->
-    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <a href="#main-content" class="skip-link">{{ _("nav.skip_to_content") }}</a>
 
     <!-- Global Nav -->
-    <nav class="bg-white shadow relative" aria-label="Main navigation">
+    <nav class="bg-white shadow relative" aria-label="{{ _('nav.main_navigation') }}">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between h-16 items-center">
 
         <!-- Brand + Icon -->
@@ -70,12 +70,12 @@
             <a href="/pricing"
                class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
                {% if request and request.url.path == '/pricing' %}aria-current="page"{% endif %}>
-              Pricing
+              {{ _("nav.pricing") }}
             </a>
             <a href="/about"
                class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
                {% if request and request.url.path == '/about' %}aria-current="page"{% endif %}>
-              About
+              {{ _("nav.about") }}
             </a>
 
             {% else %}
@@ -84,32 +84,32 @@
             <a href="/"
                class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
                {% if request and request.url.path == '/' %}aria-current="page"{% endif %}>
-              <i class="fas fa-home mr-1 text-gray-400" aria-hidden="true"></i>Dashboard
+              <i class="fas fa-home mr-1 text-gray-400" aria-hidden="true"></i>{{ _("nav.dashboard") }}
             </a>
             <a href="/upload"
                class="px-3 py-2 rounded-md text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50"
                {% if request and request.url.path == '/upload' %}aria-current="page"{% endif %}>
-              <i class="fas fa-upload mr-1" aria-hidden="true"></i>Upload
+              <i class="fas fa-upload mr-1" aria-hidden="true"></i>{{ _("nav.upload") }}
             </a>
             <a href="/files"
                class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
                {% if request and request.url.path == '/files' %}aria-current="page"{% endif %}>
-              <i class="fas fa-folder-open mr-1 text-gray-400" aria-hidden="true"></i>Files
+              <i class="fas fa-folder-open mr-1 text-gray-400" aria-hidden="true"></i>{{ _("nav.files") }}
             </a>
             <a href="/search"
                class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
                {% if request and request.url.path == '/search' %}aria-current="page"{% endif %}>
-              <i class="fas fa-search mr-1 text-gray-400" aria-hidden="true"></i>Search
+              <i class="fas fa-search mr-1 text-gray-400" aria-hidden="true"></i>{{ _("nav.search") }}
             </a>
             <a href="/pipelines"
                class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
                {% if request and request.url.path == '/pipelines' %}aria-current="page"{% endif %}>
-              <i class="fas fa-project-diagram mr-1 text-gray-400" aria-hidden="true"></i>Pipelines
+              <i class="fas fa-project-diagram mr-1 text-gray-400" aria-hidden="true"></i>{{ _("nav.pipelines") }}
             </a>
             <a href="/integrations"
                class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
                {% if request and request.url.path == '/integrations' %}aria-current="page"{% endif %}>
-              <i class="fas fa-plug mr-1 text-gray-400" aria-hidden="true"></i>Integrations
+              <i class="fas fa-plug mr-1 text-gray-400" aria-hidden="true"></i>{{ _("nav.integrations") }}
             </a>
 
             <!-- Admin dropdown – shown only for admin users via JS -->
@@ -124,7 +124,7 @@
                 :aria-expanded="adminMenuOpen"
               >
                 <i class="fas fa-shield-alt mr-1 text-red-500" aria-hidden="true"></i>
-                Admin
+                {{ _("nav.admin") }}
                 <i class="fas fa-chevron-down ml-1 text-xs" aria-hidden="true"></i>
               </button>
               <div
@@ -141,49 +141,55 @@
               >
                 <div class="py-1">
                   <a href="/settings" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                    <i class="fas fa-cog w-4 mr-2 text-gray-500" aria-hidden="true"></i> Settings
+                    <i class="fas fa-cog w-4 mr-2 text-gray-500" aria-hidden="true"></i> {{ _("nav.settings") }}
                   </a>
                   <a href="/admin/users" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                    <i class="fas fa-users w-4 mr-2 text-blue-500" aria-hidden="true"></i> Users
+                    <i class="fas fa-users w-4 mr-2 text-blue-500" aria-hidden="true"></i> {{ _("nav.users") }}
                   </a>
                   <a href="/admin/plans" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                    <i class="fas fa-layer-group w-4 mr-2 text-indigo-500" aria-hidden="true"></i> Plan Designer
+                    <i class="fas fa-layer-group w-4 mr-2 text-indigo-500" aria-hidden="true"></i> {{ _("nav.plan_designer") }}
                   </a>
                   <a href="/admin/credentials" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                    <i class="fas fa-key w-4 mr-2 text-yellow-500" aria-hidden="true"></i> Credentials
+                    <i class="fas fa-key w-4 mr-2 text-yellow-500" aria-hidden="true"></i> {{ _("nav.credentials") }}
                   </a>
                   <a href="/admin/files" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                    <i class="fas fa-folder-open w-4 mr-2 text-gray-500" aria-hidden="true"></i> File Manager
+                    <i class="fas fa-folder-open w-4 mr-2 text-gray-500" aria-hidden="true"></i> {{ _("nav.file_manager") }}
                   </a>
                   <div class="border-t border-gray-100 my-1"></div>
                   <a href="/duplicates" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                    <i class="fas fa-clone w-4 mr-2 text-orange-500" aria-hidden="true"></i> Duplicates
+                    <i class="fas fa-clone w-4 mr-2 text-orange-500" aria-hidden="true"></i> {{ _("nav.duplicates") }}
                   </a>
                   <a href="/similarity" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                    <i class="fas fa-sitemap w-4 mr-2 text-purple-500" aria-hidden="true"></i> Similarity
+                    <i class="fas fa-sitemap w-4 mr-2 text-purple-500" aria-hidden="true"></i> {{ _("nav.similarity") }}
                   </a>
                   <a href="/admin/queue" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                    <i class="fas fa-stream w-4 mr-2 text-blue-500" aria-hidden="true"></i> Queue Monitor
+                    <i class="fas fa-stream w-4 mr-2 text-blue-500" aria-hidden="true"></i> {{ _("nav.queue_monitor") }}
                   </a>
                   <a href="/admin/scheduled-jobs" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                    <i class="fas fa-clock w-4 mr-2 text-indigo-500" aria-hidden="true"></i> Scheduled Jobs
+                    <i class="fas fa-clock w-4 mr-2 text-indigo-500" aria-hidden="true"></i> {{ _("nav.scheduled_jobs") }}
                   </a>
                   <a href="/admin/compliance" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                     <i class="fas fa-check-double w-4 mr-2 text-green-500" aria-hidden="true"></i> Compliance
                   </a>
                   <a href="/admin/backup" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                    <i class="fas fa-database w-4 mr-2 text-green-600" aria-hidden="true"></i> Backup &amp; Restore
+                    <i class="fas fa-database w-4 mr-2 text-green-600" aria-hidden="true"></i> {{ _("nav.backup_restore") }}
+                  </a>
+                  <a href="/admin/audit-logs" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    <i class="fas fa-shield-halved w-4 mr-2 text-indigo-500" aria-hidden="true"></i> Audit Logs
+                  </a>
+                  <a href="/admin/audit-logs" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    <i class="fas fa-shield-halved w-4 mr-2 text-indigo-500" aria-hidden="true"></i> Audit Logs
                   </a>
                   <a href="/status" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                      {% if request and request.url.path == '/status' %}aria-current="page"{% endif %}>
-                    <i class="fas fa-circle-dot w-4 mr-2 text-gray-500" aria-hidden="true"></i> Status
+                    <i class="fas fa-circle-dot w-4 mr-2 text-gray-500" aria-hidden="true"></i> {{ _("nav.status") }}
                   </a>
                   <div class="border-t border-gray-100 my-1"></div>
                   <a href="/admin/api-docs" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                    <i class="fas fa-code w-4 mr-2 text-teal-500" aria-hidden="true"></i> API Docs
+                    <i class="fas fa-code w-4 mr-2 text-teal-500" aria-hidden="true"></i> {{ _("nav.api_docs") }}
                   </a>
                   <a href="/developer-docs/" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                    <i class="fas fa-book w-4 mr-2 text-teal-500" aria-hidden="true"></i> Developer Docs
+                    <i class="fas fa-book w-4 mr-2 text-teal-500" aria-hidden="true"></i> {{ _("nav.developer_docs") }}
                   </a>
                 </div>
               </div>
@@ -194,18 +200,18 @@
             <!-- Help – always visible, for every visitor regardless of auth state -->
             <a href="/help"
                class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
-               aria-label="Help Center"
-               title="Help Center"
+               aria-label="{{ _('nav.help_center') }}"
+               title="{{ _('nav.help_center') }}"
                {% if request and request.url.path == '/help' %}aria-current="page"{% endif %}>
-              <i class="fas fa-circle-question mr-1 text-gray-400" aria-hidden="true"></i>Help
+              <i class="fas fa-circle-question mr-1 text-gray-400" aria-hidden="true"></i>{{ _("nav.help") }}
             </a>
 
             <!-- Bell notification icon -->
             <a href="/notifications"
                id="notificationBell"
                class="relative p-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-               aria-label="Notifications"
-               title="Notifications"
+               aria-label="{{ _('nav.notifications') }}"
+               title="{{ _('nav.notifications') }}"
                {% if request and request.url.path == '/notifications' %}aria-current="page"{% endif %}>
               <i class="fas fa-bell" aria-hidden="true"></i>
               <span id="notificationBadge"
@@ -213,14 +219,59 @@
                     aria-live="polite"></span>
             </a>
 
+            <!-- Language selector dropdown -->
+            <div x-data="{ langOpen: false }" class="relative">
+              <button
+                @click="langOpen = !langOpen"
+                @click.outside="langOpen = false"
+                type="button"
+                class="p-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                aria-label="{{ _('language.selector') }}"
+                title="{{ _('language.selector') }}"
+                :aria-expanded="langOpen"
+                aria-haspopup="true"
+              >
+                <i class="fas fa-globe"></i>
+              </button>
+              <div
+                x-show="langOpen"
+                x-transition:enter="transition ease-out duration-100 transform"
+                x-transition:enter-start="opacity-0 scale-95"
+                x-transition:enter-end="opacity-100 scale-100"
+                x-transition:leave="transition ease-in duration-75 transform"
+                x-transition:leave-start="opacity-100 scale-100"
+                x-transition:leave-end="opacity-0 scale-95"
+                class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50"
+                role="menu"
+                aria-label="{{ _('language.selector') }}"
+              >
+                <div class="py-1">
+                  {% for lang in supported_languages %}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    class="flex items-center w-full px-4 py-2 text-sm text-left hover:bg-gray-100 {% if current_locale == lang.code %}bg-blue-50 text-blue-700 font-medium{% else %}text-gray-700{% endif %}"
+                    onclick="setLanguage('{{ lang.code }}')"
+                  >
+                    <span class="mr-2">{{ lang.flag }}</span>
+                    <span>{{ lang.native }}</span>
+                    {% if current_locale == lang.code %}
+                    <i class="fas fa-check ml-auto text-blue-500" aria-hidden="true"></i>
+                    {% endif %}
+                  </button>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+
             <!-- Dark mode toggle -->
             <button
               id="darkModeToggle"
               onclick="toggleDarkMode()"
               type="button"
               class="p-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-              aria-label="Toggle dark mode"
-              title="Toggle dark mode"
+              aria-label="{{ _('nav.toggle_dark_mode') }}"
+              title="{{ _('nav.toggle_dark_mode') }}"
             >
               <i class="fas fa-moon"></i>
             </button>
@@ -235,10 +286,10 @@
             type="button"
             class="md:hidden inline-flex items-center justify-center p-3 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
             style="min-height:44px;min-width:44px;"
-            aria-label="Toggle navigation menu"
+            aria-label="{{ _('nav.toggle_nav') }}"
             :aria-expanded="mobileMenuOpen"
           >
-            <span class="sr-only">Open main menu</span>
+            <span class="sr-only">{{ _("nav.open_main_menu") }}</span>
             <svg class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
@@ -262,12 +313,12 @@
               <a href="/pricing"
                  class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
                  {% if request and request.url.path == '/pricing' %}aria-current="page"{% endif %}>
-                <i class="fas fa-tag mr-2 text-gray-400" aria-hidden="true"></i>Pricing
+                <i class="fas fa-tag mr-2 text-gray-400" aria-hidden="true"></i>{{ _("nav.pricing") }}
               </a>
               <a href="/about"
                  class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
                  {% if request and request.url.path == '/about' %}aria-current="page"{% endif %}>
-                <i class="fas fa-info-circle mr-2 text-gray-400" aria-hidden="true"></i>About
+                <i class="fas fa-info-circle mr-2 text-gray-400" aria-hidden="true"></i>{{ _("nav.about") }}
               </a>
 
               {% else %}
@@ -275,87 +326,87 @@
               <a href="/"
                  class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
                  {% if request and request.url.path == '/' %}aria-current="page"{% endif %}>
-                <i class="fas fa-home mr-2 text-gray-400" aria-hidden="true"></i>Dashboard
+                <i class="fas fa-home mr-2 text-gray-400" aria-hidden="true"></i>{{ _("nav.dashboard") }}
               </a>
               <a href="/upload"
                  class="block px-3 py-3 rounded-md text-base font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50"
                  {% if request and request.url.path == '/upload' %}aria-current="page"{% endif %}>
-                <i class="fas fa-upload mr-2" aria-hidden="true"></i>Upload
+                <i class="fas fa-upload mr-2" aria-hidden="true"></i>{{ _("nav.upload") }}
               </a>
               <a href="/files"
                  class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
                  {% if request and request.url.path == '/files' %}aria-current="page"{% endif %}>
-                <i class="fas fa-folder-open mr-2 text-gray-400" aria-hidden="true"></i>Files
+                <i class="fas fa-folder-open mr-2 text-gray-400" aria-hidden="true"></i>{{ _("nav.files") }}
               </a>
               <a href="/search"
                  class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
                  {% if request and request.url.path == '/search' %}aria-current="page"{% endif %}>
-                <i class="fas fa-search mr-2 text-gray-400" aria-hidden="true"></i>Search
+                <i class="fas fa-search mr-2 text-gray-400" aria-hidden="true"></i>{{ _("nav.search") }}
               </a>
               <a href="/pipelines"
                  class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
                  {% if request and request.url.path == '/pipelines' %}aria-current="page"{% endif %}>
-                <i class="fas fa-project-diagram mr-2 text-gray-400" aria-hidden="true"></i>Pipelines
+                <i class="fas fa-project-diagram mr-2 text-gray-400" aria-hidden="true"></i>{{ _("nav.pipelines") }}
               </a>
               <a href="/integrations"
                  class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
                  {% if request and request.url.path == '/integrations' %}aria-current="page"{% endif %}>
-                <i class="fas fa-plug mr-2 text-gray-400" aria-hidden="true"></i>Integrations
+                <i class="fas fa-plug mr-2 text-gray-400" aria-hidden="true"></i>{{ _("nav.integrations") }}
               </a>
               <a href="/notifications"
                  class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
                  {% if request and request.url.path == '/notifications' %}aria-current="page"{% endif %}>
-                <i class="fas fa-bell mr-2 text-gray-400" aria-hidden="true"></i>Notifications
+                <i class="fas fa-bell mr-2 text-gray-400" aria-hidden="true"></i>{{ _("nav.notifications") }}
               </a>
 
               <!-- Admin section in mobile menu – shown only for admin users via JS -->
               <div id="mobileAdminSection" class="hidden">
                 <div class="border-t border-gray-200 mt-1 pt-1">
                   <p class="px-3 py-1 text-xs font-semibold text-red-600 uppercase tracking-wider flex items-center">
-                    <i class="fas fa-shield-alt mr-1" aria-hidden="true"></i> Admin
+                    <i class="fas fa-shield-alt mr-1" aria-hidden="true"></i> {{ _("nav.admin") }}
                   </p>
                   <a href="/settings" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    <i class="fas fa-cog mr-2 text-gray-400" aria-hidden="true"></i> Settings
+                    <i class="fas fa-cog mr-2 text-gray-400" aria-hidden="true"></i> {{ _("nav.settings") }}
                   </a>
                   <a href="/admin/users" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    <i class="fas fa-users mr-2 text-blue-400" aria-hidden="true"></i> Users
+                    <i class="fas fa-users mr-2 text-blue-400" aria-hidden="true"></i> {{ _("nav.users") }}
                   </a>
                   <a href="/admin/plans" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    <i class="fas fa-layer-group mr-2 text-indigo-400" aria-hidden="true"></i> Plan Designer
+                    <i class="fas fa-layer-group mr-2 text-indigo-400" aria-hidden="true"></i> {{ _("nav.plan_designer") }}
                   </a>
                   <a href="/admin/credentials" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    <i class="fas fa-key mr-2 text-yellow-400" aria-hidden="true"></i> Credentials
+                    <i class="fas fa-key mr-2 text-yellow-400" aria-hidden="true"></i> {{ _("nav.credentials") }}
                   </a>
                   <a href="/admin/files" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    <i class="fas fa-folder-open mr-2 text-gray-400" aria-hidden="true"></i> File Manager
+                    <i class="fas fa-folder-open mr-2 text-gray-400" aria-hidden="true"></i> {{ _("nav.file_manager") }}
                   </a>
                   <a href="/duplicates" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    <i class="fas fa-clone mr-2 text-orange-400" aria-hidden="true"></i> Duplicates
+                    <i class="fas fa-clone mr-2 text-orange-400" aria-hidden="true"></i> {{ _("nav.duplicates") }}
                   </a>
                   <a href="/similarity" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    <i class="fas fa-sitemap mr-2 text-purple-400" aria-hidden="true"></i> Similarity
+                    <i class="fas fa-sitemap mr-2 text-purple-400" aria-hidden="true"></i> {{ _("nav.similarity") }}
                   </a>
                   <a href="/admin/queue" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    <i class="fas fa-stream mr-2 text-blue-400" aria-hidden="true"></i> Queue Monitor
+                    <i class="fas fa-stream mr-2 text-blue-400" aria-hidden="true"></i> {{ _("nav.queue_monitor") }}
                   </a>
                   <a href="/admin/scheduled-jobs" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    <i class="fas fa-clock mr-2 text-indigo-500" aria-hidden="true"></i> Scheduled Jobs
+                    <i class="fas fa-clock mr-2 text-indigo-500" aria-hidden="true"></i> {{ _("nav.scheduled_jobs") }}
                   </a>
                   <a href="/admin/compliance" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
                     <i class="fas fa-check-double mr-2 text-green-500" aria-hidden="true"></i> Compliance
                   </a>
                   <a href="/admin/backup" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    <i class="fas fa-database mr-2 text-green-500" aria-hidden="true"></i> Backup &amp; Restore
+                    <i class="fas fa-database mr-2 text-green-500" aria-hidden="true"></i> {{ _("nav.backup_restore") }}
                   </a>
                   <a href="/status" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
                      {% if request and request.url.path == '/status' %}aria-current="page"{% endif %}>
-                    <i class="fas fa-circle-dot mr-2 text-gray-400" aria-hidden="true"></i> Status
+                    <i class="fas fa-circle-dot mr-2 text-gray-400" aria-hidden="true"></i> {{ _("nav.status") }}
                   </a>
                   <a href="/admin/api-docs" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    <i class="fas fa-code mr-2 text-teal-400" aria-hidden="true"></i> API Docs
+                    <i class="fas fa-code mr-2 text-teal-400" aria-hidden="true"></i> {{ _("nav.api_docs") }}
                   </a>
                   <a href="/developer-docs/" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    <i class="fas fa-book mr-2 text-teal-400" aria-hidden="true"></i> Developer Docs
+                    <i class="fas fa-book mr-2 text-teal-400" aria-hidden="true"></i> {{ _("nav.developer_docs") }}
                   </a>
                 </div>
               </div>
@@ -365,9 +416,9 @@
               <!-- Help – always visible, for every visitor regardless of auth state -->
               <a href="/help"
                  class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
-                 aria-label="Help Center"
+                 aria-label="{{ _('nav.help_center') }}"
                  {% if request and request.url.path == '/help' %}aria-current="page"{% endif %}>
-                <i class="fas fa-circle-question mr-2 text-gray-400" aria-hidden="true"></i>Help
+                <i class="fas fa-circle-question mr-2 text-gray-400" aria-hidden="true"></i>{{ _("nav.help") }}
               </a>
 
               <!-- Dark mode toggle (mobile) -->
@@ -376,10 +427,10 @@
                 type="button"
                 class="flex items-center w-full px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
                 id="darkModeToggleMobile"
-                aria-label="Toggle dark mode"
+                aria-label="{{ _('nav.toggle_dark_mode') }}"
               >
                 <i class="fas fa-moon mr-2" id="darkModeIconMobile" aria-hidden="true"></i>
-                <span id="darkModeTextMobile">Dark Mode</span>
+                <span id="darkModeTextMobile">{{ _("nav.dark_mode") }}</span>
               </button>
 
               <!-- Mobile Auth / Account section (populated by common.js) -->
@@ -400,14 +451,14 @@
     <!-- Footer -->
     <footer class="bg-white shadow" role="contentinfo">
       <div class="max-w-7xl mx-auto px-4 py-4 text-center text-gray-600">
-        DocuElevate 2025 -
-        <nav aria-label="Footer navigation" class="inline">
-        <a href="/privacy" class="text-blue-500 hover:underline">Privacy</a> -
-        <a href="/imprint" class="text-blue-500 hover:underline">Imprint</a> -
-        <a href="/terms" class="text-blue-500 hover:underline">Terms</a> -
-        <a href="/cookies" class="text-blue-500 hover:underline">Cookies</a> -
-        <a href="/license" class="text-blue-500 hover:underline">License</a> -
-        <a href="/attribution" class="text-blue-500 hover:underline">Attributions</a>
+        {{ _("footer.copyright", year="2025") }} -
+        <nav aria-label="{{ _('footer.navigation') }}" class="inline">
+        <a href="/privacy" class="text-blue-500 hover:underline">{{ _("footer.privacy") }}</a> -
+        <a href="/imprint" class="text-blue-500 hover:underline">{{ _("footer.imprint") }}</a> -
+        <a href="/terms" class="text-blue-500 hover:underline">{{ _("footer.terms") }}</a> -
+        <a href="/cookies" class="text-blue-500 hover:underline">{{ _("footer.cookies") }}</a> -
+        <a href="/license" class="text-blue-500 hover:underline">{{ _("footer.license") }}</a> -
+        <a href="/attribution" class="text-blue-500 hover:underline">{{ _("footer.attributions") }}</a>
         </nav> -
         <span class="text-xs">Version {{ app_version|default(version, true) }}{% if release_name %} "{{ release_name }}"{% endif %}</span>
       </div>
@@ -422,19 +473,18 @@
          style="display:none!important"
          aria-live="polite"
          role="region"
-         aria-label="Cookie notice">
+         aria-label="{{ _('cookie.notice_label') }}">
       <p class="text-center sm:text-left">
-        DocuElevate uses only essential session cookies required for authentication and service operation.
-        No tracking or analytics cookies are used.
-        <a href="/cookies" class="underline hover:text-blue-300 ml-1">Cookie Policy</a> &middot;
-        <a href="/privacy" class="underline hover:text-blue-300 ml-1">Privacy Notice</a>
+        {{ _("cookie.notice") }}
+        <a href="/cookies" class="underline hover:text-blue-300 ml-1">{{ _("cookie.policy_link") }}</a> &middot;
+        <a href="/privacy" class="underline hover:text-blue-300 ml-1">{{ _("cookie.privacy_link") }}</a>
       </p>
       <button
         id="cookieNoticeAccept"
         type="button"
         class="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-1.5 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-        aria-label="Acknowledge cookie notice">
-        Got it
+        aria-label="{{ _('cookie.accept') }}">
+        {{ _("cookie.accept") }}
       </button>
     </div>
     <script>
@@ -456,6 +506,26 @@
 
     <!-- Common JS (shared) -->
     <script src="/static/js/common.js"></script>
+
+    <!-- Language selector -->
+    <script>
+      function setLanguage(langCode) {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]');
+        var headers = { 'Content-Type': 'application/json' };
+        if (csrfToken && csrfToken.content) {
+          headers['X-CSRF-Token'] = csrfToken.content;
+        }
+        fetch('/api/i18n/language', {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({ language: langCode })
+        }).then(function() {
+          window.location.reload();
+        }).catch(function() {
+          window.location.reload();
+        });
+      }
+    </script>
 
     <!-- Notification badge updater -->
     <script>

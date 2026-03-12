@@ -10,6 +10,116 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.118.0 (2026-03-11)
+
+### Features
+
+- **api**: Add GraphQL endpoint at /graphql with Strawberry
+  ([`a41ded5`](https://github.com/christianlouis/DocuElevate/commit/a41ded535f32d4892199208e1cab54cc189fde13))
+
+
+## v0.117.1 (2026-03-11)
+
+### Bug Fixes
+
+- Resolve all 47 failing tests in main
+  ([`df4c91a`](https://github.com/christianlouis/DocuElevate/commit/df4c91a58661e2ecf9fda15500e4ba1259674168))
+
+
+## v0.117.0 (2026-03-11)
+
+### Continuous Integration
+
+- Opt into Node.js 24 for all GitHub Actions workflows
+  ([`c306d80`](https://github.com/christianlouis/DocuElevate/commit/c306d80755193e4b12222c73ed4da442a2d5e23c))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`ab19ae5`](https://github.com/christianlouis/DocuElevate/commit/ab19ae57060ff2be8e9172714c5e3b308c45334d))
+
+- **changelog**: Update changelog [skip ci]
+  ([`c5b67fe`](https://github.com/christianlouis/DocuElevate/commit/c5b67fe36464b0756553cc54614d0f77273772ec))
+
+- **changelog**: Update changelog [skip ci]
+  ([`eb22a58`](https://github.com/christianlouis/DocuElevate/commit/eb22a580651b4de477b3b5cc945581776a6775fa))
+
+
+## Unreleased
+
+### Continuous Integration
+
+- Opt into Node.js 24 for all GitHub Actions workflows
+  ([`c306d80`](https://github.com/christianlouis/DocuElevate/commit/c306d80755193e4b12222c73ed4da442a2d5e23c))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`c5b67fe`](https://github.com/christianlouis/DocuElevate/commit/c5b67fe36464b0756553cc54614d0f77273772ec))
+
+- **changelog**: Update changelog [skip ci]
+  ([`eb22a58`](https://github.com/christianlouis/DocuElevate/commit/eb22a580651b4de477b3b5cc945581776a6775fa))
+
+
+## Unreleased
+
+### Continuous Integration
+
+- Opt into Node.js 24 for all GitHub Actions workflows
+  ([`c306d80`](https://github.com/christianlouis/DocuElevate/commit/c306d80755193e4b12222c73ed4da442a2d5e23c))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`eb22a58`](https://github.com/christianlouis/DocuElevate/commit/eb22a580651b4de477b3b5cc945581776a6775fa))
+
+
+## Unreleased
+
+### Continuous Integration
+
+- Opt into Node.js 24 for all GitHub Actions workflows
+  ([`c306d80`](https://github.com/christianlouis/DocuElevate/commit/c306d80755193e4b12222c73ed4da442a2d5e23c))
+
+
+## v0.116.0 (2026-03-11)
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`d6fb787`](https://github.com/christianlouis/DocuElevate/commit/d6fb78715ae550f25a925bdc629eb2945f455009))
+
+### Testing
+
+- **views**: Add comprehensive coverage tests for 11 view modules
+  ([`c8987d9`](https://github.com/christianlouis/DocuElevate/commit/c8987d966bd949634d222a7809ec52c3ed258f81))
+
+- **views**: Boost coverage for 11 view modules toward 100%
+  ([`6fb1df1`](https://github.com/christianlouis/DocuElevate/commit/6fb1df1aade8a8c98c27fe50dbe44045cba1724d))
+
+
+## Unreleased
+
+### Testing
+
+- **views**: Add comprehensive coverage tests for 11 view modules
+  ([`c8987d9`](https://github.com/christianlouis/DocuElevate/commit/c8987d966bd949634d222a7809ec52c3ed258f81))
+
+- **views**: Boost coverage for 11 view modules toward 100%
+  ([`6fb1df1`](https://github.com/christianlouis/DocuElevate/commit/6fb1df1aade8a8c98c27fe50dbe44045cba1724d))
+
+
+## v0.115.0 (2026-03-10)
+
+
+## v0.114.1 (2026-03-10)
+
+### Bug Fixes
+
+- **db**: Add migration to create shared_links table for databases that skipped 025
+  ([`289dcc3`](https://github.com/christianlouis/DocuElevate/commit/289dcc375c111c8d71bd04ef31f184a0e6a3f6f2))
+
+
 ## v0.114.0 (2026-03-09)
 
 ### Bug Fixes
