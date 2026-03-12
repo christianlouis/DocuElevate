@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.121.1 (2026-03-12)
+
+### Bug Fixes
+
+- Remove duplicate Audit Logs nav entry and add login/logout audit log events
+  ([`1e8f433`](https://github.com/christianlouis/DocuElevate/commit/1e8f433419c5c7b0c551dffe05f107d2bb5a35a1))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`50ef607`](https://github.com/christianlouis/DocuElevate/commit/50ef6072935083554dd52a11cc6438891f177a8b))
+
+### Testing
+
+- **notifications**: Improve coverage for user_notification.py to 100%
+  ([`78204c2`](https://github.com/christianlouis/DocuElevate/commit/78204c2490ffd9ed0bcb62154c3da54fa9614450))
+
+
 ## Unreleased
 
 ### Testing
