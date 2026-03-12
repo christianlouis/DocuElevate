@@ -24,6 +24,7 @@ from app.tasks.imap_tasks import (
     release_lock,
     save_processed_emails,
 )
+from app.utils.allowed_types import ALL_CATEGORIES, DEFAULT_CATEGORIES, get_allowed_types_for_categories
 
 _TEST_CREDENTIAL = "pass"  # noqa: S105
 
@@ -182,27 +183,29 @@ class TestFetchAttachmentsAndEnqueue:
     @patch("app.tasks.imap_tasks.process_document")
     @patch("app.tasks.imap_tasks.convert_to_pdf")
     def test_skips_image_when_documents_only(self, mock_convert, mock_process):
-        """Test that image attachments are skipped with documents_only filter."""
+        """Test that image attachments are skipped with the default (documents-only) categories."""
         msg = EmailMessage()
         msg["Subject"] = "Photo"
         msg.add_attachment(b"\xff\xd8\xff", maintype="image", subtype="jpeg", filename="photo.jpg")
 
-        result = fetch_attachments_and_enqueue(msg, attachment_filter="documents_only")
+        doc_mime, doc_ext = get_allowed_types_for_categories(DEFAULT_CATEGORIES)
+        result = fetch_attachments_and_enqueue(msg, effective_mime_types=doc_mime, effective_extensions=doc_ext)
         assert result is False
         mock_process.delay.assert_not_called()
         mock_convert.delay.assert_not_called()
 
     @patch("app.tasks.imap_tasks.process_document")
     @patch("app.tasks.imap_tasks.convert_to_pdf")
-    def test_processes_image_when_all_filter(self, mock_convert, mock_process, tmp_path):
-        """Test that image attachments are processed with 'all' filter."""
+    def test_processes_image_when_all_categories(self, mock_convert, mock_process, tmp_path):
+        """Test that image attachments are processed when images category is included."""
         msg = EmailMessage()
         msg["Subject"] = "Photo"
         msg.add_attachment(b"\xff\xd8\xff", maintype="image", subtype="jpeg", filename="photo.jpg")
 
+        all_mime, all_ext = get_allowed_types_for_categories(ALL_CATEGORIES)
         with patch("app.tasks.imap_tasks.settings") as mock_settings:
             mock_settings.workdir = str(tmp_path)
-            result = fetch_attachments_and_enqueue(msg, attachment_filter="all")
+            result = fetch_attachments_and_enqueue(msg, effective_mime_types=all_mime, effective_extensions=all_ext)
 
         assert result is True
         mock_convert.delay.assert_called_once()
@@ -210,43 +213,43 @@ class TestFetchAttachmentsAndEnqueue:
     @patch("app.tasks.imap_tasks.process_document")
     @patch("app.tasks.imap_tasks.convert_to_pdf")
     def test_skips_image_with_image_extension_documents_only(self, mock_convert, mock_process):
-        """Test image files identified by extension are skipped with documents_only."""
+        """Test image files identified by extension are skipped with documents-only categories."""
         msg = EmailMessage()
         msg["Subject"] = "Screenshot"
         msg.add_attachment(b"\x89PNG", maintype="application", subtype="octet-stream", filename="screenshot.png")
 
-        result = fetch_attachments_and_enqueue(msg, attachment_filter="documents_only")
+        doc_mime, doc_ext = get_allowed_types_for_categories(DEFAULT_CATEGORIES)
+        result = fetch_attachments_and_enqueue(msg, effective_mime_types=doc_mime, effective_extensions=doc_ext)
         assert result is False
         mock_process.delay.assert_not_called()
         mock_convert.delay.assert_not_called()
 
     @patch("app.tasks.imap_tasks.process_document")
     @patch("app.tasks.imap_tasks.convert_to_pdf")
-    def test_processes_pdf_regardless_of_filter(self, mock_convert, mock_process, tmp_path):
-        """Test that PDFs are always processed, even with documents_only filter."""
+    def test_processes_pdf_regardless_of_categories(self, mock_convert, mock_process, tmp_path):
+        """Test that PDFs are always processed (pdf category always included in DEFAULT_CATEGORIES)."""
         msg = EmailMessage()
         msg["Subject"] = "Invoice"
         msg.add_attachment(b"%PDF-1.4", maintype="application", subtype="pdf", filename="invoice.pdf")
 
+        doc_mime, doc_ext = get_allowed_types_for_categories(DEFAULT_CATEGORIES)
         with patch("app.tasks.imap_tasks.settings") as mock_settings:
             mock_settings.workdir = str(tmp_path)
-            result = fetch_attachments_and_enqueue(msg, attachment_filter="documents_only")
+            result = fetch_attachments_and_enqueue(msg, effective_mime_types=doc_mime, effective_extensions=doc_ext)
 
         assert result is True
         mock_process.delay.assert_called_once()
 
     @patch("app.tasks.imap_tasks.process_document")
     @patch("app.tasks.imap_tasks.convert_to_pdf")
-    def test_uses_global_setting_when_no_filter(self, mock_convert, mock_process):
-        """Test that the global settings.imap_attachment_filter is used when no filter is passed."""
+    def test_uses_default_categories_when_no_types_provided(self, mock_convert, mock_process):
+        """Test that images are skipped when no effective_mime_types / extensions are passed (defaults to DEFAULT_CATEGORIES)."""
         msg = EmailMessage()
         msg["Subject"] = "Photo"
         msg.add_attachment(b"\xff\xd8\xff", maintype="image", subtype="jpeg", filename="photo.jpg")
 
-        with patch("app.tasks.imap_tasks.settings") as mock_settings:
-            mock_settings.imap_attachment_filter = "documents_only"
-            mock_settings.workdir = "/tmp"
-            result = fetch_attachments_and_enqueue(msg)
+        # No effective_mime_types passed → function defaults to DEFAULT_CATEGORIES (no images)
+        result = fetch_attachments_and_enqueue(msg)
 
         assert result is False
         mock_process.delay.assert_not_called()

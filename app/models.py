@@ -401,6 +401,48 @@ class PipelineStep(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class ImapIngestionProfile(Base):
+    """Named ingestion profile controlling which attachment types are accepted from IMAP emails.
+
+    Profiles group file-type categories (e.g. "pdf", "office", "images") so users
+    can precisely control what gets ingested from each mailbox.
+
+    System-provided built-in profiles (``is_builtin=True``) are seeded by the
+    migration and cannot be deleted or renamed.  Users may create their own profiles
+    (``owner_id`` set to their identifier) or rely on the global system profiles
+    (``owner_id=None``).
+
+    ``allowed_categories`` stores a JSON list of category strings, e.g.::
+
+        '["pdf", "office", "opendocument", "text", "web"]'
+
+    Valid category names are defined in ``app.utils.allowed_types.FILE_TYPE_CATEGORIES``.
+    """
+
+    __tablename__ = "imap_ingestion_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Human-readable profile name (e.g. "Documents Only", "Documents + Images")
+    name = Column(String(255), nullable=False)
+
+    # Optional description shown in the UI
+    description = Column(Text, nullable=True)
+
+    # Owner of this profile. NULL = global/system profile available to all users.
+    owner_id = Column(String, nullable=True, index=True)
+
+    # JSON-encoded list of enabled category keys.  Example: '["pdf","office","text"]'
+    # See FILE_TYPE_CATEGORIES in app/utils/allowed_types.py for valid values.
+    allowed_categories = Column(Text, nullable=False, default='["pdf","office","opendocument","text","web"]')
+
+    # Built-in system profiles that cannot be deleted or modified via the API.
+    is_builtin = Column(Boolean, nullable=False, default=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class UserImapAccount(Base):
     """Per-user IMAP ingestion account.
 
@@ -439,10 +481,9 @@ class UserImapAccount(Base):
     # When True, emails are deleted from the mailbox after their attachments are processed
     delete_after_process = Column(Boolean, nullable=False, default=False)
 
-    # Override for which attachment types to ingest.
-    # NULL means "inherit the global imap_attachment_filter setting".
-    # Allowed values: 'documents_only', 'all'
-    attachment_filter = Column(String(50), nullable=True, default=None)
+    # Optional reference to an ImapIngestionProfile.
+    # NULL means "use the global imap_attachment_filter setting" (system default).
+    profile_id = Column(Integer, ForeignKey("imap_ingestion_profiles.id"), nullable=True)
 
     # When False the account is not polled by the periodic task (but not deleted)
     is_active = Column(Boolean, nullable=False, default=True)

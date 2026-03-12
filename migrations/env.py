@@ -28,6 +28,7 @@ from app.models import (  # noqa: F401
     DocumentMetadata,
     FileProcessingStep,
     FileRecord,
+    ImapIngestionProfile,
     InAppNotification,
     LocalUser,
     MobileDevice,
