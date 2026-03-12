@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DocuElevate - Verify Your Email</title>
+    <title>{{ _("auth.verify_email_page_title") }}</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
           integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA=="
@@ -13,7 +13,7 @@
 <body class="bg-gray-100 min-h-screen flex items-center justify-center py-8">
     <main class="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center" role="main">
         <div class="flex justify-center mb-6">
-            <img src="/static/images/logo_writing.svg" alt="DocuElevate Logo" class="h-16">
+            <img src="/static/images/logo_writing.svg" alt="{{ _('auth.logo_alt') }}" class="h-16">
         </div>
 
         <div class="flex justify-center mb-4">
@@ -22,19 +22,19 @@
             </div>
         </div>
 
-        <h1 class="text-2xl font-bold text-gray-800 mb-2">Check your inbox</h1>
+        <h1 class="text-2xl font-bold text-gray-800 mb-2">{{ _("auth.verify_email_heading") }}</h1>
         <p class="text-gray-600 mb-6">
-            We've sent you a verification email. Please click the link in the email to activate your account.
+            {{ _("auth.verify_email_message") }}
         </p>
         <p class="text-sm text-gray-500 mb-8">
-            The link expires in 24 hours. If you don't see the email, check your spam folder.
+            {{ _("auth.verify_email_expiry") }}
         </p>
 
         <div
             x-data="{ email: '', loading: false, message: '', error: '' }"
             class="border-t border-gray-100 pt-6"
         >
-            <p class="text-sm text-gray-600 mb-3">Didn't receive it?</p>
+            <p class="text-sm text-gray-600 mb-3">{{ _("auth.verify_email_resend_prompt") }}</p>
 
             <div x-show="message" x-cloak
                  class="bg-green-100 border-l-4 border-green-500 text-green-700 p-3 mb-4 rounded text-sm"
@@ -73,14 +73,14 @@
                 novalidate
             >
                 <div>
-                    <label for="resend-email" class="sr-only">Email address</label>
+                    <label for="resend-email" class="sr-only">{{ _("auth.verify_email_resend_label") }}</label>
                     <input
                         type="email" id="resend-email" name="email"
                         x-model="email"
-                        placeholder="Enter your email address"
+                        placeholder="{{ _('auth.verify_email_resend_placeholder') }}"
                         autocomplete="email"
                         class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 text-sm"
-                        aria-label="Email address for resend"
+                        aria-label="{{ _('auth.verify_email_resend_aria_label') }}"
                         style="min-height:44px;"
                     >
                 </div>
@@ -90,9 +90,9 @@
                     class="w-full flex justify-center py-2 px-4 border border-indigo-600 rounded-md text-sm font-medium text-indigo-600 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                     style="min-height:44px;"
                 >
-                    <span x-show="!loading">Resend verification email</span>
+                    <span x-show="!loading">{{ _("auth.verify_email_resend_button") }}</span>
                     <span x-show="loading" x-cloak>
-                        <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Sending&hellip;
+                        <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>{{ _("common.loading") }}
                     </span>
                 </button>
             </form>
@@ -100,7 +100,7 @@
 
         <div class="mt-6 text-center">
             <a href="/login" class="text-sm font-medium text-blue-600 hover:text-blue-500">
-                Back to sign in
+                {{ _("auth.verify_email_back_sign_in") }}
             </a>
         </div>
     </main>

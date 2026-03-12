@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Document Similarity - DocuElevate{% endblock %}
+{% block title %}{{ _("similarity.page_title") }}{% endblock %}
 
 {% block head_extra %}
 <style>
@@ -97,45 +97,43 @@
 <main id="main-content" class="sim-container px-4 py-8">
   <h1 class="text-2xl font-bold mb-2">
     <i class="fas fa-project-diagram text-blue-500" aria-hidden="true"></i>
-    Document Similarity
+    {{ _("similarity.heading") }}
   </h1>
   <p class="text-gray-500 mb-6 text-sm">
-    Pairs of documents with high semantic similarity, ranked by score.
-    Embeddings are computed during document ingestion; a background task
-    also backfills any files that were processed before this feature was enabled.
+    {{ _("similarity.subtitle") }}
   </p>
 
   <!-- Embedding coverage stats -->
   <div class="stats-bar">
     <div class="stat-card">
       <div class="stat-value">{{ total_files }}</div>
-      <div class="stat-label">Total Files</div>
+      <div class="stat-label">{{ _("similarity.stat_total_files") }}</div>
     </div>
     <div class="stat-card">
       <div class="stat-value" style="color: #2563eb;">{{ files_with_embedding }}</div>
-      <div class="stat-label">With Embedding</div>
+      <div class="stat-label">{{ _("similarity.stat_with_embedding") }}</div>
     </div>
     <div class="stat-card">
       <div class="stat-value" style="color: {% if files_missing_embedding > 0 %}#d97706{% else %}#059669{% endif %};">
         {{ files_missing_embedding }}
       </div>
-      <div class="stat-label">Missing Embedding</div>
+      <div class="stat-label">{{ _("similarity.stat_missing_embedding") }}</div>
     </div>
     <div class="stat-card">
       <div class="stat-value text-sm" style="word-break: break-all;">{{ embedding_model }}</div>
-      <div class="stat-label">Embedding Model</div>
+      <div class="stat-label">{{ _("similarity.stat_embedding_model") }}</div>
     </div>
   </div>
 
   {% if files_missing_embedding > 0 %}
   <div style="background: #fffff0; border: 1px solid #fefcbf; border-radius: 0.5rem; padding: 0.75rem 1rem; margin-bottom: 1.5rem; font-size: 0.85rem; color: #975a16;">
     <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
-    <strong>{{ files_missing_embedding }}</strong> file(s) have OCR text but no embedding yet.
-    The background task will compute them automatically every 5 minutes, or you can
+    <strong>{{ files_missing_embedding }}</strong> {{ _("similarity.files_missing_text") }}
+    {{ _("similarity.backfill_auto") }}
     <button onclick="triggerBackfill()" id="backfill-btn"
             style="background: #d97706; color: white; border: none; padding: 0.2rem 0.6rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.8rem; min-height: 44px; min-width: 44px;"
-            aria-label="Trigger embedding computation for all files missing embeddings">
-      trigger it now
+            aria-label="{{ _('similarity.trigger_aria') }}">
+      {{ _("similarity.trigger_now") }}
     </button>.
   </div>
   {% endif %}
@@ -144,12 +142,12 @@
   <div class="controls">
     <form id="pairsForm" onsubmit="loadPairs(event)" class="controls-form">
       <div class="flex flex-col gap-1">
-        <label for="pairThreshold">Min. similarity</label>
+        <label for="pairThreshold">{{ _("similarity.min_similarity_label") }}</label>
         <input type="number" id="pairThreshold" min="0" max="1" step="0.05"
                value="{{ default_threshold }}" style="min-height:44px;">
       </div>
       <div class="flex flex-col gap-1">
-        <label for="pairLimit">Per page</label>
+        <label for="pairLimit">{{ _("similarity.per_page_label") }}</label>
         <select id="pairLimit" style="min-height:44px;">
           <option value="25">25</option>
           <option value="50" selected>50</option>
@@ -159,7 +157,7 @@
       <button type="submit"
               style="min-height:44px; background-color: #2563eb; color: white; font-weight: 700;
                      padding: 0 1.25rem; border: none; border-radius: 0.5rem; cursor: pointer;">
-        <i class="fas fa-search" aria-hidden="true"></i> Find Pairs
+        <i class="fas fa-search" aria-hidden="true"></i> {{ _("similarity.find_pairs_btn") }}
       </button>
     </form>
   </div>
@@ -167,23 +165,23 @@
   <!-- Results area -->
   <div id="pairs-loading" style="text-align: center; padding: 2rem; color: #718096;">
     <i class="fas fa-spinner fa-spin" aria-hidden="true" style="font-size: 1.5rem; margin-bottom: 0.5rem;"></i>
-    <p>Scanning for similar document pairs…</p>
+    <p>{{ _("similarity.scanning") }}</p>
   </div>
   <div id="pairs-content" style="display: none;" aria-live="polite"></div>
   <div id="pairs-empty" style="display: none;" class="empty-state">
     <i class="fas fa-check-circle text-green-400" aria-hidden="true"></i>
-    <p class="font-semibold text-lg text-gray-700">No similar pairs found</p>
+    <p class="font-semibold text-lg text-gray-700">{{ _("similarity.no_pairs_heading") }}</p>
     <p class="text-sm mt-1" id="pairs-empty-detail">
-      No document pairs exceed the similarity threshold.
+      {{ _("similarity.no_pairs_detail") }}
     </p>
   </div>
   <div id="pairs-error" style="display: none;" class="empty-state">
     <i class="fas fa-exclamation-triangle text-red-400" aria-hidden="true"></i>
-    <p class="font-semibold text-lg text-gray-700" id="pairs-error-msg">Failed to load pairs.</p>
+    <p class="font-semibold text-lg text-gray-700" id="pairs-error-msg">{{ _("similarity.load_error") }}</p>
   </div>
 
   <!-- Pagination -->
-  <nav id="pairs-pagination" class="pagination" style="display: none;" aria-label="Similarity pairs pagination"></nav>
+  <nav id="pairs-pagination" class="pagination" style="display: none;" aria-label="{{ _('similarity.pagination_aria') }}"></nav>
 </main>
 {% endblock %}
 

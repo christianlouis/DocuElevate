@@ -1,69 +1,63 @@
 {% extends "base.html" %}
-{% block title %}About DocuElevate{% endblock %}
+{% block title %}{{ _("about.page_title") }}{% endblock %}
 
 {% block content %}
 <div class="container mx-auto px-4 py-8">
-  <h1 class="text-4xl font-bold mb-4">About DocuElevate</h1>
+  <h1 class="text-4xl font-bold mb-4">{{ _("about.heading") }}</h1>
   <p class="text-gray-700 mb-6 leading-relaxed">
-    Welcome to <strong>DocuElevate</strong> – your modern, intelligent solution for document processing!
-    We've built DocuElevate to completely transform the way you handle your documents – from upload
-    to extraction, from processing to storage.
+    {{ _("about.intro_pre") }}<strong>{{ _("app.name") }}</strong>{{ _("about.intro_post") }}
   </p>
 
   <!-- Our Story Section -->
   <section class="bg-white shadow rounded p-6 mb-8">
-    <h2 class="text-2xl font-semibold mb-2">Our Story</h2>
+    <h2 class="text-2xl font-semibold mb-2">{{ _("about.story_heading") }}</h2>
     <p class="text-gray-600 mb-4">
-      DocuElevate was created with one goal in mind: to simplify and streamline document management
-      for everyone, whether you're a small startup or a large enterprise.
+      {{ _("about.story_p1") }}
     </p>
     <p class="text-gray-600">
-      We harness the power of pluggable AI providers (OpenAI, Anthropic Claude, Google Gemini, Ollama,
-      OpenRouter, Portkey, and more) for metadata extraction and text refinement, integrate seamlessly
-      with Dropbox, Nextcloud, and Paperless NGX for storage and indexing, leverage Azure Document
-      Intelligence for OCR, and even use Gotenberg for file-to-PDF conversions.
+      {{ _("about.story_p2") }}
     </p>
   </section>
 
   <!-- Key Features Section - Updated with more comprehensive features -->
   <section class="bg-white shadow rounded p-6 mb-8">
-    <h2 class="text-2xl font-semibold mb-2">Key Features</h2>
+    <h2 class="text-2xl font-semibold mb-2">{{ _("about.features_heading") }}</h2>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <h3 class="font-medium text-lg text-gray-800">Document Processing</h3>
+        <h3 class="font-medium text-lg text-gray-800">{{ _("about.features_processing_heading") }}</h3>
         <ul class="list-disc list-inside text-gray-600 ml-2">
-          <li>Simple and secure file uploads with drag & drop support</li>
-          <li>OCR powered by Azure Document Intelligence</li>
-          <li>Automated metadata extraction using a pluggable AI provider</li>
-          <li>PDF conversion for various file formats via Gotenberg</li>
-          <li>Intelligent document classification and date extraction</li>
+          <li>{{ _("about.features_processing_upload") }}</li>
+          <li>{{ _("about.features_processing_ocr") }}</li>
+          <li>{{ _("about.features_processing_metadata") }}</li>
+          <li>{{ _("about.features_processing_pdf") }}</li>
+          <li>{{ _("about.features_processing_classification") }}</li>
         </ul>
       </div>
       <div>
-        <h3 class="font-medium text-lg text-gray-800">Integration & Storage</h3>
+        <h3 class="font-medium text-lg text-gray-800">{{ _("about.features_integration_heading") }}</h3>
         <ul class="list-disc list-inside text-gray-600 ml-2">
-          <li>Multi-destination support (store documents in multiple locations)</li>
-          <li>Cloud storage: Dropbox, Google Drive, OneDrive, Amazon S3</li>
-          <li>Self-hosted options: Nextcloud, Paperless NGX, WebDAV</li>
-          <li>Transfer protocols: FTP, SFTP, Email forwarding</li>
+          <li>{{ _("about.features_integration_multi_dest") }}</li>
+          <li>{{ _("about.features_integration_cloud") }}</li>
+          <li>{{ _("about.features_integration_selfhosted") }}</li>
+          <li>{{ _("about.features_integration_protocols") }}</li>
         </ul>
       </div>
       <div>
-        <h3 class="font-medium text-lg text-gray-800">Automation</h3>
+        <h3 class="font-medium text-lg text-gray-800">{{ _("about.features_automation_heading") }}</h3>
         <ul class="list-disc list-inside text-gray-600 ml-2">
-          <li>IMAP inbox polling from multiple sources</li>
-          <li>Gmail and generic email account integration</li>
-          <li>Automated document ingestion from various inputs</li>
-          <li>Background processing with Redis and Celery</li>
+          <li>{{ _("about.features_automation_imap") }}</li>
+          <li>{{ _("about.features_automation_gmail") }}</li>
+          <li>{{ _("about.features_automation_ingestion") }}</li>
+          <li>{{ _("about.features_automation_background") }}</li>
         </ul>
       </div>
       <div>
-        <h3 class="font-medium text-lg text-gray-800">Administration</h3>
+        <h3 class="font-medium text-lg text-gray-800">{{ _("about.features_admin_heading") }}</h3>
         <ul class="list-disc list-inside text-gray-600 ml-2">
-          <li>Powerful REST API for programmatic access</li>
-          <li>OAuth2 authentication support with Authentik</li>
-          <li>Highly configurable via environment variables</li>
-          <li>Docker-ready for easy deployment and scaling</li>
+          <li>{{ _("about.features_admin_api") }}</li>
+          <li>{{ _("about.features_admin_oauth2") }}</li>
+          <li>{{ _("about.features_admin_config") }}</li>
+          <li>{{ _("about.features_admin_docker") }}</li>
         </ul>
       </div>
     </div>
@@ -71,43 +65,43 @@
 
   <!-- Meet the Creator Section -->
   <section class="bg-white shadow rounded p-6 mb-8">
-    <h2 class="text-2xl font-semibold mb-2">Meet the Creator</h2>
+    <h2 class="text-2xl font-semibold mb-2">{{ _("about.creator_heading") }}</h2>
     <p class="text-gray-600">
-      DocuElevate is passionately developed by
-      <a href="https://www.christianlouis.de" target="_blank" class="text-blue-600 hover:underline">Christian Krakau-Louis</a>.
+      {{ _("about.creator_pre") }}
+      <a href="https://www.christianlouis.de" target="_blank" class="text-blue-600 hover:underline">{{ _("about.creator_name") }}</a>.
     </p>
   </section>
 
   <!-- Privacy & Legal Section -->
   <section class="bg-white shadow rounded p-6 mb-8">
-    <h2 class="text-2xl font-semibold mb-2">Privacy & Legal</h2>
+    <h2 class="text-2xl font-semibold mb-2">{{ _("about.legal_heading") }}</h2>
     <p class="text-gray-600 mb-4">
-      We care about your privacy and data security. Please review our:
+      {{ _("about.legal_description") }}
     </p>
     <div class="flex space-x-4">
-      <a href="/privacy" class="text-blue-600 hover:underline">Privacy Notice</a>
-      <a href="/license" class="text-blue-600 hover:underline">License Information</a>
+      <a href="/privacy" class="text-blue-600 hover:underline">{{ _("about.legal_privacy") }}</a>
+      <a href="/license" class="text-blue-600 hover:underline">{{ _("about.legal_license") }}</a>
     </div>
   </section>
 
   <!-- Links Section -->
   <section class="bg-white shadow rounded p-6">
-    <h2 class="text-2xl font-semibold mb-2">Get Involved</h2>
+    <h2 class="text-2xl font-semibold mb-2">{{ _("about.involved_heading") }}</h2>
     <p class="text-gray-600 mb-4">
-      Want to dive into the code, contribute ideas, or learn more about DocuElevate?
+      {{ _("about.involved_description") }}
     </p>
     <div class="flex flex-col space-y-3">
       <a href="https://github.com/christianlouis/DocuElevate" target="_blank" class="flex items-center space-x-2 text-blue-600 hover:text-blue-800">
-        <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub Logo" class="h-6 w-6" />
-        <span>View DocuElevate on GitHub</span>
+        <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="{{ _('about.github_logo_alt') }}" class="h-6 w-6" />
+        <span>{{ _("about.involved_github") }}</span>
       </a>
       <a href="https://www.docuelevate.org" target="_blank" class="flex items-center space-x-2 text-blue-600 hover:text-blue-800">
         <i class="fas fa-globe h-6 w-6"></i>
-        <span>Visit DocuElevate Website</span>
+        <span>{{ _("about.involved_website") }}</span>
       </a>
       <a href="https://docuelevate.readthedocs.io" target="_blank" class="flex items-center space-x-2 text-blue-600 hover:text-blue-800">
         <i class="fas fa-book h-6 w-6"></i>
-        <span>Read the Documentation</span>
+        <span>{{ _("about.involved_docs") }}</span>
       </a>
     </div>
   </section>

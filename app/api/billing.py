@@ -30,6 +30,7 @@ from app.auth import require_login
 from app.config import settings
 from app.database import get_db
 from app.models import SubscriptionPlan, UserProfile
+from app.utils.i18n import translate as _translate
 from app.utils.user_scope import get_current_owner_id
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,7 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 
 _templates_dir = pathlib.Path(__file__).parents[2] / "frontend" / "templates"
 _templates = Jinja2Templates(directory=str(_templates_dir))
+_templates.env.globals["_"] = lambda key, **kwargs: _translate(key, "en", **kwargs)
 
 
 def _get_stripe() -> stripe.StripeClient | None:

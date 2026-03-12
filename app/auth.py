@@ -22,6 +22,7 @@ from app.middleware.audit_log import get_client_ip
 # Guards at call-sites ensure they are never *called* in single-user mode.
 from app.models import LocalUser as _LocalUser
 from app.models import UserProfile as _UserProfile
+from app.utils.i18n import translate as _translate
 from app.utils.local_auth import build_session_user as _build_session_user
 from app.utils.local_auth import verify_password as _verify_password
 
@@ -34,6 +35,7 @@ AUTH_ENABLED = settings.auth_enabled
 # Set up templates for authentication
 templates_dir = pathlib.Path(__file__).parents[1] / "frontend" / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
+templates.env.globals["_"] = lambda key, **kwargs: _translate(key, "en", **kwargs)
 
 # Configure OAuth provider if credentials are provided
 OAUTH_CONFIGURED = False

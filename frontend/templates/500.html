@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Server Error - DocuElevate{% endblock %}
+{% block title %}{{ _("error.500_title") }}{% endblock %}
 
 {% block content %}
 <div class="relative isolate px-6 pt-14 lg:px-8">
@@ -7,27 +7,27 @@
   <div class="mx-auto max-w-3xl py-12">
     <img
       src="/static/explosion.jpg"
-      alt="Illustration of a server error"
+      alt="{{ _('error.500_img_alt') }}"
       class="mx-auto rounded-xl shadow-xl h-[300px] w-full object-cover"
     />
   </div>
 
   <div class="mx-auto max-w-3xl text-center">
-    <h1 class="text-7xl font-bold text-red-500">500</h1>
+    <h1 class="text-7xl font-bold text-red-500">{{ _("error.500_code") }}</h1>
     <p class="mt-4 text-4xl font-semibold tracking-tight text-gray-900">
-      Oops! Something Went Wrong.
+      {{ _("error.500_heading") }}
     </p>
     <p class="mt-4 text-lg leading-8 text-gray-600">
-      Our servers encountered a mishap and need a moment. Maybe the hamsters spilled their coffee?
+      {{ _("error.500_message1") }}
     </p>
     <p class="mt-2 text-lg leading-8 text-gray-600">
-      We're already on it—sorting files, rebooting servers, and recalibrating flux capacitors.
+      {{ _("error.500_message2") }}
     </p>
 
     {% if exc %}
     <details class="mt-8 bg-gray-100 rounded-lg p-4 text-left shadow-md">
       <summary class="cursor-pointer font-medium text-blue-600 hover:text-blue-700">
-        Show Debug Info
+        {{ _("error.500_debug_info") }}
       </summary>
       <pre class="mt-4 text-sm text-gray-700 overflow-auto">{{ exc }}</pre>
     </details>
@@ -35,7 +35,7 @@
 
     <div class="mt-10">
       <a href="/" class="inline-block bg-blue-600 px-6 py-3 rounded-md text-white font-semibold shadow-md hover:bg-blue-700 transition-colors">
-        &larr; Go Home
+        &larr; {{ _("error.500_home") }}
       </a>
     </div>
   </div>
