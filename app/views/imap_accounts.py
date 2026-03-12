@@ -7,7 +7,7 @@ from fastapi import Request
 from sqlalchemy.orm import Session
 
 from app.models import ImapIngestionProfile, UserImapAccount
-from app.utils.allowed_types import FILE_TYPE_CATEGORIES
+from app.utils.allowed_types import DEFAULT_CATEGORIES, FILE_TYPE_CATEGORIES
 from app.utils.subscription import get_tier, get_user_tier_id
 from app.utils.user_scope import get_current_owner_id
 from app.views.base import APIRouter, Depends, get_db, require_login, templates
@@ -68,18 +68,13 @@ async def imap_accounts_page(request: Request, db: Session = Depends(get_db)):
         can_add = max_mailboxes is None or (max_mailboxes > 0 and current_count < max_mailboxes)
 
     # Load ingestion profiles: system-global + user's own
-    profiles: list[ImapIngestionProfile] = (
+    profiles = (
         db.query(ImapIngestionProfile)
         .filter(
-            (ImapIngestionProfile.owner_id == None)  # noqa: E711
-            | (ImapIngestionProfile.owner_id == owner_id)
+            # SQLAlchemy requires `== None` for IS NULL comparison in ORM filters
+            (ImapIngestionProfile.owner_id == None) | (ImapIngestionProfile.owner_id == owner_id)  # noqa: E711
         )
         .order_by(ImapIngestionProfile.is_builtin.desc(), ImapIngestionProfile.id)
-        .all()
-        if owner_id
-        else db.query(ImapIngestionProfile)
-        .filter(ImapIngestionProfile.owner_id == None)  # noqa: E711
-        .order_by(ImapIngestionProfile.id)
         .all()
     )
 
@@ -100,6 +95,7 @@ async def imap_accounts_page(request: Request, db: Session = Depends(get_db)):
             "accounts": accounts,
             "profiles": [_serialize_profile(p) for p in profiles],
             "categories": categories,
+            "default_categories": DEFAULT_CATEGORIES,
             "current_count": current_count,
             "max_mailboxes": max_mailboxes,
             "can_add": can_add,

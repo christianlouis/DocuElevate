@@ -69,30 +69,47 @@ By default, DocuElevate only ingests **document** attachments (PDFs, Word, Excel
 
 #### Global Default (Admin Setting)
 
-Set the `IMAP_ATTACHMENT_FILTER` environment variable to control the system-wide default:
+Set the `IMAP_ATTACHMENT_FILTER` environment variable to control the system-wide fallback when no ingestion profile is assigned to a mailbox:
 
 | Value | Behaviour |
 |-------|-----------|
-| `documents_only` | **(Default)** Only PDFs and office/document files. Images (JPEG, PNG, GIF, BMP, TIFF, WebP, SVG) are skipped. |
+| `documents_only` | **(Default)** Only PDFs and office/document files. Images are skipped. |
 | `all` | All supported file types, including images. |
 
 ```env
-# Only ingest document-type attachments (default behaviour)
 IMAP_ATTACHMENT_FILTER=documents_only
-
-# Ingest all supported file types, including images
-IMAP_ATTACHMENT_FILTER=all
 ```
 
-#### Per-User Override
+#### Ingestion Profiles (Fine-Grained Per-Mailbox Control)
 
-Each user can override the global default for their personal IMAP accounts via the **Email Ingestion** dashboard (`/imap-accounts`). When creating or editing an account, select the desired setting from the **Attachment Types to Ingest** dropdown:
+For precise control, you can create **Ingestion Profiles** that let you pick exactly which file-type categories to accept from each mailbox. This is more powerful than the binary global toggle and works independently per mailbox.
 
-- **Use global default** — inherits the `IMAP_ATTACHMENT_FILTER` setting above.
-- **Documents only** — PDFs and office files, no images.
-- **All supported types (including images)** — overrides the global setting to allow images for this specific account.
+**Available categories:**
 
-This allows administrators to restrict image ingestion system-wide while individual users can opt-in to image ingestion on a per-mailbox basis.
+| Category | File types included |
+|----------|---------------------|
+| PDF | `.pdf` |
+| Microsoft Office | `.doc`, `.docx`, `.xls`, `.xlsx`, `.ppt`, `.pptx`, and macro-enabled variants |
+| OpenDocument | `.odt`, `.ods`, `.odp`, `.odg`, `.odf` (LibreOffice / OpenOffice) |
+| Text & Data | `.txt`, `.csv`, `.rtf` |
+| Web & Markup | `.html`, `.htm`, `.md`, `.markdown` |
+| Images | `.jpg`, `.png`, `.gif`, `.bmp`, `.tiff`, `.webp`, `.svg` |
+
+**Managing profiles:**
+
+1. Go to **Email Ingestion** (`/imap-accounts`)
+2. Click **Manage profiles** (or the **+** icon next to the profile dropdown)
+3. Create a new profile, give it a name, and tick the categories you want
+4. When adding or editing a mailbox, select your profile from the dropdown
+
+Two built-in profiles are always available and cannot be deleted:
+
+- **Documents Only** — PDF, Office, OpenDocument, Text, Web (no images)
+- **All Files** — all categories including images
+
+Users can also create unlimited **custom profiles** to mix and match exactly the categories they need per mailbox (e.g. a scanner mailbox that only accepts PDFs, or a finance mailbox that accepts Office and CSV but not images).
+
+Custom profiles are created via the UI or the `/api/imap-profiles/` API.
 
 ---
 

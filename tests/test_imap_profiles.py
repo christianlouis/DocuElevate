@@ -1,6 +1,5 @@
 """Tests for app/api/imap_profiles.py and app/utils/allowed_types category helpers."""
 
-import json
 
 import pytest
 

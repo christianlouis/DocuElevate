@@ -73,7 +73,12 @@ def _resolve_categories_for_profile(profile_id: int | None) -> list[str]:
             finally:
                 db.close()
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Could not load IMAP ingestion profile %d: %s — using global default", profile_id, exc)
+            logger.warning(
+                "Could not load IMAP ingestion profile %d (%s: %s) — using global default",
+                profile_id,
+                type(exc).__name__,
+                exc,
+            )
 
     # Fall back to global setting
     if settings.imap_attachment_filter == "all":

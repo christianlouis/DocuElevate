@@ -304,7 +304,42 @@ DocuElevate can automatically pull document attachments from IMAP mailboxes — 
 | `IMAP1_SSL`                   | Use SSL (`true`/`false`).                                   | `true`            |
 | `IMAP1_POLL_INTERVAL_MINUTES` | Frequency in minutes to poll for new mail.                  | `5`               |
 | `IMAP_READONLY_MODE`          | When `true`, fetches and processes attachments but does **not** modify the mailbox (no starring, labeling, deleting, or flag changes). Use for pre-production instances sharing a mailbox with production. Default: `false`. | `false` |
-| `IMAP_ATTACHMENT_FILTER`      | Controls which attachment types are ingested from emails. `documents_only` (default) ingests PDFs and office files only — images are skipped. `all` ingests every supported file type including images. Individual per-user IMAP accounts can override this global default. | `documents_only` |
+| `IMAP_ATTACHMENT_FILTER`      | System-wide fallback for which attachment types are ingested when no ingestion profile is assigned to a mailbox. `documents_only` (default) ingests PDFs and office files only — images are skipped. `all` ingests every supported file type including images. Individual IMAP accounts can override this using ingestion profiles. | `documents_only` |
+
+#### IMAP Ingestion Profiles
+
+For fine-grained control, DocuElevate supports **Ingestion Profiles** — named configurations that let you choose exactly which file-type categories to accept from each mailbox.
+
+Each profile contains a list of enabled **categories**:
+
+| Category | Description |
+|----------|-------------|
+| `pdf` | PDF documents (`.pdf`) |
+| `office` | Microsoft Office files (Word, Excel, PowerPoint — `.docx`, `.xlsx`, `.pptx`, …) |
+| `opendocument` | LibreOffice/OpenOffice files (`.odt`, `.ods`, `.odp`, …) |
+| `text` | Plain text, CSV and RTF files (`.txt`, `.csv`, `.rtf`) |
+| `web` | HTML and Markdown files (`.html`, `.htm`, `.md`, `.markdown`) |
+| `images` | Image files (`.jpg`, `.png`, `.gif`, `.bmp`, `.tiff`, `.webp`, `.svg`) |
+
+Two built-in system profiles are seeded automatically:
+
+| Profile | Categories |
+|---------|------------|
+| **Documents Only** | pdf, office, opendocument, text, web (no images) |
+| **All Files** | All categories, including images |
+
+Users can create their own custom profiles via the **Email Ingestion** dashboard (`/imap-accounts`) by clicking the **Manage profiles** link or the **+** button next to the profile dropdown. Custom profiles are private to the creating user and can be freely edited or deleted.
+
+**API endpoints for ingestion profiles:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/imap-profiles/` | List all visible profiles (system + user's own) |
+| `POST` | `/api/imap-profiles/` | Create a new profile |
+| `GET` | `/api/imap-profiles/categories` | List available file-type categories |
+| `GET` | `/api/imap-profiles/{id}` | Get a single profile |
+| `PUT` | `/api/imap-profiles/{id}` | Update a profile (not built-in) |
+| `DELETE` | `/api/imap-profiles/{id}` | Delete a profile (not built-in) |
 
 #### Per-User IMAP Integrations
 

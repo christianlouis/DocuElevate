@@ -154,6 +154,7 @@ def list_profiles(request: Request, db: DbSession, owner_id: CurrentOwner) -> li
     profiles = (
         db.query(ImapIngestionProfile)
         .filter(
+            # SQLAlchemy requires `== None` for IS NULL comparison in ORM filters
             (ImapIngestionProfile.owner_id == None) | (ImapIngestionProfile.owner_id == owner_id)  # noqa: E711
         )
         .order_by(ImapIngestionProfile.is_builtin.desc(), ImapIngestionProfile.id)

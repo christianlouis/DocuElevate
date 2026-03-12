@@ -812,6 +812,7 @@ function imapAccountsApp() {
     accounts: {{ accounts | tojson }},
     profiles: {{ profiles | tojson }},
     categories: {{ categories | tojson }},
+    defaultCategories: {{ default_categories | tojson }},
     quota: {
       current_count: {{ current_count }},
       max_mailboxes: {{ max_mailboxes | tojson }},
@@ -1083,7 +1084,7 @@ function imapAccountsApp() {
           allowed_categories: [...profile.allowed_categories],
         };
       } else {
-        this.profileForm = { name: '', description: '', allowed_categories: ['pdf', 'office', 'opendocument', 'text', 'web'] };
+        this.profileForm = { name: '', description: '', allowed_categories: [...this.defaultCategories] };
       }
       this.profileFormError = null;
       this.profileModalOpen = true;
