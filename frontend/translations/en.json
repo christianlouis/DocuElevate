@@ -898,5 +898,6 @@
   "auth.verify_email_resend_placeholder": "Enter your email address",
   "auth.verify_email_resend_aria_label": "Email address for resend",
   "auth.verify_email_resend_button": "Resend verification email",
-  "auth.verify_email_back_sign_in": "Back to sign in"
+  "auth.verify_email_back_sign_in": "Back to sign in",
+  "auth.sign_in_with": "Sign in with"
 }
