@@ -182,6 +182,22 @@ class TestInitDb:
                     "UNIQUE (user_id, name))"
                 )
             )
+            # user_imap_accounts was created by migration 022 and must exist
+            # before migration 032 (ALTER TABLE ... ADD COLUMN) can run.
+            conn.execute(
+                text(
+                    "CREATE TABLE user_imap_accounts ("
+                    "id INTEGER PRIMARY KEY, owner_id VARCHAR NOT NULL, "
+                    "name VARCHAR(255) NOT NULL, host VARCHAR(255) NOT NULL, "
+                    "port INTEGER NOT NULL DEFAULT 993, username VARCHAR(255) NOT NULL, "
+                    "password VARCHAR(1024) NOT NULL, use_ssl BOOLEAN NOT NULL DEFAULT 1, "
+                    "delete_after_process BOOLEAN NOT NULL DEFAULT 0, "
+                    "is_active BOOLEAN NOT NULL DEFAULT 1, "
+                    "last_checked_at DATETIME, last_error TEXT, "
+                    "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                    "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
+                )
+            )
             conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
             conn.execute(text("INSERT INTO alembic_version VALUES ('026_add_scheduled_jobs')"))
 
