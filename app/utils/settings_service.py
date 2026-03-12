@@ -495,6 +495,14 @@ SETTING_METADATA = {
         "options": ["us", "eu"],
     },
     # Storage Providers - Dropbox
+    "dropbox_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable Dropbox as an upload destination. When disabled, no documents will be sent to Dropbox even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "dropbox_app_key": {
         "category": "Storage Providers",
         "description": "Dropbox app key for OAuth authentication",
@@ -528,6 +536,14 @@ SETTING_METADATA = {
         "restart_required": False,
     },
     # Storage Providers - Nextcloud
+    "nextcloud_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable Nextcloud as an upload destination. When disabled, no documents will be sent to Nextcloud even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "nextcloud_upload_url": {
         "category": "Storage Providers",
         "description": "Nextcloud WebDAV upload URL",
@@ -561,6 +577,14 @@ SETTING_METADATA = {
         "restart_required": False,
     },
     # Storage Providers - Paperless-ngx
+    "paperless_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable Paperless-ngx as an upload destination. When disabled, no documents will be sent to Paperless-ngx even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "paperless_ngx_api_token": {
         "category": "Storage Providers",
         "description": "Paperless-ngx API authentication token",
@@ -578,6 +602,14 @@ SETTING_METADATA = {
         "restart_required": False,
     },
     # Storage Providers - Google Drive
+    "google_drive_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable Google Drive as an upload destination. When disabled, no documents will be sent to Google Drive even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "google_drive_credentials_json": {
         "category": "Storage Providers",
         "description": "Google Drive service account credentials JSON",
@@ -635,6 +667,14 @@ SETTING_METADATA = {
         "restart_required": False,
     },
     # Storage Providers - OneDrive
+    "onedrive_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable OneDrive as an upload destination. When disabled, no documents will be sent to OneDrive even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "onedrive_client_id": {
         "category": "Storage Providers",
         "description": "OneDrive OAuth client ID",
@@ -676,6 +716,14 @@ SETTING_METADATA = {
         "restart_required": False,
     },
     # Storage Providers - WebDAV
+    "webdav_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable WebDAV as an upload destination. When disabled, no documents will be sent to WebDAV even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "webdav_url": {
         "category": "Storage Providers",
         "description": "WebDAV server URL",
@@ -717,6 +765,14 @@ SETTING_METADATA = {
         "restart_required": False,
     },
     # Storage Providers - FTP
+    "ftp_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable FTP as an upload destination. When disabled, no documents will be sent to FTP even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "ftp_host": {
         "category": "Storage Providers",
         "description": "FTP server hostname or IP address",
@@ -774,6 +830,14 @@ SETTING_METADATA = {
         "restart_required": False,
     },
     # Storage Providers - SFTP
+    "sftp_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable SFTP as an upload destination. When disabled, no documents will be sent to SFTP even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "sftp_host": {
         "category": "Storage Providers",
         "description": "SFTP server hostname or IP address",
@@ -839,6 +903,14 @@ SETTING_METADATA = {
         "restart_required": False,
     },
     # Storage Providers - iCloud Drive
+    "icloud_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable iCloud Drive as an upload destination. When disabled, no documents will be sent to iCloud Drive even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "icloud_username": {
         "category": "Storage Providers",
         "description": "Apple ID email address for iCloud Drive authentication",
@@ -872,6 +944,14 @@ SETTING_METADATA = {
         "restart_required": False,
     },
     # Storage Providers - AWS S3
+    "s3_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable Amazon S3 as an upload destination. When disabled, no documents will be sent to S3 even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "aws_access_key_id": {
         "category": "Storage Providers",
         "description": "AWS access key ID for S3",
@@ -1005,6 +1085,14 @@ SETTING_METADATA = {
         "restart_required": False,
     },
     # Email Destination Settings (dedicated SMTP for document delivery)
+    "dest_email_enabled": {
+        "category": "Email Destination",
+        "description": "Enable Email as an upload destination. When disabled, no documents will be delivered via email even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "dest_email_host": {
         "category": "Email Destination",
         "description": "SMTP server hostname for document delivery (separate from shared email settings)",

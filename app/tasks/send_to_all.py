@@ -26,18 +26,32 @@ logger = logging.getLogger(__name__)
 
 
 def _should_upload_to_dropbox():
-    return bool(settings.dropbox_app_key and settings.dropbox_app_secret and settings.dropbox_refresh_token)
+    return bool(
+        getattr(settings, "dropbox_enabled", True)
+        and settings.dropbox_app_key
+        and settings.dropbox_app_secret
+        and settings.dropbox_refresh_token
+    )
 
 
 def _should_upload_to_nextcloud():
-    return bool(settings.nextcloud_upload_url and settings.nextcloud_username and settings.nextcloud_password)
+    return bool(
+        getattr(settings, "nextcloud_enabled", True)
+        and settings.nextcloud_upload_url
+        and settings.nextcloud_username
+        and settings.nextcloud_password
+    )
 
 
 def _should_upload_to_paperless():
-    return bool(settings.paperless_ngx_api_token and settings.paperless_host)
+    return bool(
+        getattr(settings, "paperless_enabled", True) and settings.paperless_ngx_api_token and settings.paperless_host
+    )
 
 
 def _should_upload_to_google_drive():
+    if not getattr(settings, "google_drive_enabled", True):
+        return False
     # Check for OAuth configuration
     if getattr(settings, "google_drive_use_oauth", False):
         return bool(
@@ -52,20 +66,33 @@ def _should_upload_to_google_drive():
 
 
 def _should_upload_to_webdav():
-    return bool(settings.webdav_url and settings.webdav_username and settings.webdav_password)
+    return bool(
+        getattr(settings, "webdav_enabled", True)
+        and settings.webdav_url
+        and settings.webdav_username
+        and settings.webdav_password
+    )
 
 
 def _should_upload_to_ftp():
-    return bool(settings.ftp_host and settings.ftp_username and settings.ftp_password)
+    return bool(
+        getattr(settings, "ftp_enabled", True) and settings.ftp_host and settings.ftp_username and settings.ftp_password
+    )
 
 
 def _should_upload_to_sftp():
-    return bool(settings.sftp_host and settings.sftp_username and (settings.sftp_password or settings.sftp_private_key))
+    return bool(
+        getattr(settings, "sftp_enabled", True)
+        and settings.sftp_host
+        and settings.sftp_username
+        and (settings.sftp_password or settings.sftp_private_key)
+    )
 
 
 def _should_upload_to_email():
     return bool(
-        settings.dest_email_host
+        getattr(settings, "dest_email_enabled", True)
+        and settings.dest_email_host
         and settings.dest_email_username
         and settings.dest_email_password
         and settings.dest_email_default_recipient
@@ -73,22 +100,32 @@ def _should_upload_to_email():
 
 
 def _should_upload_to_onedrive():
-    return bool(settings.onedrive_client_id and settings.onedrive_client_secret and settings.onedrive_refresh_token)
+    return bool(
+        getattr(settings, "onedrive_enabled", True)
+        and settings.onedrive_client_id
+        and settings.onedrive_client_secret
+        and settings.onedrive_refresh_token
+    )
 
 
 def _should_upload_to_s3():
-    return bool(settings.s3_bucket_name and settings.aws_access_key_id and settings.aws_secret_access_key)
+    return bool(
+        getattr(settings, "s3_enabled", True)
+        and settings.s3_bucket_name
+        and settings.aws_access_key_id
+        and settings.aws_secret_access_key
+    )
 
 
 def _should_upload_to_icloud():
-    return bool(settings.icloud_username and settings.icloud_password)
+    return bool(getattr(settings, "icloud_enabled", True) and settings.icloud_username and settings.icloud_password)
 
 
 def get_configured_services_from_validator():
     """
-    Use the config validator to determine which services are configured properly.
+    Use the config validator to determine which services are configured and enabled.
     Returns a dictionary with service names as keys and boolean values indicating
-    whether they're properly configured.
+    whether they're properly configured AND explicitly enabled.
     """
     providers = get_provider_status()
 
@@ -109,7 +146,8 @@ def get_configured_services_from_validator():
     result = {}
     for provider_name, internal_name in service_map.items():
         if provider_name in providers:
-            result[internal_name] = providers[provider_name].get("configured", False)
+            provider = providers[provider_name]
+            result[internal_name] = provider.get("configured", False) and provider.get("enabled", True)
 
     return result
 
