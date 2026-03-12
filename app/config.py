@@ -647,6 +647,17 @@ class Settings(BaseSettings):
         ),
     )
 
+    imap_attachment_filter: str = Field(
+        default="documents_only",
+        description=(
+            "Controls which attachment types are ingested from IMAP emails. "
+            "Accepted values: "
+            "'documents_only' – ingest only PDFs and office files (Word, Excel, PowerPoint, ODT, etc.); "
+            "'all' – ingest all supported file types including images. "
+            "This is the global default; individual user IMAP accounts can override it."
+        ),
+    )
+
     # Batch processing settings
     processall_throttle_threshold: int = Field(
         default=20,

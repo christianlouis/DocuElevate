@@ -1660,6 +1660,18 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "imap_attachment_filter": {
+        "category": "IMAP",
+        "description": (
+            "Controls which attachment types are ingested from IMAP emails. "
+            "Accepted values: 'documents_only' (PDFs and office files only, default) or 'all' (including images). "
+            "Per-user IMAP accounts can override this global default."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Monitoring - Uptime Kuma
     "uptime_kuma_url": {
         "category": "Monitoring",

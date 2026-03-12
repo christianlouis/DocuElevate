@@ -110,6 +110,13 @@ class ImapAccountCreate(BaseModel):
     use_ssl: bool = Field(default=True, description="Use SSL/TLS connection")
     delete_after_process: bool = Field(default=False, description="Delete emails from mailbox after processing")
     is_active: bool = Field(default=True, description="Whether to poll this mailbox")
+    profile_id: int | None = Field(
+        default=None,
+        description=(
+            "ID of the ImapIngestionProfile that controls which attachment types to ingest. "
+            "Null inherits the global imap_attachment_filter setting."
+        ),
+    )
 
 
 class ImapAccountUpdate(BaseModel):
@@ -123,6 +130,13 @@ class ImapAccountUpdate(BaseModel):
     use_ssl: bool | None = None
     delete_after_process: bool | None = None
     is_active: bool | None = None
+    profile_id: int | None = Field(
+        default=None,
+        description=(
+            "ID of the ImapIngestionProfile to use.  "
+            "Explicitly sending null clears the override (falls back to global setting)."
+        ),
+    )
 
 
 class ImapTestRequest(BaseModel):
@@ -155,6 +169,7 @@ def _to_response(acct: UserImapAccount) -> dict[str, Any]:
         "use_ssl": acct.use_ssl,
         "delete_after_process": acct.delete_after_process,
         "is_active": acct.is_active,
+        "profile_id": acct.profile_id,
         "last_checked_at": acct.last_checked_at.isoformat() if acct.last_checked_at else None,
         "last_error": acct.last_error,
         "created_at": acct.created_at.isoformat() if acct.created_at else None,
@@ -222,6 +237,7 @@ def create_imap_account(
         use_ssl=body.use_ssl,
         delete_after_process=body.delete_after_process,
         is_active=body.is_active,
+        profile_id=body.profile_id,
     )
     try:
         db.add(acct)
@@ -277,6 +293,10 @@ def update_imap_account(
         acct.delete_after_process = body.delete_after_process
     if body.is_active is not None:
         acct.is_active = body.is_active
+    # profile_id: update whenever the field is explicitly present in the request payload
+    # (including sending null to clear the override).
+    if "profile_id" in body.model_fields_set:
+        acct.profile_id = body.profile_id
 
     # Reset last_error so the next poll gives a fresh result
     acct.last_error = None
