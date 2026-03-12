@@ -207,6 +207,9 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
         const linksDiv = document.createElement('div');
         linksDiv.className = 'py-1';
         linksDiv.appendChild(
+          _makeMenuLink('/profile', 'fas fa-user-circle text-blue-400', 'Profile Settings', 'text-gray-700')
+        );
+        linksDiv.appendChild(
           _makeMenuLink('/subscription', 'fas fa-layer-group text-indigo-400', 'My Subscription', 'text-gray-700')
         );
         linksDiv.appendChild(
@@ -271,6 +274,18 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
         userRow.appendChild(mAvatar);
         userRow.appendChild(mUserInfo);
         mobileAuthSection.appendChild(userRow);
+
+        // Profile Settings link
+        const profileLink = document.createElement('a');
+        profileLink.href = '/profile';
+        profileLink.className =
+          'flex items-center px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50';
+        const profileIcon = document.createElement('i');
+        profileIcon.className = 'fas fa-user-circle mr-2 text-blue-400';
+        profileIcon.setAttribute('aria-hidden', 'true');
+        profileLink.appendChild(profileIcon);
+        profileLink.appendChild(document.createTextNode('Profile Settings'));
+        mobileAuthSection.appendChild(profileLink);
 
         // Subscription link
         const subLink = document.createElement('a');

@@ -196,8 +196,12 @@ class TestValidateAuthConfig:
             mock_settings.authentik_client_id = None
             mock_settings.authentik_client_secret = None
             mock_settings.authentik_config_url = None
+            mock_settings.social_auth_google_enabled = False
+            mock_settings.social_auth_microsoft_enabled = False
+            mock_settings.social_auth_apple_enabled = False
+            mock_settings.social_auth_dropbox_enabled = False
             result = validate_auth_config()
-            assert "Neither simple authentication nor OIDC are properly configured" in result
+            assert "Neither simple authentication, OIDC, nor social login are properly configured" in result
 
     def test_auth_enabled_oidc_missing_provider_name(self):
         """Test validation when OIDC is configured but provider name is missing."""
@@ -210,6 +214,10 @@ class TestValidateAuthConfig:
             mock_settings.authentik_client_secret = "client_secret"
             mock_settings.authentik_config_url = "https://example.com"
             mock_settings.oauth_provider_name = None
+            mock_settings.social_auth_google_enabled = False
+            mock_settings.social_auth_microsoft_enabled = False
+            mock_settings.social_auth_apple_enabled = False
+            mock_settings.social_auth_dropbox_enabled = False
             result = validate_auth_config()
             assert "OAUTH_PROVIDER_NAME is not configured but OIDC is enabled" in result
 
@@ -223,6 +231,10 @@ class TestValidateAuthConfig:
             mock_settings.authentik_client_id = None
             mock_settings.authentik_client_secret = None
             mock_settings.authentik_config_url = None
+            mock_settings.social_auth_google_enabled = False
+            mock_settings.social_auth_microsoft_enabled = False
+            mock_settings.social_auth_apple_enabled = False
+            mock_settings.social_auth_dropbox_enabled = False
             result = validate_auth_config()
             assert len(result) == 0
 
@@ -237,6 +249,10 @@ class TestValidateAuthConfig:
             mock_settings.authentik_client_secret = "client_secret"
             mock_settings.authentik_config_url = "https://example.com"
             mock_settings.oauth_provider_name = "Authentik"
+            mock_settings.social_auth_google_enabled = False
+            mock_settings.social_auth_microsoft_enabled = False
+            mock_settings.social_auth_apple_enabled = False
+            mock_settings.social_auth_dropbox_enabled = False
             result = validate_auth_config()
             assert len(result) == 0
 

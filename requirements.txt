@@ -34,6 +34,9 @@ boto3>=1.28.0
 # SFTP
 paramiko>=3.4.0  # SSH/SFTP implementation for Python (LGPL license)
 
+# iCloud Drive
+pyicloud>=2.4.0  # Unofficial Apple iCloud API client (MIT license)
+
 # Safe XML parsing (protection against XML bomb / XXE attacks)
 defusedxml>=0.7.1
 
@@ -52,3 +55,6 @@ stripe>=7.0.0,<15.0.0  # Stripe billing SDK (MIT license)
 
 # Error and performance monitoring
 sentry-sdk[fastapi,celery,sqlalchemy]>=2.20.0,<3.0.0
+
+# GraphQL API
+strawberry-graphql[fastapi]>=0.243.0,<1.0.0

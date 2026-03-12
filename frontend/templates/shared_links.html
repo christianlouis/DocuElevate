@@ -1,37 +1,35 @@
 {% extends "base.html" %}
 
-{% block title %}Shared Links – DocuElevate{% endblock %}
+{% block title %}{{ _("shared.page_title") }}{% endblock %}
 
 {% block content %}
 <div x-data="sharedLinks()" x-init="init(); loadLinks()" class="container mx-auto px-4 py-8 max-w-5xl">
   <header class="mb-8">
     <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
       <i class="fas fa-share-alt text-blue-500" aria-hidden="true"></i>
-      Shared Links
+      {{ _("shared.heading") }}
     </h1>
     <p class="mt-2 text-gray-600 dark:text-gray-400 text-sm leading-relaxed max-w-2xl">
-      Share documents with anyone via a time-limited or view-limited link.
-      Recipients do not need a DocuElevate account.  Links can be password-protected
-      and revoked at any time.
+      {{ _("shared.subtitle") }}
     </p>
   </header>
 
   <!-- Create link section -->
   <section class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6" aria-labelledby="create-link-heading">
-    <h2 id="create-link-heading" class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Create New Shared Link</h2>
+    <h2 id="create-link-heading" class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{{ _("shared.create_heading") }}</h2>
 
     <form @submit.prevent="createLink()" class="space-y-4">
       <!-- File ID -->
       <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
         <div class="flex-1">
           <label for="file-id-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            File ID <span class="text-red-500" aria-hidden="true">*</span>
+            {{ _("shared.file_id_label") }} <span class="text-red-500" aria-hidden="true">*</span>
           </label>
           <input
             id="file-id-input"
             type="number"
             x-model.number="newLink.file_id"
-            placeholder="e.g. 42"
+            placeholder="{{ _('shared.file_id_placeholder') }}"
             required
             min="1"
             class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm
@@ -39,20 +37,20 @@
             aria-required="true"
           />
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Find the file ID on the <a href="/files" class="underline hover:text-blue-600">Files</a> page or in the document detail URL.
+            {{ _("shared.file_id_help_pre") }} <a href="/files" class="underline hover:text-blue-600">{{ _("shared.files_link") }}</a> {{ _("shared.file_id_help_post") }}
           </p>
         </div>
 
         <!-- Label (optional) -->
         <div class="flex-1">
           <label for="link-label-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Label <span class="text-gray-400 font-normal">(optional)</span>
+            {{ _("shared.label_label") }} <span class="text-gray-400 font-normal">({{ _("shared.optional") }})</span>
           </label>
           <input
             id="link-label-input"
             type="text"
             x-model="newLink.label"
-            placeholder="e.g. Shared with Bob"
+            placeholder="{{ _('shared.label_placeholder') }}"
             maxlength="255"
             class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm
                    focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
@@ -65,7 +63,7 @@
         <!-- Expiry -->
         <div class="flex-1">
           <label for="expires-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Expiry
+            {{ _("shared.expiry_label") }}
           </label>
           <select
             id="expires-select"
@@ -73,28 +71,28 @@
             class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm
                    focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
           >
-            <option :value="null">Never</option>
-            <option value="1">1 hour</option>
-            <option value="6">6 hours</option>
-            <option value="12">12 hours</option>
-            <option value="24">24 hours (1 day)</option>
-            <option value="72">3 days</option>
-            <option value="168">7 days</option>
-            <option value="336">14 days</option>
-            <option value="720">30 days</option>
+            <option :value="null">{{ _("shared.expiry_never") }}</option>
+            <option value="1">{{ _("shared.expiry_1h") }}</option>
+            <option value="6">{{ _("shared.expiry_6h") }}</option>
+            <option value="12">{{ _("shared.expiry_12h") }}</option>
+            <option value="24">{{ _("shared.expiry_24h") }}</option>
+            <option value="72">{{ _("shared.expiry_3d") }}</option>
+            <option value="168">{{ _("shared.expiry_7d") }}</option>
+            <option value="336">{{ _("shared.expiry_14d") }}</option>
+            <option value="720">{{ _("shared.expiry_30d") }}</option>
           </select>
         </div>
 
         <!-- Max views -->
         <div class="flex-1">
           <label for="max-views-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Max downloads <span class="text-gray-400 font-normal">(optional)</span>
+            {{ _("shared.max_downloads_label") }} <span class="text-gray-400 font-normal">({{ _("shared.optional") }})</span>
           </label>
           <input
             id="max-views-input"
             type="number"
             x-model.number="newLink.max_views"
-            placeholder="Unlimited"
+            placeholder="{{ _('shared.unlimited_placeholder') }}"
             min="1"
             max="10000"
             class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm
@@ -105,13 +103,13 @@
         <!-- Password -->
         <div class="flex-1">
           <label for="link-password-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Password <span class="text-gray-400 font-normal">(optional)</span>
+            {{ _("shared.password_label") }} <span class="text-gray-400 font-normal">({{ _("shared.optional") }})</span>
           </label>
           <input
             id="link-password-input"
             type="password"
             x-model="newLink.password"
-            placeholder="Leave blank for no password"
+            placeholder="{{ _('shared.password_placeholder') }}"
             maxlength="128"
             autocomplete="new-password"
             class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm
@@ -135,7 +133,7 @@
           style="min-height:40px; min-width:44px;"
         >
           <i class="fas fa-share-alt mr-2" aria-hidden="true"></i>
-          <span x-text="creating ? 'Creating…' : 'Create Link'"></span>
+          <span x-text="creating ? '{{ _('shared.creating') }}' : '{{ _('shared.create_btn') }}'"></span>
         </button>
       </div>
     </form>
@@ -146,9 +144,9 @@
         <div class="flex items-start gap-3">
           <i class="fas fa-check-circle text-green-600 dark:text-green-400 mt-0.5 text-lg" aria-hidden="true"></i>
           <div class="flex-1">
-            <p class="font-semibold text-green-800 dark:text-green-200 text-sm">Shared link created!</p>
+            <p class="font-semibold text-green-800 dark:text-green-200 text-sm">{{ _("shared.link_created") }}</p>
             <p class="text-green-700 dark:text-green-300 text-xs mt-1">
-              Copy and send this link to the recipient.
+              {{ _("shared.link_created_help") }}
             </p>
             <div class="mt-3 flex items-center gap-2">
               <code
@@ -164,10 +162,10 @@
                        hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500
                        transition-colors"
                 style="min-height:40px; min-width:44px;"
-                :aria-label="copied ? 'Copied!' : 'Copy link to clipboard'"
+                :aria-label="copied ? '{{ _('common.copied') }}' : '{{ _('shared.copy_link_aria') }}'"
               >
                 <i :class="copied ? 'fas fa-check text-green-600' : 'fas fa-copy'" aria-hidden="true"></i>
-                <span class="ml-1 hidden sm:inline" x-text="copied ? 'Copied!' : 'Copy'"></span>
+                <span class="ml-1 hidden sm:inline" x-text="copied ? '{{ _('common.copied') }}' : '{{ _('common.copy') }}'"></span>
               </button>
             </div>
           </div>
@@ -180,28 +178,28 @@
   <section class="bg-white dark:bg-gray-800 shadow rounded-lg p-6" aria-labelledby="links-heading">
     <div class="flex items-center justify-between mb-4">
       <h2 id="links-heading" class="text-lg font-semibold text-gray-900 dark:text-white">
-        Your Shared Links
+        {{ _("shared.your_links") }}
         <span
           x-show="links.length > 0"
           class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
           x-text="links.length"
-          aria-label="number of links"
+          aria-label="{{ _('shared.links_count_aria') }}"
         ></span>
       </h2>
       <button
         @click="loadLinks()"
         type="button"
         class="text-sm text-blue-600 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-        aria-label="Refresh shared links list"
+        aria-label="{{ _('shared.refresh_aria') }}"
       >
-        <i class="fas fa-sync-alt mr-1" aria-hidden="true"></i>Refresh
+        <i class="fas fa-sync-alt mr-1" aria-hidden="true"></i>{{ _("common.refresh") }}
       </button>
     </div>
 
     <!-- Loading state -->
     <template x-if="loading">
       <p class="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">
-        <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Loading…
+        <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>{{ _("common.loading") }}
       </p>
     </template>
 
@@ -209,22 +207,22 @@
     <template x-if="!loading && links.length === 0">
       <div class="text-center py-10 text-gray-400 dark:text-gray-500">
         <i class="fas fa-share-alt text-3xl mb-3" aria-hidden="true"></i>
-        <p class="text-sm">No shared links yet. Create one above to get started.</p>
+        <p class="text-sm">{{ _("shared.no_links") }}</p>
       </div>
     </template>
 
     <!-- Links list -->
     <template x-if="!loading && links.length > 0">
       <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm" aria-label="Shared links">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm" aria-label="{{ _('shared.table_aria') }}">
           <thead>
             <tr class="text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              <th scope="col" class="pb-3 pr-4">File / Label</th>
-              <th scope="col" class="pb-3 pr-4">Link</th>
-              <th scope="col" class="pb-3 pr-4">Expiry</th>
-              <th scope="col" class="pb-3 pr-4">Views</th>
-              <th scope="col" class="pb-3 pr-4">Status</th>
-              <th scope="col" class="pb-3">Actions</th>
+              <th scope="col" class="pb-3 pr-4">{{ _("shared.col_file_label") }}</th>
+              <th scope="col" class="pb-3 pr-4">{{ _("shared.col_link") }}</th>
+              <th scope="col" class="pb-3 pr-4">{{ _("shared.col_expiry") }}</th>
+              <th scope="col" class="pb-3 pr-4">{{ _("shared.col_views") }}</th>
+              <th scope="col" class="pb-3 pr-4">{{ _("common.status") }}</th>
+              <th scope="col" class="pb-3">{{ _("common.actions") }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
@@ -235,7 +233,7 @@
                   <p class="font-medium text-gray-800 dark:text-gray-200 truncate" x-text="link.original_filename || ('File #' + link.file_id)"></p>
                   <p x-show="link.label" class="text-xs text-gray-500 dark:text-gray-400 truncate" x-text="link.label"></p>
                   <p x-show="link.has_password" class="text-xs text-yellow-600 dark:text-yellow-400 mt-0.5">
-                    <i class="fas fa-lock text-xs" aria-hidden="true"></i> Password protected
+                    <i class="fas fa-lock text-xs" aria-hidden="true"></i> {{ _("shared.password_protected") }}
                   </p>
                 </td>
                 <!-- Link -->
@@ -246,8 +244,8 @@
                       type="button"
                       @click="copyUrl(link.share_url)"
                       class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded"
-                      aria-label="Copy link"
-                      title="Copy link"
+                      aria-label="{{ _('shared.copy_link_aria') }}"
+                      title="{{ _('shared.copy_link_title') }}"
                       style="min-height:32px;min-width:32px;"
                     >
                       <i class="fas fa-copy text-xs" aria-hidden="true"></i>
@@ -257,8 +255,8 @@
                       target="_blank"
                       rel="noopener noreferrer"
                       class="p-1 text-gray-400 hover:text-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded"
-                      aria-label="Open shared link"
-                      title="Open in new tab"
+                      aria-label="{{ _('shared.open_link_aria') }}"
+                      title="{{ _('shared.open_in_new_tab') }}"
                       style="min-height:32px;min-width:32px;"
                     >
                       <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
@@ -278,22 +276,22 @@
                 <td class="py-3 pr-4 whitespace-nowrap">
                   <template x-if="!link.is_active">
                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
-                      Revoked
+                      {{ _("shared.status_revoked") }}
                     </span>
                   </template>
                   <template x-if="link.is_active && isExpired(link)">
                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300">
-                      Expired
+                      {{ _("shared.status_expired") }}
                     </span>
                   </template>
                   <template x-if="link.is_active && isViewLimitReached(link)">
                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
-                      Limit reached
+                      {{ _("shared.status_limit_reached") }}
                     </span>
                   </template>
                   <template x-if="link.is_active && !isExpired(link) && !isViewLimitReached(link)">
                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
-                      Active
+                      {{ _("shared.status_active") }}
                     </span>
                   </template>
                 </td>
@@ -307,9 +305,9 @@
                            border border-red-300 dark:border-red-700 rounded hover:bg-red-50 dark:hover:bg-red-900/20
                            focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
                     style="min-height:32px;min-width:44px;"
-                    :aria-label="'Revoke shared link for ' + (link.original_filename || 'file')"
+                    :aria-label="'{{ _('shared.revoke_aria_prefix') }} ' + (link.original_filename || '{{ _('shared.revoke_aria_file') }}')"
                   >
-                    <i class="fas fa-ban mr-1" aria-hidden="true"></i> Revoke
+                    <i class="fas fa-ban mr-1" aria-hidden="true"></i> {{ _("shared.revoke_btn") }}
                   </button>
                   <span x-show="!link.is_active" class="text-xs text-gray-400 dark:text-gray-500">—</span>
                 </td>

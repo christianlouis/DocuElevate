@@ -124,6 +124,101 @@ class TestInitDb:
 
         test_engine.dispose()
 
+    def test_init_db_creates_shared_links_for_database_missing_table(self, tmp_path):
+        """Regression test: databases at revision 026 that skipped 025_add_shared_links.
+
+        Migration 025_add_shared_links was inserted into the chain between
+        024_add_api_tokens and 025_add_user_notifications after some databases
+        had already been migrated past that point.  Migration 027 creates the
+        table idempotently so those databases are repaired.
+        """
+        from sqlalchemy import create_engine, text
+        from sqlalchemy import inspect as sa_inspect
+
+        db_path = str(tmp_path / "regression_shared_links.db")
+        test_engine = create_engine(f"sqlite:///{db_path}")
+
+        # Set up a database at revision 026 but WITHOUT the shared_links table.
+        # This simulates a DB that was migrated before 025_add_shared_links
+        # was inserted into the chain.
+        with test_engine.begin() as conn:
+            conn.execute(
+                text(
+                    "CREATE TABLE files ("
+                    "id INTEGER PRIMARY KEY, filehash VARCHAR NOT NULL, "
+                    "original_filename VARCHAR, local_filename VARCHAR NOT NULL, "
+                    "original_file_path VARCHAR, processed_file_path VARCHAR, "
+                    "file_size INTEGER NOT NULL, mime_type VARCHAR, "
+                    "is_duplicate BOOLEAN DEFAULT 0 NOT NULL, duplicate_of_id INTEGER, "
+                    "ocr_text TEXT, ai_metadata TEXT, document_title VARCHAR, "
+                    "ocr_quality_score INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE TABLE processing_logs ("
+                    "id INTEGER PRIMARY KEY, file_id INTEGER, task_id VARCHAR, "
+                    "step_name VARCHAR, status VARCHAR, message VARCHAR, detail TEXT, "
+                    "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE TABLE file_processing_steps ("
+                    "id INTEGER PRIMARY KEY, file_id INTEGER NOT NULL, "
+                    "step_name VARCHAR NOT NULL, status VARCHAR NOT NULL, "
+                    "started_at DATETIME, completed_at DATETIME, error_message TEXT, "
+                    "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                    "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE TABLE saved_searches ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, user_id VARCHAR NOT NULL, "
+                    "name VARCHAR NOT NULL, filters TEXT NOT NULL, "
+                    "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                    "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                    "UNIQUE (user_id, name))"
+                )
+            )
+            # user_imap_accounts was created by migration 022 and must exist
+            # before migration 032 (ALTER TABLE ... ADD COLUMN) can run.
+            conn.execute(
+                text(
+                    "CREATE TABLE user_imap_accounts ("
+                    "id INTEGER PRIMARY KEY, owner_id VARCHAR NOT NULL, "
+                    "name VARCHAR(255) NOT NULL, host VARCHAR(255) NOT NULL, "
+                    "port INTEGER NOT NULL DEFAULT 993, username VARCHAR(255) NOT NULL, "
+                    "password VARCHAR(1024) NOT NULL, use_ssl BOOLEAN NOT NULL DEFAULT 1, "
+                    "delete_after_process BOOLEAN NOT NULL DEFAULT 0, "
+                    "is_active BOOLEAN NOT NULL DEFAULT 1, "
+                    "last_checked_at DATETIME, last_error TEXT, "
+                    "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                    "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
+                )
+            )
+            conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
+            conn.execute(text("INSERT INTO alembic_version VALUES ('026_add_scheduled_jobs')"))
+
+        with patch("app.database.engine", test_engine), patch("app.database.DB_URL", f"sqlite:///{db_path}"):
+            init_db()
+
+        inspector = sa_inspect(test_engine)
+        table_names = inspector.get_table_names()
+        assert "shared_links" in table_names
+
+        # Verify the shared_links table has the expected columns.
+        columns = {col["name"] for col in inspector.get_columns("shared_links")}
+        assert "id" in columns
+        assert "token" in columns
+        assert "file_id" in columns
+        assert "owner_id" in columns
+        assert "expires_at" in columns
+        assert "is_active" in columns
+
+        test_engine.dispose()
+
 
 @pytest.mark.unit
 class TestGetDb:

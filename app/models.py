@@ -147,6 +147,27 @@ class SettingsAuditLog(Base):
     action = Column(String, nullable=False)  # "update" or "delete"
 
 
+class AuditLog(Base):
+    """Comprehensive audit log for compliance tracking.
+
+    Records all significant actions: login/logout, document CRUD, settings
+    changes, and administrative operations.  Rows are append-only; the API
+    and service layer never update or delete entries.
+    """
+
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    user = Column(String, nullable=False, index=True)  # Username or "anonymous" / "system"
+    action = Column(String, nullable=False, index=True)  # e.g. "login", "document.create", "settings.update"
+    resource_type = Column(String, nullable=True, index=True)  # e.g. "document", "user", "settings"
+    resource_id = Column(String, nullable=True)  # ID of the affected resource
+    ip_address = Column(String, nullable=True)  # Client IP address
+    details = Column(Text, nullable=True)  # JSON-encoded extra context
+    severity = Column(String(16), nullable=False, server_default="info")  # info / warning / error / critical
+
+
 class SavedSearch(Base):
     """User-defined saved search filters for quick access to frequently used filter combinations."""
 
@@ -256,6 +277,17 @@ class UserProfile(Base):
     contact_email = Column(String(255), nullable=True)
     preferred_destination = Column(String(50), nullable=True)
     stripe_customer_id = Column(String(64), nullable=True)
+
+    # UI language preference for i18n (ISO 639-1 code, e.g. "en", "de", "fr")
+    # NULL means "auto-detect from browser Accept-Language header"
+    preferred_language = Column(String(10), nullable=True)
+
+    # UI colour scheme preference: "light" | "dark" | "system" (NULL = "system")
+    preferred_theme = Column(String(10), nullable=True)
+
+    # Custom profile avatar stored as a base64 data-URL (e.g. "data:image/png;base64,...")
+    # NULL means use the Gravatar fallback derived from the user's e-mail address.
+    avatar_data = Column(Text, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -377,6 +409,48 @@ class PipelineStep(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class ImapIngestionProfile(Base):
+    """Named ingestion profile controlling which attachment types are accepted from IMAP emails.
+
+    Profiles group file-type categories (e.g. "pdf", "office", "images") so users
+    can precisely control what gets ingested from each mailbox.
+
+    System-provided built-in profiles (``is_builtin=True``) are seeded by the
+    migration and cannot be deleted or renamed.  Users may create their own profiles
+    (``owner_id`` set to their identifier) or rely on the global system profiles
+    (``owner_id=None``).
+
+    ``allowed_categories`` stores a JSON list of category strings, e.g.::
+
+        '["pdf", "office", "opendocument", "text", "web"]'
+
+    Valid category names are defined in ``app.utils.allowed_types.FILE_TYPE_CATEGORIES``.
+    """
+
+    __tablename__ = "imap_ingestion_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Human-readable profile name (e.g. "Documents Only", "Documents + Images")
+    name = Column(String(255), nullable=False)
+
+    # Optional description shown in the UI
+    description = Column(Text, nullable=True)
+
+    # Owner of this profile. NULL = global/system profile available to all users.
+    owner_id = Column(String, nullable=True, index=True)
+
+    # JSON-encoded list of enabled category keys.  Example: '["pdf","office","text"]'
+    # See FILE_TYPE_CATEGORIES in app/utils/allowed_types.py for valid values.
+    allowed_categories = Column(Text, nullable=False, default='["pdf","office","opendocument","text","web"]')
+
+    # Built-in system profiles that cannot be deleted or modified via the API.
+    is_builtin = Column(Boolean, nullable=False, default=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class UserImapAccount(Base):
     """Per-user IMAP ingestion account.
 
@@ -414,6 +488,10 @@ class UserImapAccount(Base):
     # Processing options
     # When True, emails are deleted from the mailbox after their attachments are processed
     delete_after_process = Column(Boolean, nullable=False, default=False)
+
+    # Optional reference to an ImapIngestionProfile.
+    # NULL means "use the global imap_attachment_filter setting" (system default).
+    profile_id = Column(Integer, ForeignKey("imap_ingestion_profiles.id"), nullable=True)
 
     # When False the account is not polled by the periodic task (but not deleted)
     is_active = Column(Boolean, nullable=False, default=True)
@@ -506,6 +584,7 @@ class IntegrationType:
     EMAIL = "EMAIL"
     PAPERLESS = "PAPERLESS"
     RCLONE = "RCLONE"
+    ICLOUD = "ICLOUD"
 
     ALL = {
         IMAP,
@@ -522,6 +601,7 @@ class IntegrationType:
         EMAIL,
         PAPERLESS,
         RCLONE,
+        ICLOUD,
     }
 
 
@@ -832,6 +912,63 @@ class ScheduledJob(Base):
     last_run_status = Column(String(20), nullable=True)  # "success", "failed", "running"
     last_run_detail = Column(Text, nullable=True)  # Brief result summary or error
 
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class MobileDevice(Base):
+    """Registered mobile device for push notifications.
+
+    Stores the push token (Expo push token, FCM token, or APNs token) for a
+    specific user device so that document-processing events can be forwarded
+    as push notifications to the native mobile app.
+    """
+
+    __tablename__ = "mobile_devices"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # User that owns this device registration.
+    owner_id = Column(String, nullable=False, index=True)
+
+    # Human-readable name the user gave this device (e.g. "John's iPhone").
+    device_name = Column(String(255), nullable=True)
+
+    # Platform: "ios", "android", or "web".
+    platform = Column(String(20), nullable=False, default="ios")
+
+    # Expo push token (ExponentPushToken[…]) or raw FCM/APNs token.
+    push_token = Column(String(512), nullable=False)
+
+    # Whether push notifications are enabled for this device.
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    # Timestamps.
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (UniqueConstraint("owner_id", "push_token", name="uq_mobile_device_owner_token"),)
+
+
+class ComplianceTemplate(Base):
+    """Pre-built compliance configuration templates (GDPR, HIPAA, SOC2).
+
+    Each row represents an applied compliance template.  The ``settings_json``
+    column stores the concrete setting key/value pairs that were written when
+    the template was applied.  ``status`` tracks the current compliance posture.
+    """
+
+    __tablename__ = "compliance_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), unique=True, nullable=False, index=True)  # GDPR, HIPAA, SOC2
+    display_name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    settings_json = Column(Text, nullable=False, default="{}")  # JSON of applied settings
+    enabled = Column(Boolean, nullable=False, default=False)
+    status = Column(String(20), nullable=False, default="not_applied")  # not_applied, compliant, partial, non_compliant
+    applied_at = Column(DateTime(timezone=True), nullable=True)
+    applied_by = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
