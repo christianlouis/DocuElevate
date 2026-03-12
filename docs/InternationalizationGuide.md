@@ -167,6 +167,50 @@ The translation integrity checks enforce that:
 When you remove or rename a key, update **all** locale files in the same PR so
 no locale-specific orphan keys remain.
 
+### Optional AI-Assisted Bulk Translation with Transmart
+
+[Transmart](https://github.com/Quilljou/transmart) can help DocuElevate as an
+**optional local developer tool** when you need to bootstrap or refresh many
+locale files at once.
+
+Why it fits this project:
+
+- DocuElevate uses English as the reference locale
+- translation files are flat JSON dictionaries in `frontend/translations/`
+- there are many locale variants, so repetitive copy updates can be expensive
+
+Why it should stay optional:
+
+- it adds a Node.js-based toolchain to a primarily Python project
+- it depends on AI-generated output and API credentials
+- generated translations still require human review for product terminology and
+  tone
+- it must not replace the required translation integrity checks in CI or
+  pre-commit
+
+Recommended usage:
+
+1. Generate or refresh translations locally with Transmart
+2. Review the generated wording and placeholders carefully
+3. Commit the resulting JSON files to the repository
+4. Run:
+
+   ```bash
+   python -m pytest tests/test_i18n.py::TestTranslationFiles -q -o addopts=
+   pre-commit run translation-integrity --all-files
+   ```
+
+If you evaluate Transmart for local use, configure it around DocuElevate's
+existing layout:
+
+- `baseLocale`: `en`
+- `localePath`: `frontend/translations`
+- locale list: all non-English files in `frontend/translations/`
+
+DocuElevate does **not** currently require or bundle Transmart. The preferred
+workflow remains committed translation files plus deterministic repository
+validation.
+
 ### AI Fallback Translation
 
 When a translation key exists in English but not in the target language,
