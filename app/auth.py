@@ -15,6 +15,7 @@ from starlette.responses import RedirectResponse
 
 from app.config import settings
 from app.database import get_db
+from app.middleware.audit_log import get_client_ip
 
 # Conditional imports: only used when multi_user_enabled=True. Imported here at
 # module level (not inside auth()) so they don't incur repeated import overhead.
@@ -344,6 +345,13 @@ async def oauth_callback(request: Request, db: Session = Depends(get_db)):
 
         # Log the successful authentication
         logger.info("[SECURITY] OAUTH_LOGIN_SUCCESS user=%s admin=%s", user_data.get("email", "unknown"), is_admin)
+        _record_login_event(
+            db,
+            request,
+            user_data.get("email") or user_data.get("preferred_username") or "unknown",
+            success=True,
+            method="oauth",
+        )
 
         # Redirect first-time users to onboarding
         user_id = (
@@ -362,6 +370,48 @@ async def oauth_callback(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         logger.warning(f"[SECURITY] OAUTH_LOGIN_FAILURE error={type(e).__name__}")
         return RedirectResponse(url=f"/login?error=Authentication+failed:+{str(e)}", status_code=status.HTTP_302_FOUND)
+
+
+def _record_login_event(
+    db: Session,
+    request: Request,
+    username: str,
+    *,
+    success: bool,
+    method: str = "local",
+    detail: str | None = None,
+) -> None:
+    """Write a login or login-failure audit event to the database.
+
+    Failures are silently swallowed so that an audit-service error never
+    prevents a legitimate login or surfaces an unrelated 500 error to the user.
+
+    Args:
+        db: Active database session.
+        request: The current HTTP request (used to extract the client IP).
+        username: The username that attempted authentication.
+        success: ``True`` for a successful login, ``False`` for a failure.
+        method: Authentication method, e.g. ``"local"`` or ``"oauth"``.
+        detail: Optional extra context for failures (e.g. ``"wrong_password"``).
+    """
+    try:
+        from app.utils.audit_service import record_event
+
+        action = "login" if success else "login.failure"
+        details: dict = {"method": method}
+        if detail:
+            details["reason"] = detail
+        record_event(
+            db,
+            action=action,
+            user=username,
+            resource_type="session",
+            ip_address=get_client_ip(request),
+            details=details,
+            severity="info" if success else "warning",
+        )
+    except Exception:
+        logger.debug("Failed to write login audit event for user=%s", username, exc_info=True)
 
 
 async def auth(request: Request, db: Session = Depends(get_db)):
@@ -413,6 +463,7 @@ async def auth(request: Request, db: Session = Depends(get_db)):
                     username,
                     local_user.is_active,
                 )
+                _record_login_event(db, request, username, success=False, detail="account_not_verified")
                 return RedirectResponse(
                     url="/login?error=Please+verify+your+email+address+before+logging+in",
                     status_code=302,
@@ -425,10 +476,12 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             )
             if not pw_ok:
                 logger.warning("[SECURITY] LOCAL_LOGIN_FAILURE reason=wrong_password user=%s", username)
+                _record_login_event(db, request, username, success=False, detail="wrong_password")
                 return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
             user_data = _build_session_user(local_user)
             request.session["user"] = user_data
             logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", local_user.email)
+            _record_login_event(db, request, local_user.email, success=True)
             _ensure_user_profile(db, user_data, is_admin=bool(local_user.is_admin))
             profile = db.query(_UserProfile).filter(_UserProfile.user_id == local_user.email).first()
             if profile and not profile.onboarding_completed:
@@ -473,6 +526,7 @@ async def auth(request: Request, db: Session = Depends(get_db)):
         }
         request.session["user"] = admin_user_data
         logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", username)
+        _record_login_event(db, request, username, success=True)
         _ensure_user_profile(db, admin_user_data, is_admin=True)
         redirect_url = request.session.pop("redirect_after_login", "/upload")
         return RedirectResponse(url=redirect_url, status_code=302)
@@ -485,16 +539,30 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             admin_configured,
             not username and not password,
         )
+        _record_login_event(db, request, username or "anonymous", success=False, detail="invalid_credentials")
         return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
 
 
-async def logout(request: Request):
+async def logout(request: Request, db: Session = Depends(get_db)):
     """Handle user logout"""
     user = request.session.get("user")
     username = "unknown"
     if isinstance(user, dict):
         username = user.get("preferred_username") or user.get("email") or "unknown"
     logger.info(f"[SECURITY] LOGOUT user={username}")
+    try:
+        from app.utils.audit_service import record_event
+
+        record_event(
+            db,
+            action="logout",
+            user=username,
+            resource_type="session",
+            ip_address=get_client_ip(request),
+            severity="info",
+        )
+    except Exception:
+        logger.debug("Failed to write logout audit event for user=%s", username, exc_info=True)
     request.session.pop("user", None)
     return RedirectResponse(url="/login?message=You+have+been+logged+out+successfully", status_code=302)
 
