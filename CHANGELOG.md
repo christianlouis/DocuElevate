@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.125.1 (2026-03-12)
+
+### Bug Fixes
+
+- **i18n**: Sync de.json keys with en.json — add 26 missing keys to en.json and all language files
+  ([`d3349e6`](https://github.com/christianlouis/DocuElevate/commit/d3349e649ea1ef01d8afc62d9a92d00ba4aac3f8))
+
+
 ## v0.125.0 (2026-03-12)
 
 ### Bug Fixes
