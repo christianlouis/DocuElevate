@@ -765,7 +765,7 @@
   "files.filter_ocr_quality_aria": "Filtrer par score de qualité OCR",
   "files.saved_searches_save_aria": "Sauvegarder les filtres actuels comme recherche sauvegardée",
   "files.status_duplicate": "Doublon",
-  "files.files_selected": "fichier(s) sélectionné(s)",
+  "files.files_selected": "fichiers sélectionnés",
   "files.error_hint": "Cela peut être dû à un problème de configuration ou d'importation. Veuillez vérifier les journaux du serveur.",
   "files.queue_banner_items": "élément(s) sont actuellement en file d'attente ou en cours de traitement. Les fichiers apparaîtront ici une fois le traitement terminé.",
   "files.pagination_showing": "Affichage",
