@@ -33,7 +33,7 @@ from app.utils.i18n import (
 class TestTranslationFiles:
     """Verify that all translation JSON files are valid and complete."""
 
-    _PLACEHOLDER_PATTERN = re.compile(r"{([^{}]+)}")
+    PLACEHOLDER_PATTERN = re.compile(r"\{([^}]+)\}")
 
     @pytest.fixture(autouse=True)
     def _clear_cache(self) -> None:
@@ -52,7 +52,7 @@ class TestTranslationFiles:
 
     def _placeholders(self, value: str) -> set[str]:
         """Return placeholder names used in a translation string."""
-        return set(self._PLACEHOLDER_PATTERN.findall(value))
+        return set(self.PLACEHOLDER_PATTERN.findall(value))
 
     @pytest.mark.unit
     def test_all_translation_files_exist(self) -> None:

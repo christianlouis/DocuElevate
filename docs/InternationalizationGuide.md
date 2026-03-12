@@ -6,6 +6,8 @@ translator for strings that haven't been manually translated yet.
 
 ## Supported Languages
 
+Key supported languages include:
+
 | Code | Language    | Native Name | Priority |
 |------|------------|-------------|----------|
 | `en` | English    | English     | Tier 1   |

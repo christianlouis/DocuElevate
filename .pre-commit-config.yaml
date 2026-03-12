@@ -53,6 +53,7 @@ repos:
     hooks:
       - id: translation-integrity
         name: translation-integrity
+        # Override addopts so the hook stays fast and focused on translation hygiene.
         entry: python -m pytest tests/test_i18n.py::TestTranslationFiles -q -o addopts=
         language: system
         pass_filenames: false
