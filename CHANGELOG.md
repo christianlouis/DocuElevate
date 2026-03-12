@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.123.0 (2026-03-12)
+
+### Bug Fixes
+
+- **imap**: Address code review feedback on ingestion profiles
+  ([`2e08773`](https://github.com/christianlouis/DocuElevate/commit/2e087731b92fe554e54955c97166d61fe644bafc))
+
+### Features
+
+- **imap**: Add attachment type filter for IMAP ingestion
+  ([`554bb21`](https://github.com/christianlouis/DocuElevate/commit/554bb21d329ca2cca868a61adf337e29e4284ca4))
+
+- **imap**: Add ImapIngestionProfile model, API, migration and UI
+  ([`c9f5544`](https://github.com/christianlouis/DocuElevate/commit/c9f554465d5bf027a92bb4aa56db244aad4a6ff6))
+
+
 ## v0.122.0 (2026-03-12)
 
 ### Documentation
