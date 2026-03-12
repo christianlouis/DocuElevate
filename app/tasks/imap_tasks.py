@@ -13,7 +13,7 @@ from celery import shared_task
 from app.config import settings
 from app.tasks.convert_to_pdf import convert_to_pdf  # new conversion task
 from app.tasks.process_document import process_document  # Updated import
-from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES
+from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES, DOCUMENT_MIME_TYPES, IMAGE_MIME_TYPES
 
 # Database session for per-user IMAP accounts (imported lazily to avoid circular imports)
 _db_session_factory = None
@@ -180,6 +180,7 @@ def _pull_user_imap_accounts() -> None:
                         use_ssl=acct.use_ssl,
                         delete_after_process=acct.delete_after_process,
                         owner_id=acct.owner_id,
+                        attachment_filter=acct.attachment_filter or settings.imap_attachment_filter,
                     )
                     # Record successful poll
                     acct.last_checked_at = datetime.now(timezone.utc)
@@ -250,6 +251,7 @@ def _pull_user_integration_imap() -> None:
                     use_ssl = cfg.get("use_ssl", True)
                     delete_after = cfg.get("delete_after_process", False)
                     gmail_labels = cfg.get("gmail_apply_labels", True)
+                    attachment_filter = cfg.get("attachment_filter") or settings.imap_attachment_filter
 
                     if not (host and username and password):
                         logger.warning(
@@ -269,6 +271,7 @@ def _pull_user_integration_imap() -> None:
                         delete_after_process=delete_after,
                         owner_id=integ.owner_id,
                         gmail_apply_labels=gmail_labels,
+                        attachment_filter=attachment_filter,
                     )
                     integ.last_used_at = datetime.now(timezone.utc)
                     integ.last_error = None
@@ -329,6 +332,7 @@ def pull_inbox(
     delete_after_process,
     owner_id=None,
     gmail_apply_labels=True,
+    attachment_filter=None,
 ):
     """
     Connects to the IMAP inbox, fetches new unread emails from the last 3 days,
@@ -345,7 +349,12 @@ def pull_inbox(
                   attributed to this user via ``process_document`` / ``convert_to_pdf``.
         gmail_apply_labels: Whether to apply Gmail-specific labels and stars to
                   processed emails. Only relevant for Gmail hosts. Defaults to True.
+        attachment_filter: Controls which attachment types to ingest.
+                  ``'documents_only'`` (default) – PDFs and office files only.
+                  ``'all'`` – all supported types including images.
+                  ``None`` falls back to the global ``settings.imap_attachment_filter``.
     """
+    resolved_filter = attachment_filter or settings.imap_attachment_filter
     logger.info("Connecting to %s at %s:%s (SSL=%s)", mailbox_key, host, port, use_ssl)
     processed_emails = load_processed_emails()
 
@@ -407,7 +416,7 @@ def pull_inbox(
 
             # Process attachments (and convert non-PDF files).
             # We call the function without assigning its return value since it is not used.
-            fetch_attachments_and_enqueue(email_message, owner_id=owner_id)
+            fetch_attachments_and_enqueue(email_message, owner_id=owner_id, attachment_filter=resolved_filter)
 
             if settings.imap_readonly_mode:
                 logger.info("Readonly mode: skipping mailbox modifications for %s in %s", msg_id, mailbox_key)
@@ -436,27 +445,22 @@ def pull_inbox(
         logger.exception("Error pulling mailbox %s: %s", mailbox_key, e)
 
 
-def fetch_attachments_and_enqueue(email_message, owner_id: str | None = None):
+def fetch_attachments_and_enqueue(
+    email_message,
+    owner_id: str | None = None,
+    attachment_filter: str | None = None,
+):
     """
     Extracts attachments from the email and processes only allowed file types.
 
-    Files are accepted if either:
-    1. They have a MIME type from the ALLOWED_MIME_TYPES set, OR
-    2. They have a '.pdf' file extension (regardless of MIME type)
+    Files are first checked against the ``attachment_filter`` to determine which
+    broad categories are permitted, then validated against known MIME types /
+    extensions.
 
-    Allowed file types include:
-      - PDF: application/pdf or *.pdf extension
-      - Microsoft Office files:
-          - Word: application/msword,
-            application/vnd.openxmlformats-officedocument.wordprocessingml.document
-          - Excel: application/vnd.ms-excel,
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
-          - PowerPoint: application/vnd.ms-powerpoint,
-            application/vnd.openxmlformats-officedocument.presentationml.presentation
-      - Other meaningful attachments:
-          - Plain text: text/plain
-          - CSV: text/csv
-          - Rich Text Format: application/rtf, text/rtf
+    Attachment filter values:
+      - ``'documents_only'`` (default): PDFs, office files (Word, Excel, PowerPoint,
+        OpenDocument, RTF), plain text, CSV, HTML, and Markdown.  Images are skipped.
+      - ``'all'``: All supported file types, including images (JPEG, PNG, GIF, etc.).
 
     If the attachment is a PDF (by extension or MIME type), it is enqueued for upload;
     any other allowed file is enqueued for conversion to PDF.
@@ -465,9 +469,37 @@ def fetch_attachments_and_enqueue(email_message, owner_id: str | None = None):
         email_message: The parsed email message to extract attachments from.
         owner_id: Optional user identifier forwarded to ``process_document`` /
                   ``convert_to_pdf`` for multi-tenant attribution.
+        attachment_filter: Override for the filter level.  Defaults to
+                  ``settings.imap_attachment_filter`` when not provided.
 
     Returns True if at least one allowed attachment was processed.
     """
+    resolved_filter = attachment_filter or settings.imap_attachment_filter
+
+    # Build the effective allowed MIME type set based on the filter
+    if resolved_filter == "all":
+        effective_mime_types = ALLOWED_MIME_TYPES
+    else:
+        # 'documents_only' (and any unrecognised value): exclude images
+        effective_mime_types = DOCUMENT_MIME_TYPES
+
+    # Build the effective allowed extensions set (images excluded for documents_only)
+    if resolved_filter == "all":
+        effective_extensions = ALLOWED_EXTENSIONS
+    else:
+        image_extensions = {
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".gif",
+            ".bmp",
+            ".tiff",
+            ".tif",
+            ".webp",
+            ".svg",
+        }
+        effective_extensions = ALLOWED_EXTENSIONS - image_extensions
+
     has_attachment = False
     for part in email_message.walk():
         if part.get_content_maintype() == "multipart":
@@ -482,8 +514,30 @@ def fetch_attachments_and_enqueue(email_message, owner_id: str | None = None):
 
         mime_type = part.get_content_type()
         file_ext = os.path.splitext(filename)[1].lower()
+
+        # Skip images when filter is documents_only
+        is_image = mime_type in IMAGE_MIME_TYPES or file_ext in {
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".gif",
+            ".bmp",
+            ".tiff",
+            ".tif",
+            ".webp",
+            ".svg",
+        }
+        if is_image and resolved_filter != "all":
+            logger.info(
+                "Skipping image attachment %s (MIME: %s) — attachment_filter=%s",
+                filename,
+                mime_type,
+                resolved_filter,
+            )
+            continue
+
         # Accept file if it has an allowed MIME type, an allowed extension, OR is a PDF by extension
-        if mime_type not in ALLOWED_MIME_TYPES and file_ext not in ALLOWED_EXTENSIONS and not is_pdf_by_extension:
+        if mime_type not in effective_mime_types and file_ext not in effective_extensions and not is_pdf_by_extension:
             logger.info("Skipping attachment %s with MIME type %s", filename, mime_type)
             continue
 
@@ -495,7 +549,7 @@ def fetch_attachments_and_enqueue(email_message, owner_id: str | None = None):
         if mime_type == "application/pdf" or is_pdf_by_extension:
             process_document.delay(file_path, owner_id=owner_id)
             logger.info("Enqueued PDF for upload: %s (MIME: %s)", filename, mime_type)
-        elif mime_type in ALLOWED_MIME_TYPES:
+        elif mime_type in effective_mime_types:
             # Other allowed files are sent for conversion
             convert_to_pdf.delay(file_path, owner_id=owner_id)
             logger.info("Enqueued file for conversion to PDF: %s", filename)

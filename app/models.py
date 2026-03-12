@@ -439,6 +439,11 @@ class UserImapAccount(Base):
     # When True, emails are deleted from the mailbox after their attachments are processed
     delete_after_process = Column(Boolean, nullable=False, default=False)
 
+    # Override for which attachment types to ingest.
+    # NULL means "inherit the global imap_attachment_filter setting".
+    # Allowed values: 'documents_only', 'all'
+    attachment_filter = Column(String(50), nullable=True, default=None)
+
     # When False the account is not polled by the periodic task (but not deleted)
     is_active = Column(Boolean, nullable=False, default=True)
 

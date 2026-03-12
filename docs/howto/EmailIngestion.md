@@ -63,6 +63,37 @@ DocuElevate will process the following attachment types from emails:
 | TIFF | `.tif`, `.tiff` | Common format from older scanners/fax |
 | Multi-page TIFF | `.tif` | Full multi-page support |
 
+### Controlling Which Attachment Types Are Ingested
+
+By default, DocuElevate only ingests **document** attachments (PDFs, Word, Excel, PowerPoint, OpenDocument, RTF, TXT, CSV, HTML, Markdown). Images are **not** ingested by default — this prevents cluttering your document archive with inline images or unrelated photo attachments.
+
+#### Global Default (Admin Setting)
+
+Set the `IMAP_ATTACHMENT_FILTER` environment variable to control the system-wide default:
+
+| Value | Behaviour |
+|-------|-----------|
+| `documents_only` | **(Default)** Only PDFs and office/document files. Images (JPEG, PNG, GIF, BMP, TIFF, WebP, SVG) are skipped. |
+| `all` | All supported file types, including images. |
+
+```env
+# Only ingest document-type attachments (default behaviour)
+IMAP_ATTACHMENT_FILTER=documents_only
+
+# Ingest all supported file types, including images
+IMAP_ATTACHMENT_FILTER=all
+```
+
+#### Per-User Override
+
+Each user can override the global default for their personal IMAP accounts via the **Email Ingestion** dashboard (`/imap-accounts`). When creating or editing an account, select the desired setting from the **Attachment Types to Ingest** dropdown:
+
+- **Use global default** — inherits the `IMAP_ATTACHMENT_FILTER` setting above.
+- **Documents only** — PDFs and office files, no images.
+- **All supported types (including images)** — overrides the global setting to allow images for this specific account.
+
+This allows administrators to restrict image ingestion system-wide while individual users can opt-in to image ingestion on a per-mailbox basis.
+
 ---
 
 ## Setting Up Your Scanner/Device

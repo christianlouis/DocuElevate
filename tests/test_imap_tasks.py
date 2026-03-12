@@ -179,6 +179,79 @@ class TestFetchAttachmentsAndEnqueue:
         assert result is True
         mock_convert.delay.assert_called_once()
 
+    @patch("app.tasks.imap_tasks.process_document")
+    @patch("app.tasks.imap_tasks.convert_to_pdf")
+    def test_skips_image_when_documents_only(self, mock_convert, mock_process):
+        """Test that image attachments are skipped with documents_only filter."""
+        msg = EmailMessage()
+        msg["Subject"] = "Photo"
+        msg.add_attachment(b"\xff\xd8\xff", maintype="image", subtype="jpeg", filename="photo.jpg")
+
+        result = fetch_attachments_and_enqueue(msg, attachment_filter="documents_only")
+        assert result is False
+        mock_process.delay.assert_not_called()
+        mock_convert.delay.assert_not_called()
+
+    @patch("app.tasks.imap_tasks.process_document")
+    @patch("app.tasks.imap_tasks.convert_to_pdf")
+    def test_processes_image_when_all_filter(self, mock_convert, mock_process, tmp_path):
+        """Test that image attachments are processed with 'all' filter."""
+        msg = EmailMessage()
+        msg["Subject"] = "Photo"
+        msg.add_attachment(b"\xff\xd8\xff", maintype="image", subtype="jpeg", filename="photo.jpg")
+
+        with patch("app.tasks.imap_tasks.settings") as mock_settings:
+            mock_settings.workdir = str(tmp_path)
+            result = fetch_attachments_and_enqueue(msg, attachment_filter="all")
+
+        assert result is True
+        mock_convert.delay.assert_called_once()
+
+    @patch("app.tasks.imap_tasks.process_document")
+    @patch("app.tasks.imap_tasks.convert_to_pdf")
+    def test_skips_image_with_image_extension_documents_only(self, mock_convert, mock_process):
+        """Test image files identified by extension are skipped with documents_only."""
+        msg = EmailMessage()
+        msg["Subject"] = "Screenshot"
+        msg.add_attachment(b"\x89PNG", maintype="application", subtype="octet-stream", filename="screenshot.png")
+
+        result = fetch_attachments_and_enqueue(msg, attachment_filter="documents_only")
+        assert result is False
+        mock_process.delay.assert_not_called()
+        mock_convert.delay.assert_not_called()
+
+    @patch("app.tasks.imap_tasks.process_document")
+    @patch("app.tasks.imap_tasks.convert_to_pdf")
+    def test_processes_pdf_regardless_of_filter(self, mock_convert, mock_process, tmp_path):
+        """Test that PDFs are always processed, even with documents_only filter."""
+        msg = EmailMessage()
+        msg["Subject"] = "Invoice"
+        msg.add_attachment(b"%PDF-1.4", maintype="application", subtype="pdf", filename="invoice.pdf")
+
+        with patch("app.tasks.imap_tasks.settings") as mock_settings:
+            mock_settings.workdir = str(tmp_path)
+            result = fetch_attachments_and_enqueue(msg, attachment_filter="documents_only")
+
+        assert result is True
+        mock_process.delay.assert_called_once()
+
+    @patch("app.tasks.imap_tasks.process_document")
+    @patch("app.tasks.imap_tasks.convert_to_pdf")
+    def test_uses_global_setting_when_no_filter(self, mock_convert, mock_process):
+        """Test that the global settings.imap_attachment_filter is used when no filter is passed."""
+        msg = EmailMessage()
+        msg["Subject"] = "Photo"
+        msg.add_attachment(b"\xff\xd8\xff", maintype="image", subtype="jpeg", filename="photo.jpg")
+
+        with patch("app.tasks.imap_tasks.settings") as mock_settings:
+            mock_settings.imap_attachment_filter = "documents_only"
+            mock_settings.workdir = "/tmp"
+            result = fetch_attachments_and_enqueue(msg)
+
+        assert result is False
+        mock_process.delay.assert_not_called()
+        mock_convert.delay.assert_not_called()
+
 
 @pytest.mark.unit
 class TestEmailAlreadyHasLabel:

@@ -304,6 +304,7 @@ DocuElevate can automatically pull document attachments from IMAP mailboxes — 
 | `IMAP1_SSL`                   | Use SSL (`true`/`false`).                                   | `true`            |
 | `IMAP1_POLL_INTERVAL_MINUTES` | Frequency in minutes to poll for new mail.                  | `5`               |
 | `IMAP_READONLY_MODE`          | When `true`, fetches and processes attachments but does **not** modify the mailbox (no starring, labeling, deleting, or flag changes). Use for pre-production instances sharing a mailbox with production. Default: `false`. | `false` |
+| `IMAP_ATTACHMENT_FILTER`      | Controls which attachment types are ingested from emails. `documents_only` (default) ingests PDFs and office files only — images are skipped. `all` ingests every supported file type including images. Individual per-user IMAP accounts can override this global default. | `documents_only` |
 
 #### Per-User IMAP Integrations
 
