@@ -20,10 +20,11 @@ For a complete list of configuration options, see the [Configuration Guide](Conf
 
 ## Authentication Methods
 
-DocuElevate supports two primary authentication methods:
+DocuElevate supports multiple authentication methods that can be used independently or together:
 
 1. **Simple Authentication** - Basic username/password authentication managed by DocuElevate
 2. **OpenID Connect** - Integration with identity providers like Authentik, Keycloak, or Auth0
+3. **Social Login** - Sign in with Google, Microsoft, Apple, or Dropbox accounts (see [Social Login Setup Guide](SocialLoginSetup.md))
 
 ## Session Security
 
@@ -189,3 +190,11 @@ If you encounter issues with authentication:
    - For most providers, you can visit the `/.well-known/openid-configuration` endpoint to verify their settings
 
 For more general configuration issues, see the [Configuration Troubleshooting Guide](ConfigurationTroubleshooting.md).
+
+## Social Login
+
+DocuElevate supports social login with Google, Microsoft, Apple, and Dropbox. Social login allows users to authenticate using their existing accounts with these providers, without needing a separate DocuElevate password.
+
+Social login can be used alongside any other authentication method (simple auth, OIDC, local signup). Each social provider is independently configured.
+
+For detailed setup instructions, prerequisites, and provider-specific configuration, see the **[Social Login Setup Guide](SocialLoginSetup.md)**.
