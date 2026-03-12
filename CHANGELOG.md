@@ -10,6 +10,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.120.0 (2026-03-12)
+
+### Bug Fixes
+
+- Remove accidental pip artifact file and update docs for iCloud Drive
+  ([`ca84a11`](https://github.com/christianlouis/DocuElevate/commit/ca84a11284a979409db186b20b0381f5025d4fdf))
+
+- Remove accidental pip artifact file and update docs for iCloud Drive
+  ([`528f0a6`](https://github.com/christianlouis/DocuElevate/commit/528f0a624de335b21125b8b86700eb4d85dfed86))
+
+- **tests**: Add iCloud mocks to all test files and address code review feedback
+  ([`50af0ea`](https://github.com/christianlouis/DocuElevate/commit/50af0ea67942e545849bbd745258cbed7822af45))
+
+### Features
+
+- **storage**: Add Apple iCloud Drive storage provider
+  ([`82d67c5`](https://github.com/christianlouis/DocuElevate/commit/82d67c56b34ec5a849bb3fa46aba0182c7f51dcd))
+
+- **storage**: Add Apple iCloud Drive storage provider
+  ([`30f06e0`](https://github.com/christianlouis/DocuElevate/commit/30f06e0b3292d9b01428fc945913ab91888644a3))
+
+### Testing
+
+- **tasks**: Add _should_upload_to_icloud mock to send_to_all tests
+  ([`6e50c61`](https://github.com/christianlouis/DocuElevate/commit/6e50c6197082bbf2de2935cca1b74602789383f4))
+
+- **tasks**: Add _should_upload_to_icloud mock to send_to_all tests
+  ([`9bc23aa`](https://github.com/christianlouis/DocuElevate/commit/9bc23aa40b9c8a9c943cf75f1051fac9e38c24fc))
+
+
 ## v0.119.0 (2026-03-12)
 
 
