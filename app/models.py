@@ -7,6 +7,7 @@ from app.database import Base
 # Foreign key constants
 _FILES_ID_FK = "files.id"
 _PIPELINES_ID_FK = "pipelines.id"
+_ROUTING_RULES_TABLE = "pipeline_routing_rules"
 
 
 class DocumentMetadata(Base):
@@ -968,5 +969,55 @@ class ComplianceTemplate(Base):
     status = Column(String(20), nullable=False, default="not_applied")  # not_applied, compliant, partial, non_compliant
     applied_at = Column(DateTime(timezone=True), nullable=True)
     applied_by = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class PipelineRoutingRule(Base):
+    """Conditional routing rule that assigns documents to pipelines.
+
+    Rules are evaluated in ascending ``position`` order for a given owner.
+    The first rule whose condition matches the document properties wins and
+    the document is routed to ``target_pipeline_id``.  If no rule matches,
+    the caller falls back to the owner's (or system) default pipeline.
+
+    Supported fields:
+        file_type, document_type, category, filename, size, and any key
+        inside the AI-extracted metadata JSON (prefixed ``metadata.``).
+
+    Supported operators:
+        equals, not_equals, contains, not_contains, regex, gt, lt, gte, lte.
+    """
+
+    __tablename__ = _ROUTING_RULES_TABLE
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Owner of this rule.  NULL = system-wide rule (admin only).
+    owner_id = Column(String, nullable=True, index=True)
+
+    # Human-readable label for the rule.
+    name = Column(String(255), nullable=False)
+
+    # Evaluation order (lower = earlier).  First matching rule wins.
+    position = Column(Integer, nullable=False, default=0)
+
+    # The document property to evaluate.
+    # Built-in: file_type, document_type, category, filename, size.
+    # For AI metadata fields, use the "metadata.<key>" prefix.
+    field = Column(String(255), nullable=False)
+
+    # Comparison operator.
+    operator = Column(String(50), nullable=False)
+
+    # Value to compare against (always stored as text; cast as needed).
+    value = Column(String(1024), nullable=False)
+
+    # Target pipeline when the condition matches.
+    target_pipeline_id = Column(Integer, ForeignKey(_PIPELINES_ID_FK), nullable=False, index=True)
+
+    # Soft-disable without deleting.
+    is_active = Column(Boolean, nullable=False, default=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

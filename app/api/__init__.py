@@ -34,6 +34,7 @@ from app.api.plans import router as plans_router
 from app.api.process import router as process_router
 from app.api.profile import router as profile_router
 from app.api.queue import router as queue_router
+from app.api.routing_rules import router as routing_rules_router
 from app.api.saved_searches import router as saved_searches_router
 from app.api.scheduled_jobs import router as scheduled_jobs_router
 from app.api.search import router as search_router
@@ -85,6 +86,7 @@ router.include_router(onboarding_router)
 router.include_router(billing_router)
 router.include_router(pipelines_router)
 router.include_router(profile_router)
+router.include_router(routing_rules_router)
 router.include_router(imap_accounts_router)
 router.include_router(imap_profiles_router)
 router.include_router(integrations_router)
