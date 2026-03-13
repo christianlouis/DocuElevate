@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.131.0 (2026-03-13)
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`bd35cdd`](https://github.com/christianlouis/DocuElevate/commit/bd35cdd268b796cefa257e395d9ef3039c2fc63f))
+
+- **changelog**: Update changelog [skip ci]
+  ([`bb71f0a`](https://github.com/christianlouis/DocuElevate/commit/bb71f0aab8d4375c02553eb93d8c5c6cb71cde09))
+
+- **i18n**: Add comment on Welsh subdivision flag Unicode representation
+  ([`ce4e797`](https://github.com/christianlouis/DocuElevate/commit/ce4e797bd10f0cde5268a2a335510c5bd08b41e3))
+
+### Features
+
+- **i18n**: Expand supported languages from 31 to 49 with flags and locale formats
+  ([`87d8562`](https://github.com/christianlouis/DocuElevate/commit/87d85624be78b2c97faec27745e7c896480a4438))
+
+
 ## Unreleased
 
 ### Documentation
