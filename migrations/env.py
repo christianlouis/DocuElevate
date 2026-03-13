@@ -33,6 +33,7 @@ from app.models import (  # noqa: F401
     LocalUser,
     MobileDevice,
     Pipeline,
+    PipelineRoutingRule,
     PipelineStep,
     ProcessingLog,
     SavedSearch,
