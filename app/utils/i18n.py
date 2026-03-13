@@ -51,7 +51,7 @@ SUPPORTED_LANGUAGES: list[dict[str, str]] = [
     {"code": "ga", "name": "Irish", "native": "Gaeilge", "flag": "🇮🇪"},
     {"code": "lb", "name": "Luxembourgish", "native": "Lëtzebuergesch", "flag": "🇱🇺"},
     {"code": "ca", "name": "Catalan", "native": "Català", "flag": "🏴"},
-    {"code": "cy", "name": "Welsh", "native": "Cymraeg", "flag": "🏴󠁧󠁢󠁷󠁬󠁳󠁿"},
+    {"code": "cy", "name": "Welsh", "native": "Cymraeg", "flag": "🏴󠁧󠁢󠁷󠁬󠁳󠁿"},  # Wales subdivision flag (U+1F3F4 + tag chars)
     {"code": "fy", "name": "Frisian", "native": "Frysk", "flag": "🇳🇱"},
     {"code": "gl", "name": "Galician", "native": "Galego", "flag": "🇪🇸"},
     {"code": "li", "name": "Limburgish", "native": "Limburgs", "flag": "🇳🇱"},
