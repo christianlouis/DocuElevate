@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`bb71f0a`](https://github.com/christianlouis/DocuElevate/commit/bb71f0aab8d4375c02553eb93d8c5c6cb71cde09))
+
+
+## Unreleased
+
 
 ## v0.130.0 (2026-03-13)
 
