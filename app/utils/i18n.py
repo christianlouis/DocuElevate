@@ -2,7 +2,7 @@
 
 Provides a JSON-based translation system for the DocuElevate UI with:
 
-* **31 supported languages** covering all major European languages plus ZH
+* **49 supported languages** covering European, Asian, Middle-Eastern, and other languages
 * Browser ``Accept-Language`` detection with cookie & user-profile persistence
 * AI-powered fallback translation via the configured LLM provider
 * Locale-aware date, number, and file-size formatting helpers
@@ -42,7 +42,8 @@ SUPPORTED_LANGUAGES: list[dict[str, str]] = [
     {"code": "pt", "name": "Portuguese", "native": "Português", "flag": "🇵🇹"},
     # --- Tier 2: Western & Northern European ---
     {"code": "nl", "name": "Dutch", "native": "Nederlands", "flag": "🇳🇱"},
-    {"code": "nb", "name": "Norwegian", "native": "Norsk", "flag": "🇳🇴"},
+    {"code": "nb", "name": "Norwegian Bokmål", "native": "Norsk bokmål", "flag": "🇳🇴"},
+    {"code": "no", "name": "Norwegian", "native": "Norsk", "flag": "🇳🇴"},
     {"code": "da", "name": "Danish", "native": "Dansk", "flag": "🇩🇰"},
     {"code": "sv", "name": "Swedish", "native": "Svenska", "flag": "🇸🇪"},
     {"code": "fi", "name": "Finnish", "native": "Suomi", "flag": "🇫🇮"},
@@ -50,6 +51,12 @@ SUPPORTED_LANGUAGES: list[dict[str, str]] = [
     {"code": "ga", "name": "Irish", "native": "Gaeilge", "flag": "🇮🇪"},
     {"code": "lb", "name": "Luxembourgish", "native": "Lëtzebuergesch", "flag": "🇱🇺"},
     {"code": "ca", "name": "Catalan", "native": "Català", "flag": "🏴"},
+    {"code": "cy", "name": "Welsh", "native": "Cymraeg", "flag": "🏴󠁧󠁢󠁷󠁬󠁳󠁿"},
+    {"code": "fy", "name": "Frisian", "native": "Frysk", "flag": "🇳🇱"},
+    {"code": "gl", "name": "Galician", "native": "Galego", "flag": "🇪🇸"},
+    {"code": "li", "name": "Limburgish", "native": "Limburgs", "flag": "🇳🇱"},
+    {"code": "vls", "name": "West Flemish", "native": "West-Vlams", "flag": "🇧🇪"},
+    {"code": "nds", "name": "Low German", "native": "Plattdüütsch", "flag": "🇩🇪"},
     # --- Tier 3: Central & Eastern European ---
     {"code": "pl", "name": "Polish", "native": "Polski", "flag": "🇵🇱"},
     {"code": "cs", "name": "Czech", "native": "Čeština", "flag": "🇨🇿"},
@@ -63,11 +70,24 @@ SUPPORTED_LANGUAGES: list[dict[str, str]] = [
     {"code": "et", "name": "Estonian", "native": "Eesti", "flag": "🇪🇪"},
     {"code": "lv", "name": "Latvian", "native": "Latviešu", "flag": "🇱🇻"},
     {"code": "lt", "name": "Lithuanian", "native": "Lietuvių", "flag": "🇱🇹"},
-    # --- Tier 4: Non-EU European & Other ---
+    {"code": "sr", "name": "Serbian", "native": "Српски", "flag": "🇷🇸"},
+    # --- Tier 4: Non-EU European, Middle Eastern & African ---
     {"code": "tr", "name": "Turkish", "native": "Türkçe", "flag": "🇹🇷"},
     {"code": "uk", "name": "Ukrainian", "native": "Українська", "flag": "🇺🇦"},
     {"code": "ru", "name": "Russian", "native": "Русский", "flag": "🇷🇺"},
+    {"code": "he", "name": "Hebrew", "native": "עברית", "flag": "🇮🇱"},
+    {"code": "ar", "name": "Arabic", "native": "العربية", "flag": "🇸🇦"},
+    {"code": "fa", "name": "Persian", "native": "فارسی", "flag": "🇮🇷"},
+    {"code": "af", "name": "Afrikaans", "native": "Afrikaans", "flag": "🇿🇦"},
+    # --- Tier 5: Asian languages ---
     {"code": "zh", "name": "Chinese", "native": "中文", "flag": "🇨🇳"},
+    {"code": "ja", "name": "Japanese", "native": "日本語", "flag": "🇯🇵"},
+    {"code": "ko", "name": "Korean", "native": "한국어", "flag": "🇰🇷"},
+    {"code": "vi", "name": "Vietnamese", "native": "Tiếng Việt", "flag": "🇻🇳"},
+    {"code": "pa", "name": "Punjabi", "native": "ਪੰਜਾਬੀ", "flag": "🇮🇳"},
+    {"code": "kn", "name": "Kannada", "native": "ಕನ್ನಡ", "flag": "🇮🇳"},
+    # --- Tier 6: Constructed & other languages ---
+    {"code": "eo", "name": "Esperanto", "native": "Esperanto", "flag": "🌍"},
 ]
 
 SUPPORTED_LANGUAGE_CODES: set[str] = {lang["code"] for lang in SUPPORTED_LANGUAGES}
@@ -500,6 +520,133 @@ _LOCALE_FORMATS: dict[str, dict[str, Any]] = {
         "date": "%d %B %Y",
         "date_short": "%d.%m.%Y",
         "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+    # --- New languages ---
+    "no": {
+        "date": "%d. %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d. %B %Y %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+    "cy": {
+        "date": "%d %B %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "fy": {
+        "date": "%d %B %Y",
+        "date_short": "%d-%m-%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "gl": {
+        "date": "%d de %B de %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d de %B de %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "li": {
+        "date": "%d %B %Y",
+        "date_short": "%d-%m-%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "vls": {
+        "date": "%d %B %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "nds": {
+        "date": "%d. %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d. %B %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "sr": {
+        "date": "%d. %B %Y.",
+        "date_short": "%d.%m.%Y.",
+        "datetime": "%d. %B %Y. %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "he": {
+        "date": "%d %B %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "ar": {
+        "date": "%d %B %Y",
+        "date_short": "%Y/%m/%d",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "fa": {
+        "date": "%d %B %Y",
+        "date_short": "%Y/%m/%d",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "af": {
+        "date": "%d %B %Y",
+        "date_short": "%Y/%m/%d",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+    "ja": {
+        "date": "%Y年%m月%d日",
+        "date_short": "%Y/%m/%d",
+        "datetime": "%Y年%m月%d日 %H:%M",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "ko": {
+        "date": "%Y년 %m월 %d일",
+        "date_short": "%Y.%m.%d",
+        "datetime": "%Y년 %m월 %d일 %H:%M",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "vi": {
+        "date": "ngày %d tháng %m năm %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "ngày %d tháng %m năm %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "pa": {
+        "date": "%d %B %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "kn": {
+        "date": "%d %B %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "eo": {
+        "date": "%d-a de %B %Y",
+        "date_short": "%Y-%m-%d",
+        "datetime": "%d-a de %B %Y %H:%M",
         "thousands_sep": "\u00a0",
         "decimal_sep": ",",
     },
