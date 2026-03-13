@@ -2,7 +2,7 @@
 
 Provides a JSON-based translation system for the DocuElevate UI with:
 
-* **49 supported languages** covering European, Asian, Middle-Eastern, and other languages
+* **77 supported languages** covering European, Asian, Middle-Eastern, African, and other languages
 * Browser ``Accept-Language`` detection with cookie & user-profile persistence
 * AI-powered fallback translation via the configured LLM provider
 * Locale-aware date, number, and file-size formatting helpers
@@ -52,10 +52,10 @@ SUPPORTED_LANGUAGES: list[dict[str, str]] = [
     {"code": "lb", "name": "Luxembourgish", "native": "Lëtzebuergesch", "flag": "🇱🇺"},
     {"code": "ca", "name": "Catalan", "native": "Català", "flag": "🏴"},
     {"code": "cy", "name": "Welsh", "native": "Cymraeg", "flag": "🏴󠁧󠁢󠁷󠁬󠁳󠁿"},  # Wales subdivision flag (U+1F3F4 + tag chars)
-    {"code": "fy", "name": "Frisian", "native": "Frysk", "flag": "🇳🇱"},
+    {"code": "fy", "name": "Western Frisian", "native": "Frysk", "flag": "🇳🇱"},
     {"code": "gl", "name": "Galician", "native": "Galego", "flag": "🇪🇸"},
     {"code": "li", "name": "Limburgish", "native": "Limburgs", "flag": "🇳🇱"},
-    {"code": "vls", "name": "West Flemish", "native": "West-Vlams", "flag": "🇧🇪"},
+    {"code": "vls", "name": "Flemish", "native": "West-Vlams", "flag": "🇧🇪"},
     {"code": "nds", "name": "Low German", "native": "Plattdüütsch", "flag": "🇩🇪"},
     # --- Tier 3: Central & Eastern European ---
     {"code": "pl", "name": "Polish", "native": "Polski", "flag": "🇵🇱"},
@@ -74,19 +74,48 @@ SUPPORTED_LANGUAGES: list[dict[str, str]] = [
     # --- Tier 4: Non-EU European, Middle Eastern & African ---
     {"code": "tr", "name": "Turkish", "native": "Türkçe", "flag": "🇹🇷"},
     {"code": "uk", "name": "Ukrainian", "native": "Українська", "flag": "🇺🇦"},
-    {"code": "ru", "name": "Russian", "native": "Русский", "flag": "🇷🇺"},
     {"code": "he", "name": "Hebrew", "native": "עברית", "flag": "🇮🇱"},
     {"code": "ar", "name": "Arabic", "native": "العربية", "flag": "🇸🇦"},
     {"code": "fa", "name": "Persian", "native": "فارسی", "flag": "🇮🇷"},
     {"code": "af", "name": "Afrikaans", "native": "Afrikaans", "flag": "🇿🇦"},
     # --- Tier 5: Asian languages ---
     {"code": "zh", "name": "Chinese", "native": "中文", "flag": "🇨🇳"},
+    {"code": "zh-TW", "name": "Traditional Chinese", "native": "繁體中文", "flag": "🇹🇼"},
     {"code": "ja", "name": "Japanese", "native": "日本語", "flag": "🇯🇵"},
     {"code": "ko", "name": "Korean", "native": "한국어", "flag": "🇰🇷"},
     {"code": "vi", "name": "Vietnamese", "native": "Tiếng Việt", "flag": "🇻🇳"},
     {"code": "pa", "name": "Punjabi", "native": "ਪੰਜਾਬੀ", "flag": "🇮🇳"},
     {"code": "kn", "name": "Kannada", "native": "ಕನ್ನಡ", "flag": "🇮🇳"},
-    # --- Tier 6: Constructed & other languages ---
+    {"code": "hi", "name": "Hindi", "native": "हिन्दी", "flag": "🇮🇳"},
+    {"code": "bn", "name": "Bengali", "native": "বাংলা", "flag": "🇧🇩"},
+    {"code": "gu", "name": "Gujarati", "native": "ગુજરાતી", "flag": "🇮🇳"},
+    {"code": "ml", "name": "Malayalam", "native": "മലയാളം", "flag": "🇮🇳"},
+    {"code": "mr", "name": "Marathi", "native": "मराठी", "flag": "🇮🇳"},
+    {"code": "ta", "name": "Tamil", "native": "தமிழ்", "flag": "🇮🇳"},
+    {"code": "te", "name": "Telugu", "native": "తెలుగు", "flag": "🇮🇳"},
+    {"code": "ur", "name": "Urdu", "native": "اردو", "flag": "🇵🇰"},
+    {"code": "si", "name": "Sinhala", "native": "සිංහල", "flag": "🇱🇰"},
+    {"code": "ne", "name": "Nepali", "native": "नेपाली", "flag": "🇳🇵"},
+    {"code": "th", "name": "Thai", "native": "ไทย", "flag": "🇹🇭"},
+    {"code": "km", "name": "Khmer", "native": "ខ្មែរ", "flag": "🇰🇭"},
+    {"code": "id", "name": "Indonesian", "native": "Bahasa Indonesia", "flag": "🇮🇩"},
+    {"code": "ms", "name": "Malay", "native": "Bahasa Melayu", "flag": "🇲🇾"},
+    {"code": "jv", "name": "Javanese", "native": "Basa Jawa", "flag": "🇮🇩"},
+    {"code": "tl", "name": "Tagalog", "native": "Filipino", "flag": "🇵🇭"},
+    {"code": "mn", "name": "Mongolian", "native": "Монгол", "flag": "🇲🇳"},
+    {"code": "kk", "name": "Kazakh", "native": "Қазақ тілі", "flag": "🇰🇿"},
+    {"code": "uz", "name": "Uzbek", "native": "Oʻzbekcha", "flag": "🇺🇿"},
+    {"code": "az", "name": "Azerbaijani", "native": "Azərbaycan dili", "flag": "🇦🇿"},
+    {"code": "hy", "name": "Armenian", "native": "Հայերեն", "flag": "🇦🇲"},
+    {"code": "ka", "name": "Georgian", "native": "ქართული", "flag": "🇬🇪"},
+    # --- Tier 6: African languages ---
+    {"code": "sw", "name": "Swahili", "native": "Kiswahili", "flag": "🇰🇪"},
+    {"code": "am", "name": "Amharic", "native": "አማርኛ", "flag": "🇪🇹"},
+    {"code": "ha", "name": "Hausa", "native": "Hausa", "flag": "🇳🇬"},
+    {"code": "yo", "name": "Yoruba", "native": "Yorùbá", "flag": "🇳🇬"},
+    {"code": "ig", "name": "Igbo", "native": "Igbo", "flag": "🇳🇬"},
+    {"code": "zu", "name": "Zulu", "native": "isiZulu", "flag": "🇿🇦"},
+    # --- Tier 7: Constructed & other languages ---
     {"code": "eo", "name": "Esperanto", "native": "Esperanto", "flag": "🌍"},
 ]
 
