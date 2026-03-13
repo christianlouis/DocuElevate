@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.130.0 (2026-03-13)
+
+### Features
+
+- **i18n**: Add complete Catalan (ca) translation
+  ([`217217d`](https://github.com/christianlouis/DocuElevate/commit/217217dd01eaa29eeb2510f953438240fb8fc235))
+
+
 ## v0.129.0 (2026-03-13)
 
 ### Bug Fixes
