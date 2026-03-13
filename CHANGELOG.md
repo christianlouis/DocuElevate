@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.128.0 (2026-03-13)
+
+### Features
+
+- **i18n**: Add missing Polish translations to pl.json
+  ([`f737f29`](https://github.com/christianlouis/DocuElevate/commit/f737f2903a8ecfe204f4ca9a40f4eb143545609b))
+
+
 ## v0.127.0 (2026-03-13)
 
 
