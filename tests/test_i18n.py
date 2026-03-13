@@ -161,7 +161,7 @@ class TestParseAcceptLanguage:
 
     @pytest.mark.unit
     def test_unsupported_language_fallback(self) -> None:
-        result = _parse_accept_language("ja, ko")
+        result = _parse_accept_language("xx, yy")
         assert result is None
 
     @pytest.mark.unit
@@ -326,7 +326,7 @@ class TestSupportedLanguages:
 
     @pytest.mark.unit
     def test_ten_languages_supported(self) -> None:
-        assert len(SUPPORTED_LANGUAGES) == 31
+        assert len(SUPPORTED_LANGUAGES) == 49
 
     @pytest.mark.unit
     def test_supported_codes_set(self) -> None:
@@ -338,10 +338,8 @@ class TestSupportedLanguages:
             "it",
             "pt",
             "nl",
-            "pl",
-            "zh",
-            "ru",
             "nb",
+            "no",
             "da",
             "sv",
             "fi",
@@ -349,6 +347,13 @@ class TestSupportedLanguages:
             "ga",
             "lb",
             "ca",
+            "cy",
+            "fy",
+            "gl",
+            "li",
+            "vls",
+            "nds",
+            "pl",
             "cs",
             "sk",
             "hu",
@@ -360,8 +365,21 @@ class TestSupportedLanguages:
             "et",
             "lv",
             "lt",
+            "sr",
             "tr",
             "uk",
+            "ru",
+            "he",
+            "ar",
+            "fa",
+            "af",
+            "zh",
+            "ja",
+            "ko",
+            "vi",
+            "pa",
+            "kn",
+            "eo",
         }
         assert SUPPORTED_LANGUAGE_CODES == expected
 
@@ -385,7 +403,7 @@ class TestI18nAPI:
         assert response.status_code == 200
         data = response.json()
         assert "languages" in data
-        assert len(data["languages"]) == 31
+        assert len(data["languages"]) == 49
         assert data["default"] == "en"
         # Verify each language has required fields
         for lang in data["languages"]:
