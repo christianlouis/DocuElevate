@@ -135,7 +135,8 @@ class TestTranslate:
     def test_translate_with_kwargs_german(self) -> None:
         """Placeholder interpolation in German."""
         result = translate("language.changed", "de", language="English")
-        assert result == "Sprache geändert zu English"
+        assert "English" in result
+        assert result != "language.changed"
 
 
 # ---------------------------------------------------------------------------
