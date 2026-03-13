@@ -10,6 +10,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.126.0 (2026-03-13)
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`fd4ea5c`](https://github.com/christianlouis/DocuElevate/commit/fd4ea5c71b4ac3204bb9cf21b115333c0db24927))
+
+- **changelog**: Update changelog [skip ci]
+  ([`95af9ff`](https://github.com/christianlouis/DocuElevate/commit/95af9ffe5e493470caaf09dc784ba12f5d19a8e7))
+
+- **changelog**: Update changelog [skip ci]
+  ([`ca88d7d`](https://github.com/christianlouis/DocuElevate/commit/ca88d7d4250b3b9ee384d05b53d854056c5eccb4))
+
+- **routing**: Add routing rules documentation to API.md and UserGuide.md
+  ([`e95693d`](https://github.com/christianlouis/DocuElevate/commit/e95693d684076ef87c436840caf2c5aa4581456d))
+
+### Features
+
+- **routing**: Add conditional routing rules for document-to-pipeline assignment
+  ([`40d56f0`](https://github.com/christianlouis/DocuElevate/commit/40d56f0396b42754954cea03e4efa2e442121313))
+
+### Refactoring
+
+- **routing**: Address code review feedback - simplify list filter, fix docs example
+  ([`1e5e35a`](https://github.com/christianlouis/DocuElevate/commit/1e5e35a26af47db925f77514a3bfdbccf417c0f5))
+
+
 ## Unreleased
 
 ### Documentation
