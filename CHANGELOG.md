@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.129.0 (2026-03-13)
+
+### Bug Fixes
+
+- **i18n**: Use plain plural form for files.files_selected in fr.json
+  ([`bb2c3ac`](https://github.com/christianlouis/DocuElevate/commit/bb2c3ac7595d1668cae5d9ff5d5668f10670be24))
+
+### Features
+
+- **i18n**: Add complete French translations to fr.json
+  ([`5de7e01`](https://github.com/christianlouis/DocuElevate/commit/5de7e01a8677902b3f249c68b96692bdc42eb623))
+
+
 ## v0.128.0 (2026-03-13)
 
 ### Features
