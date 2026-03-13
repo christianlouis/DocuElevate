@@ -252,8 +252,11 @@ format_number(1234.56, "en")                # → "1,234.56"
 ### Adding a New Translation Key
 
 1. Add the key and English text to `frontend/translations/en.json`
-2. Add translations for all other languages in their respective files
-3. Use `{{ _("your.new.key") }}` in templates
+2. Use `{{ _("your.new.key") }}` in templates or `translate("your.new.key", locale)` in Python
+
+That's it. An external automation script picks up new keys in `en.json` and propagates
+translations to all other language files. You never need to touch the non-English JSON
+files manually — the translate-and-sync pipeline takes care of it.
 
 ### AI Fallback Translation
 

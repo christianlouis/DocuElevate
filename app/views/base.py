@@ -18,6 +18,7 @@ from app.utils.i18n import (
     format_date,
     format_datetime,
     format_number,
+    get_suggested_languages,
     translate,
 )
 
@@ -73,6 +74,10 @@ def _inject_global_context(ctx: dict) -> None:
         # --- i18n: detect language and register template helpers ---
         current_locale = detect_language(req)
         ctx.setdefault("current_locale", current_locale)
+
+        # Smart language suggestions for the compact nav-bar dropdown (5-7 languages)
+        accept_header = req.headers.get("accept-language", "") if hasattr(req, "headers") else ""
+        ctx.setdefault("suggested_languages", get_suggested_languages(current_locale, accept_header))
 
         def _translate(key: str, **kwargs: object) -> str:
             return translate(key, current_locale, **kwargs)

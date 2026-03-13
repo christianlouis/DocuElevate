@@ -122,6 +122,12 @@ SUPPORTED_LANGUAGES: list[dict[str, str]] = [
 SUPPORTED_LANGUAGE_CODES: set[str] = {lang["code"] for lang in SUPPORTED_LANGUAGES}
 DEFAULT_LANGUAGE = "en"
 
+# Lookup map for fast code → language-dict resolution
+_LANG_CODE_MAP: dict[str, dict[str, str]] = {lang["code"]: lang for lang in SUPPORTED_LANGUAGES}
+
+# Global-usage order used to fill remaining slots in the smart suggestions list
+_POPULAR_LANGUAGE_CODES: list[str] = ["en", "zh", "es", "ar", "fr", "de", "ja", "pt", "hi", "ko"]
+
 # ---------------------------------------------------------------------------
 # Translation file loading
 # ---------------------------------------------------------------------------
@@ -292,14 +298,10 @@ def detect_language(request: Request) -> str:
     return DEFAULT_LANGUAGE
 
 
-def _parse_accept_language(header: str) -> str | None:
-    """Extract the best matching language from an ``Accept-Language`` header.
-
-    Parses quality values and returns the highest-priority match among
-    :data:`SUPPORTED_LANGUAGE_CODES`, or ``None`` if nothing matches.
-    """
+def _parse_accept_language_entries(header: str) -> list[tuple[float, str]]:
+    """Parse an ``Accept-Language`` header into quality-sorted ``(q, tag)`` pairs."""
     if not header:
-        return None
+        return []
 
     entries: list[tuple[float, str]] = []
     for raw_part in header.split(","):
@@ -317,16 +319,61 @@ def _parse_accept_language(header: str) -> str | None:
             quality = 1.0
         entries.append((quality, lang_tag.strip().lower()))
 
-    # Sort by quality descending
     entries.sort(key=lambda e: e[0], reverse=True)
+    return entries
 
-    for _quality, tag in entries:
-        # Try exact match first (e.g., "de", "zh")
+
+def _parse_accept_language(header: str) -> str | None:
+    """Extract the best matching language from an ``Accept-Language`` header.
+
+    Parses quality values and returns the highest-priority match among
+    :data:`SUPPORTED_LANGUAGE_CODES`, or ``None`` if nothing matches.
+    """
+    for _quality, tag in _parse_accept_language_entries(header):
         code = tag.split("-")[0]
         if code in SUPPORTED_LANGUAGE_CODES:
             return code
 
     return None
+
+
+# Maximum number of languages shown in the compact nav-bar dropdown
+_SUGGESTED_LANGUAGES_MAX = 6
+
+
+def get_suggested_languages(current_locale: str, accept_language_header: str = "") -> list[dict[str, str]]:
+    """Return up to :data:`_SUGGESTED_LANGUAGES_MAX` suggested languages for the compact picker.
+
+    Selection priority:
+        1. The currently active language (always included first).
+        2. Languages listed in the browser's ``Accept-Language`` header.
+        3. Popular global languages (by estimated speaker count) as fillers.
+
+    The resulting list is de-duplicated and capped at
+    :data:`_SUGGESTED_LANGUAGES_MAX` entries.
+    """
+    candidates: list[str] = []
+
+    # 1. Active locale first
+    if current_locale in SUPPORTED_LANGUAGE_CODES:
+        candidates.append(current_locale)
+
+    # 2. Browser preferences
+    for _quality, tag in _parse_accept_language_entries(accept_language_header):
+        if len(candidates) >= _SUGGESTED_LANGUAGES_MAX:
+            break
+        code = tag.split("-")[0]
+        if code in SUPPORTED_LANGUAGE_CODES and code not in candidates:
+            candidates.append(code)
+
+    # 3. Popular language fillers
+    for code in _POPULAR_LANGUAGE_CODES:
+        if len(candidates) >= _SUGGESTED_LANGUAGES_MAX:
+            break
+        if code not in candidates and code in SUPPORTED_LANGUAGE_CODES:
+            candidates.append(code)
+
+    return [_LANG_CODE_MAP[c] for c in candidates[:_SUGGESTED_LANGUAGES_MAX] if c in _LANG_CODE_MAP]
 
 
 # ---------------------------------------------------------------------------
