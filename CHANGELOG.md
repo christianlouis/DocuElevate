@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - **changelog**: Update changelog [skip ci]
+  ([`95af9ff`](https://github.com/christianlouis/DocuElevate/commit/95af9ffe5e493470caaf09dc784ba12f5d19a8e7))
+
+- **changelog**: Update changelog [skip ci]
+  ([`ca88d7d`](https://github.com/christianlouis/DocuElevate/commit/ca88d7d4250b3b9ee384d05b53d854056c5eccb4))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
   ([`ca88d7d`](https://github.com/christianlouis/DocuElevate/commit/ca88d7d4250b3b9ee384d05b53d854056c5eccb4))
 
 
