@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.132.0 (2026-03-13)
+
+### Features
+
+- **i18n**: Update language support to 77 languages
+  ([`59d8512`](https://github.com/christianlouis/DocuElevate/commit/59d851272dccd0213c4b718a9a07e98d9fed1be8))
+
+
 ## v0.131.0 (2026-03-13)
 
 ### Documentation
