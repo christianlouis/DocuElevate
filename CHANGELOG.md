@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.134.3 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Add expo-dev-client, pin Node version, and fix EAS build config
+  ([`6834f3e`](https://github.com/christianlouis/DocuElevate/commit/6834f3ef1b3bce099e4f8f9f76cee94a2a635f64))
+
+- **mobile**: Add owner field to app.json to match EAS project owner
+  ([`492b2c6`](https://github.com/christianlouis/DocuElevate/commit/492b2c643c42686c950f871bd284a4e702af52d5))
+
+
 ## v0.134.2 (2026-03-14)
 
 ### Bug Fixes
