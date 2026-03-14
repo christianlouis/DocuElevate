@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.135.1 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Resolve EAS CI build failures – wrap app.json, update deps, pin Xcode image
+  ([`3bf9589`](https://github.com/christianlouis/DocuElevate/commit/3bf9589462ffb2cff80ef3d73b38be879869f157))
+
+
 ## v0.135.0 (2026-03-14)
 
 ### Features
