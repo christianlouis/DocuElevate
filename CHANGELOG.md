@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.133.0 (2026-03-14)
+
+### Features
+
+- **ui**: Smart compact language selector with search and flags
+  ([`3557590`](https://github.com/christianlouis/DocuElevate/commit/3557590679f17ad88fe7cf91b5665fd669ba0447))
+
+
 ## v0.132.1 (2026-03-14)
 
 ### Bug Fixes
