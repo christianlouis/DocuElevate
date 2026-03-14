@@ -8,6 +8,7 @@
 
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -48,8 +49,8 @@ function TabNavigator() {
         options={{
           title: "Upload",
           tabBarLabel: "Upload",
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 20, color }}>⬆️</Text>
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="cloud-upload-outline" size={size} color={color} />
           ),
           headerTitle: "DocuElevate",
         }}
@@ -60,8 +61,8 @@ function TabNavigator() {
         options={{
           title: "Files",
           tabBarLabel: "Files",
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 20, color }}>📄</Text>
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="document-text-outline" size={size} color={color} />
           ),
           headerTitle: "My Documents",
         }}
@@ -72,8 +73,8 @@ function TabNavigator() {
         options={{
           title: "Profile",
           tabBarLabel: "Profile",
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 20, color }}>👤</Text>
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person-circle-outline" size={size} color={color} />
           ),
           headerTitle: "Profile",
         }}
