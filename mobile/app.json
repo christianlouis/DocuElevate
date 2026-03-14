@@ -58,8 +58,7 @@
       }
     ],
     "expo-document-picker",
-    "expo-secure-store",
-    "expo-sharing"
+    "expo-secure-store"
   ],
   "scheme": "docuelevate",
   "extra": {
