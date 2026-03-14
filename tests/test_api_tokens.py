@@ -263,8 +263,22 @@ class TestTokenRevoke:
 
     @pytest.mark.unit
     def test_revoke_token_database_error(self, tok_engine, tok_session):
-        """Revoking a token should rollback and raise 500 if database commit fails."""
+        """Revoking a token should rollback and raise 500 if database commit fails.
+
+        The test verifies two properties:
+        1. ``db.rollback()`` is actually called when commit raises (not just that
+           the endpoint returns 500).
+        2. After the rollback the token remains active in the database.
+
+        To ensure the assertions are meaningful, the patched ``commit`` first
+        flushes the session (so the changes *are* staged inside the transaction)
+        before raising.  Without a subsequent ``rollback()`` the flushed state
+        would still be visible to other sessions, so the ``is_active`` check
+        would catch a missing rollback call.
+        """
         from unittest.mock import patch
+
+        from sqlalchemy.orm import Session as SASession
 
         from app.main import app
 
@@ -273,12 +287,32 @@ class TestTokenRevoke:
             create_resp = client.post("/api/api-tokens/", json={"name": "DB Error Test"})
             token_id = create_resp.json()["id"]
 
-            # Mock commit to raise an exception
-            with patch("sqlalchemy.orm.Session.commit", side_effect=Exception("DB Failure")):
+            # Wrap commit: flush first so changes are staged in the transaction,
+            # then raise to simulate a commit failure after data has been written.
+            def _fail_after_flush(self):
+                self.flush()  # stage changes inside the open transaction
+                raise Exception("DB Failure")
+
+            # Spy on rollback so we can assert it is called.
+            rollback_called = False
+            real_rollback = SASession.rollback
+
+            def _spy_rollback(self):
+                nonlocal rollback_called
+                rollback_called = True
+                real_rollback(self)
+
+            with (
+                patch.object(SASession, "commit", _fail_after_flush),
+                patch.object(SASession, "rollback", _spy_rollback),
+            ):
                 resp = client.delete(f"/api/api-tokens/{token_id}")
                 assert resp.status_code == 500
 
-            # Verify token is still active in DB because of rollback
+            # rollback() must have been called to undo the flushed changes.
+            assert rollback_called, "db.rollback() was not called after commit failure"
+
+            # After rollback the token must still be active in the database.
             db_token = tok_session.query(ApiToken).filter(ApiToken.id == token_id).first()
             assert db_token.is_active is True
         finally:
