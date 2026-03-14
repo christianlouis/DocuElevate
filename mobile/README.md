@@ -43,9 +43,6 @@ npm install -g eas-cli
 # Log in to Expo
 eas login
 
-# Configure your project (one-time) – updates app.json with the EAS project ID
-eas init
-
 # Build for iOS
 eas build --platform ios
 
@@ -56,7 +53,7 @@ eas build --platform android
 eas build --platform all
 ```
 
-> **After running `eas init`:** update the `extra.eas.projectId` field in `app.json` with the value printed by the command.
+> **Note:** The EAS project ID is already configured in `app.json` (`extra.eas.projectId`). You only need to run `eas init` if you are setting up a fork or a brand-new EAS project — in that case, replace the `extra.eas.projectId` value in `app.json` with the ID printed by `eas init`.
 
 ### iOS-specific
 
