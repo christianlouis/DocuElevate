@@ -15,6 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "org.docuelevate.mobile",
+      "appleTeamId": "975U2ZESBM",
       "infoPlist": {
         "NSCameraUsageDescription": "DocuElevate uses the camera to capture documents for upload.",
         "NSPhotoLibraryUsageDescription": "DocuElevate accesses your photo library to select documents for upload.",
