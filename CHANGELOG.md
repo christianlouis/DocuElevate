@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.133.5 (2026-03-14)
+
+### Bug Fixes
+
+- **ui**: Add 22 missing help page translation keys to en.json
+  ([`48a9303`](https://github.com/christianlouis/DocuElevate/commit/48a93036ca94cf910eb854c210382884911502c2))
+
+
 ## v0.133.4 (2026-03-14)
 
 ### Bug Fixes
