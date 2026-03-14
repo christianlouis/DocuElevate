@@ -10,6 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.135.2 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Add missing assets and EAS workflow for automatic builds
+  ([`1aa02ae`](https://github.com/christianlouis/DocuElevate/commit/1aa02aea24fbfdc40cc5cf92a5907616f4d9c706))
+
+- **mobile**: Sync app.json and eas.json to expo.dev project credentials
+  ([`5f3d134`](https://github.com/christianlouis/DocuElevate/commit/5f3d134d7ef42380b6f99fa70f8fdf71bed9391b))
+
+- **mobile**: Sync app.json slug and owner to expo.dev project
+  ([`7633cdf`](https://github.com/christianlouis/DocuElevate/commit/7633cdf4e49277612a830ef9c6aaf9c5ed783648))
+
+- **mobile**: Use org.docuelevate.mobile as app identifier
+  ([`4f38075`](https://github.com/christianlouis/DocuElevate/commit/4f38075de4b6647b41f776517ff6499fb616b6e6))
+
+
 ## v0.135.1 (2026-03-14)
 
 ### Bug Fixes
