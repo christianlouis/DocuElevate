@@ -18,7 +18,8 @@
       "NSCameraUsageDescription": "DocuElevate uses the camera to capture documents for upload.",
       "NSPhotoLibraryUsageDescription": "DocuElevate accesses your photo library to select documents for upload.",
       "NSPhotoLibraryAddUsageDescription": "DocuElevate saves scanned documents to your photo library.",
-      "UIBackgroundModes": ["fetch", "remote-notification"]
+      "UIBackgroundModes": ["fetch", "remote-notification"],
+      "ITSAppUsesNonExemptEncryption": false
     },
     "buildNumber": "1"
   },
@@ -61,6 +62,7 @@
     "expo-secure-store"
   ],
   "scheme": "docuelevate",
+  "owner": "christian-krakau-louis",
   "extra": {
     "eas": {
       "projectId": "8455f39d-ef0d-4850-98e4-f79e388642c1"
