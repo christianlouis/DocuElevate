@@ -267,6 +267,7 @@ _error_templates.env.globals["_"] = lambda key, **kwargs: _translate_fn(key, "en
 _error_templates.env.globals["min"] = min
 _error_templates.env.globals["max"] = max
 _error_templates.env.globals["supported_languages"] = _SUPPORTED_LANGUAGES
+_error_templates.env.globals["suggested_languages"] = []
 
 
 @app.exception_handler(HTTPException)
