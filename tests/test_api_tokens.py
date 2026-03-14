@@ -221,6 +221,7 @@ class TestTokenRevoke:
 
             resp = client.delete(f"/api/api-tokens/{token_id}")
             assert resp.status_code == 400
+            assert resp.json()["detail"] == "Token is already revoked"
         finally:
             _cleanup(app)
 
@@ -233,6 +234,65 @@ class TestTokenRevoke:
         try:
             resp = client.delete("/api/api-tokens/99999")
             assert resp.status_code == 404
+            assert resp.json()["detail"] == "Token not found"
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_revoke_token_unauthenticated(self, tok_engine):
+        """Revoking a token without authentication should return 401."""
+        from fastapi import HTTPException, status
+
+        from app.api.api_tokens import _get_owner_id
+        from app.main import app
+
+        client = _make_client(tok_engine)
+
+        # Simulating unauthenticated by forcing the dependency to raise 401
+        def _override_owner_fail():
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+        app.dependency_overrides[_get_owner_id] = _override_owner_fail
+
+        try:
+            resp = client.delete("/api/api-tokens/1")
+            assert resp.status_code == 401
+            assert resp.json()["detail"] == "Not authenticated"
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_revoke_token_database_error(self, tok_engine, tok_session):
+        """Revoking a token should rollback and raise 500 if database commit fails."""
+        from unittest.mock import patch
+
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            create_resp = client.post("/api/api-tokens/", json={"name": "DB Error Test"})
+            token_id = create_resp.json()["id"]
+
+            # Mock commit to raise an exception
+            with patch("sqlalchemy.orm.Session.commit", side_effect=Exception("DB Failure")):
+                resp = client.delete(f"/api/api-tokens/{token_id}")
+                assert resp.status_code == 500
+
+            # Verify token is still active in DB because of rollback
+            db_token = tok_session.query(ApiToken).filter(ApiToken.id == token_id).first()
+            assert db_token.is_active is True
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_revoke_token_invalid_id_format(self, tok_engine):
+        """Revoking a token with a non-integer ID should return 422 Unprocessable Entity."""
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            resp = client.delete("/api/api-tokens/abc")
+            assert resp.status_code == 422
         finally:
             _cleanup(app)
 
