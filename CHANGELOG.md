@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.133.2 (2026-03-14)
+
+### Bug Fixes
+
+- **ui**: Add missing suggested_languages global to error templates
+  ([`0592c59`](https://github.com/christianlouis/DocuElevate/commit/0592c59174bfb2cbb2b96f62297963c9a6c1bb60))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`de0b674`](https://github.com/christianlouis/DocuElevate/commit/de0b674025943dcc6aa21edc9e8027512964a605))
+
+
 ## v0.133.1 (2026-03-14)
 
 ### Bug Fixes
