@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.135.0 (2026-03-14)
+
+### Features
+
+- **ui**: Add i18n support to privacy page
+  ([`e1941ad`](https://github.com/christianlouis/DocuElevate/commit/e1941adfc9aa59301de9f3114a7c2370c26b547b))
+
+
 ## v0.134.5 (2026-03-14)
 
 ### Bug Fixes
