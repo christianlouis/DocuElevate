@@ -10,6 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.133.4 (2026-03-14)
+
+### Bug Fixes
+
+- **i18n**: Add noqa comment to intentionally broad exception in hydration helper
+  ([`f41ecc9`](https://github.com/christianlouis/DocuElevate/commit/f41ecc9b2c234062d5d5565380c3c409011e3883))
+
+- **i18n**: Persist language preference server-side, fix dropdown rendering and avatar 404
+  ([`1416d90`](https://github.com/christianlouis/DocuElevate/commit/1416d901d0615adf0c77551d1678207ae3308b3a))
+
+### Chores
+
+- **i18n**: Auto-update translations via LLM
+  ([`d09227b`](https://github.com/christianlouis/DocuElevate/commit/d09227b61cad3fc77396b86834da9849a222e8a0))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`01739e8`](https://github.com/christianlouis/DocuElevate/commit/01739e8c228f1bd1278cb472998eb7c05e851a51))
+
+
 ## Unreleased
 
 ### Chores
