@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.134.2 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Upgrade Expo SDK from 51 to 54 and fix EAS project ID
+  ([`f148785`](https://github.com/christianlouis/DocuElevate/commit/f148785079b220530ff4ba8a41ca4258727c9f2d))
+
+
 ## v0.134.1 (2026-03-14)
 
 ### Bug Fixes
