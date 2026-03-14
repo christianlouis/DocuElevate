@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.133.7 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Fix EAS build Node.js version incompatibility for iOS and Android
+  ([`8717538`](https://github.com/christianlouis/DocuElevate/commit/8717538967a8d8b141984abf8c070e19728f07f8))
+
+
 ## v0.133.6 (2026-03-14)
 
 ### Bug Fixes
