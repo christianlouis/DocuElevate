@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.134.1 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Relax Node.js engine constraint to >=18.0.0
+  ([`fb5d494`](https://github.com/christianlouis/DocuElevate/commit/fb5d494e42e1d4caf8b5d62480e38a168118de21))
+
+- **mobile**: Remove expo-sharing from plugins and align .nvmrc with Node 18 LTS
+  ([`8f9405b`](https://github.com/christianlouis/DocuElevate/commit/8f9405b5ac33df9a0f211061038814aac3d57286))
+
+
 ## v0.134.0 (2026-03-14)
 
 ### Bug Fixes
