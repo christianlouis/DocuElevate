@@ -62,6 +62,7 @@
     "expo-secure-store"
   ],
   "scheme": "docuelevate",
+  "owner": "christian-krakau-louis",
   "extra": {
     "eas": {
       "projectId": "8455f39d-ef0d-4850-98e4-f79e388642c1"
