@@ -68,6 +68,31 @@ def _make_client(tok_engine, owner_id: str = _OWNER) -> TestClient:
     return client
 
 
+def _make_unauthenticated_client(tok_engine) -> TestClient:
+    """Return a TestClient that only overrides ``get_db`` (no auth injection).
+
+    This exercises the real ``_get_owner_id`` → ``get_current_owner_id``
+    authentication path.  Any request made with this client that does not
+    carry a valid session or Bearer token will receive a 401 from the
+    actual auth code, not from a mocked dependency.
+    """
+    from app.main import app
+
+    Session = sessionmaker(bind=tok_engine)
+
+    def _override_get_db():
+        session = Session()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = _override_get_db
+
+    client = TestClient(app, base_url="http://localhost", raise_server_exceptions=False)
+    return client
+
+
 def _cleanup(app):
     """Remove dependency overrides after test."""
     app.dependency_overrides.clear()
@@ -240,20 +265,16 @@ class TestTokenRevoke:
 
     @pytest.mark.unit
     def test_revoke_token_unauthenticated(self, tok_engine):
-        """Revoking a token without authentication should return 401."""
-        from fastapi import HTTPException, status
+        """Revoking a token without authentication should return 401.
 
-        from app.api.api_tokens import _get_owner_id
+        Uses a client that only overrides ``get_db`` so that the real
+        ``_get_owner_id`` → ``get_current_owner_id`` path is exercised.
+        Sending no session or Bearer credentials means ``get_current_owner_id``
+        returns ``None``, and ``_get_owner_id`` raises a 401.
+        """
         from app.main import app
 
-        client = _make_client(tok_engine)
-
-        # Simulating unauthenticated by forcing the dependency to raise 401
-        def _override_owner_fail():
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-
-        app.dependency_overrides[_get_owner_id] = _override_owner_fail
-
+        client = _make_unauthenticated_client(tok_engine)
         try:
             resp = client.delete("/api/api-tokens/1")
             assert resp.status_code == 401
