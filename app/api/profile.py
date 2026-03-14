@@ -18,7 +18,7 @@ import logging
 from hashlib import md5
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -156,7 +156,9 @@ async def get_profile(request: Request, db: DbSession) -> ProfileResponse:
 
 @router.patch("", response_model=ProfileResponse)
 @require_login
-async def update_profile(body: ProfileUpdateRequest, request: Request, db: DbSession) -> ProfileResponse:
+async def update_profile(
+    body: ProfileUpdateRequest, request: Request, response: Response, db: DbSession
+) -> ProfileResponse:
     """Update the current user's editable profile settings."""
     user_id = _get_user_id(request)
     profile = _get_or_create_profile(db, user_id)
@@ -170,6 +172,24 @@ async def update_profile(body: ProfileUpdateRequest, request: Request, db: DbSes
                 detail=f"Unsupported language code: {lang}",
             )
         profile.preferred_language = lang or None  # type: ignore[assignment]
+
+        # Keep session and cookie in sync so detect_language() picks up
+        # the new preference immediately (without a DB round-trip).
+        if hasattr(request, "session"):
+            if lang:
+                request.session["preferred_language"] = lang
+            else:
+                request.session.pop("preferred_language", None)
+        if lang:
+            response.set_cookie(
+                key="docuelevate_lang",
+                value=lang,
+                max_age=30 * 24 * 60 * 60,
+                httponly=False,
+                samesite="lax",
+            )
+        else:
+            response.delete_cookie(key="docuelevate_lang")
 
     # Validate theme
     if body.preferred_theme is not None:

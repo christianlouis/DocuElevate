@@ -224,9 +224,10 @@ class TestUpdateProfileHandler:
 
         req = MagicMock()
         req.session = {"user": {"preferred_username": "carol", "email": "carol@example.com"}}
+        resp = MagicMock()
 
         body = ProfileUpdateRequest(display_name="Carol Smith")
-        result = await update_profile(body, req, prof_session)
+        result = await update_profile(body, req, resp, prof_session)
         assert result.display_name == "Carol Smith"
 
     @pytest.mark.asyncio
@@ -236,10 +237,30 @@ class TestUpdateProfileHandler:
 
         req = MagicMock()
         req.session = {"user": {"preferred_username": "dave", "email": "dave@example.com"}}
+        resp = MagicMock()
 
         body = ProfileUpdateRequest(preferred_language="de")
-        result = await update_profile(body, req, prof_session)
+        result = await update_profile(body, req, resp, prof_session)
         assert result.preferred_language == "de"
+
+    @pytest.mark.asyncio
+    async def test_updates_language_syncs_session_and_cookie(self, prof_session):
+        """update_profile syncs language to session and cookie."""
+        from app.api.profile import ProfileUpdateRequest, update_profile
+
+        session = {"user": {"preferred_username": "dave2", "email": "dave2@example.com"}}
+        req = MagicMock()
+        req.session = session
+        resp = MagicMock()
+
+        body = ProfileUpdateRequest(preferred_language="fr")
+        await update_profile(body, req, resp, prof_session)
+
+        assert session["preferred_language"] == "fr"
+        resp.set_cookie.assert_called_once()
+        cookie_kwargs = resp.set_cookie.call_args
+        assert cookie_kwargs.kwargs["key"] == "docuelevate_lang"
+        assert cookie_kwargs.kwargs["value"] == "fr"
 
     @pytest.mark.asyncio
     async def test_updates_theme(self, prof_session):
@@ -248,9 +269,10 @@ class TestUpdateProfileHandler:
 
         req = MagicMock()
         req.session = {"user": {"preferred_username": "eve", "email": "eve@example.com"}}
+        resp = MagicMock()
 
         body = ProfileUpdateRequest(preferred_theme="light")
-        result = await update_profile(body, req, prof_session)
+        result = await update_profile(body, req, resp, prof_session)
         assert result.preferred_theme == "light"
 
     @pytest.mark.asyncio
@@ -260,10 +282,11 @@ class TestUpdateProfileHandler:
 
         req = MagicMock()
         req.session = {"user": {"preferred_username": "frank", "email": "frank@example.com"}}
+        resp = MagicMock()
 
         body = ProfileUpdateRequest(preferred_language="xx")
         with pytest.raises(HTTPException) as exc:
-            await update_profile(body, req, prof_session)
+            await update_profile(body, req, resp, prof_session)
         assert exc.value.status_code == 422
 
     @pytest.mark.asyncio
@@ -273,11 +296,76 @@ class TestUpdateProfileHandler:
 
         req = MagicMock()
         req.session = {"user": {"preferred_username": "grace", "email": "grace@example.com"}}
+        resp = MagicMock()
 
         body = ProfileUpdateRequest(preferred_theme="rainbow")
         with pytest.raises(HTTPException) as exc:
-            await update_profile(body, req, prof_session)
+            await update_profile(body, req, resp, prof_session)
         assert exc.value.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Unit tests — _hydrate_language_from_db (views/base.py)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestHydrateLanguageFromDb:
+    """Tests for session hydration of preferred_language from DB."""
+
+    def test_hydrates_language_into_session(self, prof_session):
+        """When DB has a preferred_language, it should be set in the session."""
+        from app.views.base import _hydrate_language_from_db
+
+        # Create a profile with a preferred_language
+        profile = UserProfile(user_id="hydrate_user", preferred_language="fr")
+        prof_session.add(profile)
+        prof_session.commit()
+
+        req = MagicMock()
+        req.session = {}
+        session_user = {"preferred_username": "hydrate_user"}
+
+        # Patch SessionLocal to return our test session
+        from unittest.mock import patch
+
+        with patch("app.views.base.SessionLocal", return_value=prof_session):
+            _hydrate_language_from_db(req, session_user)
+
+        assert req.session.get("preferred_language") == "fr"
+
+    def test_no_hydration_when_no_db_preference(self, prof_session):
+        """When DB has no preferred_language, session should remain empty."""
+        from app.views.base import _hydrate_language_from_db
+
+        profile = UserProfile(user_id="no_pref_user")
+        prof_session.add(profile)
+        prof_session.commit()
+
+        req = MagicMock()
+        req.session = {}
+        session_user = {"preferred_username": "no_pref_user"}
+
+        from unittest.mock import patch
+
+        with patch("app.views.base.SessionLocal", return_value=prof_session):
+            _hydrate_language_from_db(req, session_user)
+
+        assert "preferred_language" not in req.session
+
+    def test_no_hydration_when_no_user_id(self, prof_session):
+        """When session_user has no identifiable user_id, do nothing."""
+        from app.views.base import _hydrate_language_from_db
+
+        req = MagicMock()
+        req.session = {}
+
+        from unittest.mock import patch
+
+        with patch("app.views.base.SessionLocal", return_value=prof_session):
+            _hydrate_language_from_db(req, {})
+
+        assert "preferred_language" not in req.session
 
 
 # ---------------------------------------------------------------------------
