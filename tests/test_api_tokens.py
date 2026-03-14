@@ -75,6 +75,9 @@ def _make_unauthenticated_client(tok_engine) -> TestClient:
     authentication path.  Any request made with this client that does not
     carry a valid session or Bearer token will receive a 401 from the
     actual auth code, not from a mocked dependency.
+
+    The caller is responsible for clearing overrides via ``_cleanup(app)``
+    after the test completes (typically in a ``finally`` block).
     """
     from app.main import app
 
