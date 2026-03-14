@@ -14,7 +14,7 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.docuelevate.app",
+      "bundleIdentifier": "org.docuelevate.mobile",
       "infoPlist": {
         "NSCameraUsageDescription": "DocuElevate uses the camera to capture documents for upload.",
         "NSPhotoLibraryUsageDescription": "DocuElevate accesses your photo library to select documents for upload.",
@@ -22,14 +22,14 @@
         "UIBackgroundModes": ["fetch", "remote-notification"],
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "1"
+      "buildNumber": "3"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1e40af"
       },
-      "package": "com.docuelevate.app",
+      "package": "org.docuelevate.mobile",
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
@@ -66,7 +66,7 @@
     "owner": "christian-krakau-louis",
     "extra": {
       "eas": {
-        "projectId": "8455f39d-ef0d-4850-98e4-f79e388642c1"
+        "projectId": "16925679-cb94-411c-83b5-a62c9addb872"
       }
     }
   }
