@@ -7,18 +7,25 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "node": "20.19.4"
+      "node": "20.19.4",
+      "ios": {
+        "image": "macos-sequoia-15.1-xcode-16.2"
+      }
     },
     "preview": {
       "distribution": "internal",
       "node": "20.19.4",
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "image": "macos-sequoia-15.1-xcode-16.2"
       }
     },
     "production": {
       "autoIncrement": true,
-      "node": "20.19.4"
+      "node": "20.19.4",
+      "ios": {
+        "image": "macos-sequoia-15.1-xcode-16.2"
+      }
     }
   },
   "submit": {
