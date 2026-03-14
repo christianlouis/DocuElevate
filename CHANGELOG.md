@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.135.3 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Update iOS build image from macos-sequoia-15.1-xcode-16.2 to
+  macos-sequoia-15.3-xcode-16.2
+  ([`fe66e51`](https://github.com/christianlouis/DocuElevate/commit/fe66e519966c983cee9b8867cc33261459a085df))
+
+
 ## v0.135.2 (2026-03-14)
 
 ### Bug Fixes
