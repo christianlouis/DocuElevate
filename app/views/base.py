@@ -77,7 +77,7 @@ def _hydrate_language_from_db(request: Request, session_user: object) -> None:
         profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
         if profile and profile.preferred_language and profile.preferred_language in SUPPORTED_LANGUAGE_CODES:
             request.session["preferred_language"] = profile.preferred_language
-    except Exception:
+    except Exception:  # noqa: BLE001 — intentionally broad; DB may be temporarily unavailable
         logger.debug("Could not hydrate language preference for user_id=%s", user_id)
     finally:
         db.close()
