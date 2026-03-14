@@ -10,6 +10,7 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -53,7 +54,15 @@ export default function LoginScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={styles.card}>
-        <Text style={styles.logo}>DocuElevate</Text>
+        <View style={styles.logoContainer}>
+          <Image
+            source={require("../../../assets/logo.png")}
+            style={styles.logoImage}
+            resizeMode="contain"
+            accessibilityLabel="DocuElevate logo"
+          />
+          <Text style={styles.logoText}>DocuElevate</Text>
+        </View>
         <Text style={styles.tagline}>Intelligent Document Processing</Text>
 
         <Text style={styles.label}>Server URL</Text>
@@ -110,12 +119,20 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
-  logo: {
+  logoContainer: {
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  logoImage: {
+    width: 80,
+    height: 80,
+    marginBottom: 10,
+  },
+  logoText: {
     fontSize: 28,
     fontWeight: "700",
     color: "#1e40af",
     textAlign: "center",
-    marginBottom: 4,
   },
   tagline: {
     fontSize: 14,
