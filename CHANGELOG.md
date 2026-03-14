@@ -10,6 +10,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.133.6 (2026-03-14)
+
+### Bug Fixes
+
+- **database**: Quote identifiers in index management queries to prevent SQL injection
+  ([`120002b`](https://github.com/christianlouis/DocuElevate/commit/120002b39408fb610d06c7555abdd40ab40c2ae4))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`0b064b9`](https://github.com/christianlouis/DocuElevate/commit/0b064b9d20f600b0a6ca140d590bc93cf6148491))
+
+- Use Annotated pattern in audit_logs.py to resolve Ruff B008
+  ([`f96fcbe`](https://github.com/christianlouis/DocuElevate/commit/f96fcbe6c9d1b306e1b40c0485da8c4c97062f9b))
+
+### Testing
+
+- Add error path tests for API token revocation
+  ([`fdf5053`](https://github.com/christianlouis/DocuElevate/commit/fdf5053acedae711fc8b1f874e6057141fd4cd6d))
+
+- Clarify caller cleanup responsibility in _make_unauthenticated_client docstring
+  ([`751b16d`](https://github.com/christianlouis/DocuElevate/commit/751b16d804b0659514ac682b6b5d6c66a4e83e94))
+
+- Exercise real auth path in test_revoke_token_unauthenticated
+  ([`96ef7d4`](https://github.com/christianlouis/DocuElevate/commit/96ef7d4769fc5cdfbd552cd49a13778f8717a4d9))
+
+- Strengthen test_revoke_token_database_error to verify rollback is called
+  ([`9e9b1fb`](https://github.com/christianlouis/DocuElevate/commit/9e9b1fb158cf906de47b61997436104d924b45d6))
+
+- **database**: Add unit test for quoted identifier in filehash index drop
+  ([`33eded0`](https://github.com/christianlouis/DocuElevate/commit/33eded02b1a4a603136a41b46dcd3ec6a5356489))
+
+
 ## v0.133.5 (2026-03-14)
 
 ### Bug Fixes
