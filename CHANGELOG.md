@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Chores
+
+- **i18n**: Auto-update translations via LLM
+  ([`0cb6017`](https://github.com/christianlouis/DocuElevate/commit/0cb6017b50c7e2bb06a39a41a17d504b68bcb09f))
+
+
 ## v0.133.0 (2026-03-14)
 
 ### Features
