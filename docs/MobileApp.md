@@ -53,6 +53,8 @@ eas build --platform ios
 eas build --platform android
 ```
 
+> **Note:** The mobile app uses `expo-build-properties` with `buildReactNativeFromSource: true` for iOS builds. This is required for Expo SDK 54 (React Native 0.81) compatibility — some native modules still use legacy bridge APIs (`RCTBridge`, `RCTViewManager`, etc.) that are no longer included in the default precompiled XCFrameworks. Building React Native from source makes these headers available, at the cost of slightly longer iOS build times.
+
 See the [EAS Build documentation](https://docs.expo.dev/build/introduction/) for full setup instructions.
 
 ## Authentication
