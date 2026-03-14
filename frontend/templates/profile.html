@@ -327,7 +327,7 @@
 function profileSettings() {
   return {
     // ── State ──────────────────────────────────────────────────────────────
-    avatarUrl: '/static/images/avatar-placeholder.svg',
+    avatarUrl: '/static/images/default-avatar.svg',
     hasCustomAvatar: false,
     isLocalUser: false,
     saving: false,
@@ -349,6 +349,8 @@ function profileSettings() {
     },
 
     // ── Init ───────────────────────────────────────────────────────────────
+    _initialLanguage: '',
+
     async init() {
       try {
         const res = await fetch('/api/profile');
@@ -361,6 +363,7 @@ function profileSettings() {
         this.form.contact_email    = data.contact_email    || '';
         this.form.preferred_language = data.preferred_language || '';
         this.form.preferred_theme    = data.preferred_theme  || 'system';
+        this._initialLanguage = this.form.preferred_language;
       } catch (_e) {
         // Silently ignore — user might not be logged in (rare for this page)
       }
@@ -378,6 +381,7 @@ function profileSettings() {
     async saveProfile() {
       this.saving = true;
       this._hideBanner();
+      const previousLang = this._initialLanguage || '';
       try {
         const csrfToken = this._getCSRFToken();
 
@@ -392,6 +396,11 @@ function profileSettings() {
         const data = await res.json();
         if (!res.ok) {
           this._showBanner(data.detail || 'Failed to save settings.', true);
+          return;
+        }
+        // If the UI language changed, reload so the page renders in the new locale
+        if (this.form.preferred_language !== previousLang) {
+          window.location.reload();
           return;
         }
         this._showBanner('Profile settings saved successfully.', false);

@@ -216,12 +216,18 @@
                     aria-live="polite"></span>
             </a>
 
+            <!-- Language selector data (kept outside the HTML attribute to avoid quote conflicts with tojson) -->
+            <script>
+              window.__langSuggested = {{ suggested_languages | tojson }};
+              window.__langAll = {{ supported_languages | tojson }};
+            </script>
+
             <!-- Language selector dropdown -->
             <div x-data="{
               langOpen: false,
               search: '',
-              suggested: {{ suggested_languages | tojson }},
-              all: {{ supported_languages | tojson }},
+              suggested: window.__langSuggested,
+              all: window.__langAll,
               get filtered() {
                 if (!this.search.trim()) return this.suggested;
                 const q = this.search.trim().toLowerCase();
