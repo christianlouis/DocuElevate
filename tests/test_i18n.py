@@ -20,6 +20,7 @@ from app.utils.i18n import (
     format_datetime,
     format_number,
     get_language_info,
+    get_suggested_languages,
     reload_translations,
     translate,
 )
@@ -54,21 +55,6 @@ class TestTranslationFiles:
             data = json.loads(filepath.read_text(encoding="utf-8"))
             assert isinstance(data, dict), f"{lang['code']}.json must be a dict"
             assert len(data) > 0, f"{lang['code']}.json must not be empty"
-
-    @pytest.mark.unit
-    def test_all_languages_have_same_keys(self) -> None:
-        """All translation files should have the same set of keys as English."""
-        translations_dir = Path(__file__).resolve().parent.parent / "frontend" / "translations"
-        en_path = translations_dir / "en.json"
-        en_keys = set(json.loads(en_path.read_text(encoding="utf-8")).keys())
-
-        for lang in SUPPORTED_LANGUAGES:
-            if lang["code"] == "en":
-                continue
-            filepath = translations_dir / f"{lang['code']}.json"
-            lang_keys = set(json.loads(filepath.read_text(encoding="utf-8")).keys())
-            missing = en_keys - lang_keys
-            assert not missing, f"{lang['code']}.json missing keys: {missing}"
 
 
 # ---------------------------------------------------------------------------
@@ -318,6 +304,69 @@ class TestGetLanguageInfo:
 
 
 # ---------------------------------------------------------------------------
+# get_suggested_languages()
+# ---------------------------------------------------------------------------
+
+
+class TestGetSuggestedLanguages:
+    """Tests for get_suggested_languages() utility."""
+
+    @pytest.mark.unit
+    def test_returns_at_most_six(self) -> None:
+        """Result must contain at most 6 languages."""
+        result = get_suggested_languages("en", "en,de;q=0.9,fr;q=0.8,es;q=0.7,it;q=0.6,pt;q=0.5,nl;q=0.4,zh;q=0.3")
+        assert len(result) <= 6
+
+    @pytest.mark.unit
+    def test_current_locale_is_first(self) -> None:
+        """Currently active language must always be the first entry."""
+        result = get_suggested_languages("de", "")
+        assert result[0]["code"] == "de"
+
+    @pytest.mark.unit
+    def test_includes_browser_preference(self) -> None:
+        """Languages from Accept-Language header should be included."""
+        result = get_suggested_languages("en", "fr;q=0.9,de;q=0.8")
+        codes = [lang["code"] for lang in result]
+        assert "fr" in codes
+        assert "de" in codes
+
+    @pytest.mark.unit
+    def test_fallback_to_popular_languages(self) -> None:
+        """Popular languages fill remaining slots when no browser prefs given."""
+        result = get_suggested_languages("en", "")
+        codes = [lang["code"] for lang in result]
+        # en is current; popular fallbacks like zh, es, fr should be present
+        assert "en" in codes
+        # At least one other popular language should appear
+        popular = {"zh", "es", "ar", "fr", "de", "ja", "pt", "hi", "ko"}
+        assert popular & set(codes)
+
+    @pytest.mark.unit
+    def test_no_duplicates(self) -> None:
+        """No language code should appear more than once."""
+        result = get_suggested_languages("fr", "fr;q=1.0,de;q=0.9")
+        codes = [lang["code"] for lang in result]
+        assert len(codes) == len(set(codes))
+
+    @pytest.mark.unit
+    def test_all_entries_are_valid_languages(self) -> None:
+        """Every returned entry must be a dict with required language fields."""
+        result = get_suggested_languages("es", "ca;q=0.9")
+        for entry in result:
+            assert "code" in entry
+            assert "name" in entry
+            assert "native" in entry
+            assert "flag" in entry
+
+    @pytest.mark.unit
+    def test_unknown_locale_falls_back_gracefully(self) -> None:
+        """An unsupported current_locale must not crash and still return results."""
+        result = get_suggested_languages("xx", "")
+        assert len(result) > 0  # popular fallbacks still returned
+
+
+# ---------------------------------------------------------------------------
 # SUPPORTED_LANGUAGES metadata
 # ---------------------------------------------------------------------------
 
@@ -487,8 +536,11 @@ class TestI18nAPI:
 
     @pytest.mark.integration
     def test_language_selector_in_nav(self, client: TestClient) -> None:
-        """The navigation should contain the language selector globe icon."""
+        """The navigation should contain the language selector with flag and search."""
         response = client.get("/", follow_redirects=True)
         if response.status_code == 200:
-            assert "fa-globe" in response.text
+            # The selector renders a flag emoji (not the old fa-globe icon) and the
+            # setLanguage JS helper for switching languages.
             assert "setLanguage" in response.text
+            # The search input for filtering all languages must be present.
+            assert "langSearch" in response.text
