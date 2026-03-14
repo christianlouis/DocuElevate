@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "DocuElevate",
-    "slug": "docuelevate",
+    "slug": "docuelevate-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -63,7 +63,7 @@
       "expo-secure-store"
     ],
     "scheme": "docuelevate",
-    "owner": "christian-krakau-louis",
+    "owner": "christianlouis",
     "extra": {
       "eas": {
         "projectId": "16925679-cb94-411c-83b5-a62c9addb872"
