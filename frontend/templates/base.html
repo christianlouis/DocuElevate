@@ -548,6 +548,23 @@
       })();
     </script>
 
+    <!-- i18n strings for common.js (user menu) -->
+    <script>
+      window.__i18n = {
+        accountMenu: {{ _("nav.account_menu") | tojson }},
+        accountMenuFor: {{ _("nav.account_menu_for") | tojson }},
+        avatar: {{ _("common.avatar") | tojson }},
+        profileSettings: {{ _("nav.profile_settings") | tojson }},
+        mySubscription: {{ _("nav.my_subscription") | tojson }},
+        apiTokens: {{ _("nav.api_tokens") | tojson }},
+        sharedLinks: {{ _("nav.shared_links") | tojson }},
+        signOut: {{ _("nav.sign_out") | tojson }},
+        logIn: {{ _("nav.login") | tojson }},
+        signUp: {{ _("nav.signup") | tojson }},
+        getStarted: {{ _("nav.get_started") | tojson }},
+      };
+    </script>
+
     <!-- Common JS (shared) -->
     <script src="/static/js/common.js"></script>
 

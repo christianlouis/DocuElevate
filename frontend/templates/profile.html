@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Profile Settings – DocuElevate{% endblock %}
+{% block title %}{{ _("profile.page_title") }}{% endblock %}
 
 {% block content %}
 <div
@@ -12,10 +12,10 @@
   <header class="mb-8">
     <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
       <i class="fas fa-user-circle text-blue-500" aria-hidden="true"></i>
-      Profile Settings
+      {{ _("profile.heading") }}
     </h1>
     <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-      Manage your display name, avatar, language, and theme preferences.
+      {{ _("profile.subtitle") }}
     </p>
   </header>
 
@@ -36,7 +36,7 @@
       type="button"
       @click="banner.visible = false"
       class="ml-auto"
-      aria-label="Dismiss"
+      aria-label="{{ _('profile.dismiss') }}"
       style="min-height:44px; min-width:44px;"
     >
       <i class="fas fa-times" aria-hidden="true"></i>
@@ -49,7 +49,7 @@
     aria-labelledby="avatar-heading"
   >
     <h2 id="avatar-heading" class="text-base font-semibold text-gray-900 dark:text-white mb-4">
-      <i class="fas fa-camera text-gray-400 mr-2" aria-hidden="true"></i>Profile Picture
+      <i class="fas fa-camera text-gray-400 mr-2" aria-hidden="true"></i>{{ _("profile.avatar_heading") }}
     </h2>
 
     <div class="flex flex-col sm:flex-row items-center gap-6">
@@ -57,7 +57,7 @@
       <div class="relative flex-shrink-0">
         <img
           :src="avatarUrl"
-          alt="Your profile picture"
+          alt="{{ _('profile.avatar_alt') }}"
           class="w-24 h-24 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600"
         />
         <template x-if="hasCustomAvatar">
@@ -66,8 +66,8 @@
             @click="removeAvatar()"
             :disabled="saving"
             class="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow focus:outline-none focus:ring-2 focus:ring-red-400"
-            aria-label="Remove custom avatar"
-            title="Remove custom avatar"
+            aria-label="{{ _('profile.avatar_remove') }}"
+            title="{{ _('profile.avatar_remove') }}"
           >
             <i class="fas fa-times text-xs" aria-hidden="true"></i>
           </button>
@@ -77,8 +77,8 @@
       <!-- Upload controls -->
       <div class="flex-1 space-y-3">
         <p class="text-sm text-gray-600 dark:text-gray-400">
-          Upload a JPEG, PNG, GIF, or WebP image up to 2 MB.
-          If no custom picture is set, your <a href="https://gravatar.com" class="underline" target="_blank" rel="noopener noreferrer" aria-label="Gravatar (opens in new tab)">Gravatar</a> is shown.
+          {% set gravatar_anchor %}<a href="https://gravatar.com" class="underline" target="_blank" rel="noopener noreferrer" aria-label="{{ _('profile.gravatar_link') }} (opens in new tab)">{{ _("profile.gravatar_link") }}</a>{% endset %}
+          {{ _("profile.avatar_upload_hint", gravatar=gravatar_anchor) | safe }}
         </p>
         <label
           for="avatar-input"
@@ -86,7 +86,7 @@
           style="min-height:44px;"
         >
           <i class="fas fa-upload" aria-hidden="true"></i>
-          <span>Choose image…</span>
+          <span>{{ _("profile.choose_image") }}</span>
           <input
             id="avatar-input"
             type="file"
@@ -107,49 +107,49 @@
     aria-labelledby="general-heading"
   >
     <h2 id="general-heading" class="text-base font-semibold text-gray-900 dark:text-white mb-4">
-      <i class="fas fa-id-card text-gray-400 mr-2" aria-hidden="true"></i>General Information
+      <i class="fas fa-id-card text-gray-400 mr-2" aria-hidden="true"></i>{{ _("profile.general_heading") }}
     </h2>
 
     <div class="space-y-4">
       <!-- Display name -->
       <div>
         <label for="display-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          Display Name
+          {{ _("profile.display_name_label") }}
         </label>
         <input
           id="display-name"
           type="text"
           x-model="form.display_name"
           maxlength="255"
-          placeholder="Your name as shown in the UI"
+          placeholder="{{ _('profile.display_name_placeholder') }}"
           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm
                  focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
           style="min-height:44px;"
           aria-describedby="display-name-hint"
         />
         <p id="display-name-hint" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          Leave blank to use your account username or email.
+          {{ _("profile.display_name_hint") }}
         </p>
       </div>
 
       <!-- Contact email -->
       <div>
         <label for="contact-email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          Contact / Notification E-mail
+          {{ _("profile.contact_email_label") }}
         </label>
         <input
           id="contact-email"
           type="email"
           x-model="form.contact_email"
           maxlength="255"
-          placeholder="you@example.com"
+          placeholder="{{ _('profile.contact_email_placeholder') }}"
           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm
                  focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
           style="min-height:44px;"
           aria-describedby="contact-email-hint"
         />
         <p id="contact-email-hint" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          Used for system notifications. This does not change your login e-mail.
+          {{ _("profile.contact_email_hint") }}
         </p>
       </div>
     </div>
@@ -161,14 +161,14 @@
     aria-labelledby="prefs-heading"
   >
     <h2 id="prefs-heading" class="text-base font-semibold text-gray-900 dark:text-white mb-4">
-      <i class="fas fa-sliders-h text-gray-400 mr-2" aria-hidden="true"></i>Preferences
+      <i class="fas fa-sliders-h text-gray-400 mr-2" aria-hidden="true"></i>{{ _("profile.preferences_heading") }}
     </h2>
 
     <div class="space-y-5">
       <!-- Language -->
       <div>
         <label for="lang-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          <i class="fas fa-globe text-gray-400 mr-1" aria-hidden="true"></i>UI Language
+          <i class="fas fa-globe text-gray-400 mr-1" aria-hidden="true"></i>{{ _("profile.language_label") }}
         </label>
         <select
           id="lang-select"
@@ -177,20 +177,20 @@
                  focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
           style="min-height:44px;"
         >
-          <option value="">Auto-detect (from browser)</option>
+          <option value="">{{ _("profile.language_auto_detect") }}</option>
           {% for lang in supported_languages %}
           <option value="{{ lang.code }}">{{ lang.flag }} {{ lang.native }} ({{ lang.name }})</option>
           {% endfor %}
         </select>
         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          Choose your preferred interface language. "Auto-detect" follows your browser settings.
+          {{ _("profile.language_hint") }}
         </p>
       </div>
 
       <!-- Theme -->
       <fieldset>
         <legend class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          <i class="fas fa-palette text-gray-400 mr-1" aria-hidden="true"></i>Colour Scheme
+          <i class="fas fa-palette text-gray-400 mr-1" aria-hidden="true"></i>{{ _("profile.theme_label") }}
         </legend>
         <div class="flex flex-wrap gap-3">
           <label
@@ -202,7 +202,7 @@
             style="min-height:44px; min-width:44px;"
           >
             <input type="radio" name="theme" value="light" x-model="form.preferred_theme" class="sr-only" />
-            <i class="fas fa-sun" aria-hidden="true"></i> Light
+            <i class="fas fa-sun" aria-hidden="true"></i> {{ _("profile.theme_light") }}
           </label>
           <label
             class="relative flex items-center gap-2 cursor-pointer rounded-lg border px-4 py-3 text-sm transition-colors
@@ -213,7 +213,7 @@
             style="min-height:44px; min-width:44px;"
           >
             <input type="radio" name="theme" value="dark" x-model="form.preferred_theme" class="sr-only" />
-            <i class="fas fa-moon" aria-hidden="true"></i> Dark
+            <i class="fas fa-moon" aria-hidden="true"></i> {{ _("profile.theme_dark") }}
           </label>
           <label
             class="relative flex items-center gap-2 cursor-pointer rounded-lg border px-4 py-3 text-sm transition-colors
@@ -224,11 +224,11 @@
             style="min-height:44px; min-width:44px;"
           >
             <input type="radio" name="theme" value="system" x-model="form.preferred_theme" class="sr-only" />
-            <i class="fas fa-desktop" aria-hidden="true"></i> System Default
+            <i class="fas fa-desktop" aria-hidden="true"></i> {{ _("profile.theme_system") }}
           </label>
         </div>
         <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-          "System Default" follows your device's dark-mode setting.
+          {{ _("profile.theme_hint") }}
         </p>
       </fieldset>
     </div>
@@ -245,7 +245,7 @@
       style="min-height:44px; min-width:44px;"
     >
       <i class="fas fa-save" aria-hidden="true"></i>
-      <span x-text="saving ? 'Saving…' : 'Save Changes'"></span>
+      <span x-text="saving ? '{{ _('profile.saving') }}' : '{{ _('profile.save_button') }}'"></span>
     </button>
   </div>
 
@@ -256,13 +256,13 @@
       aria-labelledby="password-heading"
     >
       <h2 id="password-heading" class="text-base font-semibold text-gray-900 dark:text-white mb-4">
-        <i class="fas fa-lock text-gray-400 mr-2" aria-hidden="true"></i>Change Password
+        <i class="fas fa-lock text-gray-400 mr-2" aria-hidden="true"></i>{{ _("profile.password_heading") }}
       </h2>
 
       <div class="space-y-4 max-w-md">
         <div>
           <label for="current-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Current Password
+            {{ _("profile.current_password") }}
           </label>
           <input
             id="current-password"
@@ -276,7 +276,7 @@
         </div>
         <div>
           <label for="new-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            New Password
+            {{ _("profile.new_password") }}
           </label>
           <input
             id="new-password"
@@ -288,11 +288,11 @@
             style="min-height:44px;"
             aria-describedby="new-pw-hint"
           />
-          <p id="new-pw-hint" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Minimum 8 characters.</p>
+          <p id="new-pw-hint" class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ _("profile.new_password_hint") }}</p>
         </div>
         <div>
           <label for="confirm-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Confirm New Password
+            {{ _("profile.confirm_password") }}
           </label>
           <input
             id="confirm-password"
@@ -314,7 +314,7 @@
             style="min-height:44px;"
           >
             <i class="fas fa-key" aria-hidden="true"></i>
-            <span x-text="pwSaving ? 'Updating…' : 'Update Password'"></span>
+            <span x-text="pwSaving ? '{{ _('profile.updating') }}' : '{{ _('profile.update_password') }}'"></span>
           </button>
         </div>
       </div>
