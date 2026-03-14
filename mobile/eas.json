@@ -9,7 +9,7 @@
       "distribution": "internal",
       "node": "20.19.4",
       "ios": {
-        "image": "macos-sequoia-15.1-xcode-16.2"
+        "image": "macos-sequoia-15.3-xcode-16.2"
       }
     },
     "preview": {
@@ -17,14 +17,14 @@
       "node": "20.19.4",
       "ios": {
         "simulator": false,
-        "image": "macos-sequoia-15.1-xcode-16.2"
+        "image": "macos-sequoia-15.3-xcode-16.2"
       }
     },
     "production": {
       "autoIncrement": true,
       "node": "20.19.4",
       "ios": {
-        "image": "macos-sequoia-15.1-xcode-16.2"
+        "image": "macos-sequoia-15.3-xcode-16.2"
       }
     }
   },
