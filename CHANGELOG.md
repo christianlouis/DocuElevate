@@ -10,6 +10,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.134.5 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Update react to 19.2.4 and add package-lock.json to fix npm ERESOLVE build failure
+  ([`8653247`](https://github.com/christianlouis/DocuElevate/commit/8653247e442b64d1d8456f716d7baa2b3f61d73a))
+
+### Chores
+
+- Initial plan for mobile npm peer dep fix
+  ([`0cb2f6c`](https://github.com/christianlouis/DocuElevate/commit/0cb2f6c36263616b68f8c7799fd4c967fb1cf3bd))
+
+- **i18n**: Auto-update translations via LLM
+  ([`c664220`](https://github.com/christianlouis/DocuElevate/commit/c6642203c095c59329d6ce460c31a0bdb53dc948))
+
+- **i18n**: Auto-update translations via LLM
+  ([`31218c8`](https://github.com/christianlouis/DocuElevate/commit/31218c886021aced8f74881e6015d7d660cc99c2))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`ef4c513`](https://github.com/christianlouis/DocuElevate/commit/ef4c513908eee9fbc40f8c3bcae8cbfc072415bc))
+
+
 ## Unreleased
 
 ### Chores
