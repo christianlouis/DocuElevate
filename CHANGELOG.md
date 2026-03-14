@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.134.0 (2026-03-14)
+
+### Bug Fixes
+
+- **i18n**: Replace fragment translation keys with placeholder-based complete sentences
+  ([`eaa5337`](https://github.com/christianlouis/DocuElevate/commit/eaa533760dbb8e143fadfece808d1a229e29940b))
+
+- **ui**: Restore missing template x-if tag and fix Nextcloud URL label key
+  ([`08853e8`](https://github.com/christianlouis/DocuElevate/commit/08853e823c949d9b220d02004a9ac1196b15bb23))
+
+### Features
+
+- **ui**: Internationalize profile, subscription, integrations templates and user menu JS
+  ([`5a02557`](https://github.com/christianlouis/DocuElevate/commit/5a025576c42107ac01caa3d8fcf9ffe5b35223f8))
+
+
 ## v0.133.7 (2026-03-14)
 
 ### Bug Fixes
