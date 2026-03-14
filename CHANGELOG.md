@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.133.3 (2026-03-14)
+
+### Bug Fixes
+
+- **i18n**: Add missing index page translation keys to en.json
+  ([`1f24b1b`](https://github.com/christianlouis/DocuElevate/commit/1f24b1b95be512c0f9a09b54001ae5bf71b47e37))
+
+
 ## v0.133.2 (2026-03-14)
 
 ### Bug Fixes
