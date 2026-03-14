@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.136.0 (2026-03-14)
+
+### Features
+
+- **mobile**: Update DocuElevate mobile app branding with original logo and UX
+  ([`971e578`](https://github.com/christianlouis/DocuElevate/commit/971e578dd7f356d5a7cf2d2dfbb8c7a168f334d0))
+
+
 ## v0.135.4 (2026-03-14)
 
 ### Bug Fixes
