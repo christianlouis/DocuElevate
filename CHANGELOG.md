@@ -10,6 +10,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.132.1 (2026-03-14)
+
+### Bug Fixes
+
+- **security**: Prevent potential SQL injection in database migration
+  ([`82b1f89`](https://github.com/christianlouis/DocuElevate/commit/82b1f89332d7bb3e7d8a16651b17a060e8ae4d0f))
+
+### Chores
+
+- **i18n**: Auto-update translations via LLM
+  ([`8e86518`](https://github.com/christianlouis/DocuElevate/commit/8e865180a5e751566ea3312bef916efc9dc7cdb1))
+
+- **i18n**: Auto-update translations via LLM
+  ([`9a480e3`](https://github.com/christianlouis/DocuElevate/commit/9a480e3d68e2e162c73cb526b2887dbcae0cedac))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`4a46f37`](https://github.com/christianlouis/DocuElevate/commit/4a46f372b97f89a3c0059ce8c451424e9c121c7a))
+
+### Testing
+
+- **i18n**: Remove translation content assertion from test_translate_with_kwargs_german
+  ([`9b32cbc`](https://github.com/christianlouis/DocuElevate/commit/9b32cbc91b26f83cd451d0c5d369b0692dd7edf7))
+
+
 ## Unreleased
 
 ### Chores
