@@ -68,6 +68,34 @@ def _make_client(tok_engine, owner_id: str = _OWNER) -> TestClient:
     return client
 
 
+def _make_unauthenticated_client(tok_engine) -> TestClient:
+    """Return a TestClient that only overrides ``get_db`` (no auth injection).
+
+    This exercises the real ``_get_owner_id`` → ``get_current_owner_id``
+    authentication path.  Any request made with this client that does not
+    carry a valid session or Bearer token will receive a 401 from the
+    actual auth code, not from a mocked dependency.
+
+    The caller is responsible for clearing overrides via ``_cleanup(app)``
+    after the test completes (typically in a ``finally`` block).
+    """
+    from app.main import app
+
+    Session = sessionmaker(bind=tok_engine)
+
+    def _override_get_db():
+        session = Session()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = _override_get_db
+
+    client = TestClient(app, base_url="http://localhost", raise_server_exceptions=False)
+    return client
+
+
 def _cleanup(app):
     """Remove dependency overrides after test."""
     app.dependency_overrides.clear()
@@ -221,6 +249,7 @@ class TestTokenRevoke:
 
             resp = client.delete(f"/api/api-tokens/{token_id}")
             assert resp.status_code == 400
+            assert resp.json()["detail"] == "Token is already revoked"
         finally:
             _cleanup(app)
 
@@ -233,6 +262,95 @@ class TestTokenRevoke:
         try:
             resp = client.delete("/api/api-tokens/99999")
             assert resp.status_code == 404
+            assert resp.json()["detail"] == "Token not found"
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_revoke_token_unauthenticated(self, tok_engine):
+        """Revoking a token without authentication should return 401.
+
+        Uses a client that only overrides ``get_db`` so that the real
+        ``_get_owner_id`` → ``get_current_owner_id`` path is exercised.
+        Sending no session or Bearer credentials means ``get_current_owner_id``
+        returns ``None``, and ``_get_owner_id`` raises a 401.
+        """
+        from app.main import app
+
+        client = _make_unauthenticated_client(tok_engine)
+        try:
+            resp = client.delete("/api/api-tokens/1")
+            assert resp.status_code == 401
+            assert resp.json()["detail"] == "Not authenticated"
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_revoke_token_database_error(self, tok_engine, tok_session):
+        """Revoking a token should rollback and raise 500 if database commit fails.
+
+        The test verifies two properties:
+        1. ``db.rollback()`` is actually called when commit raises (not just that
+           the endpoint returns 500).
+        2. After the rollback the token remains active in the database.
+
+        To ensure the assertions are meaningful, the patched ``commit`` first
+        flushes the session (so the changes *are* staged inside the transaction)
+        before raising.  Without a subsequent ``rollback()`` the flushed state
+        would still be visible to other sessions, so the ``is_active`` check
+        would catch a missing rollback call.
+        """
+        from unittest.mock import patch
+
+        from sqlalchemy.orm import Session as SASession
+
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            create_resp = client.post("/api/api-tokens/", json={"name": "DB Error Test"})
+            token_id = create_resp.json()["id"]
+
+            # Wrap commit: flush first so changes are staged in the transaction,
+            # then raise to simulate a commit failure after data has been written.
+            def _fail_after_flush(self):
+                self.flush()  # stage changes inside the open transaction
+                raise Exception("DB Failure")
+
+            # Spy on rollback so we can assert it is called.
+            rollback_called = False
+            real_rollback = SASession.rollback
+
+            def _spy_rollback(self):
+                nonlocal rollback_called
+                rollback_called = True
+                real_rollback(self)
+
+            with (
+                patch.object(SASession, "commit", _fail_after_flush),
+                patch.object(SASession, "rollback", _spy_rollback),
+            ):
+                resp = client.delete(f"/api/api-tokens/{token_id}")
+                assert resp.status_code == 500
+
+            # rollback() must have been called to undo the flushed changes.
+            assert rollback_called, "db.rollback() was not called after commit failure"
+
+            # After rollback the token must still be active in the database.
+            db_token = tok_session.query(ApiToken).filter(ApiToken.id == token_id).first()
+            assert db_token.is_active is True
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_revoke_token_invalid_id_format(self, tok_engine):
+        """Revoking a token with a non-integer ID should return 422 Unprocessable Entity."""
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            resp = client.delete("/api/api-tokens/abc")
+            assert resp.status_code == 422
         finally:
             _cleanup(app)
 
