@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.135.4 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Fix expo doctor dependency version mismatches for SDK 54
+  ([`f6e955a`](https://github.com/christianlouis/DocuElevate/commit/f6e955acce84366cab4138634dbc8b258bb10f3d))
+
+
 ## v0.135.3 (2026-03-14)
 
 ### Bug Fixes
