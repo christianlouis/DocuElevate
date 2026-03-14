@@ -261,12 +261,14 @@ _error_templates = Jinja2Templates(directory=str(_error_templates_dir))
 # Register the i18n translate helper as a global so error templates can use {{ _("key") }}.
 # Error pages use the default language (English); request-specific locale is not needed here.
 from app.utils.i18n import SUPPORTED_LANGUAGES as _SUPPORTED_LANGUAGES  # noqa: E402
+from app.utils.i18n import get_suggested_languages as _get_suggested_languages  # noqa: E402
 from app.utils.i18n import translate as _translate_fn  # noqa: E402
 
 _error_templates.env.globals["_"] = lambda key, **kwargs: _translate_fn(key, "en", **kwargs)
 _error_templates.env.globals["min"] = min
 _error_templates.env.globals["max"] = max
 _error_templates.env.globals["supported_languages"] = _SUPPORTED_LANGUAGES
+_error_templates.env.globals["suggested_languages"] = _get_suggested_languages("en", "")
 
 
 @app.exception_handler(HTTPException)
