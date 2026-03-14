@@ -647,6 +647,7 @@
   "integrations.name_label": "Label",
   "integrations.name_placeholder": "e.g. Work Gmail, S3 Archive",
   "integrations.nextcloud_settings": "Nextcloud Settings",
+  "integrations.nextcloud_url_label": "Nextcloud URL",
   "integrations.no_integrations_body": "Add your first integration to connect ingestion sources (like IMAP) and storage destinations (like S3, Dropbox, or Google Drive).",
   "integrations.not_connected": "Not Connected",
   "integrations.oauth_folder_label": "Folder",

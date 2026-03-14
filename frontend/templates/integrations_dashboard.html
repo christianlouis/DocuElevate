@@ -58,6 +58,7 @@
           </p>
         </div>
         <!-- Mini usage bar -->
+        <template x-if="quota.max_sources !== null && quota.max_sources > 0">
           <div class="w-24 flex-shrink-0">
             <div class="bg-gray-200 dark:bg-gray-600 rounded-full h-2 overflow-hidden">
               <div
@@ -739,7 +740,7 @@
             <template x-if="form.config.source_type === 'nextcloud'">
               <div class="space-y-3">
                 <div>
-                  <label for="wf-nc-url" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.nextcloud_settings") }} URL <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <label for="wf-nc-url" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.nextcloud_url_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
                   <input id="wf-nc-url" type="url" x-model="form.config.url" placeholder="https://cloud.example.com" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
                 </div>
                 <div>
