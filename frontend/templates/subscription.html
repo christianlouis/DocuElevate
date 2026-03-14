@@ -23,8 +23,8 @@
     <div>
       <p class="font-semibold text-blue-800">{{ _("subscription.single_user_title") }}</p>
       <p class="text-blue-700 text-sm mt-1">
-        {{ _("subscription.single_user_body_before_link") }}
-        <a href="/settings" class="underline hover:text-blue-900">{{ _("nav.settings") }}</a>{{ _("subscription.single_user_body_after_link") }}
+        {% set settings_link %}<a href="/settings" class="underline hover:text-blue-900">{{ _("nav.settings") }}</a>{% endset %}
+        {{ _("subscription.single_user_body", settings_link=settings_link) | safe }}
       </p>
     </div>
   </div>

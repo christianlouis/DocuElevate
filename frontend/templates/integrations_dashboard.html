@@ -846,8 +846,8 @@
               </h4>
               <ol class="text-sm text-gray-600 dark:text-gray-400 space-y-2 list-decimal list-inside">
                 <li>
-                  Go to <a href="/api-tokens" class="text-indigo-600 hover:underline font-medium">API Tokens</a>
-                  {{ _("integrations.webhook_create_token") }}
+                  {% set api_tokens_link %}<a href="/api-tokens" class="text-indigo-600 hover:underline font-medium">{{ _("nav.api_tokens") }}</a>{% endset %}
+                  {{ _("integrations.webhook_step1", api_tokens_link=api_tokens_link) | safe }}
                 </li>
                 <li>{{ _("integrations.webhook_upload_with_token") }}</li>
               </ol>

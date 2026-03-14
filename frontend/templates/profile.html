@@ -77,7 +77,8 @@
       <!-- Upload controls -->
       <div class="flex-1 space-y-3">
         <p class="text-sm text-gray-600 dark:text-gray-400">
-          {{ _("profile.avatar_upload_hint") }} <a href="https://gravatar.com" class="underline" target="_blank" rel="noopener noreferrer" aria-label="{{ _('profile.gravatar_link') }} (opens in new tab)">{{ _("profile.gravatar_link") }}</a> {{ _("profile.avatar_gravatar_suffix") }}
+          {% set gravatar_anchor %}<a href="https://gravatar.com" class="underline" target="_blank" rel="noopener noreferrer" aria-label="{{ _('profile.gravatar_link') }} (opens in new tab)">{{ _("profile.gravatar_link") }}</a>{% endset %}
+          {{ _("profile.avatar_upload_hint", gravatar=gravatar_anchor) | safe }}
         </p>
         <label
           for="avatar-input"

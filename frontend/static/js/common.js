@@ -165,7 +165,7 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
           'flex items-center gap-2 px-2 py-1 rounded-md text-gray-700 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500';
         btn.setAttribute('aria-haspopup', 'true');
         btn.setAttribute('aria-expanded', 'false');
-        btn.setAttribute('aria-label', `${(window.__i18n.accountMenuFor || 'Account menu for {name}').replace('{name}', displayName)}`);
+        btn.setAttribute('aria-label', `${((window.__i18n?.accountMenuFor) || 'Account menu for {name}').replace('{name}', displayName)}`);
 
         const avatar = document.createElement('img');
         avatar.src = data.picture;
