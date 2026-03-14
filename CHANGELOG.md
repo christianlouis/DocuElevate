@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.134.4 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Bump Node to 20.19.4 and fix react-navigation peer dependency
+  ([`4c6596b`](https://github.com/christianlouis/DocuElevate/commit/4c6596b56192341f2be4bb14a8a9ace1182bd38e))
+
+
 ## v0.134.3 (2026-03-14)
 
 ### Bug Fixes
