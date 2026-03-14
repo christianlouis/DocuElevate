@@ -210,8 +210,10 @@ def _run_schema_migrations(engine: Any) -> None:
             if unique_filehash_indexes:
                 logger.info("Migrating files: dropping unique index on 'filehash'")
                 with engine.begin() as conn:
+                    preparer = conn.dialect.identifier_preparer
                     for index in unique_filehash_indexes:
-                        conn.execute(text(f"DROP INDEX IF EXISTS {index['name']}"))
+                        quoted_idx = preparer.quote(index["name"])
+                        conn.execute(text(f"DROP INDEX IF EXISTS {quoted_idx}"))
                 logger.info("Migration complete: unique index on 'filehash' removed")
         except Exception as exc:
             logger.warning(f"Skipping filehash unique index drop: {exc}")
@@ -263,12 +265,16 @@ def _ensure_indexes(engine: Any, inspector: Any) -> None:
     table_names = inspector.get_table_names()
     columns_by_table: dict[str, set[str]] = {}
     with engine.begin() as conn:
+        preparer = conn.dialect.identifier_preparer
         for idx_name, table, column in _PERF_INDEXES:
             if table in table_names:
                 if table not in columns_by_table:
                     columns_by_table[table] = {col["name"] for col in inspector.get_columns(table)}
                 if column in columns_by_table[table]:
-                    conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} ({column})"))
+                    quoted_idx = preparer.quote(idx_name)
+                    quoted_table = preparer.quote(table)
+                    quoted_col = preparer.quote(column)
+                    conn.execute(text(f"CREATE INDEX IF NOT EXISTS {quoted_idx} ON {quoted_table} ({quoted_col})"))
 
     logger.info("Performance indexes ensured")
 
