@@ -10,6 +10,7 @@ from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from starlette.responses import RedirectResponse
 
@@ -263,8 +264,28 @@ async def login(request: Request):
     _MOBILE_ALLOWED_SCHEMES = ("docuelevate://", "exp://")
     if request.query_params.get("mobile") == "1":
         redirect_uri = request.query_params.get("redirect_uri", "")
+        logger.debug(
+            "[MOBILE] Login page opened with mobile=1: redirect_uri=%r client_ip=%s",
+            redirect_uri,
+            get_client_ip(request),
+        )
         if any(redirect_uri.startswith(s) for s in _MOBILE_ALLOWED_SCHEMES):
             request.session["mobile_redirect_uri"] = redirect_uri
+            logger.info(
+                "[MOBILE] Mobile redirect URI stored in session: %r",
+                redirect_uri,
+            )
+        else:
+            logger.warning(
+                "[MOBILE] Rejected redirect_uri with disallowed scheme: %r (allowed: %s)",
+                redirect_uri,
+                ", ".join(_MOBILE_ALLOWED_SCHEMES),
+            )
+    else:
+        logger.debug(
+            "[MOBILE] Login page opened without mobile=1 (standard browser flow) client_ip=%s",
+            get_client_ip(request),
+        )
 
     return templates.TemplateResponse(
         "login.html",
@@ -590,8 +611,13 @@ async def oauth_callback(request: Request, db: Session = Depends(get_db)):
         # Mobile app flow: issue an inline API token and redirect back to the app.
         # This check runs before onboarding so native-app users are never sent
         # to the web-based onboarding wizard.
+        logger.debug(
+            "[MOBILE] oauth_callback: checking for mobile redirect (session has mobile_redirect_uri=%s)",
+            "mobile_redirect_uri" in request.session,
+        )
         mobile_resp = _create_mobile_redirect(request, db)
         if mobile_resp:
+            logger.info("[MOBILE] oauth_callback: returning mobile redirect response")
             return mobile_resp
 
         if user_id:
@@ -674,10 +700,24 @@ def _create_mobile_redirect(request: Request, db: Session) -> RedirectResponse |
     """
     mobile_redirect_uri = request.session.pop("mobile_redirect_uri", None)
     if not mobile_redirect_uri:
+        logger.debug("[MOBILE] _create_mobile_redirect: no mobile_redirect_uri in session — skipping mobile flow")
         return None
+
+    logger.info(
+        "[MOBILE] _create_mobile_redirect: mobile flow detected, redirect_uri=%r",
+        mobile_redirect_uri,
+    )
 
     user = request.session.get("user") or {}
     owner_id = user.get("sub") or user.get("preferred_username") or user.get("email") or user.get("id")
+    logger.debug(
+        "[MOBILE] Resolving owner_id from session user: sub=%r preferred_username=%r email=%r id=%r → owner_id=%r",
+        user.get("sub"),
+        user.get("preferred_username"),
+        user.get("email"),
+        user.get("id"),
+        owner_id,
+    )
     if not owner_id:
         logger.warning("Mobile SSO redirect requested but no owner_id could be resolved from session")
         return None
@@ -707,7 +747,25 @@ def _create_mobile_redirect(request: Request, db: Session) -> RedirectResponse |
     # Safely append the token as a query parameter, preserving any existing params.
     separator = "&" if "?" in mobile_redirect_uri else "?"
     redirect_url = f"{mobile_redirect_uri}{separator}{urlencode({'token': plaintext})}"
-    logger.info("[SECURITY] MOBILE_SSO_TOKEN_ISSUED owner=%s token_id=%s", owner_id, db_token.id)
+
+    # Log the full redirect URL at DEBUG so it's visible when debug logging is enabled.
+    # At INFO level, log a sanitised version (scheme + host only, token prefix only)
+    # so the plaintext token is never written to persistent info logs.
+    parsed = urlparse(redirect_url)
+    existing_params = f"&{parsed.query.replace(f'token={plaintext}', '')}" if parsed.query else ""
+    sanitised_url = (
+        f"{parsed.scheme}://{parsed.netloc}{parsed.path}?token={prefix}…[redacted]{existing_params.rstrip('&')}"
+    )
+    logger.info(
+        "[MOBILE] MOBILE_SSO_TOKEN_ISSUED owner=%s token_id=%s redirect_target=%s",
+        owner_id,
+        db_token.id,
+        sanitised_url,
+    )
+    logger.debug(
+        "[MOBILE] Full redirect URL being sent to client: %s",
+        redirect_url,
+    )
     return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
 
 
@@ -745,8 +803,13 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             )
             return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
 
+        username_lower = username.lower()
         local_user = (
-            db.query(_LocalUser).filter((_LocalUser.username == username) | (_LocalUser.email == username)).first()
+            db.query(_LocalUser)
+            .filter(
+                (func.lower(_LocalUser.username) == username_lower) | (func.lower(_LocalUser.email) == username_lower)
+            )
+            .first()
         )
         logger.debug(
             "[AUTH] LocalUser lookup: username=%r found=%s",
@@ -782,8 +845,13 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             _ensure_user_profile(db, user_data, is_admin=bool(local_user.is_admin))
 
             # Mobile app flow: issue an inline API token and redirect back to the app.
+            logger.debug(
+                "[MOBILE] local auth: checking for mobile redirect (session has mobile_redirect_uri=%s)",
+                "mobile_redirect_uri" in request.session,
+            )
             mobile_resp = _create_mobile_redirect(request, db)
             if mobile_resp:
+                logger.info("[MOBILE] local auth: returning mobile redirect response")
                 return mobile_resp
 
             profile = db.query(_UserProfile).filter(_UserProfile.user_id == local_user.email).first()
@@ -810,13 +878,13 @@ async def auth(request: Request, db: Session = Depends(get_db)):
     logger.debug(
         "[AUTH] Admin credential check: admin_configured=%s username_match=%s multi_user_enabled=%s",
         admin_configured,
-        username == settings.admin_username if admin_configured else False,
+        (username or "").lower() == settings.admin_username.lower() if admin_configured else False,
         settings.multi_user_enabled,
     )
     if (
         settings.admin_username
         and settings.admin_password
-        and username == settings.admin_username
+        and (username or "").lower() == settings.admin_username.lower()
         and password == settings.admin_password
     ):
         admin_user_data = {
@@ -833,8 +901,13 @@ async def auth(request: Request, db: Session = Depends(get_db)):
         _ensure_user_profile(db, admin_user_data, is_admin=True)
 
         # Mobile app flow: issue an inline API token and redirect back to the app.
+        logger.debug(
+            "[MOBILE] admin auth: checking for mobile redirect (session has mobile_redirect_uri=%s)",
+            "mobile_redirect_uri" in request.session,
+        )
         mobile_resp = _create_mobile_redirect(request, db)
         if mobile_resp:
+            logger.info("[MOBILE] admin auth: returning mobile redirect response")
             return mobile_resp
 
         redirect_url = request.session.pop("redirect_after_login", "/upload")
