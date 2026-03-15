@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.140.0 (2026-03-15)
+
+### Features
+
+- **i18n**: Localize attribution page
+  ([`246ef70`](https://github.com/christianlouis/DocuElevate/commit/246ef702453fdfbca240b2bf0d1aa410abd9f179))
+
+
 ## v0.139.0 (2026-03-15)
 
 ### Features
