@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.144.0 (2026-03-15)
+
+### Bug Fixes
+
+- **i18n**: Fix overage buffer sentence spacing in admin_plans template
+  ([`de8922b`](https://github.com/christianlouis/DocuElevate/commit/de8922bb8e1e837ffc1ff29cbbeb1a2cd10d8d20))
+
+### Documentation
+
+- Rewrite README.md and update UserGuide and Troubleshooting docs
+  ([`fcf2452`](https://github.com/christianlouis/DocuElevate/commit/fcf2452b625109dbd7f7464929d5482b94db4a32))
+
+### Features
+
+- **i18n**: Localize admin plans page
+  ([`36aef73`](https://github.com/christianlouis/DocuElevate/commit/36aef7396951ff2b91677f877415b8bce4fd1fc3))
+
+
 ## v0.143.1 (2026-03-15)
 
 ### Bug Fixes
