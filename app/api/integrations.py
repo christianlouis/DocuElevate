@@ -564,7 +564,6 @@ def _test_webdav_connection(config: dict[str, Any] | None, credentials: dict[str
         return {"success": False, "message": "Missing required field: url"}
 
     # Only allow http/https to prevent file:// or other custom scheme attacks
-    import ipaddress
     from urllib.parse import urlparse
 
     parsed = urlparse(url)
@@ -575,6 +574,7 @@ def _test_webdav_connection(config: dict[str, Any] | None, credentials: dict[str
     hostname = parsed.hostname or ""
     if hostname:
         from app.utils.network import is_private_ip
+
         if is_private_ip(hostname):
             return {"success": False, "message": "URLs pointing to internal or private networks are not allowed"}
 

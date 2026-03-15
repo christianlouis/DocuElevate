@@ -4,6 +4,7 @@ import socket
 
 logger = logging.getLogger(__name__)
 
+
 def is_private_ip(hostname: str) -> bool:
     """
     Check if a hostname resolves to a private/internal IP address.

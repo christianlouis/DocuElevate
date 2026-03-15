@@ -2,7 +2,6 @@
 API endpoint for processing files from URLs
 """
 
-import ipaddress
 import logging
 import mimetypes
 import os
