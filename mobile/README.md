@@ -14,7 +14,7 @@ Native mobile application for DocuElevate, built with **React Native** and **Exp
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 20.19.4+ (use [nvm](https://github.com/nvm-sh/nvm): `nvm use` in this directory)
 - Expo CLI (`npm install -g @expo/cli`)
 - Expo Go app on device (for development) **or** Expo Application Services (EAS) for production builds
 - An Expo account: <https://expo.dev/>
