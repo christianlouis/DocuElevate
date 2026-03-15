@@ -6,7 +6,7 @@
  * AuthContext stores the API token and navigates to the main app.
  */
 
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -21,14 +21,10 @@ import {
   View,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
-import type { AuthStackParamList } from "./WelcomeScreen";
 
-type LoginScreenProps = {
-  navigation: NativeStackNavigationProp<AuthStackParamList, "Login">;
-};
-
-export default function LoginScreen({ navigation }: LoginScreenProps) {
+export default function LoginScreen() {
   const { signIn } = useAuth();
+  const router = useRouter();
   const [serverUrl, setServerUrl] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -62,7 +58,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       <View style={styles.card}>
         <View style={styles.logoContainer}>
           <Image
-            source={require("../../../assets/logo.png")}
+            source={require("../../assets/logo.png")}
             style={styles.logoImage}
             resizeMode="contain"
             accessibilityLabel="DocuElevate logo"
@@ -105,7 +101,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         </Text>
 
         <Pressable
-          onPress={() => navigation.navigate("Welcome")}
+          onPress={() => router.back()}
           accessibilityRole="button"
           accessibilityLabel="Back to welcome screen"
           style={styles.backLink}

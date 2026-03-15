@@ -1,6 +1,6 @@
 # DocuElevate Mobile App
 
-Native mobile application for DocuElevate, built with **React Native** and **Expo** for both iOS (primary) and Android.
+Native mobile application for DocuElevate, built with **React Native** and **Expo** for iOS, Android, and Web.
 
 ## Features
 
@@ -11,6 +11,7 @@ Native mobile application for DocuElevate, built with **React Native** and **Exp
 - 🔔 **Push Notifications** – receive real-time push notifications when documents finish processing (via Expo push notifications)
 - 📂 **Document List** – browse and search your processed documents
 - 👤 **Profile** – view account details and sign out
+- 🌐 **Web** – run directly in the browser via Expo web (Metro bundler)
 
 ## Requirements
 
@@ -26,11 +27,14 @@ Native mobile application for DocuElevate, built with **React Native** and **Exp
 cd mobile
 npm install
 
-# 2. Start the development server
-npx expo start
+# 2. Start the development server (choose a platform)
+npx expo start          # interactive menu (iOS / Android / Web)
+npx expo start --ios    # open directly in iOS Simulator
+npx expo start --android # open in Android Emulator
+npx expo start --web    # open in the browser
 ```
 
-Scan the QR code with **Expo Go** on your iOS or Android device.
+Scan the QR code with **Expo Go** on your iOS or Android device, or press `w` in the interactive menu to open the web build.
 
 ## Building
 
@@ -97,23 +101,35 @@ The Expo push token is sent to the backend after login via `POST /api/mobile/reg
 
 ```
 mobile/
-├── App.tsx                    # Root component
-├── app.json                   # Expo configuration
-├── eas.json                   # EAS Build configuration
+├── app/                           # expo-router file-based routes
+│   ├── _layout.tsx                # Root layout (AuthProvider + auth guard)
+│   ├── (auth)/                    # Unauthenticated route group
+│   │   ├── _layout.tsx            # Auth stack (no header)
+│   │   ├── index.tsx              # Welcome screen
+│   │   └── login.tsx              # Login screen
+│   └── (tabs)/                    # Authenticated route group
+│       ├── _layout.tsx            # Tab navigator (Upload / Files / Profile)
+│       ├── index.tsx              # Upload tab
+│       ├── files.tsx              # Files tab
+│       └── profile.tsx            # Profile tab
+├── App.tsx                        # Legacy file (not the entry point; see app/)
+├── app.json                       # Expo configuration
+├── eas.json                       # EAS Build configuration
 ├── package.json
 ├── tsconfig.json
 └── src/
     ├── context/
-    │   └── AuthContext.tsx    # Authentication state management
+    │   └── AuthContext.tsx        # Authentication state management
     ├── hooks/
     │   └── usePushNotifications.ts  # Push notification registration
     ├── screens/
-    │   ├── LoginScreen.tsx    # SSO login
-    │   ├── UploadScreen.tsx   # Camera capture + file picker
-    │   ├── FilesScreen.tsx    # Document list
-    │   └── ProfileScreen.tsx  # User profile + sign out
+    │   ├── WelcomeScreen.tsx      # Branded intro / onboarding
+    │   ├── LoginScreen.tsx        # SSO login
+    │   ├── UploadScreen.tsx       # Camera capture + file picker
+    │   ├── FilesScreen.tsx        # Document list
+    │   └── ProfileScreen.tsx      # User profile + sign out
     └── services/
-        └── api.ts             # DocuElevate API client
+        └── api.ts                 # DocuElevate API client
 ```
 
 ## Share Extension (iOS)

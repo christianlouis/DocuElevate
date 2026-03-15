@@ -5,7 +5,7 @@
  * and a "Get Started" button that navigates to the LoginScreen.
  */
 
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useRouter } from "expo-router";
 import React from "react";
 import {
   Image,
@@ -16,15 +16,6 @@ import {
   Text,
   View,
 } from "react-native";
-
-export type AuthStackParamList = {
-  Welcome: undefined;
-  Login: undefined;
-};
-
-type WelcomeScreenProps = {
-  navigation: NativeStackNavigationProp<AuthStackParamList, "Welcome">;
-};
 
 const FEATURES: { icon: string; title: string; description: string }[] = [
   {
@@ -44,7 +35,8 @@ const FEATURES: { icon: string; title: string; description: string }[] = [
   },
 ];
 
-export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
+export default function WelcomeScreen() {
+  const router = useRouter();
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView
@@ -55,7 +47,7 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
         <View style={styles.hero}>
           <View style={styles.logoContainer}>
             <Image
-              source={require("../../../assets/logo.png")}
+              source={require("../../assets/logo.png")}
               style={styles.logoImage}
               resizeMode="contain"
               accessibilityLabel="DocuElevate logo"
@@ -73,7 +65,7 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
         <View style={styles.features}>
           {FEATURES.map((feature) => (
             <View key={feature.title} style={styles.featureRow}>
-              <Text style={styles.featureIcon} aria-hidden>{feature.icon}</Text>
+              <Text style={styles.featureIcon} aria-hidden={true}>{feature.icon}</Text>
               <View style={styles.featureText}>
                 <Text style={styles.featureTitle}>{feature.title}</Text>
                 <Text style={styles.featureDescription}>{feature.description}</Text>
@@ -85,7 +77,7 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
         {/* CTA */}
         <Pressable
           style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-          onPress={() => navigation.navigate("Login")}
+          onPress={() => router.push("/(auth)/login")}
           accessibilityRole="button"
           accessibilityLabel="Get started — connect to your DocuElevate server"
         >
