@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.141.1 (2026-03-15)
+
+### Bug Fixes
+
+- **mobile**: Correct asset logo path depth and add expo-router app/ routes for web support
+  ([`82d90b4`](https://github.com/christianlouis/DocuElevate/commit/82d90b48e24320734f6b602044d2845efbbead05))
+
+- **mobile**: Update Node.js minimum requirement to 20.19.4
+  ([`b4b50e8`](https://github.com/christianlouis/DocuElevate/commit/b4b50e834088045510b3c235464862789d31c646))
+
+
 ## v0.141.0 (2026-03-15)
 
 ### Features
