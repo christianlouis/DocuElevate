@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.136.1 (2026-03-15)
+
+### Bug Fixes
+
+- **mobile**: Resolve iOS build errors by enabling buildReactNativeFromSource for Expo SDK 54
+  ([`3372a93`](https://github.com/christianlouis/DocuElevate/commit/3372a93f71f76d0dacb9c41458240b4146e33d9f))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`b7a195d`](https://github.com/christianlouis/DocuElevate/commit/b7a195d3bced215bf4d197c867883c2277940b56))
+
+
 ## v0.136.0 (2026-03-14)
 
 ### Features
