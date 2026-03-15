@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.142.0 (2026-03-15)
+
+### Features
+
+- **i18n**: Localize terms and conditions page
+  ([`8c18f0d`](https://github.com/christianlouis/DocuElevate/commit/8c18f0da1718c53ab6ba5bf70ad2679cc287f0d1))
+
+
 ## v0.141.2 (2026-03-15)
 
 ### Bug Fixes
