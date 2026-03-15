@@ -50,14 +50,14 @@ class TestURLUploadValidation:
 
     def test_is_private_ip_localhost(self):
         """Test that localhost is detected as private"""
-        from app.api.url_upload import is_private_ip
+        from app.utils.network import is_private_ip
 
         assert is_private_ip("127.0.0.1") is True
         assert is_private_ip("localhost") is True
 
     def test_is_private_ip_private_ranges(self):
         """Test that private IP ranges are detected"""
-        from app.api.url_upload import is_private_ip
+        from app.utils.network import is_private_ip
 
         # Private IP ranges
         assert is_private_ip("10.0.0.1") is True
@@ -67,7 +67,7 @@ class TestURLUploadValidation:
 
     def test_is_private_ip_public_allowed(self):
         """Test that public IPs are allowed"""
-        from app.api.url_upload import is_private_ip
+        from app.utils.network import is_private_ip
 
         # Public IPs should not be blocked
         assert is_private_ip("8.8.8.8") is False
@@ -548,14 +548,14 @@ class TestURLUploadEndpoint:
 
     def test_is_private_ip_ipv6_loopback(self):
         """Test that IPv6 loopback is detected as private"""
-        from app.api.url_upload import is_private_ip
+        from app.utils.network import is_private_ip
 
         # IPv6 loopback (::1)
         assert is_private_ip("::1") is True
 
     def test_is_private_ip_link_local(self):
         """Test that link-local addresses are detected as private"""
-        from app.api.url_upload import is_private_ip
+        from app.utils.network import is_private_ip
 
         # Link-local address
         assert is_private_ip("169.254.1.1") is True
@@ -609,7 +609,7 @@ class TestURLUploadCoverageGaps:
     @patch("socket.getaddrinfo")
     def test_is_private_ip_hostname_resolves_to_public_ip(self, mock_getaddrinfo):
         """Test that a hostname resolving to a public IP returns False (lines 65->61, 67)"""
-        from app.api.url_upload import is_private_ip
+        from app.utils.network import is_private_ip
 
         # Mock DNS resolution to return a single public IP (8.8.8.8 is Google DNS)
         mock_getaddrinfo.return_value = [
@@ -624,7 +624,7 @@ class TestURLUploadCoverageGaps:
     @patch("socket.getaddrinfo")
     def test_is_private_ip_hostname_resolves_multiple_ips_all_public(self, mock_getaddrinfo):
         """Test hostname with multiple public IPs returns False (covers 65->61 loop branch)"""
-        from app.api.url_upload import is_private_ip
+        from app.utils.network import is_private_ip
 
         # Return two public IPs - neither is private, so loop runs twice (65->61) then returns False (67)
         mock_getaddrinfo.return_value = [
