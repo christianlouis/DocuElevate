@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.141.2 (2026-03-15)
+
+### Bug Fixes
+
+- **mobile**: Align React version with react-native-renderer to fix version mismatch crash
+  ([`0736278`](https://github.com/christianlouis/DocuElevate/commit/073627884ca08ddb1b7838ce95815fc20f6ca5a0))
+
+### Chores
+
+- Initial plan placeholder
+  ([`c5b08e7`](https://github.com/christianlouis/DocuElevate/commit/c5b08e778d99d9a5a677f38a3ff5ba60cc657981))
+
+
 ## v0.141.1 (2026-03-15)
 
 ### Bug Fixes
