@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.137.1 (2026-03-15)
+
+### Bug Fixes
+
+- **mobile**: Add missing react@19.2.4 integrity hash to package-lock.json
+  ([`ca962f8`](https://github.com/christianlouis/DocuElevate/commit/ca962f8040c4f6fb5f7e20cf4bf04f4c4532c100))
+
+- **mobile**: Fix iOS TurboModule crash and npm install peer dep conflict
+  ([`f983b20`](https://github.com/christianlouis/DocuElevate/commit/f983b20a8f0424353cbda5e876428fe97459e303))
+
+### Chores
+
+- Initial plan for npm install lockfile fix
+  ([`0181143`](https://github.com/christianlouis/DocuElevate/commit/01811438dcc46b5b335dc6054cbde6b229ccd332))
+
+
 ## v0.137.0 (2026-03-15)
 
 ### Chores
