@@ -523,7 +523,7 @@ class TestURLUploadAdditionalCoverage:
         """Cover DNS resolution failure branch (lines 67-72)."""
         import socket as _socket
 
-        from app.api.url_upload import is_private_ip
+        from app.utils.network import is_private_ip
 
         with patch("socket.getaddrinfo", side_effect=_socket.gaierror("nope")):
             result = is_private_ip("nonexistent.invalid.hostname.test")
@@ -531,7 +531,7 @@ class TestURLUploadAdditionalCoverage:
 
     def test_is_private_ip_hostname_resolves_to_private(self):
         """Cover branch where hostname resolves to a private IP (line 64-65)."""
-        from app.api.url_upload import is_private_ip
+        from app.utils.network import is_private_ip
 
         with patch("socket.getaddrinfo") as mock_gai:
             # Simulate resolving to a private IP
