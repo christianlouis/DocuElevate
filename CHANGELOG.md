@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.141.0 (2026-03-15)
+
+### Features
+
+- **ui**: Localize status page with i18n translations
+  ([`e46dadb`](https://github.com/christianlouis/DocuElevate/commit/e46dadbf45bc91f1c14f544538bf143a438b1c0a))
+
+
 ## v0.140.0 (2026-03-15)
 
 ### Features
