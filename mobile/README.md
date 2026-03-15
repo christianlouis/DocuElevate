@@ -66,7 +66,12 @@ eas build --platform all
 
 ### Android-specific
 
-- Add a `google-services.json` file (from Firebase Console) to the `mobile/` directory for push notification support
+- **Android push notifications** require a `google-services.json` file from Firebase Console. This file is intentionally excluded from the repository (`.gitignore`). To enable FCM push notifications in your Android builds:
+  1. Create a Firebase project at <https://console.firebase.google.com/>
+  2. Add an Android app with the package name `org.docuelevate.mobile`
+  3. Download `google-services.json` and place it in the `mobile/` directory
+  4. Add `"googleServicesFile": "./google-services.json"` back to the `android` section of `app.json` before building
+- The app runs and bundles correctly without `google-services.json`; only Android push notifications will be unavailable
 - For Play Store submission: create a service account in Google Play Console, download the JSON key as `google-play-service-account.json`, and update `eas.json`
 
 ## Configuration
