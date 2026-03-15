@@ -71,7 +71,18 @@ The mobile app uses the server's existing OAuth2/SSO setup:
 6. `WebBrowser.openAuthSessionAsync` intercepts the `docuelevate://` deep link and returns the URL to the app.
 7. The app extracts the token from the URL and stores it securely in the device's keychain (`expo-secure-store`).
 
-> **Security note:** The `redirect_uri` is validated server-side; only URIs with the `docuelevate://` custom scheme are accepted, preventing open-redirect attacks.
+> **Security note:** The `redirect_uri` is validated server-side; only URIs with the `docuelevate://` custom scheme (production) or the `exp://` scheme (Expo Go development) are accepted, preventing open-redirect attacks.
+
+### Testing in Expo Go
+
+When developing with **Expo Go** the app does not have the `docuelevate://` custom URL scheme registered.  The auth flow adapts automatically:
+
+1. `Linking.createURL('callback')` returns an `exp://` URI pointing at the local dev server (e.g. `exp://192.168.1.5:8081/--/callback`).
+2. This URI is sent to the server as `redirect_uri`; the server accepts it alongside the production `docuelevate://` scheme.
+3. After successful authentication the server redirects back to the `exp://` URI.
+4. `WebBrowser.openAuthSessionAsync` intercepts the deep link and the Expo Go app receives the token.
+
+No extra configuration is needed — just run `npx expo start` and scan the QR code with the **Expo Go** app.
 
 ### Auto-generated Mobile Token
 

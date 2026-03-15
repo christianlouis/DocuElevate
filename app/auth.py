@@ -4,7 +4,7 @@ import logging
 import pathlib
 from datetime import datetime, timezone
 from functools import wraps
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, Request, status
@@ -256,10 +256,14 @@ async def login(request: Request):
     """Show login page with appropriate authentication options."""
     # Persist the mobile deep-link redirect URI in the session so it survives
     # the OAuth provider round-trip and is available when auth completes.
-    # Only the custom ``docuelevate://`` scheme is accepted to prevent open-redirect abuse.
+    # Accepted schemes:
+    #   • "docuelevate://" — production / EAS builds (custom app scheme)
+    #   • "exp://"         — Expo Go development client
+    # Only custom (non-HTTP) schemes are accepted to prevent open-redirect abuse.
+    _MOBILE_ALLOWED_SCHEMES = ("docuelevate://", "exp://")
     if request.query_params.get("mobile") == "1":
         redirect_uri = request.query_params.get("redirect_uri", "")
-        if redirect_uri.startswith("docuelevate://"):
+        if any(redirect_uri.startswith(s) for s in _MOBILE_ALLOWED_SCHEMES):
             request.session["mobile_redirect_uri"] = redirect_uri
 
     return templates.TemplateResponse(
@@ -647,7 +651,7 @@ def _record_login_event(
         logger.debug("Failed to write login audit event for user=%s", username, exc_info=True)
 
 
-def _create_mobile_redirect(request: Request, db: Session) -> "RedirectResponse | None":
+def _create_mobile_redirect(request: Request, db: Session) -> RedirectResponse | None:
     """Generate a mobile API token and return a redirect to the mobile app.
 
     If ``mobile_redirect_uri`` is stored in the session (set when the login
@@ -679,8 +683,8 @@ def _create_mobile_redirect(request: Request, db: Session) -> "RedirectResponse 
         return None
 
     # Lazy imports to avoid circular dependency via app.api.__init__
-    from app.api.api_tokens import generate_api_token, hash_token  # noqa: PLC0415
-    from app.models import ApiToken as _ApiToken  # noqa: PLC0415
+    from app.api.api_tokens import generate_api_token, hash_token
+    from app.models import ApiToken as _ApiToken
 
     plaintext = generate_api_token()
     token_hash_value = hash_token(plaintext)
@@ -700,7 +704,9 @@ def _create_mobile_redirect(request: Request, db: Session) -> "RedirectResponse 
         logger.exception("Failed to create mobile API token for owner_id=%s", owner_id)
         return None
 
-    redirect_url = f"{mobile_redirect_uri}?token={plaintext}"
+    # Safely append the token as a query parameter, preserving any existing params.
+    separator = "&" if "?" in mobile_redirect_uri else "?"
+    redirect_url = f"{mobile_redirect_uri}{separator}{urlencode({'token': plaintext})}"
     logger.info("[SECURITY] MOBILE_SSO_TOKEN_ISSUED owner=%s token_id=%s", owner_id, db_token.id)
     return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
 
