@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.145.1 (2026-03-15)
+
+### Bug Fixes
+
+- **mobile**: Suppress Node.js url.parse() deprecation and document Apple session fix
+  ([`dd02ff5`](https://github.com/christianlouis/DocuElevate/commit/dd02ff5677fdd9704da4bacdaf2850882e9f6743))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`4de5743`](https://github.com/christianlouis/DocuElevate/commit/4de574370c700708915c4241c1b0ac91e4478707))
+
+### Testing
+
+- Fix webdav localhost assertion to match actual error message
+  ([`fe48e2a`](https://github.com/christianlouis/DocuElevate/commit/fe48e2aedc6cae822cd06a85293833ce103ebcce))
+
+
 ## Unreleased
 
 ### Testing
