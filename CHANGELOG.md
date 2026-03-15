@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.139.0 (2026-03-15)
+
+### Features
+
+- **ui**: Localize license page with i18n translation keys
+  ([`9c73ab8`](https://github.com/christianlouis/DocuElevate/commit/9c73ab8e5963ae061c5ca3b494efb5620d4c8468))
+
+
 ## v0.138.0 (2026-03-15)
 
 ### Features
