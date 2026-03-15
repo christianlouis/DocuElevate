@@ -64,11 +64,25 @@ See the [EAS Build documentation](https://docs.expo.dev/build/introduction/) for
 The mobile app uses the server's existing OAuth2/SSO setup:
 
 1. User enters the DocuElevate server URL on the login screen.
-2. The app opens `<server>/login?mobile=1&redirect_uri=docuelevate://callback` in the **system browser** (Safari / Chrome).
-3. The user authenticates via SSO or local credentials.
-4. The server redirects back to `docuelevate://callback`.
-5. The app calls `POST /api/mobile/generate-token` to exchange the session for a **long-lived API token**.
-6. The token is stored securely in the device's keychain (`expo-secure-store`).
+2. The app opens `<server>/login?mobile=1&redirect_uri=docuelevate://callback` in the **system browser** (Safari / Chrome Custom Tabs).
+3. The server stores `docuelevate://callback` in the browser session and presents the login page.
+4. The user authenticates via SSO or local credentials.
+5. After successful authentication the server mints a long-lived API token and redirects the browser to `docuelevate://callback?token=<token>`.
+6. `WebBrowser.openAuthSessionAsync` intercepts the `docuelevate://` deep link and returns the URL to the app.
+7. The app extracts the token from the URL and stores it securely in the device's keychain (`expo-secure-store`).
+
+> **Security note:** The `redirect_uri` is validated server-side; only URIs with the `docuelevate://` custom scheme (production) or the `exp://` scheme (Expo Go development) are accepted, preventing open-redirect attacks.
+
+### Testing in Expo Go
+
+When developing with **Expo Go** the app does not have the `docuelevate://` custom URL scheme registered.  The auth flow adapts automatically:
+
+1. `Linking.createURL('callback')` returns an `exp://` URI pointing at the local dev server (e.g. `exp://192.168.1.5:8081/--/callback`).
+2. This URI is sent to the server as `redirect_uri`; the server accepts it alongside the production `docuelevate://` scheme.
+3. After successful authentication the server redirects back to the `exp://` URI.
+4. `WebBrowser.openAuthSessionAsync` intercepts the deep link and the Expo Go app receives the token.
+
+No extra configuration is needed — just run `npx expo start` and scan the QR code with the **Expo Go** app.
 
 ### Auto-generated Mobile Token
 

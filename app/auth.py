@@ -4,7 +4,7 @@ import logging
 import pathlib
 from datetime import datetime, timezone
 from functools import wraps
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, Request, status
@@ -254,6 +254,18 @@ def get_gravatar_url(email):
 
 async def login(request: Request):
     """Show login page with appropriate authentication options."""
+    # Persist the mobile deep-link redirect URI in the session so it survives
+    # the OAuth provider round-trip and is available when auth completes.
+    # Accepted schemes:
+    #   • "docuelevate://" — production / EAS builds (custom app scheme)
+    #   • "exp://"         — Expo Go development client
+    # Only custom (non-HTTP) schemes are accepted to prevent open-redirect abuse.
+    _MOBILE_ALLOWED_SCHEMES = ("docuelevate://", "exp://")
+    if request.query_params.get("mobile") == "1":
+        redirect_uri = request.query_params.get("redirect_uri", "")
+        if any(redirect_uri.startswith(s) for s in _MOBILE_ALLOWED_SCHEMES):
+            request.session["mobile_redirect_uri"] = redirect_uri
+
     return templates.TemplateResponse(
         "login.html",
         {
@@ -407,6 +419,12 @@ async def social_callback(request: Request, provider: str, db: Session = Depends
         user_id = (
             user_data.get("sub") or user_data.get("preferred_username") or user_data.get("email") or user_data.get("id")
         )
+
+        # Mobile app flow: issue an inline API token and redirect back to the app.
+        mobile_resp = _create_mobile_redirect(request, db)
+        if mobile_resp:
+            return mobile_resp
+
         if user_id:
             profile = db.query(_UserProfile).filter(_UserProfile.user_id == user_id).first()
             if profile and not profile.onboarding_completed:
@@ -568,6 +586,14 @@ async def oauth_callback(request: Request, db: Session = Depends(get_db)):
         user_id = (
             user_data.get("sub") or user_data.get("preferred_username") or user_data.get("email") or user_data.get("id")
         )
+
+        # Mobile app flow: issue an inline API token and redirect back to the app.
+        # This check runs before onboarding so native-app users are never sent
+        # to the web-based onboarding wizard.
+        mobile_resp = _create_mobile_redirect(request, db)
+        if mobile_resp:
+            return mobile_resp
+
         if user_id:
             profile = db.query(_UserProfile).filter(_UserProfile.user_id == user_id).first()
             if profile and not profile.onboarding_completed:
@@ -623,6 +649,66 @@ def _record_login_event(
         )
     except Exception:
         logger.debug("Failed to write login audit event for user=%s", username, exc_info=True)
+
+
+def _create_mobile_redirect(request: Request, db: Session) -> RedirectResponse | None:
+    """Generate a mobile API token and return a redirect to the mobile app.
+
+    If ``mobile_redirect_uri`` is stored in the session (set when the login
+    page was opened with ``?mobile=1&redirect_uri=docuelevate://...``), this
+    function creates a long-lived API token, appends it as a ``?token=``
+    query parameter to the redirect URI, and returns the redirect so that
+    ``WebBrowser.openAuthSessionAsync`` in the Expo app intercepts the
+    deep link and stores the token.
+
+    Returns ``None`` when the request is not part of a mobile SSO flow.
+
+    Args:
+        request: The current FastAPI request.  The ``user`` dict must already
+            be stored in ``request.session`` before calling this function.
+        db: Active database session used to persist the new API token.
+
+    Returns:
+        A ``RedirectResponse`` to the deep-link URI with ``?token=<plaintext>``,
+        or ``None`` if no mobile redirect URI is pending.
+    """
+    mobile_redirect_uri = request.session.pop("mobile_redirect_uri", None)
+    if not mobile_redirect_uri:
+        return None
+
+    user = request.session.get("user") or {}
+    owner_id = user.get("sub") or user.get("preferred_username") or user.get("email") or user.get("id")
+    if not owner_id:
+        logger.warning("Mobile SSO redirect requested but no owner_id could be resolved from session")
+        return None
+
+    # Lazy imports to avoid circular dependency via app.api.__init__
+    from app.api.api_tokens import generate_api_token, hash_token
+    from app.models import ApiToken as _ApiToken
+
+    plaintext = generate_api_token()
+    token_hash_value = hash_token(plaintext)
+    prefix = plaintext[:12]
+
+    db_token = _ApiToken(
+        owner_id=owner_id,
+        name="Mobile App",
+        token_hash=token_hash_value,
+        token_prefix=prefix,
+    )
+    try:
+        db.add(db_token)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to create mobile API token for owner_id=%s", owner_id)
+        return None
+
+    # Safely append the token as a query parameter, preserving any existing params.
+    separator = "&" if "?" in mobile_redirect_uri else "?"
+    redirect_url = f"{mobile_redirect_uri}{separator}{urlencode({'token': plaintext})}"
+    logger.info("[SECURITY] MOBILE_SSO_TOKEN_ISSUED owner=%s token_id=%s", owner_id, db_token.id)
+    return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
 
 
 async def auth(request: Request, db: Session = Depends(get_db)):
@@ -694,6 +780,12 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", local_user.email)
             _record_login_event(db, request, local_user.email, success=True)
             _ensure_user_profile(db, user_data, is_admin=bool(local_user.is_admin))
+
+            # Mobile app flow: issue an inline API token and redirect back to the app.
+            mobile_resp = _create_mobile_redirect(request, db)
+            if mobile_resp:
+                return mobile_resp
+
             profile = db.query(_UserProfile).filter(_UserProfile.user_id == local_user.email).first()
             if profile and not profile.onboarding_completed:
                 post_onboarding = request.session.pop("redirect_after_login", "/upload")
@@ -739,6 +831,12 @@ async def auth(request: Request, db: Session = Depends(get_db)):
         logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", username)
         _record_login_event(db, request, username, success=True)
         _ensure_user_profile(db, admin_user_data, is_admin=True)
+
+        # Mobile app flow: issue an inline API token and redirect back to the app.
+        mobile_resp = _create_mobile_redirect(request, db)
+        if mobile_resp:
+            return mobile_resp
+
         redirect_url = request.session.pop("redirect_after_login", "/upload")
         return RedirectResponse(url=redirect_url, status_code=302)
     else:
