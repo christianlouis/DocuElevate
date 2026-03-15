@@ -158,3 +158,44 @@ The mobile app uses the following backend endpoints:
 | `GET`    | `/api/files`                        | List processed documents              |
 
 Authentication uses `Authorization: Bearer <api_token>` on all requests.
+
+## Troubleshooting
+
+### `Session expired Local session` when running `eas build`
+
+EAS CLI stores an Apple ID session locally to manage provisioning profiles and code-signing certificates. This session expires after several weeks.
+
+**Quick fix (local):** Re-authenticate by running:
+
+```bash
+eas credentials
+```
+
+Select iOS → re-enter your Apple ID credentials when prompted.
+
+**Recommended (CI / automation):** Switch to an [App Store Connect API Key](https://docs.expo.dev/app-signing/app-credentials/#app-store-connect-api-key) which does not expire automatically and works non-interactively:
+
+1. Go to [appstoreconnect.apple.com → Users → Integrations → Keys](https://appstoreconnect.apple.com/access/integrations/api) and create a key with *Developer* or *App Manager* role.
+2. Download the `.p8` file; note the **Key ID** and **Issuer ID**.
+3. Run `eas credentials` → iOS → *Add an App Store Connect API key* and upload the `.p8` file.
+
+Once an API key is stored in EAS, all future builds (local and CI) will use it automatically without requiring an Apple ID session.
+
+### `[DEP0169] DeprecationWarning: url.parse()` during build
+
+```text
+(node:XXXXX) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized…
+```
+
+This is emitted by EAS CLI itself when it runs on **Node.js 22 or later**, which deprecates `url.parse()`. It is a warning only and does not cause build failures on its own. The `eas.json` build profiles already suppress it via `"NODE_NO_WARNINGS": "1"` in their `env` sections.
+
+To suppress the warning locally, either:
+
+```bash
+# Option A: Run with the warning suppressed
+NODE_NO_WARNINGS=1 eas build --platform ios
+
+# Option B: Switch to the pinned Node version (no warning on Node 20)
+nvm use   # reads .nvmrc → Node 20.19.4
+eas build --platform ios
+```

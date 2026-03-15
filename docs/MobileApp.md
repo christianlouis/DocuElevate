@@ -20,7 +20,7 @@ DocuElevate includes a native mobile application for iOS and Android built with 
 
 ### Prerequisites
 
-- Node.js 18 or later
+- Node.js 20.19.4 or later (use [nvm](https://github.com/nvm-sh/nvm): `nvm install` inside `mobile/` reads `.nvmrc` automatically)
 - [Expo CLI](https://docs.expo.dev/get-started/installation/): `npm install -g @expo/cli`
 - [Expo Go](https://expo.dev/client) app on your iOS or Android device (for development)
 - A running DocuElevate server reachable from your device
@@ -241,6 +241,43 @@ mobile/
 ```
 
 ## Troubleshooting
+
+### "Session expired Local session" during iOS build
+
+EAS stores an Apple ID session locally (in `~/.expo/`) to manage code-signing certificates and provisioning profiles.  This session expires after a few weeks.
+
+**To fix:**
+
+1. **Refresh the session** by running `eas credentials` and re-authenticating with your Apple ID.
+2. **Recommended for automation:** Replace the Apple ID session with an [App Store Connect API Key](https://docs.expo.dev/app-signing/app-credentials/#app-store-connect-api-key).  API keys do not expire and work fully non-interactively:
+   - Create a key at [appstoreconnect.apple.com → Users → Integrations → Keys](https://appstoreconnect.apple.com/access/integrations/api)
+   - Download the `.p8` file and note the **Key ID** and **Issuer ID**
+   - Run `eas credentials` → iOS → *Add an App Store Connect API key*
+   - Upload the `.p8` file when prompted
+
+Once an API key is configured in EAS, automated builds (including CI and EAS Cloud Workflows) will no longer prompt for a password.
+
+### Node.js deprecation warning `[DEP0169]` during EAS build
+
+```
+(node:XXXXX) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized…
+```
+
+This warning is emitted by **EAS CLI** (an external tool) when it runs on **Node.js 22 or later**, which deprecates `url.parse()`.  It does not indicate a problem in the DocuElevate mobile app itself and will not cause a build failure on its own.
+
+The `eas.json` build profiles already include `"NODE_NO_WARNINGS": "1"` in their `env` sections to suppress this warning during EAS Cloud builds.  For local builds with a system Node.js ≥ 22, suppress it by running:
+
+```bash
+NODE_NO_WARNINGS=1 eas build --platform ios
+```
+
+or by activating the project's pinned Node.js version first:
+
+```bash
+cd mobile
+nvm use   # reads .nvmrc → Node 20.19.4 (no deprecation warning)
+eas build --platform ios
+```
 
 ### "Authentication was cancelled or failed"
 

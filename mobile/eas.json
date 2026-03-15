@@ -8,6 +8,9 @@
       "developmentClient": true,
       "distribution": "internal",
       "node": "20.19.4",
+      "env": {
+        "NODE_NO_WARNINGS": "1"
+      },
       "ios": {
         "image": "macos-sequoia-15.5-xcode-26.0"
       }
@@ -15,6 +18,9 @@
     "preview": {
       "distribution": "internal",
       "node": "20.19.4",
+      "env": {
+        "NODE_NO_WARNINGS": "1"
+      },
       "ios": {
         "simulator": false,
         "image": "macos-sequoia-15.5-xcode-26.0"
@@ -23,6 +29,9 @@
     "production": {
       "autoIncrement": true,
       "node": "20.19.4",
+      "env": {
+        "NODE_NO_WARNINGS": "1"
+      },
       "ios": {
         "image": "macos-sequoia-15.5-xcode-26.0"
       }
