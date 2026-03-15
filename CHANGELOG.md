@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.138.0 (2026-03-15)
+
+### Features
+
+- **i18n**: Localize cookies policy page
+  ([`182868c`](https://github.com/christianlouis/DocuElevate/commit/182868c0d71f7accfd801c7c41864c639aca5149))
+
+
 ## v0.137.1 (2026-03-15)
 
 ### Bug Fixes
