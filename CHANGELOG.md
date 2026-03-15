@@ -10,6 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.137.0 (2026-03-15)
+
+### Chores
+
+- **mobile**: Update iOS build image to Xcode 26 for iOS 26 SDK compliance
+  ([`69664ec`](https://github.com/christianlouis/DocuElevate/commit/69664ec6cdb0bcfc3742fa9d75eed2125ed9ca12))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`8a1dc2a`](https://github.com/christianlouis/DocuElevate/commit/8a1dc2aa0e6b03408501ee8964ba60f9385c552b))
+
+- **changelog**: Update changelog [skip ci]
+  ([`02c3992`](https://github.com/christianlouis/DocuElevate/commit/02c399239c8260cb0ba217128bb2c62271a847f7))
+
+### Features
+
+- **ui**: Localize imprint page
+  ([`1f6a3a5`](https://github.com/christianlouis/DocuElevate/commit/1f6a3a58037f24fc838b2d4471afa01c68f4178d))
+
+
 ## Unreleased
 
 ### Chores
