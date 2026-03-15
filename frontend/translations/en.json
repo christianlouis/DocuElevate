@@ -124,7 +124,7 @@
   "admin_plans.overage_50pct": "50%",
   "admin_plans.overage_announce": "\u2192 announce",
   "admin_plans.overage_buffer_body_prefix": "The overage buffer is",
-  "admin_plans.overage_buffer_body_suffix": ". We advertise X docs/month but only enforce at",
+  "admin_plans.overage_buffer_body_suffix": "We advertise X docs/month but only enforce at",
   "admin_plans.overage_buffer_formula": "X \u00d7 (1 + buffer%)",
   "admin_plans.overage_buffer_invisible": "invisible to users",
   "admin_plans.overage_buffer_tail": "docs. For example, a 150-doc/month plan with a 20% buffer enforces at 180 docs. This prevents hard cutoffs at the exact announced limit, giving users a graceful soft landing.",
