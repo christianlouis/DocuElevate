@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.143.0 (2026-03-15)
+
+### Features
+
+- **i18n**: Localize admin users page
+  ([`3fc0d52`](https://github.com/christianlouis/DocuElevate/commit/3fc0d5212675a3a54ee32ecaede8a0494f309c40))
+
+
 ## v0.142.0 (2026-03-15)
 
 ### Features
