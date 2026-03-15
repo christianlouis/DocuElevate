@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.143.1 (2026-03-15)
+
+### Bug Fixes
+
+- **auth**: Expo Go support via Linking.createURL; safe token URL construction; clean up return type
+  annotation
+  ([`1428556`](https://github.com/christianlouis/DocuElevate/commit/14285567d5bbf30200bd56ca30c75c906d09a376))
+
+- **auth**: Store mobile_redirect_uri in session and redirect to deep-link after SSO; fix
+  SafeAreaView deprecation
+  ([`5c373e7`](https://github.com/christianlouis/DocuElevate/commit/5c373e72243ab18a4bb0f25bb23379ef6ccfa6fc))
+
+
 ## v0.143.0 (2026-03-15)
 
 ### Features
