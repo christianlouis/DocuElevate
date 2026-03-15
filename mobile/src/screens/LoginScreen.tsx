@@ -1,11 +1,12 @@
 /**
- * LoginScreen – entry point for unauthenticated users.
+ * LoginScreen – server URL entry and SSO sign-in.
  *
  * Renders a server URL input and a "Sign in with SSO" button that opens the
  * DocuElevate web login page in the system browser.  On success the
  * AuthContext stores the API token and navigates to the main app.
  */
 
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -20,8 +21,13 @@ import {
   View,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
+import type { AuthStackParamList } from "./WelcomeScreen";
 
-export default function LoginScreen() {
+type LoginScreenProps = {
+  navigation: NativeStackNavigationProp<AuthStackParamList, "Login">;
+};
+
+export default function LoginScreen({ navigation }: LoginScreenProps) {
   const { signIn } = useAuth();
   const [serverUrl, setServerUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -97,6 +103,15 @@ export default function LoginScreen() {
         <Text style={styles.hint}>
           You will be redirected to your organisation's sign-in page.
         </Text>
+
+        <Pressable
+          onPress={() => navigation.navigate("Welcome")}
+          accessibilityRole="button"
+          accessibilityLabel="Back to welcome screen"
+          style={styles.backLink}
+        >
+          <Text style={styles.backLinkText}>← Back</Text>
+        </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
@@ -178,5 +193,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#9ca3af",
     textAlign: "center",
+  },
+  backLink: {
+    marginTop: 20,
+    alignItems: "center",
+    minHeight: 44,
+    justifyContent: "center",
+  },
+  backLinkText: {
+    fontSize: 13,
+    color: "#6b7280",
   },
 });

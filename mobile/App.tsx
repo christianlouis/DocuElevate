@@ -1,13 +1,15 @@
 /**
  * App.tsx – root component for the DocuElevate mobile app.
  *
- * Wraps the entire app in the AuthProvider and renders either the login
- * screen (unauthenticated) or the main tab navigator (authenticated).
+ * Wraps the entire app in the AuthProvider and renders either the
+ * authenticated tab navigator or an unauthenticated auth stack that takes
+ * the user through WelcomeScreen → LoginScreen.
  * Push notification registration is handled by the usePushNotifications hook.
  */
 
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
@@ -18,8 +20,19 @@ import FilesScreen from "./src/screens/FilesScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import ProfileScreen from "./src/screens/ProfileScreen";
 import UploadScreen from "./src/screens/UploadScreen";
+import WelcomeScreen, { type AuthStackParamList } from "./src/screens/WelcomeScreen";
 
 const Tab = createBottomTabNavigator();
+const AuthStack = createNativeStackNavigator<AuthStackParamList>();
+
+function AuthNavigator() {
+  return (
+    <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+      <AuthStack.Screen name="Welcome" component={WelcomeScreen} />
+      <AuthStack.Screen name="Login" component={LoginScreen} />
+    </AuthStack.Navigator>
+  );
+}
 
 function TabNavigator() {
   const { isAuthenticated } = useAuth();
@@ -97,7 +110,7 @@ function AppContent() {
 
   return (
     <NavigationContainer>
-      {isAuthenticated ? <TabNavigator /> : <LoginScreen />}
+      {isAuthenticated ? <TabNavigator /> : <AuthNavigator />}
     </NavigationContainer>
   );
 }
