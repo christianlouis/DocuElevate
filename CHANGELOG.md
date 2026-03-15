@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Testing
+
+- Fix webdav localhost assertion to match actual error message
+  ([`fe48e2a`](https://github.com/christianlouis/DocuElevate/commit/fe48e2aedc6cae822cd06a85293833ce103ebcce))
+
+
 ## v0.145.0 (2026-03-15)
 
 ### Features
