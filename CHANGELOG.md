@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.145.0 (2026-03-15)
+
+### Features
+
+- **i18n**: Localize admin files page (filemanager.html)
+  ([`2bb47e7`](https://github.com/christianlouis/DocuElevate/commit/2bb47e7631836880873e51b131455ff8a500d2a6))
+
+
 ## v0.144.0 (2026-03-15)
 
 ### Bug Fixes
