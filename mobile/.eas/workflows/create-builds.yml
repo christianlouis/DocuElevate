@@ -9,6 +9,10 @@ jobs:
   build_android:
     name: Build Android app
     type: build
+    env:
+      # Suppress Node.js url.parse() deprecation warnings ([DEP0169]) emitted by
+      # EAS CLI when running on the build image's system Node 22+.
+      NODE_NO_WARNINGS: "1"
     params:
       platform: android
       profile: production
@@ -16,6 +20,10 @@ jobs:
   build_ios:
     name: Build iOS app
     type: build
+    env:
+      # Suppress Node.js url.parse() deprecation warnings ([DEP0169]) emitted by
+      # EAS CLI when running on the build image's system Node 22+.
+      NODE_NO_WARNINGS: "1"
     params:
       platform: ios
       profile: production
