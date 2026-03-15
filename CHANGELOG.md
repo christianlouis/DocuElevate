@@ -12,6 +12,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Chores
+
+- **mobile**: Update iOS build image to Xcode 26 for iOS 26 SDK compliance
+  ([`69664ec`](https://github.com/christianlouis/DocuElevate/commit/69664ec6cdb0bcfc3742fa9d75eed2125ed9ca12))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`02c3992`](https://github.com/christianlouis/DocuElevate/commit/02c399239c8260cb0ba217128bb2c62271a847f7))
+
+
+## Unreleased
+
 
 ## v0.136.1 (2026-03-15)
 
