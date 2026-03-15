@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.145.2 (2026-03-15)
+
+### Bug Fixes
+
+- **auth**: Case-insensitive login + mobile auth debug logging
+  ([`f58b894`](https://github.com/christianlouis/DocuElevate/commit/f58b8943fbec892ebcc612b28e301605a72232b4))
+
+
 ## v0.145.1 (2026-03-15)
 
 ### Bug Fixes
