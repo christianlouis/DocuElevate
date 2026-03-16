@@ -5,7 +5,7 @@ Focuses on uncovered lines: 98-99, 121-143, 160-161, 170-171,
 324-326, 400-402, 436-438.
 """
 
-from unittest.mock import MagicMock, PropertyMock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
 from fastapi.testclient import TestClient

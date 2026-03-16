@@ -418,6 +418,7 @@ class TestOneDriveIntegration:
     def test_onedrive_token_refresh_and_user_info(self, original_env: dict) -> None:
         """Validate token refresh and user info retrieval."""
         import asyncio
+
         import httpx
 
         token = self._get_access_token(original_env)
