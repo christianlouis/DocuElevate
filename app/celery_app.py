@@ -1,6 +1,7 @@
 # app/celery_app.py
 
 import logging
+import os
 
 from celery import Celery
 from celery.signals import task_failure, worker_ready
@@ -26,9 +27,13 @@ celery.conf.task_routes = {
 }
 
 # Mapping of document pipeline task names to the positional index of ``file_id``
-# in their ``args`` tuple.  Tasks that always pass ``file_id`` as a keyword
-# argument (e.g. ``process_document``, ``finalize_document_storage``) are not
-# listed here — their ``file_id`` is found via ``kwargs`` instead.
+# in their ``args`` tuple.  These indices correspond to the task signatures:
+#   process_with_ocr(filename, file_id, ...)          → index 1
+#   extract_metadata_with_gpt(filename, text, file_id) → index 2
+#   embed_metadata_into_pdf(path, text, metadata, file_id) → index 3
+# Tasks that always pass ``file_id`` as a keyword argument
+# (e.g. ``process_document``, ``finalize_document_storage``) are not listed
+# here — their ``file_id`` is found via ``kwargs`` instead.
 _FILE_ID_ARG_INDEX: dict[str, int] = {
     "app.tasks.process_with_ocr.process_with_ocr": 1,
     "app.tasks.extract_metadata_with_gpt.extract_metadata_with_gpt": 2,
@@ -71,8 +76,6 @@ def _dispatch_user_failure_notification(sender, exception, args: list | None, kw
         filename = record.original_filename or record.local_filename or "unknown"
 
     # 3. Dispatch per-user notification
-    import os
-
     error_msg = f"{type(exception).__name__}: {exception}" if exception else "Unknown error"
     notify_user_document_failed(
         owner_id=owner_id,
@@ -114,4 +117,4 @@ def task_failure_handler(
     try:
         _dispatch_user_failure_notification(sender, exception, args, kwargs)
     except Exception:
-        logger.debug("Could not dispatch per-user failure notification", exc_info=True)
+        logger.warning("Could not dispatch per-user failure notification", exc_info=True)
