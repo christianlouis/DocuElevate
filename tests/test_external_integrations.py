@@ -417,14 +417,19 @@ class TestOneDriveIntegration:
 
     def test_onedrive_token_refresh_and_user_info(self, original_env: dict) -> None:
         """Validate token refresh and user info retrieval."""
-        import requests
+        import asyncio
+        import httpx
 
         token = self._get_access_token(original_env)
-        resp = requests.get(
-            "https://graph.microsoft.com/v1.0/me",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=30,
-        )
+
+        async def _test():
+            async with httpx.AsyncClient(timeout=30) as client:
+                return await client.get(
+                    "https://graph.microsoft.com/v1.0/me",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+
+        resp = asyncio.run(_test())
         assert resp.status_code == 200, f"OneDrive user info failed: {resp.text}"
 
     def test_onedrive_upload_download_delete(self, original_env: dict) -> None:
