@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.153.1 (2026-03-16)
+
+### Bug Fixes
+
+- **mobile**: Add root index.tsx redirect to prevent stale Hello World screen
+  ([`1350aa6`](https://github.com/christianlouis/DocuElevate/commit/1350aa6a5ede19d924a9a4c277ef8089b940ea3c))
+
+
 ## v0.153.0 (2026-03-16)
 
 ### Bug Fixes
