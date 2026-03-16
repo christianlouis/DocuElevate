@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.151.1 (2026-03-16)
+
+### Bug Fixes
+
+- Resolve merge conflict markers in mobile/app.json
+  ([`a7b993a`](https://github.com/christianlouis/DocuElevate/commit/a7b993ad421316c2182d2d038f0644d035e58466))
+
+
 ## v0.151.0 (2026-03-16)
 
 ### Features
