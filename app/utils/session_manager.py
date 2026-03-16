@@ -117,12 +117,20 @@ def validate_session(db: Session, session_token: str) -> UserSession | None:
         logger.debug("[SESSION] Session id=%s is revoked", user_session.id)
         return None
 
-    if user_session.expires_at and user_session.expires_at < now:
-        logger.debug("[SESSION] Session id=%s has expired", user_session.id)
-        return None
+    if user_session.expires_at:
+        # Ensure timezone-aware comparison (SQLite returns naive datetimes)
+        expires = user_session.expires_at
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if expires < now:
+            logger.debug("[SESSION] Session id=%s has expired", user_session.id)
+            return None
 
     # Update last_active_at (throttled to avoid excessive writes)
-    if not user_session.last_active_at or (now - user_session.last_active_at).total_seconds() > 60:
+    last_active = user_session.last_active_at
+    if last_active and last_active.tzinfo is None:
+        last_active = last_active.replace(tzinfo=timezone.utc)
+    if not last_active or (now - last_active).total_seconds() > 60:
         try:
             user_session.last_active_at = now
             db.commit()
@@ -230,16 +238,24 @@ def list_user_sessions(db: Session, user_id: str) -> list[UserSession]:
     Results are ordered by most recently active first.
     """
     now = datetime.now(timezone.utc)
-    return (
+    sessions = (
         db.query(UserSession)
         .filter(
             UserSession.user_id == user_id,
             UserSession.is_revoked.is_(False),
-            UserSession.expires_at > now,
         )
         .order_by(UserSession.last_active_at.desc())
         .all()
     )
+    # Filter expired sessions in Python to handle timezone-naive datetimes (SQLite)
+    result = []
+    for s in sessions:
+        expires = s.expires_at
+        if expires and expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if expires and expires > now:
+            result.append(s)
+    return result
 
 
 def cleanup_expired_sessions(db: Session) -> int:
