@@ -1,3 +1,4 @@
+import aiofiles
 """
 File-related API endpoints
 """
@@ -1277,7 +1278,7 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
     # enforcing the size limit during the read so memory usage stays bounded.
     try:
         written_size = 0
-        with open(target_path, "wb") as f:
+        async with aiofiles.open(target_path, "wb") as f:
             chunk_size = 65536  # 64 KB chunks
             while True:
                 chunk = await file.read(chunk_size)
@@ -1286,14 +1287,14 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
                 written_size += len(chunk)
                 if written_size > max_size:
                     # Exceeded limit mid-stream; clean up and reject
-                    f.close()
+                    await f.close()
                     os.remove(target_path)
                     raise HTTPException(
                         status_code=413,
                         detail=f"File too large: exceeded {max_size} bytes during upload. "
                         f"See SECURITY_AUDIT.md for configuration details.",
                     )
-                f.write(chunk)
+                await f.write(chunk)
     except HTTPException:
         raise
     except Exception as e:
