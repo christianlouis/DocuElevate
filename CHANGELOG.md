@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.152.0 (2026-03-16)
+
+### Features
+
+- **mobile**: Add retry for failed uploads via tap and long-press
+  ([`d322ec6`](https://github.com/christianlouis/DocuElevate/commit/d322ec6dc74ec47e9beba4a9915ad467b8ad85c3))
+
+
 ## v0.151.1 (2026-03-16)
 
 ### Bug Fixes
