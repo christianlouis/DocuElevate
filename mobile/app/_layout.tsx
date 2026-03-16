@@ -23,6 +23,9 @@ import { ShareProvider, useShare } from "../src/context/ShareContext";
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** The custom URL scheme registered in app.json. */
+const APP_SCHEME_PREFIX = "docuelevate://";
+
 /** Extract a display filename from a file:// or content:// URI. */
 function filenameFromUri(uri: string): string {
   try {
@@ -41,8 +44,7 @@ function filenameFromUri(uri: string): string {
  * itself is created once and can be easily unit-tested without a React context.
  *
  * On iOS the Share Sheet / "Open In" action may deliver the file path under
- * the app's custom URL scheme (e.g.
- * `docuelevate://private/var/mobile/Library/…/file.pdf`) instead of a plain
+ * the app's custom URL scheme (`docuelevate://…/file.pdf`) instead of a plain
  * `file://` URL.  When that happens we rewrite the URL to `file:///…` so the
  * upload logic can read the file normally.
  */
@@ -53,8 +55,8 @@ function makeUrlHandler(addPendingFile: (f: { uri: string; filename: string }) =
     // iOS may pass a filesystem path under the app's custom scheme.
     // Rewrite it to a file:// URL unless it looks like an in-app deep-link
     // (expo-router groups always start with "(").
-    if (url.startsWith("docuelevate://")) {
-      const path = url.slice("docuelevate://".length);
+    if (url.startsWith(APP_SCHEME_PREFIX)) {
+      const path = url.slice(APP_SCHEME_PREFIX.length);
       if (path.length > 0 && !path.startsWith("(")) {
         fileUri = "file:///" + path.replace(/^\/+/, "");
       }
