@@ -210,6 +210,19 @@ def dispatch_user_notification(
     finally:
         db.close()
 
+    # 3. Send push notifications to registered mobile devices
+    try:
+        from app.utils.push_notification import send_push_to_owner
+
+        send_push_to_owner(
+            owner_id=owner_id,
+            title=title,
+            body=message,
+            data={"event_type": event_type, "file_id": file_id},
+        )
+    except Exception:
+        logger.exception("Error sending push notification for owner_id=%s event=%s", owner_id, event_type)
+
 
 def notify_user_document_processed(owner_id: str, filename: str, file_id: int | None = None) -> None:
     """Notify a user that their document was successfully processed."""

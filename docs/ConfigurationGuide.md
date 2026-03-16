@@ -16,6 +16,7 @@ Configuration is primarily done through environment variables specified in a `.e
 | `GOTENBERG_URL`        | Gotenberg PDF processing URL.                           | `http://gotenberg:3000`        |
 | `EXTERNAL_HOSTNAME`    | The external hostname for the application.             | `docuelevate.example.com`      |
 | `ALLOW_FILE_DELETE`    | Enable file deletion in the web interface (`true`/`false`). | `true`                      |
+| `COMPLIANCE_ENABLED`   | Enable the compliance templates dashboard (GDPR, HIPAA, SOC 2). | `true`                      |
 
 ### Batch Processing Settings
 
@@ -303,6 +304,42 @@ DocuElevate can automatically pull document attachments from IMAP mailboxes — 
 | `IMAP1_SSL`                   | Use SSL (`true`/`false`).                                   | `true`            |
 | `IMAP1_POLL_INTERVAL_MINUTES` | Frequency in minutes to poll for new mail.                  | `5`               |
 | `IMAP_READONLY_MODE`          | When `true`, fetches and processes attachments but does **not** modify the mailbox (no starring, labeling, deleting, or flag changes). Use for pre-production instances sharing a mailbox with production. Default: `false`. | `false` |
+| `IMAP_ATTACHMENT_FILTER`      | System-wide fallback for which attachment types are ingested when no ingestion profile is assigned to a mailbox. `documents_only` (default) ingests PDFs and office files only — images are skipped. `all` ingests every supported file type including images. Individual IMAP accounts can override this using ingestion profiles. | `documents_only` |
+
+#### IMAP Ingestion Profiles
+
+For fine-grained control, DocuElevate supports **Ingestion Profiles** — named configurations that let you choose exactly which file-type categories to accept from each mailbox.
+
+Each profile contains a list of enabled **categories**:
+
+| Category | Description |
+|----------|-------------|
+| `pdf` | PDF documents (`.pdf`) |
+| `office` | Microsoft Office files (Word, Excel, PowerPoint — `.docx`, `.xlsx`, `.pptx`, …) |
+| `opendocument` | LibreOffice/OpenOffice files (`.odt`, `.ods`, `.odp`, …) |
+| `text` | Plain text, CSV and RTF files (`.txt`, `.csv`, `.rtf`) |
+| `web` | HTML and Markdown files (`.html`, `.htm`, `.md`, `.markdown`) |
+| `images` | Image files (`.jpg`, `.png`, `.gif`, `.bmp`, `.tiff`, `.webp`, `.svg`) |
+
+Two built-in system profiles are seeded automatically:
+
+| Profile | Categories |
+|---------|------------|
+| **Documents Only** | pdf, office, opendocument, text, web (no images) |
+| **All Files** | All categories, including images |
+
+Users can create their own custom profiles via the **Email Ingestion** dashboard (`/imap-accounts`) by clicking the **Manage profiles** link or the **+** button next to the profile dropdown. Custom profiles are private to the creating user and can be freely edited or deleted.
+
+**API endpoints for ingestion profiles:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/imap-profiles/` | List all visible profiles (system + user's own) |
+| `POST` | `/api/imap-profiles/` | Create a new profile |
+| `GET` | `/api/imap-profiles/categories` | List available file-type categories |
+| `GET` | `/api/imap-profiles/{id}` | Get a single profile |
+| `PUT` | `/api/imap-profiles/{id}` | Update a profile (not built-in) |
+| `DELETE` | `/api/imap-profiles/{id}` | Delete a profile (not built-in) |
 
 #### Per-User IMAP Integrations
 
@@ -334,6 +371,28 @@ Credentials are encrypted at rest using Fernet encryption.
 | `AUTHENTIK_CLIENT_SECRET` | Client secret for Authentik OAuth2/OIDC authentication.    |
 | `AUTHENTIK_CONFIG_URL`  | Configuration URL for Authentik OpenID Connect.             |
 | `OAUTH_PROVIDER_NAME`   | Display name for the OAuth provider button.                  |
+
+### Social Login Providers
+
+Social login lets users sign in with their existing Google, Microsoft, Apple, or Dropbox accounts. Each provider is independently enabled and configured. For detailed setup instructions see the [Social Login Setup Guide](SocialLoginSetup.md).
+
+| **Variable** | **Description** | **Default** |
+|---|---|---|
+| `SOCIAL_AUTH_GOOGLE_ENABLED` | Enable Google Sign-In. | `false` |
+| `SOCIAL_AUTH_GOOGLE_CLIENT_ID` | Google OAuth2 client ID from the Google Cloud Console. | *(empty)* |
+| `SOCIAL_AUTH_GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret. | *(empty)* |
+| `SOCIAL_AUTH_MICROSOFT_ENABLED` | Enable Microsoft Sign-In (Azure AD / Microsoft Entra ID). | `false` |
+| `SOCIAL_AUTH_MICROSOFT_CLIENT_ID` | Microsoft application (client) ID from Azure App Registrations. | *(empty)* |
+| `SOCIAL_AUTH_MICROSOFT_CLIENT_SECRET` | Microsoft client secret. | *(empty)* |
+| `SOCIAL_AUTH_MICROSOFT_TENANT` | Azure AD tenant: `common`, `organizations`, `consumers`, or a tenant GUID. | `common` |
+| `SOCIAL_AUTH_APPLE_ENABLED` | Enable Sign in with Apple. | `false` |
+| `SOCIAL_AUTH_APPLE_CLIENT_ID` | Apple Services ID (e.g. `com.example.docuelevate`). | *(empty)* |
+| `SOCIAL_AUTH_APPLE_TEAM_ID` | Apple Developer Team ID. | *(empty)* |
+| `SOCIAL_AUTH_APPLE_KEY_ID` | Apple Sign-In private key ID. | *(empty)* |
+| `SOCIAL_AUTH_APPLE_PRIVATE_KEY` | Apple Sign-In private key (PEM format). | *(empty)* |
+| `SOCIAL_AUTH_DROPBOX_ENABLED` | Enable Dropbox Sign-In. | `false` |
+| `SOCIAL_AUTH_DROPBOX_CLIENT_ID` | Dropbox OAuth2 App Key. | *(empty)* |
+| `SOCIAL_AUTH_DROPBOX_CLIENT_SECRET` | Dropbox OAuth2 App Secret. | *(empty)* |
 
 ### Multi-User Mode
 
@@ -397,6 +456,142 @@ default overage buffer applied across all plans.
 ### Security Headers
 
 DocuElevate supports HTTP security headers to improve browser-side security. **These headers are disabled by default** since most deployments use a reverse proxy (Traefik, Nginx, etc.) that already adds them. Enable only if deploying directly without a reverse proxy. See [Deployment Guide - Security Headers](DeploymentGuide.md#security-headers) for detailed configuration examples.
+
+### Application Logging
+
+DocuElevate uses Python's standard `logging` module. Two environment variables control log verbosity:
+
+| **Variable** | **Description** | **Default** |
+|-------------|----------------|-------------|
+| `LOG_LEVEL` | Root logger level. Accepts standard Python level names: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. | `INFO` |
+| `DEBUG` | Enable debug mode. When `true` **and** `LOG_LEVEL` is **not** explicitly set, the effective log level is automatically lowered to `DEBUG`. | `false` |
+
+**Precedence rules (standard behaviour):**
+
+1. If `LOG_LEVEL` is explicitly set, it always wins — regardless of `DEBUG`.
+2. If only `DEBUG=true` is set (no `LOG_LEVEL`), the effective level becomes `DEBUG`.
+3. If neither is set, the default level is `INFO`.
+
+```bash
+# Typical production (default)
+# LOG_LEVEL=INFO
+
+# Quick debug mode — sets level to DEBUG automatically
+DEBUG=true
+
+# Explicit level override (DEBUG flag is ignored for level selection)
+LOG_LEVEL=WARNING
+```
+
+> **Tip:** At `DEBUG` level, noisy third-party libraries (httpx, authlib, urllib3, etc.) are automatically pinned to `WARNING` so that application debug output remains readable.
+
+#### Structured JSON Logging
+
+Set `LOG_FORMAT=json` to emit structured JSON lines on stdout — one JSON object per log message. This is the standard format for log collectors and SIEM tools:
+
+| **Variable** | **Description** | **Default** |
+|-------------|----------------|-------------|
+| `LOG_FORMAT` | Log output format: `text` (human-readable) or `json` (structured JSON lines). | `text` |
+
+Each JSON log line contains: `timestamp` (ISO 8601), `level`, `logger`, `message`, `module`, `funcName`, `lineno`, and `exc_info` (when an exception is logged).
+
+```bash
+# Enable JSON logging for SIEM / log aggregation
+LOG_FORMAT=json
+```
+
+**Example JSON output:**
+```json
+{"timestamp": "2025-03-16T09:18:05.192000+00:00", "level": "INFO", "logger": "app.auth", "message": "[SECURITY] OAUTH_LOGIN_SUCCESS user=alice@example.com admin=False", "module": "auth", "funcName": "oauth_callback", "lineno": 654}
+```
+
+**Compatible with:**
+- **Grafana Loki** — Promtail scrapes JSON from Docker stdout
+- **Splunk** — Universal Forwarder or HEC with JSON sourcetype
+- **ELK / OpenSearch** — Filebeat with JSON codec
+- **Datadog** — Agent auto-parses JSON logs
+- **Fluentd / Vector** — JSON input plugin
+- **Docker log drivers** — `--log-driver=json-file` (default) preserves structure
+
+#### Syslog Forwarding (Application Logs)
+
+For traditional (non-container) deployments, application logs can be forwarded directly to a syslog receiver. This is **separate** from audit-log SIEM forwarding (see below) — it sends _every_ Python log message, not just audit events.
+
+| **Variable** | **Description** | **Default** |
+|-------------|----------------|-------------|
+| `LOG_SYSLOG_ENABLED` | Forward application logs to a syslog receiver in addition to stdout. | `false` |
+| `LOG_SYSLOG_HOST` | Hostname or IP of the syslog receiver. | `localhost` |
+| `LOG_SYSLOG_PORT` | Port of the syslog receiver. | `514` |
+| `LOG_SYSLOG_PROTOCOL` | Protocol: `udp` or `tcp`. | `udp` |
+
+```bash
+# Forward all application logs to syslog
+LOG_SYSLOG_ENABLED=true
+LOG_SYSLOG_HOST=syslog.internal.example.com
+LOG_SYSLOG_PORT=514
+LOG_SYSLOG_PROTOCOL=udp
+
+# Combine with JSON format for structured syslog messages
+LOG_FORMAT=json
+LOG_SYSLOG_ENABLED=true
+```
+
+> **Note:** When `LOG_FORMAT=json`, syslog messages are also sent as JSON. When `LOG_FORMAT=text`, syslog messages use the standard `name - level - message` format.
+
+### Audit Logging
+
+DocuElevate provides comprehensive audit logging that records significant actions (logins, document CRUD, settings changes) to an append-only database table. Every entry captures the timestamp, user, action, resource, client IP, and optional JSON details.
+
+| **Variable**                   | **Description**                                                                                   | **Default** |
+|--------------------------------|---------------------------------------------------------------------------------------------------|-------------|
+| `AUDIT_LOGGING_ENABLED`       | Enable the HTTP request audit-logging middleware.                                                  | `true`      |
+| `AUDIT_LOG_INCLUDE_CLIENT_IP` | Include the client IP address in audit log entries. Disable for GDPR-sensitive deployments.       | `true`      |
+
+#### SIEM Integration
+
+Audit events can be forwarded in real time to external SIEM systems for centralised monitoring, alerting, and long-term retention. Two transports are supported:
+
+* **Syslog** – RFC 5424 structured-data messages over UDP or TCP. Works with rsyslog, syslog-ng, Graylog, Datadog, etc.
+* **HTTP** – JSON POST payloads compatible with Splunk HEC, Logstash HTTP input, Grafana Loki push API, and any generic webhook.
+
+| **Variable**                        | **Description**                                                                                   | **Default**   |
+|-------------------------------------|---------------------------------------------------------------------------------------------------|---------------|
+| `AUDIT_SIEM_ENABLED`               | Enable forwarding of audit events to an external SIEM system.                                     | `false`       |
+| `AUDIT_SIEM_TRANSPORT`             | Transport: `syslog` or `http`.                                                                    | `syslog`      |
+| `AUDIT_SIEM_SYSLOG_HOST`           | Hostname or IP of the syslog receiver.                                                            | `localhost`   |
+| `AUDIT_SIEM_SYSLOG_PORT`           | Port of the syslog receiver.                                                                      | `514`         |
+| `AUDIT_SIEM_SYSLOG_PROTOCOL`       | Protocol for syslog: `udp` or `tcp`.                                                              | `udp`         |
+| `AUDIT_SIEM_HTTP_URL`              | HTTP endpoint URL for SIEM delivery (e.g. Splunk HEC, Logstash, Loki).                           | *(empty)*     |
+| `AUDIT_SIEM_HTTP_TOKEN`            | Bearer / HEC token for the SIEM HTTP endpoint.                                                    | *(empty)*     |
+| `AUDIT_SIEM_HTTP_CUSTOM_HEADERS`   | Comma-separated `Key:Value` extra headers for SIEM HTTP requests.                                 | *(empty)*     |
+
+**Example – Syslog to rsyslog:**
+
+```bash
+AUDIT_SIEM_ENABLED=true
+AUDIT_SIEM_TRANSPORT=syslog
+AUDIT_SIEM_SYSLOG_HOST=syslog.internal.example.com
+AUDIT_SIEM_SYSLOG_PORT=514
+AUDIT_SIEM_SYSLOG_PROTOCOL=udp
+```
+
+**Example – Splunk HEC:**
+
+```bash
+AUDIT_SIEM_ENABLED=true
+AUDIT_SIEM_TRANSPORT=http
+AUDIT_SIEM_HTTP_URL=https://splunk.example.com:8088/services/collector/event
+AUDIT_SIEM_HTTP_TOKEN=your-hec-token
+```
+
+**Example – Logstash HTTP input:**
+
+```bash
+AUDIT_SIEM_ENABLED=true
+AUDIT_SIEM_TRANSPORT=http
+AUDIT_SIEM_HTTP_URL=https://logstash.example.com:8080
+AUDIT_SIEM_HTTP_TOKEN=
+```
 
 ### Rate Limiting
 
@@ -739,6 +934,48 @@ OPENAI_API_KEY=sk-ant-...   # passed as the api_key to LiteLLM
 
 ---
 
+### Document Translation
+
+After processing, DocuElevate can automatically translate a document's extracted text into a configurable *default language* (e.g. English). This reference translation is stored alongside the original text so users always have a version in a language they understand.
+
+Other languages are translated **on the fly** via the AI provider and are not persisted.
+
+#### Settings
+
+| **Variable**                 | **Description**                                                                                           | **Default** |
+|------------------------------|-----------------------------------------------------------------------------------------------------------|-------------|
+| `DEFAULT_DOCUMENT_LANGUAGE`  | ISO 639-1 code for the default translation target (e.g. `en`, `de`, `fr`). Documents whose detected language differs are automatically translated into this language after processing. | `en`        |
+
+Each user can override this global default in their profile (`UserProfile.default_document_language`).
+
+#### How It Works
+
+1. During metadata extraction the AI detects the document language (stored as `detected_language` on the file record).
+2. If the detected language differs from the default target language, a background Celery task (`translate_to_default_language`) translates the extracted text.
+3. The translated text is persisted in `default_language_text` and the target code in `default_language_code`.
+4. The file detail view shows both the original text and the default-language version.
+5. Users can also request on-the-fly translations to any language via the **Translate** dropdown.
+
+#### API Endpoints
+
+| **Endpoint**                                  | **Method** | **Description**                                                        |
+|-----------------------------------------------|------------|------------------------------------------------------------------------|
+| `/api/files/{id}/translation/default`         | GET        | Returns the persisted default-language translation (404 if unavailable)|
+| `/api/files/{id}/translate?lang=xx`           | GET        | On-the-fly translation to any ISO 639-1 language code                  |
+| `/files/{id}/text/default-language`           | GET        | View endpoint returning the default-language text as JSON              |
+
+#### Example
+
+```bash
+# Get the stored English translation of a German document
+curl http://localhost:8000/api/files/42/translation/default
+
+# Translate on the fly to French
+curl "http://localhost:8000/api/files/42/translate?lang=fr"
+```
+
+---
+
 ### OCR Providers
 
 DocuElevate supports multiple OCR engines that can be used individually or in combination. Configure the list of active providers with `OCR_PROVIDERS` and tune each provider with the settings below.
@@ -887,6 +1124,7 @@ TESSERACT_LANGUAGE=eng+deu
 
 | **Variable**                        | **Description**                                                                                     |
 |-------------------------------------|-----------------------------------------------------------------------------------------------------|
+| `PAPERLESS_ENABLED`                 | Set to `false` to disable Paperless-ngx uploads without removing credentials. Default: `true`       |
 | `PAPERLESS_NGX_API_TOKEN`           | API token for Paperless NGX.                                                                        |
 | `PAPERLESS_HOST`                    | Root URL for Paperless NGX (e.g. `https://paperless.example.com`).                                 |
 | `PAPERLESS_CUSTOM_FIELD_ABSENDER`   | (Optional, Legacy) Name of the custom field in Paperless-ngx to store the sender ("absender") information. If set, the extracted sender will be automatically set as a custom field after document upload. Example: `Absender` or `Sender` |
@@ -929,6 +1167,7 @@ PAPERLESS_CUSTOM_FIELDS_MAPPING='{"absender": "Sender", "empfaenger": "Recipient
 
 | **Variable**            | **Description**                                  |
 |-------------------------|--------------------------------------------------|
+| `DROPBOX_ENABLED`       | Set to `false` to disable Dropbox uploads without removing credentials. Default: `true` |
 | `DROPBOX_APP_KEY`       | Dropbox API app key.                             |
 | `DROPBOX_APP_SECRET`    | Dropbox API app secret.                          |
 | `DROPBOX_REFRESH_TOKEN` | OAuth2 refresh token for Dropbox.                |
@@ -940,6 +1179,7 @@ For detailed setup instructions, see the [Dropbox Setup Guide](DropboxSetup.md).
 
 | **Variable**            | **Description**                                               |
 |-------------------------|---------------------------------------------------------------|
+| `NEXTCLOUD_ENABLED`     | Set to `false` to disable Nextcloud uploads without removing credentials. Default: `true` |
 | `NEXTCLOUD_UPLOAD_URL`  | Nextcloud WebDAV URL (e.g. `https://nc.example.com/remote.php/dav/files/<USERNAME>`). |
 | `NEXTCLOUD_USERNAME`    | Nextcloud login username.                                    |
 | `NEXTCLOUD_PASSWORD`    | Nextcloud login password.                                    |
@@ -949,6 +1189,7 @@ For detailed setup instructions, see the [Dropbox Setup Guide](DropboxSetup.md).
 
 | **Variable**                    | **Description**                                       |
 |---------------------------------|-------------------------------------------------------|
+| `GOOGLE_DRIVE_ENABLED`          | Set to `false` to disable Google Drive uploads without removing credentials. Default: `true` |
 | `GOOGLE_DRIVE_USE_OAUTH`        | Set to `true` to use OAuth flow (recommended)         |
 | `GOOGLE_DRIVE_CLIENT_ID`        | OAuth Client ID (required if using OAuth flow)        |
 | `GOOGLE_DRIVE_CLIENT_SECRET`    | OAuth Client Secret (required if using OAuth flow)    |
@@ -965,6 +1206,7 @@ For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveS
 
 | **Variable**            | **Description**                                               |
 |-------------------------|---------------------------------------------------------------|
+| `WEBDAV_ENABLED`        | Set to `false` to disable WebDAV uploads without removing credentials. Default: `true` |
 | `WEBDAV_URL`            | WebDAV server URL (e.g. `https://webdav.example.com/path`).   |
 | `WEBDAV_USERNAME`       | WebDAV authentication username.                               |
 | `WEBDAV_PASSWORD`       | WebDAV authentication password.                               |
@@ -975,6 +1217,7 @@ For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveS
 
 | **Variable**            | **Description**                                               |
 |-------------------------|---------------------------------------------------------------|
+| `FTP_ENABLED`           | Set to `false` to disable FTP uploads without removing credentials. Default: `true` |
 | `FTP_HOST`              | FTP server hostname or IP address.                            |
 | `FTP_PORT`              | FTP port (default: `21`).                                     |
 | `FTP_USERNAME`          | FTP authentication username.                                  |
@@ -987,6 +1230,7 @@ For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveS
 
 | **Variable**                  | **Description**                                         |
 |------------------------------|-------------------------------------------------------|
+| `SFTP_ENABLED`               | Set to `false` to disable SFTP uploads without removing credentials. Default: `true` |
 | `SFTP_HOST`                  | SFTP server hostname or IP address.                    |
 | `SFTP_PORT`                  | SFTP port (default: `22`).                             |
 | `SFTP_USERNAME`              | SFTP authentication username.                          |
@@ -1018,6 +1262,7 @@ For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveS
 
 | **Variable**                     | **Description**                                                     |
 |----------------------------------|---------------------------------------------------------------------|
+| `DEST_EMAIL_ENABLED`            | Set to `false` to disable email delivery without removing credentials. Default: `true` |
 | `DEST_EMAIL_HOST`               | SMTP server hostname for document delivery.                          |
 | `DEST_EMAIL_PORT`               | SMTP port for document delivery (default: `587`).                    |
 | `DEST_EMAIL_USERNAME`           | SMTP authentication username for document delivery.                  |
@@ -1030,6 +1275,7 @@ For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveS
 
 | **Variable**                    | **Description**                                       |
 |---------------------------------|-------------------------------------------------------|
+| `ONEDRIVE_ENABLED`              | Set to `false` to disable OneDrive uploads without removing credentials. Default: `true` |
 | `ONEDRIVE_CLIENT_ID`            | Azure AD application client ID                        |
 | `ONEDRIVE_CLIENT_SECRET`        | Azure AD application client secret                    |
 | `ONEDRIVE_TENANT_ID`            | Azure AD tenant ID: use "common" for personal accounts or your tenant ID for corporate accounts |
@@ -1056,6 +1302,7 @@ SharePoint uses the same Microsoft Graph API as OneDrive. See the [OneDrive Setu
 
 | **Variable**                    | **Description**                                       |
 |---------------------------------|-------------------------------------------------------|
+| `S3_ENABLED`                    | Set to `false` to disable S3 uploads without removing credentials. Default: `true` |
 | `AWS_ACCESS_KEY_ID`             | AWS IAM access key ID                                 |
 | `AWS_SECRET_ACCESS_KEY`         | AWS IAM secret access key                             |
 | `AWS_REGION`                    | AWS region where your S3 bucket is located (default: `us-east-1`) |
@@ -1065,6 +1312,23 @@ SharePoint uses the same Microsoft Graph API as OneDrive. See the [OneDrive Setu
 | `S3_ACL`                        | Access control for uploaded files (default: `private`) |
 
 For detailed setup instructions, see the [Amazon S3 Setup Guide](AmazonS3Setup.md).
+
+### iCloud Drive (Apple)
+
+| **Variable**                    | **Description**                                       |
+|---------------------------------|-------------------------------------------------------|
+| `ICLOUD_ENABLED`                | Set to `false` to disable iCloud uploads without removing credentials. Default: `true` |
+| `ICLOUD_USERNAME`               | Apple ID email address                                |
+| `ICLOUD_PASSWORD`               | App-specific password (generate at [appleid.apple.com](https://appleid.apple.com/account/manage)) |
+| `ICLOUD_FOLDER`                 | Target folder path in iCloud Drive (e.g. `Documents/Uploads`) |
+| `ICLOUD_COOKIE_DIRECTORY`       | Optional directory for session cookie persistence (default: `~/.pyicloud`) |
+
+> **Note:** Apple does not provide a public REST API for iCloud Drive. This
+> integration uses the [pyicloud](https://github.com/picklepete/pyicloud)
+> library which relies on an unofficial, reverse-engineered protocol. Because
+> most Apple IDs have two-factor authentication enabled, you **must** generate
+> an [app-specific password](https://support.apple.com/en-us/102654) and use
+> it as `ICLOUD_PASSWORD`.
 
 ### Notification System
 

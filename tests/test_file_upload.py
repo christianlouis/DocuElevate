@@ -345,7 +345,7 @@ class TestUploadErrorHandling:
 
     def test_upload_disk_write_failure(self, client: TestClient):
         """Test handling of disk write failures."""
-        with patch("builtins.open", side_effect=IOError("Disk full")):
+        with patch("aiofiles.open", side_effect=IOError("Disk full")):
             pdf_content = b"%PDF-1.4\n%EOF"
 
             response = client.post(

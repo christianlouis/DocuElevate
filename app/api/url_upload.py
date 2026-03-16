@@ -2,7 +2,6 @@
 API endpoint for processing files from URLs
 """
 
-import ipaddress
 import logging
 import mimetypes
 import os
@@ -10,7 +9,8 @@ import urllib.parse
 import uuid
 from typing import Optional
 
-import requests
+import aiofiles
+import httpx
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, HttpUrl, field_validator
 
@@ -19,6 +19,7 @@ from app.config import settings
 from app.tasks.process_document import process_document
 from app.utils.allowed_types import ALLOWED_MIME_TYPES
 from app.utils.filename_utils import sanitize_filename
+from app.utils.network import is_private_ip
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -40,37 +41,6 @@ class URLUploadRequest(BaseModel):
         if parsed.scheme not in ["http", "https"]:
             raise ValueError("Only HTTP and HTTPS URLs are allowed")
         return v
-
-
-def is_private_ip(hostname: str) -> bool:
-    """
-    Check if a hostname resolves to a private/internal IP address.
-    Protects against SSRF attacks by blocking access to internal networks.
-    """
-    try:
-        # Try to parse as IP address directly
-        ip = ipaddress.ip_address(hostname)
-        return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
-    except ValueError:
-        # Not a direct IP, try to resolve hostname
-        try:
-            import socket
-
-            # Get all IP addresses for this hostname
-            addr_info = socket.getaddrinfo(hostname, None)
-            for info in addr_info:
-                ip_str = info[4][0]
-                ip = ipaddress.ip_address(ip_str)
-                # Block if ANY resolved IP is private/internal
-                if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-                    return True
-            return False
-        except (socket.gaierror, socket.error):
-            # Cannot resolve - allow for testing/development
-            # In production, DNS should work properly
-            # Log this for debugging
-            logger.warning(f"Could not resolve hostname: {hostname}")
-            return False  # Changed from True to False to allow external domains in tests
 
 
 def validate_url_safety(url: str) -> None:
@@ -184,66 +154,72 @@ async def process_url(request: Request, url_request: URLUploadRequest):
         logger.info(f"Downloading file from URL: {url}")
 
         # Use configured timeout to prevent hanging
-        response = requests.get(
-            url,
+        async with httpx.AsyncClient(
             timeout=settings.http_request_timeout,
-            stream=True,  # Stream to handle large files
-            allow_redirects=True,  # Follow redirects
+            follow_redirects=True,
             headers={
                 "User-Agent": "DocuElevate/1.0",  # Identify ourselves
             },
-        )
-        response.raise_for_status()
+        ) as client:
+            async with client.stream("GET", url) as response:
+                response.raise_for_status()
 
-        # Validate content type
-        content_type = response.headers.get("Content-Type", "")
-        if not validate_file_type(content_type, safe_filename):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unsupported file type: {content_type}. "
-                "Supported types: PDF, Office documents, images, plain text",
-            )
+                # Validate content type
+                content_type = response.headers.get("Content-Type", "")
+                if not validate_file_type(content_type, safe_filename):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Unsupported file type: {content_type}. "
+                        "Supported types: PDF, Office documents, images, plain text",
+                    )
 
-        # Check content length before downloading
-        content_length = response.headers.get("Content-Length")
-        if content_length:
-            file_size = int(content_length)
-            max_size = settings.max_upload_size
-            if file_size > max_size:
-                raise HTTPException(
-                    status_code=413,
-                    detail=f"File too large: {file_size} bytes (max {max_size} bytes)",
-                )
-
-        # Generate unique filename
-        unique_id = str(uuid.uuid4())
-        if "." in safe_filename:
-            file_extension = safe_filename.rsplit(".", 1)[1]
-            target_filename = f"{unique_id}.{file_extension}"
-        else:
-            target_filename = unique_id
-
-        target_path = os.path.join(settings.workdir, target_filename)
-
-        # Download file in chunks to handle large files
-        downloaded_size = 0
-        max_size = settings.max_upload_size
-
-        with open(target_path, "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
-                    downloaded_size += len(chunk)
-
-                    # Check size during download
-                    if downloaded_size > max_size:
-                        # Remove partial file
-                        f.close()
-                        os.remove(target_path)
+                # Check content length before downloading
+                content_length = response.headers.get("Content-Length")
+                if content_length:
+                    file_size = int(content_length)
+                    max_size = settings.max_upload_size
+                    if file_size > max_size:
                         raise HTTPException(
                             status_code=413,
-                            detail=f"File too large: exceeded {max_size} bytes during download",
+                            detail=f"File too large: {file_size} bytes (max {max_size} bytes)",
                         )
+
+                # Generate unique filename
+                unique_id = str(uuid.uuid4())
+
+                # Check for extension using original_filename to avoid any CodeQL issues
+                # with safe_filename which is derived from the URL directly.
+                if "." in original_filename:
+                    _, ext = os.path.splitext(original_filename)
+                    # Strip out the leading dot and any non-alphanumeric chars
+                    clean_ext = "".join(c for c in ext if c.isalnum())
+                    if not clean_ext:
+                        clean_ext = "bin"
+                    target_filename = f"{unique_id}.{clean_ext}"
+                else:
+                    target_filename = unique_id
+
+                target_path = os.path.join(settings.workdir, target_filename)
+
+                # Download file in chunks to handle large files
+                downloaded_size = 0
+                max_size = settings.max_upload_size
+
+                async with aiofiles.open(target_path, "wb") as f:
+                    async for chunk in response.aiter_bytes(chunk_size=8192):
+                        if chunk:
+                            await f.write(chunk)
+                            downloaded_size += len(chunk)
+
+                            # Check size during download
+                            if downloaded_size > max_size:
+                                # Remove partial file
+                                await f.close()
+                                os.remove(target_path)
+                                raise HTTPException(
+                                    status_code=413,
+                                    detail=f"File too large: exceeded {max_size} bytes during download",
+                                )
 
         logger.info(f"Downloaded file from URL '{url}' as '{target_filename}' ({downloaded_size} bytes)")
 
@@ -258,19 +234,19 @@ async def process_url(request: Request, url_request: URLUploadRequest):
             "size": downloaded_size,
         }
 
-    except requests.exceptions.Timeout:
+    except httpx.TimeoutException:
         logger.error(f"Timeout while downloading file from URL: {url}")
         raise HTTPException(status_code=408, detail="Request timeout: server took too long to respond")
 
-    except requests.exceptions.ConnectionError as e:
+    except httpx.ConnectError as e:
         logger.error(f"Connection error while downloading file from URL: {url} - {str(e)}")
         raise HTTPException(status_code=502, detail=f"Failed to connect to URL: {str(e)}")
 
-    except requests.exceptions.HTTPError as e:
+    except httpx.HTTPStatusError as e:
         logger.error(f"HTTP error while downloading file from URL: {url} - {str(e)}")
         raise HTTPException(status_code=e.response.status_code, detail=f"HTTP error: {str(e)}")
 
-    except requests.exceptions.RequestException as e:
+    except httpx.RequestError as e:
         logger.error(f"Error downloading file from URL: {url} - {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to download file: {str(e)}")
 

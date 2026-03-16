@@ -59,12 +59,42 @@ def validate_auth_config() -> list[str]:
             and getattr(settings, "authentik_config_url", None)
         )
 
-        if not using_simple_auth and not using_oidc:
-            issues.append("Neither simple authentication nor OIDC are properly configured")
+        # Check if any social login provider is enabled
+        using_social_login = any(
+            getattr(settings, f"social_auth_{p}_enabled", False) for p in ("google", "microsoft", "apple", "dropbox")
+        )
+
+        if not using_simple_auth and not using_oidc and not using_social_login:
+            issues.append("Neither simple authentication, OIDC, nor social login are properly configured")
 
         # If using OIDC, check for provider name
         if using_oidc and not getattr(settings, "oauth_provider_name", None):
             issues.append("OAUTH_PROVIDER_NAME is not configured but OIDC is enabled")
+
+        # Validate individual social login provider configs
+        if getattr(settings, "social_auth_google_enabled", False):
+            if not getattr(settings, "social_auth_google_client_id", None):
+                issues.append("SOCIAL_AUTH_GOOGLE_CLIENT_ID is required when Google login is enabled")
+            if not getattr(settings, "social_auth_google_client_secret", None):
+                issues.append("SOCIAL_AUTH_GOOGLE_CLIENT_SECRET is required when Google login is enabled")
+
+        if getattr(settings, "social_auth_microsoft_enabled", False):
+            if not getattr(settings, "social_auth_microsoft_client_id", None):
+                issues.append("SOCIAL_AUTH_MICROSOFT_CLIENT_ID is required when Microsoft login is enabled")
+            if not getattr(settings, "social_auth_microsoft_client_secret", None):
+                issues.append("SOCIAL_AUTH_MICROSOFT_CLIENT_SECRET is required when Microsoft login is enabled")
+
+        if getattr(settings, "social_auth_apple_enabled", False):
+            if not getattr(settings, "social_auth_apple_client_id", None):
+                issues.append("SOCIAL_AUTH_APPLE_CLIENT_ID is required when Apple login is enabled")
+            if not getattr(settings, "social_auth_apple_team_id", None):
+                issues.append("SOCIAL_AUTH_APPLE_TEAM_ID is required when Apple login is enabled")
+
+        if getattr(settings, "social_auth_dropbox_enabled", False):
+            if not getattr(settings, "social_auth_dropbox_client_id", None):
+                issues.append("SOCIAL_AUTH_DROPBOX_CLIENT_ID is required when Dropbox login is enabled")
+            if not getattr(settings, "social_auth_dropbox_client_secret", None):
+                issues.append("SOCIAL_AUTH_DROPBOX_CLIENT_SECRET is required when Dropbox login is enabled")
 
     return issues
 

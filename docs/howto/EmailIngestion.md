@@ -63,6 +63,54 @@ DocuElevate will process the following attachment types from emails:
 | TIFF | `.tif`, `.tiff` | Common format from older scanners/fax |
 | Multi-page TIFF | `.tif` | Full multi-page support |
 
+### Controlling Which Attachment Types Are Ingested
+
+By default, DocuElevate only ingests **document** attachments (PDFs, Word, Excel, PowerPoint, OpenDocument, RTF, TXT, CSV, HTML, Markdown). Images are **not** ingested by default — this prevents cluttering your document archive with inline images or unrelated photo attachments.
+
+#### Global Default (Admin Setting)
+
+Set the `IMAP_ATTACHMENT_FILTER` environment variable to control the system-wide fallback when no ingestion profile is assigned to a mailbox:
+
+| Value | Behaviour |
+|-------|-----------|
+| `documents_only` | **(Default)** Only PDFs and office/document files. Images are skipped. |
+| `all` | All supported file types, including images. |
+
+```env
+IMAP_ATTACHMENT_FILTER=documents_only
+```
+
+#### Ingestion Profiles (Fine-Grained Per-Mailbox Control)
+
+For precise control, you can create **Ingestion Profiles** that let you pick exactly which file-type categories to accept from each mailbox. This is more powerful than the binary global toggle and works independently per mailbox.
+
+**Available categories:**
+
+| Category | File types included |
+|----------|---------------------|
+| PDF | `.pdf` |
+| Microsoft Office | `.doc`, `.docx`, `.xls`, `.xlsx`, `.ppt`, `.pptx`, and macro-enabled variants |
+| OpenDocument | `.odt`, `.ods`, `.odp`, `.odg`, `.odf` (LibreOffice / OpenOffice) |
+| Text & Data | `.txt`, `.csv`, `.rtf` |
+| Web & Markup | `.html`, `.htm`, `.md`, `.markdown` |
+| Images | `.jpg`, `.png`, `.gif`, `.bmp`, `.tiff`, `.webp`, `.svg` |
+
+**Managing profiles:**
+
+1. Go to **Email Ingestion** (`/imap-accounts`)
+2. Click **Manage profiles** (or the **+** icon next to the profile dropdown)
+3. Create a new profile, give it a name, and tick the categories you want
+4. When adding or editing a mailbox, select your profile from the dropdown
+
+Two built-in profiles are always available and cannot be deleted:
+
+- **Documents Only** — PDF, Office, OpenDocument, Text, Web (no images)
+- **All Files** — all categories including images
+
+Users can also create unlimited **custom profiles** to mix and match exactly the categories they need per mailbox (e.g. a scanner mailbox that only accepts PDFs, or a finance mailbox that accepts Office and CSV but not images).
+
+Custom profiles are created via the UI or the `/api/imap-profiles/` API.
+
 ---
 
 ## Setting Up Your Scanner/Device
