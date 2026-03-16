@@ -415,7 +415,9 @@ class TestAutomationAPI:
             "/api/automation/actions/upload",
             files={"file": ("", b"content", "application/pdf")},
         )
-        # FastAPI/Starlette returns 422 for invalid multipart form data
+        # FastAPI/Starlette may return 422 (multipart validation) or 400
+        # (our explicit check) depending on how the empty filename is
+        # parsed by the underlying multipart parser version.
         assert resp.status_code in (400, 422)
 
     # ── Auth required ────────────────────────────────────────────────
