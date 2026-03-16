@@ -271,6 +271,7 @@ def _ensure_indexes(engine: Any, inspector: Any) -> None:
                 if table not in columns_by_table:
                     columns_by_table[table] = {col["name"] for col in inspector.get_columns(table)}
                 if column in columns_by_table[table]:
+                    # SECURITY: Quoted identifiers to prevent SQL injection during index creation
                     quoted_idx = preparer.quote(idx_name)
                     quoted_table = preparer.quote(table)
                     quoted_col = preparer.quote(column)
