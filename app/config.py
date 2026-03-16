@@ -166,6 +166,25 @@ class Settings(BaseSettings):
     google_docai_location: str = "us"  # Processor location, e.g. "us" or "eu"
     external_hostname: str = "localhost"  # Default to localhost
 
+    # ---------------------------------------------------------------------------
+    # Document Translation Settings
+    # ---------------------------------------------------------------------------
+    # Default target language for automatic document translation (ISO 639-1 code).
+    # After OCR / metadata extraction, if the detected document language differs
+    # from this value the system translates the extracted text into this language
+    # and stores it alongside the original.  Other language translations are
+    # generated on the fly via the AI provider and are NOT persisted.
+    # Per-user overrides are stored in UserProfile.default_document_language.
+    default_document_language: str = Field(
+        default="en",
+        description=(
+            "ISO 639-1 language code for the default translation target "
+            "(e.g. 'en', 'de', 'fr'). Documents whose detected language "
+            "differs are automatically translated into this language after "
+            "processing. Default: 'en' (English)."
+        ),
+    )
+
     # Authentication settings
     auth_enabled: bool = True  # Default to enabled
     admin_username: Optional[str] = None

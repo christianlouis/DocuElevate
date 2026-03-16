@@ -84,6 +84,19 @@ class FileRecord(Base):
     # Processing pipeline assigned to this file (NULL = use system default)
     pipeline_id = Column(Integer, ForeignKey(_PIPELINES_ID_FK), nullable=True, index=True)
 
+    # Detected document language (ISO 639-1 code, e.g. "de", "en", "fr")
+    # Extracted from AI metadata during processing; cached here for fast access.
+    detected_language = Column(String(10), nullable=True)
+
+    # Default-language translation of the extracted text.
+    # Stored when the detected language differs from the user's/system default
+    # document language.  Only the original text and this translation are persisted;
+    # other languages are translated on the fly via the AI provider.
+    default_language_text = Column(Text, nullable=True)
+
+    # ISO 639-1 code of the default-language translation stored above (e.g. "en").
+    default_language_code = Column(String(10), nullable=True)
+
     # Timestamp when we inserted this record
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
@@ -281,6 +294,12 @@ class UserProfile(Base):
     # UI language preference for i18n (ISO 639-1 code, e.g. "en", "de", "fr")
     # NULL means "auto-detect from browser Accept-Language header"
     preferred_language = Column(String(10), nullable=True)
+
+    # Default document language for translated versions (ISO 639-1 code).
+    # When a document's detected language differs from this value, the system
+    # automatically generates and stores a translation into this language.
+    # NULL means "use the global DEFAULT_DOCUMENT_LANGUAGE setting".
+    default_document_language = Column(String(10), nullable=True)
 
     # UI colour scheme preference: "light" | "dark" | "system" (NULL = "system")
     preferred_theme = Column(String(10), nullable=True)

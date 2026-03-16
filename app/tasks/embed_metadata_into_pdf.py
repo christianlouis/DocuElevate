@@ -216,6 +216,30 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
                     except Exception as search_exc:
                         logger.warning(f"[{task_id}] Meilisearch indexing failed (non-fatal): {search_exc}")
 
+                    # Cache the detected language on the FileRecord and trigger
+                    # default-language translation when the document is in a
+                    # different language.
+                    detected_lang = metadata.get("language") if metadata else None
+                    if detected_lang and extracted_text:
+                        try:
+                            file_record.detected_language = detected_lang
+                            db.commit()
+
+                            from app.tasks.translate_to_default_language import translate_to_default_language
+
+                            translate_to_default_language.delay(
+                                file_id,
+                                extracted_text,
+                                detected_lang,
+                                owner_id=file_record.owner_id,
+                            )
+                            logger.info(
+                                f"[{task_id}] Queued default-language translation for file {file_id} "
+                                f"(detected: {detected_lang})"
+                            )
+                        except Exception as trans_exc:
+                            logger.warning(f"[{task_id}] Could not queue translation task (non-fatal): {trans_exc}")
+
         # Persist the metadata into a JSON file with the same base name.
         # Include file path references for traceability
         logger.info(f"[{task_id}] Persisting metadata to JSON")

@@ -934,6 +934,48 @@ OPENAI_API_KEY=sk-ant-...   # passed as the api_key to LiteLLM
 
 ---
 
+### Document Translation
+
+After processing, DocuElevate can automatically translate a document's extracted text into a configurable *default language* (e.g. English). This reference translation is stored alongside the original text so users always have a version in a language they understand.
+
+Other languages are translated **on the fly** via the AI provider and are not persisted.
+
+#### Settings
+
+| **Variable**                 | **Description**                                                                                           | **Default** |
+|------------------------------|-----------------------------------------------------------------------------------------------------------|-------------|
+| `DEFAULT_DOCUMENT_LANGUAGE`  | ISO 639-1 code for the default translation target (e.g. `en`, `de`, `fr`). Documents whose detected language differs are automatically translated into this language after processing. | `en`        |
+
+Each user can override this global default in their profile (`UserProfile.default_document_language`).
+
+#### How It Works
+
+1. During metadata extraction the AI detects the document language (stored as `detected_language` on the file record).
+2. If the detected language differs from the default target language, a background Celery task (`translate_to_default_language`) translates the extracted text.
+3. The translated text is persisted in `default_language_text` and the target code in `default_language_code`.
+4. The file detail view shows both the original text and the default-language version.
+5. Users can also request on-the-fly translations to any language via the **Translate** dropdown.
+
+#### API Endpoints
+
+| **Endpoint**                                  | **Method** | **Description**                                                        |
+|-----------------------------------------------|------------|------------------------------------------------------------------------|
+| `/api/files/{id}/translation/default`         | GET        | Returns the persisted default-language translation (404 if unavailable)|
+| `/api/files/{id}/translate?lang=xx`           | GET        | On-the-fly translation to any ISO 639-1 language code                  |
+| `/files/{id}/text/default-language`           | GET        | View endpoint returning the default-language text as JSON              |
+
+#### Example
+
+```bash
+# Get the stored English translation of a German document
+curl http://localhost:8000/api/files/42/translation/default
+
+# Translate on the fly to French
+curl "http://localhost:8000/api/files/42/translate?lang=fr"
+```
+
+---
+
 ### OCR Providers
 
 DocuElevate supports multiple OCR engines that can be used individually or in combination. Configure the list of active providers with `OCR_PROVIDERS` and tune each provider with the settings below.
