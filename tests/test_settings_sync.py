@@ -163,7 +163,6 @@ def test_reload_if_stale_same_version(mock_ensure_ocr, mock_reload, mock_redis, 
 @patch("app.utils.config_loader.reload_settings_from_db")
 def test_reload_if_stale_redis_error(mock_reload, mock_redis, mock_connect, reset_last_seen_version, caplog):
     import logging
-
     caplog.set_level(logging.DEBUG)
     mock_decorator = MagicMock()
     mock_connect.return_value = mock_decorator
@@ -185,9 +184,7 @@ def test_reload_if_stale_redis_error(mock_reload, mock_redis, mock_connect, rese
 @patch("app.utils.settings_sync.redis.from_url")
 @patch("app.utils.config_loader.reload_settings_from_db")
 @patch("app.utils.ocr_language_manager.ensure_ocr_languages_async")
-def test_reload_if_stale_ocr_error(
-    mock_ensure_ocr, mock_reload, mock_redis, mock_connect, reset_last_seen_version, caplog
-):
+def test_reload_if_stale_ocr_error(mock_ensure_ocr, mock_reload, mock_redis, mock_connect, reset_last_seen_version, caplog):
     mock_decorator = MagicMock()
     mock_connect.return_value = mock_decorator
     register_settings_reload_signal()
