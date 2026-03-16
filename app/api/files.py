@@ -1,5 +1,3 @@
-import aiofiles
-
 """
 File-related API endpoints
 """
@@ -13,6 +11,7 @@ import zipfile
 from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
+import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import asc, desc
