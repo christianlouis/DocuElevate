@@ -17,7 +17,7 @@ from app.config import settings
 from app.database import get_db
 from app.models import FileRecord
 from app.utils.ai_provider import get_ai_provider
-from app.utils.user_scope import apply_owner_filter, get_current_owner_id
+from app.utils.user_scope import apply_owner_filter
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +32,7 @@ _MAX_TRANSLATION_INPUT = 50_000
 def _get_file_or_404(db: Session, file_id: int, request: Request) -> FileRecord:
     """Fetch a FileRecord visible to the current user or raise 404."""
     query = db.query(FileRecord).filter(FileRecord.id == file_id)
-    owner_id = get_current_owner_id(request)
-    if owner_id:
-        query = apply_owner_filter(query, owner_id, FileRecord)
+    query = apply_owner_filter(query, request)
     record = query.first()
     if not record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
