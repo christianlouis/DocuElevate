@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.148.0 (2026-03-16)
+
+### Documentation
+
+- Improve docstring and comment clarity in extract_metadata_from_file
+  ([`f2255f9`](https://github.com/christianlouis/DocuElevate/commit/f2255f9a1c28f138eae7836e9cf2df97f03b7b17))
+
+### Features
+
+- **tasks**: Extract and map embedded PDF metadata in upload_to_email
+  ([`9d6bfde`](https://github.com/christianlouis/DocuElevate/commit/9d6bfde2882fe74356bef8b64fb79bfa99870f56))
+
+
 ## v0.147.3 (2026-03-16)
 
 ### Code Style
