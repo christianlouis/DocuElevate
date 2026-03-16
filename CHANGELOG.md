@@ -10,6 +10,248 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.147.2 (2026-03-16)
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`46c4031`](https://github.com/christianlouis/DocuElevate/commit/46c403127641c1b5c729ff69ab5505efa5c9b54d))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`66fdb11`](https://github.com/christianlouis/DocuElevate/commit/66fdb11e39bc63f5a1d2b652649fd39d2a7e7469))
+
+- **changelog**: Update changelog [skip ci]
+  ([`0f31216`](https://github.com/christianlouis/DocuElevate/commit/0f312160bcb2e46e29c90dd055c4ebc9aaf01ad4))
+
+- **changelog**: Update changelog [skip ci]
+  ([`5734df2`](https://github.com/christianlouis/DocuElevate/commit/5734df2d5046158a23b987fdc4235d3f3f6b4042))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`46c4031`](https://github.com/christianlouis/DocuElevate/commit/46c403127641c1b5c729ff69ab5505efa5c9b54d))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`0f31216`](https://github.com/christianlouis/DocuElevate/commit/0f312160bcb2e46e29c90dd055c4ebc9aaf01ad4))
+
+- **changelog**: Update changelog [skip ci]
+  ([`5734df2`](https://github.com/christianlouis/DocuElevate/commit/5734df2d5046158a23b987fdc4235d3f3f6b4042))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`46c4031`](https://github.com/christianlouis/DocuElevate/commit/46c403127641c1b5c729ff69ab5505efa5c9b54d))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`5734df2`](https://github.com/christianlouis/DocuElevate/commit/5734df2d5046158a23b987fdc4235d3f3f6b4042))
+
+
+## Unreleased
+
+
+## v0.147.1 (2026-03-16)
+
+### Bug Fixes
+
+- Resolve test failures and mypy errors on main
+  ([`c7ff177`](https://github.com/christianlouis/DocuElevate/commit/c7ff177e179b60a4b6adba7f5296522e6da4391f))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`dd7c8f0`](https://github.com/christianlouis/DocuElevate/commit/dd7c8f0342f00b80e83394d146e6bc51a3688687))
+
+- **changelog**: Update changelog [skip ci]
+  ([`4d4706e`](https://github.com/christianlouis/DocuElevate/commit/4d4706e078d661682326262000e70d7e56fb6d23))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`4d4706e`](https://github.com/christianlouis/DocuElevate/commit/4d4706e078d661682326262000e70d7e56fb6d23))
+
+
+## Unreleased
+
+
+## v0.147.0 (2026-03-16)
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`80a0ddc`](https://github.com/christianlouis/DocuElevate/commit/80a0ddcbfcd89c156d6cce65bb6275bdf35c061e))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`5e986cb`](https://github.com/christianlouis/DocuElevate/commit/5e986cb6d66c313753c7ce9cf69137c36b354ae8))
+
+- **changelog**: Update changelog [skip ci]
+  ([`8f8e11c`](https://github.com/christianlouis/DocuElevate/commit/8f8e11cffe5a6aaae47c9111bc6a95cb88ef6cd8))
+
+### Features
+
+- **config**: Add JSON structured logging and syslog forwarding for application logs
+  ([`6da1e6f`](https://github.com/christianlouis/DocuElevate/commit/6da1e6fd816fea1dc0fa37c9ad42ce8cafed8c73))
+
+- **config**: Add LOG_LEVEL setting and configure root logging at startup
+  ([`18c49c6`](https://github.com/christianlouis/DocuElevate/commit/18c49c6b2d214fddefa2f954d57b0358fb4b5f72))
+
+### Refactoring
+
+- **main**: Move JSON formatter imports to module level per code review
+  ([`df1fa51`](https://github.com/christianlouis/DocuElevate/commit/df1fa51800fb62862271fce4e0fff691f62c3333))
+
+### Testing
+
+- Add 500 error test for saved search deletion
+  ([`ae9ed6e`](https://github.com/christianlouis/DocuElevate/commit/ae9ed6e9a703f8a80880d0b1cb421de3cf024cd3))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`80a0ddc`](https://github.com/christianlouis/DocuElevate/commit/80a0ddcbfcd89c156d6cce65bb6275bdf35c061e))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`8f8e11c`](https://github.com/christianlouis/DocuElevate/commit/8f8e11cffe5a6aaae47c9111bc6a95cb88ef6cd8))
+
+### Testing
+
+- Add 500 error test for saved search deletion
+  ([`ae9ed6e`](https://github.com/christianlouis/DocuElevate/commit/ae9ed6e9a703f8a80880d0b1cb421de3cf024cd3))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`80a0ddc`](https://github.com/christianlouis/DocuElevate/commit/80a0ddcbfcd89c156d6cce65bb6275bdf35c061e))
+
+### Testing
+
+- Add 500 error test for saved search deletion
+  ([`ae9ed6e`](https://github.com/christianlouis/DocuElevate/commit/ae9ed6e9a703f8a80880d0b1cb421de3cf024cd3))
+
+
+## v0.146.0 (2026-03-16)
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`522cefa`](https://github.com/christianlouis/DocuElevate/commit/522cefad935508fed32e194984726b0a10c99654))
+
+- Apply ruff auto-fix
+  ([`c76e513`](https://github.com/christianlouis/DocuElevate/commit/c76e51391b14eccbbe74f34ffadc89a477b58a64))
+
+- Apply ruff auto-fix
+  ([`cc2a07b`](https://github.com/christianlouis/DocuElevate/commit/cc2a07b090883f3cf2affea8a5e254a4163ce966))
+
+- Apply ruff auto-fix
+  ([`8bb6457`](https://github.com/christianlouis/DocuElevate/commit/8bb6457c65c177a13fd15de7a7b55e24eb39477e))
+
+- Apply ruff auto-fix
+  ([`275a5ad`](https://github.com/christianlouis/DocuElevate/commit/275a5ad6fa887ce3aa05d50787bd5da435735f26))
+
+- Apply ruff auto-fix
+  ([`ac35c5e`](https://github.com/christianlouis/DocuElevate/commit/ac35c5e6fa84f2b38cd333de75f202f13bf4c461))
+
+- Apply ruff auto-fix
+  ([`705c801`](https://github.com/christianlouis/DocuElevate/commit/705c801158394e7d6466f82485f8d872860653bb))
+
+- Apply ruff auto-fix
+  ([`0425d46`](https://github.com/christianlouis/DocuElevate/commit/0425d46c4440191cd410434ba64c1bc9cdb53cbb))
+
+- Apply ruff auto-fix
+  ([`b4118f6`](https://github.com/christianlouis/DocuElevate/commit/b4118f61622a35461af2c220d8a948ecb795e65b))
+
+- Format app/database.py to fix CI failure
+  ([`fbd4f83`](https://github.com/christianlouis/DocuElevate/commit/fbd4f837301deb208c7303553bca8facbae85ba6))
+
+### Features
+
+- Extract embedded PDF metadata using pypdf in upload_to_email
+  ([`726e4df`](https://github.com/christianlouis/DocuElevate/commit/726e4dfdc47507dd08047a27f02c137ed3e7ecaf))
+
+- Extract embedded PDF metadata using pypdf in upload_to_email
+  ([`df64aec`](https://github.com/christianlouis/DocuElevate/commit/df64aece2c19215cf762b2ac62d476888cd21527))
+
+### Performance Improvements
+
+- Optimize dropbox token refresh by replacing blocking requests with httpx
+  ([`84c6e1c`](https://github.com/christianlouis/DocuElevate/commit/84c6e1c5dd1a427c7f015e7461df59b889e66154))
+
+- **api**: Optimize reorder_plans to prevent N+1 queries
+  ([`d8372c6`](https://github.com/christianlouis/DocuElevate/commit/d8372c6fb83b09ce8d61bc8a870c921372a9d27a))
+
+- **duplicates**: Fix N+1 query in group listing
+  ([`e4e3ac4`](https://github.com/christianlouis/DocuElevate/commit/e4e3ac40771bdd8459cc0876d9d49be441df51a4))
+
+### Testing
+
+- Add missing error tests for updating saved searches
+  ([`d18c05c`](https://github.com/christianlouis/DocuElevate/commit/d18c05c36dc4324dd24e20e5344bca9c038bbf73))
+
+- Improve coverage for notify_settings_updated error handling
+  ([`d8906ae`](https://github.com/christianlouis/DocuElevate/commit/d8906aece0045aed9dcd0f0cf1891970c7cb00e8))
+
+
+## v0.145.3 (2026-03-16)
+
+### Bug Fixes
+
+- **tests**: Resolve ruff import sorting issue in benchmark test
+  ([`fa9b037`](https://github.com/christianlouis/DocuElevate/commit/fa9b037d5a2a67f9115a1bddf0f98ba9020cefd6))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`c1657a0`](https://github.com/christianlouis/DocuElevate/commit/c1657a01a77ca6b914bc21a20a42aeb924de8254))
+
+- Apply ruff auto-fix
+  ([`6f5f4d9`](https://github.com/christianlouis/DocuElevate/commit/6f5f4d9d4948208f65fc5572c86a08642efe54b6))
+
+- Apply ruff auto-fix
+  ([`2cfbea2`](https://github.com/christianlouis/DocuElevate/commit/2cfbea29a9211abfc13b74dea0a841fe5a2546b9))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`fa36ec6`](https://github.com/christianlouis/DocuElevate/commit/fa36ec69876b919a33a7471bb837c2a6b69c2a50))
+
+### Performance Improvements
+
+- **api**: Fix n+1 query issue in user notification preferences update
+  ([`fe20e02`](https://github.com/christianlouis/DocuElevate/commit/fe20e02f78c3c6236b07f50edb66599b8a9c7ed2))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`2cfbea2`](https://github.com/christianlouis/DocuElevate/commit/2cfbea29a9211abfc13b74dea0a841fe5a2546b9))
+
+
 ## v0.145.2 (2026-03-15)
 
 ### Bug Fixes

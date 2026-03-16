@@ -11,6 +11,7 @@ import zipfile
 from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
+import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import asc, desc
@@ -1335,7 +1336,31 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
 
     # Read file in chunks to avoid loading the entire body into memory at once,
     # enforcing the size limit during the read so memory usage stays bounded.
-    written_size = await _save_upload_file_chunks(file, target_path, max_size)
+    try:
+        written_size = 0
+        async with aiofiles.open(target_path, "wb") as f:
+            chunk_size = 65536  # 64 KB chunks
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                written_size += len(chunk)
+                if written_size > max_size:
+                    # Exceeded limit mid-stream; clean up and reject
+                    await f.close()
+                    os.remove(target_path)
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File too large: exceeded {max_size} bytes during upload. "
+                        f"See SECURITY_AUDIT.md for configuration details.",
+                    )
+                await f.write(chunk)
+    except HTTPException:
+        raise
+    except Exception as e:
+        if os.path.exists(target_path):
+            os.remove(target_path)
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
 
     # Log the mapping between original and safe filename
     logger.info(f"Saved uploaded file '{safe_filename}' as '{target_filename}'")
