@@ -10,6 +10,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.145.3 (2026-03-16)
+
+### Bug Fixes
+
+- **tests**: Resolve ruff import sorting issue in benchmark test
+  ([`fa9b037`](https://github.com/christianlouis/DocuElevate/commit/fa9b037d5a2a67f9115a1bddf0f98ba9020cefd6))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`c1657a0`](https://github.com/christianlouis/DocuElevate/commit/c1657a01a77ca6b914bc21a20a42aeb924de8254))
+
+- Apply ruff auto-fix
+  ([`6f5f4d9`](https://github.com/christianlouis/DocuElevate/commit/6f5f4d9d4948208f65fc5572c86a08642efe54b6))
+
+- Apply ruff auto-fix
+  ([`2cfbea2`](https://github.com/christianlouis/DocuElevate/commit/2cfbea29a9211abfc13b74dea0a841fe5a2546b9))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`fa36ec6`](https://github.com/christianlouis/DocuElevate/commit/fa36ec69876b919a33a7471bb837c2a6b69c2a50))
+
+### Performance Improvements
+
+- **api**: Fix n+1 query issue in user notification preferences update
+  ([`fe20e02`](https://github.com/christianlouis/DocuElevate/commit/fe20e02f78c3c6236b07f50edb66599b8a9c7ed2))
+
+
 ## Unreleased
 
 ### Code Style
