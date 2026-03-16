@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.150.3 (2026-03-16)
+
+### Bug Fixes
+
+- **tasks**: Dispatch per-user notifications on document processed/failed events
+  ([`195c3c3`](https://github.com/christianlouis/DocuElevate/commit/195c3c344672357e09554996a1071e983fa92f8c))
+
+### Refactoring
+
+- **tasks**: Address code review feedback for notification dispatch
+  ([`803331d`](https://github.com/christianlouis/DocuElevate/commit/803331d61f95b315efc880fb6964094c903be9b8))
+
+
 ## v0.150.2 (2026-03-16)
 
 ### Bug Fixes
