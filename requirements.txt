@@ -58,3 +58,4 @@ sentry-sdk[fastapi,celery,sqlalchemy]>=2.20.0,<3.0.0
 
 # GraphQL API
 strawberry-graphql[fastapi]>=0.243.0,<1.0.0
+aiofiles>=23.2.1

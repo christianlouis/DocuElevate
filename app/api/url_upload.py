@@ -187,10 +187,11 @@ async def process_url(request: Request, url_request: URLUploadRequest):
                 # Generate unique filename
                 unique_id = str(uuid.uuid4())
                 if "." in safe_filename:
-                    file_extension = safe_filename.rsplit(".", 1)[1]
-                    target_filename = f"{unique_id}.{file_extension}"
+                    # Sanitize extension to prevent path traversal (CodeQL alert)
+                    file_extension = os.path.basename(safe_filename.rsplit(".", 1)[1])
+                    target_filename = os.path.basename(f"{unique_id}.{file_extension}")
                 else:
-                    target_filename = unique_id
+                    target_filename = os.path.basename(unique_id)
 
                 target_path = os.path.join(settings.workdir, target_filename)
 
