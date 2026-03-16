@@ -10,6 +10,784 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.147.2 (2026-03-16)
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`46c4031`](https://github.com/christianlouis/DocuElevate/commit/46c403127641c1b5c729ff69ab5505efa5c9b54d))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`66fdb11`](https://github.com/christianlouis/DocuElevate/commit/66fdb11e39bc63f5a1d2b652649fd39d2a7e7469))
+
+- **changelog**: Update changelog [skip ci]
+  ([`0f31216`](https://github.com/christianlouis/DocuElevate/commit/0f312160bcb2e46e29c90dd055c4ebc9aaf01ad4))
+
+- **changelog**: Update changelog [skip ci]
+  ([`5734df2`](https://github.com/christianlouis/DocuElevate/commit/5734df2d5046158a23b987fdc4235d3f3f6b4042))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`46c4031`](https://github.com/christianlouis/DocuElevate/commit/46c403127641c1b5c729ff69ab5505efa5c9b54d))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`0f31216`](https://github.com/christianlouis/DocuElevate/commit/0f312160bcb2e46e29c90dd055c4ebc9aaf01ad4))
+
+- **changelog**: Update changelog [skip ci]
+  ([`5734df2`](https://github.com/christianlouis/DocuElevate/commit/5734df2d5046158a23b987fdc4235d3f3f6b4042))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`46c4031`](https://github.com/christianlouis/DocuElevate/commit/46c403127641c1b5c729ff69ab5505efa5c9b54d))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`5734df2`](https://github.com/christianlouis/DocuElevate/commit/5734df2d5046158a23b987fdc4235d3f3f6b4042))
+
+
+## Unreleased
+
+
+## v0.147.1 (2026-03-16)
+
+### Bug Fixes
+
+- Resolve test failures and mypy errors on main
+  ([`c7ff177`](https://github.com/christianlouis/DocuElevate/commit/c7ff177e179b60a4b6adba7f5296522e6da4391f))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`dd7c8f0`](https://github.com/christianlouis/DocuElevate/commit/dd7c8f0342f00b80e83394d146e6bc51a3688687))
+
+- **changelog**: Update changelog [skip ci]
+  ([`4d4706e`](https://github.com/christianlouis/DocuElevate/commit/4d4706e078d661682326262000e70d7e56fb6d23))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`4d4706e`](https://github.com/christianlouis/DocuElevate/commit/4d4706e078d661682326262000e70d7e56fb6d23))
+
+
+## Unreleased
+
+
+## v0.147.0 (2026-03-16)
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`80a0ddc`](https://github.com/christianlouis/DocuElevate/commit/80a0ddcbfcd89c156d6cce65bb6275bdf35c061e))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`5e986cb`](https://github.com/christianlouis/DocuElevate/commit/5e986cb6d66c313753c7ce9cf69137c36b354ae8))
+
+- **changelog**: Update changelog [skip ci]
+  ([`8f8e11c`](https://github.com/christianlouis/DocuElevate/commit/8f8e11cffe5a6aaae47c9111bc6a95cb88ef6cd8))
+
+### Features
+
+- **config**: Add JSON structured logging and syslog forwarding for application logs
+  ([`6da1e6f`](https://github.com/christianlouis/DocuElevate/commit/6da1e6fd816fea1dc0fa37c9ad42ce8cafed8c73))
+
+- **config**: Add LOG_LEVEL setting and configure root logging at startup
+  ([`18c49c6`](https://github.com/christianlouis/DocuElevate/commit/18c49c6b2d214fddefa2f954d57b0358fb4b5f72))
+
+### Refactoring
+
+- **main**: Move JSON formatter imports to module level per code review
+  ([`df1fa51`](https://github.com/christianlouis/DocuElevate/commit/df1fa51800fb62862271fce4e0fff691f62c3333))
+
+### Testing
+
+- Add 500 error test for saved search deletion
+  ([`ae9ed6e`](https://github.com/christianlouis/DocuElevate/commit/ae9ed6e9a703f8a80880d0b1cb421de3cf024cd3))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`80a0ddc`](https://github.com/christianlouis/DocuElevate/commit/80a0ddcbfcd89c156d6cce65bb6275bdf35c061e))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`8f8e11c`](https://github.com/christianlouis/DocuElevate/commit/8f8e11cffe5a6aaae47c9111bc6a95cb88ef6cd8))
+
+### Testing
+
+- Add 500 error test for saved search deletion
+  ([`ae9ed6e`](https://github.com/christianlouis/DocuElevate/commit/ae9ed6e9a703f8a80880d0b1cb421de3cf024cd3))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`80a0ddc`](https://github.com/christianlouis/DocuElevate/commit/80a0ddcbfcd89c156d6cce65bb6275bdf35c061e))
+
+### Testing
+
+- Add 500 error test for saved search deletion
+  ([`ae9ed6e`](https://github.com/christianlouis/DocuElevate/commit/ae9ed6e9a703f8a80880d0b1cb421de3cf024cd3))
+
+
+## v0.146.0 (2026-03-16)
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`522cefa`](https://github.com/christianlouis/DocuElevate/commit/522cefad935508fed32e194984726b0a10c99654))
+
+- Apply ruff auto-fix
+  ([`c76e513`](https://github.com/christianlouis/DocuElevate/commit/c76e51391b14eccbbe74f34ffadc89a477b58a64))
+
+- Apply ruff auto-fix
+  ([`cc2a07b`](https://github.com/christianlouis/DocuElevate/commit/cc2a07b090883f3cf2affea8a5e254a4163ce966))
+
+- Apply ruff auto-fix
+  ([`8bb6457`](https://github.com/christianlouis/DocuElevate/commit/8bb6457c65c177a13fd15de7a7b55e24eb39477e))
+
+- Apply ruff auto-fix
+  ([`275a5ad`](https://github.com/christianlouis/DocuElevate/commit/275a5ad6fa887ce3aa05d50787bd5da435735f26))
+
+- Apply ruff auto-fix
+  ([`ac35c5e`](https://github.com/christianlouis/DocuElevate/commit/ac35c5e6fa84f2b38cd333de75f202f13bf4c461))
+
+- Apply ruff auto-fix
+  ([`705c801`](https://github.com/christianlouis/DocuElevate/commit/705c801158394e7d6466f82485f8d872860653bb))
+
+- Apply ruff auto-fix
+  ([`0425d46`](https://github.com/christianlouis/DocuElevate/commit/0425d46c4440191cd410434ba64c1bc9cdb53cbb))
+
+- Apply ruff auto-fix
+  ([`b4118f6`](https://github.com/christianlouis/DocuElevate/commit/b4118f61622a35461af2c220d8a948ecb795e65b))
+
+- Format app/database.py to fix CI failure
+  ([`fbd4f83`](https://github.com/christianlouis/DocuElevate/commit/fbd4f837301deb208c7303553bca8facbae85ba6))
+
+### Features
+
+- Extract embedded PDF metadata using pypdf in upload_to_email
+  ([`726e4df`](https://github.com/christianlouis/DocuElevate/commit/726e4dfdc47507dd08047a27f02c137ed3e7ecaf))
+
+- Extract embedded PDF metadata using pypdf in upload_to_email
+  ([`df64aec`](https://github.com/christianlouis/DocuElevate/commit/df64aece2c19215cf762b2ac62d476888cd21527))
+
+### Performance Improvements
+
+- Optimize dropbox token refresh by replacing blocking requests with httpx
+  ([`84c6e1c`](https://github.com/christianlouis/DocuElevate/commit/84c6e1c5dd1a427c7f015e7461df59b889e66154))
+
+- **api**: Optimize reorder_plans to prevent N+1 queries
+  ([`d8372c6`](https://github.com/christianlouis/DocuElevate/commit/d8372c6fb83b09ce8d61bc8a870c921372a9d27a))
+
+- **duplicates**: Fix N+1 query in group listing
+  ([`e4e3ac4`](https://github.com/christianlouis/DocuElevate/commit/e4e3ac40771bdd8459cc0876d9d49be441df51a4))
+
+### Testing
+
+- Add missing error tests for updating saved searches
+  ([`d18c05c`](https://github.com/christianlouis/DocuElevate/commit/d18c05c36dc4324dd24e20e5344bca9c038bbf73))
+
+- Improve coverage for notify_settings_updated error handling
+  ([`d8906ae`](https://github.com/christianlouis/DocuElevate/commit/d8906aece0045aed9dcd0f0cf1891970c7cb00e8))
+
+
+## v0.145.3 (2026-03-16)
+
+### Bug Fixes
+
+- **tests**: Resolve ruff import sorting issue in benchmark test
+  ([`fa9b037`](https://github.com/christianlouis/DocuElevate/commit/fa9b037d5a2a67f9115a1bddf0f98ba9020cefd6))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`c1657a0`](https://github.com/christianlouis/DocuElevate/commit/c1657a01a77ca6b914bc21a20a42aeb924de8254))
+
+- Apply ruff auto-fix
+  ([`6f5f4d9`](https://github.com/christianlouis/DocuElevate/commit/6f5f4d9d4948208f65fc5572c86a08642efe54b6))
+
+- Apply ruff auto-fix
+  ([`2cfbea2`](https://github.com/christianlouis/DocuElevate/commit/2cfbea29a9211abfc13b74dea0a841fe5a2546b9))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`fa36ec6`](https://github.com/christianlouis/DocuElevate/commit/fa36ec69876b919a33a7471bb837c2a6b69c2a50))
+
+### Performance Improvements
+
+- **api**: Fix n+1 query issue in user notification preferences update
+  ([`fe20e02`](https://github.com/christianlouis/DocuElevate/commit/fe20e02f78c3c6236b07f50edb66599b8a9c7ed2))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`2cfbea2`](https://github.com/christianlouis/DocuElevate/commit/2cfbea29a9211abfc13b74dea0a841fe5a2546b9))
+
+
+## v0.145.2 (2026-03-15)
+
+### Bug Fixes
+
+- **auth**: Case-insensitive login + mobile auth debug logging
+  ([`f58b894`](https://github.com/christianlouis/DocuElevate/commit/f58b8943fbec892ebcc612b28e301605a72232b4))
+
+
+## v0.145.1 (2026-03-15)
+
+### Bug Fixes
+
+- **mobile**: Suppress Node.js url.parse() deprecation and document Apple session fix
+  ([`dd02ff5`](https://github.com/christianlouis/DocuElevate/commit/dd02ff5677fdd9704da4bacdaf2850882e9f6743))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`4de5743`](https://github.com/christianlouis/DocuElevate/commit/4de574370c700708915c4241c1b0ac91e4478707))
+
+### Testing
+
+- Fix webdav localhost assertion to match actual error message
+  ([`fe48e2a`](https://github.com/christianlouis/DocuElevate/commit/fe48e2aedc6cae822cd06a85293833ce103ebcce))
+
+
+## Unreleased
+
+### Testing
+
+- Fix webdav localhost assertion to match actual error message
+  ([`fe48e2a`](https://github.com/christianlouis/DocuElevate/commit/fe48e2aedc6cae822cd06a85293833ce103ebcce))
+
+
+## v0.145.0 (2026-03-15)
+
+### Features
+
+- **i18n**: Localize admin files page (filemanager.html)
+  ([`2bb47e7`](https://github.com/christianlouis/DocuElevate/commit/2bb47e7631836880873e51b131455ff8a500d2a6))
+
+
+## v0.144.0 (2026-03-15)
+
+### Bug Fixes
+
+- **i18n**: Fix overage buffer sentence spacing in admin_plans template
+  ([`de8922b`](https://github.com/christianlouis/DocuElevate/commit/de8922bb8e1e837ffc1ff29cbbeb1a2cd10d8d20))
+
+### Documentation
+
+- Rewrite README.md and update UserGuide and Troubleshooting docs
+  ([`fcf2452`](https://github.com/christianlouis/DocuElevate/commit/fcf2452b625109dbd7f7464929d5482b94db4a32))
+
+### Features
+
+- **i18n**: Localize admin plans page
+  ([`36aef73`](https://github.com/christianlouis/DocuElevate/commit/36aef7396951ff2b91677f877415b8bce4fd1fc3))
+
+
+## v0.143.1 (2026-03-15)
+
+### Bug Fixes
+
+- **auth**: Expo Go support via Linking.createURL; safe token URL construction; clean up return type
+  annotation
+  ([`1428556`](https://github.com/christianlouis/DocuElevate/commit/14285567d5bbf30200bd56ca30c75c906d09a376))
+
+- **auth**: Store mobile_redirect_uri in session and redirect to deep-link after SSO; fix
+  SafeAreaView deprecation
+  ([`5c373e7`](https://github.com/christianlouis/DocuElevate/commit/5c373e72243ab18a4bb0f25bb23379ef6ccfa6fc))
+
+
+## v0.143.0 (2026-03-15)
+
+### Features
+
+- **i18n**: Localize admin users page
+  ([`3fc0d52`](https://github.com/christianlouis/DocuElevate/commit/3fc0d5212675a3a54ee32ecaede8a0494f309c40))
+
+
+## v0.142.0 (2026-03-15)
+
+### Features
+
+- **i18n**: Localize terms and conditions page
+  ([`8c18f0d`](https://github.com/christianlouis/DocuElevate/commit/8c18f0da1718c53ab6ba5bf70ad2679cc287f0d1))
+
+
+## v0.141.2 (2026-03-15)
+
+### Bug Fixes
+
+- **mobile**: Align React version with react-native-renderer to fix version mismatch crash
+  ([`0736278`](https://github.com/christianlouis/DocuElevate/commit/073627884ca08ddb1b7838ce95815fc20f6ca5a0))
+
+### Chores
+
+- Initial plan placeholder
+  ([`c5b08e7`](https://github.com/christianlouis/DocuElevate/commit/c5b08e778d99d9a5a677f38a3ff5ba60cc657981))
+
+
+## v0.141.1 (2026-03-15)
+
+### Bug Fixes
+
+- **mobile**: Correct asset logo path depth and add expo-router app/ routes for web support
+  ([`82d90b4`](https://github.com/christianlouis/DocuElevate/commit/82d90b48e24320734f6b602044d2845efbbead05))
+
+- **mobile**: Update Node.js minimum requirement to 20.19.4
+  ([`b4b50e8`](https://github.com/christianlouis/DocuElevate/commit/b4b50e834088045510b3c235464862789d31c646))
+
+
+## v0.141.0 (2026-03-15)
+
+### Features
+
+- **ui**: Localize status page with i18n translations
+  ([`e46dadb`](https://github.com/christianlouis/DocuElevate/commit/e46dadbf45bc91f1c14f544538bf143a438b1c0a))
+
+
+## v0.140.0 (2026-03-15)
+
+### Features
+
+- **i18n**: Localize attribution page
+  ([`246ef70`](https://github.com/christianlouis/DocuElevate/commit/246ef702453fdfbca240b2bf0d1aa410abd9f179))
+
+
+## v0.139.0 (2026-03-15)
+
+### Features
+
+- **ui**: Localize license page with i18n translation keys
+  ([`9c73ab8`](https://github.com/christianlouis/DocuElevate/commit/9c73ab8e5963ae061c5ca3b494efb5620d4c8468))
+
+
+## v0.138.0 (2026-03-15)
+
+### Features
+
+- **i18n**: Localize cookies policy page
+  ([`182868c`](https://github.com/christianlouis/DocuElevate/commit/182868c0d71f7accfd801c7c41864c639aca5149))
+
+
+## v0.137.1 (2026-03-15)
+
+### Bug Fixes
+
+- **mobile**: Add missing react@19.2.4 integrity hash to package-lock.json
+  ([`ca962f8`](https://github.com/christianlouis/DocuElevate/commit/ca962f8040c4f6fb5f7e20cf4bf04f4c4532c100))
+
+- **mobile**: Fix iOS TurboModule crash and npm install peer dep conflict
+  ([`f983b20`](https://github.com/christianlouis/DocuElevate/commit/f983b20a8f0424353cbda5e876428fe97459e303))
+
+### Chores
+
+- Initial plan for npm install lockfile fix
+  ([`0181143`](https://github.com/christianlouis/DocuElevate/commit/01811438dcc46b5b335dc6054cbde6b229ccd332))
+
+
+## v0.137.0 (2026-03-15)
+
+### Chores
+
+- **mobile**: Update iOS build image to Xcode 26 for iOS 26 SDK compliance
+  ([`69664ec`](https://github.com/christianlouis/DocuElevate/commit/69664ec6cdb0bcfc3742fa9d75eed2125ed9ca12))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`8a1dc2a`](https://github.com/christianlouis/DocuElevate/commit/8a1dc2aa0e6b03408501ee8964ba60f9385c552b))
+
+- **changelog**: Update changelog [skip ci]
+  ([`02c3992`](https://github.com/christianlouis/DocuElevate/commit/02c399239c8260cb0ba217128bb2c62271a847f7))
+
+### Features
+
+- **ui**: Localize imprint page
+  ([`1f6a3a5`](https://github.com/christianlouis/DocuElevate/commit/1f6a3a58037f24fc838b2d4471afa01c68f4178d))
+
+
+## Unreleased
+
+### Chores
+
+- **mobile**: Update iOS build image to Xcode 26 for iOS 26 SDK compliance
+  ([`69664ec`](https://github.com/christianlouis/DocuElevate/commit/69664ec6cdb0bcfc3742fa9d75eed2125ed9ca12))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`02c3992`](https://github.com/christianlouis/DocuElevate/commit/02c399239c8260cb0ba217128bb2c62271a847f7))
+
+
+## Unreleased
+
+
+## v0.136.1 (2026-03-15)
+
+### Bug Fixes
+
+- **mobile**: Resolve iOS build errors by enabling buildReactNativeFromSource for Expo SDK 54
+  ([`3372a93`](https://github.com/christianlouis/DocuElevate/commit/3372a93f71f76d0dacb9c41458240b4146e33d9f))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`b7a195d`](https://github.com/christianlouis/DocuElevate/commit/b7a195d3bced215bf4d197c867883c2277940b56))
+
+
+## v0.136.0 (2026-03-14)
+
+### Features
+
+- **mobile**: Update DocuElevate mobile app branding with original logo and UX
+  ([`971e578`](https://github.com/christianlouis/DocuElevate/commit/971e578dd7f356d5a7cf2d2dfbb8c7a168f334d0))
+
+
+## v0.135.4 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Fix expo doctor dependency version mismatches for SDK 54
+  ([`f6e955a`](https://github.com/christianlouis/DocuElevate/commit/f6e955acce84366cab4138634dbc8b258bb10f3d))
+
+
+## v0.135.3 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Update iOS build image from macos-sequoia-15.1-xcode-16.2 to
+  macos-sequoia-15.3-xcode-16.2
+  ([`fe66e51`](https://github.com/christianlouis/DocuElevate/commit/fe66e519966c983cee9b8867cc33261459a085df))
+
+
+## v0.135.2 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Add missing assets and EAS workflow for automatic builds
+  ([`1aa02ae`](https://github.com/christianlouis/DocuElevate/commit/1aa02aea24fbfdc40cc5cf92a5907616f4d9c706))
+
+- **mobile**: Sync app.json and eas.json to expo.dev project credentials
+  ([`5f3d134`](https://github.com/christianlouis/DocuElevate/commit/5f3d134d7ef42380b6f99fa70f8fdf71bed9391b))
+
+- **mobile**: Sync app.json slug and owner to expo.dev project
+  ([`7633cdf`](https://github.com/christianlouis/DocuElevate/commit/7633cdf4e49277612a830ef9c6aaf9c5ed783648))
+
+- **mobile**: Use org.docuelevate.mobile as app identifier
+  ([`4f38075`](https://github.com/christianlouis/DocuElevate/commit/4f38075de4b6647b41f776517ff6499fb616b6e6))
+
+
+## v0.135.1 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Resolve EAS CI build failures – wrap app.json, update deps, pin Xcode image
+  ([`3bf9589`](https://github.com/christianlouis/DocuElevate/commit/3bf9589462ffb2cff80ef3d73b38be879869f157))
+
+
+## v0.135.0 (2026-03-14)
+
+### Features
+
+- **ui**: Add i18n support to privacy page
+  ([`e1941ad`](https://github.com/christianlouis/DocuElevate/commit/e1941adfc9aa59301de9f3114a7c2370c26b547b))
+
+
+## v0.134.5 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Update react to 19.2.4 and add package-lock.json to fix npm ERESOLVE build failure
+  ([`8653247`](https://github.com/christianlouis/DocuElevate/commit/8653247e442b64d1d8456f716d7baa2b3f61d73a))
+
+### Chores
+
+- Initial plan for mobile npm peer dep fix
+  ([`0cb2f6c`](https://github.com/christianlouis/DocuElevate/commit/0cb2f6c36263616b68f8c7799fd4c967fb1cf3bd))
+
+- **i18n**: Auto-update translations via LLM
+  ([`c664220`](https://github.com/christianlouis/DocuElevate/commit/c6642203c095c59329d6ce460c31a0bdb53dc948))
+
+- **i18n**: Auto-update translations via LLM
+  ([`31218c8`](https://github.com/christianlouis/DocuElevate/commit/31218c886021aced8f74881e6015d7d660cc99c2))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`ef4c513`](https://github.com/christianlouis/DocuElevate/commit/ef4c513908eee9fbc40f8c3bcae8cbfc072415bc))
+
+
+## Unreleased
+
+### Chores
+
+- **i18n**: Auto-update translations via LLM
+  ([`c664220`](https://github.com/christianlouis/DocuElevate/commit/c6642203c095c59329d6ce460c31a0bdb53dc948))
+
+- **i18n**: Auto-update translations via LLM
+  ([`31218c8`](https://github.com/christianlouis/DocuElevate/commit/31218c886021aced8f74881e6015d7d660cc99c2))
+
+
+## v0.134.4 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Bump Node to 20.19.4 and fix react-navigation peer dependency
+  ([`4c6596b`](https://github.com/christianlouis/DocuElevate/commit/4c6596b56192341f2be4bb14a8a9ace1182bd38e))
+
+
+## v0.134.3 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Add expo-dev-client, pin Node version, and fix EAS build config
+  ([`6834f3e`](https://github.com/christianlouis/DocuElevate/commit/6834f3ef1b3bce099e4f8f9f76cee94a2a635f64))
+
+- **mobile**: Add owner field to app.json to match EAS project owner
+  ([`492b2c6`](https://github.com/christianlouis/DocuElevate/commit/492b2c643c42686c950f871bd284a4e702af52d5))
+
+
+## v0.134.2 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Upgrade Expo SDK from 51 to 54 and fix EAS project ID
+  ([`f148785`](https://github.com/christianlouis/DocuElevate/commit/f148785079b220530ff4ba8a41ca4258727c9f2d))
+
+
+## v0.134.1 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Relax Node.js engine constraint to >=18.0.0
+  ([`fb5d494`](https://github.com/christianlouis/DocuElevate/commit/fb5d494e42e1d4caf8b5d62480e38a168118de21))
+
+- **mobile**: Remove expo-sharing from plugins and align .nvmrc with Node 18 LTS
+  ([`8f9405b`](https://github.com/christianlouis/DocuElevate/commit/8f9405b5ac33df9a0f211061038814aac3d57286))
+
+
+## v0.134.0 (2026-03-14)
+
+### Bug Fixes
+
+- **i18n**: Replace fragment translation keys with placeholder-based complete sentences
+  ([`eaa5337`](https://github.com/christianlouis/DocuElevate/commit/eaa533760dbb8e143fadfece808d1a229e29940b))
+
+- **ui**: Restore missing template x-if tag and fix Nextcloud URL label key
+  ([`08853e8`](https://github.com/christianlouis/DocuElevate/commit/08853e823c949d9b220d02004a9ac1196b15bb23))
+
+### Features
+
+- **ui**: Internationalize profile, subscription, integrations templates and user menu JS
+  ([`5a02557`](https://github.com/christianlouis/DocuElevate/commit/5a025576c42107ac01caa3d8fcf9ffe5b35223f8))
+
+
+## v0.133.7 (2026-03-14)
+
+### Bug Fixes
+
+- **mobile**: Fix EAS build Node.js version incompatibility for iOS and Android
+  ([`8717538`](https://github.com/christianlouis/DocuElevate/commit/8717538967a8d8b141984abf8c070e19728f07f8))
+
+
+## v0.133.6 (2026-03-14)
+
+### Bug Fixes
+
+- **database**: Quote identifiers in index management queries to prevent SQL injection
+  ([`120002b`](https://github.com/christianlouis/DocuElevate/commit/120002b39408fb610d06c7555abdd40ab40c2ae4))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`0b064b9`](https://github.com/christianlouis/DocuElevate/commit/0b064b9d20f600b0a6ca140d590bc93cf6148491))
+
+- Use Annotated pattern in audit_logs.py to resolve Ruff B008
+  ([`f96fcbe`](https://github.com/christianlouis/DocuElevate/commit/f96fcbe6c9d1b306e1b40c0485da8c4c97062f9b))
+
+### Testing
+
+- Add error path tests for API token revocation
+  ([`fdf5053`](https://github.com/christianlouis/DocuElevate/commit/fdf5053acedae711fc8b1f874e6057141fd4cd6d))
+
+- Clarify caller cleanup responsibility in _make_unauthenticated_client docstring
+  ([`751b16d`](https://github.com/christianlouis/DocuElevate/commit/751b16d804b0659514ac682b6b5d6c66a4e83e94))
+
+- Exercise real auth path in test_revoke_token_unauthenticated
+  ([`96ef7d4`](https://github.com/christianlouis/DocuElevate/commit/96ef7d4769fc5cdfbd552cd49a13778f8717a4d9))
+
+- Strengthen test_revoke_token_database_error to verify rollback is called
+  ([`9e9b1fb`](https://github.com/christianlouis/DocuElevate/commit/9e9b1fb158cf906de47b61997436104d924b45d6))
+
+- **database**: Add unit test for quoted identifier in filehash index drop
+  ([`33eded0`](https://github.com/christianlouis/DocuElevate/commit/33eded02b1a4a603136a41b46dcd3ec6a5356489))
+
+
+## v0.133.5 (2026-03-14)
+
+### Bug Fixes
+
+- **ui**: Add 22 missing help page translation keys to en.json
+  ([`48a9303`](https://github.com/christianlouis/DocuElevate/commit/48a93036ca94cf910eb854c210382884911502c2))
+
+
+## v0.133.4 (2026-03-14)
+
+### Bug Fixes
+
+- **i18n**: Add noqa comment to intentionally broad exception in hydration helper
+  ([`f41ecc9`](https://github.com/christianlouis/DocuElevate/commit/f41ecc9b2c234062d5d5565380c3c409011e3883))
+
+- **i18n**: Persist language preference server-side, fix dropdown rendering and avatar 404
+  ([`1416d90`](https://github.com/christianlouis/DocuElevate/commit/1416d901d0615adf0c77551d1678207ae3308b3a))
+
+### Chores
+
+- **i18n**: Auto-update translations via LLM
+  ([`d09227b`](https://github.com/christianlouis/DocuElevate/commit/d09227b61cad3fc77396b86834da9849a222e8a0))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`01739e8`](https://github.com/christianlouis/DocuElevate/commit/01739e8c228f1bd1278cb472998eb7c05e851a51))
+
+
+## Unreleased
+
+### Chores
+
+- **i18n**: Auto-update translations via LLM
+  ([`d09227b`](https://github.com/christianlouis/DocuElevate/commit/d09227b61cad3fc77396b86834da9849a222e8a0))
+
+
+## v0.133.3 (2026-03-14)
+
+### Bug Fixes
+
+- **i18n**: Add missing index page translation keys to en.json
+  ([`1f24b1b`](https://github.com/christianlouis/DocuElevate/commit/1f24b1b95be512c0f9a09b54001ae5bf71b47e37))
+
+
+## v0.133.2 (2026-03-14)
+
+### Bug Fixes
+
+- **ui**: Add missing suggested_languages global to error templates
+  ([`0592c59`](https://github.com/christianlouis/DocuElevate/commit/0592c59174bfb2cbb2b96f62297963c9a6c1bb60))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`de0b674`](https://github.com/christianlouis/DocuElevate/commit/de0b674025943dcc6aa21edc9e8027512964a605))
+
+
+## v0.133.1 (2026-03-14)
+
+### Bug Fixes
+
+- **test**: Remove tests that check specific translation content
+  ([`08fabe1`](https://github.com/christianlouis/DocuElevate/commit/08fabe154a35e9f8def21f86178b3619e021a595))
+
+### Chores
+
+- **i18n**: Auto-update translations via LLM
+  ([`0cb6017`](https://github.com/christianlouis/DocuElevate/commit/0cb6017b50c7e2bb06a39a41a17d504b68bcb09f))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`971d450`](https://github.com/christianlouis/DocuElevate/commit/971d4501282790c73fa43823039d5d4cea0111f4))
+
+
+## Unreleased
+
+### Chores
+
+- **i18n**: Auto-update translations via LLM
+  ([`0cb6017`](https://github.com/christianlouis/DocuElevate/commit/0cb6017b50c7e2bb06a39a41a17d504b68bcb09f))
+
+
+## v0.133.0 (2026-03-14)
+
+### Features
+
+- **ui**: Smart compact language selector with search and flags
+  ([`3557590`](https://github.com/christianlouis/DocuElevate/commit/3557590679f17ad88fe7cf91b5665fd669ba0447))
+
+
+## v0.132.1 (2026-03-14)
+
+### Bug Fixes
+
+- **security**: Prevent potential SQL injection in database migration
+  ([`82b1f89`](https://github.com/christianlouis/DocuElevate/commit/82b1f89332d7bb3e7d8a16651b17a060e8ae4d0f))
+
+### Chores
+
+- **i18n**: Auto-update translations via LLM
+  ([`8e86518`](https://github.com/christianlouis/DocuElevate/commit/8e865180a5e751566ea3312bef916efc9dc7cdb1))
+
+- **i18n**: Auto-update translations via LLM
+  ([`9a480e3`](https://github.com/christianlouis/DocuElevate/commit/9a480e3d68e2e162c73cb526b2887dbcae0cedac))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`4a46f37`](https://github.com/christianlouis/DocuElevate/commit/4a46f372b97f89a3c0059ce8c451424e9c121c7a))
+
+### Testing
+
+- **i18n**: Remove translation content assertion from test_translate_with_kwargs_german
+  ([`9b32cbc`](https://github.com/christianlouis/DocuElevate/commit/9b32cbc91b26f83cd451d0c5d369b0692dd7edf7))
+
+
+## Unreleased
+
+### Chores
+
+- **i18n**: Auto-update translations via LLM
+  ([`8e86518`](https://github.com/christianlouis/DocuElevate/commit/8e865180a5e751566ea3312bef916efc9dc7cdb1))
+
+- **i18n**: Auto-update translations via LLM
+  ([`9a480e3`](https://github.com/christianlouis/DocuElevate/commit/9a480e3d68e2e162c73cb526b2887dbcae0cedac))
+
+
+## v0.132.0 (2026-03-13)
+
+### Features
+
+- **i18n**: Update language support to 77 languages
+  ([`59d8512`](https://github.com/christianlouis/DocuElevate/commit/59d851272dccd0213c4b718a9a07e98d9fed1be8))
+
+
 ## v0.131.0 (2026-03-13)
 
 ### Documentation

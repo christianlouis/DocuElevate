@@ -212,9 +212,10 @@ class TestExtractMetadataFilenameValidation:
         """Test that invalid filename formats are rejected."""
         import re
 
-        # Valid pattern from extract_metadata_with_gpt.py
-        # TODO: Consider extracting this to a shared constant to avoid duplication
-        valid_pattern = r"^[\w\-\. ]+$"
+        from app.utils.filename_utils import VALID_FILENAME_PATTERN
+
+        # Valid pattern from app.utils.filename_utils
+        valid_pattern = VALID_FILENAME_PATTERN
 
         # Test valid filenames
         valid_filenames = [

@@ -2628,6 +2628,63 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Logging
+    "log_level": {
+        "category": "Observability",
+        "description": (
+            "Python logging level for the application root logger. "
+            "Accepts: DEBUG, INFO, WARNING, ERROR, CRITICAL. "
+            "When DEBUG=True and LOG_LEVEL is not explicitly set, "
+            "the effective level is automatically lowered to DEBUG."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_format": {
+        "category": "Observability",
+        "description": (
+            "Log output format: 'text' (human-readable, default) or "
+            "'json' (structured JSON lines for SIEM / log aggregation)."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_syslog_enabled": {
+        "category": "Observability",
+        "description": "Forward application logs to a syslog receiver in addition to stdout.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_syslog_host": {
+        "category": "Observability",
+        "description": "Hostname or IP of the syslog receiver for application logs.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_syslog_port": {
+        "category": "Observability",
+        "description": "Port of the syslog receiver for application logs.",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_syslog_protocol": {
+        "category": "Observability",
+        "description": "Protocol for syslog transport: 'udp' or 'tcp'.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
     # Observability – Sentry
     "sentry_dsn": {
         "category": "Observability",

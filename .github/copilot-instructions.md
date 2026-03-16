@@ -163,6 +163,13 @@ pytest --tb=short -q
 - Keep JavaScript minimal - prefer server-side rendering
 - Follow existing template structure and patterns
 
+### Internationalization (i18n) & Localization (l10n)
+- **Always** use the `_("key")` helper in Jinja2 templates and `translate("key", locale)` in Python for every user-visible string — never hardcode UI text.
+- **Only add new keys to `frontend/translations/en.json`** — that is the one and only file you must touch when introducing new UI strings.
+- Do **not** manually edit any non-English translation file (`de.json`, `fr.json`, etc.). An external automation script syncs all other language files from `en.json` automatically.
+- Key naming convention: `<section>.<descriptor>` in snake_case, e.g. `language.search_placeholder`, `nav.help`, `common.cancel`.
+- The `test_all_languages_have_same_keys` check has been intentionally removed — key completeness across locales is enforced by the external sync script, not by the test suite.
+
 ### Testing
 - Write tests in `tests/` directory, mirroring `app/` structure
 - Use pytest markers: `@pytest.mark.unit`, `@pytest.mark.integration`, etc.

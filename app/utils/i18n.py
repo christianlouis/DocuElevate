@@ -2,7 +2,7 @@
 
 Provides a JSON-based translation system for the DocuElevate UI with:
 
-* **49 supported languages** covering European, Asian, Middle-Eastern, and other languages
+* **77 supported languages** covering European, Asian, Middle-Eastern, African, and other languages
 * Browser ``Accept-Language`` detection with cookie & user-profile persistence
 * AI-powered fallback translation via the configured LLM provider
 * Locale-aware date, number, and file-size formatting helpers
@@ -52,10 +52,10 @@ SUPPORTED_LANGUAGES: list[dict[str, str]] = [
     {"code": "lb", "name": "Luxembourgish", "native": "Lëtzebuergesch", "flag": "🇱🇺"},
     {"code": "ca", "name": "Catalan", "native": "Català", "flag": "🏴"},
     {"code": "cy", "name": "Welsh", "native": "Cymraeg", "flag": "🏴󠁧󠁢󠁷󠁬󠁳󠁿"},  # Wales subdivision flag (U+1F3F4 + tag chars)
-    {"code": "fy", "name": "Frisian", "native": "Frysk", "flag": "🇳🇱"},
+    {"code": "fy", "name": "Western Frisian", "native": "Frysk", "flag": "🇳🇱"},
     {"code": "gl", "name": "Galician", "native": "Galego", "flag": "🇪🇸"},
     {"code": "li", "name": "Limburgish", "native": "Limburgs", "flag": "🇳🇱"},
-    {"code": "vls", "name": "West Flemish", "native": "West-Vlams", "flag": "🇧🇪"},
+    {"code": "vls", "name": "Flemish", "native": "West-Vlams", "flag": "🇧🇪"},
     {"code": "nds", "name": "Low German", "native": "Plattdüütsch", "flag": "🇩🇪"},
     # --- Tier 3: Central & Eastern European ---
     {"code": "pl", "name": "Polish", "native": "Polski", "flag": "🇵🇱"},
@@ -74,24 +74,59 @@ SUPPORTED_LANGUAGES: list[dict[str, str]] = [
     # --- Tier 4: Non-EU European, Middle Eastern & African ---
     {"code": "tr", "name": "Turkish", "native": "Türkçe", "flag": "🇹🇷"},
     {"code": "uk", "name": "Ukrainian", "native": "Українська", "flag": "🇺🇦"},
-    {"code": "ru", "name": "Russian", "native": "Русский", "flag": "🇷🇺"},
     {"code": "he", "name": "Hebrew", "native": "עברית", "flag": "🇮🇱"},
     {"code": "ar", "name": "Arabic", "native": "العربية", "flag": "🇸🇦"},
     {"code": "fa", "name": "Persian", "native": "فارسی", "flag": "🇮🇷"},
     {"code": "af", "name": "Afrikaans", "native": "Afrikaans", "flag": "🇿🇦"},
     # --- Tier 5: Asian languages ---
     {"code": "zh", "name": "Chinese", "native": "中文", "flag": "🇨🇳"},
+    {"code": "zh-TW", "name": "Traditional Chinese", "native": "繁體中文", "flag": "🇹🇼"},
     {"code": "ja", "name": "Japanese", "native": "日本語", "flag": "🇯🇵"},
     {"code": "ko", "name": "Korean", "native": "한국어", "flag": "🇰🇷"},
     {"code": "vi", "name": "Vietnamese", "native": "Tiếng Việt", "flag": "🇻🇳"},
     {"code": "pa", "name": "Punjabi", "native": "ਪੰਜਾਬੀ", "flag": "🇮🇳"},
     {"code": "kn", "name": "Kannada", "native": "ಕನ್ನಡ", "flag": "🇮🇳"},
-    # --- Tier 6: Constructed & other languages ---
+    {"code": "hi", "name": "Hindi", "native": "हिन्दी", "flag": "🇮🇳"},
+    {"code": "bn", "name": "Bengali", "native": "বাংলা", "flag": "🇧🇩"},
+    {"code": "gu", "name": "Gujarati", "native": "ગુજરાતી", "flag": "🇮🇳"},
+    {"code": "ml", "name": "Malayalam", "native": "മലയാളം", "flag": "🇮🇳"},
+    {"code": "mr", "name": "Marathi", "native": "मराठी", "flag": "🇮🇳"},
+    {"code": "ta", "name": "Tamil", "native": "தமிழ்", "flag": "🇮🇳"},
+    {"code": "te", "name": "Telugu", "native": "తెలుగు", "flag": "🇮🇳"},
+    {"code": "ur", "name": "Urdu", "native": "اردو", "flag": "🇵🇰"},
+    {"code": "si", "name": "Sinhala", "native": "සිංහල", "flag": "🇱🇰"},
+    {"code": "ne", "name": "Nepali", "native": "नेपाली", "flag": "🇳🇵"},
+    {"code": "th", "name": "Thai", "native": "ไทย", "flag": "🇹🇭"},
+    {"code": "km", "name": "Khmer", "native": "ខ្មែរ", "flag": "🇰🇭"},
+    {"code": "id", "name": "Indonesian", "native": "Bahasa Indonesia", "flag": "🇮🇩"},
+    {"code": "ms", "name": "Malay", "native": "Bahasa Melayu", "flag": "🇲🇾"},
+    {"code": "jv", "name": "Javanese", "native": "Basa Jawa", "flag": "🇮🇩"},
+    {"code": "tl", "name": "Tagalog", "native": "Filipino", "flag": "🇵🇭"},
+    {"code": "mn", "name": "Mongolian", "native": "Монгол", "flag": "🇲🇳"},
+    {"code": "kk", "name": "Kazakh", "native": "Қазақ тілі", "flag": "🇰🇿"},
+    {"code": "uz", "name": "Uzbek", "native": "Oʻzbekcha", "flag": "🇺🇿"},
+    {"code": "az", "name": "Azerbaijani", "native": "Azərbaycan dili", "flag": "🇦🇿"},
+    {"code": "hy", "name": "Armenian", "native": "Հայերեն", "flag": "🇦🇲"},
+    {"code": "ka", "name": "Georgian", "native": "ქართული", "flag": "🇬🇪"},
+    # --- Tier 6: African languages ---
+    {"code": "sw", "name": "Swahili", "native": "Kiswahili", "flag": "🇰🇪"},
+    {"code": "am", "name": "Amharic", "native": "አማርኛ", "flag": "🇪🇹"},
+    {"code": "ha", "name": "Hausa", "native": "Hausa", "flag": "🇳🇬"},
+    {"code": "yo", "name": "Yoruba", "native": "Yorùbá", "flag": "🇳🇬"},
+    {"code": "ig", "name": "Igbo", "native": "Igbo", "flag": "🇳🇬"},
+    {"code": "zu", "name": "Zulu", "native": "isiZulu", "flag": "🇿🇦"},
+    # --- Tier 7: Constructed & other languages ---
     {"code": "eo", "name": "Esperanto", "native": "Esperanto", "flag": "🌍"},
 ]
 
 SUPPORTED_LANGUAGE_CODES: set[str] = {lang["code"] for lang in SUPPORTED_LANGUAGES}
 DEFAULT_LANGUAGE = "en"
+
+# Lookup map for fast code → language-dict resolution
+_LANG_CODE_MAP: dict[str, dict[str, str]] = {lang["code"]: lang for lang in SUPPORTED_LANGUAGES}
+
+# Global-usage order used to fill remaining slots in the smart suggestions list
+_POPULAR_LANGUAGE_CODES: list[str] = ["en", "zh", "es", "ar", "fr", "de", "ja", "pt", "hi", "ko"]
 
 # ---------------------------------------------------------------------------
 # Translation file loading
@@ -263,14 +298,10 @@ def detect_language(request: Request) -> str:
     return DEFAULT_LANGUAGE
 
 
-def _parse_accept_language(header: str) -> str | None:
-    """Extract the best matching language from an ``Accept-Language`` header.
-
-    Parses quality values and returns the highest-priority match among
-    :data:`SUPPORTED_LANGUAGE_CODES`, or ``None`` if nothing matches.
-    """
+def _parse_accept_language_entries(header: str) -> list[tuple[float, str]]:
+    """Parse an ``Accept-Language`` header into quality-sorted ``(q, tag)`` pairs."""
     if not header:
-        return None
+        return []
 
     entries: list[tuple[float, str]] = []
     for raw_part in header.split(","):
@@ -288,16 +319,61 @@ def _parse_accept_language(header: str) -> str | None:
             quality = 1.0
         entries.append((quality, lang_tag.strip().lower()))
 
-    # Sort by quality descending
     entries.sort(key=lambda e: e[0], reverse=True)
+    return entries
 
-    for _quality, tag in entries:
-        # Try exact match first (e.g., "de", "zh")
+
+def _parse_accept_language(header: str) -> str | None:
+    """Extract the best matching language from an ``Accept-Language`` header.
+
+    Parses quality values and returns the highest-priority match among
+    :data:`SUPPORTED_LANGUAGE_CODES`, or ``None`` if nothing matches.
+    """
+    for _quality, tag in _parse_accept_language_entries(header):
         code = tag.split("-")[0]
         if code in SUPPORTED_LANGUAGE_CODES:
             return code
 
     return None
+
+
+# Maximum number of languages shown in the compact nav-bar dropdown
+_SUGGESTED_LANGUAGES_MAX = 6
+
+
+def get_suggested_languages(current_locale: str, accept_language_header: str = "") -> list[dict[str, str]]:
+    """Return up to :data:`_SUGGESTED_LANGUAGES_MAX` suggested languages for the compact picker.
+
+    Selection priority:
+        1. The currently active language (always included first).
+        2. Languages listed in the browser's ``Accept-Language`` header.
+        3. Popular global languages (by estimated speaker count) as fillers.
+
+    The resulting list is de-duplicated and capped at
+    :data:`_SUGGESTED_LANGUAGES_MAX` entries.
+    """
+    candidates: list[str] = []
+
+    # 1. Active locale first
+    if current_locale in SUPPORTED_LANGUAGE_CODES:
+        candidates.append(current_locale)
+
+    # 2. Browser preferences
+    for _quality, tag in _parse_accept_language_entries(accept_language_header):
+        if len(candidates) >= _SUGGESTED_LANGUAGES_MAX:
+            break
+        code = tag.split("-")[0]
+        if code in SUPPORTED_LANGUAGE_CODES and code not in candidates:
+            candidates.append(code)
+
+    # 3. Popular language fillers
+    for code in _POPULAR_LANGUAGE_CODES:
+        if len(candidates) >= _SUGGESTED_LANGUAGES_MAX:
+            break
+        if code not in candidates and code in SUPPORTED_LANGUAGE_CODES:
+            candidates.append(code)
+
+    return [_LANG_CODE_MAP[c] for c in candidates[:_SUGGESTED_LANGUAGES_MAX] if c in _LANG_CODE_MAP]
 
 
 # ---------------------------------------------------------------------------

@@ -969,7 +969,7 @@ class TestConnectionTestEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is False
-        assert "localhost" in data["message"].lower()
+        assert "internal" in data["message"].lower() or "private" in data["message"].lower()
 
     def test_test_webdav_blocks_file_scheme(self, int_client):
         """WebDAV test blocks file:// scheme."""

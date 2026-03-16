@@ -8,6 +8,7 @@
  * token via POST /api/mobile/generate-token.
  */
 
+import * as Linking from "expo-linking";
 import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
 import React, {
@@ -104,13 +105,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await api.init(cleanUrl);
       setBaseUrl(cleanUrl);
 
+      // Compute the correct redirect URI for the current runtime:
+      //   • Expo Go (development)  → exp://<host>:<port>/--/callback
+      //   • Standalone / EAS build → docuelevate://callback
+      // Both schemes are accepted by the server; using Linking.createURL
+      // ensures the browser deep-link resolves correctly in every environment.
+      const redirectUri = Linking.createURL("callback");
+
       // Open the web login page in the system browser.  The user authenticates
-      // via SSO or local credentials, then the app deep-link (docuelevate://callback)
-      // is triggered.  The WebBrowser.openAuthSessionAsync handles the redirect
-      // back to the app.
+      // via SSO or local credentials, then the app deep-link is triggered.
+      // The WebBrowser.openAuthSessionAsync handles the redirect back to the app.
       const result = await WebBrowser.openAuthSessionAsync(
-        `${cleanUrl}/login?mobile=1&redirect_uri=docuelevate://callback`,
-        "docuelevate://callback"
+        `${cleanUrl}/login?mobile=1&redirect_uri=${encodeURIComponent(redirectUri)}`,
+        redirectUri
       );
 
       if (result.type !== "success") {

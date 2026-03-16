@@ -11,13 +11,15 @@ from sqlalchemy.orm import Session  # noqa: F401
 
 from app.auth import require_login  # noqa: F401
 from app.config import settings
-from app.database import get_db  # noqa: F401
+from app.database import SessionLocal, get_db  # noqa: F401
+from app.models import UserProfile
 from app.utils.i18n import (
     SUPPORTED_LANGUAGES,
     detect_language,
     format_date,
     format_datetime,
     format_number,
+    get_suggested_languages,
     translate,
 )
 
@@ -46,6 +48,41 @@ templates.env.globals["_"] = lambda key, **kwargs: translate(key, "en", **kwargs
 original_template_response = templates.TemplateResponse
 
 
+def _hydrate_language_from_db(request: Request, session_user: object) -> None:
+    """Load the user's preferred language from the DB into the session.
+
+    Called once per session when ``preferred_language`` is not yet in the
+    session.  A lightweight DB query fetches the stored preference so that
+    :func:`detect_language` picks it up from the session on all subsequent
+    requests without further DB access.
+    """
+    from app.utils.i18n import SUPPORTED_LANGUAGE_CODES
+
+    user_id: str | None = None
+    if isinstance(session_user, dict):
+        user_id = (
+            session_user.get("sub")
+            or session_user.get("preferred_username")
+            or session_user.get("email")
+            or session_user.get("id")
+        )
+    elif isinstance(session_user, str):
+        user_id = session_user
+
+    if not user_id:
+        return
+
+    db = SessionLocal()
+    try:
+        profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+        if profile and profile.preferred_language and profile.preferred_language in SUPPORTED_LANGUAGE_CODES:
+            request.session["preferred_language"] = profile.preferred_language
+    except Exception:  # noqa: BLE001 — intentionally broad; DB may be temporarily unavailable
+        logger.debug("Could not hydrate language preference for user_id=%s", user_id)
+    finally:
+        db.close()
+
+
 def _inject_global_context(ctx: dict) -> None:
     """Inject shared global variables into every template context dict."""
     ctx.setdefault("version", settings.version)
@@ -70,9 +107,21 @@ def _inject_global_context(ctx: dict) -> None:
         # When auth is disabled every visitor is effectively "logged in"
         ctx.setdefault("is_logged_in", not getattr(settings, "auth_enabled", True) or session_user is not None)
 
+        # --- Hydrate session language from DB (once per session) ---
+        # If the session doesn't have a preferred_language yet but the user
+        # is logged in, load the stored preference from the database so that
+        # detect_language() picks it up from the session on this and all
+        # subsequent requests.
+        if hasattr(req, "session") and "preferred_language" not in req.session and session_user is not None:
+            _hydrate_language_from_db(req, session_user)
+
         # --- i18n: detect language and register template helpers ---
         current_locale = detect_language(req)
         ctx.setdefault("current_locale", current_locale)
+
+        # Smart language suggestions for the compact nav-bar dropdown (5-7 languages)
+        accept_header = req.headers.get("accept-language", "") if hasattr(req, "headers") else ""
+        ctx.setdefault("suggested_languages", get_suggested_languages(current_locale, accept_header))
 
         def _translate(key: str, **kwargs: object) -> str:
             return translate(key, current_locale, **kwargs)

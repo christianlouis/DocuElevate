@@ -107,7 +107,7 @@ class DocuElevateAPI {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    let body: BodyInit | undefined;
+    let body: string | FormData | undefined;
     if (options?.formData) {
       body = options.formData;
       // Let fetch set multipart content-type with boundary automatically

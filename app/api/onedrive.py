@@ -3,7 +3,6 @@ OneDrive API endpoints
 """
 
 import logging
-import os
 from datetime import datetime, timedelta
 from typing import Annotated, Optional
 
@@ -14,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.auth import require_login
 from app.config import settings
 from app.database import get_db
+from app.utils.env_utils import update_env_file
 from app.utils.oauth_helper import exchange_oauth_token
 from app.utils.settings_service import save_setting_to_db
 from app.utils.settings_sync import notify_settings_updated
@@ -115,32 +115,7 @@ async def test_onedrive_token(request: Request):
             settings.onedrive_refresh_token = new_refresh_token
 
             # Also try to update .env file if it exists
-            try:
-                env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
-                if os.path.exists(env_path):
-                    with open(env_path, "r") as f:
-                        env_lines = f.readlines()
-
-                    updated_lines = []
-                    updated = False
-
-                    for line in env_lines:
-                        if line.startswith("ONEDRIVE_REFRESH_TOKEN="):
-                            updated_lines.append(f"ONEDRIVE_REFRESH_TOKEN={new_refresh_token}\n")
-                            updated = True
-                        else:
-                            updated_lines.append(line)
-
-                    if not updated:
-                        updated_lines.append(f"ONEDRIVE_REFRESH_TOKEN={new_refresh_token}\n")
-
-                    with open(env_path, "w") as f:
-                        f.writelines(updated_lines)
-
-                    logger.info("Updated refresh token in .env file")
-
-            except Exception as e:
-                logger.warning(f"Failed to update refresh token in .env file: {e}")
+            update_env_file({"ONEDRIVE_REFRESH_TOKEN": new_refresh_token})
 
             # Persist the rotated refresh token to the database
             try:
@@ -246,75 +221,26 @@ async def save_onedrive_settings(
             user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "wizard"
         )
 
-        # Best-effort .env file write
-        try:
-            env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
-            if not os.path.exists(env_path):
-                logger.warning(f".env file not found at {env_path}, skipping file write")
-            else:
-                logger.info(f"Updating OneDrive settings in {env_path}")
+        # Build settings dictionary mapped to database/memory keys
+        onedrive_settings = {
+            "onedrive_refresh_token": refresh_token,
+            "onedrive_client_id": client_id,
+            "onedrive_client_secret": client_secret,
+            "onedrive_tenant_id": tenant_id,
+            "onedrive_folder_path": folder_path,
+        }
 
-                with open(env_path, "r") as f:
-                    env_lines = f.readlines()
+        # Filter out None values
+        onedrive_settings = {k: v for k, v in onedrive_settings.items() if v is not None}
 
-                onedrive_settings = {"ONEDRIVE_REFRESH_TOKEN": refresh_token}
-                if client_id:
-                    onedrive_settings["ONEDRIVE_CLIENT_ID"] = client_id
-                if client_secret:
-                    onedrive_settings["ONEDRIVE_CLIENT_SECRET"] = client_secret
-                if tenant_id:
-                    onedrive_settings["ONEDRIVE_TENANT_ID"] = tenant_id
-                if folder_path:
-                    onedrive_settings["ONEDRIVE_FOLDER_PATH"] = folder_path
+        # Best-effort .env file write using the new utility
+        env_settings = {k.upper(): v for k, v in onedrive_settings.items()}
+        update_env_file(env_settings)
 
-                updated = set()
-                new_env_lines = []
-                for line in env_lines:
-                    stripped_line = line.rstrip()
-                    is_updated = False
-                    for key, value in onedrive_settings.items():
-                        if stripped_line.startswith(f"{key}=") or stripped_line.startswith(f"# {key}="):
-                            new_env_lines.append(f"{key}={value}")
-                            updated.add(key)
-                            is_updated = True
-                            break
-                    if not is_updated:
-                        new_env_lines.append(stripped_line)
-
-                for key, value in onedrive_settings.items():
-                    if key not in updated:
-                        new_env_lines.append(f"{key}={value}")
-
-                with open(env_path, "w") as f:
-                    f.write("\n".join(new_env_lines) + "\n")
-
-                logger.info("Successfully updated OneDrive settings in .env file")
-        except Exception as env_err:
-            logger.warning(f"Failed to write .env file (non-fatal): {env_err}")
-
-        # Update the settings in memory
-        if refresh_token:
-            settings.onedrive_refresh_token = refresh_token
-        if client_id:
-            settings.onedrive_client_id = client_id
-        if client_secret:
-            settings.onedrive_client_secret = client_secret
-        if tenant_id:
-            settings.onedrive_tenant_id = tenant_id
-        if folder_path:
-            settings.onedrive_folder_path = folder_path
-
-        # Persist to database (primary)
-        if refresh_token:
-            save_setting_to_db(db, "onedrive_refresh_token", refresh_token, changed_by=changed_by)
-        if client_id:
-            save_setting_to_db(db, "onedrive_client_id", client_id, changed_by=changed_by)
-        if client_secret:
-            save_setting_to_db(db, "onedrive_client_secret", client_secret, changed_by=changed_by)
-        if tenant_id:
-            save_setting_to_db(db, "onedrive_tenant_id", tenant_id, changed_by=changed_by)
-        if folder_path:
-            save_setting_to_db(db, "onedrive_folder_path", folder_path, changed_by=changed_by)
+        # Update in-memory settings and persist to database dynamically
+        for key, value in onedrive_settings.items():
+            setattr(settings, key, value)
+            save_setting_to_db(db, key, value, changed_by=changed_by)
 
         notify_settings_updated()
 

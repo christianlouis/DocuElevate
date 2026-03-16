@@ -1,15 +1,17 @@
 /**
- * LoginScreen – entry point for unauthenticated users.
+ * LoginScreen – server URL entry and SSO sign-in.
  *
  * Renders a server URL input and a "Sign in with SSO" button that opens the
  * DocuElevate web login page in the system browser.  On success the
  * AuthContext stores the API token and navigates to the main app.
  */
 
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -22,6 +24,7 @@ import { useAuth } from "../context/AuthContext";
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
+  const router = useRouter();
   const [serverUrl, setServerUrl] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -53,7 +56,15 @@ export default function LoginScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={styles.card}>
-        <Text style={styles.logo}>DocuElevate</Text>
+        <View style={styles.logoContainer}>
+          <Image
+            source={require("../../assets/logo.png")}
+            style={styles.logoImage}
+            resizeMode="contain"
+            accessibilityLabel="DocuElevate logo"
+          />
+          <Text style={styles.logoText}>DocuElevate</Text>
+        </View>
         <Text style={styles.tagline}>Intelligent Document Processing</Text>
 
         <Text style={styles.label}>Server URL</Text>
@@ -88,6 +99,15 @@ export default function LoginScreen() {
         <Text style={styles.hint}>
           You will be redirected to your organisation's sign-in page.
         </Text>
+
+        <Pressable
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Back to welcome screen"
+          style={styles.backLink}
+        >
+          <Text style={styles.backLinkText}>← Back</Text>
+        </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
@@ -110,12 +130,20 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
-  logo: {
+  logoContainer: {
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  logoImage: {
+    width: 80,
+    height: 80,
+    marginBottom: 10,
+  },
+  logoText: {
     fontSize: 28,
     fontWeight: "700",
     color: "#1e40af",
     textAlign: "center",
-    marginBottom: 4,
   },
   tagline: {
     fontSize: 14,
@@ -161,5 +189,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#9ca3af",
     textAlign: "center",
+  },
+  backLink: {
+    marginTop: 20,
+    alignItems: "center",
+    minHeight: 44,
+    justifyContent: "center",
+  },
+  backLinkText: {
+    fontSize: 13,
+    color: "#6b7280",
   },
 });
