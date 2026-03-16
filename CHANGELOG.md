@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.151.0 (2026-03-16)
+
+### Features
+
+- **i18n**: Localize files view - replace all hardcoded strings with translation keys
+  ([`45c2cd7`](https://github.com/christianlouis/DocuElevate/commit/45c2cd7c6e7bef5f445479c32841d159e11c3359))
+
+- **i18n**: Localize remaining image zoom controls in files view
+  ([`afb168d`](https://github.com/christianlouis/DocuElevate/commit/afb168d3e890d4f226537a832a72260f42ffe258))
+
+
 ## v0.150.7 (2026-03-16)
 
 ### Bug Fixes
