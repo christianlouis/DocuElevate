@@ -179,7 +179,7 @@
         >
           <option value="">{{ _("profile.language_auto_detect") }}</option>
           {% for lang in supported_languages %}
-          <option value="{{ lang.code }}">{{ lang.flag }} {{ lang.native }} ({{ lang.name }})</option>
+          <option value="{{ lang.code }}">{{ lang.native }} ({{ lang.name }})</option>
           {% endfor %}
         </select>
         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -246,7 +246,7 @@
         >
           <option value="">{{ _("profile.default_document_language_auto") }}</option>
           {% for lang in supported_languages %}
-          <option value="{{ lang.code }}">{{ lang.flag }} {{ lang.native }} ({{ lang.name }})</option>
+          <option value="{{ lang.code }}">{{ lang.native }} ({{ lang.name }})</option>
           {% endfor %}
         </select>
         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
