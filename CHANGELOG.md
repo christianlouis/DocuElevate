@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.150.7 (2026-03-16)
+
+### Bug Fixes
+
+- Resolve conflicts in mobile app config
+  ([`89b3a6a`](https://github.com/christianlouis/DocuElevate/commit/89b3a6a3c05dfcd72c523db011e1b5a72f82aa74))
+
+### Chores
+
+- **i18n**: Auto-update translations via LLM
+  ([`3cd895d`](https://github.com/christianlouis/DocuElevate/commit/3cd895d57ce70cd160c3085d2c30481187f7e2f8))
+
+- **i18n**: Auto-update translations via LLM
+  ([`872ff6c`](https://github.com/christianlouis/DocuElevate/commit/872ff6c53b874e1ca04a3009b4933cfc06365401))
+
+
 ## v0.150.6 (2026-03-16)
 
 ### Bug Fixes
