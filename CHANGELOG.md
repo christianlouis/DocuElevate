@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Continuous Integration
+
+- **mobile**: Add path filter and auto-submit to Apple for EAS workflow
+  ([`bebeab3`](https://github.com/christianlouis/DocuElevate/commit/bebeab319139dc22e1ccaff5f284bbb80942138e))
+
+
 ## v0.150.1 (2026-03-16)
 
 ### Bug Fixes
