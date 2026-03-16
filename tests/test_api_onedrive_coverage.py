@@ -5,7 +5,7 @@ Focuses on uncovered lines: 98-99, 121-143, 160-161, 170-171,
 324-326, 400-402, 436-438.
 """
 
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 class TestTestTokenRefreshFailed:
     """Cover lines 98-99: token refresh returns non-200."""
 
-    @patch("app.api.onedrive.requests.post")
+    @patch("httpx.AsyncClient.post", new_callable=AsyncMock)
     def test_test_token_refresh_returns_non_200(self, mock_post, client: TestClient):
         """Test token refresh returning a failure status hits the error branch."""
         from app.config import settings
@@ -42,8 +42,8 @@ class TestTestTokenRefreshFailed:
 class TestTestTokenRotation:
     """Cover lines 121-143, 160-161: token rotation with .env and DB persist."""
 
-    @patch("app.api.onedrive.requests.get")
-    @patch("app.api.onedrive.requests.post")
+    @patch("httpx.AsyncClient.get", new_callable=AsyncMock)
+    @patch("httpx.AsyncClient.post", new_callable=AsyncMock)
     def test_token_rotation_env_file_exists(self, mock_post, mock_get, client: TestClient, tmp_path):
         """When a new refresh token is received and .env file exists, it should be updated."""
         from app.config import settings
@@ -90,8 +90,8 @@ class TestTestTokenRotation:
         data = response.json()
         assert data["status"] == "success"
 
-    @patch("app.api.onedrive.requests.get")
-    @patch("app.api.onedrive.requests.post")
+    @patch("httpx.AsyncClient.get", new_callable=AsyncMock)
+    @patch("httpx.AsyncClient.post", new_callable=AsyncMock)
     def test_token_rotation_env_not_existing(self, mock_post, mock_get, client: TestClient):
         """Token rotation when .env doesn't exist still succeeds."""
         from app.config import settings
@@ -130,8 +130,8 @@ class TestTestTokenRotation:
         assert response.status_code == 200
         assert response.json()["status"] == "success"
 
-    @patch("app.api.onedrive.requests.get")
-    @patch("app.api.onedrive.requests.post")
+    @patch("httpx.AsyncClient.get", new_callable=AsyncMock)
+    @patch("httpx.AsyncClient.post", new_callable=AsyncMock)
     def test_token_rotation_env_write_failure(self, mock_post, mock_get, client: TestClient):
         """Token rotation when .env write fails (lines 142-143) still continues."""
         from app.config import settings
@@ -171,8 +171,8 @@ class TestTestTokenRotation:
         assert response.status_code == 200
         assert response.json()["status"] == "success"
 
-    @patch("app.api.onedrive.requests.get")
-    @patch("app.api.onedrive.requests.post")
+    @patch("httpx.AsyncClient.get", new_callable=AsyncMock)
+    @patch("httpx.AsyncClient.post", new_callable=AsyncMock)
     def test_token_rotation_db_persist_failure(self, mock_post, mock_get, client: TestClient):
         """Token rotation when DB persist fails (lines 160-161) still continues."""
         from app.config import settings
@@ -211,8 +211,8 @@ class TestTestTokenRotation:
 class TestTestTokenUserInfoFailed:
     """Cover lines 170-171: user info request fails."""
 
-    @patch("app.api.onedrive.requests.get")
-    @patch("app.api.onedrive.requests.post")
+    @patch("httpx.AsyncClient.get", new_callable=AsyncMock)
+    @patch("httpx.AsyncClient.post", new_callable=AsyncMock)
     def test_user_info_returns_non_200(self, mock_post, mock_get, client: TestClient):
         """Test when user info request fails after successful token refresh."""
         from app.config import settings
@@ -247,8 +247,8 @@ class TestTestTokenUserInfoFailed:
 class TestTokenRotationEnvAppendLine:
     """Cover the branch at line 134 where token line is not found in .env and must be appended."""
 
-    @patch("app.api.onedrive.requests.get")
-    @patch("app.api.onedrive.requests.post")
+    @patch("httpx.AsyncClient.get", new_callable=AsyncMock)
+    @patch("httpx.AsyncClient.post", new_callable=AsyncMock)
     def test_token_rotation_appends_to_env(self, mock_post, mock_get, client: TestClient, tmp_path):
         """When .env exists but doesn't have ONEDRIVE_REFRESH_TOKEN, it should append."""
         from app.config import settings

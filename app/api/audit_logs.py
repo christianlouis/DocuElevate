@@ -20,14 +20,16 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-DbSession = Annotated[Session, Depends(get_db)]
+# Module-level dependency singleton to satisfy Ruff B008 while maintaining default values for manual calls (e.g. in decorators).
+_db_dep = Depends(get_db)
+DbSession = Annotated[Session, _db_dep]
 
 
 @router.get("/audit-logs")
 @require_login
 async def list_audit_logs(
     request: Request,
-    db: DbSession,
+    db: DbSession = _db_dep,
     action: Annotated[str | None, Query(description="Filter by action (exact match)")] = None,
     user: Annotated[str | None, Query(description="Filter by username")] = None,
     resource_type: Annotated[str | None, Query(description="Filter by resource type")] = None,
@@ -73,7 +75,7 @@ async def list_audit_logs(
 @require_login
 async def list_distinct_actions(
     request: Request,
-    db: DbSession,
+    db: DbSession = _db_dep,
 ) -> list[str]:
     """Return the distinct action values present in the audit log."""
     from app.models import AuditLog
@@ -86,7 +88,7 @@ async def list_distinct_actions(
 @require_login
 async def list_distinct_users(
     request: Request,
-    db: DbSession,
+    db: DbSession = _db_dep,
 ) -> list[str]:
     """Return the distinct user values present in the audit log."""
     from app.models import AuditLog

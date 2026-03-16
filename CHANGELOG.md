@@ -10,6 +10,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.148.0 (2026-03-16)
+
+### Documentation
+
+- Improve docstring and comment clarity in extract_metadata_from_file
+  ([`f2255f9`](https://github.com/christianlouis/DocuElevate/commit/f2255f9a1c28f138eae7836e9cf2df97f03b7b17))
+
+### Features
+
+- **tasks**: Extract and map embedded PDF metadata in upload_to_email
+  ([`9d6bfde`](https://github.com/christianlouis/DocuElevate/commit/9d6bfde2882fe74356bef8b64fb79bfa99870f56))
+
+
+## v0.147.3 (2026-03-16)
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`ca2d023`](https://github.com/christianlouis/DocuElevate/commit/ca2d023d8130000fb82482fb8fbe0d7e218c94fb))
+
+### Performance Improvements
+
+- **onedrive**: Use async httpx for token refresh
+  ([`8279795`](https://github.com/christianlouis/DocuElevate/commit/827979598eaeab765a1d24e6011deb26fc804b95))
+
+- **onedrive**: Use async httpx for token refresh
+  ([`2471921`](https://github.com/christianlouis/DocuElevate/commit/24719212042a65ed4a0d99776c6b3974ef97f0e8))
+
+- **onedrive**: Use async httpx for token refresh
+  ([`d1f64eb`](https://github.com/christianlouis/DocuElevate/commit/d1f64ebfba6bb353ea6f75e1535a42fd26a8fe0a))
+
+- **onedrive**: Use async httpx for token refresh
+  ([`7242f3c`](https://github.com/christianlouis/DocuElevate/commit/7242f3c168396aa5400fd46ad531ede93024b467))
+
+
+## v0.147.2 (2026-03-16)
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`46c4031`](https://github.com/christianlouis/DocuElevate/commit/46c403127641c1b5c729ff69ab5505efa5c9b54d))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`66fdb11`](https://github.com/christianlouis/DocuElevate/commit/66fdb11e39bc63f5a1d2b652649fd39d2a7e7469))
+
+- **changelog**: Update changelog [skip ci]
+  ([`0f31216`](https://github.com/christianlouis/DocuElevate/commit/0f312160bcb2e46e29c90dd055c4ebc9aaf01ad4))
+
+- **changelog**: Update changelog [skip ci]
+  ([`5734df2`](https://github.com/christianlouis/DocuElevate/commit/5734df2d5046158a23b987fdc4235d3f3f6b4042))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`46c4031`](https://github.com/christianlouis/DocuElevate/commit/46c403127641c1b5c729ff69ab5505efa5c9b54d))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`0f31216`](https://github.com/christianlouis/DocuElevate/commit/0f312160bcb2e46e29c90dd055c4ebc9aaf01ad4))
+
+- **changelog**: Update changelog [skip ci]
+  ([`5734df2`](https://github.com/christianlouis/DocuElevate/commit/5734df2d5046158a23b987fdc4235d3f3f6b4042))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`46c4031`](https://github.com/christianlouis/DocuElevate/commit/46c403127641c1b5c729ff69ab5505efa5c9b54d))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`5734df2`](https://github.com/christianlouis/DocuElevate/commit/5734df2d5046158a23b987fdc4235d3f3f6b4042))
+
+
 ## Unreleased
 
 
