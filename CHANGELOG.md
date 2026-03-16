@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`80a0ddc`](https://github.com/christianlouis/DocuElevate/commit/80a0ddcbfcd89c156d6cce65bb6275bdf35c061e))
+
+### Testing
+
+- Add 500 error test for saved search deletion
+  ([`ae9ed6e`](https://github.com/christianlouis/DocuElevate/commit/ae9ed6e9a703f8a80880d0b1cb421de3cf024cd3))
+
+
 ## v0.146.0 (2026-03-16)
 
 ### Code Style
