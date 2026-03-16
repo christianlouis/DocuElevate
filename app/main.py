@@ -36,6 +36,50 @@ from app.views import router as frontend_router
 # Explicitly include the files router
 from app.views.files import router as files_router
 
+# ---------------------------------------------------------------------------
+# Configure Python root logging level early so that *all* loggers (including
+# those already created via ``logging.getLogger(__name__)`` in other modules)
+# respect the configured level.
+#
+# Standard behaviour (matches Django, Flask, 12-factor conventions):
+#   • ``LOG_LEVEL`` env var takes precedence when explicitly set.
+#   • When ``DEBUG=True`` and ``LOG_LEVEL`` is **not** set, the effective
+#     level is automatically lowered to ``DEBUG``.
+#   • Default (neither flag set): ``INFO``.
+#
+# Noisy third-party loggers (httpx, httpcore, authlib, etc.) are pinned to
+# WARNING when the app-level is DEBUG to keep output useful.
+# ---------------------------------------------------------------------------
+_explicit_log_level = os.environ.get("LOG_LEVEL")
+if settings.debug and _explicit_log_level is None:
+    _effective_level = "DEBUG"
+else:
+    _effective_level = settings.log_level.upper()
+
+_effective_level_int = getattr(logging, _effective_level, logging.INFO)
+
+logging.basicConfig(
+    level=_effective_level_int,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    force=True,
+)
+
+# Keep noisy third-party loggers quiet at DEBUG level
+if _effective_level_int <= logging.DEBUG:
+    for _noisy in (
+        "httpx",
+        "httpcore",
+        "authlib",
+        "urllib3",
+        "hpack",
+        "multipart",
+        "watchfiles",
+    ):
+        logging.getLogger(_noisy).setLevel(logging.WARNING)
+
+logging.getLogger(__name__).info("Root logging level set to %s (debug=%s)", _effective_level, settings.debug)
+
 # Load configuration from .env for the session key
 config = Config(".env")
 # Use settings.session_secret which has proper validation

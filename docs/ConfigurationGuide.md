@@ -457,6 +457,34 @@ default overage buffer applied across all plans.
 
 DocuElevate supports HTTP security headers to improve browser-side security. **These headers are disabled by default** since most deployments use a reverse proxy (Traefik, Nginx, etc.) that already adds them. Enable only if deploying directly without a reverse proxy. See [Deployment Guide - Security Headers](DeploymentGuide.md#security-headers) for detailed configuration examples.
 
+### Application Logging
+
+DocuElevate uses Python's standard `logging` module. Two environment variables control log verbosity:
+
+| **Variable** | **Description** | **Default** |
+|-------------|----------------|-------------|
+| `LOG_LEVEL` | Root logger level. Accepts standard Python level names: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. | `INFO` |
+| `DEBUG` | Enable debug mode. When `true` **and** `LOG_LEVEL` is **not** explicitly set, the effective log level is automatically lowered to `DEBUG`. | `false` |
+
+**Precedence rules (standard behaviour):**
+
+1. If `LOG_LEVEL` is explicitly set, it always wins — regardless of `DEBUG`.
+2. If only `DEBUG=true` is set (no `LOG_LEVEL`), the effective level becomes `DEBUG`.
+3. If neither is set, the default level is `INFO`.
+
+```bash
+# Typical production (default)
+# LOG_LEVEL=INFO
+
+# Quick debug mode — sets level to DEBUG automatically
+DEBUG=true
+
+# Explicit level override (DEBUG flag is ignored for level selection)
+LOG_LEVEL=WARNING
+```
+
+> **Tip:** At `DEBUG` level, noisy third-party libraries (httpx, authlib, urllib3, etc.) are automatically pinned to `WARNING` so that application debug output remains readable.
+
 ### Audit Logging
 
 DocuElevate provides comprehensive audit logging that records significant actions (logins, document CRUD, settings changes) to an append-only database table. Every entry captures the timestamp, user, action, resource, client IP, and optional JSON details.

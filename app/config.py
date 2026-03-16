@@ -48,6 +48,20 @@ class Settings(BaseSettings):
     workdir: str
     debug: bool = False  # Default to False
 
+    # Logging level for the application.  Accepts standard Python level names:
+    # DEBUG, INFO, WARNING, ERROR, CRITICAL.  When *debug* is True and
+    # *log_level* has not been explicitly set, the effective level is forced to
+    # DEBUG so that all ``logger.debug()`` calls produce output.
+    log_level: str = Field(
+        default="INFO",
+        description=(
+            "Python logging level for the application root logger.  "
+            "Accepts: DEBUG, INFO, WARNING, ERROR, CRITICAL.  "
+            "When DEBUG=True and LOG_LEVEL is not explicitly set, "
+            "the effective level is automatically lowered to DEBUG."
+        ),
+    )
+
     # Making Dropbox optional
     dropbox_enabled: bool = Field(
         default=True,
