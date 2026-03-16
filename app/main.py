@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
+import json as _json_mod
 import logging
 import os
 import pathlib
 from contextlib import asynccontextmanager
+from datetime import datetime as _dt
+from datetime import timezone as _tz
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,6 +38,114 @@ from app.views import router as frontend_router
 
 # Explicitly include the files router
 from app.views.files import router as files_router
+
+# ---------------------------------------------------------------------------
+# Configure Python root logging level early so that *all* loggers (including
+# those already created via ``logging.getLogger(__name__)`` in other modules)
+# respect the configured level.
+#
+# Standard behaviour (matches Django, Flask, 12-factor conventions):
+#   • ``LOG_LEVEL`` env var takes precedence when explicitly set.
+#   • When ``DEBUG=True`` and ``LOG_LEVEL`` is **not** set, the effective
+#     level is automatically lowered to ``DEBUG``.
+#   • Default (neither flag set): ``INFO``.
+#
+# ``LOG_FORMAT=json`` enables structured JSON lines on stdout, suitable for
+# Promtail, Fluentd, Filebeat, Datadog, Splunk UF, or any log collector.
+#
+# ``LOG_SYSLOG_ENABLED=true`` adds a Python SysLogHandler so that every log
+# message is also forwarded to the configured syslog receiver — useful for
+# traditional (non-container) deployments and centralised SIEM ingestion.
+#
+# Noisy third-party loggers (httpx, httpcore, authlib, etc.) are pinned to
+# WARNING when the app-level is DEBUG to keep output useful.
+# ---------------------------------------------------------------------------
+_explicit_log_level = os.environ.get("LOG_LEVEL")
+if settings.debug and _explicit_log_level is None:
+    _effective_level = "DEBUG"
+else:
+    _effective_level = settings.log_level.upper()
+
+_effective_level_int = getattr(logging, _effective_level, logging.INFO)
+
+
+class _JsonFormatter(logging.Formatter):
+    """Emit one JSON object per log line for machine consumption.
+
+    Fields emitted: ``timestamp``, ``level``, ``logger``, ``message``,
+    ``module``, ``funcName``, ``lineno``, and — when present — ``exc_info``.
+    Compatible with Grafana Loki, Splunk, ELK, Datadog, and most SIEM tools.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        log_entry: dict = {
+            "timestamp": _dt.fromtimestamp(record.created, tz=_tz.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+            "module": record.module,
+            "funcName": record.funcName,
+            "lineno": record.lineno,
+        }
+        if record.exc_info and record.exc_info[1] is not None:
+            log_entry["exc_info"] = self.formatException(record.exc_info)
+        return _json_mod.dumps(log_entry, default=str)
+
+
+# Choose formatter based on LOG_FORMAT setting
+if settings.log_format.lower() == "json":
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(_JsonFormatter())
+    logging.root.handlers = [_handler]
+    logging.root.setLevel(_effective_level_int)
+else:
+    logging.basicConfig(
+        level=_effective_level_int,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        force=True,
+    )
+
+# Optional: forward application logs to a syslog receiver
+if settings.log_syslog_enabled:
+    import logging.handlers as _lh
+    import socket as _socket
+
+    _proto = settings.log_syslog_protocol.lower()
+    _socktype = _socket.SOCK_STREAM if _proto == "tcp" else _socket.SOCK_DGRAM
+    _syslog_handler = _lh.SysLogHandler(
+        address=(settings.log_syslog_host, settings.log_syslog_port),
+        socktype=_socktype,
+    )
+    _syslog_handler.setLevel(_effective_level_int)
+    # Use the same formatter as stdout (text or JSON)
+    if settings.log_format.lower() == "json":
+        _syslog_handler.setFormatter(_JsonFormatter())
+    else:
+        _syslog_handler.setFormatter(logging.Formatter("%(name)s - %(levelname)s - %(message)s"))
+    logging.root.addHandler(_syslog_handler)
+
+# Keep noisy third-party loggers quiet at DEBUG level
+if _effective_level_int <= logging.DEBUG:
+    for _noisy in (
+        "httpx",
+        "httpcore",
+        "authlib",
+        "urllib3",
+        "hpack",
+        "multipart",
+        "watchfiles",
+    ):
+        logging.getLogger(_noisy).setLevel(logging.WARNING)
+
+_startup_logger = logging.getLogger(__name__)
+_startup_logger.info(
+    "Root logging level set to %s (debug=%s, format=%s, syslog=%s)",
+    _effective_level,
+    settings.debug,
+    settings.log_format,
+    settings.log_syslog_enabled,
+)
 
 # Load configuration from .env for the session key
 config = Config(".env")
