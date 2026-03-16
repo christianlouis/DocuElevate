@@ -32,7 +32,7 @@ _MAX_TRANSLATION_INPUT = 50_000
 def _get_file_or_404(db: Session, file_id: int, request: Request) -> FileRecord:
     """Fetch a FileRecord visible to the current user or raise 404."""
     query = db.query(FileRecord).filter(FileRecord.id == file_id)
-    owner_id = get_current_owner_id(request, db)
+    owner_id = get_current_owner_id(request)
     if owner_id:
         query = apply_owner_filter(query, owner_id, FileRecord)
     record = query.first()
