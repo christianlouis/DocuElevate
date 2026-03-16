@@ -168,7 +168,7 @@ async def create_checkout_session(
     checkout_session = client.checkout.sessions.create(params=session_params)
 
     logger.info(
-        "Created Stripe checkout session %s for user plan %s",
+        "Created Stripe checkout session %s for plan %s",
         checkout_session.id,
         body.plan_id,
     )
