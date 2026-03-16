@@ -10,6 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.149.1 (2026-03-16)
+
+### Bug Fixes
+
+- **auth**: Address review comments - improve debug logging, use SimpleNamespace, fix session
+  cleanup
+  ([`9a25674`](https://github.com/christianlouis/DocuElevate/commit/9a256741d5a0fe3e9c52860a8f5ea9e1b30408d3))
+
+- **auth**: Resolve Bearer token in get_current_owner_id for mobile API auth
+  ([`15a9ed9`](https://github.com/christianlouis/DocuElevate/commit/15a9ed94357f72c59010d7773321cfb361bbf278))
+
+- **security**: Clarify billing log message wording
+  ([`7bd667e`](https://github.com/christianlouis/DocuElevate/commit/7bd667e271050db4d2e8db1935e51902268fbc08))
+
+- **security**: Remove clear-text logging of sensitive data and fix Annotated+Depends pattern
+  ([`b7a3b30`](https://github.com/christianlouis/DocuElevate/commit/b7a3b301a3883e90050d5b15f49f4d2bd69390fc))
+
+- **test**: Update url_upload test mocks from requests to httpx
+  ([`0444b14`](https://github.com/christianlouis/DocuElevate/commit/0444b14d874c6307e050a348232d8476cfdc774e))
+
+
 ## v0.149.0 (2026-03-16)
 
 ### Bug Fixes
