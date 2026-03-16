@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 _LOGO_FILENAME = "logo.png"
 
 # Mapping from PDF metadata keys (with leading slash stripped) to application-specific names.
-# This mirrors the inverse of the mapping used in embed_metadata_into_pdf.py.
+# This mirrors the inverse of the mapping used in app/tasks/embed_metadata_into_pdf.py.
 _PDF_METADATA_KEY_MAP = {
     "Title": "filename",
     "Author": "absender",
@@ -78,7 +78,7 @@ def extract_metadata_from_file(file_path):
     JSON metadata takes precedence; embedded PDF metadata fills in any missing
     fields using the application's standard key mapping (e.g., /Title → filename).
 
-    Returns a dictionary of metadata or empty dict if not found.
+    Returns a dictionary of metadata (may be empty if none found).
     """
     metadata = {}
 
