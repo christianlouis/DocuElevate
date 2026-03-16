@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.149.2 (2026-03-16)
+
+### Bug Fixes
+
+- **ui**: Replace emoji flags with cross-platform flag-icons CSS library
+  ([`4619e6b`](https://github.com/christianlouis/DocuElevate/commit/4619e6b8a67ab4976ce4adf4a4b63e4475a32a78))
+
+
 ## v0.149.1 (2026-03-16)
 
 ### Bug Fixes
