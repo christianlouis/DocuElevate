@@ -121,6 +121,32 @@ class TestExtractMetadataFromFile:
 
         assert result == {}
 
+    def test_extract_metadata_from_pdf(self, tmp_path):
+        """Test extracting metadata from a PDF file using pypdf when JSON is missing."""
+        import pypdf
+
+        file_path = tmp_path / "test.pdf"
+
+        # Create a test PDF with metadata
+        writer = pypdf.PdfWriter()
+        writer.add_blank_page(width=100, height=100)
+        writer.add_metadata({
+            "/Title": "Test Title",
+            "/Author": "Test Author",
+            "/Subject": "Test Document",
+            "/Keywords": "test, metadata, pypdf"
+        })
+        with open(file_path, "wb") as f:
+            writer.write(f)
+
+        result = extract_metadata_from_file(str(file_path))
+
+        # Check that the leading slash is stripped and keys/values match
+        assert result.get("Title") == "Test Title"
+        assert result.get("Author") == "Test Author"
+        assert result.get("Subject") == "Test Document"
+        assert result.get("Keywords") == "test, metadata, pypdf"
+
 
 @pytest.mark.unit
 class TestAttachLogo:
