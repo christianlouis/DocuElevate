@@ -120,7 +120,7 @@ class TestExtractMetadataFromFile:
             "/Title": "Embedded Invoice",
             "/Author": "ACME Corp",
             "/Subject": "receipt",
-            "/Keywords": "tax, 2024, verified"
+            "/Keywords": "tax, 2024, verified",
         }
         mock_instance = mock_pdf_reader.return_value
         mock_instance.metadata = mock_pdf_info
@@ -139,10 +139,7 @@ class TestExtractMetadataFromFile:
         file_path.write_bytes(b"%PDF-1.4\n")
 
         # Create JSON metadata
-        json_metadata = {
-            "filename": "JSON Invoice",
-            "document_type": "invoice"
-        }
+        json_metadata = {"filename": "JSON Invoice", "document_type": "invoice"}
         json_path = tmp_path / "test_combined.json"
         json_path.write_text(json.dumps(json_metadata))
 
@@ -151,7 +148,7 @@ class TestExtractMetadataFromFile:
             "/Title": "Embedded Invoice",
             "/Author": "ACME Corp",
             "/Subject": "receipt",
-            "/Keywords": "tax, verified"
+            "/Keywords": "tax, verified",
         }
         mock_instance = mock_pdf_reader.return_value
         mock_instance.metadata = mock_pdf_info
