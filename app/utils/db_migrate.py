@@ -85,7 +85,7 @@ def preview_migration(source_url: str) -> dict[str, Any]:
         total = 0
         with src_engine.connect() as conn:
             for table_name in tables:
-                if not re.match(r'^[a-zA-Z0-9_]+$', table_name):
+                if not re.match(r"^[a-zA-Z0-9_]+$", table_name):
                     logger.warning(f"Skipping table with invalid name format: {table_name}")
                     continue
                 # table_name is safe — sourced from inspect().get_table_names(), not user input
