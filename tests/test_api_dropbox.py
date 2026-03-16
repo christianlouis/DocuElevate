@@ -7,7 +7,6 @@ Covers Dropbox OAuth endpoints, settings management, and token testing.
 from unittest.mock import Mock, patch
 
 import pytest
-import requests
 
 
 @pytest.mark.unit
@@ -137,7 +136,7 @@ class TestTestDropboxToken:
         assert data["status"] == "error"
         assert "not fully configured" in data["message"]
 
-    @patch("app.api.dropbox.requests.post")
+    @patch("app.api.dropbox.httpx.AsyncClient.post")
     @patch("app.api.dropbox.settings")
     def test_valid_token(self, mock_settings, mock_post, client):
         """Test successful token validation."""
@@ -162,7 +161,7 @@ class TestTestDropboxToken:
         assert data["account"] == "user@example.com"
         assert data["account_name"] == "Test User"
 
-    @patch("app.api.dropbox.requests.post")
+    @patch("app.api.dropbox.httpx.AsyncClient.post")
     @patch("app.api.dropbox.settings")
     def test_expired_token_refreshed(self, mock_settings, mock_post, client):
         """Test that expired token triggers refresh and retry."""
@@ -194,7 +193,7 @@ class TestTestDropboxToken:
         data = response.json()
         assert data["status"] == "success"
 
-    @patch("app.api.dropbox.requests.post")
+    @patch("app.api.dropbox.httpx.AsyncClient.post")
     @patch("app.api.dropbox.settings")
     def test_refresh_token_expired(self, mock_settings, mock_post, client):
         """Test handling when refresh token itself is expired."""
@@ -220,7 +219,7 @@ class TestTestDropboxToken:
         assert data["status"] == "error"
         assert data["needs_reauth"] is True
 
-    @patch("app.api.dropbox.requests.post")
+    @patch("app.api.dropbox.httpx.AsyncClient.post")
     @patch("app.api.dropbox.settings")
     def test_token_validation_failure(self, mock_settings, mock_post, client):
         """Test handling non-401, non-200 response."""
@@ -240,16 +239,21 @@ class TestTestDropboxToken:
         data = response.json()
         assert data["status"] == "error"
 
-    @patch("app.api.dropbox.requests.post")
+    @patch("app.api.dropbox.httpx.AsyncClient.post")
     @patch("app.api.dropbox.settings")
     def test_connection_error(self, mock_settings, mock_post, client):
         """Test handling of connection exceptions."""
+        import httpx
+
         mock_settings.dropbox_refresh_token = "token"
         mock_settings.dropbox_app_key = "app-key"
         mock_settings.dropbox_app_secret = "app-secret"
         mock_settings.http_request_timeout = 30
 
-        mock_post.side_effect = requests.exceptions.ConnectionError("Connection refused")
+        mock_post.side_effect = httpx.RequestError(
+            "Connection refused",
+            request=httpx.Request("POST", "https://api.dropboxapi.com/2/users/get_current_account"),
+        )
 
         response = client.get("/api/dropbox/test-token")
 

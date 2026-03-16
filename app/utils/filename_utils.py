@@ -8,6 +8,11 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# Pattern for valid filenames (alphanumeric, dash, underscore, period, and space)
+# Used for validating GPT-provided filenames and other inputs
+VALID_FILENAME_PATTERN = r"^[\w\-\. ]+$"
+VALID_FILENAME_RE = re.compile(VALID_FILENAME_PATTERN)
+
 
 def get_unique_filename(original_path: str, check_exists_func: Callable[[str], bool] | None = None) -> str:
     """

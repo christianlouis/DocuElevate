@@ -1,28 +1,48 @@
 {
   "cli": {
-    "version": ">= 5.9.0"
+    "version": ">= 5.9.0",
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "node": "20.19.4",
+      "env": {
+        "NODE_NO_WARNINGS": "1"
+      },
+      "ios": {
+        "image": "macos-sequoia-15.5-xcode-26.0"
+      }
     },
     "preview": {
       "distribution": "internal",
+      "node": "20.19.4",
+      "env": {
+        "NODE_NO_WARNINGS": "1"
+      },
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "image": "macos-sequoia-15.5-xcode-26.0"
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "node": "20.19.4",
+      "env": {
+        "NODE_NO_WARNINGS": "1"
+      },
+      "ios": {
+        "image": "macos-sequoia-15.5-xcode-26.0"
+      }
     }
   },
   "submit": {
     "production": {
       "ios": {
-        "appleId": "YOUR_APPLE_ID",
-        "ascAppId": "YOUR_APP_STORE_CONNECT_APP_ID",
-        "appleTeamId": "YOUR_APPLE_TEAM_ID"
+        "appleId": "christianlouis@gmail.com",
+        "ascAppId": "6760611200",
+        "appleTeamId": "975U2ZESBM"
       },
       "android": {
         "serviceAccountKeyPath": "./google-play-service-account.json",

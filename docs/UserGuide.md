@@ -63,6 +63,15 @@ DocuElevate features a simple navigation system with the following main sections
 - **Search**: Dedicated full-text search across all document content
 - **About**: Information about DocuElevate
 
+### Other Ways to Use DocuElevate
+
+Beyond the web interface, DocuElevate is available through several additional clients:
+
+- **Mobile App (iOS & Android)** — Capture documents with your phone camera or upload from your photo library. See the [Mobile App Guide](MobileApp.md) for setup and usage.
+- **Browser Extension** — Clip web pages or send files to DocuElevate directly from Chrome, Firefox, or Edge. See the [Browser Extension Guide](BrowserExtension.md) for installation.
+- **CLI Tool** — Upload, download, search, and manage documents from the command line or scripts. See the [CLI Guide](CLIGuide.md) for details.
+- **REST & GraphQL API** — Full programmatic access for automation and integrations. See the [API Documentation](API.md).
+
 ## Uploading Documents
 
 DocuElevate provides multiple convenient ways to upload documents to the system.

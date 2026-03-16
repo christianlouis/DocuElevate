@@ -11,6 +11,7 @@ from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+import pypdf
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.celery_app import celery
@@ -80,8 +81,22 @@ def extract_metadata_from_file(file_path):
         except Exception as e:
             logger.warning(f"Failed to load metadata from JSON file: {str(e)}")
 
-    # TODO: For PDF files, try to extract embedded metadata using PyPDF2
-    # This would require additional dependencies, so for now we'll just check for external JSON
+    # Try to extract embedded metadata from PDF
+    if file_path.lower().endswith(".pdf") and os.path.exists(file_path):
+        try:
+            with open(file_path, "rb") as f:
+                pdf_reader = pypdf.PdfReader(f)
+                pdf_metadata = pdf_reader.metadata
+                if pdf_metadata:
+                    # Convert metadata to a standard dictionary
+                    for key, value in pdf_metadata.items():
+                        # Remove the leading slash from PDF metadata keys (e.g., '/Title' -> 'Title')
+                        clean_key = key[1:] if key.startswith("/") else key
+                        metadata[clean_key] = str(value)
+
+                    logger.info(f"Extracted embedded metadata from PDF: {file_path}")
+        except Exception as e:
+            logger.warning(f"Failed to extract metadata from PDF {file_path}: {str(e)}")
 
     return metadata
 

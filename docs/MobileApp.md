@@ -20,7 +20,7 @@ DocuElevate includes a native mobile application for iOS and Android built with 
 
 ### Prerequisites
 
-- Node.js 18 or later
+- Node.js 20.19.4 or later (use [nvm](https://github.com/nvm-sh/nvm): `nvm install` inside `mobile/` reads `.nvmrc` automatically)
 - [Expo CLI](https://docs.expo.dev/get-started/installation/): `npm install -g @expo/cli`
 - [Expo Go](https://expo.dev/client) app on your iOS or Android device (for development)
 - A running DocuElevate server reachable from your device
@@ -53,6 +53,8 @@ eas build --platform ios
 eas build --platform android
 ```
 
+> **Note:** The mobile app uses `expo-build-properties` with `buildReactNativeFromSource: true` for iOS builds. This is required for Expo SDK 54 (React Native 0.81) compatibility — some native modules still use legacy bridge APIs (`RCTBridge`, `RCTViewManager`, etc.) that are no longer included in the default precompiled XCFrameworks. Building React Native from source makes these headers available, at the cost of slightly longer iOS build times.
+
 See the [EAS Build documentation](https://docs.expo.dev/build/introduction/) for full setup instructions.
 
 ## Authentication
@@ -62,11 +64,25 @@ See the [EAS Build documentation](https://docs.expo.dev/build/introduction/) for
 The mobile app uses the server's existing OAuth2/SSO setup:
 
 1. User enters the DocuElevate server URL on the login screen.
-2. The app opens `<server>/login?mobile=1&redirect_uri=docuelevate://callback` in the **system browser** (Safari / Chrome).
-3. The user authenticates via SSO or local credentials.
-4. The server redirects back to `docuelevate://callback`.
-5. The app calls `POST /api/mobile/generate-token` to exchange the session for a **long-lived API token**.
-6. The token is stored securely in the device's keychain (`expo-secure-store`).
+2. The app opens `<server>/login?mobile=1&redirect_uri=docuelevate://callback` in the **system browser** (Safari / Chrome Custom Tabs).
+3. The server stores `docuelevate://callback` in the browser session and presents the login page.
+4. The user authenticates via SSO or local credentials.
+5. After successful authentication the server mints a long-lived API token and redirects the browser to `docuelevate://callback?token=<token>`.
+6. `WebBrowser.openAuthSessionAsync` intercepts the `docuelevate://` deep link and returns the URL to the app.
+7. The app extracts the token from the URL and stores it securely in the device's keychain (`expo-secure-store`).
+
+> **Security note:** The `redirect_uri` is validated server-side; only URIs with the `docuelevate://` custom scheme (production) or the `exp://` scheme (Expo Go development) are accepted, preventing open-redirect attacks.
+
+### Testing in Expo Go
+
+When developing with **Expo Go** the app does not have the `docuelevate://` custom URL scheme registered.  The auth flow adapts automatically:
+
+1. `Linking.createURL('callback')` returns an `exp://` URI pointing at the local dev server (e.g. `exp://192.168.1.5:8081/--/callback`).
+2. This URI is sent to the server as `redirect_uri`; the server accepts it alongside the production `docuelevate://` scheme.
+3. After successful authentication the server redirects back to the `exp://` URI.
+4. `WebBrowser.openAuthSessionAsync` intercepts the deep link and the Expo Go app receives the token.
+
+No extra configuration is needed — just run `npx expo start` and scan the QR code with the **Expo Go** app.
 
 ### Auto-generated Mobile Token
 
@@ -225,6 +241,43 @@ mobile/
 ```
 
 ## Troubleshooting
+
+### "Session expired Local session" during iOS build
+
+EAS stores an Apple ID session locally (in `~/.expo/`) to manage code-signing certificates and provisioning profiles.  This session expires after a few weeks.
+
+**To fix:**
+
+1. **Refresh the session** by running `eas credentials` and re-authenticating with your Apple ID.
+2. **Recommended for automation:** Replace the Apple ID session with an [App Store Connect API Key](https://docs.expo.dev/app-signing/app-credentials/#app-store-connect-api-key).  API keys do not expire and work fully non-interactively:
+   - Create a key at [appstoreconnect.apple.com → Users → Integrations → Keys](https://appstoreconnect.apple.com/access/integrations/api)
+   - Download the `.p8` file and note the **Key ID** and **Issuer ID**
+   - Run `eas credentials` → iOS → *Add an App Store Connect API key*
+   - Upload the `.p8` file when prompted
+
+Once an API key is configured in EAS, automated builds (including CI and EAS Cloud Workflows) will no longer prompt for a password.
+
+### Node.js deprecation warning `[DEP0169]` during EAS build
+
+```
+(node:XXXXX) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized…
+```
+
+This warning is emitted by **EAS CLI** (an external tool) when it runs on **Node.js 22 or later**, which deprecates `url.parse()`.  It does not indicate a problem in the DocuElevate mobile app itself and will not cause a build failure on its own.
+
+The `eas.json` build profiles already include `"NODE_NO_WARNINGS": "1"` in their `env` sections to suppress this warning during EAS Cloud builds.  For local builds with a system Node.js ≥ 22, suppress it by running:
+
+```bash
+NODE_NO_WARNINGS=1 eas build --platform ios
+```
+
+or by activating the project's pinned Node.js version first:
+
+```bash
+cd mobile
+nvm use   # reads .nvmrc → Node 20.19.4 (no deprecation warning)
+eas build --platform ios
+```
 
 ### "Authentication was cancelled or failed"
 

@@ -830,3 +830,58 @@ class TestUserNotificationService:
 
         result = _send_email_notification({"smtp_host": "smtp.example.com"}, "Title", "Body")
         assert result is False
+
+
+class TestBenchmark:
+    @pytest.mark.unit
+    def test_update_preferences_benchmark(self, notif_engine, notif_session):
+        import statistics
+        import time
+
+        from app.main import app
+
+        target = UserNotificationTarget(
+            owner_id=_OWNER,
+            channel_type="webhook",
+            name="My Webhook",
+            config=json.dumps({"url": "https://x.com"}),
+        )
+        notif_session.add(target)
+        notif_session.commit()
+        notif_session.refresh(target)
+
+        client = _make_client(notif_engine, _OWNER)
+        try:
+            items_count = 100
+            preferences = []
+            for i in range(items_count):
+                preferences.append(
+                    {
+                        "event_type": f"event.type.{i}",
+                        "channel_type": "webhook",
+                        "is_enabled": True,
+                        "target_id": target.id,
+                    }
+                )
+
+            payload = {"preferences": preferences}
+
+            # Warm up
+            client.put("/api/user-notifications/preferences", json=payload)
+
+            times = []
+            for _ in range(5):
+                # Alter the values a bit so it's a real update
+                for p in payload["preferences"]:
+                    p["is_enabled"] = not p["is_enabled"]
+
+                start = time.time()
+                resp = client.put("/api/user-notifications/preferences", json=payload)
+                end = time.time()
+
+                assert resp.status_code == 200
+                times.append(end - start)
+
+            print(f"\nAverage time: {statistics.mean(times):.4f}s")
+        finally:
+            _cleanup(app)

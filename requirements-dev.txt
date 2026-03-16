@@ -23,6 +23,7 @@ djlint>=1.36.0  # HTML template linter for accessibility and best practices
 mkdocs-material>=9.5.0  # MkDocs Material theme – same package used in docs/requirements.txt
 
 # Type stubs for mypy
+types-aiofiles>=24.1.0
 types-requests>=2.31.0
 types-paramiko>=3.0.0
 
@@ -37,3 +38,4 @@ pip-licenses==5.5.1  # For license compliance checking
 
 # Release automation
 python-semantic-release>=9.0.0
+types-aiofiles>=24.1.0.20240311  # Type stubs for aiofiles

@@ -196,11 +196,20 @@ def seed_plans(db: DbSession, _admin: AdminUser) -> dict[str, Any]:
 def reorder_plans(body: ReorderBody, db: DbSession, _admin: AdminUser) -> dict[str, Any]:
     """Update sort_order for each plan_id in *body.order* (position = index in list)."""
     updated = 0
-    for sort_order, plan_id in enumerate(body.order):
-        plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.plan_id == plan_id).first()
+
+    # Fetch all requested plans in a single query to avoid N+1
+    plan_ids = body.order
+    plans = db.query(SubscriptionPlan).filter(SubscriptionPlan.plan_id.in_(plan_ids)).all()
+
+    # Build a map for fast O(1) lookup
+    plan_map = {p.plan_id: p for p in plans}
+
+    for sort_order, plan_id in enumerate(plan_ids):
+        plan = plan_map.get(plan_id)
         if plan:
             plan.sort_order = sort_order
             updated += 1
+
     try:
         db.commit()
     except Exception:
