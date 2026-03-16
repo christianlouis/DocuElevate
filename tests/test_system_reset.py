@@ -257,14 +257,19 @@ class TestSystemResetApi:
 
     def test_full_reset_requires_feature_flag(self, client):
         """Returns 404 when ENABLE_FACTORY_RESET is false."""
-        with patch("app.api.system_reset._require_admin", return_value={"is_admin": True}):
+        from app.api.system_reset import _require_admin
+
+        client.app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        try:
             with patch("app.api.system_reset.settings") as mock_s:
                 mock_s.enable_factory_reset = False
                 response = client.post(
                     "/api/admin/system-reset/full",
                     json={"confirmation": "DELETE"},
                 )
-        assert response.status_code in (403, 404)
+        finally:
+            client.app.dependency_overrides.pop(_require_admin, None)
+        assert response.status_code == 404
 
     def test_full_reset_requires_confirmation(self, client):
         """Wrong confirmation string gets 400."""
@@ -369,25 +374,20 @@ class TestSystemResetView:
     """Tests for the /admin/system-reset view."""
 
     def test_view_redirects_when_disabled(self, client):
-        """When ENABLE_FACTORY_RESET=False, redirects to /settings."""
-        # Simulate admin session
+        """When ENABLE_FACTORY_RESET=False, accessing the page redirects away."""
         with client:
             client.cookies.set("session", "test")
             with patch("app.views.system_reset.settings") as mock_s:
                 mock_s.enable_factory_reset = False
-                # Session admin mock
                 response = client.get("/admin/system-reset", follow_redirects=False)
-        # Should redirect (302) or require login
-        assert response.status_code in (302, 307, 200)
+        # Redirect to /settings (302) when disabled, or to login (302/307) when unauthenticated
+        assert response.status_code in (302, 307)
 
-    def test_view_renders_when_enabled(self, client):
-        """When enabled and admin, renders the reset page."""
-        # Set session cookie with admin user
+    def test_view_requires_auth(self, client):
+        """Unauthenticated users are redirected away from the page."""
         with patch("app.views.system_reset.settings") as mock_s:
             mock_s.enable_factory_reset = True
             mock_s.factory_reset_on_startup = False
-            # Force session
-            response = client.get("/admin/system-reset")
-
-        # Will get redirect to login if not authenticated, which is expected
-        assert response.status_code in (200, 302, 307)
+            response = client.get("/admin/system-reset", follow_redirects=False)
+        # Should redirect to login since there's no active session
+        assert response.status_code in (302, 307)

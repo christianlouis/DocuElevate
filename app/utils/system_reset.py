@@ -168,7 +168,7 @@ def _wipe_database(db: Session) -> dict[str, int]:
             result[table_name] = count
             logger.info("Wiped %d rows from %s", count, table_name)
         except Exception:
-            logger.exception("Failed to wipe table %s", table_name)
+            logger.exception("Failed to wipe table %s during system reset", table_name)
             db.rollback()
             raise
 
@@ -220,6 +220,12 @@ def perform_reset_and_reimport(db: Session) -> dict:
     if original_dir.is_dir():
         for entry in original_dir.iterdir():
             if entry.is_file():
+                # Validate the resolved path stays within original_dir (path traversal guard)
+                try:
+                    entry.resolve().relative_to(original_dir.resolve())
+                except ValueError:
+                    logger.warning("Skipping file outside original dir: %s", entry)
+                    continue
                 dest = reimport_dir / entry.name
                 # Avoid overwriting: append counter if name clash
                 if dest.exists():
