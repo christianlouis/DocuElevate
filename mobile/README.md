@@ -88,6 +88,15 @@ An EAS Cloud Workflow (`mobile/.eas/workflows/create-builds.yml`) runs automatic
 
 > An [App Store Connect API Key](https://docs.expo.dev/app-signing/app-credentials/#app-store-connect-api-key) must be configured in EAS (`eas credentials`) for non-interactive submission.
 
+### Version management
+
+Build numbers (`ios.buildNumber` / `android.versionCode`) are managed **remotely** by EAS — see `eas.json`:
+
+- `"appVersionSource": "remote"` — EAS tracks the current build number on its servers, so each CI build automatically receives a unique, incrementing number without committing changes back to the repo.
+- `"autoIncrement": true` (production profile) — EAS bumps the build number before every production build.
+
+The values in `app.json` are used as the **initial seed** when the remote version is first created; after that they are informational only. Use `eas build:version:get` / `eas build:version:set` to inspect or override the remote version.
+
 ## Configuration
 
 No code changes are needed to point the app at a different server.  The server URL is entered by the user on the login screen and stored in the device's secure store.
