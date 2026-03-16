@@ -269,6 +269,53 @@ class TestSavedSearchesCRUD:
         response2 = client.post("/api/saved-searches", json=payload)
         assert response2.status_code == 409
 
+    def test_create_saved_search_db_error(self, client: TestClient, monkeypatch):
+        """POST /api/saved-searches returns 500 on DB exception."""
+        # Mock db.add or db.commit to raise an exception
+        # We can monkeypatch the route's dependency or the models
+        # It's easier to mock the SavedSearch model's __init__ or db's add
+        # Since we use db: DbSession, it's an instance of sqlalchemy.orm.Session
+        from sqlalchemy.orm import Session
+
+        original_commit = Session.commit
+
+        def mock_commit(*args, **kwargs):
+            raise Exception("Simulated DB error")
+
+        monkeypatch.setattr(Session, "commit", mock_commit)
+
+        payload = {
+            "name": "DB Error Search",
+            "filters": {"status": "completed"},
+        }
+        response = client.post("/api/saved-searches", json=payload)
+        assert response.status_code == 500
+        assert "Failed to save search" in response.json()["detail"]
+
+    def test_create_saved_search_limit_reached(self, client: TestClient, monkeypatch):
+        """POST /api/saved-searches returns 409 if max limit is reached."""
+        monkeypatch.setattr("app.api.saved_searches.MAX_SAVED_SEARCHES_PER_USER", 1)
+
+        # Create first one
+        payload1 = {"name": "Search 1", "filters": {"status": "completed"}}
+        response1 = client.post("/api/saved-searches", json=payload1)
+        assert response1.status_code == 201
+
+        # Creating second one should fail due to limit
+        payload2 = {"name": "Search 2", "filters": {"status": "pending"}}
+        response2 = client.post("/api/saved-searches", json=payload2)
+        assert response2.status_code == 409
+        assert "Maximum of 1 saved searches reached" in response2.json()["detail"]
+
+    def test_create_saved_search_invalid_name_type(self, client: TestClient):
+        """POST /api/saved-searches with non-string name returns 422."""
+        payload = {
+            "name": 12345,
+            "filters": {"status": "completed"},
+        }
+        response = client.post("/api/saved-searches", json=payload)
+        assert response.status_code == 422
+
     def test_update_saved_search(self, client: TestClient):
         """PUT /api/saved-searches/{id} updates the saved search."""
         # Create
