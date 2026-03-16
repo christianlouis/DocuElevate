@@ -78,6 +78,16 @@ eas build --platform all
 - The app runs and bundles correctly without `google-services.json`; only Android push notifications will be unavailable
 - For Play Store submission: create a service account in Google Play Console, download the JSON key as `google-play-service-account.json`, and update `eas.json`
 
+## CI/CD
+
+An EAS Cloud Workflow (`mobile/.eas/workflows/create-builds.yml`) runs automatically when changes inside `mobile/` are pushed to `main`:
+
+1. **Path filtering** — only commits that modify files under `mobile/` trigger a build; backend-only changes are skipped.
+2. **Parallel builds** — iOS and Android production builds run at the same time on EAS Build.
+3. **Auto-submit to Apple** — after the iOS build succeeds, the workflow submits the binary to App Store Connect (TestFlight) using the credentials in `eas.json` → `submit.production.ios`.
+
+> An [App Store Connect API Key](https://docs.expo.dev/app-signing/app-credentials/#app-store-connect-api-key) must be configured in EAS (`eas credentials`) for non-interactive submission.
+
 ## Configuration
 
 No code changes are needed to point the app at a different server.  The server URL is entered by the user on the login screen and stored in the device's secure store.

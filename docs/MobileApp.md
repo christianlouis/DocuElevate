@@ -57,6 +57,16 @@ eas build --platform android
 
 See the [EAS Build documentation](https://docs.expo.dev/build/introduction/) for full setup instructions.
 
+## Automated CI/CD
+
+An **EAS Cloud Workflow** (`mobile/.eas/workflows/create-builds.yml`) automates production builds and iOS submission:
+
+- **Path filtering:** The workflow only triggers on pushes to `main` that include changes inside the `mobile/` directory.  Backend-only or documentation-only changes do not trigger a mobile build.
+- **Build:** Both iOS and Android production builds run in parallel on EAS Build.
+- **Auto-submit (iOS):** After a successful iOS build, the workflow automatically submits the binary to **App Store Connect** using the credentials configured in `eas.json` (`submit.production.ios`).  The build then appears in **TestFlight** for internal testing and can be promoted to the App Store from App Store Connect.
+
+> **Prerequisite:** An App Store Connect API Key must be configured in EAS for non-interactive submission.  See [Troubleshooting → "Session expired"](#session-expired-local-session-during-ios-build) below for setup instructions.
+
 ## Authentication
 
 ### SSO Login Flow
