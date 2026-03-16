@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}{{ _("system_reset.page_title") }} - DocuElevate{% endblock %}
+
+{% block head_extra %}
+<style>
+  .reset-card { transition: box-shadow 0.2s ease; }
+  .reset-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.08); }
+  .confirmation-input { font-family: 'Courier New', monospace; letter-spacing: 0.1em; text-transform: uppercase; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8" x-data="systemResetApp()">
+
+  <!-- Header -->
+  <div class="mb-6">
+    <div class="flex items-center gap-3 mb-2">
+      <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+        <i class="fas fa-skull-crossbones mr-2 text-red-600" aria-hidden="true"></i>
+        {{ _("system_reset.heading") }}
+      </h1>
+    </div>
+    <p class="text-sm text-gray-500 dark:text-gray-400">
+      {{ _("system_reset.subtitle") }}
+    </p>
+  </div>
+
+  <!-- Factory Reset on Startup banner -->
+  {% if factory_reset_on_startup %}
+  <div class="mb-6 rounded-lg border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700 p-4" role="alert">
+    <div class="flex items-start gap-3">
+      <i class="fas fa-exclamation-triangle text-yellow-600 mt-0.5" aria-hidden="true"></i>
+      <div>
+        <p class="font-semibold text-yellow-800 dark:text-yellow-200">{{ _("system_reset.startup_reset_active") }}</p>
+        <p class="text-sm text-yellow-700 dark:text-yellow-300 mt-1">{{ _("system_reset.startup_reset_desc") }}</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Warning banner -->
+  <div class="mb-8 rounded-lg border-2 border-red-300 bg-red-50 dark:bg-red-900/20 dark:border-red-700 p-6" role="alert">
+    <div class="flex items-start gap-3">
+      <i class="fas fa-radiation text-red-600 text-2xl mt-0.5" aria-hidden="true"></i>
+      <div>
+        <p class="font-bold text-red-800 dark:text-red-200 text-lg">{{ _("system_reset.danger_zone") }}</p>
+        <p class="text-sm text-red-700 dark:text-red-300 mt-1">{{ _("system_reset.danger_desc") }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+    <!-- Full Reset Card -->
+    <div class="reset-card rounded-xl border-2 border-red-200 dark:border-red-800 bg-white dark:bg-gray-800 p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="h-10 w-10 rounded-full bg-red-100 dark:bg-red-900 flex items-center justify-center">
+          <i class="fas fa-trash-alt text-red-600" aria-hidden="true"></i>
+        </div>
+        <div>
+          <h2 class="text-xl font-bold text-gray-900 dark:text-white">{{ _("system_reset.full_reset_title") }}</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">{{ _("system_reset.full_reset_subtitle") }}</p>
+        </div>
+      </div>
+
+      <div class="space-y-3 mb-6">
+        <p class="text-sm text-gray-700 dark:text-gray-300">{{ _("system_reset.full_reset_desc") }}</p>
+        <ul class="text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4 list-disc">
+          <li>{{ _("system_reset.full_reset_item_db") }}</li>
+          <li>{{ _("system_reset.full_reset_item_files") }}</li>
+          <li>{{ _("system_reset.full_reset_item_cache") }}</li>
+          <li>{{ _("system_reset.full_reset_item_settings_kept") }}</li>
+        </ul>
+      </div>
+
+      <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+        <label for="fullResetConfirm" class="block text-sm font-semibold text-red-700 dark:text-red-400 mb-2">
+          {{ _("system_reset.type_delete") }}
+        </label>
+        <input id="fullResetConfirm"
+               type="text"
+               x-model="fullResetInput"
+               class="confirmation-input w-full px-3 py-2 border-2 border-red-300 dark:border-red-700 rounded-lg
+                      text-center text-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white
+                      focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+               placeholder="DELETE"
+               autocomplete="off"
+               aria-describedby="fullResetHelp" />
+        <p id="fullResetHelp" class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ _("system_reset.type_delete_help") }}</p>
+
+        <button @click="executeFullReset()"
+                :disabled="fullResetInput !== 'DELETE' || loading"
+                type="button"
+                class="mt-4 w-full inline-flex items-center justify-center px-4 py-3 border border-transparent
+                       text-base font-bold rounded-lg text-white
+                       bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500
+                       disabled:opacity-40 disabled:cursor-not-allowed transition min-h-[44px]"
+                aria-label="{{ _('system_reset.full_reset_button') }}">
+          <template x-if="loading && activeAction === 'full'">
+            <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>
+          </template>
+          <i x-show="!(loading && activeAction === 'full')" class="fas fa-trash-alt mr-2" aria-hidden="true"></i>
+          {{ _("system_reset.full_reset_button") }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Reset & Re-import Card -->
+    <div class="reset-card rounded-xl border-2 border-orange-200 dark:border-orange-800 bg-white dark:bg-gray-800 p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="h-10 w-10 rounded-full bg-orange-100 dark:bg-orange-900 flex items-center justify-center">
+          <i class="fas fa-recycle text-orange-600" aria-hidden="true"></i>
+        </div>
+        <div>
+          <h2 class="text-xl font-bold text-gray-900 dark:text-white">{{ _("system_reset.reimport_title") }}</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">{{ _("system_reset.reimport_subtitle") }}</p>
+        </div>
+      </div>
+
+      <div class="space-y-3 mb-6">
+        <p class="text-sm text-gray-700 dark:text-gray-300">{{ _("system_reset.reimport_desc") }}</p>
+        <ol class="text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4 list-decimal">
+          <li>{{ _("system_reset.reimport_step_1") }}</li>
+          <li>{{ _("system_reset.reimport_step_2") }}</li>
+          <li>{{ _("system_reset.reimport_step_3") }}</li>
+        </ol>
+        <p class="text-xs text-gray-500 dark:text-gray-400 italic">{{ _("system_reset.reimport_note") }}</p>
+      </div>
+
+      <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+        <label for="reimportConfirm" class="block text-sm font-semibold text-orange-700 dark:text-orange-400 mb-2">
+          {{ _("system_reset.type_reimport") }}
+        </label>
+        <input id="reimportConfirm"
+               type="text"
+               x-model="reimportInput"
+               class="confirmation-input w-full px-3 py-2 border-2 border-orange-300 dark:border-orange-700 rounded-lg
+                      text-center text-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white
+                      focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+               placeholder="REIMPORT"
+               autocomplete="off"
+               aria-describedby="reimportHelp" />
+        <p id="reimportHelp" class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ _("system_reset.type_reimport_help") }}</p>
+
+        <button @click="executeReimport()"
+                :disabled="reimportInput !== 'REIMPORT' || loading"
+                type="button"
+                class="mt-4 w-full inline-flex items-center justify-center px-4 py-3 border border-transparent
+                       text-base font-bold rounded-lg text-white
+                       bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500
+                       disabled:opacity-40 disabled:cursor-not-allowed transition min-h-[44px]"
+                aria-label="{{ _('system_reset.reimport_button') }}">
+          <template x-if="loading && activeAction === 'reimport'">
+            <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>
+          </template>
+          <i x-show="!(loading && activeAction === 'reimport')" class="fas fa-recycle mr-2" aria-hidden="true"></i>
+          {{ _("system_reset.reimport_button") }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result banner (shown after a reset completes) -->
+  <div x-show="resultMessage" x-cloak
+       class="mt-8 rounded-lg p-4"
+       :class="resultSuccess ? 'bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700' :
+                                'bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700'"
+       role="status" aria-live="polite">
+    <div class="flex items-start gap-3">
+      <i :class="resultSuccess ? 'fas fa-check-circle text-green-600' : 'fas fa-times-circle text-red-600'" aria-hidden="true"></i>
+      <div>
+        <p class="font-semibold" :class="resultSuccess ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'"
+           x-text="resultMessage"></p>
+        <pre x-show="resultDetail" x-text="resultDetail"
+             class="mt-2 text-xs overflow-x-auto whitespace-pre-wrap"
+             :class="resultSuccess ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function systemResetApp() {
+  const __i18n = {
+    successFull:  {{ _("system_reset.js_success_full") | tojson }},
+    successReimport: {{ _("system_reset.js_success_reimport") | tojson }},
+    errorGeneric: {{ _("system_reset.js_error_generic") | tojson }},
+  };
+
+  return {
+    fullResetInput: '',
+    reimportInput: '',
+    loading: false,
+    activeAction: null,
+    resultMessage: null,
+    resultDetail: null,
+    resultSuccess: false,
+
+    async executeFullReset() {
+      if (this.fullResetInput !== 'DELETE') return;
+      this.loading = true;
+      this.activeAction = 'full';
+      this.resultMessage = null;
+      try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        const resp = await fetch('/api/admin/system-reset/full', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ confirmation: 'DELETE' }),
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          this.resultSuccess = true;
+          this.resultMessage = __i18n.successFull;
+          this.resultDetail = JSON.stringify(data.result, null, 2);
+        } else {
+          this.resultSuccess = false;
+          this.resultMessage = data.detail || __i18n.errorGeneric;
+        }
+      } catch (err) {
+        this.resultSuccess = false;
+        this.resultMessage = __i18n.errorGeneric;
+      } finally {
+        this.loading = false;
+        this.fullResetInput = '';
+      }
+    },
+
+    async executeReimport() {
+      if (this.reimportInput !== 'REIMPORT') return;
+      this.loading = true;
+      this.activeAction = 'reimport';
+      this.resultMessage = null;
+      try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        const resp = await fetch('/api/admin/system-reset/reimport', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ confirmation: 'REIMPORT' }),
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          this.resultSuccess = true;
+          this.resultMessage = __i18n.successReimport;
+          this.resultDetail = JSON.stringify(data.result, null, 2);
+        } else {
+          this.resultSuccess = false;
+          this.resultMessage = data.detail || __i18n.errorGeneric;
+        }
+      } catch (err) {
+        this.resultSuccess = false;
+        this.resultMessage = __i18n.errorGeneric;
+      } finally {
+        this.loading = false;
+        this.reimportInput = '';
+      }
+    },
+  };
+}
+</script>
+{% endblock %}
