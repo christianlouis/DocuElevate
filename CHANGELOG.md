@@ -10,6 +10,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.147.0 (2026-03-16)
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`80a0ddc`](https://github.com/christianlouis/DocuElevate/commit/80a0ddcbfcd89c156d6cce65bb6275bdf35c061e))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`5e986cb`](https://github.com/christianlouis/DocuElevate/commit/5e986cb6d66c313753c7ce9cf69137c36b354ae8))
+
+- **changelog**: Update changelog [skip ci]
+  ([`8f8e11c`](https://github.com/christianlouis/DocuElevate/commit/8f8e11cffe5a6aaae47c9111bc6a95cb88ef6cd8))
+
+### Features
+
+- **config**: Add JSON structured logging and syslog forwarding for application logs
+  ([`6da1e6f`](https://github.com/christianlouis/DocuElevate/commit/6da1e6fd816fea1dc0fa37c9ad42ce8cafed8c73))
+
+- **config**: Add LOG_LEVEL setting and configure root logging at startup
+  ([`18c49c6`](https://github.com/christianlouis/DocuElevate/commit/18c49c6b2d214fddefa2f954d57b0358fb4b5f72))
+
+### Refactoring
+
+- **main**: Move JSON formatter imports to module level per code review
+  ([`df1fa51`](https://github.com/christianlouis/DocuElevate/commit/df1fa51800fb62862271fce4e0fff691f62c3333))
+
+### Testing
+
+- Add 500 error test for saved search deletion
+  ([`ae9ed6e`](https://github.com/christianlouis/DocuElevate/commit/ae9ed6e9a703f8a80880d0b1cb421de3cf024cd3))
+
+
 ## Unreleased
 
 ### Code Style
