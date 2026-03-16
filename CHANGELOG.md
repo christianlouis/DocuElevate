@@ -12,6 +12,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Code Style
+
+- Apply ruff auto-fix
+  ([`46c4031`](https://github.com/christianlouis/DocuElevate/commit/46c403127641c1b5c729ff69ab5505efa5c9b54d))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`5734df2`](https://github.com/christianlouis/DocuElevate/commit/5734df2d5046158a23b987fdc4235d3f3f6b4042))
+
+
+## Unreleased
+
 
 ## v0.147.1 (2026-03-16)
 
