@@ -38,4 +38,5 @@ pip-licenses==5.5.1  # For license compliance checking
 
 # Release automation
 python-semantic-release>=9.0.0
+
 types-aiofiles>=24.1.0.20240311  # Type stubs for aiofiles
