@@ -63,6 +63,15 @@ DocuElevate features a simple navigation system with the following main sections
 - **Search**: Dedicated full-text search across all document content
 - **About**: Information about DocuElevate
 
+### Other Ways to Use DocuElevate
+
+Beyond the web interface, DocuElevate is available through several additional clients:
+
+- **Mobile App (iOS & Android)** — Capture documents with your phone camera or upload from your photo library. See the [Mobile App Guide](MobileApp.md) for setup and usage.
+- **Browser Extension** — Clip web pages or send files to DocuElevate directly from Chrome, Firefox, or Edge. See the [Browser Extension Guide](BrowserExtension.md) for installation.
+- **CLI Tool** — Upload, download, search, and manage documents from the command line or scripts. See the [CLI Guide](CLIGuide.md) for details.
+- **REST & GraphQL API** — Full programmatic access for automation and integrations. See the [API Documentation](API.md).
+
 ## Uploading Documents
 
 DocuElevate provides multiple convenient ways to upload documents to the system.
@@ -643,6 +652,58 @@ Pass no `pipeline_id` to clear the assignment and fall back to the system defaul
 ### Admin: system-wide pipelines
 
 Admins can create **system pipelines** that appear in every user's pipeline list. These can be set as the global default so all users benefit from a consistent processing baseline. Navigate to **Pipelines** and check the **System pipeline** box when creating a new one (admin only).
+
+### Conditional routing rules
+
+Routing rules automatically assign incoming documents to the right pipeline
+based on their properties — no manual pipeline selection required.
+
+**How it works:**
+
+1. Define one or more routing rules via the API
+   (`POST /api/routing-rules`).
+2. Each rule specifies a **field** to inspect, an **operator** (condition),
+   a **value** to compare against, and a **target pipeline**.
+3. When a document is processed, rules are evaluated **in position order**
+   (lowest first).  The first matching rule wins and the document is routed
+   to that pipeline.
+4. If no rule matches, the document is processed by the default pipeline.
+
+**Available fields:**
+
+| Field | Description |
+|-------|-------------|
+| `file_type` | MIME type, e.g. `application/pdf` |
+| `filename` | Original filename |
+| `size` | File size in bytes |
+| `document_type` | AI-classified type (Invoice, Contract, …) |
+| `category` | Alias for `document_type` |
+| `metadata.<key>` | Any key from the AI-extracted metadata JSON |
+
+**Available operators:**
+
+| Operator | Description |
+|----------|-------------|
+| `equals` / `not_equals` | Exact match (case-insensitive) |
+| `contains` / `not_contains` | Substring match (case-insensitive) |
+| `regex` | Full Python regex match (case-insensitive) |
+| `gt` / `lt` / `gte` / `lte` | Numeric comparison (greater/less than) |
+
+**Example:** Route invoices to one pipeline and large files to another:
+
+```
+Rule 1: field=document_type, operator=equals, value=Invoice, target_pipeline=3
+Rule 2: field=size,          operator=gt,     value=1048576, target_pipeline=5
+```
+
+With first-match-wins logic, an invoice of any size matches Rule 1 and is
+routed to pipeline 3.  A non-invoice file larger than 1 MB matches Rule 2
+and is routed to pipeline 5.  Everything else falls back to the default
+pipeline.
+
+You can test your rules without actually routing a document using the
+**evaluate** endpoint (`POST /api/routing-rules/evaluate`).  For the full
+API reference, see [API Documentation](API.md#routing-rules).
 
 ## API Access
 

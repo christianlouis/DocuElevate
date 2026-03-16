@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Annotated, Optional
 
-import requests
+import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
@@ -132,57 +132,60 @@ async def test_dropbox_token(request: Request):
                 "message": "Dropbox credentials are not fully configured",
             }
 
-        # Check token validity by getting current account info
-        headers = {"Authorization": f"Bearer {settings.dropbox_refresh_token}"}
-        response = requests.post(
-            "https://api.dropboxapi.com/2/users/get_current_account",
-            headers=headers,
-            timeout=settings.http_request_timeout,
-        )
-
-        # If token is invalid, try refreshing it
-        if response.status_code == 401:
-            logger.info("Dropbox access token invalid or expired, trying to refresh")
-
-            # Get a new access token using the refresh token
-            refresh_url = "https://api.dropbox.com/oauth2/token"
-            refresh_data = {
-                "grant_type": "refresh_token",
-                "refresh_token": settings.dropbox_refresh_token,
-                "client_id": settings.dropbox_app_key,
-                "client_secret": settings.dropbox_app_secret,
-            }
-
-            refresh_response = requests.post(refresh_url, data=refresh_data, timeout=settings.http_request_timeout)
-
-            if refresh_response.status_code != 200:
-                logger.error(f"Failed to refresh Dropbox token: {refresh_response.text}")
-                return {
-                    "status": "error",
-                    "message": "Refresh token has expired or is invalid",
-                    "needs_reauth": True,
-                }
-
-            token_info = refresh_response.json()
-            access_token = token_info.get("access_token")
-
-            # Try again with the new access token
-            headers = {"Authorization": f"Bearer {access_token}"}
-            response = requests.post(
+        async with httpx.AsyncClient() as client:
+            # Check token validity by getting current account info
+            headers = {"Authorization": f"Bearer {settings.dropbox_refresh_token}"}
+            response = await client.post(
                 "https://api.dropboxapi.com/2/users/get_current_account",
                 headers=headers,
                 timeout=settings.http_request_timeout,
             )
 
-        if response.status_code != 200:
-            logger.error(f"Dropbox token test failed: {response.status_code} {response.text}")
-            return {
-                "status": "error",
-                "message": f"Token validation failed with status {response.status_code}: {response.text}",
-            }
+            # If token is invalid, try refreshing it
+            if response.status_code == 401:
+                logger.info("Dropbox access token invalid or expired, trying to refresh")
 
-        # Get account info
-        account_info = response.json()
+                # Get a new access token using the refresh token
+                refresh_url = "https://api.dropbox.com/oauth2/token"
+                refresh_data = {
+                    "grant_type": "refresh_token",
+                    "refresh_token": settings.dropbox_refresh_token,
+                    "client_id": settings.dropbox_app_key,
+                    "client_secret": settings.dropbox_app_secret,
+                }
+
+                refresh_response = await client.post(
+                    refresh_url, data=refresh_data, timeout=settings.http_request_timeout
+                )
+
+                if refresh_response.status_code != 200:
+                    logger.error(f"Failed to refresh Dropbox token: {refresh_response.text}")
+                    return {
+                        "status": "error",
+                        "message": "Refresh token has expired or is invalid",
+                        "needs_reauth": True,
+                    }
+
+                token_info = refresh_response.json()
+                access_token = token_info.get("access_token")
+
+                # Try again with the new access token
+                headers = {"Authorization": f"Bearer {access_token}"}
+                response = await client.post(
+                    "https://api.dropboxapi.com/2/users/get_current_account",
+                    headers=headers,
+                    timeout=settings.http_request_timeout,
+                )
+
+            if response.status_code != 200:
+                logger.error(f"Dropbox token test failed: {response.status_code} {response.text}")
+                return {
+                    "status": "error",
+                    "message": f"Token validation failed with status {response.status_code}: {response.text}",
+                }
+
+            # Get account info
+            account_info = response.json()
         account_email = account_info.get("email", "Unknown account")
         account_name = account_info.get("name", {}).get("display_name", "Unknown user")
 

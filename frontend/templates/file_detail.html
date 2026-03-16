@@ -1095,10 +1095,18 @@
 
 {% block content %}
 <div class="detail-container">
-  <a href="/files" class="back-button" aria-label="Back to File List">
-    <i class="fas fa-arrow-left" aria-hidden="true"></i>
-    Back to File List
-  </a>
+  <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap;">
+    <a href="/files" class="back-button" style="margin-bottom:0;" aria-label="Back to File List">
+      <i class="fas fa-arrow-left" aria-hidden="true"></i>
+      Back to File List
+    </a>
+    {% if file %}
+    <a href="/files/{{ file.id }}" class="back-button" style="margin-bottom:0;" aria-label="View document for {{ file.original_filename }}">
+      <i class="fas fa-eye" aria-hidden="true"></i>
+      View Document
+    </a>
+    {% endif %}
+  </div>
 
   {% if error %}
   <div class="error-message">

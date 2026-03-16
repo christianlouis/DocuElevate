@@ -61,10 +61,13 @@ from app.main import app as fastapi_app  # noqa: E402
 # Import models to register them with SQLAlchemy Base
 from app.models import (  # noqa: F401, E402
     ApiToken,
+    AuditLog,
     ClassificationRuleModel,
+    ComplianceTemplate,
     DocumentMetadata,
     FileRecord,
     Pipeline,
+    PipelineRoutingRule,
     PipelineStep,
     ProcessingLog,
     SavedSearch,

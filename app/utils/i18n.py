@@ -1,0 +1,767 @@
+"""Internationalization (i18n) and localization (l10n) utilities.
+
+Provides a JSON-based translation system for the DocuElevate UI with:
+
+* **77 supported languages** covering European, Asian, Middle-Eastern, African, and other languages
+* Browser ``Accept-Language`` detection with cookie & user-profile persistence
+* AI-powered fallback translation via the configured LLM provider
+* Locale-aware date, number, and file-size formatting helpers
+* Jinja2 integration via a ``_()`` global function
+
+Language resolution order:
+    1. User profile ``preferred_language`` (persisted in DB)
+    2. ``docuelevate_lang`` cookie
+    3. ``Accept-Language`` HTTP header
+    4. Default (``en``)
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from datetime import date, datetime
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
+
+from starlette.requests import Request
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Supported languages (ordered by priority)
+# ---------------------------------------------------------------------------
+
+SUPPORTED_LANGUAGES: list[dict[str, str]] = [
+    # --- Tier 1: Primary European languages ---
+    # flag: lowercase ISO 3166-1 alpha-2 country code used with the flag-icons CSS library
+    # (e.g. "gb" → <span class="fi fi-gb">). Regional codes like "gb-wls" are also supported.
+    {"code": "en", "name": "English", "native": "English", "flag": "gb"},
+    {"code": "de", "name": "German", "native": "Deutsch", "flag": "de"},
+    {"code": "fr", "name": "French", "native": "Français", "flag": "fr"},
+    {"code": "es", "name": "Spanish", "native": "Español", "flag": "es"},
+    {"code": "it", "name": "Italian", "native": "Italiano", "flag": "it"},
+    {"code": "pt", "name": "Portuguese", "native": "Português", "flag": "pt"},
+    # --- Tier 2: Western & Northern European ---
+    {"code": "nl", "name": "Dutch", "native": "Nederlands", "flag": "nl"},
+    {"code": "nb", "name": "Norwegian Bokmål", "native": "Norsk bokmål", "flag": "no"},
+    {"code": "no", "name": "Norwegian", "native": "Norsk", "flag": "no"},
+    {"code": "da", "name": "Danish", "native": "Dansk", "flag": "dk"},
+    {"code": "sv", "name": "Swedish", "native": "Svenska", "flag": "se"},
+    {"code": "fi", "name": "Finnish", "native": "Suomi", "flag": "fi"},
+    {"code": "is", "name": "Icelandic", "native": "Íslenska", "flag": "is"},
+    {"code": "ga", "name": "Irish", "native": "Gaeilge", "flag": "ie"},
+    {"code": "lb", "name": "Luxembourgish", "native": "Lëtzebuergesch", "flag": "lu"},
+    {"code": "ca", "name": "Catalan", "native": "Català", "flag": "es"},  # no dedicated ISO flag; use Spain
+    {"code": "cy", "name": "Welsh", "native": "Cymraeg", "flag": "gb-wls"},  # flag-icons GB region code
+    {"code": "fy", "name": "Western Frisian", "native": "Frysk", "flag": "nl"},
+    {"code": "gl", "name": "Galician", "native": "Galego", "flag": "es"},
+    {"code": "li", "name": "Limburgish", "native": "Limburgs", "flag": "nl"},
+    {"code": "vls", "name": "Flemish", "native": "West-Vlams", "flag": "be"},
+    {"code": "nds", "name": "Low German", "native": "Plattdüütsch", "flag": "de"},
+    # --- Tier 3: Central & Eastern European ---
+    {"code": "pl", "name": "Polish", "native": "Polski", "flag": "pl"},
+    {"code": "cs", "name": "Czech", "native": "Čeština", "flag": "cz"},
+    {"code": "sk", "name": "Slovak", "native": "Slovenčina", "flag": "sk"},
+    {"code": "hu", "name": "Hungarian", "native": "Magyar", "flag": "hu"},
+    {"code": "sl", "name": "Slovenian", "native": "Slovenščina", "flag": "si"},
+    {"code": "hr", "name": "Croatian", "native": "Hrvatski", "flag": "hr"},
+    {"code": "ro", "name": "Romanian", "native": "Română", "flag": "ro"},
+    {"code": "bg", "name": "Bulgarian", "native": "Български", "flag": "bg"},
+    {"code": "el", "name": "Greek", "native": "Ελληνικά", "flag": "gr"},
+    {"code": "et", "name": "Estonian", "native": "Eesti", "flag": "ee"},
+    {"code": "lv", "name": "Latvian", "native": "Latviešu", "flag": "lv"},
+    {"code": "lt", "name": "Lithuanian", "native": "Lietuvių", "flag": "lt"},
+    {"code": "sr", "name": "Serbian", "native": "Српски", "flag": "rs"},
+    # --- Tier 4: Non-EU European, Middle Eastern & African ---
+    {"code": "tr", "name": "Turkish", "native": "Türkçe", "flag": "tr"},
+    {"code": "uk", "name": "Ukrainian", "native": "Українська", "flag": "ua"},
+    {"code": "he", "name": "Hebrew", "native": "עברית", "flag": "il"},
+    {"code": "ar", "name": "Arabic", "native": "العربية", "flag": "sa"},
+    {"code": "fa", "name": "Persian", "native": "فارسی", "flag": "ir"},
+    {"code": "af", "name": "Afrikaans", "native": "Afrikaans", "flag": "za"},
+    # --- Tier 5: Asian languages ---
+    {"code": "zh", "name": "Chinese", "native": "中文", "flag": "cn"},
+    {"code": "zh-TW", "name": "Traditional Chinese", "native": "繁體中文", "flag": "tw"},
+    {"code": "ja", "name": "Japanese", "native": "日本語", "flag": "jp"},
+    {"code": "ko", "name": "Korean", "native": "한국어", "flag": "kr"},
+    {"code": "vi", "name": "Vietnamese", "native": "Tiếng Việt", "flag": "vn"},
+    {"code": "pa", "name": "Punjabi", "native": "ਪੰਜਾਬੀ", "flag": "in"},
+    {"code": "kn", "name": "Kannada", "native": "ಕನ್ನಡ", "flag": "in"},
+    {"code": "hi", "name": "Hindi", "native": "हिन्दी", "flag": "in"},
+    {"code": "bn", "name": "Bengali", "native": "বাংলা", "flag": "bd"},
+    {"code": "gu", "name": "Gujarati", "native": "ગુજરાતી", "flag": "in"},
+    {"code": "ml", "name": "Malayalam", "native": "മലയാളം", "flag": "in"},
+    {"code": "mr", "name": "Marathi", "native": "मराठी", "flag": "in"},
+    {"code": "ta", "name": "Tamil", "native": "தமிழ்", "flag": "in"},
+    {"code": "te", "name": "Telugu", "native": "తెలుగు", "flag": "in"},
+    {"code": "ur", "name": "Urdu", "native": "اردو", "flag": "pk"},
+    {"code": "si", "name": "Sinhala", "native": "සිංහල", "flag": "lk"},
+    {"code": "ne", "name": "Nepali", "native": "नेपाली", "flag": "np"},
+    {"code": "th", "name": "Thai", "native": "ไทย", "flag": "th"},
+    {"code": "km", "name": "Khmer", "native": "ខ្មែរ", "flag": "kh"},
+    {"code": "id", "name": "Indonesian", "native": "Bahasa Indonesia", "flag": "id"},
+    {"code": "ms", "name": "Malay", "native": "Bahasa Melayu", "flag": "my"},
+    {"code": "jv", "name": "Javanese", "native": "Basa Jawa", "flag": "id"},
+    {"code": "tl", "name": "Tagalog", "native": "Filipino", "flag": "ph"},
+    {"code": "mn", "name": "Mongolian", "native": "Монгол", "flag": "mn"},
+    {"code": "kk", "name": "Kazakh", "native": "Қазақ тілі", "flag": "kz"},
+    {"code": "uz", "name": "Uzbek", "native": "Oʻzbekcha", "flag": "uz"},
+    {"code": "az", "name": "Azerbaijani", "native": "Azərbaycan dili", "flag": "az"},
+    {"code": "hy", "name": "Armenian", "native": "Հայերեն", "flag": "am"},
+    {"code": "ka", "name": "Georgian", "native": "ქართული", "flag": "ge"},
+    # --- Tier 6: African languages ---
+    {"code": "sw", "name": "Swahili", "native": "Kiswahili", "flag": "ke"},
+    {"code": "am", "name": "Amharic", "native": "አማርኛ", "flag": "et"},
+    {"code": "ha", "name": "Hausa", "native": "Hausa", "flag": "ng"},
+    {"code": "yo", "name": "Yoruba", "native": "Yorùbá", "flag": "ng"},
+    {"code": "ig", "name": "Igbo", "native": "Igbo", "flag": "ng"},
+    {"code": "zu", "name": "Zulu", "native": "isiZulu", "flag": "za"},
+    # --- Tier 7: Constructed & other languages ---
+    {"code": "eo", "name": "Esperanto", "native": "Esperanto", "flag": "un"},  # UN flag for international language
+]
+
+SUPPORTED_LANGUAGE_CODES: set[str] = {lang["code"] for lang in SUPPORTED_LANGUAGES}
+DEFAULT_LANGUAGE = "en"
+
+# Lookup map for fast code → language-dict resolution
+_LANG_CODE_MAP: dict[str, dict[str, str]] = {lang["code"]: lang for lang in SUPPORTED_LANGUAGES}
+
+# Global-usage order used to fill remaining slots in the smart suggestions list
+_POPULAR_LANGUAGE_CODES: list[str] = ["en", "zh", "es", "ar", "fr", "de", "ja", "pt", "hi", "ko"]
+
+# ---------------------------------------------------------------------------
+# Translation file loading
+# ---------------------------------------------------------------------------
+
+_TRANSLATIONS_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "translations"
+_translation_cache: dict[str, dict[str, str]] = {}
+
+
+def _load_translations(locale: str) -> dict[str, str]:
+    """Load the translation JSON file for *locale*, with caching."""
+    if locale in _translation_cache:
+        return _translation_cache[locale]
+
+    filepath = _TRANSLATIONS_DIR / f"{locale}.json"
+    if not filepath.is_file():
+        logger.warning("Translation file not found for locale '%s'", locale)
+        _translation_cache[locale] = {}
+        return {}
+
+    try:
+        data: dict[str, str] = json.loads(filepath.read_text(encoding="utf-8"))
+        _translation_cache[locale] = data
+        return data
+    except (json.JSONDecodeError, OSError):
+        logger.exception("Failed to load translations for '%s'", locale)
+        _translation_cache[locale] = {}
+        return {}
+
+
+def reload_translations() -> None:
+    """Clear the translation cache so files are re-read on next access."""
+    _translation_cache.clear()
+
+
+# ---------------------------------------------------------------------------
+# Core translation function
+# ---------------------------------------------------------------------------
+
+
+def translate(key: str, locale: str | None = None, **kwargs: Any) -> str:
+    """Return the translated string for *key* in *locale*.
+
+    Falls back through:
+        1. Requested *locale*
+        2. English (``en``)
+        3. The raw key itself (to keep the UI functional)
+
+    Positional placeholders ``{0}``, ``{1}`` or named placeholders
+    ``{name}`` in the translated string are interpolated via *kwargs*.
+    """
+    locale = locale if locale and locale in SUPPORTED_LANGUAGE_CODES else DEFAULT_LANGUAGE
+
+    translations = _load_translations(locale)
+    value = translations.get(key)
+
+    # Fallback to English
+    if value is None and locale != DEFAULT_LANGUAGE:
+        en_translations = _load_translations(DEFAULT_LANGUAGE)
+        value = en_translations.get(key)
+
+    # Fallback to key itself
+    if value is None:
+        value = key
+
+    if kwargs:
+        try:
+            value = value.format(**kwargs)
+        except (KeyError, IndexError):
+            pass  # Return unformatted string rather than crash
+
+    return value
+
+
+# ---------------------------------------------------------------------------
+# AI fallback translation (best-effort, non-blocking)
+# ---------------------------------------------------------------------------
+
+_ai_translation_cache: dict[tuple[str, str], str] = {}
+
+
+def translate_with_ai_fallback(text: str, target_locale: str) -> str:
+    """Translate *text* using the configured AI provider as a fallback.
+
+    Returns the original *text* unchanged when:
+    * The target locale is English (source language)
+    * The AI provider is unavailable or returns an error
+    * The translation has already been cached
+
+    Results are cached in-memory for the lifetime of the process.
+    """
+    if target_locale == DEFAULT_LANGUAGE or target_locale not in SUPPORTED_LANGUAGE_CODES:
+        return text
+
+    cache_key = (text, target_locale)
+    if cache_key in _ai_translation_cache:
+        return _ai_translation_cache[cache_key]
+
+    target_name = next(
+        (lang["name"] for lang in SUPPORTED_LANGUAGES if lang["code"] == target_locale),
+        target_locale,
+    )
+
+    try:
+        from litellm import completion  # type: ignore[import-untyped]
+
+        from app.config import settings
+
+        model = getattr(settings, "ai_model", None) or getattr(settings, "openai_model", "gpt-4o-mini")
+        response = completion(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        f"You are a professional translator. Translate the following UI text "
+                        f"from English to {target_name}. Return ONLY the translated text, "
+                        f"nothing else. Keep any HTML tags, placeholders like {{name}}, "
+                        f"and special characters intact."
+                    ),
+                },
+                {"role": "user", "content": text},
+            ],
+            max_tokens=256,
+            temperature=0.1,
+        )
+        translated = response.choices[0].message.content.strip()
+        _ai_translation_cache[cache_key] = translated
+        return translated
+    except Exception:
+        logger.debug("AI fallback translation failed for '%s' → %s", text[:50], target_locale)
+        return text
+
+
+# ---------------------------------------------------------------------------
+# Language detection
+# ---------------------------------------------------------------------------
+
+
+def detect_language(request: Request) -> str:
+    """Determine the preferred UI language from the request context.
+
+    Resolution order:
+        1. ``preferred_language`` stored in the user session
+        2. ``docuelevate_lang`` cookie
+        3. ``Accept-Language`` HTTP header (best match)
+        4. Default → ``en``
+    """
+    # 1. User session preference
+    if hasattr(request, "session"):
+        session_lang = request.session.get("preferred_language")
+        if isinstance(session_lang, str) and session_lang in SUPPORTED_LANGUAGE_CODES:
+            return session_lang
+
+    # 2. Cookie
+    if hasattr(request, "cookies"):
+        cookie_lang = request.cookies.get("docuelevate_lang")
+        if isinstance(cookie_lang, str) and cookie_lang in SUPPORTED_LANGUAGE_CODES:
+            return cookie_lang
+
+    # 3. Accept-Language header
+    accept = ""
+    if hasattr(request, "headers"):
+        accept = request.headers.get("accept-language", "")
+    lang = _parse_accept_language(accept)
+    if lang:
+        return lang
+
+    return DEFAULT_LANGUAGE
+
+
+def _parse_accept_language_entries(header: str) -> list[tuple[float, str]]:
+    """Parse an ``Accept-Language`` header into quality-sorted ``(q, tag)`` pairs."""
+    if not header:
+        return []
+
+    entries: list[tuple[float, str]] = []
+    for raw_part in header.split(","):
+        part = raw_part.strip()
+        if not part:
+            continue
+        if ";q=" in part:
+            lang_tag, _, q_str = part.partition(";q=")
+            try:
+                quality = float(q_str.strip())
+            except ValueError:
+                quality = 0.0
+        else:
+            lang_tag = part
+            quality = 1.0
+        entries.append((quality, lang_tag.strip().lower()))
+
+    entries.sort(key=lambda e: e[0], reverse=True)
+    return entries
+
+
+def _parse_accept_language(header: str) -> str | None:
+    """Extract the best matching language from an ``Accept-Language`` header.
+
+    Parses quality values and returns the highest-priority match among
+    :data:`SUPPORTED_LANGUAGE_CODES`, or ``None`` if nothing matches.
+    """
+    for _quality, tag in _parse_accept_language_entries(header):
+        code = tag.split("-")[0]
+        if code in SUPPORTED_LANGUAGE_CODES:
+            return code
+
+    return None
+
+
+# Maximum number of languages shown in the compact nav-bar dropdown
+_SUGGESTED_LANGUAGES_MAX = 6
+
+
+def get_suggested_languages(current_locale: str, accept_language_header: str = "") -> list[dict[str, str]]:
+    """Return up to :data:`_SUGGESTED_LANGUAGES_MAX` suggested languages for the compact picker.
+
+    Selection priority:
+        1. The currently active language (always included first).
+        2. Languages listed in the browser's ``Accept-Language`` header.
+        3. Popular global languages (by estimated speaker count) as fillers.
+
+    The resulting list is de-duplicated and capped at
+    :data:`_SUGGESTED_LANGUAGES_MAX` entries.
+    """
+    candidates: list[str] = []
+
+    # 1. Active locale first
+    if current_locale in SUPPORTED_LANGUAGE_CODES:
+        candidates.append(current_locale)
+
+    # 2. Browser preferences
+    for _quality, tag in _parse_accept_language_entries(accept_language_header):
+        if len(candidates) >= _SUGGESTED_LANGUAGES_MAX:
+            break
+        code = tag.split("-")[0]
+        if code in SUPPORTED_LANGUAGE_CODES and code not in candidates:
+            candidates.append(code)
+
+    # 3. Popular language fillers
+    for code in _POPULAR_LANGUAGE_CODES:
+        if len(candidates) >= _SUGGESTED_LANGUAGES_MAX:
+            break
+        if code not in candidates and code in SUPPORTED_LANGUAGE_CODES:
+            candidates.append(code)
+
+    return [_LANG_CODE_MAP[c] for c in candidates[:_SUGGESTED_LANGUAGES_MAX] if c in _LANG_CODE_MAP]
+
+
+# ---------------------------------------------------------------------------
+# Localization helpers (l10n)
+# ---------------------------------------------------------------------------
+
+# Locale-specific formatting rules for date/number display
+_LOCALE_FORMATS: dict[str, dict[str, Any]] = {
+    "en": {
+        "date": "%B %d, %Y",
+        "date_short": "%m/%d/%Y",
+        "datetime": "%B %d, %Y %I:%M %p",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "de": {
+        "date": "%d. %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d. %B %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "fr": {
+        "date": "%d %B %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": "\u202f",
+        "decimal_sep": ",",
+    },
+    "es": {
+        "date": "%d de %B de %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d de %B de %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "it": {
+        "date": "%d %B %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "pt": {
+        "date": "%d de %B de %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d de %B de %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "nl": {
+        "date": "%d %B %Y",
+        "date_short": "%d-%m-%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "nb": {
+        "date": "%d. %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d. %B %Y %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+    "da": {
+        "date": "%d. %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d. %B %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "sv": {
+        "date": "%d %B %Y",
+        "date_short": "%Y-%m-%d",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+    "fi": {
+        "date": "%d. %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d. %B %Y %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+    "is": {
+        "date": "%d. %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d. %B %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "ga": {
+        "date": "%d %B %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "lb": {
+        "date": "%d. %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d. %B %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "ca": {
+        "date": "%d de %B de %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d de %B de %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "pl": {
+        "date": "%d %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+    "cs": {
+        "date": "%d. %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d. %B %Y %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+    "sk": {
+        "date": "%d. %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d. %B %Y %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+    "hu": {
+        "date": "%Y. %B %d.",
+        "date_short": "%Y.%m.%d.",
+        "datetime": "%Y. %B %d. %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+    "sl": {
+        "date": "%d. %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d. %B %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "hr": {
+        "date": "%d. %B %Y.",
+        "date_short": "%d.%m.%Y.",
+        "datetime": "%d. %B %Y. %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "ro": {
+        "date": "%d %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "bg": {
+        "date": "%d %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+    "el": {
+        "date": "%d %B %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "et": {
+        "date": "%d. %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d. %B %Y %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+    "lv": {
+        "date": "%Y. gada %d. %B",
+        "date_short": "%d.%m.%Y.",
+        "datetime": "%Y. gada %d. %B %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+    "lt": {
+        "date": "%Y m. %B %d d.",
+        "date_short": "%Y-%m-%d",
+        "datetime": "%Y m. %B %d d. %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+    "tr": {
+        "date": "%d %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "uk": {
+        "date": "%d %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+    "zh": {
+        "date": "%Y年%m月%d日",
+        "date_short": "%Y/%m/%d",
+        "datetime": "%Y年%m月%d日 %H:%M",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "ru": {
+        "date": "%d %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+    # --- New languages ---
+    "no": {
+        "date": "%d. %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d. %B %Y %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+    "cy": {
+        "date": "%d %B %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "fy": {
+        "date": "%d %B %Y",
+        "date_short": "%d-%m-%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "gl": {
+        "date": "%d de %B de %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d de %B de %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "li": {
+        "date": "%d %B %Y",
+        "date_short": "%d-%m-%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "vls": {
+        "date": "%d %B %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "nds": {
+        "date": "%d. %B %Y",
+        "date_short": "%d.%m.%Y",
+        "datetime": "%d. %B %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "sr": {
+        "date": "%d. %B %Y.",
+        "date_short": "%d.%m.%Y.",
+        "datetime": "%d. %B %Y. %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "he": {
+        "date": "%d %B %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "ar": {
+        "date": "%d %B %Y",
+        "date_short": "%Y/%m/%d",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "fa": {
+        "date": "%d %B %Y",
+        "date_short": "%Y/%m/%d",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "af": {
+        "date": "%d %B %Y",
+        "date_short": "%Y/%m/%d",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+    "ja": {
+        "date": "%Y年%m月%d日",
+        "date_short": "%Y/%m/%d",
+        "datetime": "%Y年%m月%d日 %H:%M",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "ko": {
+        "date": "%Y년 %m월 %d일",
+        "date_short": "%Y.%m.%d",
+        "datetime": "%Y년 %m월 %d일 %H:%M",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "vi": {
+        "date": "ngày %d tháng %m năm %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "ngày %d tháng %m năm %Y %H:%M",
+        "thousands_sep": ".",
+        "decimal_sep": ",",
+    },
+    "pa": {
+        "date": "%d %B %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "kn": {
+        "date": "%d %B %Y",
+        "date_short": "%d/%m/%Y",
+        "datetime": "%d %B %Y %H:%M",
+        "thousands_sep": ",",
+        "decimal_sep": ".",
+    },
+    "eo": {
+        "date": "%d-a de %B %Y",
+        "date_short": "%Y-%m-%d",
+        "datetime": "%d-a de %B %Y %H:%M",
+        "thousands_sep": "\u00a0",
+        "decimal_sep": ",",
+    },
+}
+
+
+def format_date(value: date | datetime | None, locale: str = DEFAULT_LANGUAGE, short: bool = False) -> str:
+    """Format a date/datetime value according to the locale conventions."""
+    if value is None:
+        return ""
+    fmt_key = "date_short" if short else "date"
+    fmt = _LOCALE_FORMATS.get(locale, _LOCALE_FORMATS[DEFAULT_LANGUAGE])[fmt_key]
+    return value.strftime(fmt)
+
+
+def format_datetime(value: datetime | None, locale: str = DEFAULT_LANGUAGE) -> str:
+    """Format a datetime value according to the locale conventions."""
+    if value is None:
+        return ""
+    fmt = _LOCALE_FORMATS.get(locale, _LOCALE_FORMATS[DEFAULT_LANGUAGE])["datetime"]
+    return value.strftime(fmt)
+
+
+def format_number(value: int | float, locale: str = DEFAULT_LANGUAGE) -> str:
+    """Format a number with locale-appropriate thousand separators."""
+    lf = _LOCALE_FORMATS.get(locale, _LOCALE_FORMATS[DEFAULT_LANGUAGE])
+    if isinstance(value, float):
+        int_part, _, dec_part = f"{value:,.2f}".partition(".")
+        formatted_int = int_part.replace(",", lf["thousands_sep"])
+        return f"{formatted_int}{lf['decimal_sep']}{dec_part}"
+    return f"{value:,}".replace(",", lf["thousands_sep"])
+
+
+@lru_cache(maxsize=32)
+def get_language_info(code: str) -> dict[str, str] | None:
+    """Return the metadata dict for a supported language code, or ``None``."""
+    for lang in SUPPORTED_LANGUAGES:
+        if lang["code"] == code:
+            return lang
+    return None

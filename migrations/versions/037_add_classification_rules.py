@@ -1,7 +1,7 @@
 """Add classification_rules table for custom document classification rules.
 
-Revision ID: 027_add_classification_rules
-Revises: 026_add_scheduled_jobs
+Revision ID: 037_add_classification_rules
+Revises: 036_add_document_translation_fields
 Create Date: 2026-03-09
 """
 
@@ -10,8 +10,8 @@ from typing import Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "027_add_classification_rules"
-down_revision: Union[str, None] = "026_add_scheduled_jobs"
+revision: str = "037_add_classification_rules"
+down_revision: Union[str, None] = "036_add_document_translation_fields"
 depends_on: Union[str, None] = None
 
 

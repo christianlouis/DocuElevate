@@ -11,6 +11,7 @@ import zipfile
 from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
+import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import asc, desc
@@ -1217,6 +1218,66 @@ def download_file(
         raise HTTPException(status_code=500, detail=f"Error downloading file: {str(e)}")
 
 
+async def _save_upload_file_chunks(file: UploadFile, target_path: str, max_size: int) -> int:
+    """Save an uploaded file in chunks and enforce the maximum size limit."""
+    try:
+        written_size = 0
+        with open(target_path, "wb") as f:
+            chunk_size = 65536  # 64 KB chunks
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                written_size += len(chunk)
+                if written_size > max_size:
+                    # Exceeded limit mid-stream; clean up and reject
+                    f.close()
+                    os.remove(target_path)
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File too large: exceeded {max_size} bytes during upload. "
+                        f"See SECURITY_AUDIT.md for configuration details.",
+                    )
+                f.write(chunk)
+        return written_size
+    except HTTPException:
+        raise
+    except Exception as e:
+        if os.path.exists(target_path):
+            os.remove(target_path)
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+
+
+def _check_for_exact_duplicate(db: DbSession, target_path: str, safe_filename: str) -> dict | None:
+    """Check for an exact duplicate of the uploaded file and return a warning if found."""
+    if not settings.enable_deduplication:
+        return None
+
+    try:
+        filehash = hash_file(target_path)
+        existing = (
+            db.query(FileRecord)
+            .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False))
+            .order_by(FileRecord.id.asc())
+            .first()
+        )
+        if existing:
+            logger.info(f"Exact duplicate detected on upload: '{safe_filename}' matches file ID {existing.id}")
+            return {
+                "duplicate_type": "exact",
+                "original_file_id": existing.id,
+                "original_filename": existing.original_filename,
+                "message": (
+                    "This file appears to be an exact duplicate of an already-processed document. "
+                    "It will still be queued but will be flagged as a duplicate."
+                ),
+            }
+    except Exception as e:
+        logger.warning(f"Duplicate check failed for uploaded file '{safe_filename}': {e}")
+
+    return None
+
+
 @router.post("/ui-upload")
 @require_login
 async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...)):
@@ -1277,7 +1338,7 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
     # enforcing the size limit during the read so memory usage stays bounded.
     try:
         written_size = 0
-        with open(target_path, "wb") as f:
+        async with aiofiles.open(target_path, "wb") as f:
             chunk_size = 65536  # 64 KB chunks
             while True:
                 chunk = await file.read(chunk_size)
@@ -1286,14 +1347,14 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
                 written_size += len(chunk)
                 if written_size > max_size:
                     # Exceeded limit mid-stream; clean up and reject
-                    f.close()
+                    await f.close()
                     os.remove(target_path)
                     raise HTTPException(
                         status_code=413,
                         detail=f"File too large: exceeded {max_size} bytes during upload. "
                         f"See SECURITY_AUDIT.md for configuration details.",
                     )
-                f.write(chunk)
+                await f.write(chunk)
     except HTTPException:
         raise
     except Exception as e:
@@ -1384,29 +1445,7 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
     # Check for exact duplicates (same SHA-256 hash) before returning.
     # This gives the caller an immediate warning without waiting for the pipeline.
     # Only performed when deduplication is enabled in settings.
-    exact_duplicate_warning = None
-    if settings.enable_deduplication:
-        try:
-            filehash = hash_file(target_path)
-            existing = (
-                db.query(FileRecord)
-                .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False))
-                .order_by(FileRecord.id.asc())
-                .first()
-            )
-            if existing:
-                exact_duplicate_warning = {
-                    "duplicate_type": "exact",
-                    "original_file_id": existing.id,
-                    "original_filename": existing.original_filename,
-                    "message": (
-                        "This file appears to be an exact duplicate of an already-processed document. "
-                        "It will still be queued but will be flagged as a duplicate."
-                    ),
-                }
-                logger.info(f"Exact duplicate detected on upload: '{safe_filename}' matches file ID {existing.id}")
-        except Exception as e:
-            logger.warning(f"Duplicate check failed for uploaded file '{safe_filename}': {e}")
+    exact_duplicate_warning = _check_for_exact_duplicate(db, target_path, safe_filename)
 
     response: dict = {
         "task_id": task.id,
@@ -1458,7 +1497,7 @@ def claim_file(request: Request, file_id: int, db: DbSession):
         logger.exception(f"Error claiming file {file_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to claim document")
 
-    logger.info(f"File {file_id} claimed by user '{owner_id}'")
+    logger.info("File %d claimed by user", file_id)
     return {"status": "success", "message": "Document claimed successfully", "file_id": file_id, "owner_id": owner_id}
 
 
@@ -1498,7 +1537,7 @@ def bulk_claim_files(request: Request, file_ids: list[int], db: DbSession):
         logger.exception(f"Error during bulk claim: {e}")
         raise HTTPException(status_code=500, detail="Failed to claim documents")
 
-    logger.info(f"Bulk claim by '{owner_id}': claimed={claimed}, skipped={[s['file_id'] for s in skipped]}")
+    logger.info("Bulk claim: claimed=%s, skipped=%s", claimed, [s["file_id"] for s in skipped])
     return {
         "status": "success",
         "claimed_count": len(claimed),
@@ -1551,8 +1590,7 @@ def assign_owner(request: Request, db: DbSession, owner_id: str = Query(...), fi
         logger.exception(f"Error assigning owner: {e}")
         raise HTTPException(status_code=500, detail="Failed to assign owner")
 
-    admin_name = get_current_owner_id(request) or "admin"
-    logger.info(f"Admin '{admin_name}' assigned owner_id='{owner_id}' to {updated} file(s)")
+    logger.info("Admin assigned owner to %d file(s)", updated)
     return {
         "status": "success",
         "message": f"Assigned owner to {updated} document(s)",
