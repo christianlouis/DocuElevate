@@ -712,7 +712,9 @@ class TestSettingsSyncAdditional:
             mock_redis_module.from_url.side_effect = Exception("Redis connection failed")
             with patch("app.utils.settings_sync.logger") as mock_logger:
                 notify_settings_updated()
-                mock_logger.warning.assert_any_call("Could not publish settings update to Redis: Redis connection failed")
+                mock_logger.warning.assert_any_call(
+                    "Could not publish settings update to Redis: Redis connection failed"
+                )
 
     def test_reload_failure_is_logged_not_raised(self):
         """Test that a reload failure is logged, not raised (lines 71-72)."""
@@ -733,7 +735,9 @@ class TestSettingsSyncAdditional:
         with patch("app.utils.settings_sync.redis") as mock_redis_module:
             mock_redis_module.from_url.return_value = MagicMock()  # Redis OK
             with patch("app.utils.config_loader.reload_settings_from_db"):
-                with patch("app.utils.ocr_language_manager.ensure_ocr_languages_async", side_effect=Exception("OCR failed")):
+                with patch(
+                    "app.utils.ocr_language_manager.ensure_ocr_languages_async", side_effect=Exception("OCR failed")
+                ):
                     with patch("app.utils.settings_sync.logger") as mock_logger:
                         notify_settings_updated()
                         mock_logger.warning.assert_any_call("Could not schedule OCR language check: OCR failed")
@@ -749,10 +753,12 @@ class TestSettingsSyncAdditional:
             if fn is not None:
                 handler_fn = fn
                 return fn
+
             def decorator(func):
                 nonlocal handler_fn
                 handler_fn = func
                 return func
+
             return decorator
 
         with patch("app.utils.settings_sync.task_prerun") as mock_signal:
@@ -768,10 +774,15 @@ class TestSettingsSyncAdditional:
             mock_redis_mod.from_url.return_value = mock_redis
             with patch("app.utils.config_loader.reload_settings_from_db"):
                 with patch("app.utils.settings_sync._last_seen_version", ""):
-                    with patch("app.utils.ocr_language_manager.ensure_ocr_languages_async", side_effect=Exception("Worker OCR fail")):
+                    with patch(
+                        "app.utils.ocr_language_manager.ensure_ocr_languages_async",
+                        side_effect=Exception("Worker OCR fail"),
+                    ):
                         with patch("app.utils.settings_sync.logger") as mock_logger:
                             handler_fn(sender=None)
-                            mock_logger.warning.assert_any_call("Could not schedule OCR language check on worker: Worker OCR fail")
+                            mock_logger.warning.assert_any_call(
+                                "Could not schedule OCR language check on worker: Worker OCR fail"
+                            )
 
     def test_signal_handler_reloads_on_version_change(self):
         """Test the task_prerun signal handler reloads settings when version changes (lines 95-98)."""
