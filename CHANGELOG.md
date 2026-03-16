@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.153.0 (2026-03-16)
+
+### Bug Fixes
+
+- **system-reset**: Address code review feedback
+  ([`7dffdc0`](https://github.com/christianlouis/DocuElevate/commit/7dffdc05542cbfe37a91f86b661790038195fef5))
+
+### Features
+
+- **system-reset**: Add system reset and factory reset feature
+  ([`a88d790`](https://github.com/christianlouis/DocuElevate/commit/a88d790445e5aae9f8ba04e735501d6c93589dec))
+
+### Testing
+
+- **system-reset**: Add comprehensive tests and documentation
+  ([`96bfba8`](https://github.com/christianlouis/DocuElevate/commit/96bfba8057e506f561d21318b0205e521cf67109))
+
+
 ## v0.152.0 (2026-03-16)
 
 ### Features
