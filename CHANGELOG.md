@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Chores
+
+- **docker**: Optimize image size with venv, slim builder, and dockerignore
+  ([`718d82c`](https://github.com/christianlouis/DocuElevate/commit/718d82c815c693436708944b4396939f329a1ca7))
+
+
 ## v0.149.4 (2026-03-16)
 
 ### Bug Fixes
