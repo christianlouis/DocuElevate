@@ -538,7 +538,8 @@ class TestTokenUtils:
     def test_generate_api_token_length(self):
         """Generated tokens should have the exact expected length based on TOKEN_BYTES."""
         import math
-        from app.api.api_tokens import generate_api_token, TOKEN_PREFIX, TOKEN_BYTES
+
+        from app.api.api_tokens import TOKEN_BYTES, TOKEN_PREFIX, generate_api_token
 
         # base64url encoding of N bytes without padding: ceil(N * 4 / 3) characters
         expected_b64_len = math.ceil(TOKEN_BYTES * 4 / 3)
@@ -551,7 +552,8 @@ class TestTokenUtils:
     def test_generate_api_token_charset(self):
         """Generated tokens should only contain URL-safe base64 characters and the prefix."""
         import re
-        from app.api.api_tokens import generate_api_token, TOKEN_PREFIX
+
+        from app.api.api_tokens import TOKEN_PREFIX, generate_api_token
 
         token = generate_api_token()
         # Check it starts with prefix and the rest is base64url chars ([A-Za-z0-9_-])
@@ -562,13 +564,13 @@ class TestTokenUtils:
     def test_generate_api_token_uses_secrets(self):
         """Generated tokens should use secrets.token_urlsafe with the correct number of bytes."""
         from unittest.mock import patch
-        from app.api.api_tokens import generate_api_token, TOKEN_BYTES, TOKEN_PREFIX
+
+        from app.api.api_tokens import TOKEN_BYTES, TOKEN_PREFIX, generate_api_token
 
         with patch("app.api.api_tokens.secrets.token_urlsafe", return_value="mocked_token") as mock_secrets:
             token = generate_api_token()
             mock_secrets.assert_called_once_with(TOKEN_BYTES)
             assert token == f"{TOKEN_PREFIX}mocked_token"
-
 
     @pytest.mark.unit
     def test_hash_token_deterministic(self):
