@@ -825,15 +825,18 @@ class TestSettingsSyncAdditional:
         from app.utils.settings_sync import register_settings_reload_signal
 
         handler_fn = None
+
         def capture_connect(fn=None, weak=None, **kwargs):
             nonlocal handler_fn
             if fn is not None:
                 handler_fn = fn
                 return fn
+
             def decorator(func):
                 nonlocal handler_fn
                 handler_fn = func
                 return func
+
             return decorator
 
         with patch("app.utils.settings_sync.task_prerun") as mock_signal:
@@ -856,15 +859,18 @@ class TestSettingsSyncAdditional:
         from app.utils.settings_sync import register_settings_reload_signal
 
         handler_fn = None
+
         def capture_connect(fn=None, weak=None, **kwargs):
             nonlocal handler_fn
             if fn is not None:
                 handler_fn = fn
                 return fn
+
             def decorator(func):
                 nonlocal handler_fn
                 handler_fn = func
                 return func
+
             return decorator
 
         with patch("app.utils.settings_sync.task_prerun") as mock_signal:
@@ -881,10 +887,16 @@ class TestSettingsSyncAdditional:
             with patch("app.utils.config_loader.reload_settings_from_db") as mock_reload:
                 with patch("app.utils.settings_sync._last_seen_version", "111.0"):
                     with patch("app.utils.settings_sync.logger") as mock_logger:
-                        with patch("app.utils.ocr_language_manager.ensure_ocr_languages_async", side_effect=Exception("OCR failed")):
+                        with patch(
+                            "app.utils.ocr_language_manager.ensure_ocr_languages_async",
+                            side_effect=Exception("OCR failed"),
+                        ):
                             handler_fn(sender=None)
                             mock_reload.assert_called_once()
-                            mock_logger.warning.assert_called_with("Could not schedule OCR language check on worker: OCR failed")
+                            mock_logger.warning.assert_called_with(
+                                "Could not schedule OCR language check on worker: OCR failed"
+                            )
+
 
 # ===========================================================================
 # app/api/logs.py – additional branches
