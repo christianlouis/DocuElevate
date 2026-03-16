@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.149.3 (2026-03-16)
+
+### Bug Fixes
+
+- **migrations**: Guard migration 036 against missing user_profiles table
+  ([`77df962`](https://github.com/christianlouis/DocuElevate/commit/77df9628c33ccff8756735a819911aeb7d32977b))
+
+
 ## v0.149.2 (2026-03-16)
 
 ### Bug Fixes
