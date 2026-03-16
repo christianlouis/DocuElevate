@@ -21,6 +21,7 @@ _OTHER_OWNER = "other_user@example.com"
 # Shared fixture helpers
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def int_engine():
     """In-memory SQLite engine for integration tests."""
@@ -45,8 +46,9 @@ def int_session(int_engine):
 
 def _make_client(int_engine, owner_id: str = _OWNER):
     """Return a TestClient with *owner_id* injected as the authenticated user."""
-    from app.main import app
     from unittest.mock import patch
+
+    from app.main import app
 
     def override_db():
         Session = sessionmaker(bind=int_engine)
@@ -73,6 +75,7 @@ def int_client(int_engine):
 # CRUD tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 class TestSavedSearchesAPI:
     """Tests for Saved Searches endpoints."""
@@ -85,13 +88,7 @@ class TestSavedSearchesAPI:
 
     def test_create_saved_search(self, int_client):
         """Create a saved search and verify the response."""
-        payload = {
-            "name": "My Invoices",
-            "filters": {
-                "tags": "invoice",
-                "document_type": "Invoice"
-            }
-        }
+        payload = {"name": "My Invoices", "filters": {"tags": "invoice", "document_type": "Invoice"}}
         resp = int_client.post("/api/saved-searches", json=payload)
         assert resp.status_code == 201
         data = resp.json()
@@ -102,27 +99,18 @@ class TestSavedSearchesAPI:
     def test_create_saved_search_invalid_filters(self, int_client):
         """Creating with invalid filters returns 422."""
         # Missing filters parameter (or empty after sanitization)
-        payload = {
-            "name": "My Invoices",
-            "filters": {}
-        }
+        payload = {"name": "My Invoices", "filters": {}}
         resp = int_client.post("/api/saved-searches", json=payload)
         assert resp.status_code == 422
 
         # Invalid filters format
-        payload2 = {
-            "name": "My Invoices",
-            "filters": "not_a_dict"
-        }
+        payload2 = {"name": "My Invoices", "filters": "not_a_dict"}
         resp2 = int_client.post("/api/saved-searches", json=payload2)
         assert resp2.status_code == 422
 
     def test_create_saved_search_duplicate(self, int_client):
         """Creating a duplicate named search returns 409."""
-        payload = {
-            "name": "Duplicate",
-            "filters": {"q": "test"}
-        }
+        payload = {"name": "Duplicate", "filters": {"q": "test"}}
         int_client.post("/api/saved-searches", json=payload)
         resp = int_client.post("/api/saved-searches", json=payload)
         assert resp.status_code == 409
@@ -134,26 +122,17 @@ class TestSavedSearchesAPI:
             resp = int_client.post("/api/saved-searches", json={"name": f"Search LIMIT {i}", "filters": {"q": "test"}})
             assert resp.status_code == 201
 
-        payload = {
-            "name": "One too many",
-            "filters": {"q": "test"}
-        }
+        payload = {"name": "One too many", "filters": {"q": "test"}}
         resp = int_client.post("/api/saved-searches", json=payload)
         assert resp.status_code == 409
 
     def test_update_saved_search(self, int_client):
         """Update an existing saved search."""
-        payload = {
-            "name": "Original Name",
-            "filters": {"q": "test"}
-        }
+        payload = {"name": "Original Name", "filters": {"q": "test"}}
         created = int_client.post("/api/saved-searches", json=payload).json()
         search_id = created["id"]
 
-        update_payload = {
-            "name": "Updated Name",
-            "filters": {"tags": "new"}
-        }
+        update_payload = {"name": "Updated Name", "filters": {"tags": "new"}}
         resp = int_client.put(f"/api/saved-searches/{search_id}", json=update_payload)
         assert resp.status_code == 200
         data = resp.json()
@@ -162,9 +141,7 @@ class TestSavedSearchesAPI:
 
     def test_update_saved_search_not_found(self, int_client):
         """Updating a non-existent search returns 404."""
-        update_payload = {
-            "name": "Updated Name"
-        }
+        update_payload = {"name": "Updated Name"}
         resp = int_client.put("/api/saved-searches/999", json=update_payload)
         assert resp.status_code == 404
 
@@ -182,10 +159,7 @@ class TestSavedSearchesAPI:
 
     def test_delete_saved_search(self, int_client, int_session):
         """Delete an existing search."""
-        payload = {
-            "name": "To be deleted",
-            "filters": {"q": "test"}
-        }
+        payload = {"name": "To be deleted", "filters": {"q": "test"}}
         created = int_client.post("/api/saved-searches", json=payload).json()
         search_id = created["id"]
 
