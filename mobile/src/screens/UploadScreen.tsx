@@ -1,10 +1,11 @@
 /**
- * UploadScreen – document upload via camera or file picker.
+ * UploadScreen – document upload via camera, photo library, or file picker.
  *
  * Users can:
  * 1. Take a photo of a document with the device camera.
- * 2. Pick an existing file (PDF, image, Office document) from the Files app.
- * 3. Receive files shared from other apps via the iOS Share Sheet / Android
+ * 2. Select an existing photo from the device's photo library.
+ * 3. Pick an existing file (PDF, image, Office document) from the Files app.
+ * 4. Receive files shared from other apps via the iOS Share Sheet / Android
  *    Share Intent (handled via ShareContext populated by the root layout).
  *
  * After a successful upload the screen polls the backend every 5 seconds to
@@ -161,6 +162,29 @@ export default function UploadScreen() {
     }
   }
 
+  async function handlePhotoLibrary() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Photo library access required",
+        "Please grant photo library access in Settings to select images."
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.9,
+      allowsEditing: false,
+    });
+
+    if (!result.canceled && result.assets.length > 0) {
+      const asset = result.assets[0];
+      const filename = asset.fileName ?? `photo_${Date.now()}.jpg`;
+      await uploadFile(asset.uri, filename, asset.mimeType ?? "image/jpeg");
+    }
+  }
+
   async function handleFilePicker() {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -202,13 +226,23 @@ export default function UploadScreen() {
         </Pressable>
 
         <Pressable
+          style={[styles.actionButton, styles.photoLibraryButton]}
+          onPress={handlePhotoLibrary}
+          accessibilityRole="button"
+          accessibilityLabel="Select photo from library"
+        >
+          <Text style={styles.actionIcon}>🖼️</Text>
+          <Text style={styles.actionLabel}>Photos</Text>
+        </Pressable>
+
+        <Pressable
           style={[styles.actionButton, styles.fileButton]}
           onPress={handleFilePicker}
           accessibilityRole="button"
           accessibilityLabel="Pick file from device"
         >
           <Text style={styles.actionIcon}>📄</Text>
-          <Text style={styles.actionLabel}>File Picker</Text>
+          <Text style={styles.actionLabel}>Files</Text>
         </Pressable>
       </View>
 
@@ -218,7 +252,7 @@ export default function UploadScreen() {
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>☁️</Text>
             <Text style={styles.emptyText}>
-              Tap Camera or File Picker to upload a document.
+              Tap Camera, Photos, or Files to upload a document.
             </Text>
             <Text style={styles.emptyHint}>
               You can also share files from other apps directly to DocuElevate.
@@ -304,6 +338,7 @@ const styles = StyleSheet.create({
     minHeight: 80,
   },
   cameraButton: { backgroundColor: "#1e40af" },
+  photoLibraryButton: { backgroundColor: "#7c3aed" },
   fileButton: { backgroundColor: "#059669" },
   actionIcon: { fontSize: 28, marginBottom: 6 },
   actionLabel: {

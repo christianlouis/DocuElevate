@@ -6,6 +6,7 @@ Native mobile application for DocuElevate, built with **React Native** and **Exp
 
 - 🔐 **SSO Login** – authenticate via your DocuElevate server's OAuth2/SSO provider; an API token is auto-generated and stored securely in the device keychain
 - 📷 **Camera Capture** – scan documents directly with the device camera
+- 🖼️ **Photo Library** – select existing photos from the device's photo library for upload
 - 📄 **File Picker** – upload PDFs, images, and Office documents from the device's Files app
 - 🔗 **Share Extension** – send files from any app directly to DocuElevate via the iOS/Android share sheet
 - 🔔 **Push Notifications** – receive real-time push notifications when documents finish processing (via Expo push notifications)
@@ -145,7 +146,7 @@ mobile/
     ├── screens/
     │   ├── WelcomeScreen.tsx      # Branded intro / onboarding
     │   ├── LoginScreen.tsx        # SSO login
-    │   ├── UploadScreen.tsx       # Camera capture + file picker
+    │   ├── UploadScreen.tsx       # Camera capture + photo library + file picker
     │   ├── FilesScreen.tsx        # Document list
     │   └── ProfileScreen.tsx      # User profile + sign out
     └── services/
@@ -158,9 +159,9 @@ The app registers itself as a share target so any file can be sent directly to D
 
 ### iOS – how it works
 
-`app.json` declares `CFBundleDocumentTypes` in the iOS `infoPlist` section.  This tells iOS which file types the app can receive, causing it to appear in the share sheet when the user shares a matching file.  When the user taps **DocuElevate** in the share sheet, iOS passes the file path to the app via `application:openURL:options:`, which React Native forwards as a `file://` URL through the `Linking` module.
+`app.json` declares `CFBundleDocumentTypes` in the iOS `infoPlist` section.  This tells iOS which file types the app can receive, causing it to appear in the share sheet when the user shares a matching file.  When the user taps **DocuElevate** in the share sheet, iOS passes the file path to the app via `application:openURL:options:`.  The URL may arrive as a standard `file://` path or under the app's custom `docuelevate://` scheme.
 
-The root layout (`app/_layout.tsx`) listens for incoming `file://` URLs via `Linking.addEventListener` (warm start) and `Linking.getInitialURL()` (cold start).  Incoming files are stored in `ShareContext` and automatically uploaded by `UploadScreen`.
+The root layout (`app/_layout.tsx`) listens for incoming URLs via `Linking.addEventListener` (warm start) and `Linking.getInitialURL()` (cold start).  If the URL uses the `docuelevate://` scheme it is automatically rewritten to `file://` before being forwarded.  Incoming files are stored in `ShareContext` and automatically uploaded by `UploadScreen`.
 
 **Supported iOS file types:** PDF, images (JPEG / PNG / GIF / BMP / TIFF / WebP), plain text, Word (`.docx`, `.doc`), Excel (`.xlsx`, `.xls`), PowerPoint (`.pptx`, `.ppt`), and any other file (`public.data`).
 

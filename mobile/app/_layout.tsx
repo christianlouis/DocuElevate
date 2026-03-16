@@ -39,11 +39,29 @@ function filenameFromUri(uri: string): string {
  * Build a Linking URL handler that forwards incoming file:// / content://
  * URLs to ShareContext.  Extracted as a module-level factory so the handler
  * itself is created once and can be easily unit-tested without a React context.
+ *
+ * On iOS the Share Sheet / "Open In" action may deliver the file path under
+ * the app's custom URL scheme (e.g.
+ * `docuelevate://private/var/mobile/Library/…/file.pdf`) instead of a plain
+ * `file://` URL.  When that happens we rewrite the URL to `file:///…` so the
+ * upload logic can read the file normally.
  */
 function makeUrlHandler(addPendingFile: (f: { uri: string; filename: string }) => void) {
   return ({ url }: { url: string }) => {
-    if (!url.startsWith("file://") && !url.startsWith("content://")) return;
-    addPendingFile({ uri: url, filename: filenameFromUri(url) });
+    let fileUri = url;
+
+    // iOS may pass a filesystem path under the app's custom scheme.
+    // Rewrite it to a file:// URL unless it looks like an in-app deep-link
+    // (expo-router groups always start with "(").
+    if (url.startsWith("docuelevate://")) {
+      const path = url.slice("docuelevate://".length);
+      if (path.length > 0 && !path.startsWith("(")) {
+        fileUri = "file:///" + path.replace(/^\/+/, "");
+      }
+    }
+
+    if (!fileUri.startsWith("file://") && !fileUri.startsWith("content://")) return;
+    addPendingFile({ uri: fileUri, filename: filenameFromUri(fileUri) });
   };
 }
 
