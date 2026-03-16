@@ -667,3 +667,13 @@ class TestTokenUtils:
         # All characters should be valid lowercase hex digits.
         int(h, 16)
         assert h == h.lower()
+
+    @pytest.mark.unit
+    def test_hash_token_known_value(self):
+        """hash_token should return the exact expected PBKDF2 digest for a known input."""
+        from app.api.api_tokens import hash_token
+
+        # PBKDF2-HMAC-SHA256 with 100,000 iterations and salt b"api-token-v1"
+        token = "de_test_token_value"
+        expected_hash = "9b89d9adf2f390c75bf2fd0ff2bb5622ef5a9dce438354cce6e39f2f5401129e"
+        assert hash_token(token) == expected_hash
