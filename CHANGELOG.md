@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.150.4 (2026-03-16)
+
+### Bug Fixes
+
+- **mobile**: Sync package-lock.json with package.json to fix npm ci failure
+  ([`0e14471`](https://github.com/christianlouis/DocuElevate/commit/0e144710b56fd14a42e0089c1bcfdd9f3a7c5901))
+
+
 ## v0.150.3 (2026-03-16)
 
 ### Bug Fixes
