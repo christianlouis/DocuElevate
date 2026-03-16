@@ -969,6 +969,86 @@ class MobileDevice(Base):
     __table_args__ = (UniqueConstraint("owner_id", "push_token", name="uq_mobile_device_owner_token"),)
 
 
+class UserSession(Base):
+    """Server-side session tracking for invalidation and device management.
+
+    Each row represents an active browser or app session.  The ``session_token``
+    is stored in the user's cookie and validated on every authenticated request.
+    Revoking a row (``is_revoked=True``) immediately terminates that session
+    on the next request.
+    """
+
+    __tablename__ = "user_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Cryptographically random token stored in the session cookie.
+    session_token = Column(String(128), unique=True, nullable=False, index=True)
+
+    # Stable owner identifier — matches FileRecord.owner_id.
+    user_id = Column(String, nullable=False, index=True)
+
+    # Client metadata for display in the session management UI.
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(512), nullable=True)
+    device_info = Column(String(255), nullable=True)
+
+    is_revoked = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_active_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class QRLoginChallenge(Base):
+    """Time-limited QR code login challenge for mobile app authentication.
+
+    A logged-in web user generates a challenge that produces a QR code.  The
+    mobile app scans the QR code and calls the claim endpoint with the
+    ``challenge_token``.  The server verifies the challenge is still valid,
+    unclaimed, and unexpired, then issues an API token for the mobile app.
+
+    Security properties:
+    * Time-bound (default 2 minutes).
+    * Single-use (``is_claimed`` prevents replay).
+    * Cryptographically random 64-byte token.
+    * Bound to the creating user — only that user's mobile device receives a
+      token.
+    """
+
+    __tablename__ = "qr_login_challenges"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Cryptographically random token encoded in the QR code.
+    challenge_token = Column(String(128), unique=True, nullable=False, index=True)
+
+    # The user who created this challenge (from the web session).
+    user_id = Column(String, nullable=False, index=True)
+
+    # Whether the challenge has been successfully claimed by a mobile app.
+    is_claimed = Column(Boolean, nullable=False, default=False)
+
+    # Whether the challenge has been explicitly cancelled or expired.
+    is_cancelled = Column(Boolean, nullable=False, default=False)
+
+    # IP address of the web client that created the challenge.
+    created_by_ip = Column(String(45), nullable=True)
+
+    # IP address of the mobile client that claimed the challenge.
+    claimed_by_ip = Column(String(45), nullable=True)
+
+    # Device name provided by the mobile app when claiming.
+    device_name = Column(String(255), nullable=True)
+
+    # The API token ID that was issued to the mobile app (for audit trail).
+    issued_token_id = Column(Integer, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    claimed_at = Column(DateTime(timezone=True), nullable=True)
+
+
 class ComplianceTemplate(Base):
     """Pre-built compliance configuration templates (GDPR, HIPAA, SOC2).
 

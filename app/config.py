@@ -190,6 +190,26 @@ class Settings(BaseSettings):
     admin_username: Optional[str] = None
     admin_password: Optional[str] = None
     session_secret: Optional[str] = None
+    session_lifetime_days: int = Field(
+        default=30,
+        description=(
+            "Session lifetime in days.  Common values: 30, 60, 90.  "
+            "Determines how long a user stays logged in before being required to re-authenticate.  "
+            "Applies to both browser sessions and the session cookie max_age."
+        ),
+    )
+    session_lifetime_custom_days: int | None = Field(
+        default=None,
+        description=(
+            "Override session_lifetime_days with a custom value.  "
+            "When set, this takes precedence over session_lifetime_days.  "
+            "Useful for admin-configured non-standard durations."
+        ),
+    )
+    qr_login_challenge_ttl_seconds: int = Field(
+        default=120,
+        description="Time-to-live in seconds for QR login challenges (default: 2 minutes).",
+    )
     admin_group_name: str = "admin"
 
     # Multi-user settings

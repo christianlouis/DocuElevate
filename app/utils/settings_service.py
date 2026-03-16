@@ -134,6 +134,30 @@ SETTING_METADATA = {
         "required": True,  # Required when auth_enabled=True (validated in config.py)
         "restart_required": True,
     },
+    "session_lifetime_days": {
+        "category": "Authentication",
+        "description": "Session lifetime in days (default 30). Determines how long a user stays logged in.",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "session_lifetime_custom_days": {
+        "category": "Authentication",
+        "description": "Override session_lifetime_days with a custom value. Takes precedence when set.",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "qr_login_challenge_ttl_seconds": {
+        "category": "Authentication",
+        "description": "Time-to-live in seconds for QR login challenges (default 120).",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "admin_username": {
         "category": "Authentication",
         "description": "Admin username for local authentication",
