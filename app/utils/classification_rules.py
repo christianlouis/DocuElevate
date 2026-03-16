@@ -257,10 +257,10 @@ def _match_metadata(rule: ClassificationRule, metadata: dict[str, Any] | None) -
     return str(actual).lower() == expected_value.strip().lower()
 
 
-_MATCHERS = {
-    RULE_TYPE_FILENAME: _match_filename,
-    RULE_TYPE_CONTENT: _match_content,
-    RULE_TYPE_METADATA: _match_metadata,
+_MATCHERS: dict[str, tuple] = {
+    RULE_TYPE_FILENAME: (_match_filename, "filename"),
+    RULE_TYPE_CONTENT: (_match_content, "text"),
+    RULE_TYPE_METADATA: (_match_metadata, "metadata"),
 }
 
 
@@ -271,19 +271,13 @@ def _evaluate_rule(
     metadata: dict[str, Any] | None,
 ) -> MatchedRule | None:
     """Evaluate a single rule against the document.  Return a :class:`MatchedRule` on match."""
-    matcher = _MATCHERS.get(rule.rule_type)
-    if matcher is None:
+    entry = _MATCHERS.get(rule.rule_type)
+    if entry is None:
         return None
 
-    # Dispatch to the appropriate matcher based on rule type
-    if rule.rule_type == RULE_TYPE_FILENAME:
-        matched = matcher(rule, filename)
-    elif rule.rule_type == RULE_TYPE_CONTENT:
-        matched = matcher(rule, text)
-    elif rule.rule_type == RULE_TYPE_METADATA:
-        matched = matcher(rule, metadata)
-    else:
-        matched = False
+    matcher, arg_key = entry
+    arg_map = {"filename": filename, "text": text, "metadata": metadata}
+    matched = matcher(rule, arg_map[arg_key])
 
     if matched:
         return MatchedRule(

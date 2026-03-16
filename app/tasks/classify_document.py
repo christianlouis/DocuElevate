@@ -103,6 +103,7 @@ def classify_document_task(
                 try:
                     existing_metadata = json.loads(file_record.ai_metadata)
                 except (json.JSONDecodeError, TypeError):
+                    logger.warning("Failed to parse ai_metadata for file %s, starting fresh", file_id)
                     existing_metadata = {}
 
             # Load custom rules
