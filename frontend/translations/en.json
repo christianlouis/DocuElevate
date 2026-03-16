@@ -1377,9 +1377,6 @@
   "profile.contact_email_label": "Contact / Notification E-mail",
   "profile.contact_email_placeholder": "you@example.com",
   "profile.current_password": "Current Password",
-  "profile.default_document_language_auto": "Use system default",
-  "profile.default_document_language_hint": "Documents in other languages are automatically translated into this language. Leave blank to use the system default (English).",
-  "profile.default_document_language_label": "Default Document Language",
   "profile.dismiss": "Dismiss",
   "profile.display_name_hint": "Leave blank to use your account username or email.",
   "profile.display_name_label": "Display Name",
@@ -1734,21 +1731,5 @@
   "upload.uploading": "Uploading...",
   "upload.url_description": "Enter a direct link to a file (PDF, Office documents, or images)",
   "upload.url_label": "File URL",
-  "upload.url_placeholder": "https://example.com/document.pdf",
-
-  "translation.default_language_version": "Default Language Version",
-  "translation.detected_language": "Detected language",
-  "translation.show_text": "Show text",
-  "translation.hide_text": "Hide text",
-  "translation.copy": "Copy",
-  "translation.load_translation": "Load translation",
-  "translation.translate_to": "Translate to Another Language",
-  "translation.select_language": "Select language…",
-  "translation.translate_btn": "Translate",
-  "translation.translating": "Translating…",
-  "translation.no_translation": "No translation available yet — it may still be processing",
-  "translation.translated_to": "Translated to",
-  "translation.translation_failed": "Translation failed",
-  "translation.select_target": "Please select a target language.",
-  "translation.copied": "Copied!"
+  "upload.url_placeholder": "https://example.com/document.pdf"
 }
