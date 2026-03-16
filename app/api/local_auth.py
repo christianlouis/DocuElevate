@@ -26,6 +26,7 @@ from starlette.responses import RedirectResponse
 from app.config import settings
 from app.database import get_db
 from app.models import LocalUser, UserProfile
+from app.utils.i18n import translate as _translate
 from app.utils.local_auth import (
     build_session_user,
     generate_token,
@@ -41,6 +42,7 @@ router = APIRouter(tags=["local-auth"])
 
 _templates_dir = pathlib.Path(__file__).parents[2] / "frontend" / "templates"
 templates = Jinja2Templates(directory=str(_templates_dir))
+templates.env.globals["_"] = lambda key, **kwargs: _translate(key, "en", **kwargs)
 
 DbSession = Annotated[Session, Depends(get_db)]
 

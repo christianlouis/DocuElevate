@@ -1,0 +1,546 @@
+{% extends "base.html" %}
+{% block title %}{{ _("profile.page_title") }}{% endblock %}
+
+{% block content %}
+<div
+  class="container mx-auto px-4 py-8 max-w-3xl"
+  x-data="profileSettings()"
+  x-init="init()"
+>
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <header class="mb-8">
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+      <i class="fas fa-user-circle text-blue-500" aria-hidden="true"></i>
+      {{ _("profile.heading") }}
+    </h1>
+    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      {{ _("profile.subtitle") }}
+    </p>
+  </header>
+
+  <!-- ── Status banner ──────────────────────────────────────────────────── -->
+  <div
+    role="alert"
+    aria-live="polite"
+    x-show="banner.visible"
+    x-transition
+    :class="banner.error
+      ? 'bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-700 text-red-800 dark:text-red-200'
+      : 'bg-green-50 dark:bg-green-900/30 border border-green-300 dark:border-green-700 text-green-800 dark:text-green-200'"
+    class="rounded-lg p-4 mb-6 flex items-start gap-3 text-sm"
+  >
+    <i :class="banner.error ? 'fas fa-exclamation-circle' : 'fas fa-check-circle'" aria-hidden="true"></i>
+    <span x-text="banner.message"></span>
+    <button
+      type="button"
+      @click="banner.visible = false"
+      class="ml-auto"
+      aria-label="{{ _('profile.dismiss') }}"
+      style="min-height:44px; min-width:44px;"
+    >
+      <i class="fas fa-times" aria-hidden="true"></i>
+    </button>
+  </div>
+
+  <!-- ── Avatar card ────────────────────────────────────────────────────── -->
+  <section
+    class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6"
+    aria-labelledby="avatar-heading"
+  >
+    <h2 id="avatar-heading" class="text-base font-semibold text-gray-900 dark:text-white mb-4">
+      <i class="fas fa-camera text-gray-400 mr-2" aria-hidden="true"></i>{{ _("profile.avatar_heading") }}
+    </h2>
+
+    <div class="flex flex-col sm:flex-row items-center gap-6">
+      <!-- Current avatar -->
+      <div class="relative flex-shrink-0">
+        <img
+          :src="avatarUrl"
+          alt="{{ _('profile.avatar_alt') }}"
+          class="w-24 h-24 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600"
+        />
+        <template x-if="hasCustomAvatar">
+          <button
+            type="button"
+            @click="removeAvatar()"
+            :disabled="saving"
+            class="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow focus:outline-none focus:ring-2 focus:ring-red-400"
+            aria-label="{{ _('profile.avatar_remove') }}"
+            title="{{ _('profile.avatar_remove') }}"
+          >
+            <i class="fas fa-times text-xs" aria-hidden="true"></i>
+          </button>
+        </template>
+      </div>
+
+      <!-- Upload controls -->
+      <div class="flex-1 space-y-3">
+        <p class="text-sm text-gray-600 dark:text-gray-400">
+          {% set gravatar_anchor %}<a href="https://gravatar.com" class="underline" target="_blank" rel="noopener noreferrer" aria-label="{{ _('profile.gravatar_link') }} (opens in new tab)">{{ _("profile.gravatar_link") }}</a>{% endset %}
+          {{ _("profile.avatar_upload_hint", gravatar=gravatar_anchor) | safe }}
+        </p>
+        <label
+          for="avatar-input"
+          class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md cursor-pointer focus-within:ring-2 focus-within:ring-blue-500 transition-colors"
+          style="min-height:44px;"
+        >
+          <i class="fas fa-upload" aria-hidden="true"></i>
+          <span>{{ _("profile.choose_image") }}</span>
+          <input
+            id="avatar-input"
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            class="sr-only"
+            @change="uploadAvatar($event)"
+            :disabled="saving"
+          />
+        </label>
+        <p x-show="uploadProgress" class="text-xs text-gray-500 dark:text-gray-400" x-text="uploadProgress" aria-live="polite"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── General info card ──────────────────────────────────────────────── -->
+  <section
+    class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6"
+    aria-labelledby="general-heading"
+  >
+    <h2 id="general-heading" class="text-base font-semibold text-gray-900 dark:text-white mb-4">
+      <i class="fas fa-id-card text-gray-400 mr-2" aria-hidden="true"></i>{{ _("profile.general_heading") }}
+    </h2>
+
+    <div class="space-y-4">
+      <!-- Display name -->
+      <div>
+        <label for="display-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          {{ _("profile.display_name_label") }}
+        </label>
+        <input
+          id="display-name"
+          type="text"
+          x-model="form.display_name"
+          maxlength="255"
+          placeholder="{{ _('profile.display_name_placeholder') }}"
+          class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm
+                 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+          style="min-height:44px;"
+          aria-describedby="display-name-hint"
+        />
+        <p id="display-name-hint" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {{ _("profile.display_name_hint") }}
+        </p>
+      </div>
+
+      <!-- Contact email -->
+      <div>
+        <label for="contact-email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          {{ _("profile.contact_email_label") }}
+        </label>
+        <input
+          id="contact-email"
+          type="email"
+          x-model="form.contact_email"
+          maxlength="255"
+          placeholder="{{ _('profile.contact_email_placeholder') }}"
+          class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm
+                 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+          style="min-height:44px;"
+          aria-describedby="contact-email-hint"
+        />
+        <p id="contact-email-hint" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {{ _("profile.contact_email_hint") }}
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Preferences card ───────────────────────────────────────────────── -->
+  <section
+    class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6"
+    aria-labelledby="prefs-heading"
+  >
+    <h2 id="prefs-heading" class="text-base font-semibold text-gray-900 dark:text-white mb-4">
+      <i class="fas fa-sliders-h text-gray-400 mr-2" aria-hidden="true"></i>{{ _("profile.preferences_heading") }}
+    </h2>
+
+    <div class="space-y-5">
+      <!-- Language -->
+      <div>
+        <label for="lang-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <i class="fas fa-globe text-gray-400 mr-1" aria-hidden="true"></i>{{ _("profile.language_label") }}
+        </label>
+        <select
+          id="lang-select"
+          x-model="form.preferred_language"
+          class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm
+                 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+          style="min-height:44px;"
+        >
+          <option value="">{{ _("profile.language_auto_detect") }}</option>
+          {% for lang in supported_languages %}
+          <option value="{{ lang.code }}">{{ lang.native }} ({{ lang.name }})</option>
+          {% endfor %}
+        </select>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {{ _("profile.language_hint") }}
+        </p>
+      </div>
+
+      <!-- Theme -->
+      <fieldset>
+        <legend class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          <i class="fas fa-palette text-gray-400 mr-1" aria-hidden="true"></i>{{ _("profile.theme_label") }}
+        </legend>
+        <div class="flex flex-wrap gap-3">
+          <label
+            class="relative flex items-center gap-2 cursor-pointer rounded-lg border px-4 py-3 text-sm transition-colors
+                   focus-within:ring-2 focus-within:ring-blue-500"
+            :class="form.preferred_theme === 'light'
+              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+              : 'border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-gray-300'"
+            style="min-height:44px; min-width:44px;"
+          >
+            <input type="radio" name="theme" value="light" x-model="form.preferred_theme" class="sr-only" />
+            <i class="fas fa-sun" aria-hidden="true"></i> {{ _("profile.theme_light") }}
+          </label>
+          <label
+            class="relative flex items-center gap-2 cursor-pointer rounded-lg border px-4 py-3 text-sm transition-colors
+                   focus-within:ring-2 focus-within:ring-blue-500"
+            :class="form.preferred_theme === 'dark'
+              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+              : 'border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-gray-300'"
+            style="min-height:44px; min-width:44px;"
+          >
+            <input type="radio" name="theme" value="dark" x-model="form.preferred_theme" class="sr-only" />
+            <i class="fas fa-moon" aria-hidden="true"></i> {{ _("profile.theme_dark") }}
+          </label>
+          <label
+            class="relative flex items-center gap-2 cursor-pointer rounded-lg border px-4 py-3 text-sm transition-colors
+                   focus-within:ring-2 focus-within:ring-blue-500"
+            :class="!form.preferred_theme || form.preferred_theme === 'system'
+              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+              : 'border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-gray-300'"
+            style="min-height:44px; min-width:44px;"
+          >
+            <input type="radio" name="theme" value="system" x-model="form.preferred_theme" class="sr-only" />
+            <i class="fas fa-desktop" aria-hidden="true"></i> {{ _("profile.theme_system") }}
+          </label>
+        </div>
+        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          {{ _("profile.theme_hint") }}
+        </p>
+      </fieldset>
+
+      <!-- Default Document Language -->
+      <div>
+        <label for="doc-lang-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <i class="fas fa-language text-gray-400 mr-1" aria-hidden="true"></i>{{ _("profile.default_document_language_label") }}
+        </label>
+        <select
+          id="doc-lang-select"
+          x-model="form.default_document_language"
+          class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm
+                 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+          style="min-height:44px;"
+        >
+          <option value="">{{ _("profile.default_document_language_auto") }}</option>
+          {% for lang in supported_languages %}
+          <option value="{{ lang.code }}">{{ lang.native }} ({{ lang.name }})</option>
+          {% endfor %}
+        </select>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {{ _("profile.default_document_language_hint") }}
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Save button -->
+  <div class="flex justify-end">
+    <button
+      type="button"
+      @click="saveProfile()"
+      :disabled="saving"
+      class="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium
+             rounded-md shadow focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+      style="min-height:44px; min-width:44px;"
+    >
+      <i class="fas fa-save" aria-hidden="true"></i>
+      <span x-text="saving ? '{{ _('profile.saving') }}' : '{{ _('profile.save_button') }}'"></span>
+    </button>
+  </div>
+
+  <!-- ── Password change card (local accounts only) ─────────────────────── -->
+  <template x-if="isLocalUser">
+    <section
+      class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mt-6"
+      aria-labelledby="password-heading"
+    >
+      <h2 id="password-heading" class="text-base font-semibold text-gray-900 dark:text-white mb-4">
+        <i class="fas fa-lock text-gray-400 mr-2" aria-hidden="true"></i>{{ _("profile.password_heading") }}
+      </h2>
+
+      <div class="space-y-4 max-w-md">
+        <div>
+          <label for="current-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {{ _("profile.current_password") }}
+          </label>
+          <input
+            id="current-password"
+            type="password"
+            x-model="pwForm.current_password"
+            autocomplete="current-password"
+            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm
+                   focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            style="min-height:44px;"
+          />
+        </div>
+        <div>
+          <label for="new-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {{ _("profile.new_password") }}
+          </label>
+          <input
+            id="new-password"
+            type="password"
+            x-model="pwForm.new_password"
+            autocomplete="new-password"
+            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm
+                   focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            style="min-height:44px;"
+            aria-describedby="new-pw-hint"
+          />
+          <p id="new-pw-hint" class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ _("profile.new_password_hint") }}</p>
+        </div>
+        <div>
+          <label for="confirm-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {{ _("profile.confirm_password") }}
+          </label>
+          <input
+            id="confirm-password"
+            type="password"
+            x-model="pwForm.new_password_confirm"
+            autocomplete="new-password"
+            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm
+                   focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            style="min-height:44px;"
+          />
+        </div>
+        <div class="flex justify-end">
+          <button
+            type="button"
+            @click="changePassword()"
+            :disabled="pwSaving"
+            class="inline-flex items-center gap-2 px-5 py-2 bg-gray-700 hover:bg-gray-800 text-white text-sm font-medium
+                   rounded-md shadow focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50 transition-colors"
+            style="min-height:44px;"
+          >
+            <i class="fas fa-key" aria-hidden="true"></i>
+            <span x-text="pwSaving ? '{{ _('profile.updating') }}' : '{{ _('profile.update_password') }}'"></span>
+          </button>
+        </div>
+      </div>
+    </section>
+  </template>
+
+</div><!-- /container -->
+
+<script>
+function profileSettings() {
+  return {
+    // ── State ──────────────────────────────────────────────────────────────
+    avatarUrl: '/static/images/default-avatar.svg',
+    hasCustomAvatar: false,
+    isLocalUser: false,
+    saving: false,
+    pwSaving: false,
+    uploadProgress: '',
+    banner: { visible: false, error: false, message: '' },
+
+    form: {
+      display_name: '',
+      contact_email: '',
+      preferred_language: '',
+      preferred_theme: 'system',
+      default_document_language: '',
+    },
+
+    pwForm: {
+      current_password: '',
+      new_password: '',
+      new_password_confirm: '',
+    },
+
+    // ── Init ───────────────────────────────────────────────────────────────
+    _initialLanguage: '',
+
+    async init() {
+      try {
+        const res = await fetch('/api/profile');
+        if (!res.ok) return;
+        const data = await res.json();
+        this.avatarUrl        = data.avatar_url  || this.avatarUrl;
+        this.hasCustomAvatar  = !!(data.avatar_url && data.avatar_url.startsWith('data:'));
+        this.isLocalUser      = data.is_local_user || false;
+        this.form.display_name     = data.display_name     || '';
+        this.form.contact_email    = data.contact_email    || '';
+        this.form.preferred_language = data.preferred_language || '';
+        this.form.preferred_theme    = data.preferred_theme  || 'system';
+        this.form.default_document_language = data.default_document_language || '';
+        this._initialLanguage = this.form.preferred_language;
+      } catch (_e) {
+        // Silently ignore — user might not be logged in (rare for this page)
+      }
+    },
+
+    // ── CSRF helper ────────────────────────────────────────────────────────
+    _getCSRFToken() {
+      return document.cookie
+        .split('; ')
+        .find(row => row.startsWith('csrf_token='))
+        ?.split('=')[1];
+    },
+
+    // ── Save general settings ──────────────────────────────────────────────
+    async saveProfile() {
+      this.saving = true;
+      this._hideBanner();
+      const previousLang = this._initialLanguage || '';
+      try {
+        const csrfToken = this._getCSRFToken();
+
+        const res = await fetch('/api/profile', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+          },
+          body: JSON.stringify(this.form),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          this._showBanner(data.detail || 'Failed to save settings.', true);
+          return;
+        }
+        // If the UI language changed, reload so the page renders in the new locale
+        if (this.form.preferred_language !== previousLang) {
+          window.location.reload();
+          return;
+        }
+        this._showBanner('Profile settings saved successfully.', false);
+        // Update display name across the nav (refresh the avatar/name)
+        if (data.avatar_url) {
+          this.avatarUrl = data.avatar_url;
+          this.hasCustomAvatar = data.avatar_url.startsWith('data:');
+        }
+      } catch (_e) {
+        this._showBanner('Network error — please try again.', true);
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    // ── Avatar upload ──────────────────────────────────────────────────────
+    async uploadAvatar(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      if (file.size > 2 * 1024 * 1024) {
+        this._showBanner('Image is too large. Maximum size is 2 MB.', true);
+        return;
+      }
+      this.uploadProgress = 'Uploading…';
+      this._hideBanner();
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const csrfToken = this._getCSRFToken();
+
+      try {
+        const res = await fetch('/api/profile/avatar', {
+          method: 'POST',
+          headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
+          body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          this._showBanner(data.detail || 'Upload failed.', true);
+          return;
+        }
+        this.avatarUrl = data.avatar_url;
+        this.hasCustomAvatar = true;
+        this._showBanner('Profile picture updated.', false);
+      } catch (_e) {
+        this._showBanner('Network error — please try again.', true);
+      } finally {
+        this.uploadProgress = '';
+        // Reset file input so the same file can be re-selected
+        event.target.value = '';
+      }
+    },
+
+    // ── Remove avatar ──────────────────────────────────────────────────────
+    async removeAvatar() {
+      this._hideBanner();
+      const csrfToken = this._getCSRFToken();
+
+      try {
+        const res = await fetch('/api/profile/avatar', {
+          method: 'DELETE',
+          headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          this._showBanner(data.detail || 'Failed to remove avatar.', true);
+          return;
+        }
+        this.avatarUrl = data.avatar_url;
+        this.hasCustomAvatar = false;
+        this._showBanner('Custom avatar removed. Gravatar is now shown.', false);
+      } catch (_e) {
+        this._showBanner('Network error — please try again.', true);
+      }
+    },
+
+    // ── Change password ────────────────────────────────────────────────────
+    async changePassword() {
+      this.pwSaving = true;
+      this._hideBanner();
+      const csrfToken = this._getCSRFToken();
+
+      try {
+        const res = await fetch('/api/profile/change-password', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+          },
+          body: JSON.stringify(this.pwForm),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          this._showBanner(data.detail || 'Failed to change password.', true);
+          return;
+        }
+        this._showBanner('Password changed successfully.', false);
+        this.pwForm = { current_password: '', new_password: '', new_password_confirm: '' };
+      } catch (_e) {
+        this._showBanner('Network error — please try again.', true);
+      } finally {
+        this.pwSaving = false;
+      }
+    },
+
+    // ── Banner helpers ─────────────────────────────────────────────────────
+    _showBanner(message, error) {
+      this.banner = { visible: true, error, message };
+      if (!error) {
+        setTimeout(() => { this.banner.visible = false; }, 4000);
+      }
+    },
+    _hideBanner() {
+      this.banner.visible = false;
+    },
+  };
+}
+</script>
+{% endblock %}

@@ -564,7 +564,6 @@ def _test_webdav_connection(config: dict[str, Any] | None, credentials: dict[str
         return {"success": False, "message": "Missing required field: url"}
 
     # Only allow http/https to prevent file:// or other custom scheme attacks
-    import ipaddress
     from urllib.parse import urlparse
 
     parsed = urlparse(url)
@@ -574,14 +573,10 @@ def _test_webdav_connection(config: dict[str, Any] | None, credentials: dict[str
     # Block requests to private/internal IPs to prevent SSRF
     hostname = parsed.hostname or ""
     if hostname:
-        try:
-            addr = ipaddress.ip_address(hostname)
-            if addr.is_private or addr.is_loopback or addr.is_link_local:
-                return {"success": False, "message": "URLs pointing to internal or private networks are not allowed"}
-        except ValueError:
-            # Hostname is not an IP literal — allow DNS names through
-            if hostname in ("localhost", "localhost.localdomain"):
-                return {"success": False, "message": "URLs pointing to localhost are not allowed"}
+        from app.utils.network import is_private_ip
+
+        if is_private_ip(hostname):
+            return {"success": False, "message": "URLs pointing to internal or private networks are not allowed"}
 
     try:
         import base64

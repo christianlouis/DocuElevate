@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DocuElevate - Login</title>
+    <title>{{ _("app.name") }} - {{ _("auth.login_title") }}</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
           integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA=="
@@ -12,10 +12,10 @@
 <body class="bg-gray-100 h-screen flex items-center justify-center">
     <main class="bg-white rounded-lg shadow-lg p-8 max-w-md w-full" role="main">
         <div class="flex justify-center mb-6">
-            <img src="/static/images/logo_writing.svg" alt="DocuElevate Logo" class="h-16">
+            <img src="/static/images/logo_writing.svg" alt="{{ _('auth.logo_alt') }}" class="h-16">
         </div>
 
-        <h1 class="text-2xl font-bold text-center text-gray-800 mb-6">Welcome to DocuElevate</h1>
+        <h1 class="text-2xl font-bold text-center text-gray-800 mb-6">{{ _("dashboard.welcome") }}</h1>
 
         {% if error %}
         <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
@@ -31,33 +31,33 @@
 
         <!-- Local authentication form -->
         <div class="mb-8" id="local-auth">
-            <h2 class="text-lg font-semibold mb-4 text-gray-700">Sign in with username</h2>
+            <h2 class="text-lg font-semibold mb-4 text-gray-700">{{ _("auth.sign_in_with_username") }}</h2>
             <form method="POST" action="/auth" class="space-y-4">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token | default('', true) }}">
                 <div>
-                    <label for="username" class="block text-sm font-medium text-gray-700">Username or Email</label>
+                    <label for="username" class="block text-sm font-medium text-gray-700">{{ _("auth.username_or_email") }}</label>
                     <input type="text" id="username" name="username" required
                         autocomplete="username"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50">
                 </div>
 
                 <div>
-                    <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
+                    <label for="password" class="block text-sm font-medium text-gray-700">{{ _("auth.password_label") }}</label>
                     <input type="password" id="password" name="password" required
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50">
                 </div>
 
                 <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                    Sign in
+                    {{ _("auth.sign_in") }}
                 </button>
             </form>
             <div class="mt-3 text-center space-x-3">
                 <a href="/forgot-password" class="text-sm text-blue-600 hover:text-blue-500">
-                    Forgot password?
+                    {{ _("auth.forgot_password") }}
                 </a>
                 <span class="text-gray-300" aria-hidden="true">|</span>
                 <a href="/forgot-username" class="text-sm text-blue-600 hover:text-blue-500">
-                    Forgot username?
+                    {{ _("auth.forgot_username") }}
                 </a>
             </div>
         </div>
@@ -69,37 +69,64 @@
                 <div class="w-full border-t border-gray-300"></div>
             </div>
             <div class="relative flex justify-center text-sm">
-                <span class="px-2 bg-white text-gray-500">Or continue with</span>
+                <span class="px-2 bg-white text-gray-500">{{ _("auth.or_continue_with") }}</span>
             </div>
         </div>
 
         <div class="mt-6 grid grid-cols-1 gap-3">
             <a href="/oauth-login"
-               class="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                <span class="sr-only">Sign in with SSO</span>
+               class="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+               style="min-height:44px; min-width:44px">
+                <span class="sr-only">{{ _("auth.sign_in_sso") }}</span>
                 <i class="fas fa-lock mr-2" aria-hidden="true"></i>
                 {{ oauth_provider_name }}
             </a>
         </div>
         {% endif %}
 
+        {% if social_providers %}
+        <!-- Social login options -->
+        {% if not show_oauth %}
+        <div class="relative">
+            <div class="absolute inset-0 flex items-center">
+                <div class="w-full border-t border-gray-300"></div>
+            </div>
+            <div class="relative flex justify-center text-sm">
+                <span class="px-2 bg-white text-gray-500">{{ _("auth.or_continue_with") }}</span>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="mt-6 grid grid-cols-1 gap-3">
+            {% for provider_key, provider in social_providers.items() %}
+            <a href="/social-login/{{ provider_key }}"
+               class="w-full inline-flex items-center justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+               style="min-height:44px; min-width:44px"
+               aria-label="{{ _('auth.sign_in_with') }} {{ provider.name }}">
+                <i class="{{ provider.icon }} mr-2" aria-hidden="true"></i>
+                {{ _("auth.sign_in_with") }} {{ provider.name }}
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         <div class="mt-8 text-center">
             <a href="/" class="text-sm font-medium text-blue-600 hover:text-blue-500">
-                Return to Home
+                {{ _("auth.return_home") }}
             </a>
         </div>
 
         {% if allow_signup %}
         <div class="mt-4 text-center">
-            <span class="text-sm text-gray-600">Don't have an account?</span>
+            <span class="text-sm text-gray-600">{{ _("auth.no_account") }}</span>
             <a href="/signup" class="ml-1 text-sm font-medium text-indigo-600 hover:text-indigo-500">
-                Create account
+                {{ _("auth.create_account") }}
             </a>
         </div>
         {% endif %}
     </main>
     <div class="fixed bottom-4 text-center w-full text-xs text-gray-500">
-        DocuElevate {{ app_version|default('', true) }}
+        {{ _("app.name") }} {{ app_version|default('', true) }}
     </div>
 </body>
 </html>

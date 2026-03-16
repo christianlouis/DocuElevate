@@ -172,6 +172,11 @@
                       <i class="fas fa-trash-alt mr-1" aria-hidden="true"></i>Delete after process
                     </span>
                   </template>
+                  <template x-if="acct.profile_id">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded bg-blue-50 text-blue-700">
+                      <i class="fas fa-filter mr-1" aria-hidden="true"></i><span x-text="profileName(acct.profile_id)"></span>
+                    </span>
+                  </template>
                   <template x-if="acct.last_checked_at">
                     <span class="text-gray-400" :title="acct.last_checked_at">
                       <i class="fas fa-clock mr-1" aria-hidden="true"></i>Last polled: <span x-text="formatDate(acct.last_checked_at)"></span>
@@ -386,6 +391,49 @@
         </label>
       </div>
 
+      <!-- Attachment filter -->
+      <div>
+        <label for="acct-profile" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+          Ingestion Profile
+        </label>
+        <div class="flex gap-2 items-center">
+          <select
+            id="acct-profile"
+            x-model.number="form.profile_id"
+            class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+            aria-describedby="acct-profile-hint"
+          >
+            <option :value="null">Use global default</option>
+            <template x-for="profile in profiles" :key="profile.id">
+              <option :value="profile.id" x-text="profile.name + (profile.is_builtin ? '' : ' (custom)')"></option>
+            </template>
+          </select>
+          <button
+            type="button"
+            @click="openProfileModal(null)"
+            class="inline-flex items-center px-3 py-2 text-sm font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style="min-height:40px;"
+            title="Create new profile"
+            aria-label="Create new ingestion profile"
+          >
+            <i class="fas fa-plus" aria-hidden="true"></i>
+          </button>
+        </div>
+        <p id="acct-profile-hint" class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+          Controls which attachment types are ingested. Leave blank to use the global default (documents only).
+          <button type="button" @click="showProfilesSection = !showProfilesSection" class="underline hover:text-blue-600 focus:outline-none">
+            Manage profiles
+          </button>
+        </p>
+        <!-- Inline selected profile summary -->
+        <template x-if="form.profile_id">
+          <div class="mt-2 text-xs bg-blue-50 dark:bg-blue-900/20 rounded px-2 py-1.5 text-blue-800 dark:text-blue-200">
+            <strong x-text="profileName(form.profile_id)"></strong>:
+            <span x-text="profileCategorySummary(form.profile_id)"></span>
+          </div>
+        </template>
+      </div>
+
       <!-- Test connection result -->
       <template x-if="testResult">
         <div
@@ -494,10 +542,277 @@
 
 </div>
 
+<!-- ── Ingestion Profiles panel ─────────────────────────────────────────────── -->
+<div
+  x-show="showProfilesSection"
+  x-transition
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="profiles-panel-title"
+  @keydown.escape.window="showProfilesSection = false"
+  style="display:none;"
+>
+  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl overflow-y-auto max-h-[90vh]" @click.stop>
+    <div class="px-6 pt-6 pb-2 flex items-center justify-between">
+      <h2 id="profiles-panel-title" class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+        <i class="fas fa-filter text-blue-500" aria-hidden="true"></i>
+        Ingestion Profiles
+      </h2>
+      <button
+        type="button"
+        @click="showProfilesSection = false"
+        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+        aria-label="Close profiles panel"
+      >
+        <i class="fas fa-times text-xl" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="px-6 pb-6 pt-2">
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Profiles define which attachment types are ingested from emails. Assign a profile to each IMAP account for fine-grained control.
+      </p>
+
+      <!-- Profile list -->
+      <div class="space-y-3 mb-4">
+        <template x-for="profile in profiles" :key="profile.id">
+          <div class="border border-gray-100 dark:border-gray-700 rounded-lg p-4 flex items-start gap-3">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-medium text-sm text-gray-900 dark:text-white" x-text="profile.name"></span>
+                <template x-if="profile.is_builtin">
+                  <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500">built-in</span>
+                </template>
+              </div>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5" x-text="profile.description || ''"></p>
+              <!-- Category badges -->
+              <div class="flex flex-wrap gap-1 mt-2">
+                <template x-for="cat in profile.allowed_categories" :key="cat">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                    <span x-text="categoryLabel(cat)"></span>
+                  </span>
+                </template>
+              </div>
+            </div>
+            <div class="flex gap-1 shrink-0">
+              <button
+                type="button"
+                @click="openProfileModal(profile)"
+                :disabled="profile.is_builtin"
+                :class="profile.is_builtin ? 'opacity-40 cursor-not-allowed' : ''"
+                class="p-1.5 text-gray-400 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                :aria-label="`Edit profile ${profile.name}`"
+                :title="profile.is_builtin ? 'Built-in profiles cannot be edited' : 'Edit profile'"
+              >
+                <i class="fas fa-edit text-sm" aria-hidden="true"></i>
+              </button>
+              <button
+                type="button"
+                @click="confirmDeleteProfile(profile)"
+                :disabled="profile.is_builtin"
+                :class="profile.is_builtin ? 'opacity-40 cursor-not-allowed' : ''"
+                class="p-1.5 text-gray-400 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 rounded"
+                :aria-label="`Delete profile ${profile.name}`"
+                :title="profile.is_builtin ? 'Built-in profiles cannot be deleted' : 'Delete profile'"
+              >
+                <i class="fas fa-trash-alt text-sm" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <button
+        type="button"
+        @click="openProfileModal(null)"
+        class="inline-flex items-center px-4 py-2 text-sm font-medium rounded bg-blue-600 hover:bg-blue-700 text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        style="min-height:40px;"
+      >
+        <i class="fas fa-plus mr-2" aria-hidden="true"></i> New Profile
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Profile create / edit modal ────────────────────────────────────────────── -->
+<div
+  x-show="profileModalOpen"
+  x-transition:enter="ease-out duration-200"
+  x-transition:enter-start="opacity-0"
+  x-transition:enter-end="opacity-100"
+  x-transition:leave="ease-in duration-150"
+  x-transition:leave-start="opacity-100"
+  x-transition:leave-end="opacity-0"
+  class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4"
+  role="dialog"
+  aria-modal="true"
+  :aria-labelledby="editingProfile ? 'profile-modal-title-edit' : 'profile-modal-title-create'"
+  @keydown.escape.window="closeProfileModal()"
+  style="display:none;"
+>
+  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg overflow-y-auto max-h-[90vh]" @click.stop>
+    <div class="px-6 pt-6 pb-2 flex items-center justify-between">
+      <h2
+        :id="editingProfile ? 'profile-modal-title-edit' : 'profile-modal-title-create'"
+        class="text-lg font-semibold text-gray-900 dark:text-white"
+        x-text="editingProfile ? 'Edit Profile' : 'New Ingestion Profile'"
+      ></h2>
+      <button
+        type="button"
+        @click="closeProfileModal()"
+        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+        aria-label="Close modal"
+      >
+        <i class="fas fa-times text-xl" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <form @submit.prevent="saveProfile()" class="px-6 pb-6 pt-4 space-y-4">
+
+      <!-- Profile name -->
+      <div>
+        <label for="profile-name" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+          Profile Name <span class="text-red-500" aria-hidden="true">*</span>
+        </label>
+        <input
+          id="profile-name"
+          type="text"
+          x-model="profileForm.name"
+          placeholder="e.g. Scanner Inbox, Finance Documents"
+          required
+          maxlength="255"
+          class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+          aria-required="true"
+        />
+      </div>
+
+      <!-- Description -->
+      <div>
+        <label for="profile-description" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+          Description
+        </label>
+        <input
+          id="profile-description"
+          type="text"
+          x-model="profileForm.description"
+          placeholder="Optional description"
+          maxlength="500"
+          class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+        />
+      </div>
+
+      <!-- Category checkboxes -->
+      <div>
+        <fieldset>
+          <legend class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
+            File Type Categories <span class="text-red-500" aria-hidden="true">*</span>
+          </legend>
+          <div class="space-y-2">
+            <template x-for="cat in categories" :key="cat.key">
+              <label class="flex items-start gap-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  :value="cat.key"
+                  :checked="profileForm.allowed_categories.includes(cat.key)"
+                  @change="toggleCategory(cat.key)"
+                  class="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span class="flex-1">
+                  <span class="text-sm font-medium text-gray-800 dark:text-gray-100" x-text="cat.label"></span>
+                  <span class="block text-xs text-gray-500 dark:text-gray-400" x-text="cat.description"></span>
+                </span>
+              </label>
+            </template>
+          </div>
+          <p x-show="profileForm.allowed_categories.length === 0" class="mt-2 text-xs text-red-600" role="alert">
+            Select at least one category.
+          </p>
+        </fieldset>
+      </div>
+
+      <!-- Form error -->
+      <template x-if="profileFormError">
+        <p class="text-sm text-red-600" role="alert" x-text="profileFormError"></p>
+      </template>
+
+      <!-- Actions -->
+      <div class="flex justify-end gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+        <button
+          type="button"
+          @click="closeProfileModal()"
+          class="px-4 py-2 text-sm font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          style="min-height:40px;"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          :disabled="savingProfile || profileForm.allowed_categories.length === 0"
+          class="inline-flex items-center px-4 py-2 text-sm font-medium rounded bg-blue-600 hover:bg-blue-700 text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          style="min-height:40px;"
+        >
+          <template x-if="savingProfile">
+            <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>
+          </template>
+          <span x-text="editingProfile ? 'Save Changes' : 'Create Profile'"></span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Delete profile confirmation modal ────────────────────────────────────── -->
+<div
+  x-show="deleteProfileModalOpen"
+  x-transition
+  class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="delete-profile-modal-title"
+  @keydown.escape.window="deleteProfileModalOpen = false"
+  style="display:none;"
+>
+  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-sm p-6" @click.stop>
+    <h2 id="delete-profile-modal-title" class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+      Delete Profile?
+    </h2>
+    <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">
+      Are you sure you want to delete the profile
+      <strong x-text="profileToDelete ? profileToDelete.name : ''"></strong>?
+      IMAP accounts using this profile will fall back to the global default.
+    </p>
+    <div class="flex justify-end gap-2">
+      <button
+        type="button"
+        @click="deleteProfileModalOpen = false; profileToDelete = null"
+        class="px-4 py-2 text-sm font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+        style="min-height:40px;"
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        @click="deleteProfile()"
+        :disabled="deletingProfile"
+        class="inline-flex items-center px-4 py-2 text-sm font-medium rounded bg-red-600 hover:bg-red-700 text-white focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
+        style="min-height:40px;"
+      >
+        <template x-if="deletingProfile">
+          <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>
+        </template>
+        Delete
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
 function imapAccountsApp() {
   return {
     accounts: {{ accounts | tojson }},
+    profiles: {{ profiles | tojson }},
+    categories: {{ categories | tojson }},
+    defaultCategories: {{ default_categories | tojson }},
     quota: {
       current_count: {{ current_count }},
       max_mailboxes: {{ max_mailboxes | tojson }},
@@ -508,23 +823,34 @@ function imapAccountsApp() {
     loading: false,
     alert: { show: false, type: '', title: '', message: '' },
 
-    // Modal state
+    // Account modal state
     modalOpen: false,
     editingAccount: null,
-    form: { name: '', host: '', port: 993, username: '', password: '', use_ssl: true, delete_after_process: false, is_active: true },
+    form: { name: '', host: '', port: 993, username: '', password: '', use_ssl: true, delete_after_process: false, is_active: true, profile_id: null },
     showPassword: false,
     saving: false,
     testing: false,
     testResult: null,
     formError: null,
 
-    // Delete state
+    // Account delete state
     deleteModalOpen: false,
     accountToDelete: null,
     deleting: false,
 
     // Test (saved account) state
     testingId: null,
+
+    // Profiles panel & modal state
+    showProfilesSection: false,
+    profileModalOpen: false,
+    editingProfile: null,
+    profileForm: { name: '', description: '', allowed_categories: [] },
+    savingProfile: false,
+    profileFormError: null,
+    deleteProfileModalOpen: false,
+    profileToDelete: null,
+    deletingProfile: false,
 
     get canAdd() {
       return this.quota.can_add;
@@ -549,9 +875,33 @@ function imapAccountsApp() {
       setTimeout(() => { this.alert.show = false; }, 5000);
     },
 
+    // ── Profile helpers ──────────────────────────────────────────────────────
+
+    profileById(id) {
+      return this.profiles.find(p => p.id === id) || null;
+    },
+
+    profileName(id) {
+      const p = this.profileById(id);
+      return p ? p.name : 'Unknown profile';
+    },
+
+    profileCategorySummary(id) {
+      const p = this.profileById(id);
+      if (!p) return '';
+      return p.allowed_categories.map(k => this.categoryLabel(k)).join(', ');
+    },
+
+    categoryLabel(key) {
+      const cat = this.categories.find(c => c.key === key);
+      return cat ? cat.label : key;
+    },
+
+    // ── Account modal ────────────────────────────────────────────────────────
+
     openCreateModal() {
       this.editingAccount = null;
-      this.form = { name: '', host: '', port: 993, username: '', password: '', use_ssl: true, delete_after_process: false, is_active: true };
+      this.form = { name: '', host: '', port: 993, username: '', password: '', use_ssl: true, delete_after_process: false, is_active: true, profile_id: null };
       this.showPassword = false;
       this.testResult = null;
       this.formError = null;
@@ -569,6 +919,7 @@ function imapAccountsApp() {
         use_ssl: acct.use_ssl,
         delete_after_process: acct.delete_after_process,
         is_active: acct.is_active,
+        profile_id: acct.profile_id || null,
       };
       this.showPassword = false;
       this.testResult = null;
@@ -592,6 +943,8 @@ function imapAccountsApp() {
         if (this.editingAccount && payload.password === '') {
           delete payload.password;
         }
+        // Normalise profile_id: empty string → null
+        if (payload.profile_id === '' || payload.profile_id === 0) payload.profile_id = null;
         let resp;
         if (this.editingAccount) {
           resp = await fetch(`/api/imap-accounts/${this.editingAccount.id}`, {
@@ -717,6 +1070,126 @@ function imapAccountsApp() {
         this.showAlert('error', 'Delete Failed', `Network error: ${err.message || 'Unknown error'}`);
       } finally {
         this.deleting = false;
+      }
+    },
+
+    // ── Profile CRUD ─────────────────────────────────────────────────────────
+
+    openProfileModal(profile) {
+      this.editingProfile = profile;
+      if (profile) {
+        this.profileForm = {
+          name: profile.name,
+          description: profile.description || '',
+          allowed_categories: [...profile.allowed_categories],
+        };
+      } else {
+        this.profileForm = { name: '', description: '', allowed_categories: [...this.defaultCategories] };
+      }
+      this.profileFormError = null;
+      this.profileModalOpen = true;
+    },
+
+    closeProfileModal() {
+      this.profileModalOpen = false;
+      this.editingProfile = null;
+      this.profileFormError = null;
+    },
+
+    toggleCategory(key) {
+      const idx = this.profileForm.allowed_categories.indexOf(key);
+      if (idx === -1) {
+        this.profileForm.allowed_categories.push(key);
+      } else {
+        this.profileForm.allowed_categories.splice(idx, 1);
+      }
+    },
+
+    async saveProfile() {
+      if (this.profileForm.allowed_categories.length === 0) {
+        this.profileFormError = 'Select at least one category.';
+        return;
+      }
+      this.profileFormError = null;
+      this.savingProfile = true;
+      try {
+        const payload = {
+          name: this.profileForm.name,
+          description: this.profileForm.description || null,
+          allowed_categories: this.profileForm.allowed_categories,
+        };
+        let resp;
+        if (this.editingProfile) {
+          resp = await fetch(`/api/imap-profiles/${this.editingProfile.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+            body: JSON.stringify(payload),
+          });
+        } else {
+          resp = await fetch('/api/imap-profiles/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+            body: JSON.stringify(payload),
+          });
+        }
+        const data = await resp.json();
+        if (!resp.ok) {
+          this.profileFormError = data.detail || 'Failed to save profile.';
+          return;
+        }
+        // Flatten response into the same shape used locally
+        const normalized = {
+          id: data.id,
+          name: data.name,
+          description: data.description,
+          owner_id: data.owner_id,
+          allowed_categories: data.allowed_categories,
+          is_builtin: data.is_builtin,
+        };
+        if (this.editingProfile) {
+          const idx = this.profiles.findIndex(p => p.id === normalized.id);
+          if (idx !== -1) this.profiles.splice(idx, 1, normalized);
+        } else {
+          this.profiles.push(normalized);
+        }
+        this.closeProfileModal();
+        this.showAlert('success', 'Saved', this.editingProfile ? 'Profile updated.' : 'Profile created.');
+      } catch (err) {
+        this.profileFormError = `Network error: ${err.message || 'Unknown error'}. Please try again.`;
+      } finally {
+        this.savingProfile = false;
+      }
+    },
+
+    confirmDeleteProfile(profile) {
+      this.profileToDelete = profile;
+      this.deleteProfileModalOpen = true;
+    },
+
+    async deleteProfile() {
+      if (!this.profileToDelete) return;
+      this.deletingProfile = true;
+      try {
+        const resp = await fetch(`/api/imap-profiles/${this.profileToDelete.id}`, {
+          method: 'DELETE',
+          headers: { 'X-CSRF-Token': getCsrfToken() },
+        });
+        if (resp.ok || resp.status === 204) {
+          const deletedId = this.profileToDelete.id;
+          this.profiles = this.profiles.filter(p => p.id !== deletedId);
+          // Clear profile_id on accounts that referenced this profile
+          this.accounts.forEach(a => { if (a.profile_id === deletedId) a.profile_id = null; });
+          this.showAlert('success', 'Deleted', `Profile "${this.profileToDelete.name}" removed.`);
+          this.deleteProfileModalOpen = false;
+          this.profileToDelete = null;
+        } else {
+          const data = await resp.json();
+          this.showAlert('error', 'Delete Failed', data.detail || 'Could not delete profile.');
+        }
+      } catch (err) {
+        this.showAlert('error', 'Delete Failed', `Network error: ${err.message || 'Unknown error'}`);
+      } finally {
+        this.deletingProfile = false;
       }
     },
   };

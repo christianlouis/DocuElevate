@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}User Management – Admin – DocuElevate{% endblock %}
+{% block title %}{{ _("admin_users.page_title") }}{% endblock %}
 
 {% block content %}
 <div class="container mx-auto px-4 py-8" x-data="adminUsersApp()">
@@ -9,11 +9,11 @@
     <div>
       <h1 class="text-3xl font-bold text-gray-900 flex items-center gap-2">
         <i class="fas fa-users text-blue-500" aria-hidden="true"></i>
-        User Management
-        <span class="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded px-2 py-0.5 ml-1">Admin Only</span>
+        {{ _("admin_users.heading") }}
+        <span class="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded px-2 py-0.5 ml-1">{{ _("admin_users.admin_only_badge") }}</span>
       </h1>
       <p class="text-gray-500 text-sm mt-1">
-        Manage user profiles, per-user upload limits, and document ownership.
+        {{ _("admin_users.subheading") }}
       </p>
     </div>
     <button
@@ -21,14 +21,14 @@
       @click="openCreateModal()"
       class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
     >
-      <i class="fas fa-user-plus mr-2" aria-hidden="true"></i> Add User Profile
+      <i class="fas fa-user-plus mr-2" aria-hidden="true"></i> {{ _("admin_users.add_user_profile_btn") }}
     </button>
     <button
       type="button"
       @click="openCreateLocalUserModal()"
       class="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
     >
-      <i class="fas fa-user-lock mr-2" aria-hidden="true"></i> Create Local Account
+      <i class="fas fa-user-lock mr-2" aria-hidden="true"></i> {{ _("admin_users.create_local_account_btn") }}
     </button>
   </div>
 
@@ -48,7 +48,7 @@
   <!-- ── Search & pagination controls ──────────────────────────────────────── -->
   <div class="mb-4 flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
     <div class="flex-1 max-w-sm">
-      <label for="userSearch" class="sr-only">Search users</label>
+      <label for="userSearch" class="sr-only">{{ _("admin_users.search_users_label") }}</label>
       <div class="relative">
         <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
           <i class="fas fa-search text-gray-400 text-sm" aria-hidden="true"></i>
@@ -58,7 +58,7 @@
           type="search"
           x-model="search"
           @input.debounce.300ms="fetchUsers(1)"
-          placeholder="Filter by user ID…"
+          placeholder="{{ _('admin_users.filter_placeholder') }}"
           class="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
         />
       </div>
@@ -68,24 +68,24 @@
 
   <!-- ── Table ──────────────────────────────────────────────────────────────── -->
   <div class="bg-white shadow rounded-lg overflow-x-auto">
-    <table class="min-w-full divide-y divide-gray-200" aria-label="User list">
+    <table class="min-w-full divide-y divide-gray-200" aria-label="{{ _('admin_users.heading') }}">
       <thead class="bg-gray-50">
         <tr>
-          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User ID</th>
-          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Display Name</th>
-          <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Documents</th>
-          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Upload</th>
-          <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>
-          <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Upload Limit</th>
-          <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("admin_users.col_user_id") }}</th>
+          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("admin_users.col_display_name") }}</th>
+          <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("admin_users.col_documents") }}</th>
+          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("admin_users.col_last_upload") }}</th>
+          <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("admin_users.col_plan") }}</th>
+          <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("admin_users.col_upload_limit") }}</th>
+          <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("common.status") }}</th>
+          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("common.actions") }}</th>
         </tr>
       </thead>
       <tbody class="bg-white divide-y divide-gray-200">
         <template x-if="loading">
           <tr>
             <td colspan="8" class="px-4 py-8 text-center text-gray-400">
-              <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i> Loading users…
+              <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i> {{ _("admin_users.loading_users") }}
             </td>
           </tr>
         </template>
@@ -93,9 +93,9 @@
           <tr>
             <td colspan="8" class="px-4 py-8 text-center text-gray-400">
               <i class="fas fa-users-slash text-3xl block mb-2" aria-hidden="true"></i>
-              No users found.
-              <span x-show="search"> Try a different search term.</span>
-              <span x-show="!search"> Upload some documents or add a profile above.</span>
+              {{ _("admin_users.no_users_found") }}
+              <span x-show="search"> {{ _("admin_users.no_users_search_hint") }}</span>
+              <span x-show="!search"> {{ _("admin_users.no_users_add_hint") }}</span>
             </td>
           </tr>
         </template>
@@ -159,9 +159,9 @@
             <td class="px-4 py-3 text-sm text-center text-gray-700">
               <span x-show="user.daily_upload_limit !== null && user.daily_upload_limit !== undefined"
                     class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700"
-                    x-text="user.daily_upload_limit + ' / day'"></span>
+                    x-text="user.daily_upload_limit + ' {{ _("admin_users.per_day") }}'"></span>
               <span x-show="user.daily_upload_limit === null || user.daily_upload_limit === undefined"
-                    class="text-gray-400 text-xs">global default</span>
+                    class="text-gray-400 text-xs">{{ _("admin_users.global_default") }}</span>
             </td>
             <!-- Status -->
             <td class="px-4 py-3 text-sm text-center">
@@ -172,7 +172,7 @@
                 class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
               >
                 <i :class="user.is_blocked ? 'fas fa-ban' : 'fas fa-check-circle'" aria-hidden="true"></i>
-                <span x-text="user.is_blocked ? 'Blocked' : 'Active'"></span>
+                <span x-text="user.is_blocked ? '{{ _("admin_users.status_blocked") }}' : '{{ _("common.active") }}'"></span>
               </span>
             </td>
             <!-- Actions -->
@@ -181,18 +181,18 @@
                 type="button"
                 @click="openEditModal(user)"
                 class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 mr-1"
-                :aria-label="`Edit profile for ${user.user_id}`"
+                :aria-label="`{{ _('common.edit') }} ${user.user_id}`"
               >
-                <i class="fas fa-edit mr-1" aria-hidden="true"></i> Edit
+                <i class="fas fa-edit mr-1" aria-hidden="true"></i> {{ _("common.edit") }}
               </button>
               <button
                 type="button"
                 @click="confirmDelete(user)"
                 x-show="user.profile_id !== null"
                 class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded border border-red-300 text-red-600 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-red-400"
-                :aria-label="`Delete profile for ${user.user_id}`"
+                :aria-label="`{{ _('common.delete') }} ${user.user_id}`"
               >
-                <i class="fas fa-trash mr-1" aria-hidden="true"></i> Delete
+                <i class="fas fa-trash mr-1" aria-hidden="true"></i> {{ _("common.delete") }}
               </button>
             </td>
           </tr>
@@ -209,10 +209,10 @@
       :disabled="currentPage <= 1"
       class="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
     >
-      <i class="fas fa-chevron-left mr-1" aria-hidden="true"></i> Previous
+      <i class="fas fa-chevron-left mr-1" aria-hidden="true"></i> {{ _("common.previous") }}
     </button>
     <span class="text-sm text-gray-500">
-      Page <span x-text="currentPage"></span> of <span x-text="pages"></span>
+      {{ _("common.page") }} <span x-text="currentPage"></span> {{ _("admin_users.pagination_page_of") }} <span x-text="pages"></span>
     </span>
     <button
       type="button"
@@ -220,7 +220,7 @@
       :disabled="currentPage >= pages"
       class="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
     >
-      Next <i class="fas fa-chevron-right ml-1" aria-hidden="true"></i>
+      {{ _("common.next") }} <i class="fas fa-chevron-right ml-1" aria-hidden="true"></i>
     </button>
   </div>
 
@@ -250,7 +250,7 @@
           type="button"
           @click="modalOpen = false"
           class="text-gray-400 hover:text-gray-600 focus:outline-none"
-          aria-label="Close dialog"
+          aria-label="{{ _('admin_users.modal_close_aria') }}"
         >
           <i class="fas fa-times" aria-hidden="true"></i>
         </button>
@@ -261,7 +261,7 @@
 
           <!-- User ID (read-only when editing) -->
           <div>
-            <label for="modal-user-id" class="block text-sm font-medium text-gray-700 mb-1">User ID</label>
+            <label for="modal-user-id" class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_users.modal_user_id_label") }}</label>
             <input
               id="modal-user-id"
               type="text"
@@ -269,32 +269,32 @@
               :readonly="!isCreate"
               :class="!isCreate ? 'bg-gray-100 cursor-not-allowed' : ''"
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-              placeholder="user@example.com or OAuth sub"
+              placeholder="{{ _('admin_users.modal_user_id_placeholder') }}"
               required
               aria-required="true"
               autocomplete="off"
             />
-            <p class="text-xs text-gray-400 mt-1">The stable identifier that matches <code>owner_id</code> in documents.</p>
+            <p class="text-xs text-gray-400 mt-1">{{ _("admin_users.modal_user_id_hint") }}</p>
           </div>
 
           <!-- Display name -->
           <div>
-            <label for="modal-display-name" class="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+            <label for="modal-display-name" class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_users.modal_display_name_label") }}</label>
             <input
               id="modal-display-name"
               type="text"
               x-model="form.display_name"
               maxlength="255"
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-              placeholder="Alice Smith (optional)"
+              placeholder="{{ _('admin_users.modal_display_name_placeholder') }}"
             />
           </div>
 
           <!-- Daily upload limit -->
           <div>
             <label for="modal-limit" class="block text-sm font-medium text-gray-700 mb-1">
-              Daily Upload Limit
-              <span class="ml-1 text-xs font-normal text-gray-400">(leave empty to use global default)</span>
+              {{ _("admin_users.modal_daily_limit_label") }}
+              <span class="ml-1 text-xs font-normal text-gray-400">{{ _("admin_users.modal_daily_limit_hint") }}</span>
             </label>
             <input
               id="modal-limit"
@@ -302,20 +302,20 @@
               x-model.number="form.daily_upload_limit"
               min="0"
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-              placeholder="e.g. 50  (0 = unlimited)"
+              placeholder="{{ _('admin_users.modal_daily_limit_placeholder') }}"
             />
           </div>
 
           <!-- Notes -->
           <div>
-            <label for="modal-notes" class="block text-sm font-medium text-gray-700 mb-1">Admin Notes</label>
+            <label for="modal-notes" class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_users.modal_notes_label") }}</label>
             <textarea
               id="modal-notes"
               x-model="form.notes"
               rows="3"
               maxlength="4096"
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-y"
-              placeholder="Internal notes visible only to admins…"
+              placeholder="{{ _('admin_users.modal_notes_placeholder') }}"
             ></textarea>
           </div>
 
@@ -336,50 +336,50 @@
               ></span>
             </button>
             <span id="modal-blocked-label" class="text-sm font-medium text-gray-700">
-              Block this user
-              <span class="text-xs text-gray-400 font-normal">(prevents new document uploads)</span>
+              {{ _("admin_users.modal_block_label") }}
+              <span class="text-xs text-gray-400 font-normal">{{ _("admin_users.modal_block_hint") }}</span>
             </span>
           </div>
 
           <!-- Subscription tier -->
           <div>
             <label for="modal-tier" class="block text-sm font-medium text-gray-700 mb-1">
-              Subscription Plan
+              {{ _("admin_users.modal_plan_label") }}
             </label>
             <select
               id="modal-tier"
               x-model="form.subscription_tier"
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
             >
-              <option value="free">Free — 25 lifetime files</option>
-              <option value="starter">Starter — $2.99/mo (50/mo, 1 mailbox)</option>
-              <option value="professional">Professional — $5.99/mo (150/mo, 3 mailboxes)</option>
-              <option value="business">Business — $7.99/mo (300/mo, unlimited mailboxes)</option>
+              <option value="free">{{ _("admin_users.modal_plan_free") }}</option>
+              <option value="starter">{{ _("admin_users.modal_plan_starter") }}</option>
+              <option value="professional">{{ _("admin_users.modal_plan_professional") }}</option>
+              <option value="business">{{ _("admin_users.modal_plan_business") }}</option>
             </select>
             <p class="text-xs text-gray-400 mt-1">
-              Sets the quota limits for this user. Limits are enforced on upload.
+              {{ _("admin_users.modal_plan_hint") }}
             </p>
           </div>
 
           <!-- Billing cycle -->
           <div>
             <label for="modal-billing-cycle" class="block text-sm font-medium text-gray-700 mb-1">
-              Billing Cycle
+              {{ _("admin_users.modal_billing_cycle_label") }}
             </label>
             <select
               id="modal-billing-cycle"
               x-model="form.subscription_billing_cycle"
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
             >
-              <option value="monthly">Monthly</option>
-              <option value="yearly">Yearly</option>
+              <option value="monthly">{{ _("admin_users.modal_billing_monthly") }}</option>
+              <option value="yearly">{{ _("admin_users.modal_billing_yearly") }}</option>
             </select>
           </div>
 
           <!-- Subscription period start (only shown for yearly) -->
           <div x-show="form.subscription_billing_cycle === 'yearly'" x-cloak>
             <label for="modal-period-start" class="block text-sm font-medium text-gray-700 mb-1">
-              Subscription Period Start
+              {{ _("admin_users.modal_period_start_label") }}
             </label>
             <input
               type="date"
@@ -388,7 +388,7 @@
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
             <p class="text-xs text-gray-400 mt-1">
-              Annual carry-over calculates from this date. Leave blank for monthly enforcement.
+              {{ _("admin_users.modal_period_start_hint") }}
             </p>
           </div>
 
@@ -409,8 +409,8 @@
               ></span>
             </button>
             <span id="modal-complimentary-label" class="text-sm font-medium text-gray-700">
-              Complimentary plan
-              <span class="text-xs text-gray-400 font-normal">(user keeps tier benefits but is never billed — set automatically for admin accounts)</span>
+              {{ _("admin_users.modal_complimentary_label") }}
+              <span class="text-xs text-gray-400 font-normal">{{ _("admin_users.modal_complimentary_hint") }}</span>
             </span>
           </div>
 
@@ -423,15 +423,15 @@
             @click="modalOpen = false"
             class="px-4 py-2 text-sm font-medium border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400"
           >
-            Cancel
+            {{ _("common.cancel") }}
           </button>
           <button
             type="submit"
             :disabled="saving"
             class="px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span x-show="!saving" x-text="isCreate ? 'Create' : 'Save Changes'"></span>
-            <span x-show="saving"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Saving…</span>
+            <span x-show="!saving" x-text="isCreate ? '{{ _('common.create') }}' : '{{ _('admin_users.modal_save_changes') }}'"></span>
+            <span x-show="saving"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> {{ _("admin_users.modal_saving") }}</span>
           </button>
         </div>
       </form>
@@ -444,10 +444,10 @@
       <div>
         <h2 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
           <i class="fas fa-user-lock text-green-600" aria-hidden="true"></i>
-          Local User Accounts
+          {{ _("admin_users.local_accounts_heading") }}
         </h2>
         <p class="text-sm text-gray-500 mt-0.5">
-          Email/password accounts created directly on this server.
+          {{ _("admin_users.local_accounts_subheading") }}
         </p>
       </div>
       <button
@@ -455,35 +455,35 @@
         @click="openCreateLocalUserModal()"
         class="inline-flex items-center px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
       >
-        <i class="fas fa-plus mr-1" aria-hidden="true"></i> New Account
+        <i class="fas fa-plus mr-1" aria-hidden="true"></i> {{ _("admin_users.new_account_btn") }}
       </button>
     </div>
     <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-200" aria-label="Local user accounts">
+      <table class="min-w-full divide-y divide-gray-200" aria-label="{{ _('admin_users.local_accounts_heading') }}">
         <thead class="bg-gray-50">
           <tr>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Display Name</th>
-            <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-            <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("admin_users.col_username") }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("admin_users.col_email") }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("admin_users.col_display_name") }}</th>
+            <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("common.status") }}</th>
+            <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("admin_users.col_role") }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("common.created") }}</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("common.actions") }}</th>
           </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
           <template x-if="localUsersLoading">
             <tr>
               <td colspan="7" class="px-4 py-6 text-center text-gray-400">
-                <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i> Loading…
+                <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i> {{ _("admin_users.local_loading") }}
               </td>
             </tr>
           </template>
           <template x-if="!localUsersLoading && localUsers.length === 0">
             <tr>
               <td colspan="7" class="px-4 py-6 text-center text-gray-400">
-                No local accounts yet.
-                <button type="button" @click="openCreateLocalUserModal()" class="text-green-600 hover:underline ml-1">Create one.</button>
+                {{ _("admin_users.local_no_accounts") }}
+                <button type="button" @click="openCreateLocalUserModal()" class="text-green-600 hover:underline ml-1">{{ _("admin_users.local_create_one") }}</button>
               </td>
             </tr>
           </template>
@@ -496,14 +496,14 @@
                 <span
                   :class="lu.is_active ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'"
                   class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
-                  x-text="lu.is_active ? 'Active' : 'Unverified'"
+                  x-text="lu.is_active ? '{{ _("common.active") }}' : '{{ _("admin_users.status_unverified") }}'"
                 ></span>
               </td>
               <td class="px-4 py-3 text-sm text-center">
                 <span
                   :class="lu.is_admin ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'"
                   class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
-                  x-text="lu.is_admin ? 'Admin' : 'User'"
+                  x-text="lu.is_admin ? '{{ _("admin_users.role_admin") }}' : '{{ _("admin_users.role_user") }}'"
                 ></span>
               </td>
               <td class="px-4 py-3 text-sm text-gray-500 whitespace-nowrap" x-text="lu.created_at ? formatDate(lu.created_at) : '—'"></td>
@@ -512,34 +512,34 @@
                   type="button"
                   @click="openEditLocalUserModal(lu)"
                   class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 mr-1"
-                  :aria-label="`Edit account for ${lu.username}`"
+                  :aria-label="`{{ _('common.edit') }} ${lu.username}`"
                 >
-                  <i class="fas fa-edit mr-1" aria-hidden="true"></i> Edit
+                  <i class="fas fa-edit mr-1" aria-hidden="true"></i> {{ _("common.edit") }}
                 </button>
                 <button
                   type="button"
                   @click="openSetPasswordModal(lu)"
                   class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded border border-yellow-300 text-yellow-700 bg-white hover:bg-yellow-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-yellow-400 mr-1"
-                  :aria-label="`Set password for ${lu.username}`"
+                  :aria-label="`{{ _('admin_users.btn_password') }} ${lu.username}`"
                 >
-                  <i class="fas fa-key mr-1" aria-hidden="true"></i> Password
+                  <i class="fas fa-key mr-1" aria-hidden="true"></i> {{ _("admin_users.btn_password") }}
                 </button>
                 <button
                   type="button"
                   @click="sendPasswordReset(lu)"
                   class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded border border-indigo-300 text-indigo-600 bg-white hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400 mr-1"
-                  :aria-label="`Send password reset email to ${lu.username}`"
-                  title="Send password reset email"
+                  :aria-label="`{{ _('admin_users.btn_reset') }} ${lu.username}`"
+                  title="{{ _('admin_users.btn_reset') }}"
                 >
-                  <i class="fas fa-envelope mr-1" aria-hidden="true"></i> Reset
+                  <i class="fas fa-envelope mr-1" aria-hidden="true"></i> {{ _("admin_users.btn_reset") }}
                 </button>
                 <button
                   type="button"
                   @click="confirmDeleteLocalUser(lu)"
                   class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded border border-red-300 text-red-600 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-red-400"
-                  :aria-label="`Delete account for ${lu.username}`"
+                  :aria-label="`{{ _('common.delete') }} ${lu.username}`"
                 >
-                  <i class="fas fa-trash mr-1" aria-hidden="true"></i> Delete
+                  <i class="fas fa-trash mr-1" aria-hidden="true"></i> {{ _("common.delete") }}
                 </button>
               </td>
             </tr>
@@ -562,44 +562,44 @@
   >
     <div class="bg-white rounded-lg shadow-xl w-full max-w-lg" @click.outside="localUserModal.open = false">
       <div class="px-6 py-4 border-b flex items-center justify-between">
-        <h2 id="create-local-user-title" class="text-lg font-semibold text-gray-900">Create Local Account</h2>
-        <button type="button" @click="localUserModal.open = false" aria-label="Close" class="text-gray-400 hover:text-gray-600">
+        <h2 id="create-local-user-title" class="text-lg font-semibold text-gray-900">{{ _("admin_users.create_local_title") }}</h2>
+        <button type="button" @click="localUserModal.open = false" aria-label="{{ _('common.close') }}" class="text-gray-400 hover:text-gray-600">
           <i class="fas fa-times" aria-hidden="true"></i>
         </button>
       </div>
       <form @submit.prevent="submitCreateLocalUser" class="px-6 py-5 space-y-4">
         <div>
-          <label for="lu-email" class="block text-sm font-medium text-gray-700">Email <span aria-hidden="true" class="text-red-500">*</span></label>
+          <label for="lu-email" class="block text-sm font-medium text-gray-700">{{ _("admin_users.col_email") }} <span aria-hidden="true" class="text-red-500">*</span></label>
           <input type="email" id="lu-email" x-model="localUserModal.form.email" required autocomplete="off"
             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring focus:ring-green-500 focus:ring-opacity-50 text-sm"
             style="min-height:40px;" aria-required="true">
         </div>
         <div>
-          <label for="lu-username" class="block text-sm font-medium text-gray-700">Username <span aria-hidden="true" class="text-red-500">*</span></label>
+          <label for="lu-username" class="block text-sm font-medium text-gray-700">{{ _("admin_users.col_username") }} <span aria-hidden="true" class="text-red-500">*</span></label>
           <input type="text" id="lu-username" x-model="localUserModal.form.username" required autocomplete="off"
             pattern="^[a-zA-Z0-9_-]+$" minlength="3" maxlength="64"
             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring focus:ring-green-500 focus:ring-opacity-50 text-sm"
             style="min-height:40px;" aria-required="true" aria-describedby="lu-username-hint">
-          <p id="lu-username-hint" class="mt-1 text-xs text-gray-500">3–64 characters. Letters, numbers, hyphens and underscores only.</p>
+          <p id="lu-username-hint" class="mt-1 text-xs text-gray-500">{{ _("admin_users.local_username_hint") }}</p>
         </div>
         <div>
-          <label for="lu-display-name" class="block text-sm font-medium text-gray-700">Display Name <span class="text-gray-400">(optional)</span></label>
+          <label for="lu-display-name" class="block text-sm font-medium text-gray-700">{{ _("admin_users.col_display_name") }} <span class="text-gray-400">{{ _("admin_users.local_display_name_optional") }}</span></label>
           <input type="text" id="lu-display-name" x-model="localUserModal.form.display_name" autocomplete="off" maxlength="255"
             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring focus:ring-green-500 focus:ring-opacity-50 text-sm"
             style="min-height:40px;">
         </div>
         <div>
-          <label for="lu-password" class="block text-sm font-medium text-gray-700">Password <span aria-hidden="true" class="text-red-500">*</span></label>
+          <label for="lu-password" class="block text-sm font-medium text-gray-700">{{ _("auth.password_label") }} <span aria-hidden="true" class="text-red-500">*</span></label>
           <input type="password" id="lu-password" x-model="localUserModal.form.password" required autocomplete="new-password"
             minlength="8" maxlength="128"
             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring focus:ring-green-500 focus:ring-opacity-50 text-sm"
             style="min-height:40px;" aria-required="true" aria-describedby="lu-password-hint">
-          <p id="lu-password-hint" class="mt-1 text-xs text-gray-500">Minimum 8 characters.</p>
+          <p id="lu-password-hint" class="mt-1 text-xs text-gray-500">{{ _("admin_users.local_password_hint") }}</p>
         </div>
         <div class="flex items-center gap-2">
           <input type="checkbox" id="lu-is-admin" x-model="localUserModal.form.is_admin"
             class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500">
-          <label for="lu-is-admin" class="text-sm text-gray-700">Grant admin privileges</label>
+          <label for="lu-is-admin" class="text-sm text-gray-700">{{ _("admin_users.local_admin_privileges") }}</label>
         </div>
         <div x-show="localUserModal.error" x-cloak
           class="bg-red-50 border-l-4 border-red-500 text-red-700 p-3 rounded text-sm"
@@ -608,12 +608,12 @@
         <div class="flex justify-end gap-3 pt-2">
           <button type="button" @click="localUserModal.open = false"
             class="px-4 py-2 text-sm font-medium border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50">
-            Cancel
+            {{ _("common.cancel") }}
           </button>
           <button type="submit" :disabled="localUserModal.saving"
             class="px-4 py-2 text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500 disabled:opacity-50">
-            <span x-show="!localUserModal.saving">Create Account</span>
-            <span x-show="localUserModal.saving" x-cloak><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Creating…</span>
+            <span x-show="!localUserModal.saving">{{ _("admin_users.local_create_btn") }}</span>
+            <span x-show="localUserModal.saving" x-cloak><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> {{ _("admin_users.local_creating") }}</span>
           </button>
         </div>
       </form>
@@ -633,20 +633,20 @@
   >
     <div class="bg-white rounded-lg shadow-xl w-full max-w-lg" @click.outside="editLocalUserModal.open = false">
       <div class="px-6 py-4 border-b flex items-center justify-between">
-        <h2 id="edit-local-user-title" class="text-lg font-semibold text-gray-900">Edit Local Account</h2>
-        <button type="button" @click="editLocalUserModal.open = false" aria-label="Close" class="text-gray-400 hover:text-gray-600">
+        <h2 id="edit-local-user-title" class="text-lg font-semibold text-gray-900">{{ _("admin_users.edit_local_title") }}</h2>
+        <button type="button" @click="editLocalUserModal.open = false" aria-label="{{ _('common.close') }}" class="text-gray-400 hover:text-gray-600">
           <i class="fas fa-times" aria-hidden="true"></i>
         </button>
       </div>
       <form @submit.prevent="submitEditLocalUser" class="px-6 py-5 space-y-4">
         <div>
-          <label for="elu-email" class="block text-sm font-medium text-gray-700">Email <span aria-hidden="true" class="text-red-500">*</span></label>
+          <label for="elu-email" class="block text-sm font-medium text-gray-700">{{ _("admin_users.col_email") }} <span aria-hidden="true" class="text-red-500">*</span></label>
           <input type="email" id="elu-email" x-model="editLocalUserModal.form.email" required autocomplete="off"
             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 text-sm"
             style="min-height:40px;" aria-required="true">
         </div>
         <div>
-          <label for="elu-display-name" class="block text-sm font-medium text-gray-700">Display Name <span class="text-gray-400">(optional)</span></label>
+          <label for="elu-display-name" class="block text-sm font-medium text-gray-700">{{ _("admin_users.col_display_name") }} <span class="text-gray-400">{{ _("admin_users.local_display_name_optional") }}</span></label>
           <input type="text" id="elu-display-name" x-model="editLocalUserModal.form.display_name" autocomplete="off" maxlength="255"
             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 text-sm"
             style="min-height:40px;">
@@ -654,12 +654,12 @@
         <div class="flex items-center gap-2">
           <input type="checkbox" id="elu-is-admin" x-model="editLocalUserModal.form.is_admin"
             class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-          <label for="elu-is-admin" class="text-sm text-gray-700">Admin privileges</label>
+          <label for="elu-is-admin" class="text-sm text-gray-700">{{ _("admin_users.local_admin_privileges_short") }}</label>
         </div>
         <div class="flex items-center gap-2">
           <input type="checkbox" id="elu-is-active" x-model="editLocalUserModal.form.is_active"
             class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-          <label for="elu-is-active" class="text-sm text-gray-700">Account active</label>
+          <label for="elu-is-active" class="text-sm text-gray-700">{{ _("admin_users.local_account_active") }}</label>
         </div>
         <div x-show="editLocalUserModal.error" x-cloak
           class="bg-red-50 border-l-4 border-red-500 text-red-700 p-3 rounded text-sm"
@@ -668,12 +668,12 @@
         <div class="flex justify-end gap-3 pt-2">
           <button type="button" @click="editLocalUserModal.open = false"
             class="px-4 py-2 text-sm font-medium border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50">
-            Cancel
+            {{ _("common.cancel") }}
           </button>
           <button type="submit" :disabled="editLocalUserModal.saving"
             class="px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 disabled:opacity-50">
-            <span x-show="!editLocalUserModal.saving">Save Changes</span>
-            <span x-show="editLocalUserModal.saving" x-cloak><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Saving…</span>
+            <span x-show="!editLocalUserModal.saving">{{ _("admin_users.modal_save_changes") }}</span>
+            <span x-show="editLocalUserModal.saving" x-cloak><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> {{ _("admin_users.local_saving") }}</span>
           </button>
         </div>
       </form>
@@ -693,23 +693,23 @@
   >
     <div class="bg-white rounded-lg shadow-xl w-full max-w-md" @click.outside="setPasswordModal.open = false">
       <div class="px-6 py-4 border-b flex items-center justify-between">
-        <h2 id="set-password-title" class="text-lg font-semibold text-gray-900">Set Temporary Password</h2>
-        <button type="button" @click="setPasswordModal.open = false" aria-label="Close" class="text-gray-400 hover:text-gray-600">
+        <h2 id="set-password-title" class="text-lg font-semibold text-gray-900">{{ _("admin_users.set_password_title") }}</h2>
+        <button type="button" @click="setPasswordModal.open = false" aria-label="{{ _('common.close') }}" class="text-gray-400 hover:text-gray-600">
           <i class="fas fa-times" aria-hidden="true"></i>
         </button>
       </div>
       <form @submit.prevent="submitSetPassword" class="px-6 py-5 space-y-4">
         <p class="text-sm text-gray-600">
-          Set a new password directly for <strong class="font-mono" x-text="setPasswordModal.username"></strong>.
-          The user should change this password after logging in.
+          {{ _("admin_users.set_password_desc_pre") }} <strong class="font-mono" x-text="setPasswordModal.username"></strong>.
+          {{ _("admin_users.set_password_desc") }}
         </p>
         <div>
-          <label for="sp-password" class="block text-sm font-medium text-gray-700">New Password <span aria-hidden="true" class="text-red-500">*</span></label>
+          <label for="sp-password" class="block text-sm font-medium text-gray-700">{{ _("admin_users.new_password_label") }} <span aria-hidden="true" class="text-red-500">*</span></label>
           <input type="password" id="sp-password" x-model="setPasswordModal.password" required autocomplete="new-password"
             minlength="8" maxlength="128"
             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-yellow-500 focus:ring focus:ring-yellow-500 focus:ring-opacity-50 text-sm"
             style="min-height:40px;" aria-required="true" aria-describedby="sp-password-hint">
-          <p id="sp-password-hint" class="mt-1 text-xs text-gray-500">Minimum 8 characters.</p>
+          <p id="sp-password-hint" class="mt-1 text-xs text-gray-500">{{ _("admin_users.local_password_hint") }}</p>
         </div>
         <div x-show="setPasswordModal.error" x-cloak
           class="bg-red-50 border-l-4 border-red-500 text-red-700 p-3 rounded text-sm"
@@ -718,12 +718,12 @@
         <div class="flex justify-end gap-3 pt-2">
           <button type="button" @click="setPasswordModal.open = false"
             class="px-4 py-2 text-sm font-medium border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50">
-            Cancel
+            {{ _("common.cancel") }}
           </button>
           <button type="submit" :disabled="setPasswordModal.saving"
             class="px-4 py-2 text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-yellow-500 disabled:opacity-50">
-            <span x-show="!setPasswordModal.saving">Set Password</span>
-            <span x-show="setPasswordModal.saving" x-cloak><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Setting…</span>
+            <span x-show="!setPasswordModal.saving">{{ _("admin_users.set_password_btn") }}</span>
+            <span x-show="setPasswordModal.saving" x-cloak><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> {{ _("admin_users.setting") }}</span>
           </button>
         </div>
       </form>
@@ -743,25 +743,25 @@
   >
     <div class="bg-white rounded-lg shadow-xl w-full max-w-md" @click.outside="deleteLocalUserModal.open = false">
       <div class="px-6 py-4 border-b">
-        <h2 id="delete-local-user-title" class="text-lg font-semibold text-gray-900">Delete Local Account</h2>
+        <h2 id="delete-local-user-title" class="text-lg font-semibold text-gray-900">{{ _("admin_users.delete_local_title") }}</h2>
       </div>
       <div class="px-6 py-5">
         <p class="text-sm text-gray-700">
-          Are you sure you want to delete the account for
+          {{ _("admin_users.delete_local_confirm") }}
           <strong class="font-mono" x-text="deleteLocalUserModal.username"></strong>
           (<span class="font-mono" x-text="deleteLocalUserModal.email"></span>)?
         </p>
-        <p class="text-sm text-gray-500 mt-2">This cannot be undone. Documents owned by this user are <strong>not</strong> deleted.</p>
+        <p class="text-sm text-gray-500 mt-2">{{ _("admin_users.delete_local_warning") }}</p>
       </div>
       <div class="px-6 py-4 border-t flex justify-end gap-3">
         <button type="button" @click="deleteLocalUserModal.open = false"
           class="px-4 py-2 text-sm font-medium border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50">
-          Cancel
+          {{ _("common.cancel") }}
         </button>
         <button type="button" @click="executeDeleteLocalUser()" :disabled="deleteLocalUserModal.deleting"
           class="px-4 py-2 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 disabled:opacity-50">
-          <span x-show="!deleteLocalUserModal.deleting">Delete Account</span>
-          <span x-show="deleteLocalUserModal.deleting" x-cloak><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Deleting…</span>
+          <span x-show="!deleteLocalUserModal.deleting">{{ _("admin_users.delete_account_btn") }}</span>
+          <span x-show="deleteLocalUserModal.deleting" x-cloak><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> {{ _("admin_users.deleting") }}</span>
         </button>
       </div>
     </div>
@@ -780,15 +780,15 @@
   >
     <div class="bg-white rounded-lg shadow-xl w-full max-w-md" @click.outside="deleteModal.open = false">
       <div class="px-6 py-4 border-b">
-        <h2 id="delete-modal-title" class="text-lg font-semibold text-gray-900">Delete User Profile</h2>
+        <h2 id="delete-modal-title" class="text-lg font-semibold text-gray-900">{{ _("admin_users.delete_profile_title") }}</h2>
       </div>
       <div class="px-6 py-5">
         <p class="text-sm text-gray-700">
-          Are you sure you want to delete the profile for
+          {{ _("admin_users.delete_profile_confirm") }}
           <strong class="font-mono" x-text="deleteModal.user_id"></strong>?
         </p>
         <p class="text-sm text-gray-500 mt-2">
-          This only removes the admin-managed profile record. Documents owned by this user are <strong>not</strong> deleted.
+          {{ _("admin_users.delete_profile_warning") }}
         </p>
       </div>
       <div class="px-6 py-4 border-t flex justify-end gap-3">
@@ -797,7 +797,7 @@
           @click="deleteModal.open = false"
           class="px-4 py-2 text-sm font-medium border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50"
         >
-          Cancel
+          {{ _("common.cancel") }}
         </button>
         <button
           type="button"
@@ -805,8 +805,8 @@
           :disabled="deleteModal.deleting"
           class="px-4 py-2 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
         >
-          <span x-show="!deleteModal.deleting">Delete Profile</span>
-          <span x-show="deleteModal.deleting"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Deleting…</span>
+          <span x-show="!deleteModal.deleting">{{ _("admin_users.delete_profile_btn") }}</span>
+          <span x-show="deleteModal.deleting"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> {{ _("admin_users.deleting") }}</span>
         </button>
       </div>
     </div>
@@ -815,7 +815,42 @@
 </div>
 
 <script>
+  window.__i18nAdminUsers = {
+    noUsers: {{ _("admin_users.total_no_users") | tojson }},
+    oneUser: {{ _("admin_users.total_one_user") | tojson }},
+    countUsers: {{ _("admin_users.total_count_users") | tojson }},
+    modalAddTitle: {{ _("admin_users.modal_add_title") | tojson }},
+    modalEditTitle: {{ _("admin_users.modal_edit_title") | tojson }},
+    failedLoadUsers: {{ _("admin_users.js_failed_load_users") | tojson }},
+    networkError: {{ _("admin_users.js_network_error") | tojson }},
+    saveFailed: {{ _("admin_users.js_save_failed") | tojson }},
+    saved: {{ _("admin_users.js_saved") | tojson }},
+    profileSaved: {{ _("admin_users.js_profile_saved") | tojson }},
+    deleteFailed: {{ _("admin_users.js_delete_failed") | tojson }},
+    deleted: {{ _("admin_users.js_deleted") | tojson }},
+    profileDeleted: {{ _("admin_users.js_profile_deleted") | tojson }},
+    failedLoadLocal: {{ _("admin_users.js_failed_load_local") | tojson }},
+    accountCreated: {{ _("admin_users.js_account_created") | tojson }},
+    accountCreatedMsg: {{ _("admin_users.js_account_created_msg") | tojson }},
+    failedCreate: {{ _("admin_users.js_failed_create") | tojson }},
+    accountDeletedMsg: {{ _("admin_users.js_account_deleted_msg") | tojson }},
+    updated: {{ _("admin_users.js_updated") | tojson }},
+    accountUpdated: {{ _("admin_users.js_account_updated") | tojson }},
+    failedUpdate: {{ _("admin_users.js_failed_update") | tojson }},
+    passwordSet: {{ _("admin_users.js_password_set") | tojson }},
+    passwordSetMsg: {{ _("admin_users.js_password_set_msg") | tojson }},
+    failedSetPassword: {{ _("admin_users.js_failed_set_password") | tojson }},
+    emailSent: {{ _("admin_users.js_email_sent") | tojson }},
+    emailSentMsg: {{ _("admin_users.js_email_sent_msg") | tojson }},
+    emailNotSent: {{ _("admin_users.js_email_not_sent") | tojson }},
+    smtpNotConfigured: {{ _("admin_users.js_smtp_not_configured") | tojson }},
+    failed: {{ _("admin_users.js_failed") | tojson }},
+  };
+</script>
+
+<script>
 function adminUsersApp() {
+  const i18n = window.__i18nAdminUsers;
   return {
     // State
     users: [],
@@ -887,8 +922,9 @@ function adminUsersApp() {
 
     get totalLabel() {
       if (this.loading) return '';
-      if (this.total === 0) return 'No users';
-      return `${this.total} user${this.total !== 1 ? 's' : ''}`;
+      if (this.total === 0) return i18n.noUsers;
+      if (this.total === 1) return i18n.oneUser;
+      return i18n.countUsers.replace('{count}', this.total);
     },
 
     async init() {
@@ -908,7 +944,7 @@ function adminUsersApp() {
         const resp = await fetch(`/api/admin/users/?${params}`);
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
-          this.showAlert('error', 'Failed to load users', err.detail || resp.statusText);
+          this.showAlert('error', i18n.failedLoadUsers, err.detail || resp.statusText);
           return;
         }
         const data = await resp.json();
@@ -916,7 +952,7 @@ function adminUsersApp() {
         this.total = data.total;
         this.pages = data.pages;
       } catch (e) {
-        this.showAlert('error', 'Network error', e.message);
+        this.showAlert('error', i18n.networkError, e.message);
       } finally {
         this.loading = false;
       }
@@ -924,14 +960,14 @@ function adminUsersApp() {
 
     openCreateModal() {
       this.isCreate = true;
-      this.modalTitle = 'Add User Profile';
+      this.modalTitle = i18n.modalAddTitle;
       this.form = { user_id: '', display_name: '', daily_upload_limit: null, notes: '', is_blocked: false, subscription_tier: 'free', subscription_billing_cycle: 'monthly', subscription_period_start: null, is_complimentary: false };
       this.modalOpen = true;
     },
 
     openEditModal(user) {
       this.isCreate = false;
-      this.modalTitle = 'Edit User Profile';
+      this.modalTitle = i18n.modalEditTitle;
       this.form = {
         user_id: user.user_id,
         display_name: user.display_name || '',
@@ -970,14 +1006,14 @@ function adminUsersApp() {
         });
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
-          this.showAlert('error', 'Save failed', err.detail || resp.statusText);
+          this.showAlert('error', i18n.saveFailed, err.detail || resp.statusText);
           return;
         }
         this.modalOpen = false;
-        this.showAlert('success', 'Saved', `Profile for "${this.form.user_id}" has been saved.`);
+        this.showAlert('success', i18n.saved, i18n.profileSaved.replace('{id}', this.form.user_id));
         await this.fetchUsers(this.currentPage);
       } catch (e) {
-        this.showAlert('error', 'Network error', e.message);
+        this.showAlert('error', i18n.networkError, e.message);
       } finally {
         this.saving = false;
       }
@@ -1001,15 +1037,15 @@ function adminUsersApp() {
         });
         if (resp.status === 204) {
           this.deleteModal.open = false;
-          this.showAlert('success', 'Deleted', `Profile for "${this.deleteModal.user_id}" has been removed.`);
+          this.showAlert('success', i18n.deleted, i18n.profileDeleted.replace('{id}', this.deleteModal.user_id));
           await this.fetchUsers(this.currentPage);
         } else {
           const err = await resp.json().catch(() => ({}));
-          this.showAlert('error', 'Delete failed', err.detail || resp.statusText);
+          this.showAlert('error', i18n.deleteFailed, err.detail || resp.statusText);
           this.deleteModal.open = false;
         }
       } catch (e) {
-        this.showAlert('error', 'Network error', e.message);
+        this.showAlert('error', i18n.networkError, e.message);
         this.deleteModal.open = false;
       } finally {
         this.deleteModal.deleting = false;
@@ -1044,12 +1080,12 @@ function adminUsersApp() {
           headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '' },
         });
         if (!resp.ok) {
-          this.showAlert('error', 'Failed to load local users', resp.statusText);
+          this.showAlert('error', i18n.failedLoadLocal, resp.statusText);
           return;
         }
         this.localUsers = await resp.json();
       } catch (e) {
-        this.showAlert('error', 'Network error', e.message);
+        this.showAlert('error', i18n.networkError, e.message);
       } finally {
         this.localUsersLoading = false;
       }
@@ -1076,14 +1112,14 @@ function adminUsersApp() {
         });
         if (resp.ok) {
           this.localUserModal.open = false;
-          this.showAlert('success', 'Account created', `Local account for "${this.localUserModal.form.username}" was created successfully.`);
+          this.showAlert('success', i18n.accountCreated, i18n.accountCreatedMsg.replace('{username}', this.localUserModal.form.username));
           await this.fetchLocalUsers();
         } else {
           const err = await resp.json().catch(() => ({}));
-          this.localUserModal.error = err.detail || 'Failed to create account.';
+          this.localUserModal.error = err.detail || i18n.failedCreate;
         }
       } catch (e) {
-        this.localUserModal.error = 'Network error: ' + e.message;
+        this.localUserModal.error = i18n.networkError + ': ' + e.message;
       } finally {
         this.localUserModal.saving = false;
       }
@@ -1129,14 +1165,14 @@ function adminUsersApp() {
         });
         if (resp.ok) {
           this.editLocalUserModal.open = false;
-          this.showAlert('success', 'Updated', `Account has been updated.`);
+          this.showAlert('success', i18n.updated, i18n.accountUpdated);
           await this.fetchLocalUsers();
         } else {
           const err = await resp.json().catch(() => ({}));
-          this.editLocalUserModal.error = err.detail || 'Failed to update account.';
+          this.editLocalUserModal.error = err.detail || i18n.failedUpdate;
         }
       } catch (e) {
-        this.editLocalUserModal.error = 'Network error: ' + e.message;
+        this.editLocalUserModal.error = i18n.networkError + ': ' + e.message;
       } finally {
         this.editLocalUserModal.saving = false;
       }
@@ -1165,13 +1201,13 @@ function adminUsersApp() {
         });
         if (resp.ok) {
           this.setPasswordModal.open = false;
-          this.showAlert('success', 'Password set', `Password for "${this.setPasswordModal.username}" has been updated.`);
+          this.showAlert('success', i18n.passwordSet, i18n.passwordSetMsg.replace('{username}', this.setPasswordModal.username));
         } else {
           const err = await resp.json().catch(() => ({}));
-          this.setPasswordModal.error = err.detail || 'Failed to set password.';
+          this.setPasswordModal.error = err.detail || i18n.failedSetPassword;
         }
       } catch (e) {
-        this.setPasswordModal.error = 'Network error: ' + e.message;
+        this.setPasswordModal.error = i18n.networkError + ': ' + e.message;
       } finally {
         this.setPasswordModal.saving = false;
       }
@@ -1187,14 +1223,14 @@ function adminUsersApp() {
         });
         const data = await resp.json().catch(() => ({}));
         if (resp.ok && data.sent) {
-          this.showAlert('success', 'Email sent', `Password reset email sent to "${lu.email}".`);
+          this.showAlert('success', i18n.emailSent, i18n.emailSentMsg.replace('{email}', lu.email));
         } else if (resp.ok && !data.sent) {
-          this.showAlert('error', 'Email not sent', data.reason || 'SMTP is not configured.');
+          this.showAlert('error', i18n.emailNotSent, data.reason || i18n.smtpNotConfigured);
         } else {
-          this.showAlert('error', 'Failed', data.detail || resp.statusText);
+          this.showAlert('error', i18n.failed, data.detail || resp.statusText);
         }
       } catch (e) {
-        this.showAlert('error', 'Network error', e.message);
+        this.showAlert('error', i18n.networkError, e.message);
       }
     },
 
@@ -1207,15 +1243,15 @@ function adminUsersApp() {
         });
         if (resp.status === 204) {
           this.deleteLocalUserModal.open = false;
-          this.showAlert('success', 'Deleted', `Account for "${this.deleteLocalUserModal.username}" has been removed.`);
+          this.showAlert('success', i18n.deleted, i18n.accountDeletedMsg.replace('{username}', this.deleteLocalUserModal.username));
           await this.fetchLocalUsers();
         } else {
           const err = await resp.json().catch(() => ({}));
-          this.showAlert('error', 'Delete failed', err.detail || resp.statusText);
+          this.showAlert('error', i18n.deleteFailed, err.detail || resp.statusText);
           this.deleteLocalUserModal.open = false;
         }
       } catch (e) {
-        this.showAlert('error', 'Network error', e.message);
+        this.showAlert('error', i18n.networkError, e.message);
         this.deleteLocalUserModal.open = false;
       } finally {
         this.deleteLocalUserModal.deleting = false;

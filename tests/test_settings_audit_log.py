@@ -289,7 +289,8 @@ class TestNotifySettingsUpdated:
         call_args = mock_redis_instance.set.call_args[0]
         assert call_args[0] == SETTINGS_VERSION_KEY
 
-    def test_does_not_raise_on_redis_failure(self):
+    @patch("app.utils.settings_sync.logger")
+    def test_does_not_raise_on_redis_failure(self, mock_logger):
         """notify_settings_updated must not propagate Redis errors."""
         from app.utils.settings_sync import notify_settings_updated
 
@@ -297,6 +298,35 @@ class TestNotifySettingsUpdated:
             mock_redis_module.from_url.side_effect = Exception("Redis down")
             # Should not raise
             notify_settings_updated()
+            mock_logger.warning.assert_any_call("Could not publish settings update to Redis: Redis down")
+
+    @patch("app.utils.settings_sync.logger")
+    def test_does_not_raise_on_reload_failure(self, mock_logger):
+        """notify_settings_updated must not propagate settings reload errors."""
+        from app.utils.settings_sync import notify_settings_updated
+
+        with patch("app.utils.config_loader.reload_settings_from_db") as mock_reload:
+            mock_reload.side_effect = Exception("Reload error")
+            # We mock redis so that we skip over the redis block, and mock ensure_ocr_languages_async to prevent its side effects.
+            with patch("app.utils.settings_sync.redis"):
+                with patch("app.utils.ocr_language_manager.ensure_ocr_languages_async"):
+                    # Should not raise
+                    notify_settings_updated()
+            mock_logger.warning.assert_any_call("Could not reload in-process settings: Reload error")
+
+    @patch("app.utils.settings_sync.logger")
+    def test_does_not_raise_on_ocr_language_check_failure(self, mock_logger):
+        """notify_settings_updated must not propagate OCR language check errors."""
+        from app.utils.settings_sync import notify_settings_updated
+
+        with patch("app.utils.ocr_language_manager.ensure_ocr_languages_async") as mock_ensure:
+            mock_ensure.side_effect = Exception("OCR error")
+            # We mock redis and reload_settings_from_db so we only test the OCR block failure.
+            with patch("app.utils.settings_sync.redis"):
+                with patch("app.utils.config_loader.reload_settings_from_db"):
+                    # Should not raise
+                    notify_settings_updated()
+            mock_logger.warning.assert_any_call("Could not schedule OCR language check: OCR error")
 
 
 @pytest.mark.unit

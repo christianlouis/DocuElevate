@@ -571,6 +571,37 @@ def _upload_rclone(file_path: str, cfg: dict[str, Any], creds: dict[str, Any], t
     return {"status": "Completed", "rclone_dest": dest}
 
 
+def _upload_icloud(file_path: str, cfg: dict[str, Any], creds: dict[str, Any], task_id: str) -> dict[str, Any]:
+    """Upload *file_path* to iCloud Drive using per-user credentials.
+
+    Expected *cfg* keys:
+        * ``folder`` – target folder path inside iCloud Drive (e.g. ``Documents/Uploads``).
+        * ``cookie_directory`` – (optional) path for session cookie persistence.
+
+    Expected *creds* keys:
+        * ``username`` – Apple ID email address.
+        * ``password`` – app-specific password.
+    """
+    from app.tasks.upload_to_icloud import _get_icloud_api, _navigate_to_folder
+
+    username = creds.get("username") or ""
+    password = creds.get("password") or ""
+    folder = cfg.get("folder") or ""
+    cookie_directory = cfg.get("cookie_directory") or None
+
+    if not username or not password:
+        raise ValueError("iCloud integration is missing username or password in credentials")
+
+    api = _get_icloud_api(username, password, cookie_directory)
+    folder_node = _navigate_to_folder(api.drive, folder)
+
+    with open(file_path, "rb") as fh:
+        folder_node.upload(fh)
+
+    logger.info("[%s] iCloud Drive upload complete: folder=%s", task_id, folder or "/")
+    return {"status": "Completed", "icloud_folder": folder or "/"}
+
+
 # Map IntegrationType → upload helper
 _UPLOAD_HANDLERS = {
     IntegrationType.DROPBOX: _upload_dropbox,
@@ -584,6 +615,7 @@ _UPLOAD_HANDLERS = {
     IntegrationType.PAPERLESS: _upload_paperless,
     IntegrationType.EMAIL: _upload_email,
     IntegrationType.RCLONE: _upload_rclone,
+    IntegrationType.ICLOUD: _upload_icloud,
 }
 
 

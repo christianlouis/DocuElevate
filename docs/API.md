@@ -1960,6 +1960,160 @@ Pass no `pipeline_id` query parameter (or omit it) to clear the assignment.
 ```
 
 
+## Routing Rules
+
+Routing rules let you conditionally assign documents to different pipelines
+based on file properties such as type, size, filename, or AI-extracted
+metadata.  Rules are evaluated in **position order** (lowest first); the first
+rule that matches wins.  If no rule matches, the system falls back to the
+owner's (or global) default pipeline.
+
+### Supported operators and fields
+
+```bash
+GET /api/routing-rules/operators
+```
+
+Returns the catalogue of valid operators and built-in fields so UIs can
+populate dropdowns without hard-coding values.
+
+**Response (200):**
+```json
+{
+  "operators": ["contains", "equals", "gt", "gte", "lt", "lte", "not_contains", "not_equals", "regex"],
+  "builtin_fields": ["category", "document_type", "file_type", "filename", "size"],
+  "metadata_prefix": "metadata."
+}
+```
+
+> **Tip:** For AI metadata fields use the `metadata.` prefix, e.g.
+> `metadata.sender`, `metadata.amount`.
+
+### List routing rules
+
+```bash
+GET /api/routing-rules
+```
+
+Returns the current user's rules **plus** any system-wide rules
+(`owner_id = null`), ordered by position.
+
+**Response (200):**
+```json
+[
+  {
+    "id": 1,
+    "owner_id": "alice",
+    "name": "Route invoices",
+    "position": 0,
+    "field": "document_type",
+    "operator": "equals",
+    "value": "Invoice",
+    "target_pipeline_id": 3,
+    "is_active": true,
+    "created_at": "2026-03-09T12:00:00+00:00",
+    "updated_at": "2026-03-09T12:00:00+00:00"
+  }
+]
+```
+
+### Create routing rule
+
+```bash
+POST /api/routing-rules
+Content-Type: application/json
+
+{
+  "name": "Route invoices",
+  "field": "document_type",
+  "operator": "equals",
+  "value": "Invoice",
+  "target_pipeline_id": 3
+}
+```
+
+Optional fields: `position` (auto-assigned if omitted), `is_active` (default `true`).
+
+**Response (201 Created):** The created rule object.
+
+### Get routing rule
+
+```bash
+GET /api/routing-rules/{rule_id}
+```
+
+**Response (200):** A single rule object.
+
+### Update routing rule
+
+```bash
+PUT /api/routing-rules/{rule_id}
+Content-Type: application/json
+
+{ "name": "Renamed rule", "operator": "contains", "is_active": false }
+```
+
+Only the supplied fields are updated.
+
+**Response (200):** The updated rule object.
+
+### Delete routing rule
+
+```bash
+DELETE /api/routing-rules/{rule_id}
+```
+
+Returns **204 No Content**.
+
+### Reorder routing rules
+
+```bash
+PUT /api/routing-rules/reorder
+Content-Type: application/json
+
+{ "rule_ids": [3, 1, 2] }
+```
+
+Provide the complete ordered list of your rule IDs.  Positions are reassigned
+0, 1, 2, … in the given order.
+
+### Evaluate rules (dry run)
+
+```bash
+POST /api/routing-rules/evaluate
+Content-Type: application/json
+
+{
+  "file_type": "application/pdf",
+  "filename": "invoice_2024.pdf",
+  "size": 204800,
+  "document_type": "Invoice",
+  "metadata": { "sender": "Acme Corp" }
+}
+```
+
+Tests which rule (if any) would match the given properties **without**
+actually routing a document.
+
+**Response (200) – match found:**
+```json
+{
+  "matched": true,
+  "rule": { "id": 1, "name": "Route invoices", "..." : "..." },
+  "target_pipeline": { "id": 3, "name": "Invoice Pipeline", "is_active": true }
+}
+```
+
+**Response (200) – no match:**
+```json
+{
+  "matched": false,
+  "rule": null,
+  "target_pipeline": null
+}
+```
+
+
 ## API Tokens
 
 Personal API tokens allow programmatic access to the DocuElevate API without
@@ -2215,3 +2369,191 @@ Automation hook deliveries follow the same retry policy as regular webhooks: up 
 ## Further Assistance
 
 For additional help with the API, please contact our support team or refer to the [Development Guide](../CONTRIBUTING.md).
+
+## Mobile App API
+
+The mobile API provides endpoints used by the native iOS and Android app.  All endpoints require authentication (Bearer token or active session cookie).
+
+For full mobile app documentation see [MobileApp.md](./MobileApp.md).
+
+### POST /api/mobile/generate-token
+
+Exchange an active web session for a long-lived API token scoped to the mobile app.
+
+**Request:**
+```json
+{ "device_name": "John's iPhone" }
+```
+
+**Response (201 Created):**
+```json
+{
+  "token": "de_AbCdEfGhIjKl...",
+  "token_id": 42,
+  "name": "Mobile App – John's iPhone",
+  "created_at": "2026-03-10T09:30:00Z"
+}
+```
+
+> The `token` is shown **once only**.
+
+### POST /api/mobile/register-device
+
+Register an Expo push token to receive push notifications.
+
+**Request:**
+```json
+{
+  "push_token": "ExponentPushToken[xxxxxx]",
+  "device_name": "John's iPhone",
+  "platform": "ios"
+}
+```
+
+**Response (201 Created):** Device record with `id`, `platform`, `is_active`, `created_at`.
+
+### GET /api/mobile/devices
+
+List all registered push-notification devices for the current user.
+
+**Response (200 OK):** Array of device records.
+
+### DELETE /api/mobile/devices/{device_id}
+
+Deactivate a push-notification device.  The device will no longer receive push notifications.
+
+**Response (204 No Content)**
+
+### GET /api/mobile/whoami
+
+Return basic profile information for the authenticated user.
+
+**Response (200 OK):**
+```json
+{
+  "owner_id": "john@example.com",
+  "display_name": "John Doe",
+  "email": "john@example.com",
+  "avatar_url": "https://www.gravatar.com/avatar/...",
+  "is_admin": false
+}
+```
+
+---
+
+## GraphQL API
+
+DocuElevate exposes a GraphQL API at `/graphql` alongside the REST API.  It
+supports flexible queries with field selection, making it ideal for dashboards
+and integrations that only need a subset of the available data.
+
+### Endpoint
+
+| Method | URL | Description |
+|--------|-----|-------------|
+| `POST` | `/graphql` | Execute a GraphQL query or mutation |
+| `GET`  | `/graphql` | Open the GraphiQL interactive playground |
+
+### Authentication
+
+The GraphQL endpoint honours the same authentication rules as the REST API:
+
+- **`AUTH_ENABLED=False`** (default, single-user mode): all queries are
+  allowed without credentials.
+- **`AUTH_ENABLED=True`** (multi-user mode): a valid session cookie **or**
+  an `Authorization: Bearer <token>` API token is required.  Admin-only
+  queries (settings, users) additionally require the `is_admin` flag.
+
+### Available Queries
+
+| Field | Returns | Notes |
+|-------|---------|-------|
+| `documents(ownerId, limit, offset)` | `[DocumentType]` | Paginated list of documents |
+| `document(id)` | `DocumentType` | Single document by primary key |
+| `pipelines(ownerId, limit, offset)` | `[PipelineType]` | Paginated list of pipelines with steps |
+| `pipeline(id)` | `PipelineType` | Single pipeline by primary key |
+| `settings(limit, offset)` | `[SettingType]` | Non-sensitive app settings (**admin only**) |
+| `users(limit, offset)` | `[UserType]` | User profiles (**admin only**) |
+| `user(userId)` | `UserType` | Single user profile (**admin only**) |
+
+> **Note:** Sensitive configuration keys (API secrets, passwords, tokens) are
+> automatically excluded from the `settings` query regardless of the caller's
+> privilege level.
+
+### GraphiQL Playground
+
+Navigate to `http://<your-instance>/graphql` in a browser to open the
+interactive GraphiQL IDE, which provides schema documentation, auto-complete,
+and the ability to run queries directly.
+
+### Example Queries
+
+**List recent documents:**
+```graphql
+{
+  documents(limit: 5) {
+    id
+    originalFilename
+    mimeType
+    fileSize
+    documentTitle
+    createdAt
+  }
+}
+```
+
+**Fetch a pipeline with its steps:**
+```graphql
+{
+  pipeline(id: 1) {
+    id
+    name
+    description
+    isDefault
+    isActive
+    steps {
+      position
+      stepType
+      label
+      enabled
+    }
+  }
+}
+```
+
+**List application settings (admin only):**
+```graphql
+{
+  settings {
+    key
+    value
+    updatedAt
+  }
+}
+```
+
+**List user profiles (admin only):**
+```graphql
+{
+  users(limit: 10) {
+    userId
+    displayName
+    subscriptionTier
+    isBlocked
+  }
+}
+```
+
+**Using variables:**
+```graphql
+query GetDocument($id: Int!) {
+  document(id: $id) {
+    id
+    originalFilename
+    documentTitle
+    isDuplicate
+    ocrQualityScore
+  }
+}
+```
+Variables: `{ "id": 42 }`

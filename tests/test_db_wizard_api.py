@@ -345,7 +345,7 @@ class TestSettingsPageWizardLink:
         template_path = Path(__file__).resolve().parent.parent / "frontend" / "templates" / "settings.html"
         content = template_path.read_text()
         assert "/database-wizard" in content
-        assert "DB Wizard" in content
+        assert "settings.db_wizard_btn" in content  # i18n key (resolves to "DB Wizard")
 
     def test_settings_template_has_help_link_rendering(self):
         """Test that the settings template renders help_link metadata."""

@@ -1,7 +1,7 @@
 """Comprehensive unit tests for app/api/onedrive.py module."""
 
 from datetime import timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -48,8 +48,8 @@ class TestExchangeOneDriveToken:
 class TestTestOneDriveToken:
     """Tests for GET /onedrive/test-token endpoint."""
 
-    @patch("app.api.onedrive.requests.post")
-    @patch("app.api.onedrive.requests.get")
+    @patch("httpx.AsyncClient.post", new_callable=AsyncMock)
+    @patch("httpx.AsyncClient.get", new_callable=AsyncMock)
     def test_test_token_success(self, mock_get, mock_post):
         """Test successful token validation."""
         from app.config import settings
@@ -79,7 +79,7 @@ class TestTestOneDriveToken:
                         # Should return success
                         pass
 
-    @patch("app.api.onedrive.requests.post")
+    @patch("httpx.AsyncClient.post", new_callable=AsyncMock)
     def test_test_token_not_configured(self, mock_post):
         """Test when credentials are not configured."""
         from app.config import settings
@@ -88,7 +88,7 @@ class TestTestOneDriveToken:
             # Should return error
             pass
 
-    @patch("app.api.onedrive.requests.post")
+    @patch("httpx.AsyncClient.post", new_callable=AsyncMock)
     def test_test_token_refresh_failed(self, mock_post):
         """Test when token refresh fails."""
         from app.config import settings
@@ -104,8 +104,8 @@ class TestTestOneDriveToken:
                     # Should return error with needs_reauth
                     pass
 
-    @patch("app.api.onedrive.requests.post")
-    @patch("app.api.onedrive.requests.get")
+    @patch("httpx.AsyncClient.post", new_callable=AsyncMock)
+    @patch("httpx.AsyncClient.get", new_callable=AsyncMock)
     def test_test_token_user_info_failed(self, mock_get, mock_post):
         """Test when user info request fails."""
         from app.config import settings
@@ -128,8 +128,8 @@ class TestTestOneDriveToken:
                     # Should return error
                     pass
 
-    @patch("app.api.onedrive.requests.post")
-    @patch("app.api.onedrive.requests.get")
+    @patch("httpx.AsyncClient.post", new_callable=AsyncMock)
+    @patch("httpx.AsyncClient.get", new_callable=AsyncMock)
     @patch("builtins.open", create=True)
     @patch("os.path.exists")
     def test_test_token_updates_refresh_token(self, mock_exists, mock_open, mock_get, mock_post):
@@ -167,8 +167,8 @@ class TestTestOneDriveToken:
                     # Should update refresh token in memory and file
                     pass
 
-    @patch("app.api.onedrive.requests.post")
-    @patch("app.api.onedrive.requests.get")
+    @patch("httpx.AsyncClient.post", new_callable=AsyncMock)
+    @patch("httpx.AsyncClient.get", new_callable=AsyncMock)
     def test_test_token_expiration_info(self, mock_get, mock_post):
         """Test that expiration info is included."""
         from app.config import settings
@@ -195,7 +195,7 @@ class TestTestOneDriveToken:
                     # token_info should include expiration details
                     pass
 
-    @patch("app.api.onedrive.requests.post")
+    @patch("httpx.AsyncClient.post", new_callable=AsyncMock)
     def test_test_token_exception_handling(self, mock_post):
         """Test handling of exceptions."""
         from app.config import settings

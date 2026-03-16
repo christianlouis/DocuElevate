@@ -73,33 +73,38 @@ def list_duplicate_groups(
     groups = []
     total_duplicate_files = 0
 
-    for filehash in dup_hashes:
-        # Find the original (non-duplicate) record with this hash
-        original = (
-            db.query(FileRecord)
-            .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False))
-            .order_by(FileRecord.id.asc())
-            .first()
+    if dup_hashes:
+        # Fetch all matching files (both original and duplicates) in a single batch query
+        all_records = (
+            db.query(FileRecord).filter(FileRecord.filehash.in_(dup_hashes)).order_by(FileRecord.id.asc()).all()
         )
 
-        # Find all duplicate records for this hash
-        duplicates = (
-            db.query(FileRecord)
-            .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(True))
-            .order_by(FileRecord.id.asc())
-            .all()
-        )
+        # Group records by hash
+        originals_by_hash = {}
+        duplicates_by_hash = {h: [] for h in dup_hashes}
 
-        total_duplicate_files += len(duplicates)
+        for record in all_records:
+            h = record.filehash
+            if not record.is_duplicate:
+                # Store only the first original record per hash, matching the old .first() behaviour
+                if h not in originals_by_hash:
+                    originals_by_hash[h] = record
+            else:
+                duplicates_by_hash[h].append(record)
+                total_duplicate_files += 1
 
-        groups.append(
-            {
-                "filehash": filehash,
-                "original": _file_record_to_dict(original) if original else None,
-                "duplicates": [_file_record_to_dict(d) for d in duplicates],
-                "duplicate_count": len(duplicates),
-            }
-        )
+        for filehash in dup_hashes:
+            original = originals_by_hash.get(filehash)
+            duplicates = duplicates_by_hash.get(filehash, [])
+
+            groups.append(
+                {
+                    "filehash": filehash,
+                    "original": _file_record_to_dict(original) if original else None,
+                    "duplicates": [_file_record_to_dict(d) for d in duplicates],
+                    "duplicate_count": len(duplicates),
+                }
+            )
 
     total_pages = (total_groups + per_page - 1) // per_page if total_groups > 0 else 1
 
