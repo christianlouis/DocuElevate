@@ -522,6 +522,19 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Document Translation
+    "default_document_language": {
+        "category": "AI Services",
+        "description": (
+            "ISO 639-1 language code for the default document translation target "
+            "(e.g. 'en', 'de', 'fr'). Documents whose detected language differs "
+            "are automatically translated into this language after processing."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # OCR Engine Configuration
     "ocr_providers": {
         "category": "OCR Engines",

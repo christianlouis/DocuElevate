@@ -39,6 +39,7 @@ from app.tasks.refine_text_with_gpt import refine_text_with_gpt  # noqa: F401
 from app.tasks.rotate_pdf_pages import rotate_pdf_pages  # noqa: F401
 from app.tasks.send_to_all import send_to_all_destinations  # noqa: F401
 from app.tasks.subscription_tasks import apply_pending_subscription_changes_all  # noqa: F401
+from app.tasks.translate_to_default_language import translate_to_default_language  # noqa: F401
 
 # Import new send tasks
 from app.tasks.upload_to_dropbox import upload_to_dropbox  # noqa: F401
