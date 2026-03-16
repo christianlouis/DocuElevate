@@ -10,6 +10,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.147.3 (2026-03-16)
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`ca2d023`](https://github.com/christianlouis/DocuElevate/commit/ca2d023d8130000fb82482fb8fbe0d7e218c94fb))
+
+### Performance Improvements
+
+- **onedrive**: Use async httpx for token refresh
+  ([`8279795`](https://github.com/christianlouis/DocuElevate/commit/827979598eaeab765a1d24e6011deb26fc804b95))
+
+- **onedrive**: Use async httpx for token refresh
+  ([`2471921`](https://github.com/christianlouis/DocuElevate/commit/24719212042a65ed4a0d99776c6b3974ef97f0e8))
+
+- **onedrive**: Use async httpx for token refresh
+  ([`d1f64eb`](https://github.com/christianlouis/DocuElevate/commit/d1f64ebfba6bb353ea6f75e1535a42fd26a8fe0a))
+
+- **onedrive**: Use async httpx for token refresh
+  ([`7242f3c`](https://github.com/christianlouis/DocuElevate/commit/7242f3c168396aa5400fd46ad531ede93024b467))
+
+
 ## v0.147.2 (2026-03-16)
 
 ### Code Style
