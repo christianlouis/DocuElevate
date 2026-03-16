@@ -168,9 +168,8 @@ async def create_checkout_session(
     checkout_session = client.checkout.sessions.create(params=session_params)
 
     logger.info(
-        "Created Stripe checkout session %s for user %s plan %s",
+        "Created Stripe checkout session %s for user plan %s",
         checkout_session.id,
-        owner_id,
         body.plan_id,
     )
     return {"checkout_url": checkout_session.url, "session_id": checkout_session.id}
@@ -213,7 +212,7 @@ async def create_portal_session(
         }
     )
 
-    logger.info("Created Stripe portal session for user %s", owner_id)
+    logger.info("Created Stripe portal session for user")
     return {"portal_url": portal.url}
 
 

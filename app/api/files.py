@@ -1497,7 +1497,7 @@ def claim_file(request: Request, file_id: int, db: DbSession):
         logger.exception(f"Error claiming file {file_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to claim document")
 
-    logger.info(f"File {file_id} claimed by user '{owner_id}'")
+    logger.info("File %d claimed by user", file_id)
     return {"status": "success", "message": "Document claimed successfully", "file_id": file_id, "owner_id": owner_id}
 
 
@@ -1537,7 +1537,7 @@ def bulk_claim_files(request: Request, file_ids: list[int], db: DbSession):
         logger.exception(f"Error during bulk claim: {e}")
         raise HTTPException(status_code=500, detail="Failed to claim documents")
 
-    logger.info(f"Bulk claim by '{owner_id}': claimed={claimed}, skipped={[s['file_id'] for s in skipped]}")
+    logger.info("Bulk claim: claimed=%s, skipped=%s", claimed, [s["file_id"] for s in skipped])
     return {
         "status": "success",
         "claimed_count": len(claimed),
@@ -1590,8 +1590,7 @@ def assign_owner(request: Request, db: DbSession, owner_id: str = Query(...), fi
         logger.exception(f"Error assigning owner: {e}")
         raise HTTPException(status_code=500, detail="Failed to assign owner")
 
-    admin_name = get_current_owner_id(request) or "admin"
-    logger.info(f"Admin '{admin_name}' assigned owner_id='{owner_id}' to {updated} file(s)")
+    logger.info("Admin assigned owner to %d file(s)", updated)
     return {
         "status": "success",
         "message": f"Assigned owner to {updated} document(s)",
