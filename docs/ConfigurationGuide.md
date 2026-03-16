@@ -17,6 +17,8 @@ Configuration is primarily done through environment variables specified in a `.e
 | `EXTERNAL_HOSTNAME`    | The external hostname for the application.             | `docuelevate.example.com`      |
 | `ALLOW_FILE_DELETE`    | Enable file deletion in the web interface (`true`/`false`). | `true`                      |
 | `COMPLIANCE_ENABLED`   | Enable the compliance templates dashboard (GDPR, HIPAA, SOC 2). | `true`                      |
+| `FACTORY_RESET_ON_STARTUP` | Wipe all user data on every startup (demo/testing). | `false` |
+| `ENABLE_FACTORY_RESET` | Show the System Reset page in the admin UI.         | `false` |
 
 ### Batch Processing Settings
 
@@ -1855,6 +1857,52 @@ BACKUP_RETAIN_WEEKLY=13
 ## Selective Service Configuration
 
 You can choose which document storage services to use by only including the relevant environment variables. For example, if you only want to use Dropbox, include only the Dropbox variables and omit the Paperless NGX and Nextcloud variables.
+
+## System Reset / Factory Reset
+
+DocuElevate provides two mechanisms for resetting the system to a clean state.  Both are **disabled by default** and must be explicitly enabled.
+
+### Automatic Reset on Startup
+
+Set `FACTORY_RESET_ON_STARTUP=true` to wipe all user data (database rows and work-files) every time the application starts.  This is useful for demo, testing, or ephemeral environments where you always want a fresh instance.
+
+```dotenv
+FACTORY_RESET_ON_STARTUP=true
+```
+
+> **Warning:** This destroys all documents, processing history, audit logs, and backups on every restart.  Application settings and configuration are preserved.
+
+### Admin UI Reset Page
+
+Set `ENABLE_FACTORY_RESET=true` to display the **System Reset** page in the admin navigation menu.  From this page, administrators can:
+
+| Action | Confirmation | Description |
+|--------|-------------|-------------|
+| **Full Reset** | Type `DELETE` | Wipes all database rows and work-files.  The system returns to its initial state. |
+| **Reset & Re-import** | Type `REIMPORT` | Copies original files to a `reimport/` folder inside the workdir, wipes everything, then configures the reimport folder as a watch folder so files are automatically re-ingested with the same processing pipeline, rate limits, and backoff strategy as regular uploads. |
+
+```dotenv
+ENABLE_FACTORY_RESET=true
+```
+
+### API Endpoints
+
+When `ENABLE_FACTORY_RESET=true`, two admin-only API endpoints are available:
+
+- `POST /api/admin/system-reset/full` — body: `{"confirmation": "DELETE"}`
+- `POST /api/admin/system-reset/reimport` — body: `{"confirmation": "REIMPORT"}`
+- `GET  /api/admin/system-reset/status` — returns current feature-flag state
+
+### What Gets Deleted
+
+| Deleted | Preserved |
+|---------|-----------|
+| All document records (`files` table) | Application settings (`application_settings` table) |
+| Processing logs and steps | User accounts and profiles |
+| Audit logs | Subscription plans |
+| Backup records | Pipelines and scheduled jobs |
+| Original, processed, and temporary files | The workdir directory itself |
+| Watch-folder caches and ingestion state | OAuth and integration configuration |
 
 ## Configuration File Location
 

@@ -94,6 +94,7 @@ def _inject_global_context(ctx: dict) -> None:
         "allow_signup",
         getattr(settings, "multi_user_enabled", False) and getattr(settings, "allow_local_signup", False),
     )
+    ctx.setdefault("enable_factory_reset", getattr(settings, "enable_factory_reset", False))
 
     req = ctx.get("request")
     if req is not None:
