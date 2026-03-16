@@ -632,3 +632,137 @@ class TestFinalizeDocumentStorageUserRouting:
         mock_send_all.delay.assert_called_once_with("/workdir/processed/file.pdf", True, 400)
         mock_send_user.delay.assert_not_called()
         assert result["status"] == "Completed"
+
+
+@pytest.mark.unit
+class TestFinalizeDocumentStorageUserNotification:
+    """Tests for per-user notification dispatch in finalize_document_storage."""
+
+    @patch("app.tasks.finalize_document_storage.notify_user_document_processed")
+    @patch("app.tasks.finalize_document_storage.notify_file_processed")
+    @patch("app.tasks.finalize_document_storage.send_to_user_destinations")
+    @patch("app.tasks.finalize_document_storage.send_to_all_destinations")
+    @patch("app.tasks.finalize_document_storage.get_user_destination_count", return_value=2)
+    @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
+    @patch("app.tasks.finalize_document_storage.log_task_progress")
+    @patch("app.tasks.finalize_document_storage.SessionLocal")
+    def test_dispatches_per_user_notification_when_owner_is_set(
+        self,
+        mock_session_local,
+        mock_log_progress,
+        mock_get_services,
+        mock_get_dest_count,
+        mock_send_all,
+        mock_send_user,
+        mock_notify_system,
+        mock_notify_user,
+    ):
+        """notify_user_document_processed is called when owner_id is available."""
+        mock_get_services.return_value = {"dropbox": True}
+
+        mock_db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = mock_db
+        mock_file_record = _make_file_record(100, owner_id="alice@example.com")
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_file_record
+
+        with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=True):
+            with patch("app.tasks.finalize_document_storage.os.path.getsize", return_value=1024):
+                with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="doc.pdf"):
+                    finalize_document_storage.request.id = "test-task-id"
+
+                    finalize_document_storage.__wrapped__(
+                        original_file="/tmp/original.pdf",
+                        processed_file="/workdir/processed/doc.pdf",
+                        metadata={"filename": "doc.pdf"},
+                        file_id=100,
+                    )
+
+        mock_notify_user.assert_called_once_with(
+            owner_id="alice@example.com",
+            filename="doc.pdf",
+            file_id=100,
+        )
+
+    @patch("app.tasks.finalize_document_storage.notify_user_document_processed")
+    @patch("app.tasks.finalize_document_storage.notify_file_processed")
+    @patch("app.tasks.finalize_document_storage.send_to_user_destinations")
+    @patch("app.tasks.finalize_document_storage.send_to_all_destinations")
+    @patch("app.tasks.finalize_document_storage.get_user_destination_count", return_value=0)
+    @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
+    @patch("app.tasks.finalize_document_storage.log_task_progress")
+    @patch("app.tasks.finalize_document_storage.SessionLocal")
+    def test_skips_per_user_notification_when_no_owner(
+        self,
+        mock_session_local,
+        mock_log_progress,
+        mock_get_services,
+        mock_get_dest_count,
+        mock_send_all,
+        mock_send_user,
+        mock_notify_system,
+        mock_notify_user,
+    ):
+        """notify_user_document_processed is NOT called when owner_id is None."""
+        mock_get_services.return_value = {"dropbox": True}
+
+        mock_db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = mock_db
+        mock_file_record = _make_file_record(200, owner_id=None)
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_file_record
+
+        with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=True):
+            with patch("app.tasks.finalize_document_storage.os.path.getsize", return_value=2048):
+                with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="file.pdf"):
+                    finalize_document_storage.request.id = "test-task-id"
+
+                    finalize_document_storage.__wrapped__(
+                        original_file="/tmp/original.pdf",
+                        processed_file="/workdir/processed/file.pdf",
+                        metadata={"filename": "file.pdf"},
+                        file_id=200,
+                    )
+
+        mock_notify_user.assert_not_called()
+
+    @patch("app.tasks.finalize_document_storage.notify_user_document_processed")
+    @patch("app.tasks.finalize_document_storage.notify_file_processed")
+    @patch("app.tasks.finalize_document_storage.send_to_user_destinations")
+    @patch("app.tasks.finalize_document_storage.send_to_all_destinations")
+    @patch("app.tasks.finalize_document_storage.get_user_destination_count", return_value=0)
+    @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
+    @patch("app.tasks.finalize_document_storage.log_task_progress")
+    @patch("app.tasks.finalize_document_storage.SessionLocal")
+    def test_per_user_notification_failure_does_not_break_task(
+        self,
+        mock_session_local,
+        mock_log_progress,
+        mock_get_services,
+        mock_get_dest_count,
+        mock_send_all,
+        mock_send_user,
+        mock_notify_system,
+        mock_notify_user,
+    ):
+        """Even if notify_user_document_processed raises, finalize returns success."""
+        mock_get_services.return_value = {"dropbox": True}
+        mock_notify_user.side_effect = RuntimeError("SMTP down")
+
+        mock_db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = mock_db
+        mock_file_record = _make_file_record(300, owner_id="bob@example.com")
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_file_record
+
+        with patch("app.tasks.finalize_document_storage.os.path.exists", return_value=True):
+            with patch("app.tasks.finalize_document_storage.os.path.getsize", return_value=512):
+                with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="a.pdf"):
+                    finalize_document_storage.request.id = "test-task-id"
+
+                    result = finalize_document_storage.__wrapped__(
+                        original_file="/tmp/original.pdf",
+                        processed_file="/workdir/processed/a.pdf",
+                        metadata={"filename": "a.pdf"},
+                        file_id=300,
+                    )
+
+        assert result["status"] == "Completed"
+        mock_notify_user.assert_called_once()
