@@ -44,7 +44,7 @@
           }
         ]
       },
-      "buildNumber": "3"
+      "buildNumber": "7"
     },
     "android": {
       "adaptiveIcon": {
@@ -71,7 +71,7 @@
           "category": ["DEFAULT"]
         }
       ],
-      "versionCode": 1
+      "versionCode": 7
     },
     "web": {
       "favicon": "./assets/favicon.png",

@@ -67,6 +67,24 @@ An **EAS Cloud Workflow** (`mobile/.eas/workflows/create-builds.yml`) automates 
 
 > **Prerequisite:** An App Store Connect API Key must be configured in EAS for non-interactive submission.  See [Troubleshooting → "Session expired"](#session-expired-local-session-during-ios-build) below for setup instructions.
 
+### Version Management
+
+Build numbers (iOS `buildNumber` / Android `versionCode`) are managed **remotely** by EAS.  The `eas.json` configuration uses:
+
+```json
+{
+  "cli": { "appVersionSource": "remote" },
+  "build": { "production": { "autoIncrement": true } }
+}
+```
+
+- **`appVersionSource: "remote"`** — EAS stores the current build number on its servers instead of reading it from `app.json`.  This ensures every CI build gets a unique, ever-increasing number without needing to commit version bumps back to the repository.
+- **`autoIncrement: true`** — EAS automatically increments the build number before each production build.
+
+The `ios.buildNumber` and `android.versionCode` values in `app.json` serve as the **initial seed** when the remote version is first created; after that they are informational only.  Do not rely on them for the actual version submitted to the stores.
+
+> **Tip:** To check or manually set the remote version, use `eas build:version:get` and `eas build:version:set`.
+
 ## Authentication
 
 ### SSO Login Flow
