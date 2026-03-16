@@ -43,6 +43,10 @@ interface UploadItem {
   fileId?: number;
   /** Actual server-side processing status (e.g. "pending", "processing", "completed"). */
   serverStatus?: string;
+  /** Original file URI – retained so the upload can be retried on failure. */
+  uri?: string;
+  /** MIME type of the original file. */
+  mimeType?: string;
 }
 
 export default function UploadScreen() {
@@ -63,7 +67,7 @@ export default function UploadScreen() {
 
   const uploadFile = useCallback(async (uri: string, filename: string, mimeType?: string) => {
     const id = `${Date.now()}-${filename}`;
-    setUploads((prev) => [{ id, filename, status: "uploading" }, ...prev]);
+    setUploads((prev) => [{ id, filename, status: "uploading", uri, mimeType }, ...prev]);
 
     try {
       const resp = await api.uploadFile(uri, filename, mimeType);
@@ -78,6 +82,35 @@ export default function UploadScreen() {
       const msg = err instanceof Error ? err.message : "Upload failed";
       setUploads((prev) =>
         prev.map((item) => (item.id === id ? { ...item, status: "error", error: msg } : item))
+      );
+    }
+  }, []);
+
+  const retryUpload = useCallback(async (item: UploadItem) => {
+    if (!item.uri) return;
+
+    // Reset the item to "uploading" and clear previous error/server state.
+    setUploads((prev) =>
+      prev.map((u) =>
+        u.id === item.id
+          ? { ...u, status: "uploading" as const, error: undefined, serverStatus: undefined, fileId: undefined, taskId: undefined, originalFilename: undefined }
+          : u
+      )
+    );
+
+    try {
+      const resp = await api.uploadFile(item.uri, item.filename, item.mimeType);
+      setUploads((prev) =>
+        prev.map((u) =>
+          u.id === item.id
+            ? { ...u, status: "done", taskId: resp.task_id, originalFilename: resp.original_filename }
+            : u
+        )
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Upload failed";
+      setUploads((prev) =>
+        prev.map((u) => (u.id === item.id ? { ...u, status: "error", error: msg } : u))
       );
     }
   }, []);
@@ -262,7 +295,7 @@ export default function UploadScreen() {
           </View>
         ) : (
           uploads.map((item) => (
-            <UploadRow key={item.id} item={item} />
+            <UploadRow key={item.id} item={item} onRetry={retryUpload} />
           ))
         )}
       </ScrollView>
@@ -270,7 +303,7 @@ export default function UploadScreen() {
   );
 }
 
-function UploadRow({ item }: { item: UploadItem }) {
+function UploadRow({ item, onRetry }: { item: UploadItem; onRetry: (item: UploadItem) => void }) {
   const uploadIcons: Record<UploadItem["status"], string> = {
     pending: "⏳",
     uploading: "⬆️",
@@ -290,8 +323,25 @@ function UploadRow({ item }: { item: UploadItem }) {
     return labels[s] ?? s;
   }
 
+  const canRetry = item.status === "error" && !!item.uri;
+
+  function handleLongPress() {
+    if (!canRetry) return;
+    Alert.alert("Retry Upload", `Do you want to retry uploading "${item.filename}"?`, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Retry", onPress: () => onRetry(item) },
+    ]);
+  }
+
   return (
-    <View style={rowStyles.row}>
+    <Pressable
+      onLongPress={handleLongPress}
+      onPress={canRetry ? () => onRetry(item) : undefined}
+      style={rowStyles.row}
+      accessibilityRole={canRetry ? "button" : "none"}
+      accessibilityLabel={canRetry ? `Retry uploading ${item.filename}` : undefined}
+      accessibilityHint={canRetry ? "Tap or long-press to retry this upload" : undefined}
+    >
       <Text style={rowStyles.icon}>{uploadIcons[item.status]}</Text>
       <View style={rowStyles.info}>
         <Text style={rowStyles.filename} numberOfLines={1}>
@@ -317,10 +367,15 @@ function UploadRow({ item }: { item: UploadItem }) {
           </Text>
         )}
         {item.status === "error" && (
-          <Text style={rowStyles.statusError}>{item.error}</Text>
+          <View>
+            <Text style={rowStyles.statusError}>{item.error}</Text>
+            {canRetry && (
+              <Text style={rowStyles.retryHint}>Tap to retry</Text>
+            )}
+          </View>
         )}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -399,4 +454,5 @@ const rowStyles = StyleSheet.create({
   statusDone: { fontSize: 12, color: "#059669" },
   statusQueued: { fontSize: 12, color: "#6b7280" },
   statusError: { fontSize: 12, color: "#dc2626" },
+  retryHint: { fontSize: 12, color: "#1e40af", fontWeight: "600", marginTop: 4 },
 });
