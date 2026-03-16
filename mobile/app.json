@@ -21,7 +21,27 @@
         "NSPhotoLibraryUsageDescription": "DocuElevate accesses your photo library to select documents for upload.",
         "NSPhotoLibraryAddUsageDescription": "DocuElevate saves scanned documents to your photo library.",
         "UIBackgroundModes": ["fetch", "remote-notification"],
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "All Documents",
+            "CFBundleTypeRole": "Viewer",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": [
+              "public.content",
+              "public.data",
+              "public.image",
+              "com.adobe.pdf",
+              "public.plain-text",
+              "org.openxmlformats.wordprocessingml.document",
+              "org.openxmlformats.spreadsheetml.sheet",
+              "org.openxmlformats.presentationml.presentation",
+              "com.microsoft.word.doc",
+              "com.microsoft.excel.xls",
+              "com.microsoft.powerpoint.ppt"
+            ]
+          }
+        ]
       },
       "buildNumber": "3"
     },
@@ -37,6 +57,18 @@
         "WRITE_EXTERNAL_STORAGE",
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE"
+      ],
+      "intentFilters": [
+        {
+          "action": "SEND",
+          "data": [{ "mimeType": "*/*" }],
+          "category": ["DEFAULT"]
+        },
+        {
+          "action": "SEND_MULTIPLE",
+          "data": [{ "mimeType": "*/*" }],
+          "category": ["DEFAULT"]
+        }
       ],
       "versionCode": 1
     },
