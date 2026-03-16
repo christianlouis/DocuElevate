@@ -109,6 +109,62 @@ class TestExtractMetadataFromFile:
 
         assert result == metadata
 
+    @patch("app.tasks.upload_to_email.pypdf.PdfReader")
+    def test_extracts_embedded_metadata_from_pdf(self, mock_pdf_reader, tmp_path):
+        """Test extracts embedded metadata from PDF."""
+        file_path = tmp_path / "test_embedded.pdf"
+        file_path.write_bytes(b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\n")
+
+        # Mock PDF metadata
+        mock_pdf_info = {
+            "/Title": "Embedded Invoice",
+            "/Author": "ACME Corp",
+            "/Subject": "receipt",
+            "/Keywords": "tax, 2024, verified"
+        }
+        mock_instance = mock_pdf_reader.return_value
+        mock_instance.metadata = mock_pdf_info
+
+        result = extract_metadata_from_file(str(file_path))
+
+        assert result["filename"] == "Embedded Invoice"
+        assert result["absender"] == "ACME Corp"
+        assert result["document_type"] == "receipt"
+        assert result["tags"] == ["tax", "2024", "verified"]
+
+    @patch("app.tasks.upload_to_email.pypdf.PdfReader")
+    def test_pdf_metadata_does_not_overwrite_json(self, mock_pdf_reader, tmp_path):
+        """Test JSON metadata takes precedence over embedded PDF metadata."""
+        file_path = tmp_path / "test_combined.pdf"
+        file_path.write_bytes(b"%PDF-1.4\n")
+
+        # Create JSON metadata
+        json_metadata = {
+            "filename": "JSON Invoice",
+            "document_type": "invoice"
+        }
+        json_path = tmp_path / "test_combined.json"
+        json_path.write_text(json.dumps(json_metadata))
+
+        # Mock PDF metadata
+        mock_pdf_info = {
+            "/Title": "Embedded Invoice",
+            "/Author": "ACME Corp",
+            "/Subject": "receipt",
+            "/Keywords": "tax, verified"
+        }
+        mock_instance = mock_pdf_reader.return_value
+        mock_instance.metadata = mock_pdf_info
+
+        result = extract_metadata_from_file(str(file_path))
+
+        # JSON values should take precedence
+        assert result.get("filename") == "JSON Invoice"
+        assert result.get("document_type") == "invoice"
+        # But missing PDF values should be added
+        assert result.get("absender") == "ACME Corp"
+        assert result.get("tags") == ["tax", "verified"]
+
     def test_handles_invalid_json_gracefully(self, tmp_path):
         """Test handles invalid JSON gracefully."""
         file_path = tmp_path / "test.pdf"

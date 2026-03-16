@@ -11,6 +11,7 @@ from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+import pypdf
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.celery_app import celery
@@ -76,12 +77,29 @@ def extract_metadata_from_file(file_path):
             with open(metadata_path, "r", encoding="utf-8") as f:
                 metadata = json.load(f)
                 logger.info(f"Loaded metadata from external JSON file: {metadata_path}")
-                return metadata
         except Exception as e:
             logger.warning(f"Failed to load metadata from JSON file: {str(e)}")
 
-    # TODO: For PDF files, try to extract embedded metadata using PyPDF2
-    # This would require additional dependencies, so for now we'll just check for external JSON
+    # Extract embedded metadata using pypdf if it's a PDF file
+    if file_path.lower().endswith(".pdf") and os.path.exists(file_path):
+        try:
+            with open(file_path, "rb") as f:
+                pdf_reader = pypdf.PdfReader(f)
+                pdf_info = pdf_reader.metadata
+                if pdf_info:
+                    if "/Title" in pdf_info and "filename" not in metadata:
+                        metadata["filename"] = pdf_info["/Title"]
+                    if "/Author" in pdf_info and "absender" not in metadata:
+                        metadata["absender"] = pdf_info["/Author"]
+                    if "/Subject" in pdf_info and "document_type" not in metadata:
+                        metadata["document_type"] = pdf_info["/Subject"]
+                    if "/Keywords" in pdf_info and "tags" not in metadata:
+                        keywords = pdf_info["/Keywords"]
+                        if isinstance(keywords, str):
+                            metadata["tags"] = [k.strip() for k in keywords.split(",") if k.strip()]
+                    logger.info(f"Extracted embedded metadata from PDF: {file_path}")
+        except Exception as e:
+            logger.warning(f"Failed to extract metadata from PDF {file_path}: {str(e)}")
 
     return metadata
 
