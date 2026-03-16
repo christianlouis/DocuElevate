@@ -11,7 +11,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#1e40af"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "org.docuelevate.mobile",
@@ -20,6 +22,7 @@
         "NSCameraUsageDescription": "DocuElevate uses the camera to capture documents for upload.",
         "NSPhotoLibraryUsageDescription": "DocuElevate accesses your photo library to select documents for upload.",
         "NSPhotoLibraryAddUsageDescription": "DocuElevate saves scanned documents to your photo library.",
+<<<<<<< Updated upstream
         "UIBackgroundModes": ["fetch", "remote-notification"],
         "ITSAppUsesNonExemptEncryption": false,
         "LSSupportsOpeningDocumentsInPlace": true,
@@ -45,6 +48,15 @@
         ]
       },
       "buildNumber": "7"
+=======
+        "UIBackgroundModes": [
+          "fetch",
+          "remote-notification"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "buildNumber": "6"
+>>>>>>> Stashed changes
     },
     "android": {
       "adaptiveIcon": {
@@ -93,7 +105,13 @@
         {
           "icon": "./assets/notification-icon.png",
           "color": "#1e40af",
+<<<<<<< Updated upstream
           "sounds": ["./assets/notification_sound.wav"]
+=======
+          "sounds": [
+            "./assets/notification-sound.wav"
+          ]
+>>>>>>> Stashed changes
         }
       ],
       [
