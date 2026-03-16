@@ -1217,6 +1217,66 @@ def download_file(
         raise HTTPException(status_code=500, detail=f"Error downloading file: {str(e)}")
 
 
+async def _save_upload_file_chunks(file: UploadFile, target_path: str, max_size: int) -> int:
+    """Save an uploaded file in chunks and enforce the maximum size limit."""
+    try:
+        written_size = 0
+        with open(target_path, "wb") as f:
+            chunk_size = 65536  # 64 KB chunks
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                written_size += len(chunk)
+                if written_size > max_size:
+                    # Exceeded limit mid-stream; clean up and reject
+                    f.close()
+                    os.remove(target_path)
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File too large: exceeded {max_size} bytes during upload. "
+                        f"See SECURITY_AUDIT.md for configuration details.",
+                    )
+                f.write(chunk)
+        return written_size
+    except HTTPException:
+        raise
+    except Exception as e:
+        if os.path.exists(target_path):
+            os.remove(target_path)
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+
+
+def _check_for_exact_duplicate(db: DbSession, target_path: str, safe_filename: str) -> dict | None:
+    """Check for an exact duplicate of the uploaded file and return a warning if found."""
+    if not settings.enable_deduplication:
+        return None
+
+    try:
+        filehash = hash_file(target_path)
+        existing = (
+            db.query(FileRecord)
+            .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False))
+            .order_by(FileRecord.id.asc())
+            .first()
+        )
+        if existing:
+            logger.info(f"Exact duplicate detected on upload: '{safe_filename}' matches file ID {existing.id}")
+            return {
+                "duplicate_type": "exact",
+                "original_file_id": existing.id,
+                "original_filename": existing.original_filename,
+                "message": (
+                    "This file appears to be an exact duplicate of an already-processed document. "
+                    "It will still be queued but will be flagged as a duplicate."
+                ),
+            }
+    except Exception as e:
+        logger.warning(f"Duplicate check failed for uploaded file '{safe_filename}': {e}")
+
+    return None
+
+
 @router.post("/ui-upload")
 @require_login
 async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...)):
@@ -1275,31 +1335,7 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
 
     # Read file in chunks to avoid loading the entire body into memory at once,
     # enforcing the size limit during the read so memory usage stays bounded.
-    try:
-        written_size = 0
-        with open(target_path, "wb") as f:
-            chunk_size = 65536  # 64 KB chunks
-            while True:
-                chunk = await file.read(chunk_size)
-                if not chunk:
-                    break
-                written_size += len(chunk)
-                if written_size > max_size:
-                    # Exceeded limit mid-stream; clean up and reject
-                    f.close()
-                    os.remove(target_path)
-                    raise HTTPException(
-                        status_code=413,
-                        detail=f"File too large: exceeded {max_size} bytes during upload. "
-                        f"See SECURITY_AUDIT.md for configuration details.",
-                    )
-                f.write(chunk)
-    except HTTPException:
-        raise
-    except Exception as e:
-        if os.path.exists(target_path):
-            os.remove(target_path)
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+    written_size = await _save_upload_file_chunks(file, target_path, max_size)
 
     # Log the mapping between original and safe filename
     logger.info(f"Saved uploaded file '{safe_filename}' as '{target_filename}'")
@@ -1384,29 +1420,7 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
     # Check for exact duplicates (same SHA-256 hash) before returning.
     # This gives the caller an immediate warning without waiting for the pipeline.
     # Only performed when deduplication is enabled in settings.
-    exact_duplicate_warning = None
-    if settings.enable_deduplication:
-        try:
-            filehash = hash_file(target_path)
-            existing = (
-                db.query(FileRecord)
-                .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False))
-                .order_by(FileRecord.id.asc())
-                .first()
-            )
-            if existing:
-                exact_duplicate_warning = {
-                    "duplicate_type": "exact",
-                    "original_file_id": existing.id,
-                    "original_filename": existing.original_filename,
-                    "message": (
-                        "This file appears to be an exact duplicate of an already-processed document. "
-                        "It will still be queued but will be flagged as a duplicate."
-                    ),
-                }
-                logger.info(f"Exact duplicate detected on upload: '{safe_filename}' matches file ID {existing.id}")
-        except Exception as e:
-            logger.warning(f"Duplicate check failed for uploaded file '{safe_filename}': {e}")
+    exact_duplicate_warning = _check_for_exact_duplicate(db, target_path, safe_filename)
 
     response: dict = {
         "task_id": task.id,
