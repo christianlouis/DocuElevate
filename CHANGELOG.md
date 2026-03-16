@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.150.0 (2026-03-16)
+
+### Chores
+
+- **docker**: Optimize image size with venv, slim builder, and dockerignore
+  ([`718d82c`](https://github.com/christianlouis/DocuElevate/commit/718d82c815c693436708944b4396939f329a1ca7))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`b8df5ba`](https://github.com/christianlouis/DocuElevate/commit/b8df5ba253cea4ed51f3c36be7c5b1fda37c65b9))
+
+### Features
+
+- **ui**: Add View Document link from file detail page back to file view page
+  ([`036210d`](https://github.com/christianlouis/DocuElevate/commit/036210dd454c21b1fa54ddd1c253aaf48687b35a))
+
+
 ## Unreleased
 
 ### Chores
