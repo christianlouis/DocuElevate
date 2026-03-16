@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.150.6 (2026-03-16)
+
+### Bug Fixes
+
+- **mobile**: Handle iOS share sheet custom scheme URLs and add photo library picker
+  ([`acfba4b`](https://github.com/christianlouis/DocuElevate/commit/acfba4b58cced43a939765692a1cd1798f1abe7f))
+
+### Refactoring
+
+- **mobile**: Address code review feedback
+  ([`b6af39c`](https://github.com/christianlouis/DocuElevate/commit/b6af39c56700250a8a9d3118729df876e64142ab))
+
+
 ## v0.150.5 (2026-03-16)
 
 ### Bug Fixes
