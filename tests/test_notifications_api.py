@@ -831,11 +831,13 @@ class TestUserNotificationService:
         result = _send_email_notification({"smtp_host": "smtp.example.com"}, "Title", "Body")
         assert result is False
 
+
 class TestBenchmark:
     @pytest.mark.unit
     def test_update_preferences_benchmark(self, notif_engine, notif_session):
-        import time
         import statistics
+        import time
+
         from app.main import app
 
         target = UserNotificationTarget(
@@ -853,12 +855,14 @@ class TestBenchmark:
             items_count = 100
             preferences = []
             for i in range(items_count):
-                preferences.append({
-                    "event_type": f"event.type.{i}",
-                    "channel_type": "webhook",
-                    "is_enabled": True,
-                    "target_id": target.id,
-                })
+                preferences.append(
+                    {
+                        "event_type": f"event.type.{i}",
+                        "channel_type": "webhook",
+                        "is_enabled": True,
+                        "target_id": target.id,
+                    }
+                )
 
             payload = {"preferences": preferences}
 
