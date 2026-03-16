@@ -1,25 +1,29 @@
+{{- /*
+  Celery Beat scheduler — publishes periodic tasks to the broker.
+  Exactly ONE replica must run; never scale this deployment.
+*/ -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "docuelevate.fullname" . }}-worker
+  name: {{ include "docuelevate.fullname" . }}-beat
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "docuelevate.labels" . | nindent 4 }}
-    app.kubernetes.io/component: worker
+    app.kubernetes.io/component: beat
 spec:
-  {{- if not .Values.worker.autoscaling.enabled }}
-  replicas: {{ .Values.worker.replicaCount }}
-  {{- end }}
+  replicas: 1
+  strategy:
+    type: Recreate          # Prevent two Beat instances from running simultaneously
   selector:
     matchLabels:
       {{- include "docuelevate.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: worker
+      app.kubernetes.io/component: beat
   template:
     metadata:
       labels:
         {{- include "docuelevate.selectorLabels" . | nindent 8 }}
-        app.kubernetes.io/component: worker
-      {{- with .Values.worker.podAnnotations }}
+        app.kubernetes.io/component: beat
+      {{- with .Values.beat.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -29,33 +33,31 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.worker.podSecurityContext }}
+      {{- with .Values.beat.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: worker
+        - name: beat
           image: {{ include "docuelevate.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
             - celery
             - -A
             - app.celery_worker
-            - worker
+            - beat
             - --loglevel=info
-            - -Q
-            - document_processor,default,celery
           envFrom:
             - configMapRef:
                 name: {{ include "docuelevate.fullname" . }}-config
             - secretRef:
                 name: {{ include "docuelevate.fullname" . }}-secret
-          {{- with .Values.worker.securityContext }}
+          {{- with .Values.beat.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           resources:
-            {{- toYaml .Values.worker.resources | nindent 12 }}
+            {{- toYaml .Values.beat.resources | nindent 12 }}
           volumeMounts:
             - name: workdir
               mountPath: /workdir
@@ -67,15 +69,15 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
-      {{- with .Values.worker.nodeSelector }}
+      {{- with .Values.beat.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.worker.affinity }}
+      {{- with .Values.beat.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.worker.tolerations }}
+      {{- with .Values.beat.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}

@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: document_api
+    # No container_name — allows `docker compose up --scale api=N`
     restart: always
 
     # We'll keep the code in /app, but set working_dir to the shared data directory
@@ -24,7 +24,7 @@ services:
 
     depends_on:
       - redis
-      - worker
+      - beat
 
     # Mount the shared working directory for data
     volumes:
@@ -34,13 +34,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: document_worker
+    # No container_name — allows `docker compose up --scale worker=N`
     restart: always
 
     # same shared working directory
     working_dir: /workdir
 
-    command: ["celery", "-A", "app.celery_worker", "worker", "-B", "--loglevel=info", "-Q", "document_processor,default,celery"]
+    # Workers process tasks only — no -B flag (Beat runs in the dedicated beat service)
+    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "-Q", "document_processor,default,celery"]
     env_file:
       - .env
     environment:
@@ -51,6 +52,26 @@ services:
       - gotenberg
 
     # Mount the shared directory
+    volumes:
+      - /var/docparse/workdir:/workdir
+
+  # Dedicated Celery Beat scheduler — exactly one instance must run at all times.
+  # Beat publishes periodic tasks to the Redis broker; workers pick them up.
+  # Do NOT scale this service (replicas must stay at 1).
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: document_beat
+    restart: always
+    working_dir: /workdir
+    command: ["celery", "-A", "app.celery_worker", "beat", "--loglevel=info"]
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+    depends_on:
+      - redis
     volumes:
       - /var/docparse/workdir:/workdir
 
