@@ -452,17 +452,16 @@ async def update_preferences(
             )
 
     try:
+        # Pre-fetch existing preferences for this user to avoid N+1 queries
+        existing_prefs = (
+            db.query(UserNotificationPreference).filter(UserNotificationPreference.owner_id == owner_id).all()
+        )
+
+        # Build a fast lookup dictionary keyed by (event_type, channel_type, target_id)
+        prefs_dict = {(pref.event_type, pref.channel_type, pref.target_id): pref for pref in existing_prefs}
+
         for item in body.preferences:
-            existing = (
-                db.query(UserNotificationPreference)
-                .filter(
-                    UserNotificationPreference.owner_id == owner_id,
-                    UserNotificationPreference.event_type == item.event_type,
-                    UserNotificationPreference.channel_type == item.channel_type,
-                    UserNotificationPreference.target_id == item.target_id,
-                )
-                .first()
-            )
+            existing = prefs_dict.get((item.event_type, item.channel_type, item.target_id))
             if existing:
                 existing.is_enabled = item.is_enabled
             else:
