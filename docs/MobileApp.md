@@ -140,9 +140,23 @@ The app registers itself as a share target so any file can be sent directly to D
 1. Open a file in Files, Mail, Safari, or any other app.
 2. Tap the **Share** button (iOS) or **Share** (Android).
 3. Find and tap **DocuElevate** in the share sheet.
-4. The file is immediately uploaded.
+4. The file is immediately uploaded and queued for processing.
 
 > **Note:** The app must be installed on the device for it to appear in the share sheet.
+
+#### iOS implementation
+
+`app.json` declares `CFBundleDocumentTypes` (with `LSHandlerRank: Alternate`) inside the iOS `infoPlist`.  This tells iOS that DocuElevate can open common document types, making it visible in the share sheet without overriding system defaults.  When the user selects DocuElevate, iOS opens the app with a `file://` URL via `application:openURL:options:`.
+
+The root layout listens for this URL via `expo-linking` (`Linking.addEventListener` for warm-start, `Linking.getInitialURL` for cold-start) and forwards it to the Upload screen through `ShareContext`.
+
+#### Android implementation
+
+`app.json` declares `ACTION_SEND` and `ACTION_SEND_MULTIPLE` intent filters for `mimeType: "*/*"` in the `android.intentFilters` section.  Incoming content URIs are received the same way as on iOS.
+
+#### Upload status polling
+
+After a file is uploaded the app polls `/api/files?search=<filename>` every 5 seconds to find the corresponding `FileRecord`, then polls `/api/files/{id}` to track the processing status in real time.  Polling stops automatically once the status reaches a terminal state (`completed`, `failed`, or `duplicate`).
 
 ## Mobile API Endpoints
 
@@ -228,7 +242,8 @@ mobile/
 ├── tsconfig.json
 └── src/
     ├── context/
-    │   └── AuthContext.tsx      # Auth state + SSO login flow
+    │   ├── AuthContext.tsx      # Auth state + SSO login flow
+    │   └── ShareContext.tsx     # Shared-file queue (iOS Share Sheet / Android Intent)
     ├── hooks/
     │   └── usePushNotifications.ts  # Push token registration
     ├── screens/

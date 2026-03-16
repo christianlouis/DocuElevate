@@ -5,12 +5,15 @@
  * 1. Take a photo of a document with the device camera.
  * 2. Pick an existing file (PDF, image, Office document) from the Files app.
  * 3. Receive files shared from other apps via the iOS Share Sheet / Android
- *    Share Intent (handled by the expo-sharing + deep-link integration).
+ *    Share Intent (handled via ShareContext populated by the root layout).
+ *
+ * After a successful upload the screen polls the backend every 5 seconds to
+ * track the real-time processing status of each uploaded file.
  */
 
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -21,7 +24,11 @@ import {
   View,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
+import { useShare } from "../context/ShareContext";
 import api from "../services/api";
+
+/** Statuses that indicate processing has finished (no further polling needed). */
+const TERMINAL_STATUSES = new Set(["completed", "failed", "duplicate"]);
 
 interface UploadItem {
   id: string;
@@ -29,33 +36,107 @@ interface UploadItem {
   status: "pending" | "uploading" | "done" | "error";
   error?: string;
   taskId?: string;
+  /** Sanitised filename returned by the server – used to search for the record. */
+  originalFilename?: string;
+  /** Database ID of the FileRecord once it has been created by the worker. */
+  fileId?: number;
+  /** Actual server-side processing status (e.g. "pending", "processing", "completed"). */
+  serverStatus?: string;
 }
 
 export default function UploadScreen() {
   const { isAuthenticated } = useAuth();
+  const { pendingFiles, clearPendingFiles } = useShare();
   const [uploads, setUploads] = useState<UploadItem[]>([]);
 
-  function updateItem(id: string, patch: Partial<UploadItem>) {
-    setUploads((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...patch } : item))
-    );
-  }
+  // Keep a ref in sync so the polling interval can read current state without
+  // capturing a stale closure.
+  const uploadsRef = useRef<UploadItem[]>([]);
+  useEffect(() => {
+    uploadsRef.current = uploads;
+  }, [uploads]);
 
-  async function uploadFile(uri: string, filename: string, mimeType?: string) {
+  // ---------------------------------------------------------------------------
+  // Core helpers (declared before the effects that depend on them)
+  // ---------------------------------------------------------------------------
+
+  const uploadFile = useCallback(async (uri: string, filename: string, mimeType?: string) => {
     const id = `${Date.now()}-${filename}`;
-    setUploads((prev) => [
-      { id, filename, status: "uploading" },
-      ...prev,
-    ]);
+    setUploads((prev) => [{ id, filename, status: "uploading" }, ...prev]);
 
     try {
       const resp = await api.uploadFile(uri, filename, mimeType);
-      updateItem(id, { status: "done", taskId: resp.task_id });
+      setUploads((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? { ...item, status: "done", taskId: resp.task_id, originalFilename: resp.original_filename }
+            : item
+        )
+      );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Upload failed";
-      updateItem(id, { status: "error", error: msg });
+      setUploads((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, status: "error", error: msg } : item))
+      );
     }
-  }
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Polling – check server-side processing status every 5 seconds
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const poll = async () => {
+      const current = uploadsRef.current;
+      for (const item of current) {
+        // Only poll items that were successfully uploaded and haven't reached a
+        // terminal status yet.
+        if (item.status !== "done") continue;
+        if (item.serverStatus && TERMINAL_STATUSES.has(item.serverStatus)) continue;
+
+        try {
+          if (item.fileId !== undefined) {
+            // We already know the file ID – just refresh its status.
+            const ps = await api.getFileStatus(item.fileId);
+            setUploads((prev) =>
+              prev.map((u) => (u.id === item.id ? { ...u, serverStatus: ps.status } : u))
+            );
+          } else if (item.originalFilename) {
+            // Search for the file by name; it may not exist yet if the worker
+            // hasn't started.
+            const files = await api.listFiles(1, 5, item.originalFilename);
+            const found = files.find((f) => f.original_filename === item.originalFilename);
+            if (found) {
+              setUploads((prev) =>
+                prev.map((u) =>
+                  u.id === item.id
+                    ? { ...u, fileId: found.id, serverStatus: found.processing_status.status }
+                    : u
+                )
+              );
+            }
+          }
+        } catch (err) {
+          // Network errors are transient – silently retry on the next tick.
+          console.debug("[StatusPoll] failed:", err);
+        }
+      }
+    };
+
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+  }, []); // Intentionally empty – poll() reads state via uploadsRef
+
+  // ---------------------------------------------------------------------------
+  // Handle files received from the iOS Share Sheet / Android Share Intent
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (pendingFiles.length === 0 || !isAuthenticated) return;
+    const files = [...pendingFiles];
+    clearPendingFiles();
+    files.forEach((file) => {
+      void uploadFile(file.uri, file.filename, file.mimeType);
+    });
+  }, [pendingFiles, isAuthenticated, clearPendingFiles, uploadFile]);
 
   async function handleCamera() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -154,16 +235,28 @@ export default function UploadScreen() {
 }
 
 function UploadRow({ item }: { item: UploadItem }) {
-  const icons: Record<UploadItem["status"], string> = {
+  const uploadIcons: Record<UploadItem["status"], string> = {
     pending: "⏳",
     uploading: "⬆️",
     done: "✅",
     error: "❌",
   };
 
+  /** Human-readable label for the server-side processing status. */
+  function serverStatusLabel(s: string): string {
+    const labels: Record<string, string> = {
+      pending: "Queued for processing…",
+      processing: "Processing…",
+      completed: "Processed ✓",
+      failed: "Processing failed",
+      duplicate: "Duplicate – already processed",
+    };
+    return labels[s] ?? s;
+  }
+
   return (
     <View style={rowStyles.row}>
-      <Text style={rowStyles.icon}>{icons[item.status]}</Text>
+      <Text style={rowStyles.icon}>{uploadIcons[item.status]}</Text>
       <View style={rowStyles.info}>
         <Text style={rowStyles.filename} numberOfLines={1}>
           {item.filename}
@@ -171,8 +264,21 @@ function UploadRow({ item }: { item: UploadItem }) {
         {item.status === "uploading" && (
           <ActivityIndicator size="small" color="#1e40af" />
         )}
-        {item.status === "done" && (
-          <Text style={rowStyles.statusDone}>Queued for processing</Text>
+        {item.status === "done" && !item.serverStatus && (
+          <Text style={rowStyles.statusQueued}>Queued for processing…</Text>
+        )}
+        {item.status === "done" && item.serverStatus && (
+          <Text
+            style={
+              item.serverStatus === "completed"
+                ? rowStyles.statusDone
+                : item.serverStatus === "failed"
+                ? rowStyles.statusError
+                : rowStyles.statusQueued
+            }
+          >
+            {serverStatusLabel(item.serverStatus)}
+          </Text>
         )}
         {item.status === "error" && (
           <Text style={rowStyles.statusError}>{item.error}</Text>
@@ -254,5 +360,6 @@ const rowStyles = StyleSheet.create({
     marginBottom: 4,
   },
   statusDone: { fontSize: 12, color: "#059669" },
+  statusQueued: { fontSize: 12, color: "#6b7280" },
   statusError: { fontSize: 12, color: "#dc2626" },
 });

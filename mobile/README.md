@@ -119,7 +119,8 @@ mobile/
 ├── tsconfig.json
 └── src/
     ├── context/
-    │   └── AuthContext.tsx        # Authentication state management
+    │   ├── AuthContext.tsx        # Authentication state management
+    │   └── ShareContext.tsx       # Shared-file queue (iOS Share Sheet / Android Intent)
     ├── hooks/
     │   └── usePushNotifications.ts  # Push notification registration
     ├── screens/
@@ -132,16 +133,30 @@ mobile/
         └── api.ts                 # DocuElevate API client
 ```
 
-## Share Extension (iOS)
+## Share Sheet (iOS) / Share Intent (Android)
 
-The app registers the `docuelevate://` URL scheme and the `com.docuelevate.app` bundle identifier.  To enable the share sheet:
+The app registers itself as a share target so any file can be sent directly to DocuElevate from another app.
 
-1. Ensure the app is installed on the device
-2. Open any file in Files, Mail, Safari, etc.
-3. Tap the share icon → find **DocuElevate** in the share sheet
-4. The file is uploaded immediately
+### iOS – how it works
 
-Android uses a similar intent filter configured in `app.json`.
+`app.json` declares `CFBundleDocumentTypes` in the iOS `infoPlist` section.  This tells iOS which file types the app can receive, causing it to appear in the share sheet when the user shares a matching file.  When the user taps **DocuElevate** in the share sheet, iOS passes the file path to the app via `application:openURL:options:`, which React Native forwards as a `file://` URL through the `Linking` module.
+
+The root layout (`app/_layout.tsx`) listens for incoming `file://` URLs via `Linking.addEventListener` (warm start) and `Linking.getInitialURL()` (cold start).  Incoming files are stored in `ShareContext` and automatically uploaded by `UploadScreen`.
+
+**Supported iOS file types:** PDF, images (JPEG / PNG / GIF / BMP / TIFF / WebP), plain text, Word (`.docx`, `.doc`), Excel (`.xlsx`, `.xls`), PowerPoint (`.pptx`, `.ppt`), and any other file (`public.data`).
+
+To use the share sheet:
+
+1. Ensure the app is installed on the device.
+2. Open any supported file in Files, Mail, Safari, etc.
+3. Tap the **Share** button → find **DocuElevate** in the share sheet.
+4. The file is uploaded immediately.
+
+> **Note:** `CFBundleDocumentTypes` with `LSHandlerRank: Alternate` means DocuElevate appears in the share sheet as an option but does **not** become the default app for any file type.
+
+### Android – how it works
+
+`app.json` declares `intentFilters` for `ACTION_SEND` and `ACTION_SEND_MULTIPLE` with `mimeType: "*/*"`.  When a user shares a file from another app and selects DocuElevate, Android delivers the content URI through the share intent, which is captured via `Linking.getInitialURL()` and processed the same way as on iOS.
 
 ## Backend API
 
@@ -156,6 +171,7 @@ The mobile app uses the following backend endpoints:
 | `GET`    | `/api/mobile/whoami`                | Get current user profile              |
 | `POST`   | `/api/ui-upload`                    | Upload file for processing            |
 | `GET`    | `/api/files`                        | List processed documents              |
+| `GET`    | `/api/files/{id}`                   | Get processing status of a single file |
 
 Authentication uses `Authorization: Bearer <api_token>` on all requests.
 
