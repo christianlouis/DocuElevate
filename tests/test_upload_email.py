@@ -143,11 +143,72 @@ class TestExtractMetadataFromFile:
 
         result = extract_metadata_from_file(str(file_path))
 
-        # Check that the leading slash is stripped and keys/values match
-        assert result.get("Title") == "Test Title"
-        assert result.get("Author") == "Test Author"
-        assert result.get("Subject") == "Test Document"
-        assert result.get("Keywords") == "test, metadata, pypdf"
+        # Keys are mapped to application-specific names
+        assert result.get("filename") == "Test Title"
+        assert result.get("absender") == "Test Author"
+        assert result.get("document_type") == "Test Document"
+        assert result.get("tags") == "test, metadata, pypdf"
+
+    def test_extracts_embedded_metadata_from_pdf(self, tmp_path):
+        """Test that embedded PDF metadata is mapped to application-specific keys."""
+        import pypdf
+
+        file_path = tmp_path / "mapped.pdf"
+
+        writer = pypdf.PdfWriter()
+        writer.add_blank_page(width=100, height=100)
+        writer.add_metadata(
+            {
+                "/Title": "Invoice 2024",
+                "/Author": "Acme Corp",
+                "/Subject": "invoice",
+                "/Keywords": "finance, billing",
+            }
+        )
+        with open(file_path, "wb") as f:
+            writer.write(f)
+
+        result = extract_metadata_from_file(str(file_path))
+
+        # Verify the PDF-to-app key mapping
+        assert result["filename"] == "Invoice 2024"
+        assert result["absender"] == "Acme Corp"
+        assert result["document_type"] == "invoice"
+        assert result["tags"] == "finance, billing"
+
+    def test_pdf_metadata_does_not_overwrite_json(self, tmp_path):
+        """Test that JSON metadata takes precedence over embedded PDF metadata."""
+        import pypdf
+
+        file_path = tmp_path / "dual.pdf"
+
+        # Create a PDF with embedded metadata
+        writer = pypdf.PdfWriter()
+        writer.add_blank_page(width=100, height=100)
+        writer.add_metadata(
+            {
+                "/Title": "PDF Title",
+                "/Author": "PDF Author",
+                "/Subject": "PDF Subject",
+                "/Keywords": "pdf, keywords",
+            }
+        )
+        with open(file_path, "wb") as f:
+            writer.write(f)
+
+        # Create a companion JSON file that sets some overlapping fields
+        json_metadata = {"filename": "JSON Filename", "absender": "JSON Author"}
+        json_path = tmp_path / "dual.json"
+        json_path.write_text(json.dumps(json_metadata))
+
+        result = extract_metadata_from_file(str(file_path))
+
+        # JSON values must not be overwritten by PDF metadata
+        assert result["filename"] == "JSON Filename"
+        assert result["absender"] == "JSON Author"
+        # Fields missing from JSON are filled from PDF metadata
+        assert result["document_type"] == "PDF Subject"
+        assert result["tags"] == "pdf, keywords"
 
 
 @pytest.mark.unit
