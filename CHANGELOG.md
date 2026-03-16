@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.149.4 (2026-03-16)
+
+### Bug Fixes
+
+- **translation**: Fix apply_owner_filter called with wrong arguments
+  ([`825f3cc`](https://github.com/christianlouis/DocuElevate/commit/825f3cc3a80305cd5ab31d0b61cf97a117b3c633))
+
+
 ## v0.149.3 (2026-03-16)
 
 ### Bug Fixes
