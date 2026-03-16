@@ -130,12 +130,14 @@ class TestExtractMetadataFromFile:
         # Create a test PDF with metadata
         writer = pypdf.PdfWriter()
         writer.add_blank_page(width=100, height=100)
-        writer.add_metadata({
-            "/Title": "Test Title",
-            "/Author": "Test Author",
-            "/Subject": "Test Document",
-            "/Keywords": "test, metadata, pypdf"
-        })
+        writer.add_metadata(
+            {
+                "/Title": "Test Title",
+                "/Author": "Test Author",
+                "/Subject": "Test Document",
+                "/Keywords": "test, metadata, pypdf",
+            }
+        )
         with open(file_path, "wb") as f:
             writer.write(f)
 
