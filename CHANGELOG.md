@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.150.1 (2026-03-16)
+
+### Bug Fixes
+
+- **mobile**: IOS share sheet, empty files tab, and stuck upload status
+  ([`4de6b43`](https://github.com/christianlouis/DocuElevate/commit/4de6b439ceddee2cb047771af594851fa2b10244))
+
+
 ## v0.150.0 (2026-03-16)
 
 ### Chores
