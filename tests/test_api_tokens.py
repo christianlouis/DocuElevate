@@ -105,6 +105,7 @@ def _cleanup(app):
 # Tests – Auth Helper
 # ---------------------------------------------------------------------------
 
+
 class TestGetOwnerId:
     """Tests for the _get_owner_id dependency helper."""
 
