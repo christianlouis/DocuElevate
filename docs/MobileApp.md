@@ -154,10 +154,17 @@ curl -X DELETE -H "Authorization: Bearer <token>" https://your-server/api/mobile
 3. Point the camera at the document and take a photo.
 4. The image is immediately uploaded and queued for processing.
 
+### Photo Library
+
+1. Open the **Upload** tab.
+2. Tap **Photos**.
+3. Select an existing photo from the device's photo library.
+4. The image is uploaded and queued for processing.
+
 ### File Picker
 
 1. Open the **Upload** tab.
-2. Tap **File Picker**.
+2. Tap **Files**.
 3. Browse to and select one or more files (PDF, DOCX, images, etc.).
 4. Files are uploaded and queued for processing.
 
@@ -174,9 +181,9 @@ The app registers itself as a share target so any file can be sent directly to D
 
 #### iOS implementation
 
-`app.json` declares `CFBundleDocumentTypes` (with `LSHandlerRank: Alternate`) inside the iOS `infoPlist`.  This tells iOS that DocuElevate can open common document types, making it visible in the share sheet without overriding system defaults.  When the user selects DocuElevate, iOS opens the app with a `file://` URL via `application:openURL:options:`.
+`app.json` declares `CFBundleDocumentTypes` (with `LSHandlerRank: Alternate`) inside the iOS `infoPlist`.  This tells iOS that DocuElevate can open common document types, making it visible in the share sheet without overriding system defaults.  When the user selects DocuElevate, iOS opens the app with a URL via `application:openURL:options:`.
 
-The root layout listens for this URL via `expo-linking` (`Linking.addEventListener` for warm-start, `Linking.getInitialURL` for cold-start) and forwards it to the Upload screen through `ShareContext`.
+The URL may arrive as a standard `file://` path **or** under the app's custom `docuelevate://` scheme (e.g. `docuelevate://private/var/mobile/Library/…/file.pdf`).  The root layout detects the custom-scheme form and rewrites it to a `file://` URL before forwarding it to the Upload screen through `ShareContext`.
 
 #### Android implementation
 
@@ -276,7 +283,7 @@ mobile/
     │   └── usePushNotifications.ts  # Push token registration
     ├── screens/
     │   ├── LoginScreen.tsx      # Server URL + SSO button
-    │   ├── UploadScreen.tsx     # Camera capture + file picker
+    │   ├── UploadScreen.tsx     # Camera capture + photo library + file picker
     │   ├── FilesScreen.tsx      # Processed document list
     │   └── ProfileScreen.tsx    # User profile + sign out
     └── services/
