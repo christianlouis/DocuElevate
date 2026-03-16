@@ -244,12 +244,16 @@ class TestTestDropboxToken:
     def test_connection_error(self, mock_settings, mock_post, client):
         """Test handling of connection exceptions."""
         import httpx
+
         mock_settings.dropbox_refresh_token = "token"
         mock_settings.dropbox_app_key = "app-key"
         mock_settings.dropbox_app_secret = "app-secret"
         mock_settings.http_request_timeout = 30
 
-        mock_post.side_effect = httpx.RequestError("Connection refused", request=httpx.Request("POST", "https://api.dropboxapi.com/2/users/get_current_account"))
+        mock_post.side_effect = httpx.RequestError(
+            "Connection refused",
+            request=httpx.Request("POST", "https://api.dropboxapi.com/2/users/get_current_account"),
+        )
 
         response = client.get("/api/dropbox/test-token")
 
