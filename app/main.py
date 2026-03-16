@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
+import json as _json_mod
 import logging
 import os
 import pathlib
 from contextlib import asynccontextmanager
+from datetime import datetime as _dt
+from datetime import timezone as _tz
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -75,10 +78,6 @@ class _JsonFormatter(logging.Formatter):
     """
 
     def format(self, record: logging.LogRecord) -> str:
-        import json as _json
-        from datetime import datetime as _dt
-        from datetime import timezone as _tz
-
         log_entry: dict = {
             "timestamp": _dt.fromtimestamp(record.created, tz=_tz.utc).isoformat(),
             "level": record.levelname,
@@ -90,7 +89,7 @@ class _JsonFormatter(logging.Formatter):
         }
         if record.exc_info and record.exc_info[1] is not None:
             log_entry["exc_info"] = self.formatException(record.exc_info)
-        return _json.dumps(log_entry, default=str)
+        return _json_mod.dumps(log_entry, default=str)
 
 
 # Choose formatter based on LOG_FORMAT setting
