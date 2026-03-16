@@ -343,6 +343,83 @@ class TestSavedSearchesCRUD:
         )
         assert response.status_code == 404
 
+    def test_update_saved_search_duplicate_name(self, client: TestClient):
+        """PUT /api/saved-searches/{id} with duplicate name returns 409."""
+        # Create first search
+        client.post(
+            "/api/saved-searches",
+            json={"name": "First Search", "filters": {"status": "pending"}},
+        )
+        # Create second search
+        create_resp2 = client.post(
+            "/api/saved-searches",
+            json={"name": "Second Search", "filters": {"status": "completed"}},
+        )
+        search_id2 = create_resp2.json()["id"]
+
+        # Try to rename second search to "First Search"
+        update_resp = client.put(
+            f"/api/saved-searches/{search_id2}",
+            json={"name": "First Search", "filters": {"status": "completed"}},
+        )
+        assert update_resp.status_code == 409
+
+    def test_update_saved_search_name_too_long(self, client: TestClient):
+        """PUT /api/saved-searches/{id} with name > 100 chars returns 422."""
+        create_resp = client.post(
+            "/api/saved-searches",
+            json={"name": "Valid Name", "filters": {"status": "pending"}},
+        )
+        search_id = create_resp.json()["id"]
+
+        update_resp = client.put(
+            f"/api/saved-searches/{search_id}",
+            json={"name": "x" * 101, "filters": {"status": "completed"}},
+        )
+        assert update_resp.status_code == 422
+
+    def test_update_saved_search_empty_name(self, client: TestClient):
+        """PUT /api/saved-searches/{id} with empty name returns 422."""
+        create_resp = client.post(
+            "/api/saved-searches",
+            json={"name": "Valid Name", "filters": {"status": "pending"}},
+        )
+        search_id = create_resp.json()["id"]
+
+        update_resp = client.put(
+            f"/api/saved-searches/{search_id}",
+            json={"name": "", "filters": {"status": "completed"}},
+        )
+        assert update_resp.status_code == 422
+
+    def test_update_saved_search_empty_filters(self, client: TestClient):
+        """PUT /api/saved-searches/{id} with empty filters returns 422."""
+        create_resp = client.post(
+            "/api/saved-searches",
+            json={"name": "Valid Name", "filters": {"status": "pending"}},
+        )
+        search_id = create_resp.json()["id"]
+
+        update_resp = client.put(
+            f"/api/saved-searches/{search_id}",
+            json={"name": "Valid Name", "filters": {}},
+        )
+        assert update_resp.status_code == 422
+
+    def test_update_saved_search_invalid_filters(self, client: TestClient):
+        """PUT /api/saved-searches/{id} with only invalid filters returns 422."""
+        create_resp = client.post(
+            "/api/saved-searches",
+            json={"name": "Valid Name", "filters": {"status": "pending"}},
+        )
+        search_id = create_resp.json()["id"]
+
+        update_resp = client.put(
+            f"/api/saved-searches/{search_id}",
+            json={"name": "Valid Name", "filters": {"invalid_key": "value"}},
+        )
+        assert update_resp.status_code == 422
+
     def test_delete_saved_search(self, client: TestClient):
         """DELETE /api/saved-searches/{id} removes the saved search."""
         # Create
