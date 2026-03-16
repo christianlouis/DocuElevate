@@ -220,12 +220,10 @@ class TestTokenCreate:
                 rollback_called = True
                 real_rollback(self)
 
-            with (
-                patch.object(SASession, "commit", _fail_after_flush),
-                patch.object(SASession, "rollback", _spy_rollback),
-            ):
-                resp = client.post("/api/api-tokens/", json={"name": "DB Error Create Test"})
-                assert resp.status_code == 500
+            with patch.object(SASession, "commit", _fail_after_flush):
+                with patch.object(SASession, "rollback", _spy_rollback):
+                    resp = client.post("/api/api-tokens/", json={"name": "DB Error Create Test"})
+                    assert resp.status_code == 500
 
             # rollback() must have been called to undo the flushed changes.
             assert rollback_called, "db.rollback() was not called after commit failure in create_token"
@@ -405,12 +403,10 @@ class TestTokenRevoke:
                 rollback_called = True
                 real_rollback(self)
 
-            with (
-                patch.object(SASession, "commit", _fail_after_flush),
-                patch.object(SASession, "rollback", _spy_rollback),
-            ):
-                resp = client.delete(f"/api/api-tokens/{token_id}")
-                assert resp.status_code == 500
+            with patch.object(SASession, "commit", _fail_after_flush):
+                with patch.object(SASession, "rollback", _spy_rollback):
+                    resp = client.delete(f"/api/api-tokens/{token_id}")
+                    assert resp.status_code == 500
 
             # rollback() must have been called to undo the flushed changes.
             assert rollback_called, "db.rollback() was not called after commit failure"
