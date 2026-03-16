@@ -193,6 +193,15 @@ The URL may arrive as a standard `file://` path **or** under the app's custom `d
 
 After a file is uploaded the app polls `/api/files?search=<filename>` every 5 seconds to find the corresponding `FileRecord`, then polls `/api/files/{id}` to track the processing status in real time.  Polling stops automatically once the status reaches a terminal state (`completed`, `failed`, or `duplicate`).
 
+#### Retrying failed uploads
+
+If a file upload fails (e.g. due to network issues or a server error), the failed item stays visible in the upload list with an error message and a **"Tap to retry"** hint.  Users can retry the upload in two ways:
+
+- **Tap** the failed item to immediately retry the upload.
+- **Long-press** the failed item to see a confirmation dialog with a **Retry** option.
+
+The retry re-uses the original file URI so no re-selection is needed.
+
 ## Mobile API Endpoints
 
 The backend exposes a dedicated `/api/mobile/` namespace:
