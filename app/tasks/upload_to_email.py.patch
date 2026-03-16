@@ -1,0 +1,41 @@
+--- app/tasks/upload_to_email.py
++++ app/tasks/upload_to_email.py
+@@ -83,31 +83,16 @@
+         except Exception as e:
+             logger.warning(f"Failed to load metadata from JSON file: {str(e)}")
+
+-<<<<<<< HEAD
+     # Extract embedded metadata using pypdf if it's a PDF file
+-=======
+-    # Try to extract embedded metadata from PDF
+->>>>>>> origin/main
+     if file_path.lower().endswith(".pdf") and os.path.exists(file_path):
+         try:
+             with open(file_path, "rb") as f:
+                 pdf_reader = pypdf.PdfReader(f)
+-<<<<<<< HEAD
+                 pdf_info = pdf_reader.metadata
+                 if pdf_info:
+                     if "/Title" in pdf_info and "filename" not in metadata:
+                         metadata["filename"] = pdf_info["/Title"]
+                     if "/Author" in pdf_info and "absender" not in metadata:
+                         metadata["absender"] = pdf_info["/Author"]
+                     if "/Subject" in pdf_info and "document_type" not in metadata:
+                         metadata["document_type"] = pdf_info["/Subject"]
+                     if "/Keywords" in pdf_info and "tags" not in metadata:
+                         keywords = pdf_info["/Keywords"]
+                         if isinstance(keywords, str):
+                             metadata["tags"] = [k.strip() for k in keywords.split(",") if k.strip()]
+-=======
+-                pdf_metadata = pdf_reader.metadata
+-                if pdf_metadata:
+-                    # Convert metadata to a standard dictionary
+-                    for key, value in pdf_metadata.items():
+-                        # Remove the leading slash from PDF metadata keys (e.g., '/Title' -> 'Title')
+-                        clean_key = key[1:] if key.startswith("/") else key
+-                        metadata[clean_key] = str(value)
+-
+->>>>>>> origin/main
+                     logger.info(f"Extracted embedded metadata from PDF: {file_path}")
+         except Exception as e:
+             logger.warning(f"Failed to extract metadata from PDF {file_path}: {str(e)}")
