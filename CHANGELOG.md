@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.149.0 (2026-03-16)
+
+### Bug Fixes
+
+- Register translate task in celery_worker and add setting metadata
+  ([`0c10fcb`](https://github.com/christianlouis/DocuElevate/commit/0c10fcbafc5b6b708ac983d664384a42e0b0d456))
+
+### Features
+
+- **profile**: Expose default_document_language in profile API and UI
+  ([`075a505`](https://github.com/christianlouis/DocuElevate/commit/075a5050855840e10155503517a239639f43a68d))
+
+- **translation**: Add model, config, task, API, and UI for default document language translation
+  ([`3a221a6`](https://github.com/christianlouis/DocuElevate/commit/3a221a62cd30900f4b0808cbda9c0bf37dbccdf4))
+
+
 ## v0.148.0 (2026-03-16)
 
 ### Documentation
