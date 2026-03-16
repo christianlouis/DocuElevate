@@ -75,28 +75,48 @@ def extract_metadata_from_file(file_path):
     if os.path.exists(metadata_path):
         try:
             with open(metadata_path, "r", encoding="utf-8") as f:
-                metadata = json.load(f)
-                logger.info(f"Loaded metadata from external JSON file: {metadata_path}")
+                loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    metadata = loaded
+                    logger.info(f"Loaded metadata from external JSON file: {metadata_path}")
+                else:
+                    logger.warning(f"JSON metadata file did not contain an object, ignoring: {metadata_path}")
         except Exception as e:
             logger.warning(f"Failed to load metadata from JSON file: {str(e)}")
 
-    # Extract embedded metadata using pypdf if it's a PDF file
-    if file_path.lower().endswith(".pdf") and os.path.exists(file_path):
+    # Extract embedded metadata using pypdf if it's a PDF file and there are still missing fields
+    _pdf_target_fields = {"filename", "absender", "document_type", "tags"}
+    if (
+        file_path.lower().endswith(".pdf")
+        and os.path.exists(file_path)
+        and not _pdf_target_fields.issubset(metadata.keys())
+    ):
         try:
             with open(file_path, "rb") as f:
+                # Quick magic-bytes check to avoid feeding arbitrary bytes into the PDF parser
+                if f.read(5) != b"%PDF-":
+                    raise ValueError("File does not start with PDF magic bytes")
+                f.seek(0)
                 pdf_reader = pypdf.PdfReader(f)
                 pdf_info = pdf_reader.metadata
                 if pdf_info:
                     if "/Title" in pdf_info and "filename" not in metadata:
-                        metadata["filename"] = pdf_info["/Title"]
+                        value = str(pdf_info["/Title"]).strip()
+                        if value:
+                            metadata["filename"] = value
                     if "/Author" in pdf_info and "absender" not in metadata:
-                        metadata["absender"] = pdf_info["/Author"]
+                        value = str(pdf_info["/Author"]).strip()
+                        if value:
+                            metadata["absender"] = value
                     if "/Subject" in pdf_info and "document_type" not in metadata:
-                        metadata["document_type"] = pdf_info["/Subject"]
+                        value = str(pdf_info["/Subject"]).strip()
+                        if value:
+                            metadata["document_type"] = value
                     if "/Keywords" in pdf_info and "tags" not in metadata:
-                        keywords = pdf_info["/Keywords"]
-                        if isinstance(keywords, str):
-                            metadata["tags"] = [k.strip() for k in keywords.split(",") if k.strip()]
+                        keywords = str(pdf_info["/Keywords"]).strip()
+                        tag_list = [k.strip() for k in keywords.split(",") if k.strip()]
+                        if tag_list:
+                            metadata["tags"] = tag_list
                     logger.info(f"Extracted embedded metadata from PDF: {file_path}")
         except Exception as e:
             logger.warning(f"Failed to extract metadata from PDF {file_path}: {str(e)}")

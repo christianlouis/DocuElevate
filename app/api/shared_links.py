@@ -313,16 +313,18 @@ async def list_shared_links(
     active_only: bool = Query(False, description="When true, only return active (non-revoked) links"),
 ) -> list[dict[str, Any]]:
     """List all shared links created by the authenticated user."""
-    q = db.query(SharedLink).filter(SharedLink.owner_id == owner_id)
+    q = (
+        db.query(SharedLink, FileRecord.original_filename)
+        .outerjoin(FileRecord, SharedLink.file_id == FileRecord.id)
+        .filter(SharedLink.owner_id == owner_id)
+    )
     if active_only:
         q = q.filter(SharedLink.is_active.is_(True))
-    links = q.order_by(SharedLink.created_at.desc()).all()
+    links_with_filenames = q.order_by(SharedLink.created_at.desc()).all()
 
     base_url = str(request.base_url).rstrip("/")
     result = []
-    for link in links:
-        file_record = db.query(FileRecord).filter(FileRecord.id == link.file_id).first()
-        filename = file_record.original_filename if file_record else None
+    for link, filename in links_with_filenames:
         result.append(_link_to_dict(link, base_url, filename))
     return result
 

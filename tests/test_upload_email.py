@@ -174,6 +174,76 @@ class TestExtractMetadataFromFile:
 
         assert result == {}
 
+    def test_extract_metadata_from_pdf(self, tmp_path):
+        """Test extracting metadata from a PDF file using pypdf when JSON is missing."""
+        import pypdf
+
+        file_path = tmp_path / "test.pdf"
+
+        # Create a test PDF with metadata
+        writer = pypdf.PdfWriter()
+        writer.add_blank_page(width=100, height=100)
+        writer.add_metadata(
+            {
+                "/Title": "Test Title",
+                "/Author": "Test Author",
+                "/Subject": "Test Document",
+                "/Keywords": "test, metadata, pypdf",
+            }
+        )
+        with open(file_path, "wb") as f:
+            writer.write(f)
+
+        result = extract_metadata_from_file(str(file_path))
+
+        # Check that PDF metadata is mapped to the expected fields
+        assert result.get("filename") == "Test Title"
+        assert result.get("absender") == "Test Author"
+        assert result.get("document_type") == "Test Document"
+        assert result.get("tags") == ["test", "metadata", "pypdf"]
+
+    def test_non_pdf_bytes_skips_pdf_parsing(self, tmp_path):
+        """Test that a .pdf file without PDF magic bytes logs a warning and returns empty metadata."""
+        file_path = tmp_path / "fake.pdf"
+        file_path.write_bytes(b"NOT_A_PDF_FILE")
+
+        result = extract_metadata_from_file(str(file_path))
+
+        assert result == {}
+
+    def test_json_with_non_dict_is_ignored(self, tmp_path):
+        """Test that a JSON sidecar file containing a non-object is ignored."""
+        import json as _json
+
+        file_path = tmp_path / "test.pdf"
+        file_path.write_bytes(b"NOT_A_PDF_FILE")
+        json_path = tmp_path / "test.json"
+        json_path.write_text(_json.dumps(["list", "not", "dict"]))
+
+        result = extract_metadata_from_file(str(file_path))
+
+        assert result == {}
+
+    def test_skips_pdf_when_all_fields_present(self, tmp_path):
+        """Test that PDF parsing is skipped when all target fields are already in JSON."""
+        import json as _json
+
+        file_path = tmp_path / "test.pdf"
+        # Even without valid PDF bytes, no warning should be raised for the PDF parser
+        file_path.write_bytes(b"NOT_A_PDF_FILE")
+        full_metadata = {
+            "filename": "from_json",
+            "absender": "from_json",
+            "document_type": "from_json",
+            "tags": ["from_json"],
+        }
+        json_path = tmp_path / "test.json"
+        json_path.write_text(_json.dumps(full_metadata))
+
+        result = extract_metadata_from_file(str(file_path))
+
+        assert result == full_metadata
+
 
 @pytest.mark.unit
 class TestAttachLogo:
