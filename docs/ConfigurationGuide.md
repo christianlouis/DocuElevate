@@ -485,6 +485,59 @@ LOG_LEVEL=WARNING
 
 > **Tip:** At `DEBUG` level, noisy third-party libraries (httpx, authlib, urllib3, etc.) are automatically pinned to `WARNING` so that application debug output remains readable.
 
+#### Structured JSON Logging
+
+Set `LOG_FORMAT=json` to emit structured JSON lines on stdout — one JSON object per log message. This is the standard format for log collectors and SIEM tools:
+
+| **Variable** | **Description** | **Default** |
+|-------------|----------------|-------------|
+| `LOG_FORMAT` | Log output format: `text` (human-readable) or `json` (structured JSON lines). | `text` |
+
+Each JSON log line contains: `timestamp` (ISO 8601), `level`, `logger`, `message`, `module`, `funcName`, `lineno`, and `exc_info` (when an exception is logged).
+
+```bash
+# Enable JSON logging for SIEM / log aggregation
+LOG_FORMAT=json
+```
+
+**Example JSON output:**
+```json
+{"timestamp": "2025-03-16T09:18:05.192000+00:00", "level": "INFO", "logger": "app.auth", "message": "[SECURITY] OAUTH_LOGIN_SUCCESS user=alice@example.com admin=False", "module": "auth", "funcName": "oauth_callback", "lineno": 654}
+```
+
+**Compatible with:**
+- **Grafana Loki** — Promtail scrapes JSON from Docker stdout
+- **Splunk** — Universal Forwarder or HEC with JSON sourcetype
+- **ELK / OpenSearch** — Filebeat with JSON codec
+- **Datadog** — Agent auto-parses JSON logs
+- **Fluentd / Vector** — JSON input plugin
+- **Docker log drivers** — `--log-driver=json-file` (default) preserves structure
+
+#### Syslog Forwarding (Application Logs)
+
+For traditional (non-container) deployments, application logs can be forwarded directly to a syslog receiver. This is **separate** from audit-log SIEM forwarding (see below) — it sends _every_ Python log message, not just audit events.
+
+| **Variable** | **Description** | **Default** |
+|-------------|----------------|-------------|
+| `LOG_SYSLOG_ENABLED` | Forward application logs to a syslog receiver in addition to stdout. | `false` |
+| `LOG_SYSLOG_HOST` | Hostname or IP of the syslog receiver. | `localhost` |
+| `LOG_SYSLOG_PORT` | Port of the syslog receiver. | `514` |
+| `LOG_SYSLOG_PROTOCOL` | Protocol: `udp` or `tcp`. | `udp` |
+
+```bash
+# Forward all application logs to syslog
+LOG_SYSLOG_ENABLED=true
+LOG_SYSLOG_HOST=syslog.internal.example.com
+LOG_SYSLOG_PORT=514
+LOG_SYSLOG_PROTOCOL=udp
+
+# Combine with JSON format for structured syslog messages
+LOG_FORMAT=json
+LOG_SYSLOG_ENABLED=true
+```
+
+> **Note:** When `LOG_FORMAT=json`, syslog messages are also sent as JSON. When `LOG_FORMAT=text`, syslog messages use the standard `name - level - message` format.
+
 ### Audit Logging
 
 DocuElevate provides comprehensive audit logging that records significant actions (logins, document CRUD, settings changes) to an append-only database table. Every entry captures the timestamp, user, action, resource, client IP, and optional JSON details.

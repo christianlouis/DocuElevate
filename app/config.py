@@ -62,6 +62,37 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Log output format.  ``text`` is the human-readable default.
+    # ``json`` emits one JSON object per line, ideal for log collectors
+    # (Promtail, Fluentd, Filebeat, Datadog agent) and SIEM ingestion.
+    log_format: str = Field(
+        default="text",
+        description=(
+            "Log output format: 'text' (human-readable, default) or "
+            "'json' (structured JSON lines for SIEM / log aggregation)."
+        ),
+    )
+
+    # Optional syslog forwarding for application logs (not just audit events).
+    # When enabled, a Python SysLogHandler is added to the root logger so that
+    # every log message is also sent to the configured syslog receiver.
+    log_syslog_enabled: bool = Field(
+        default=False,
+        description="Forward application logs to a syslog receiver in addition to stdout.",
+    )
+    log_syslog_host: str = Field(
+        default="localhost",
+        description="Hostname or IP of the syslog receiver for application logs.",
+    )
+    log_syslog_port: int = Field(
+        default=514,
+        description="Port of the syslog receiver for application logs.",
+    )
+    log_syslog_protocol: str = Field(
+        default="udp",
+        description="Protocol for syslog transport: 'udp' or 'tcp'.",
+    )
+
     # Making Dropbox optional
     dropbox_enabled: bool = Field(
         default=True,
