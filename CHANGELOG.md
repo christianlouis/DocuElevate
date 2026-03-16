@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.150.2 (2026-03-16)
+
+### Bug Fixes
+
+- **mobile**: Rename notification sound for Android, add LSSupportsOpeningDocumentsInPlace, update
+  deps
+  ([`04c6823`](https://github.com/christianlouis/DocuElevate/commit/04c6823079ef544294205dba840676370f0cad22))
+
+### Continuous Integration
+
+- **mobile**: Add path filter and auto-submit to Apple for EAS workflow
+  ([`bebeab3`](https://github.com/christianlouis/DocuElevate/commit/bebeab319139dc22e1ccaff5f284bbb80942138e))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`1c81678`](https://github.com/christianlouis/DocuElevate/commit/1c81678c9f09d8b3fa1b37c1c4a9805518498db5))
+
+
 ## Unreleased
 
 ### Continuous Integration
