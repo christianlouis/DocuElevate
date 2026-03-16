@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.150.5 (2026-03-16)
+
+### Bug Fixes
+
+- **mobile**: Switch to remote appVersionSource for auto-incrementing build numbers
+  ([`4c8926a`](https://github.com/christianlouis/DocuElevate/commit/4c8926a1fa32082a0e7aeb7d84bd667652695dab))
+
+
 ## v0.150.4 (2026-03-16)
 
 ### Bug Fixes
