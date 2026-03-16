@@ -884,6 +884,9 @@
       prevPage: {{ _("files.js_prev_page") | tojson }},
       pageInfo: {{ _("files.js_page_info") | tojson }},
       nextPage: {{ _("files.js_next_page") | tojson }},
+      zoomIn: {{ _("files.js_zoom_in") | tojson }},
+      zoomOut: {{ _("files.js_zoom_out") | tojson }},
+      resetZoom: {{ _("files.js_reset_zoom") | tojson }},
     };
 
     // Modal functionality
@@ -1009,12 +1012,12 @@
     function _pmRenderImage(body, url, alt) {
       body.innerHTML =
         '<div class="pm-img-controls">' +
-          '<button onclick="_pmImgZoom(1.25)" title="Zoom in" aria-label="Zoom in"><i class="fas fa-search-plus" aria-hidden="true"></i></button>' +
-          '<button onclick="_pmImgZoom(0.8)" title="Zoom out" aria-label="Zoom out"><i class="fas fa-search-minus" aria-hidden="true"></i></button>' +
-          '<button onclick="_pmImgReset()" title="Reset" aria-label="Reset zoom"><i class="fas fa-expand" aria-hidden="true"></i></button>' +
+          '<button onclick="_pmImgZoom(1.25)" title="' + __i18n.zoomIn + '" aria-label="' + __i18n.zoomIn + '"><i class="fas fa-search-plus" aria-hidden="true"></i></button>' +
+          '<button onclick="_pmImgZoom(0.8)" title="' + __i18n.zoomOut + '" aria-label="' + __i18n.zoomOut + '"><i class="fas fa-search-minus" aria-hidden="true"></i></button>' +
+          '<button onclick="_pmImgReset()" title="' + __i18n.resetZoom + '" aria-label="' + __i18n.resetZoom + '"><i class="fas fa-expand" aria-hidden="true"></i></button>' +
           '<span id="pm-zoom-level" style="font-size:0.8rem;color:#6b7280;">100%</span>' +
         '</div>' +
-        '<div class="pm-img-wrap" id="pm-img-wrap"><img id="pm-preview-img" src="' + url + '" alt="' + (alt || 'Preview') + '" draggable="false" style="max-width:100%;height:auto;"></div>';
+        '<div class="pm-img-wrap" id="pm-img-wrap"><img id="pm-preview-img" src="' + url + '" alt="' + (alt || __i18n.previewFallback) + '" draggable="false" style="max-width:100%;height:auto;"></div>';
       // Drag-pan
       var wrap = document.getElementById('pm-img-wrap');
       if (wrap) {
