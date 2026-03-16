@@ -442,6 +442,22 @@ class TestSavedSearchesCRUD:
         response = client.delete("/api/saved-searches/999")
         assert response.status_code == 404
 
+    def test_delete_saved_search_db_error(self, client: TestClient):
+        """DELETE /api/saved-searches/{id} handles database errors (500)."""
+        from unittest.mock import patch
+
+        # Create
+        create_resp = client.post(
+            "/api/saved-searches",
+            json={"name": "To Delete DB Error", "filters": {"status": "failed"}},
+        )
+        search_id = create_resp.json()["id"]
+
+        with patch("sqlalchemy.orm.Session.delete", side_effect=Exception("DB Delete Error")):
+            response = client.delete(f"/api/saved-searches/{search_id}")
+            assert response.status_code == 500
+            assert response.json()["detail"] == "Failed to delete saved search"
+
     def test_create_name_too_long(self, client: TestClient):
         """POST /api/saved-searches with name > 100 chars returns 422."""
         payload = {
