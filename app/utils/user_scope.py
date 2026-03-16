@@ -84,7 +84,7 @@ def get_current_owner_id(request: Request) -> str | None:
                 request.state.api_token_user = resolved
                 return _owner_id_from_user(resolved)
         except Exception:
-            logger.debug("Bearer token resolution failed in get_current_owner_id")
+            logger.debug("Bearer token resolution failed in get_current_owner_id", exc_info=True)
 
     return None
 

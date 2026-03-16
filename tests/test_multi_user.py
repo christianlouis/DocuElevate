@@ -189,6 +189,8 @@ class TestGetCurrentOwnerId:
     @pytest.mark.unit
     def test_resolves_bearer_token_directly(self, mu_engine, mu_session):
         """get_current_owner_id should resolve a Bearer token when no session exists."""
+        from types import SimpleNamespace
+
         from app.api.api_tokens import generate_api_token, hash_token
         from app.utils.user_scope import get_current_owner_id
 
@@ -205,16 +207,18 @@ class TestGetCurrentOwnerId:
         mu_session.add(db_token)
         mu_session.commit()
 
-        # Build a mock request with Bearer header but no session
+        # Build a mock request with Bearer header but no session.
+        # SimpleNamespace starts with no attributes so getattr(..., None) works.
         request = MagicMock()
         request.session = {}
-        request.state = MagicMock(spec=[])  # no api_token_user attr
+        request.state = SimpleNamespace()
         request.headers = {"authorization": f"Bearer {plaintext}"}
         request.client.host = "127.0.0.1"
 
-        with patch("app.database.SessionLocal", return_value=mu_session):
-            # Prevent the session from being closed since it's shared with the test
-            mu_session.close = MagicMock()
+        # Provide the test session and make close() a no-op so the shared
+        # session is not torn down prematurely.
+        noop_close = MagicMock()
+        with patch("app.database.SessionLocal", return_value=mu_session), patch.object(mu_session, "close", noop_close):
             result = get_current_owner_id(request)
 
         assert result == "bearer-owner"
@@ -224,16 +228,18 @@ class TestGetCurrentOwnerId:
     @pytest.mark.unit
     def test_returns_none_for_invalid_bearer_token(self, mu_engine, mu_session):
         """get_current_owner_id should return None for an invalid Bearer token."""
+        from types import SimpleNamespace
+
         from app.utils.user_scope import get_current_owner_id
 
         request = MagicMock()
         request.session = {}
-        request.state = MagicMock(spec=[])  # no api_token_user attr
+        request.state = SimpleNamespace()
         request.headers = {"authorization": "Bearer de_invalid_token_value"}
         request.client.host = "127.0.0.1"
 
-        with patch("app.database.SessionLocal", return_value=mu_session):
-            mu_session.close = MagicMock()
+        noop_close = MagicMock()
+        with patch("app.database.SessionLocal", return_value=mu_session), patch.object(mu_session, "close", noop_close):
             result = get_current_owner_id(request)
 
         assert result is None
