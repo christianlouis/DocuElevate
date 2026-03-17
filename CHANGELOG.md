@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.154.0 (2026-03-17)
+
+### Bug Fixes
+
+- **db**: Address code review feedback - fix comment stripping, type hints, test skip, and docs
+  ([`a007b4f`](https://github.com/christianlouis/DocuElevate/commit/a007b4fd98ed327a9874082766e0f3b8c32a1a68))
+
+### Features
+
+- **db**: Add migration chain CI validation, pre-commit hook, script template, docs, and tests
+  ([`aa49fa3`](https://github.com/christianlouis/DocuElevate/commit/aa49fa3ae6ae0bfbb0f9efa6304cf109eca1c402))
+
+
 ## v0.153.1 (2026-03-16)
 
 ### Bug Fixes
