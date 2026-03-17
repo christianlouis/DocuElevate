@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.155.1 (2026-03-17)
+
+### Bug Fixes
+
+- **api**: Add ttl_seconds to QR challenge response and fix client-side countdown
+  ([`0f6a1ee`](https://github.com/christianlouis/DocuElevate/commit/0f6a1ee1ec8186d70afc17abe50258c968058c92))
+
+- **mobile**: Replace gap with marginLeft for React Native compatibility
+  ([`70b193e`](https://github.com/christianlouis/DocuElevate/commit/70b193e07d2f85e353b6b12c56bf5bcbf828ee24))
+
+### Documentation
+
+- Update QR code login documentation with scanner and TTL details
+  ([`723b14e`](https://github.com/christianlouis/DocuElevate/commit/723b14e660737887c454b8e8300ac38bb390841f))
+
+
 ## v0.155.0 (2026-03-17)
 
 
