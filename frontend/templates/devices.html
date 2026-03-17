@@ -329,11 +329,9 @@ function devicesPage() {
     /** Extract the device name from the full token name (e.g. "Mobile App – iPhone 15 Pro" → "iPhone 15 Pro"). */
     formatDeviceName(name) {
       if (!name) return 'Unknown Device';
-      const sep = name.indexOf('–');
-      if (sep > -1) return name.substring(sep + 1).trim();
-      const dash = name.indexOf('-');
-      if (dash > -1) return name.substring(dash + 1).trim();
-      return name;
+      // Match either em dash (–) or hyphen (-) separators used by the mobile flows.
+      const match = name.match(/[–\-]\s*(.+)$/);
+      return match ? match[1].trim() : name;
     },
 
     formatDate(d) {
