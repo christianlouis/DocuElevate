@@ -20,6 +20,18 @@ from app.models import ApiToken, QRLoginChallenge, UserSession
 logger = logging.getLogger(__name__)
 
 
+def _ensure_tz_aware(dt: datetime | None) -> datetime | None:
+    """Return *dt* with UTC tzinfo if it is naive, or unchanged if already aware.
+
+    SQLite does not persist timezone information, so datetimes read back from
+    the database are offset-naive.  This helper normalises them for safe
+    comparison with ``datetime.now(timezone.utc)``.
+    """
+    if dt is not None and dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def get_session_lifetime_days() -> int:
     """Return the effective session lifetime in days.
 
@@ -118,18 +130,13 @@ def validate_session(db: Session, session_token: str) -> UserSession | None:
         return None
 
     if user_session.expires_at:
-        # Ensure timezone-aware comparison (SQLite returns naive datetimes)
-        expires = user_session.expires_at
-        if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=timezone.utc)
+        expires = _ensure_tz_aware(user_session.expires_at)
         if expires < now:
             logger.debug("[SESSION] Session id=%s has expired", user_session.id)
             return None
 
     # Update last_active_at (throttled to avoid excessive writes)
-    last_active = user_session.last_active_at
-    if last_active and last_active.tzinfo is None:
-        last_active = last_active.replace(tzinfo=timezone.utc)
+    last_active = _ensure_tz_aware(user_session.last_active_at)
     if not last_active or (now - last_active).total_seconds() > 60:
         try:
             user_session.last_active_at = now
@@ -250,9 +257,7 @@ def list_user_sessions(db: Session, user_id: str) -> list[UserSession]:
     # Filter expired sessions in Python to handle timezone-naive datetimes (SQLite)
     result = []
     for s in sessions:
-        expires = s.expires_at
-        if expires and expires.tzinfo is None:
-            expires = expires.replace(tzinfo=timezone.utc)
+        expires = _ensure_tz_aware(s.expires_at)
         if expires and expires > now:
             result.append(s)
     return result
@@ -337,10 +342,7 @@ def validate_qr_challenge(db: Session, challenge_token: str) -> QRLoginChallenge
     if challenge.is_claimed or challenge.is_cancelled:
         return None
 
-    # Ensure timezone-aware comparison (SQLite returns naive datetimes)
-    expires = challenge.expires_at
-    if expires and expires.tzinfo is None:
-        expires = expires.replace(tzinfo=timezone.utc)
+    expires = _ensure_tz_aware(challenge.expires_at)
     if expires and expires < now:
         return None
 
@@ -437,10 +439,7 @@ def get_challenge_status(db: Session, challenge_id: int, user_id: str) -> dict |
         return None
 
     now = datetime.now(timezone.utc)
-    # Ensure timezone-aware comparison (SQLite returns naive datetimes)
-    expires = challenge.expires_at
-    if expires and expires.tzinfo is None:
-        expires = expires.replace(tzinfo=timezone.utc)
+    expires = _ensure_tz_aware(challenge.expires_at)
 
     if challenge.is_claimed:
         status = "claimed"

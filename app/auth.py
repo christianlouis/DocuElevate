@@ -1116,9 +1116,9 @@ async def logout(request: Request, db: Session = Depends(get_db)):
     session_token = request.session.get("_session_token")
     if session_token:
         try:
-            from app.models import UserSession
+            from app.utils.session_manager import validate_session
 
-            user_session = db.query(UserSession).filter(UserSession.session_token == session_token).first()
+            user_session = validate_session(db, session_token)
             if user_session:
                 user_session.is_revoked = True
                 user_session.revoked_at = datetime.now(timezone.utc)
