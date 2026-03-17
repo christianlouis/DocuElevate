@@ -1900,6 +1900,28 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "factory_reset_on_startup": {
+        "category": "Feature Flags",
+        "description": (
+            "Wipe all user data on every startup so the instance always starts fresh. "
+            "Useful for demo/testing environments. Default: False."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "enable_factory_reset": {
+        "category": "Feature Flags",
+        "description": (
+            "Show the System Reset page in the admin UI.  Allows administrators to "
+            "trigger a full data wipe or a wipe-and-reimport from the web interface. Default: False."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Backup / Restore
     "backup_enabled": {
         "category": "Backup",

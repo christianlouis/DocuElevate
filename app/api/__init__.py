@@ -44,6 +44,7 @@ from app.api.shared_links import public_router as shared_links_public_router
 from app.api.shared_links import router as shared_links_router
 from app.api.similarity import router as similarity_router
 from app.api.subscriptions import router as subscriptions_router
+from app.api.system_reset import router as system_reset_router
 from app.api.translation import router as translation_router
 from app.api.url_upload import router as url_upload_router
 
@@ -98,5 +99,6 @@ router.include_router(audit_logs_router)
 router.include_router(i18n_router)
 router.include_router(mobile_router)
 router.include_router(compliance_router)
+router.include_router(system_reset_router)
 router.include_router(translation_router)
 router.include_router(classification_rules_router)
