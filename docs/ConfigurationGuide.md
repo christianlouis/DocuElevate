@@ -11,6 +11,10 @@ Configuration is primarily done through environment variables specified in a `.e
 | **Variable**           | **Description**                                          | **Example**                    |
 |------------------------|----------------------------------------------------------|--------------------------------|
 | `DATABASE_URL`         | Path/URL to the SQLite database (or other SQL backend). Use the [Database Wizard](/database-wizard) for guided setup. See [Database Configuration](DatabaseConfiguration.md). | `sqlite:///./app/database.db`  |
+| `DB_POOL_SIZE`         | Number of persistent connections in the pool per worker (PostgreSQL/MySQL only; ignored for SQLite). | `10` |
+| `DB_MAX_OVERFLOW`      | Additional connections beyond `DB_POOL_SIZE` under burst load (PostgreSQL/MySQL only). | `20` |
+| `DB_POOL_TIMEOUT`      | Seconds to wait for a pool connection before raising `TimeoutError` (PostgreSQL/MySQL only). | `30` |
+| `DB_POOL_RECYCLE`      | Recycle connections after this many seconds to avoid stale connections (PostgreSQL/MySQL only). | `1800` |
 | `REDIS_URL`            | URL for Redis, used by Celery for broker & result store. | `redis://redis:6379/0`         |
 | `WORKDIR`              | Working directory for the application.                  | `/workdir`                     |
 | `GOTENBERG_URL`        | Gotenberg PDF processing URL.                           | `http://gotenberg:3000`        |

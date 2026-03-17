@@ -13,6 +13,24 @@ class Settings(BaseSettings):
 
     database_url: str
     redis_url: str
+
+    # Database connection-pool tuning (ignored for SQLite, which uses NullPool).
+    db_pool_size: int = Field(
+        default=10,
+        description="Number of persistent connections kept in the pool per worker process.",
+    )
+    db_max_overflow: int = Field(
+        default=20,
+        description="Additional connections allowed beyond db_pool_size under burst load.",
+    )
+    db_pool_timeout: int = Field(
+        default=30,
+        description="Seconds to wait for a connection from the pool before raising a TimeoutError.",
+    )
+    db_pool_recycle: int = Field(
+        default=1800,
+        description="Recycle (close and reopen) connections after this many seconds to avoid stale connections.",
+    )
     openai_api_key: str
     openai_base_url: str = "https://api.openai.com/v1"  # Default to OpenAI's endpoint
     openai_model: str = "gpt-4o-mini"  # Default model
