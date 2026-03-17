@@ -332,7 +332,6 @@ If the iOS or Android app shows a generic "Hello World – This is the first pag
 
 The repository includes a root `app/index.tsx` that immediately redirects to the authentication flow, so this issue should not recur once the correct file is present.
 
-
 ### "Session expired Local session" during iOS build
 
 EAS stores an Apple ID session locally (in `~/.expo/`) to manage code-signing certificates and provisioning profiles.  This session expires after a few weeks.

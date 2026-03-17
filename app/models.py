@@ -980,7 +980,6 @@ class ClassificationRuleModel(Base):
     __table_args__ = (UniqueConstraint("owner_id", "name", name="uq_classification_rules_owner_name"),)
 
 
-
 class MobileDevice(Base):
     """Registered mobile device for push notifications.
 
