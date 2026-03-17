@@ -35,6 +35,14 @@ export interface GenerateTokenResponse {
   created_at: string;
 }
 
+export interface QRClaimResponse {
+  token: string;
+  token_id: number;
+  name: string;
+  owner_id: string;
+  created_at: string;
+}
+
 export interface DeviceRegistration {
   push_token: string;
   device_name?: string;
@@ -154,6 +162,13 @@ class DocuElevateAPI {
   async generateMobileToken(deviceName: string): Promise<GenerateTokenResponse> {
     return this.request<GenerateTokenResponse>("POST", "/api/mobile/generate-token", {
       body: { device_name: deviceName },
+    });
+  }
+
+  /** Claim a QR login challenge and receive an API token. */
+  async claimQRChallenge(challengeToken: string, deviceName: string): Promise<QRClaimResponse> {
+    return this.request<QRClaimResponse>("POST", "/api/qr-auth/claim", {
+      body: { challenge_token: challengeToken, device_name: deviceName },
     });
   }
 

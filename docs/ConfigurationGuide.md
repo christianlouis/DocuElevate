@@ -366,6 +366,9 @@ Credentials are encrypted at rest using Fernet encryption.
 |-------------------------|---------------------------------------------------------------|
 | `AUTH_ENABLED`          | Enable or disable authentication (`true`/`false`).           |
 | `SESSION_SECRET`        | Secret key used to encrypt sessions and cookies (at least 32 chars). |
+| `SESSION_LIFETIME_DAYS` | Number of days before a server-side session expires. Default: `30`. |
+| `SESSION_LIFETIME_CUSTOM_DAYS` | Override for `SESSION_LIFETIME_DAYS` when set.        |
+| `QR_LOGIN_CHALLENGE_TTL_SECONDS` | How long a QR login challenge is valid (seconds). Default: `120`. |
 | `ADMIN_USERNAME`        | Username for basic authentication (when not using OIDC).     |
 | `ADMIN_PASSWORD`        | Password for basic authentication (when not using OIDC).     |
 | `ADMIN_GROUP_NAME`      | Group name in OIDC claims that grants admin access. Default: `admin`. |

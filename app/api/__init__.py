@@ -33,11 +33,13 @@ from app.api.pipelines import router as pipelines_router
 from app.api.plans import router as plans_router
 from app.api.process import router as process_router
 from app.api.profile import router as profile_router
+from app.api.qr_auth import router as qr_auth_router
 from app.api.queue import router as queue_router
 from app.api.routing_rules import router as routing_rules_router
 from app.api.saved_searches import router as saved_searches_router
 from app.api.scheduled_jobs import router as scheduled_jobs_router
 from app.api.search import router as search_router
+from app.api.sessions import router as sessions_router
 from app.api.settings import router as settings_router
 from app.api.shared_links import public_router as shared_links_public_router
 from app.api.shared_links import router as shared_links_router
@@ -97,6 +99,8 @@ router.include_router(scheduled_jobs_router)
 router.include_router(audit_logs_router)
 router.include_router(i18n_router)
 router.include_router(mobile_router)
+router.include_router(sessions_router)
+router.include_router(qr_auth_router)
 router.include_router(compliance_router)
 router.include_router(system_reset_router)
 router.include_router(translation_router)
