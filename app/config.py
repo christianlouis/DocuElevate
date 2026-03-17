@@ -1143,6 +1143,20 @@ class Settings(BaseSettings):
         description="Stricter rate limit for authentication endpoints to prevent brute force attacks.",
     )
 
+    # Per-user upload rate limiting (health-aware, Redis-backed sliding window)
+    upload_rate_limit_per_user: int = Field(
+        default=20,
+        description=(
+            "Maximum number of file uploads allowed per user within the sliding window. "
+            "The effective limit may be reduced dynamically when the system is under heavy load "
+            "(high queue depth or CPU usage). Set to 0 to disable per-user upload rate limiting."
+        ),
+    )
+    upload_rate_limit_window: int = Field(
+        default=60,
+        description="Sliding window size in seconds for per-user upload rate limiting (default: 60).",
+    )
+
     # CORS Configuration (see SECURITY_AUDIT.md – Infrastructure Security section)
     # Disabled by default since most deployments use a reverse proxy (Traefik, Nginx, etc.)
     # that already adds CORS headers. Enable only if deploying without a reverse proxy or if
