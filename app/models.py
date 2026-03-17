@@ -603,6 +603,7 @@ class IntegrationType:
     EMAIL = "EMAIL"
     PAPERLESS = "PAPERLESS"
     RCLONE = "RCLONE"
+    SHAREPOINT = "SHAREPOINT"
     ICLOUD = "ICLOUD"
 
     ALL = {
@@ -620,6 +621,7 @@ class IntegrationType:
         EMAIL,
         PAPERLESS,
         RCLONE,
+        SHAREPOINT,
         ICLOUD,
     }
 
