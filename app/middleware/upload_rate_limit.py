@@ -70,7 +70,7 @@ def _get_redis() -> redis.Redis | None:
         _redis_client.ping()
         return _redis_client
     except Exception:  # noqa: BLE001
-        logger.debug("Redis unavailable for upload rate limiter – falling back to allow-all")
+        logger.debug("Redis unavailable for upload rate limiter – falling back to allow-all", exc_info=True)
         _redis_client = None
         return None
 
@@ -87,7 +87,7 @@ def _get_queue_depth(r: redis.Redis) -> int:
         try:
             total += r.llen(queue_name)
         except Exception:  # noqa: BLE001, S110
-            logger.debug("Could not read queue length for '%s'", queue_name)
+            logger.debug("Could not read queue length for %r", queue_name, exc_info=True)
     return total
 
 

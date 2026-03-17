@@ -82,9 +82,10 @@ class TestComputeEffectiveLimit:
         """A base limit of 0 (disabled) should clamp to at least 1."""
         effective, _factor, _reason = compute_effective_limit(0, queue_depth=0, cpu_load_ratio=0.0)
         # max(1, int(0 * 1.0)) = max(1, 0) = 1
-        # This is correct since a base_limit of 0 means "disabled" and is
-        # handled upstream (the dependency skips the check entirely).
-        assert effective >= 0
+        # A base_limit of 0 means "disabled" and is handled upstream
+        # (the dependency skips the check entirely), but the pure function
+        # still clamps to 1 as a safety net.
+        assert effective == 1
 
 
 # ---------------------------------------------------------------------------
