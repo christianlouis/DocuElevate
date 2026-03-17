@@ -10,6 +10,7 @@ from app.views.audit_logs import router as audit_logs_router
 from app.views.backup import router as backup_router
 from app.views.compliance import router as compliance_router
 from app.views.db_wizard import router as db_wizard_router
+from app.views.devices import router as devices_router  # Mobile devices dashboard
 from app.views.dropbox import router as dropbox_router
 from app.views.filemanager import router as filemanager_router
 
@@ -69,3 +70,4 @@ router.include_router(scheduled_jobs_router)  # Admin scheduled batch jobs
 router.include_router(audit_logs_router)  # Comprehensive audit log viewer
 router.include_router(help_router)  # Built-in help / How-To docs
 router.include_router(compliance_router)  # Compliance templates dashboard
+router.include_router(devices_router)  # Mobile devices dashboard
