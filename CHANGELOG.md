@@ -10,6 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.156.0 (2026-03-17)
+
+### Bug Fixes
+
+- **storage**: Use RuntimeError instead of bare Exception in SharePoint task
+  ([`2b698cc`](https://github.com/christianlouis/DocuElevate/commit/2b698cc6940fb731b1ab87300ad0f7fdebc8f024))
+
+- **test**: Add missing _should_upload_to_sharepoint mock to send_to_all tests
+  ([`bcf2d00`](https://github.com/christianlouis/DocuElevate/commit/bcf2d00c3324a3ded3852e16759ea4d0af3af666))
+
+### Documentation
+
+- Add SharePoint setup guide and update all references
+  ([`13aa14b`](https://github.com/christianlouis/DocuElevate/commit/13aa14b8e4102437f72f6c260b2795a6ee761eb9))
+
+### Features
+
+- **storage**: Add SharePoint integration for document storage
+  ([`b85fc1d`](https://github.com/christianlouis/DocuElevate/commit/b85fc1d277475c06c1efa100c391b7a3c43e7c25))
+
+
 ## v0.155.1 (2026-03-17)
 
 ### Bug Fixes
