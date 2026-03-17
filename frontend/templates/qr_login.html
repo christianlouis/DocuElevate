@@ -126,6 +126,8 @@ function qrLoginPage() {
     errorMsg: '',
     _pollTimer: null,
     _countdownTimer: null,
+    _ttlSeconds: 0,
+    _receivedAt: null,
 
     _csrfToken() {
       return document.cookie
@@ -156,6 +158,8 @@ function qrLoginPage() {
         this.challengeToken = data.challenge_token;
         this.qrPayload = data.qr_payload;
         this.expiresAt = new Date(data.expires_at);
+        this._ttlSeconds = data.ttl_seconds || 120;
+        this._receivedAt = Date.now();
         this.status = 'pending';
         this.deviceName = '';
 
@@ -214,8 +218,9 @@ function qrLoginPage() {
     },
 
     _updateCountdown() {
-      if (!this.expiresAt) { this.countdown = 0; return; }
-      const remaining = Math.max(0, Math.floor((this.expiresAt - new Date()) / 1000));
+      if (!this._receivedAt) { this.countdown = 0; return; }
+      const elapsed = (Date.now() - this._receivedAt) / 1000;
+      const remaining = Math.max(0, Math.floor(this._ttlSeconds - elapsed));
       this.countdown = remaining;
     },
 

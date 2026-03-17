@@ -144,10 +144,7 @@ export default function LoginScreen() {
         <Pressable
           style={[styles.qrButton, qrLoading && styles.buttonDisabled]}
           onPress={() => {
-            Alert.alert(
-              "Scan QR Code",
-              "Open the DocuElevate web app on your computer, go to Profile → Security & Sessions → \"Log in on mobile via QR code\", and scan the QR code shown there.\n\nThe app will automatically detect the QR code when scanned with your device camera."
-            );
+            router.push("/(auth)/qr-scanner");
           }}
           disabled={loading || qrLoading}
           accessibilityRole="button"
