@@ -130,6 +130,7 @@ def client(db_session) -> TestClient:
     # Disable per-user upload rate limiting in tests so that upload-heavy
     # test suites are not rejected with 429 Too Many Requests.
     async def _no_rate_limit() -> None:
+        """No-op override: skip upload rate limiting during tests."""
         return None
 
     fastapi_app.dependency_overrides[require_upload_rate_limit] = _no_rate_limit
