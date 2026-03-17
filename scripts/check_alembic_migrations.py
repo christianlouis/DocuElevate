@@ -42,7 +42,7 @@ from pathlib import Path
 
 _REVISION_RE = re.compile(r'^revision\s*(?::\s*str\s*)?=\s*["\'](.+?)["\']', re.MULTILINE)
 _DOWN_REV_RE = re.compile(
-    r'^down_revision\s*(?::\s*Union\[str,\s*(?:None|tuple)\]\s*)?=\s*(.+)',
+    r"^down_revision\s*(?::\s*Union\[str,\s*(?:None|tuple)\]\s*)?=\s*(.+)",
     re.MULTILINE,
 )
 
@@ -120,11 +120,7 @@ def check_migrations(versions_dir: Path, *, verbose: bool = False) -> list[str]:
 
         # Check 1 – duplicate revision IDs
         if rev in migrations:
-            errors.append(
-                f"Duplicate revision '{rev}' in:\n"
-                f"  - {migrations[rev]['path'].name}\n"
-                f"  - {path.name}"
-            )
+            errors.append(f"Duplicate revision '{rev}' in:\n  - {migrations[rev]['path'].name}\n  - {path.name}")
         else:
             migrations[rev] = info
 
@@ -157,7 +153,7 @@ def check_migrations(versions_dir: Path, *, verbose: bool = False) -> list[str]:
         errors.append(
             f"Multiple migration heads detected ({len(heads)}).  "
             f"Create a merge migration to resolve:\n{head_details}\n\n"
-            f"  Fix: alembic merge heads -m \"merge_parallel_branches\""
+            f'  Fix: alembic merge heads -m "merge_parallel_branches"'
         )
 
     # Check 4 – revision / filename consistency -----------------------------
