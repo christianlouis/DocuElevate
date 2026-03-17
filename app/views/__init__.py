@@ -36,6 +36,7 @@ from app.views.share import router as share_router
 from app.views.shared_links import router as shared_links_router
 from app.views.status import router as status_router
 from app.views.subscriptions import router as subscriptions_router  # Pricing + subscription pages
+from app.views.system_reset import router as system_reset_router  # System reset / factory reset
 from app.views.wizard import router as wizard_router
 
 # Create a main router that includes all the view routers
@@ -71,3 +72,4 @@ router.include_router(audit_logs_router)  # Comprehensive audit log viewer
 router.include_router(help_router)  # Built-in help / How-To docs
 router.include_router(compliance_router)  # Compliance templates dashboard
 router.include_router(devices_router)  # Mobile devices dashboard
+router.include_router(system_reset_router)  # System reset / factory reset

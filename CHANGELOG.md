@@ -10,6 +10,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.154.0 (2026-03-17)
+
+### Bug Fixes
+
+- **db**: Address code review feedback - fix comment stripping, type hints, test skip, and docs
+  ([`a007b4f`](https://github.com/christianlouis/DocuElevate/commit/a007b4fd98ed327a9874082766e0f3b8c32a1a68))
+
+### Features
+
+- **db**: Add migration chain CI validation, pre-commit hook, script template, docs, and tests
+  ([`aa49fa3`](https://github.com/christianlouis/DocuElevate/commit/aa49fa3ae6ae0bfbb0f9efa6304cf109eca1c402))
+
+
+## v0.153.1 (2026-03-16)
+
+### Bug Fixes
+
+- **mobile**: Add root index.tsx redirect to prevent stale Hello World screen
+  ([`1350aa6`](https://github.com/christianlouis/DocuElevate/commit/1350aa6a5ede19d924a9a4c277ef8089b940ea3c))
+
+
+## v0.153.0 (2026-03-16)
+
+### Bug Fixes
+
+- **system-reset**: Address code review feedback
+  ([`7dffdc0`](https://github.com/christianlouis/DocuElevate/commit/7dffdc05542cbfe37a91f86b661790038195fef5))
+
+### Features
+
+- **system-reset**: Add system reset and factory reset feature
+  ([`a88d790`](https://github.com/christianlouis/DocuElevate/commit/a88d790445e5aae9f8ba04e735501d6c93589dec))
+
+### Testing
+
+- **system-reset**: Add comprehensive tests and documentation
+  ([`96bfba8`](https://github.com/christianlouis/DocuElevate/commit/96bfba8057e506f561d21318b0205e521cf67109))
+
+
 ## v0.152.0 (2026-03-16)
 
 ### Features

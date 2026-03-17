@@ -659,6 +659,25 @@ class Settings(BaseSettings):
         ),
     )
 
+    # System reset / factory reset settings
+    factory_reset_on_startup: bool = Field(
+        default=False,
+        description=(
+            "When enabled, DocuElevate wipes all user data (database rows and "
+            "work-files on disk) on every startup so the instance always comes "
+            "up in a clean, fresh state.  Useful for demo or testing environments. "
+            "Default: False."
+        ),
+    )
+    enable_factory_reset: bool = Field(
+        default=False,
+        description=(
+            "Show the 'System Reset' page in the admin UI.  When enabled, "
+            "administrators can trigger a full data wipe or a wipe-and-reimport "
+            "directly from the web interface.  Default: False."
+        ),
+    )
+
     # PDF/A archival conversion settings
     enable_pdfa_conversion: bool = Field(
         default=False,

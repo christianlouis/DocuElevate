@@ -170,6 +170,12 @@ async def lifespan(app: FastAPI):
     # Startup: Initialize database
     init_db()  # Create tables if they don't exist
 
+    # Factory reset on startup — wipe all user data before anything else
+    if settings.factory_reset_on_startup:
+        from app.utils.system_reset import perform_startup_reset
+
+        perform_startup_reset()
+
     # Load settings from database after DB initialization
     from app.database import SessionLocal
     from app.utils.config_loader import load_settings_from_db
