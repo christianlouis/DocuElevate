@@ -22,7 +22,9 @@ main = _mod.main
 # ---------------------------------------------------------------------------
 
 
-def _write_migration(directory: Path, filename: str, revision: str, down_revision: str | None) -> Path:
+def _write_migration(
+    directory: Path, filename: str, revision: str, down_revision: str | tuple[str, ...] | None
+) -> Path:
     """Helper to create a minimal migration file."""
     if down_revision is None:
         down_rev_str = "None"
@@ -191,6 +193,7 @@ class TestMainCLI:
     def test_real_migrations(self) -> None:
         """Smoke test against the actual project migrations."""
         real_dir = Path(__file__).resolve().parent.parent / "migrations" / "versions"
-        if real_dir.is_dir():
-            rc = main(["--versions-dir", str(real_dir)])
-            assert rc == 0
+        if not real_dir.is_dir():
+            pytest.skip("migrations/versions directory not found in working tree")
+        rc = main(["--versions-dir", str(real_dir)])
+        assert rc == 0

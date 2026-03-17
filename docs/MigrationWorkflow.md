@@ -48,35 +48,37 @@ python scripts/check_alembic_migrations.py --verbose
 
 1. **Edit `app/models.py`** — add or modify SQLAlchemy model classes.
 
-2. **Generate the migration** from the repo root:
+2. **Generate the migration** from the repo root.  Use `--rev-id` to set the
+   revision identifier directly (avoids renaming afterwards):
+
+   ```bash
+   alembic revision --autogenerate --rev-id 037_add_my_new_table -m "add my new table"
+   ```
+
+   This creates `migrations/versions/037_add_my_new_table_add_my_new_table.py`
+   with `revision = "037_add_my_new_table"`.  Rename the file to match:
+
+   ```bash
+   mv migrations/versions/037_add_my_new_table_add_my_new_table.py \
+      migrations/versions/037_add_my_new_table.py
+   ```
+
+   Alternatively, generate with the default hash and then rename:
 
    ```bash
    alembic revision --autogenerate -m "add_my_new_table"
+   # Rename: mv migrations/versions/<hash>_add_my_new_table.py migrations/versions/037_add_my_new_table.py
+   # Update revision inside the file to match the filename stem.
    ```
 
    Alembic uses the `migrations/script.py.mako` template to generate the file.  The template includes inline comments about idempotent patterns — read them.
 
-3. **Rename the file** to follow the [naming convention](#migration-naming-convention):
-
-   ```bash
-   # Alembic generates a hash-based name by default.
-   # Rename to the sequential numbering scheme:
-   mv migrations/versions/<hash>_add_my_new_table.py \
-      migrations/versions/037_add_my_new_table.py
-   ```
-
-   Update the `revision` variable inside the file to match:
-
-   ```python
-   revision: str = "037_add_my_new_table"
-   ```
-
-4. **Review the generated code** — autogenerate is helpful but not perfect.  Check:
+3. **Review the generated code** — autogenerate is helpful but not perfect.  Check:
    - Are new tables and columns detected correctly?
    - Does the `downgrade()` reverse all changes?
    - Are SQLite-incompatible operations wrapped in `batch_alter_table()`?
 
-5. **Test the migration** against a fresh database:
+4. **Test the migration** against a fresh database:
 
    ```bash
    # Apply
@@ -89,7 +91,7 @@ python scripts/check_alembic_migrations.py --verbose
    alembic upgrade head
    ```
 
-6. **Run the chain validation**:
+5. **Run the chain validation**:
 
    ```bash
    python scripts/check_alembic_migrations.py

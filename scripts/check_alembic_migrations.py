@@ -54,8 +54,8 @@ def _parse_down_revision(raw: str) -> list[str] | None:
     Returns a list with one or more strings otherwise.  Tuples are
     returned for merge migrations (e.g. ``("017_a", "017_b")``).
     """
-    raw = raw.strip().rstrip("#").strip()
-    # Handle inline comments
+    # Strip inline comments (e.g. ``None  # type: ignore``)
+    raw = raw.strip()
     if "#" in raw:
         raw = raw[: raw.index("#")].strip()
     try:
