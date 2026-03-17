@@ -154,6 +154,59 @@ DocuElevate can work with any OpenID Connect-compliant provider, not just Authen
    OAUTH_PROVIDER_NAME=Auth0
    ```
 
+## Server-Side Session Management
+
+DocuElevate supports server-side session tracking. Every login creates a `UserSession` record that can be listed and revoked individually or all at once ("log off everywhere").
+
+### Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SESSION_LIFETIME_DAYS` | Number of days before a session expires | `30` |
+| `SESSION_LIFETIME_CUSTOM_DAYS` | Override for `SESSION_LIFETIME_DAYS` when set | — |
+
+### Managing Sessions
+
+Users can manage their active sessions from the **Profile → Security** section:
+
+- **View active sessions** — see browser, device, IP address, and last activity for each session.
+- **Revoke a single session** — immediately invalidate one session.
+- **Log off everywhere** — revoke all sessions (optionally keeping the current one) and all API tokens at once.
+
+Expired sessions are automatically cleaned up by a periodic background task.
+
+### API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/sessions` | List the current user's active sessions |
+| `DELETE` | `/api/sessions/{id}` | Revoke a single session |
+| `POST` | `/api/sessions/revoke-all` | Revoke all sessions for the current user |
+
+## QR Code Login
+
+QR code login allows users to authenticate a mobile device by scanning a QR code displayed in the web UI, without manually entering credentials on the phone.
+
+### How It Works
+
+1. The authenticated web user opens the **QR Login** page and a challenge QR code is displayed.
+2. The mobile app scans the QR code and calls the claim endpoint.
+3. An API token is issued for the mobile device and the web UI is notified via polling.
+
+### Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `QR_LOGIN_CHALLENGE_TTL_SECONDS` | How long a QR challenge is valid | `120` |
+
+### API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/qr-auth/challenge` | Create a new QR login challenge |
+| `GET` | `/api/qr-auth/challenge/{id}/status` | Poll the status of a challenge |
+| `POST` | `/api/qr-auth/claim` | Claim a challenge from a mobile device |
+
 ## Security Considerations
 
 1. **Always use HTTPS** in production to protect authentication tokens and passwords
