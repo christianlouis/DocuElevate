@@ -115,6 +115,7 @@ def client(db_session) -> TestClient:
 
     # Import the canonical get_db function
     from app.database import get_db
+    from app.middleware.upload_rate_limit import require_upload_rate_limit
 
     # Override the get_db dependency to use our test database
     def override_get_db():
@@ -125,6 +126,13 @@ def client(db_session) -> TestClient:
 
     # Override the single canonical get_db dependency
     fastapi_app.dependency_overrides[get_db] = override_get_db
+
+    # Disable per-user upload rate limiting in tests so that upload-heavy
+    # test suites are not rejected with 429 Too Many Requests.
+    async def _no_rate_limit() -> None:
+        return None
+
+    fastapi_app.dependency_overrides[require_upload_rate_limit] = _no_rate_limit
 
     # Use base_url to satisfy TrustedHostMiddleware
     with TestClient(fastapi_app, base_url="http://localhost") as test_client:
