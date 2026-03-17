@@ -8,6 +8,7 @@ DocuElevate includes a native mobile application for iOS and Android built with 
 |---------|-----|---------|
 | SSO login (OAuth2) | ✅ | ✅ |
 | Local / basic auth login | ✅ | ✅ |
+| QR code login (scan from web) | ✅ | ✅ |
 | Auto-generated API token | ✅ | ✅ |
 | Camera capture → upload | ✅ | ✅ |
 | File picker upload | ✅ | ✅ |
@@ -111,6 +112,18 @@ When developing with **Expo Go** the app does not have the `docuelevate://` cust
 4. `WebBrowser.openAuthSessionAsync` intercepts the deep link and the Expo Go app receives the token.
 
 No extra configuration is needed — just run `npx expo start` and scan the QR code with the **Expo Go** app.
+
+### QR Code Login Flow
+
+As an alternative to SSO, users can log in by scanning a QR code displayed in the web UI:
+
+1. The authenticated web user navigates to **Profile → Security & Sessions → Log in on mobile via QR code**.
+2. A QR code is displayed containing a deep link: `docuelevate://qr-login?token=<challenge_token>&server=<server_url>`.
+3. In the mobile app, the user taps **Scan QR Code to Login**, which opens the device camera.
+4. The app scans the QR code, extracts both the server URL and the challenge token, and calls `POST /api/qr-auth/claim`.
+5. An API token is issued and stored securely — no need to enter the server URL manually.
+
+> **Note:** The QR code already contains the server URL, so users do not need to type it in when using QR login.
 
 ### Auto-generated Mobile Token
 
@@ -286,7 +299,8 @@ mobile/
 │   ├── (auth)/                  # Unauthenticated route group
 │   │   ├── _layout.tsx          # Stack navigator (headerless)
 │   │   ├── index.tsx            # Welcome screen
-│   │   └── login.tsx            # Login screen
+│   │   ├── login.tsx            # Login screen
+│   │   └── qr-scanner.tsx       # QR code scanner screen
 │   └── (tabs)/                  # Authenticated route group
 │       ├── _layout.tsx          # Tab navigator
 │       ├── index.tsx            # Upload screen (default tab)
@@ -303,7 +317,8 @@ mobile/
     ├── hooks/
     │   └── usePushNotifications.ts  # Push token registration
     ├── screens/
-    │   ├── LoginScreen.tsx      # Server URL + SSO button
+    │   ├── LoginScreen.tsx      # Server URL + SSO button + QR code scanner
+    │   ├── QRScannerScreen.tsx  # Camera-based QR code scanner for login
     │   ├── UploadScreen.tsx     # Camera capture + photo library + file picker
     │   ├── FilesScreen.tsx      # Processed document list
     │   └── ProfileScreen.tsx    # User profile + sign out
