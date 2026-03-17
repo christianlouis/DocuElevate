@@ -19,7 +19,7 @@
       "bundleIdentifier": "org.docuelevate.mobile",
       "appleTeamId": "975U2ZESBM",
       "infoPlist": {
-        "NSCameraUsageDescription": "DocuElevate uses the camera to capture documents for upload.",
+        "NSCameraUsageDescription": "DocuElevate uses the camera to scan QR codes for login and to capture documents for upload.",
         "NSPhotoLibraryUsageDescription": "DocuElevate accesses your photo library to select documents for upload.",
         "NSPhotoLibraryAddUsageDescription": "DocuElevate saves scanned documents to your photo library.",
         "UIBackgroundModes": ["fetch", "remote-notification"],
@@ -101,7 +101,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "DocuElevate uses the camera to capture documents for upload."
+          "cameraPermission": "DocuElevate uses the camera to scan QR codes for login and to capture documents for upload."
         }
       ],
       "expo-document-picker",

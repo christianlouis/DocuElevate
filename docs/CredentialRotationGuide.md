@@ -11,7 +11,7 @@ Credentials fall into two categories:
 | Category | Examples |
 |---|---|
 | **API keys** | OpenAI API key, Azure AI key, Paperless-ngx API token, AWS access keys |
-| **OAuth tokens / secrets** | Dropbox, Google Drive, OneDrive, Authentik client secrets and refresh tokens |
+| **OAuth tokens / secrets** | Dropbox, Google Drive, OneDrive, SharePoint, Authentik client secrets and refresh tokens |
 | **Passwords** | Admin password, Nextcloud, Email (SMTP), IMAP, FTP, SFTP, WebDAV |
 | **Private keys** | SFTP private key and passphrase |
 
@@ -118,6 +118,15 @@ For service-account credentials (`google_drive_credentials_json`):
 3. Update `onedrive_client_secret` in DocuElevate.
 4. Re-authorize via the OAuth flow to get a fresh `onedrive_refresh_token`.
 5. Delete the old client secret in Azure.
+
+### SharePoint (Microsoft OAuth)
+
+1. SharePoint uses the same Azure AD app registration as OneDrive.
+2. In **Azure App Registrations**, navigate to **Certificates & secrets** for your app.
+3. Add a new client secret.
+4. Update `sharepoint_client_secret` in DocuElevate.
+5. Re-authorize via the OAuth flow to get a fresh `sharepoint_refresh_token`.
+6. Delete the old client secret in Azure.
 
 ### Authentik (OIDC)
 

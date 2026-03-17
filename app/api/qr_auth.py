@@ -70,6 +70,7 @@ class CreateChallengeResponse(BaseModel):
     challenge_id: int
     challenge_token: str
     expires_at: datetime
+    ttl_seconds: int = Field(description="Seconds until the challenge expires (use for client-side countdown).")
     qr_payload: str = Field(description="The string to encode in the QR code.")
 
 
@@ -131,10 +132,16 @@ async def create_challenge(
     base_url = str(request.base_url).rstrip("/")
     qr_payload = f"docuelevate://qr-login?token={challenge.challenge_token}&server={base_url}"
 
+    # Compute the TTL in seconds so the client can run a countdown timer
+    # without comparing absolute timestamps (which breaks when client and
+    # server clocks are out of sync).
+    ttl_seconds = max(0, int((challenge.expires_at - challenge.created_at).total_seconds()))
+
     return {
         "challenge_id": challenge.id,
         "challenge_token": challenge.challenge_token,
         "expires_at": challenge.expires_at,
+        "ttl_seconds": ttl_seconds,
         "qr_payload": qr_payload,
     }
 

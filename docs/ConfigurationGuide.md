@@ -1289,6 +1289,20 @@ For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveS
 
 For detailed setup instructions, see the [OneDrive Setup Guide](OneDriveSetup.md).
 
+### SharePoint Online
+
+| **Variable**                    | **Description**                                       |
+|---------------------------------|-------------------------------------------------------|
+| `SHAREPOINT_CLIENT_ID`          | Azure AD application client ID                        |
+| `SHAREPOINT_CLIENT_SECRET`      | Azure AD application client secret                    |
+| `SHAREPOINT_TENANT_ID`          | Azure AD tenant ID (use "common" for multi-tenant apps) |
+| `SHAREPOINT_REFRESH_TOKEN`      | OAuth 2.0 refresh token                               |
+| `SHAREPOINT_SITE_URL`           | SharePoint site URL (e.g. `https://tenant.sharepoint.com/sites/sitename`) |
+| `SHAREPOINT_DOCUMENT_LIBRARY`   | Document library name (default: `Documents`)          |
+| `SHAREPOINT_FOLDER_PATH`        | Subfolder path inside the document library            |
+
+SharePoint uses the same Microsoft Graph API as OneDrive. See the [OneDrive Setup Guide](OneDriveSetup.md) for Azure AD app registration instructions — the same app registration can be reused for SharePoint with the `Sites.ReadWrite.All` permission.
+
 ### Amazon S3
 
 | **Variable**                    | **Description**                                       |
@@ -1628,6 +1642,7 @@ For example:
 | S3           | `docs/uploads/`             | `docs/uploads/pdfa/`             |
 | Nextcloud    | `/Files`                    | `/Files/pdfa`                    |
 | OneDrive     | `Documents/Uploads`         | `Documents/Uploads/pdfa`         |
+| SharePoint   | `Uploads`                   | `Uploads/pdfa`                   |
 | Google Drive | *(folder ID)*               | `GOOGLE_DRIVE_PDFA_FOLDER_ID`    |
 
 Set `PDFA_UPLOAD_FOLDER` to an empty string to upload PDF/A files into the
@@ -1833,6 +1848,15 @@ ONEDRIVE_CLIENT_SECRET=your_client_secret
 ONEDRIVE_TENANT_ID=common
 ONEDRIVE_REFRESH_TOKEN=your_refresh_token
 ONEDRIVE_FOLDER_PATH=Documents/Uploads
+
+# SharePoint Online
+SHAREPOINT_CLIENT_ID=12345678-1234-1234-1234-123456789012
+SHAREPOINT_CLIENT_SECRET=your_client_secret
+SHAREPOINT_TENANT_ID=your-tenant-id
+SHAREPOINT_REFRESH_TOKEN=your_refresh_token
+SHAREPOINT_SITE_URL=https://tenant.sharepoint.com/sites/sitename
+SHAREPOINT_DOCUMENT_LIBRARY=Documents
+SHAREPOINT_FOLDER_PATH=Uploads
 
 # Amazon S3
 AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE

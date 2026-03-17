@@ -170,7 +170,7 @@ The **Integrations** page (`/integrations`) provides a unified view of all your 
    - **S3** — bucket, region, access key, secret key
    - **WebDAV / Nextcloud** — URL, folder, username, password
    - **FTP / SFTP** — host, port, remote path, username, password
-   - **Dropbox / Google Drive / OneDrive** — folder path, with a link to the OAuth setup page
+   - **Dropbox / Google Drive / OneDrive / SharePoint** — folder path, with a link to the OAuth setup page
    - **Email Forward** — recipient email address
    - **Watch Folder** — source type (Local, S3, Dropbox, Google Drive, OneDrive, Nextcloud, WebDAV), per-type config fields, delete after processing toggle
    - **Paperless NGX** — URL and API token

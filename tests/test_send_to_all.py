@@ -360,6 +360,7 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_sftp")
     @patch("app.tasks.send_to_all._should_upload_to_email")
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_sharepoint")
     @patch("app.tasks.send_to_all._should_upload_to_icloud")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
@@ -368,6 +369,7 @@ class TestSendToAllDestinations:
         mock_upload,
         mock_s3,
         mock_icloud,
+        mock_sharepoint,
         mock_onedrive,
         mock_email,
         mock_sftp,
@@ -397,6 +399,7 @@ class TestSendToAllDestinations:
         mock_email.return_value = False
         mock_onedrive.return_value = False
         mock_s3.return_value = False
+        mock_sharepoint.return_value = False
         mock_icloud.return_value = False
         mock_upload.delay.return_value = MagicMock(id="task-123")
 
@@ -410,6 +413,7 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all.settings")
     @patch("app.tasks.send_to_all._should_upload_to_dropbox")
     @patch("app.tasks.send_to_all._should_upload_to_icloud")
+    @patch("app.tasks.send_to_all._should_upload_to_sharepoint")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all._should_upload_to_nextcloud")
     @patch("app.tasks.send_to_all._should_upload_to_paperless")
@@ -434,6 +438,7 @@ class TestSendToAllDestinations:
         mock_paperless,
         mock_nextcloud,
         mock_should_s3,
+        mock_sharepoint,
         mock_icloud,
         mock_should_dropbox,
         mock_settings,
@@ -456,6 +461,7 @@ class TestSendToAllDestinations:
         mock_sftp.return_value = False
         mock_email.return_value = False
         mock_onedrive.return_value = False
+        mock_sharepoint.return_value = False
         mock_icloud.return_value = False
         mock_dropbox_upload.delay.return_value = MagicMock(id="dropbox-task")
         mock_s3_upload.delay.return_value = MagicMock(id="s3-task")
@@ -478,12 +484,14 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_sftp")
     @patch("app.tasks.send_to_all._should_upload_to_email")
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_sharepoint")
     @patch("app.tasks.send_to_all._should_upload_to_icloud")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     def test_skips_unconfigured_services(
         self,
         mock_s3,
         mock_icloud,
+        mock_sharepoint,
         mock_onedrive,
         mock_email,
         mock_sftp,
@@ -513,6 +521,7 @@ class TestSendToAllDestinations:
         mock_email.return_value = False
         mock_onedrive.return_value = False
         mock_s3.return_value = False
+        mock_sharepoint.return_value = False
         mock_icloud.return_value = False
 
         result = send_to_all_destinations.apply(args=[str(test_file), False, 1])
@@ -534,6 +543,7 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_sftp")
     @patch("app.tasks.send_to_all._should_upload_to_email")
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_sharepoint")
     @patch("app.tasks.send_to_all._should_upload_to_icloud")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
@@ -542,6 +552,7 @@ class TestSendToAllDestinations:
         mock_upload,
         mock_s3,
         mock_icloud,
+        mock_sharepoint,
         mock_onedrive,
         mock_email,
         mock_sftp,
@@ -571,6 +582,7 @@ class TestSendToAllDestinations:
         mock_email.return_value = False
         mock_onedrive.return_value = False
         mock_s3.return_value = False
+        mock_sharepoint.return_value = False
         mock_icloud.return_value = False
         mock_upload.delay.return_value = MagicMock(id="task-123")
 
@@ -593,6 +605,7 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_sftp")
     @patch("app.tasks.send_to_all._should_upload_to_email")
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_sharepoint")
     @patch("app.tasks.send_to_all._should_upload_to_icloud")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.get_configured_services_from_validator")
@@ -603,6 +616,7 @@ class TestSendToAllDestinations:
         mock_validator,
         mock_s3,
         mock_icloud,
+        mock_sharepoint,
         mock_onedrive,
         mock_email,
         mock_sftp,
@@ -633,6 +647,7 @@ class TestSendToAllDestinations:
         mock_email.return_value = False
         mock_onedrive.return_value = False
         mock_s3.return_value = False
+        mock_sharepoint.return_value = False
         mock_icloud.return_value = False
         mock_upload.delay.return_value = MagicMock(id="task-123")
 
@@ -653,6 +668,7 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_sftp")
     @patch("app.tasks.send_to_all._should_upload_to_email")
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_sharepoint")
     @patch("app.tasks.send_to_all._should_upload_to_icloud")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.get_configured_services_from_validator")
@@ -661,6 +677,7 @@ class TestSendToAllDestinations:
         mock_validator,
         mock_s3,
         mock_icloud,
+        mock_sharepoint,
         mock_onedrive,
         mock_email,
         mock_sftp,
@@ -691,6 +708,7 @@ class TestSendToAllDestinations:
         mock_email.return_value = False
         mock_onedrive.return_value = False
         mock_s3.return_value = False
+        mock_sharepoint.return_value = False
         mock_icloud.return_value = False
 
         # Should not raise, should fall back to individual checks
@@ -710,6 +728,7 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_sftp")
     @patch("app.tasks.send_to_all._should_upload_to_email")
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_sharepoint")
     @patch("app.tasks.send_to_all._should_upload_to_icloud")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
@@ -718,6 +737,7 @@ class TestSendToAllDestinations:
         mock_upload,
         mock_s3,
         mock_icloud,
+        mock_sharepoint,
         mock_onedrive,
         mock_email,
         mock_sftp,
@@ -747,6 +767,7 @@ class TestSendToAllDestinations:
         mock_email.return_value = False
         mock_onedrive.return_value = False
         mock_s3.return_value = False
+        mock_sharepoint.return_value = False
         mock_icloud.return_value = False
         mock_upload.delay.side_effect = Exception("Queue error")
 
@@ -758,6 +779,7 @@ class TestSendToAllDestinations:
         assert "dropbox_error" in result.result["tasks"]
 
     @patch("app.tasks.send_to_all._should_upload_to_icloud")
+    @patch("app.tasks.send_to_all._should_upload_to_sharepoint")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
     @patch("app.tasks.send_to_all._should_upload_to_email")
@@ -786,6 +808,7 @@ class TestSendToAllDestinations:
         mock_email,
         mock_onedrive,
         mock_s3,
+        mock_sharepoint,
         mock_icloud,
         tmp_path,
     ):
@@ -808,6 +831,7 @@ class TestSendToAllDestinations:
         mock_email.return_value = False
         mock_onedrive.return_value = False
         mock_s3.return_value = False
+        mock_sharepoint.return_value = False
         mock_icloud.return_value = False
 
         # Mock database session
@@ -836,12 +860,14 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_sftp")
     @patch("app.tasks.send_to_all._should_upload_to_email")
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_sharepoint")
     @patch("app.tasks.send_to_all._should_upload_to_icloud")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     def test_should_upload_check_exception_handling(
         self,
         mock_s3,
         mock_icloud,
+        mock_sharepoint,
         mock_onedrive,
         mock_email,
         mock_sftp,
@@ -871,6 +897,7 @@ class TestSendToAllDestinations:
         mock_email.return_value = False
         mock_onedrive.return_value = False
         mock_s3.return_value = False
+        mock_sharepoint.return_value = False
         mock_icloud.return_value = False
 
         # Should not raise, should treat as not configured

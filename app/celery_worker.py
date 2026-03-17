@@ -53,6 +53,7 @@ from app.tasks.upload_to_onedrive import upload_to_onedrive  # noqa: F401
 from app.tasks.upload_to_paperless import upload_to_paperless  # noqa: F401
 from app.tasks.upload_to_s3 import upload_to_s3  # noqa: F401
 from app.tasks.upload_to_sftp import upload_to_sftp  # noqa: F401
+from app.tasks.upload_to_sharepoint import upload_to_sharepoint  # noqa: F401
 from app.tasks.upload_to_user_integration import upload_to_user_integration  # noqa: F401
 from app.tasks.upload_to_webdav import upload_to_webdav  # noqa: F401
 from app.tasks.upload_with_rclone import send_to_all_rclone_destinations, upload_with_rclone  # noqa: F401
