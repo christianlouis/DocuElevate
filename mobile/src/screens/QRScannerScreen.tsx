@@ -263,12 +263,12 @@ const styles = StyleSheet.create({
   statusContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
   },
   statusText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
+    marginLeft: 10,
   },
   instructionText: {
     color: "#fff",
