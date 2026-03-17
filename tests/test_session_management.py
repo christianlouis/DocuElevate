@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import create_engine
@@ -22,10 +22,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.database import Base
 from app.models import ApiToken, QRLoginChallenge, UserSession
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def db_session():
@@ -47,6 +47,7 @@ def sample_user_id():
 # ---------------------------------------------------------------------------
 # Model Tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestUserSessionModel:
@@ -123,6 +124,7 @@ class TestQRLoginChallengeModel:
 # ---------------------------------------------------------------------------
 # Session Manager Tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestSessionManager:
@@ -301,7 +303,10 @@ class TestSessionManager:
         s3 = create_session(db_session, user_id=sample_user_id)
 
         count = revoke_all_sessions(
-            db_session, sample_user_id, except_session_id=s1.id, revoke_api_tokens=False,
+            db_session,
+            sample_user_id,
+            except_session_id=s1.id,
+            revoke_api_tokens=False,
         )
         assert count == 2
 
@@ -370,6 +375,7 @@ class TestSessionManager:
 # QR Login Tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestQRLogin:
     """Tests for QR login challenge/claim flow."""
@@ -389,7 +395,11 @@ class TestQRLogin:
         assert len(challenge.challenge_token) > 32
         assert challenge.is_claimed is False
         assert challenge.created_by_ip == "10.0.0.1"
-        assert challenge.expires_at > datetime.now(timezone.utc)
+        # SQLite returns naive datetimes; normalise before comparison
+        expires = challenge.expires_at
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        assert expires > datetime.now(timezone.utc)
 
     @patch("app.utils.session_manager.settings")
     def test_validate_qr_challenge_valid(self, mock_settings, db_session: Session, sample_user_id: str):
@@ -575,6 +585,7 @@ class TestQRLogin:
 # Device Info Parsing Tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestDeviceInfoParsing:
     """Tests for User-Agent parsing."""
@@ -633,6 +644,7 @@ class TestDeviceInfoParsing:
 # ---------------------------------------------------------------------------
 # Config Tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestSessionConfig:

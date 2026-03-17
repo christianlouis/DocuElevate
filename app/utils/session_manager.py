@@ -336,7 +336,12 @@ def validate_qr_challenge(db: Session, challenge_token: str) -> QRLoginChallenge
         return None
     if challenge.is_claimed or challenge.is_cancelled:
         return None
-    if challenge.expires_at < now:
+
+    # Ensure timezone-aware comparison (SQLite returns naive datetimes)
+    expires = challenge.expires_at
+    if expires and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if expires and expires < now:
         return None
 
     return challenge
@@ -432,11 +437,16 @@ def get_challenge_status(db: Session, challenge_id: int, user_id: str) -> dict |
         return None
 
     now = datetime.now(timezone.utc)
+    # Ensure timezone-aware comparison (SQLite returns naive datetimes)
+    expires = challenge.expires_at
+    if expires and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+
     if challenge.is_claimed:
         status = "claimed"
     elif challenge.is_cancelled:
         status = "cancelled"
-    elif challenge.expires_at < now:
+    elif expires and expires < now:
         status = "expired"
     else:
         status = "pending"
