@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.156.3 (2026-03-18)
+
+### Bug Fixes
+
+- **auth**: Exempt /api/qr-auth/claim from CSRF to fix mobile QR login
+  ([`a4aaebf`](https://github.com/christianlouis/DocuElevate/commit/a4aaebfe6649ef051790b6af24e0739bdd9ecfed))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`d8d2016`](https://github.com/christianlouis/DocuElevate/commit/d8d2016f8597f775cdf3848e7baeaae98cb998b0))
+
+
 ## Unreleased
 
 
