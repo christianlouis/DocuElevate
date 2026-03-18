@@ -273,31 +273,44 @@ async def list_devices(
     return [_device_to_response(d) for d in devices]
 
 
-@router.delete("/devices/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/devices/{device_id}", status_code=status.HTTP_200_OK)
 @require_login
 async def deactivate_device(
     request: Request,
     device_id: int,
     owner_id: CurrentOwner,
     db: DbSession,
-) -> None:
-    """Deactivate a push-notification device registration.
+) -> dict[str, str]:
+    """Deactivate or permanently delete a push-notification device registration.
 
-    The device record is kept for audit purposes but will no longer receive
-    push notifications.
+    * **Active device** – soft-deactivated: the record is kept for audit
+      purposes but will no longer receive push notifications.
+    * **Already-inactive device** – hard-deleted: the record is permanently
+      removed from the database.
     """
     device = db.get(MobileDevice, device_id)
     if not device or device.owner_id != owner_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
 
-    device.is_active = False
+    if device.is_active:
+        device.is_active = False
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        logger.info("Mobile device deactivated: id=%s owner=%s", device_id, owner_id)
+        return {"detail": "Device deactivated"}
+
+    # Hard-delete an already-inactive device.
     try:
+        db.delete(device)
         db.commit()
     except Exception:
         db.rollback()
         raise
-
-    logger.info("Mobile device deactivated: id=%s owner=%s", device_id, owner_id)
+    logger.info("Mobile device permanently deleted: id=%s owner=%s", device_id, owner_id)
+    return {"detail": "Device deleted"}
 
 
 @router.get("/whoami", response_model=WhoAmIResponse)
