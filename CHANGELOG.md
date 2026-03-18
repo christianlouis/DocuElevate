@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.156.2 (2026-03-18)
+
+### Bug Fixes
+
+- **qr-login**: Render QR code server-side using segno instead of CDN JS library
+  ([`a8eb650`](https://github.com/christianlouis/DocuElevate/commit/a8eb6504ac100c14b10f57511fde8f1202deeffe))
+
+### Chores
+
+- Initial plan for server-side QR code rendering
+  ([`6727253`](https://github.com/christianlouis/DocuElevate/commit/6727253958a6ae8436fc1184736ec43eef2ab820))
+
+- Remove accidentally committed =1.6.0 file
+  ([`ba8c88b`](https://github.com/christianlouis/DocuElevate/commit/ba8c88bc17d3245cba6079ac5ba3be5fddf36366))
+
+
 ## v0.156.1 (2026-03-18)
 
 ### Bug Fixes
