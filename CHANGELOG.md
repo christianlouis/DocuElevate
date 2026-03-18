@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.156.1 (2026-03-18)
+
+### Bug Fixes
+
+- Add missing SETTING_METADATA entries for db pool and upload rate limit settings
+  ([`dc0a19b`](https://github.com/christianlouis/DocuElevate/commit/dc0a19bd118d3503ad50608f55fb0bc4ce104948))
+
+
 ## v0.156.0 (2026-03-17)
 
 ### Bug Fixes
