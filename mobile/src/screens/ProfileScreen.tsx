@@ -2,6 +2,8 @@
  * ProfileScreen – authenticated user profile and settings.
  */
 
+import Constants from "expo-constants";
+import * as Linking from "expo-linking";
 import React from "react";
 import {
   Alert,
@@ -9,14 +11,18 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 
+const DEFAULT_SERVER_URL = "https://app.docuelevate.org";
+
 export default function ProfileScreen() {
   const { user, signOut, baseUrl } = useAuth();
+
+  const effectiveBaseUrl = baseUrl || DEFAULT_SERVER_URL;
+  const appVersion = Constants.expoConfig?.version ?? "1.0.0";
 
   function handleSignOut() {
     Alert.alert("Sign out", "Are you sure you want to sign out?", [
@@ -27,6 +33,37 @@ export default function ProfileScreen() {
         onPress: signOut,
       },
     ]);
+  }
+
+  function handleDeleteAccount() {
+    Alert.alert(
+      "Delete Account",
+      "This will permanently delete your account and all associated data. This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete Account",
+          style: "destructive",
+          onPress: () => {
+            Linking.openURL(`${effectiveBaseUrl}/account/delete`).catch(() => {
+              Alert.alert("Error", "Could not open the account deletion page. Please try again.");
+            });
+          },
+        },
+      ]
+    );
+  }
+
+  function openPrivacyPolicy() {
+    Linking.openURL(`${effectiveBaseUrl}/privacy`).catch(() => {
+      Alert.alert("Error", "Could not open the privacy policy. Please try again.");
+    });
+  }
+
+  function openTermsOfService() {
+    Linking.openURL(`${effectiveBaseUrl}/terms`).catch(() => {
+      Alert.alert("Error", "Could not open the terms of service. Please try again.");
+    });
   }
 
   if (!user) {
@@ -65,7 +102,7 @@ export default function ProfileScreen() {
         <View style={styles.row}>
           <Text style={styles.rowLabel}>Server</Text>
           <Text style={styles.rowValue} numberOfLines={1}>
-            {baseUrl || "–"}
+            {effectiveBaseUrl}
           </Text>
         </View>
         <View style={styles.row}>
@@ -76,7 +113,30 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Danger zone */}
+      {/* Legal & Privacy */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Legal</Text>
+        <Pressable
+          style={styles.linkRow}
+          onPress={openPrivacyPolicy}
+          accessibilityRole="link"
+          accessibilityLabel="Privacy Policy"
+        >
+          <Text style={styles.linkText}>Privacy Policy</Text>
+          <Text style={styles.linkChevron}>›</Text>
+        </Pressable>
+        <Pressable
+          style={styles.linkRow}
+          onPress={openTermsOfService}
+          accessibilityRole="link"
+          accessibilityLabel="Terms of Service"
+        >
+          <Text style={styles.linkText}>Terms of Service</Text>
+          <Text style={styles.linkChevron}>›</Text>
+        </Pressable>
+      </View>
+
+      {/* Sign out */}
       <View style={styles.section}>
         <Pressable
           style={styles.signOutButton}
@@ -87,13 +147,28 @@ export default function ProfileScreen() {
           <Text style={styles.signOutText}>Sign out</Text>
         </Pressable>
       </View>
+
+      {/* Account deletion – Apple Guideline 5.1.1(v) */}
+      <View style={styles.section}>
+        <Pressable
+          style={styles.deleteAccountButton}
+          onPress={handleDeleteAccount}
+          accessibilityRole="button"
+          accessibilityLabel="Delete account"
+        >
+          <Text style={styles.deleteAccountText}>Delete Account</Text>
+        </Pressable>
+      </View>
+
+      {/* App version */}
+      <Text style={styles.versionText}>DocuElevate v{appVersion}</Text>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: "#f9fafb" },
-  content: { padding: 20 },
+  content: { padding: 20, paddingBottom: 40 },
   center: {
     flex: 1,
     alignItems: "center",
@@ -180,6 +255,24 @@ const styles = StyleSheet.create({
     maxWidth: "60%",
     textAlign: "right",
   },
+  linkRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+    minHeight: 44,
+  },
+  linkText: {
+    fontSize: 15,
+    color: "#1e40af",
+  },
+  linkChevron: {
+    fontSize: 18,
+    color: "#9ca3af",
+    fontWeight: "600",
+  },
   signOutButton: {
     backgroundColor: "#fee2e2",
     borderRadius: 10,
@@ -191,5 +284,25 @@ const styles = StyleSheet.create({
     color: "#dc2626",
     fontWeight: "700",
     fontSize: 15,
+  },
+  deleteAccountButton: {
+    backgroundColor: "#ffffff",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#dc2626",
+    paddingVertical: 14,
+    alignItems: "center",
+    minHeight: 48,
+  },
+  deleteAccountText: {
+    color: "#dc2626",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  versionText: {
+    fontSize: 12,
+    color: "#9ca3af",
+    textAlign: "center",
+    marginTop: 8,
   },
 });

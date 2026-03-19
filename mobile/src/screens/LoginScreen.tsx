@@ -28,7 +28,7 @@ import { useAuth } from "../context/AuthContext";
 export default function LoginScreen() {
   const { signIn, signInWithQR } = useAuth();
   const router = useRouter();
-  const [serverUrl, setServerUrl] = useState("");
+  const [serverUrl, setServerUrl] = useState("https://app.docuelevate.org");
   const [loading, setLoading] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
 

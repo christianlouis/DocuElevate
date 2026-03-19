@@ -210,6 +210,14 @@ expo-router strips the scheme and tries to match `/private/var/mobile/…` as an
 
 The fix is a catch-all `+not-found.tsx` route (see `mobile/app/+not-found.tsx`).  When expo-router cannot match the path, it renders this screen instead.  The screen detects that the path is a filesystem path rather than a real in-app route, adds the file directly to `ShareContext`, and redirects to the Upload tab.  `UploadScreen` picks up the pending file and begins uploading automatically.  The `Linking` listener in the root layout may also fire for the same URL; `ShareContext.addPendingFile` deduplicates by URI so the file is only uploaded once.
 
+##### File accessibility and local caching
+
+Shared files may reference paths outside the app's sandbox or use security-scoped URLs that React Native's `fetch` cannot read directly.  To guarantee reliable uploads:
+
+- **`LSSupportsOpeningDocumentsInPlace`** is set to `false` in `app.json`, which tells iOS to copy shared files into the app's `Documents/Inbox` directory before handing them to the app.
+- **`UploadScreen`** uses `expo-file-system` (`FileSystem.copyAsync`) to copy any `file://` URI that is outside the app's cache/documents directory to a local cache path before uploading.  This ensures the file is readable regardless of its origin.
+- **MIME type inference**: Both `+not-found.tsx` and the `Linking` handler in `_layout.tsx` infer the MIME type from the file extension (e.g. `.pdf` → `application/pdf`) so the server receives a correct `Content-Type` instead of `application/octet-stream`.
+
 ##### iOS Action / Share Extension (future enhancement)
 
 Apps like DeepL ("Translate in DeepL") and Microsoft Word ("Convert to Word") appear as **Action Extensions** in the iOS share sheet — a system-level feature that requires a separate Xcode target built with Swift or Objective-C.  A proper Action Extension runs in its own process and must share authentication credentials with the main app via an iOS **App Group** (shared keychain / shared container).
@@ -426,3 +434,4 @@ eas build --platform ios
 - [API Documentation](./API.md)
 - [Configuration Guide](./ConfigurationGuide.md)
 - [Deployment Guide](./DeploymentGuide.md)
+- [Apple App Store Compliance Audit](./AppleAppStoreCompliance.md)

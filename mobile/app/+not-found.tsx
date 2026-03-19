@@ -26,6 +26,7 @@ import { usePathname, useRouter } from "expo-router";
 import React, { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { useShare } from "../src/context/ShareContext";
+import { mimeTypeFromFilename } from "../src/utils/mimeTypes";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -120,7 +121,7 @@ export default function NotFoundScreen() {
       // file:// URI so the upload logic can read the file.
       const fileUri = `file://${pathname}`;
       const filename = filenameFromPath(pathname);
-      addPendingFile({ uri: fileUri, filename });
+      addPendingFile({ uri: fileUri, filename, mimeType: mimeTypeFromFilename(filename) });
       router.replace("/(tabs)/");
     } else {
       // Truly unknown in-app route – fall back to the root redirect.

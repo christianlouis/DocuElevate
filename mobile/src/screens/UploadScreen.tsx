@@ -12,7 +12,9 @@
  * track the real-time processing status of each uploaded file.
  */
 
+import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -65,12 +67,48 @@ export default function UploadScreen() {
   // Core helpers (declared before the effects that depend on them)
   // ---------------------------------------------------------------------------
 
+  /**
+   * Ensure a file URI is accessible for upload.
+   *
+   * Files received via the iOS Share Sheet / "Open In…" may reference paths
+   * outside the app's sandbox or use security-scoped URLs that React Native's
+   * fetch cannot read directly.  This helper copies such files to the app's
+   * cache directory so the upload can proceed reliably.
+   *
+   * URIs from expo-image-picker and expo-document-picker are already in the
+   * app's cache and are returned unchanged.
+   */
+  const ensureLocalUri = useCallback(async (uri: string, filename: string): Promise<string> => {
+    // Android content:// URIs are handled natively by React Native's fetch.
+    if (!uri.startsWith("file://")) return uri;
+
+    // Files already in the app's cache or documents directory are accessible.
+    const cacheDir = FileSystem.cacheDirectory;
+    const docDir = FileSystem.documentDirectory;
+    if (cacheDir && uri.startsWith(cacheDir)) return uri;
+    if (docDir && uri.startsWith(docDir)) return uri;
+
+    // External file (e.g. from iOS Inbox or security-scoped URL) – copy to
+    // cache so the upload has guaranteed read access.
+    const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const destUri = `${cacheDir}shared_${Date.now()}_${safeName}`;
+    try {
+      await FileSystem.copyAsync({ from: uri, to: destUri });
+      return destUri;
+    } catch (copyErr) {
+      // Copy failed – fall back to the original URI (might work for some paths).
+      console.warn("[ensureLocalUri] copyAsync failed:", { from: uri, to: destUri, error: copyErr });
+      return uri;
+    }
+  }, []);
+
   const uploadFile = useCallback(async (uri: string, filename: string, mimeType?: string) => {
     const id = `${Date.now()}-${filename}`;
     setUploads((prev) => [{ id, filename, status: "uploading", uri, mimeType }, ...prev]);
 
     try {
-      const resp = await api.uploadFile(uri, filename, mimeType);
+      const localUri = await ensureLocalUri(uri, filename);
+      const resp = await api.uploadFile(localUri, filename, mimeType);
       setUploads((prev) =>
         prev.map((item) =>
           item.id === id
@@ -84,7 +122,7 @@ export default function UploadScreen() {
         prev.map((item) => (item.id === id ? { ...item, status: "error", error: msg } : item))
       );
     }
-  }, []);
+  }, [ensureLocalUri]);
 
   const retryUpload = useCallback(async (item: UploadItem) => {
     if (!item.uri) return;
@@ -99,7 +137,8 @@ export default function UploadScreen() {
     );
 
     try {
-      const resp = await api.uploadFile(item.uri, item.filename, item.mimeType);
+      const localUri = await ensureLocalUri(item.uri, item.filename);
+      const resp = await api.uploadFile(localUri, item.filename, item.mimeType);
       setUploads((prev) =>
         prev.map((u) =>
           u.id === item.id
@@ -113,7 +152,7 @@ export default function UploadScreen() {
         prev.map((u) => (u.id === item.id ? { ...u, status: "error", error: msg } : u))
       );
     }
-  }, []);
+  }, [ensureLocalUri]);
 
   // ---------------------------------------------------------------------------
   // Polling – check server-side processing status every 5 seconds
@@ -256,7 +295,7 @@ export default function UploadScreen() {
           accessibilityRole="button"
           accessibilityLabel="Capture document with camera"
         >
-          <Text style={styles.actionIcon}>📷</Text>
+          <Ionicons name="camera-outline" size={28} color="#fff" style={styles.actionIcon} />
           <Text style={styles.actionLabel}>Camera</Text>
         </Pressable>
 
@@ -266,7 +305,7 @@ export default function UploadScreen() {
           accessibilityRole="button"
           accessibilityLabel="Select photo from library"
         >
-          <Text style={styles.actionIcon}>🖼️</Text>
+          <Ionicons name="images-outline" size={28} color="#fff" style={styles.actionIcon} />
           <Text style={styles.actionLabel}>Photos</Text>
         </Pressable>
 
@@ -276,7 +315,7 @@ export default function UploadScreen() {
           accessibilityRole="button"
           accessibilityLabel="Pick file from device"
         >
-          <Text style={styles.actionIcon}>📄</Text>
+          <Ionicons name="document-outline" size={28} color="#fff" style={styles.actionIcon} />
           <Text style={styles.actionLabel}>Files</Text>
         </Pressable>
       </View>
@@ -285,7 +324,7 @@ export default function UploadScreen() {
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
         {uploads.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>☁️</Text>
+            <Ionicons name="cloud-upload-outline" size={48} color="#9ca3af" style={{ marginBottom: 12 }} />
             <Text style={styles.emptyText}>
               Tap Camera, Photos, or Files to upload a document.
             </Text>
@@ -304,11 +343,11 @@ export default function UploadScreen() {
 }
 
 function UploadRow({ item, onRetry }: { item: UploadItem; onRetry: (item: UploadItem) => void }) {
-  const uploadIcons: Record<UploadItem["status"], string> = {
-    pending: "⏳",
-    uploading: "⬆️",
-    done: "✅",
-    error: "❌",
+  const uploadIconProps: Record<UploadItem["status"], { name: keyof typeof Ionicons.glyphMap; color: string }> = {
+    pending: { name: "time-outline", color: "#6b7280" },
+    uploading: { name: "arrow-up-circle-outline", color: "#1e40af" },
+    done: { name: "checkmark-circle", color: "#059669" },
+    error: { name: "close-circle", color: "#dc2626" },
   };
 
   /** Human-readable label for the server-side processing status. */
@@ -316,7 +355,7 @@ function UploadRow({ item, onRetry }: { item: UploadItem; onRetry: (item: Upload
     const labels: Record<string, string> = {
       pending: "Queued for processing…",
       processing: "Processing…",
-      completed: "Processed ✓",
+      completed: "Processed",
       failed: "Processing failed",
       duplicate: "Duplicate – already processed",
     };
@@ -342,7 +381,7 @@ function UploadRow({ item, onRetry }: { item: UploadItem; onRetry: (item: Upload
       accessibilityLabel={canRetry ? `Retry uploading ${item.filename}` : undefined}
       accessibilityHint={canRetry ? "Tap or long-press to retry this upload" : undefined}
     >
-      <Text style={rowStyles.icon}>{uploadIcons[item.status]}</Text>
+      <Ionicons name={uploadIconProps[item.status].name} size={22} color={uploadIconProps[item.status].color} style={rowStyles.icon} />
       <View style={rowStyles.info}>
         <Text style={rowStyles.filename} numberOfLines={1}>
           {item.filename}
@@ -397,7 +436,7 @@ const styles = StyleSheet.create({
   cameraButton: { backgroundColor: "#1e40af" },
   photoLibraryButton: { backgroundColor: "#7c3aed" },
   fileButton: { backgroundColor: "#059669" },
-  actionIcon: { fontSize: 28, marginBottom: 6 },
+  actionIcon: { marginBottom: 6 },
   actionLabel: {
     color: "#fff",
     fontSize: 14,
@@ -409,7 +448,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: 60,
   },
-  emptyEmoji: { fontSize: 48, marginBottom: 12 },
   emptyText: {
     fontSize: 16,
     color: "#374151",
@@ -443,7 +481,7 @@ const rowStyles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  icon: { fontSize: 22, marginRight: 12 },
+  icon: { marginRight: 12 },
   info: { flex: 1 },
   filename: {
     fontSize: 14,
