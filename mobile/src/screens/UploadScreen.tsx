@@ -305,10 +305,11 @@ export default function UploadScreen() {
     });
 
     if (!result.canceled && result.assets.length > 0) {
-      for (const asset of result.assets) {
+      for (let i = 0; i < result.assets.length; i++) {
+        const asset = result.assets[i];
         // Derive extension from MIME type so the filename matches the actual format
         const ext = asset.mimeType?.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
-        const filename = asset.fileName ?? `photo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.${ext}`;
+        const filename = asset.fileName ?? `photo_${Date.now()}_${i}.${ext}`;
         await uploadFile(asset.uri, filename, asset.mimeType ?? "image/jpeg");
       }
     }

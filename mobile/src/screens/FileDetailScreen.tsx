@@ -181,7 +181,7 @@ export default function FileDetailScreen() {
           <MetaRow label="File Size" value={formatBytes(file.file_size)} />
           <MetaRow label="MIME Type" value={file.mime_type ?? "–"} />
           <MetaRow label="Uploaded" value={formatDateTime(file.created_at)} />
-          <MetaRow label="File Hash" value={file.filehash ? `${file.filehash.slice(0, 16)}…` : "–"} />
+          <MetaRow label="File Hash" value={file.filehash ? `${file.filehash.slice(0, 24)}…` : "–"} />
           <MetaRow label="Last Step" value={status.last_step ?? "–"} />
           <MetaRow label="Total Steps" value={String(status.total_steps)} />
         </View>

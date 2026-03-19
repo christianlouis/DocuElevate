@@ -109,18 +109,25 @@ export default function FilesScreen() {
       searchTimeoutRef.current = setTimeout(async () => {
         setPage(1);
         setLoading(true);
-        await fetchFiles(1, true, text);
-        setLoading(false);
+        try {
+          await fetchFiles(1, true, text);
+        } finally {
+          setLoading(false);
+        }
       }, 400);
     },
     [fetchFiles]
   );
 
-  const handleClearSearch = useCallback(() => {
+  const handleClearSearch = useCallback(async () => {
     setSearchQuery("");
     setPage(1);
     setLoading(true);
-    fetchFiles(1, true).then(() => setLoading(false));
+    try {
+      await fetchFiles(1, true);
+    } finally {
+      setLoading(false);
+    }
   }, [fetchFiles]);
 
   const handleFilePress = useCallback(
