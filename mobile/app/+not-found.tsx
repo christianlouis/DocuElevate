@@ -110,7 +110,14 @@ export default function NotFoundScreen() {
   const router = useRouter();
   const { addPendingFile } = useShare();
 
+  // Guard: track which pathname has been handled so the effect does not
+  // re-fire when `router` or `addPendingFile` change identity mid-navigation.
+  const handledRef = React.useRef<string | null>(null);
+
   useEffect(() => {
+    if (handledRef.current === pathname) return;  // already handled
+    handledRef.current = pathname;
+
     if (looksLikeFilePath(pathname)) {
       // Filesystem path from iOS "Open In…" – add the file to ShareContext
       // and redirect to the Upload tab.  UploadScreen will pick up the

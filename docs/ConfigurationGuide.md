@@ -1581,14 +1581,30 @@ DocuElevate detects and flags documents that share the same content, even if the
 
 ### Exact Duplicate Detection (SHA-256)
 
-When `ENABLE_DEDUPLICATION=True` (the default), each new document is hashed with SHA-256 before processing begins. If the hash matches an existing file record the new document is stored as a duplicate (`is_duplicate=True`, `duplicate_of_id=<original_id>`) and no further processing is performed.
+When `ENABLE_DEDUPLICATION=True` (the default), each new document is hashed with SHA-256 before processing begins. If the hash matches an existing file record the upload is rejected immediately — no processing task is created, and the temporary file is removed from disk. The `/api/ui-upload` response returns `"status": "duplicate"` together with a `duplicate_of` object that identifies the original file.
+
+If the same file somehow reaches the Celery worker (e.g. via a watch-folder ingest) it is still caught there and stored as a duplicate (`is_duplicate=True`, `duplicate_of_id=<original_id>`) with no further processing.
 
 | Variable | Description | Default |
 |---|---|---|
 | `ENABLE_DEDUPLICATION` | Hash-based exact duplicate detection on ingest. | `True` |
 | `SHOW_DEDUPLICATION_STEP` | Show the "Check for Duplicates" step in the processing timeline UI. | `True` |
 
-An immediate duplicate warning is also included in the `/api/ui-upload` JSON response so the frontend can alert the user before the pipeline completes.
+When the upload is an exact duplicate the `/api/ui-upload` response looks like:
+
+```json
+{
+  "status": "duplicate",
+  "original_filename": "invoice.pdf",
+  "stored_filename": "abc-123.pdf",
+  "duplicate_of": {
+    "duplicate_type": "exact",
+    "original_file_id": 42,
+    "original_filename": "invoice.pdf",
+    "message": "This file is an exact duplicate of an already-processed document. It has not been queued for processing again."
+  }
+}
+```
 
 ### Near-Duplicate Detection (Content Similarity)
 

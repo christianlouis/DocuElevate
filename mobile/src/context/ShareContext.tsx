@@ -28,6 +28,28 @@ const ShareContext = createContext<ShareContextValue>({
   clearPendingFiles: () => {},
 });
 
+/**
+ * Aggressively normalise a file URI so that the same physical file is
+ * recognised regardless of how the URI was constructed.
+ *
+ * - Decode percent-encoding (`%20` → ` `)
+ * - Collapse consecutive slashes after the scheme (`file:////` → `file:///`)
+ * - Strip trailing slashes
+ */
+function normalizeFileUri(uri: string): string {
+  let norm: string;
+  try {
+    norm = decodeURIComponent(uri);
+  } catch {
+    norm = uri;
+  }
+  // Collapse multiple slashes after the scheme (e.g. file://// → file:///)
+  norm = norm.replace(/^(file:\/\/)\/{2,}/, "$1/");
+  // Strip trailing slash
+  norm = norm.replace(/\/+$/, "");
+  return norm;
+}
+
 export function ShareProvider({ children }: { children: React.ReactNode }) {
   const [pendingFiles, setPendingFiles] = useState<SharedFile[]>([]);
 
@@ -35,11 +57,8 @@ export function ShareProvider({ children }: { children: React.ReactNode }) {
     setPendingFiles((prev) => {
       // Deduplicate by normalised URI so the same file is not uploaded twice
       // when both the Linking handler (_layout.tsx) and +not-found.tsx fire.
-      const normalize = (uri: string) => {
-        try { return decodeURIComponent(uri); } catch { return uri; }
-      };
-      const norm = normalize(file.uri);
-      if (prev.some((f) => normalize(f.uri) === norm)) return prev;
+      const norm = normalizeFileUri(file.uri);
+      if (prev.some((f) => normalizeFileUri(f.uri) === norm)) return prev;
       return [...prev, file];
     });
   }, []);

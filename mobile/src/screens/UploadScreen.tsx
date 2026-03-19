@@ -33,6 +33,25 @@ import api from "../services/api";
 /** Statuses that indicate processing has finished (no further polling needed). */
 const TERMINAL_STATUSES = new Set(["completed", "failed", "duplicate"]);
 
+/**
+ * Normalise a file URI for deduplication.
+ *
+ * - Decode percent-encoding (`%20` → ` `)
+ * - Collapse consecutive slashes after the scheme (`file:////` → `file:///`)
+ * - Strip trailing slashes
+ */
+function normalizeUri(uri: string): string {
+  let norm: string;
+  try {
+    norm = decodeURIComponent(uri);
+  } catch {
+    norm = uri;
+  }
+  norm = norm.replace(/^(file:\/\/)\/{2,}/, "$1/");
+  norm = norm.replace(/\/+$/, "");
+  return norm;
+}
+
 interface UploadItem {
   id: string;
   filename: string;
@@ -62,6 +81,11 @@ export default function UploadScreen() {
   useEffect(() => {
     uploadsRef.current = uploads;
   }, [uploads]);
+
+  // Track URIs that have already been uploaded in this session so that
+  // duplicate share-sheet deliveries (iOS can fire both the Linking handler
+  // and +not-found.tsx for the same file) do not trigger repeated uploads.
+  const uploadedUrisRef = useRef<Set<string>>(new Set());
 
   // ---------------------------------------------------------------------------
   // Core helpers (declared before the effects that depend on them)
@@ -103,20 +127,51 @@ export default function UploadScreen() {
   }, []);
 
   const uploadFile = useCallback(async (uri: string, filename: string, mimeType?: string) => {
-    const id = `${Date.now()}-${filename}`;
+    // Deduplicate: skip if this exact URI was already uploaded in this session.
+    // This guards against duplicate share-sheet deliveries from iOS where the
+    // Linking handler and +not-found.tsx fire for the same file.
+    const normUri = normalizeUri(uri);
+    if (uploadedUrisRef.current.has(normUri)) {
+      console.debug("[uploadFile] skipping duplicate URI:", uri);
+      return;
+    }
+    uploadedUrisRef.current.add(normUri);
+
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}-${filename}`;
     setUploads((prev) => [{ id, filename, status: "uploading", uri, mimeType }, ...prev]);
 
     try {
       const localUri = await ensureLocalUri(uri, filename);
       const resp = await api.uploadFile(localUri, filename, mimeType);
-      setUploads((prev) =>
-        prev.map((item) =>
-          item.id === id
-            ? { ...item, status: "done", taskId: resp.task_id, originalFilename: resp.original_filename }
-            : item
-        )
-      );
+      if (resp.status === "duplicate" && resp.duplicate_of) {
+        // Server rejected the file as a known duplicate — mark as done and
+        // set the server-side status to "duplicate" so it appears as a
+        // terminal status and is not polled further.
+        setUploads((prev) =>
+          prev.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  status: "done",
+                  fileId: resp.duplicate_of!.original_file_id,
+                  originalFilename: resp.original_filename,
+                  serverStatus: "duplicate",
+                }
+              : item
+          )
+        );
+      } else {
+        setUploads((prev) =>
+          prev.map((item) =>
+            item.id === id
+              ? { ...item, status: "done", taskId: resp.task_id, originalFilename: resp.original_filename }
+              : item
+          )
+        );
+      }
     } catch (err: unknown) {
+      // Allow retrying this URI on failure.
+      uploadedUrisRef.current.delete(normUri);
       const msg = err instanceof Error ? err.message : "Upload failed";
       setUploads((prev) =>
         prev.map((item) => (item.id === id ? { ...item, status: "error", error: msg } : item))
@@ -139,13 +194,29 @@ export default function UploadScreen() {
     try {
       const localUri = await ensureLocalUri(item.uri, item.filename);
       const resp = await api.uploadFile(localUri, item.filename, item.mimeType);
-      setUploads((prev) =>
-        prev.map((u) =>
-          u.id === item.id
-            ? { ...u, status: "done", taskId: resp.task_id, originalFilename: resp.original_filename }
-            : u
-        )
-      );
+      if (resp.status === "duplicate" && resp.duplicate_of) {
+        setUploads((prev) =>
+          prev.map((u) =>
+            u.id === item.id
+              ? {
+                  ...u,
+                  status: "done",
+                  fileId: resp.duplicate_of!.original_file_id,
+                  originalFilename: resp.original_filename,
+                  serverStatus: "duplicate",
+                }
+              : u
+          )
+        );
+      } else {
+        setUploads((prev) =>
+          prev.map((u) =>
+            u.id === item.id
+              ? { ...u, status: "done", taskId: resp.task_id, originalFilename: resp.original_filename }
+              : u
+          )
+        );
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Upload failed";
       setUploads((prev) =>

@@ -1268,7 +1268,12 @@ async def _save_upload_file_chunks(file: UploadFile, target_path: str, max_size:
 
 
 def _check_for_exact_duplicate(db: DbSession, target_path: str, safe_filename: str) -> dict | None:
-    """Check for an exact duplicate of the uploaded file and return a warning if found."""
+    """Check for an exact duplicate of the uploaded file.
+
+    Returns a dict with duplicate info when the file's SHA-256 hash matches an
+    already-processed document, or ``None`` when no duplicate is found (or
+    deduplication is disabled).
+    """
     if not settings.enable_deduplication:
         return None
 
@@ -1287,8 +1292,8 @@ def _check_for_exact_duplicate(db: DbSession, target_path: str, safe_filename: s
                 "original_file_id": existing.id,
                 "original_filename": existing.original_filename,
                 "message": (
-                    "This file appears to be an exact duplicate of an already-processed document. "
-                    "It will still be queued but will be flagged as a duplicate."
+                    "This file is an exact duplicate of an already-processed document. "
+                    "It has not been queued for processing again."
                 ),
             }
     except Exception as e:
@@ -1390,6 +1395,25 @@ async def ui_upload(
     logger.info(f"Saved uploaded file '{safe_filename}' as '{target_filename}'")
     file_size = written_size
 
+    # ── Early duplicate rejection ──────────────────────────────────────────
+    # Check for exact duplicates (same SHA-256 hash) BEFORE enqueuing a
+    # processing task.  When deduplication is enabled and the file already
+    # exists, we skip processing entirely, clean up the temp file, and
+    # return the existing file's information to the caller.
+    exact_duplicate = _check_for_exact_duplicate(db, target_path, safe_filename)
+    if exact_duplicate:
+        # Remove the just-saved temp file — it's a duplicate.
+        try:
+            os.remove(target_path)
+        except OSError:
+            pass
+        return {
+            "status": "duplicate",
+            "original_filename": safe_filename,
+            "stored_filename": target_filename,
+            "duplicate_of": exact_duplicate,
+        }
+
     # Determine if the file is a PDF or needs conversion
     mime_type, _ = mimetypes.guess_type(target_path)
     file_ext = os.path.splitext(target_path)[1].lower()
@@ -1466,20 +1490,12 @@ async def ui_upload(
         logger.warning(f"Unsupported MIME type {mime_type} for {target_path}, attempting conversion")
         task = convert_to_pdf.delay(target_path, original_filename=safe_filename, owner_id=upload_owner_id)
 
-    # Check for exact duplicates (same SHA-256 hash) before returning.
-    # This gives the caller an immediate warning without waiting for the pipeline.
-    # Only performed when deduplication is enabled in settings.
-    exact_duplicate_warning = _check_for_exact_duplicate(db, target_path, safe_filename)
-
-    response: dict = {
+    return {
         "task_id": task.id,
         "status": "queued",
         "original_filename": safe_filename,
         "stored_filename": target_filename,
     }
-    if exact_duplicate_warning:
-        response["duplicate_warning"] = exact_duplicate_warning
-    return response
 
 
 # ---------------------------------------------------------------------------
