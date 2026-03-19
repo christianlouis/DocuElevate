@@ -171,7 +171,7 @@ iOS sometimes delivers the file path under the `docuelevate://` scheme:
 docuelevate://private/var/mobile/Library/Mobile Documents/…/Invoice.pdf
 ```
 
-expo-router strips the scheme and tries to match `/private/var/mobile/…` as an in-app route.  The catch-all `app/+not-found.tsx` intercepts this, detects the filesystem-path pattern, and immediately redirects to the Upload tab.  The file — already added to `ShareContext` by the `Linking` listener — is then uploaded automatically.
+expo-router strips the scheme and tries to match `/private/var/mobile/…` as an in-app route.  The catch-all `app/+not-found.tsx` intercepts this, detects the filesystem-path pattern, adds the file directly to `ShareContext`, and redirects to the Upload tab.  `UploadScreen` picks up the pending file and begins uploading automatically.  The `Linking` listener in the root layout may also fire for the same URL; `ShareContext` deduplicates by URI to prevent double uploads.
 
 **Supported iOS file types:** PDF, images (JPEG / PNG / GIF / BMP / TIFF / WebP), plain text, Word (`.docx`, `.doc`), Excel (`.xlsx`, `.xls`), PowerPoint (`.pptx`, `.ppt`), and any other file (`public.data`).
 
