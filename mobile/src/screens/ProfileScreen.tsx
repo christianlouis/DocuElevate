@@ -33,6 +33,10 @@ export default function ProfileScreen() {
   }
 
   function handleDeleteAccount() {
+    if (!baseUrl) {
+      Alert.alert("Not Connected", "Cannot reach server. Please sign in again.");
+      return;
+    }
     Alert.alert(
       "Delete Account",
       "This will permanently delete your account and all associated data. This action cannot be undone.",
@@ -42,9 +46,7 @@ export default function ProfileScreen() {
           text: "Delete Account",
           style: "destructive",
           onPress: () => {
-            if (baseUrl) {
-              Linking.openURL(`${baseUrl}/account/delete`);
-            }
+            Linking.openURL(`${baseUrl}/account/delete`);
           },
         },
       ]
@@ -52,15 +54,19 @@ export default function ProfileScreen() {
   }
 
   function openPrivacyPolicy() {
-    if (baseUrl) {
-      Linking.openURL(`${baseUrl}/privacy`);
+    if (!baseUrl) {
+      Alert.alert("Not Connected", "Cannot reach server. Please sign in again.");
+      return;
     }
+    Linking.openURL(`${baseUrl}/privacy`);
   }
 
   function openTermsOfService() {
-    if (baseUrl) {
-      Linking.openURL(`${baseUrl}/terms`);
+    if (!baseUrl) {
+      Alert.alert("Not Connected", "Cannot reach server. Please sign in again.");
+      return;
     }
+    Linking.openURL(`${baseUrl}/terms`);
   }
 
   if (!user) {
