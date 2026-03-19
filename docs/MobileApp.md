@@ -208,7 +208,7 @@ docuelevate://private/var/mobile/Library/Mobile Documents/…/Invoice.pdf
 
 expo-router strips the scheme and tries to match `/private/var/mobile/…` as an in-app route.  Because no such route exists, it previously threw an **"unmatched route docuelevate://"** error and the upload never completed.
 
-The fix is a catch-all `+not-found.tsx` route (see `mobile/app/+not-found.tsx`).  When expo-router cannot match the path, it renders this screen instead.  The screen detects that the path is a filesystem path rather than a real in-app route and immediately redirects to the Upload tab.  The `Linking` listener registered in the root layout has concurrently (or will shortly) added the file to `ShareContext`, so the upload proceeds normally once the user lands on the Upload tab.
+The fix is a catch-all `+not-found.tsx` route (see `mobile/app/+not-found.tsx`).  When expo-router cannot match the path, it renders this screen instead.  The screen detects that the path is a filesystem path rather than a real in-app route, adds the file directly to `ShareContext`, and redirects to the Upload tab.  `UploadScreen` picks up the pending file and begins uploading automatically.  The `Linking` listener in the root layout may also fire for the same URL; `ShareContext.addPendingFile` deduplicates by URI so the file is only uploaded once.
 
 ##### iOS Action / Share Extension (future enhancement)
 

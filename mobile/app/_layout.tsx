@@ -12,8 +12,8 @@
  *
  * The companion `+not-found.tsx` handles the case where expo-router receives
  * a `docuelevate://` URL with a filesystem path (from iOS "Open In…") and
- * cannot match it to a route.  It detects the pattern and redirects to the
- * Upload tab so the file — already in ShareContext — is uploaded transparently.
+ * cannot match it to a route.  It adds the file directly to ShareContext and
+ * redirects to the Upload tab so the file is uploaded transparently.
  */
 
 import * as Linking from "expo-linking";
@@ -55,9 +55,9 @@ function filenameFromUri(uri: string): string {
  *
  * Note: expo-router also receives the same URL and will attempt to match it as
  * an in-app route.  When no route matches it renders `+not-found.tsx`, which
- * redirects to the Upload tab.  This handler and `+not-found.tsx` work in
- * concert: this handler adds the file to ShareContext, and `+not-found.tsx`
- * ensures the user lands on the Upload tab so the file is uploaded.
+ * adds the file to ShareContext directly and redirects to the Upload tab.
+ * Both this handler and `+not-found.tsx` call `addPendingFile`;
+ * `ShareContext` deduplicates by URI so the file is only uploaded once.
  */
 function makeUrlHandler(addPendingFile: (f: { uri: string; filename: string }) => void) {
   return ({ url }: { url: string }) => {
