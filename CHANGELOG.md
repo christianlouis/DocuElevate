@@ -10,6 +10,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.158.2 (2026-03-19)
+
+### Bug Fixes
+
+- **mobile**: Add user feedback when server URL is unavailable
+  ([`1366317`](https://github.com/christianlouis/DocuElevate/commit/136631762bc81399aecd5766663da7d923cba985))
+
+- **mobile**: Apple App Store compliance fixes
+  ([`5c15a23`](https://github.com/christianlouis/DocuElevate/commit/5c15a2395a0dcfa5fe5cf1a34a98ae743d29eabc))
+
+- **mobile**: Fix file sharing deep-link conflicts and add MIME type inference
+  ([`1559686`](https://github.com/christianlouis/DocuElevate/commit/1559686f903808e2ab4547f21575460aaeca839e))
+
+- **mobile**: Fix shared file upload hanging by copying to cache
+  ([`f549505`](https://github.com/christianlouis/DocuElevate/commit/f549505bfd625100e77a170cfcae372913680835))
+
+### Documentation
+
+- Add Apple App Store Compliance audit report
+  ([`1572f32`](https://github.com/christianlouis/DocuElevate/commit/1572f322d72583c45c88e55ea51b2456e548de4c))
+
+### Refactoring
+
+- **mobile**: Extract shared MIME type utility and improve error handling
+  ([`cfe83d7`](https://github.com/christianlouis/DocuElevate/commit/cfe83d7efa7f93ca51bfcac417cfafc650bbc36b))
+
+
 ## v0.158.1 (2026-03-19)
 
 ### Bug Fixes
