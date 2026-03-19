@@ -2,6 +2,7 @@
  * FilesScreen – list of documents processed by DocuElevate.
  */
 
+import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -34,15 +35,15 @@ function formatDate(iso: string): string {
   }
 }
 
-function statusEmoji(status: string): string {
-  const map: Record<string, string> = {
-    completed: "✅",
-    processing: "⚙️",
-    pending: "⏳",
-    failed: "❌",
-    duplicate: "🔁",
+function statusIcon(status: string): { name: keyof typeof Ionicons.glyphMap; color: string } {
+  const map: Record<string, { name: keyof typeof Ionicons.glyphMap; color: string }> = {
+    completed: { name: "checkmark-circle", color: "#059669" },
+    processing: { name: "sync-circle", color: "#d97706" },
+    pending: { name: "time-outline", color: "#6b7280" },
+    failed: { name: "close-circle", color: "#dc2626" },
+    duplicate: { name: "copy-outline", color: "#6b7280" },
   };
-  return map[status?.toLowerCase()] ?? "📄";
+  return map[status?.toLowerCase()] ?? { name: "document-outline", color: "#6b7280" };
 }
 
 export default function FilesScreen() {
@@ -126,7 +127,7 @@ export default function FilesScreen() {
       onEndReachedThreshold={0.4}
       ListEmptyComponent={
         <View style={styles.emptyState}>
-          <Text style={styles.emptyEmoji}>📂</Text>
+          <Ionicons name="folder-open-outline" size={48} color="#9ca3af" style={{ marginBottom: 12 }} />
           <Text style={styles.emptyText}>No documents yet.</Text>
           <Text style={styles.emptyHint}>
             Upload a document from the Upload tab to get started.
@@ -144,9 +145,10 @@ export default function FilesScreen() {
 
 function FileRow({ file }: { file: FileRecord }) {
   const status = file.processing_status?.status ?? "pending";
+  const icon = statusIcon(status);
   return (
     <View style={rowStyles.row}>
-      <Text style={rowStyles.icon}>{statusEmoji(status)}</Text>
+      <Ionicons name={icon.name} size={22} color={icon.color} style={rowStyles.icon} />
       <View style={rowStyles.info}>
         <Text style={rowStyles.filename} numberOfLines={1}>
           {file.original_filename}
@@ -179,7 +181,6 @@ const styles = StyleSheet.create({
   },
   retryText: { color: "#fff", fontWeight: "600" },
   emptyState: { alignItems: "center", paddingTop: 60 },
-  emptyEmoji: { fontSize: 48, marginBottom: 12 },
   emptyText: { fontSize: 16, color: "#374151", marginBottom: 8 },
   emptyHint: {
     fontSize: 13,
@@ -203,7 +204,7 @@ const rowStyles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  icon: { fontSize: 22, marginRight: 12 },
+  icon: { marginRight: 12 },
   info: { flex: 1 },
   filename: {
     fontSize: 14,

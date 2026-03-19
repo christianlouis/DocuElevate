@@ -12,6 +12,7 @@
  * track the real-time processing status of each uploaded file.
  */
 
+import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -256,7 +257,7 @@ export default function UploadScreen() {
           accessibilityRole="button"
           accessibilityLabel="Capture document with camera"
         >
-          <Text style={styles.actionIcon}>📷</Text>
+          <Ionicons name="camera-outline" size={28} color="#fff" style={styles.actionIcon} />
           <Text style={styles.actionLabel}>Camera</Text>
         </Pressable>
 
@@ -266,7 +267,7 @@ export default function UploadScreen() {
           accessibilityRole="button"
           accessibilityLabel="Select photo from library"
         >
-          <Text style={styles.actionIcon}>🖼️</Text>
+          <Ionicons name="images-outline" size={28} color="#fff" style={styles.actionIcon} />
           <Text style={styles.actionLabel}>Photos</Text>
         </Pressable>
 
@@ -276,7 +277,7 @@ export default function UploadScreen() {
           accessibilityRole="button"
           accessibilityLabel="Pick file from device"
         >
-          <Text style={styles.actionIcon}>📄</Text>
+          <Ionicons name="document-outline" size={28} color="#fff" style={styles.actionIcon} />
           <Text style={styles.actionLabel}>Files</Text>
         </Pressable>
       </View>
@@ -285,7 +286,7 @@ export default function UploadScreen() {
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
         {uploads.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>☁️</Text>
+            <Ionicons name="cloud-upload-outline" size={48} color="#9ca3af" style={{ marginBottom: 12 }} />
             <Text style={styles.emptyText}>
               Tap Camera, Photos, or Files to upload a document.
             </Text>
@@ -304,11 +305,11 @@ export default function UploadScreen() {
 }
 
 function UploadRow({ item, onRetry }: { item: UploadItem; onRetry: (item: UploadItem) => void }) {
-  const uploadIcons: Record<UploadItem["status"], string> = {
-    pending: "⏳",
-    uploading: "⬆️",
-    done: "✅",
-    error: "❌",
+  const uploadIconProps: Record<UploadItem["status"], { name: keyof typeof Ionicons.glyphMap; color: string }> = {
+    pending: { name: "time-outline", color: "#6b7280" },
+    uploading: { name: "arrow-up-circle-outline", color: "#1e40af" },
+    done: { name: "checkmark-circle", color: "#059669" },
+    error: { name: "close-circle", color: "#dc2626" },
   };
 
   /** Human-readable label for the server-side processing status. */
@@ -316,7 +317,7 @@ function UploadRow({ item, onRetry }: { item: UploadItem; onRetry: (item: Upload
     const labels: Record<string, string> = {
       pending: "Queued for processing…",
       processing: "Processing…",
-      completed: "Processed ✓",
+      completed: "Processed",
       failed: "Processing failed",
       duplicate: "Duplicate – already processed",
     };
@@ -342,7 +343,7 @@ function UploadRow({ item, onRetry }: { item: UploadItem; onRetry: (item: Upload
       accessibilityLabel={canRetry ? `Retry uploading ${item.filename}` : undefined}
       accessibilityHint={canRetry ? "Tap or long-press to retry this upload" : undefined}
     >
-      <Text style={rowStyles.icon}>{uploadIcons[item.status]}</Text>
+      <Ionicons name={uploadIconProps[item.status].name} size={22} color={uploadIconProps[item.status].color} style={rowStyles.icon} />
       <View style={rowStyles.info}>
         <Text style={rowStyles.filename} numberOfLines={1}>
           {item.filename}
@@ -397,7 +398,7 @@ const styles = StyleSheet.create({
   cameraButton: { backgroundColor: "#1e40af" },
   photoLibraryButton: { backgroundColor: "#7c3aed" },
   fileButton: { backgroundColor: "#059669" },
-  actionIcon: { fontSize: 28, marginBottom: 6 },
+  actionIcon: { marginBottom: 6 },
   actionLabel: {
     color: "#fff",
     fontSize: 14,
@@ -409,7 +410,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: 60,
   },
-  emptyEmoji: { fontSize: 48, marginBottom: 12 },
   emptyText: {
     fontSize: 16,
     color: "#374151",
@@ -443,7 +443,7 @@ const rowStyles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  icon: { fontSize: 22, marginRight: 12 },
+  icon: { marginRight: 12 },
   info: { flex: 1 },
   filename: {
     fontSize: 14,
