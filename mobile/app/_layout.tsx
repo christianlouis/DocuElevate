@@ -31,6 +31,13 @@ import { ShareProvider, useShare } from "../src/context/ShareContext";
 /** The custom URL scheme registered in app.json. */
 const APP_SCHEME_PREFIX = "docuelevate://";
 
+/**
+ * Known deep-link path prefixes that should NOT be treated as shared files.
+ * These are in-app deep-link routes handled by their respective screens
+ * (e.g. QR login, OAuth callback).
+ */
+const DEEP_LINK_PATHS = ["qr-login", "callback"];
+
 /** Extract a display filename from a file:// or content:// URI. */
 function filenameFromUri(uri: string): string {
   try {
@@ -41,6 +48,44 @@ function filenameFromUri(uri: string): string {
   } catch {
     return "shared_file";
   }
+}
+
+/**
+ * Common MIME type mappings for file extensions.
+ * Used to infer the MIME type of files shared via the Share Sheet / "Open In…"
+ * so the server receives a correct Content-Type instead of application/octet-stream.
+ */
+const EXT_TO_MIME: Record<string, string> = {
+  pdf: "application/pdf",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  gif: "image/gif",
+  bmp: "image/bmp",
+  tiff: "image/tiff",
+  tif: "image/tiff",
+  webp: "image/webp",
+  heic: "image/heic",
+  heif: "image/heif",
+  txt: "text/plain",
+  csv: "text/csv",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  rtf: "application/rtf",
+  html: "text/html",
+  xml: "application/xml",
+  json: "application/json",
+  zip: "application/zip",
+};
+
+/** Infer MIME type from a filename's extension, or undefined if unknown. */
+function mimeTypeFromFilename(filename: string): string | undefined {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  return ext ? EXT_TO_MIME[ext] : undefined;
 }
 
 /**
@@ -59,7 +104,7 @@ function filenameFromUri(uri: string): string {
  * Both this handler and `+not-found.tsx` call `addPendingFile`;
  * `ShareContext` deduplicates by URI so the file is only uploaded once.
  */
-function makeUrlHandler(addPendingFile: (f: { uri: string; filename: string }) => void) {
+function makeUrlHandler(addPendingFile: (f: { uri: string; filename: string; mimeType?: string }) => void) {
   return ({ url }: { url: string }) => {
     let fileUri = url;
 
@@ -68,13 +113,22 @@ function makeUrlHandler(addPendingFile: (f: { uri: string; filename: string }) =
     // (expo-router groups always start with "(").
     if (url.startsWith(APP_SCHEME_PREFIX)) {
       const path = url.slice(APP_SCHEME_PREFIX.length);
-      if (path.length > 0 && !path.startsWith("(")) {
+
+      // Skip known in-app deep-link paths (e.g. qr-login, callback).
+      // These are handled by their respective screens, not the share flow.
+      const pathBase = path.split("?")[0].replace(/^\/+/, "");
+      if (DEEP_LINK_PATHS.includes(pathBase) || path.startsWith("(")) {
+        return;
+      }
+
+      if (path.length > 0) {
         fileUri = "file:///" + path.replace(/^\/+/, "");
       }
     }
 
     if (!fileUri.startsWith("file://") && !fileUri.startsWith("content://")) return;
-    addPendingFile({ uri: fileUri, filename: filenameFromUri(fileUri) });
+    const filename = filenameFromUri(fileUri);
+    addPendingFile({ uri: fileUri, filename, mimeType: mimeTypeFromFilename(filename) });
   };
 }
 

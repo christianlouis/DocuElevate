@@ -32,6 +32,44 @@ import { useShare } from "../src/context/ShareContext";
 // ---------------------------------------------------------------------------
 
 /**
+ * Common MIME type mappings for file extensions.
+ * Used to infer the MIME type of files shared via iOS "Open In…" so the
+ * server receives a correct Content-Type instead of application/octet-stream.
+ */
+const EXT_TO_MIME: Record<string, string> = {
+  pdf: "application/pdf",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  gif: "image/gif",
+  bmp: "image/bmp",
+  tiff: "image/tiff",
+  tif: "image/tiff",
+  webp: "image/webp",
+  heic: "image/heic",
+  heif: "image/heif",
+  txt: "text/plain",
+  csv: "text/csv",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  rtf: "application/rtf",
+  html: "text/html",
+  xml: "application/xml",
+  json: "application/json",
+  zip: "application/zip",
+};
+
+/** Infer MIME type from a filename's extension, or undefined if unknown. */
+function mimeTypeFromFilename(filename: string): string | undefined {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  return ext ? EXT_TO_MIME[ext] : undefined;
+}
+
+/**
  * First path-segment names that identify iOS/Android sandbox filesystem paths.
  * These can never be expo-router route-group names, so their presence is a
  * strong positive signal that the URL is a shared file rather than a route.
@@ -120,7 +158,7 @@ export default function NotFoundScreen() {
       // file:// URI so the upload logic can read the file.
       const fileUri = `file://${pathname}`;
       const filename = filenameFromPath(pathname);
-      addPendingFile({ uri: fileUri, filename });
+      addPendingFile({ uri: fileUri, filename, mimeType: mimeTypeFromFilename(filename) });
       router.replace("/(tabs)/");
     } else {
       // Truly unknown in-app route – fall back to the root redirect.

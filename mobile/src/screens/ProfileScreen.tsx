@@ -16,9 +16,12 @@ import {
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 
+const DEFAULT_SERVER_URL = "https://app.docuelevate.org";
+
 export default function ProfileScreen() {
   const { user, signOut, baseUrl } = useAuth();
 
+  const effectiveBaseUrl = baseUrl || DEFAULT_SERVER_URL;
   const appVersion = Constants.expoConfig?.version ?? "1.0.0";
 
   function handleSignOut() {
@@ -33,10 +36,6 @@ export default function ProfileScreen() {
   }
 
   function handleDeleteAccount() {
-    if (!baseUrl) {
-      Alert.alert("Not Connected", "Cannot reach server. Please sign in again.");
-      return;
-    }
     Alert.alert(
       "Delete Account",
       "This will permanently delete your account and all associated data. This action cannot be undone.",
@@ -46,7 +45,7 @@ export default function ProfileScreen() {
           text: "Delete Account",
           style: "destructive",
           onPress: () => {
-            Linking.openURL(`${baseUrl}/account/delete`);
+            Linking.openURL(`${effectiveBaseUrl}/account/delete`);
           },
         },
       ]
@@ -54,19 +53,11 @@ export default function ProfileScreen() {
   }
 
   function openPrivacyPolicy() {
-    if (!baseUrl) {
-      Alert.alert("Not Connected", "Cannot reach server. Please sign in again.");
-      return;
-    }
-    Linking.openURL(`${baseUrl}/privacy`);
+    Linking.openURL(`${effectiveBaseUrl}/privacy`);
   }
 
   function openTermsOfService() {
-    if (!baseUrl) {
-      Alert.alert("Not Connected", "Cannot reach server. Please sign in again.");
-      return;
-    }
-    Linking.openURL(`${baseUrl}/terms`);
+    Linking.openURL(`${effectiveBaseUrl}/terms`);
   }
 
   if (!user) {
@@ -105,7 +96,7 @@ export default function ProfileScreen() {
         <View style={styles.row}>
           <Text style={styles.rowLabel}>Server</Text>
           <Text style={styles.rowValue} numberOfLines={1}>
-            {baseUrl || "–"}
+            {effectiveBaseUrl}
           </Text>
         </View>
         <View style={styles.row}>
