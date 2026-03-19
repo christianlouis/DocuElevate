@@ -1133,43 +1133,18 @@ class Settings(BaseSettings):
         ),
     )
 
-    # Database Connection Pool Configuration
-    # Controls SQLAlchemy QueuePool behaviour for PostgreSQL/MySQL.
-    # SQLite uses NullPool and ignores these settings.
-    db_pool_size: int = Field(
-        default=5,
-        description="Number of persistent connections kept in the pool. Ignored for SQLite.",
-    )
-    db_max_overflow: int = Field(
-        default=10,
-        description=("Maximum number of connections that can be opened beyond db_pool_size. Ignored for SQLite."),
-    )
-    db_pool_timeout: int = Field(
-        default=30,
-        description="Seconds to wait for a connection from the pool before raising an error. Ignored for SQLite.",
-    )
-    db_pool_recycle: int = Field(
-        default=1800,
-        description=(
-            "Seconds after which a connection is recycled to prevent stale connections. "
-            "Ignored for SQLite. Default: 1800 (30 minutes)."
-        ),
-    )
-
-    # Per-user upload rate limiting (health-aware limiter)
-    # Controls how many uploads a single user may submit within a sliding window.
+    # Per-user upload rate limiting (health-aware, Redis-backed sliding window)
     upload_rate_limit_per_user: int = Field(
         default=20,
         description=(
-            "Maximum number of uploads allowed per user within the upload_rate_limit_window. "
-            "The limiter may dynamically reduce this value when Redis queue depth or CPU load is high."
+            "Maximum number of file uploads allowed per user within the sliding window. "
+            "The effective limit may be reduced dynamically when the system is under heavy load "
+            "(high queue depth or CPU usage). Set to 0 to disable per-user upload rate limiting."
         ),
     )
     upload_rate_limit_window: int = Field(
         default=60,
-        description=(
-            "Sliding window in seconds over which upload_rate_limit_per_user is enforced. Default: 60 seconds."
-        ),
+        description="Sliding window size in seconds for per-user upload rate limiting (default: 60).",
     )
 
     # Rate Limiting Configuration (see SECURITY_AUDIT.md and docs/API.md)
@@ -1189,20 +1164,6 @@ class Settings(BaseSettings):
     rate_limit_auth: str = Field(
         default="10/minute",
         description="Stricter rate limit for authentication endpoints to prevent brute force attacks.",
-    )
-
-    # Per-user upload rate limiting (health-aware, Redis-backed sliding window)
-    upload_rate_limit_per_user: int = Field(
-        default=20,
-        description=(
-            "Maximum number of file uploads allowed per user within the sliding window. "
-            "The effective limit may be reduced dynamically when the system is under heavy load "
-            "(high queue depth or CPU usage). Set to 0 to disable per-user upload rate limiting."
-        ),
-    )
-    upload_rate_limit_window: int = Field(
-        default=60,
-        description="Sliding window size in seconds for per-user upload rate limiting (default: 60).",
     )
 
     # CORS Configuration (see SECURITY_AUDIT.md – Infrastructure Security section)

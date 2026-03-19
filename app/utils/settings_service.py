@@ -2601,51 +2601,6 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
-    # Database Connection Pool
-    "db_pool_size": {
-        "category": "Core",
-        "description": (
-            "Number of persistent connections kept in the SQLAlchemy QueuePool. "
-            "Has no effect for SQLite databases. Default: 5."
-        ),
-        "type": "integer",
-        "sensitive": False,
-        "required": False,
-        "restart_required": True,
-    },
-    "db_max_overflow": {
-        "category": "Core",
-        "description": (
-            "Maximum extra connections that can be opened beyond db_pool_size. "
-            "Has no effect for SQLite databases. Default: 10."
-        ),
-        "type": "integer",
-        "sensitive": False,
-        "required": False,
-        "restart_required": True,
-    },
-    "db_pool_timeout": {
-        "category": "Core",
-        "description": (
-            "Seconds to wait for a connection from the pool before raising an error. "
-            "Has no effect for SQLite databases. Default: 30."
-        ),
-        "type": "integer",
-        "sensitive": False,
-        "required": False,
-        "restart_required": True,
-    },
-    "db_pool_recycle": {
-        "category": "Core",
-        "description": (
-            "Seconds after which idle connections are recycled to prevent stale connections. "
-            "Has no effect for SQLite databases. Default: 1800 (30 minutes)."
-        ),
-        "type": "integer",
-        "sensitive": False,
-        "required": False,
-        "restart_required": True,
-    },
     # Per-user upload rate limiting
     "upload_rate_limit_per_user": {
         "category": "Security",
@@ -2703,26 +2658,6 @@ SETTING_METADATA = {
         "sensitive": False,
         "required": False,
         "restart_required": True,
-    },
-    "upload_rate_limit_per_user": {
-        "category": "Security",
-        "description": (
-            "Maximum number of file uploads allowed per user within the sliding window. "
-            "The effective limit may be reduced dynamically when the system is under heavy load. "
-            "Set to 0 to disable per-user upload rate limiting. Default: 20."
-        ),
-        "type": "integer",
-        "sensitive": False,
-        "required": False,
-        "restart_required": False,
-    },
-    "upload_rate_limit_window": {
-        "category": "Security",
-        "description": ("Sliding window size in seconds for per-user upload rate limiting. Default: 60."),
-        "type": "integer",
-        "sensitive": False,
-        "required": False,
-        "restart_required": False,
     },
     # CORS
     "cors_enabled": {
