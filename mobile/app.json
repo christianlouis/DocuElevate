@@ -24,7 +24,7 @@
         "NSPhotoLibraryAddUsageDescription": "DocuElevate saves scanned documents to your photo library.",
         "UIBackgroundModes": ["remote-notification"],
         "ITSAppUsesNonExemptEncryption": false,
-        "LSSupportsOpeningDocumentsInPlace": true,
+        "LSSupportsOpeningDocumentsInPlace": false,
         "CFBundleDocumentTypes": [
           {
             "CFBundleTypeName": "All Documents",

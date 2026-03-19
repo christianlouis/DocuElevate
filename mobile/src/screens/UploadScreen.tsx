@@ -14,6 +14,7 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -66,12 +67,47 @@ export default function UploadScreen() {
   // Core helpers (declared before the effects that depend on them)
   // ---------------------------------------------------------------------------
 
+  /**
+   * Ensure a file URI is accessible for upload.
+   *
+   * Files received via the iOS Share Sheet / "Open In…" may reference paths
+   * outside the app's sandbox or use security-scoped URLs that React Native's
+   * fetch cannot read directly.  This helper copies such files to the app's
+   * cache directory so the upload can proceed reliably.
+   *
+   * URIs from expo-image-picker and expo-document-picker are already in the
+   * app's cache and are returned unchanged.
+   */
+  const ensureLocalUri = useCallback(async (uri: string, filename: string): Promise<string> => {
+    // Android content:// URIs are handled natively by React Native's fetch.
+    if (!uri.startsWith("file://")) return uri;
+
+    // Files already in the app's cache or documents directory are accessible.
+    const cacheDir = FileSystem.cacheDirectory;
+    const docDir = FileSystem.documentDirectory;
+    if (cacheDir && uri.startsWith(cacheDir)) return uri;
+    if (docDir && uri.startsWith(docDir)) return uri;
+
+    // External file (e.g. from iOS Inbox or security-scoped URL) – copy to
+    // cache so the upload has guaranteed read access.
+    const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const destUri = `${cacheDir}shared_${Date.now()}_${safeName}`;
+    try {
+      await FileSystem.copyAsync({ from: uri, to: destUri });
+      return destUri;
+    } catch {
+      // Copy failed – fall back to the original URI (might work for some paths).
+      return uri;
+    }
+  }, []);
+
   const uploadFile = useCallback(async (uri: string, filename: string, mimeType?: string) => {
     const id = `${Date.now()}-${filename}`;
     setUploads((prev) => [{ id, filename, status: "uploading", uri, mimeType }, ...prev]);
 
     try {
-      const resp = await api.uploadFile(uri, filename, mimeType);
+      const localUri = await ensureLocalUri(uri, filename);
+      const resp = await api.uploadFile(localUri, filename, mimeType);
       setUploads((prev) =>
         prev.map((item) =>
           item.id === id
@@ -85,7 +121,7 @@ export default function UploadScreen() {
         prev.map((item) => (item.id === id ? { ...item, status: "error", error: msg } : item))
       );
     }
-  }, []);
+  }, [ensureLocalUri]);
 
   const retryUpload = useCallback(async (item: UploadItem) => {
     if (!item.uri) return;
@@ -100,7 +136,8 @@ export default function UploadScreen() {
     );
 
     try {
-      const resp = await api.uploadFile(item.uri, item.filename, item.mimeType);
+      const localUri = await ensureLocalUri(item.uri, item.filename);
+      const resp = await api.uploadFile(localUri, item.filename, item.mimeType);
       setUploads((prev) =>
         prev.map((u) =>
           u.id === item.id
@@ -114,7 +151,7 @@ export default function UploadScreen() {
         prev.map((u) => (u.id === item.id ? { ...u, status: "error", error: msg } : u))
       );
     }
-  }, []);
+  }, [ensureLocalUri]);
 
   // ---------------------------------------------------------------------------
   // Polling – check server-side processing status every 5 seconds
