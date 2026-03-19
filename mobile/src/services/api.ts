@@ -66,10 +66,16 @@ export interface FileRecord {
 }
 
 export interface UploadResponse {
-  task_id: string;
+  task_id?: string;
   status: string;
   original_filename: string;
   stored_filename: string;
+  duplicate_of?: {
+    duplicate_type: string;
+    original_file_id: number;
+    original_filename: string;
+    message: string;
+  };
 }
 
 // ---------------------------------------------------------------------------

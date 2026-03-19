@@ -3,11 +3,12 @@
 Covers:
 - ``GET /api/duplicates``            — list all exact-duplicate groups
 - ``GET /api/files/{id}/duplicates`` — per-file exact + near-duplicate info
-- ``POST /api/ui-upload``            — exact-duplicate warning in upload response
+- ``POST /api/ui-upload``            — exact-duplicate rejection at upload time
 - ``GET /duplicates``                — duplicate management UI page
 """
 
 import json
+import os
 from unittest.mock import patch
 
 import pytest
@@ -283,17 +284,25 @@ class TestGetFileDuplicates:
 
 
 # ---------------------------------------------------------------------------
-# POST /api/ui-upload  — exact-duplicate warning
+# POST /api/ui-upload  — exact-duplicate rejection
 # ---------------------------------------------------------------------------
 
 
-class TestUploadDuplicateWarning:
-    """Tests for duplicate warning injected into the upload response."""
+class TestUploadDuplicateRejection:
+    """Tests for duplicate rejection at upload time.
+
+    When ``ENABLE_DEDUPLICATION`` is ``True`` (the default) and the uploaded
+    file's SHA-256 hash matches an already-processed document, the upload
+    endpoint must:
+    - return ``status: "duplicate"`` instead of ``"queued"``
+    - **not** enqueue a Celery task
+    - clean up the temporary file from disk
+    """
 
     @pytest.mark.integration
     @patch("app.tasks.process_document.process_document.delay")
     def test_no_warning_for_unique_file(self, mock_delay, client: TestClient, tmp_path):
-        """Uploading a unique file should not produce a duplicate_warning."""
+        """Uploading a unique file should not produce a duplicate response."""
         mock_delay.return_value.id = "task-unique"
         pdf = tmp_path / "unique.pdf"
         pdf.write_bytes(b"%PDF-1.4\n%%EOF")
@@ -306,14 +315,12 @@ class TestUploadDuplicateWarning:
 
         assert response.status_code == 200
         data = response.json()
-        assert "duplicate_warning" not in data or data.get("duplicate_warning") is None
+        assert data["status"] == "queued"
+        assert "duplicate_of" not in data
 
     @pytest.mark.integration
-    @patch("app.tasks.process_document.process_document.delay")
-    def test_warning_for_exact_duplicate(self, mock_delay, client: TestClient, db_session, tmp_path):
-        """Uploading a file with the same hash as an existing record returns a warning."""
-        mock_delay.return_value.id = "task-dup"
-
+    def test_exact_duplicate_rejected(self, client: TestClient, db_session, tmp_path):
+        """Uploading a file with the same hash as an existing record is rejected."""
         # Create a real PDF with known content
         pdf_bytes = b"%PDF-1.4\nsome unique content for test\n%%EOF"
         pdf = tmp_path / "existing.pdf"
@@ -335,16 +342,14 @@ class TestUploadDuplicateWarning:
 
         assert response.status_code == 200
         data = response.json()
-        assert "duplicate_warning" in data
-        assert data["duplicate_warning"]["duplicate_type"] == "exact"
-        assert data["duplicate_warning"]["original_file_id"] == existing.id
+        assert data["status"] == "duplicate"
+        assert "duplicate_of" in data
+        assert data["duplicate_of"]["duplicate_type"] == "exact"
+        assert data["duplicate_of"]["original_file_id"] == existing.id
 
     @pytest.mark.integration
-    @patch("app.tasks.process_document.process_document.delay")
-    def test_upload_still_queued_despite_warning(self, mock_delay, client: TestClient, db_session, tmp_path):
-        """Even when a duplicate is detected, the file should still be queued."""
-        mock_delay.return_value.id = "task-still-queued"
-
+    def test_duplicate_not_enqueued(self, client: TestClient, db_session, tmp_path):
+        """When a duplicate is detected, no Celery task should be created."""
         pdf_bytes = b"%PDF-1.4\nqueue test content\n%%EOF"
         pdf = tmp_path / "queue_test.pdf"
         pdf.write_bytes(pdf_bytes)
@@ -354,16 +359,47 @@ class TestUploadDuplicateWarning:
         filehash = hash_file(str(pdf))
         _make_file(db_session, filehash=filehash, filename="queue_orig.pdf")
 
-        with open(pdf, "rb") as f:
-            response = client.post(
-                "/api/ui-upload",
-                files={"file": ("queue_test.pdf", f, "application/pdf")},
-            )
+        with patch("app.tasks.process_document.process_document.delay") as mock_delay:
+            with open(pdf, "rb") as f:
+                response = client.post(
+                    "/api/ui-upload",
+                    files={"file": ("queue_test.pdf", f, "application/pdf")},
+                )
 
         assert response.status_code == 200
         data = response.json()
-        assert "task_id" in data
-        assert data["status"] == "queued"
+        assert data["status"] == "duplicate"
+        assert "task_id" not in data
+        mock_delay.assert_not_called()
+
+    @pytest.mark.integration
+    def test_duplicate_temp_file_cleaned_up(self, client: TestClient, db_session, tmp_path):
+        """The temporary file saved to disk should be removed for a duplicate."""
+        pdf_bytes = b"%PDF-1.4\ncleanup test content\n%%EOF"
+        pdf = tmp_path / "cleanup_test.pdf"
+        pdf.write_bytes(pdf_bytes)
+
+        from app.utils.file_operations import hash_file
+
+        filehash = hash_file(str(pdf))
+        _make_file(db_session, filehash=filehash, filename="cleanup_orig.pdf")
+
+        with patch("app.tasks.process_document.process_document.delay"):
+            with open(pdf, "rb") as f:
+                response = client.post(
+                    "/api/ui-upload",
+                    files={"file": ("cleanup_test.pdf", f, "application/pdf")},
+                )
+
+        assert response.status_code == 200
+        data = response.json()
+        # The stored_filename is returned so we can verify cleanup
+        stored = data.get("stored_filename")
+        assert stored is not None
+
+        from app.config import settings
+
+        assert not os.path.exists(os.path.join(settings.workdir, stored))
 
 
 # ---------------------------------------------------------------------------

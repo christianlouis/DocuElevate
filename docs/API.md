@@ -242,17 +242,33 @@ The DocuElevate browser extension uses this endpoint to send files directly from
 
 **POST** `/api/ui-upload`
 
-Upload one or more files from your computer for processing.
+Upload a file from your computer for processing.
 
 **Request**:
-- Multipart form data with file(s)
+- Multipart form data with a single `file` field
 
-**Response**:
+**Response** (new file):
 ```json
 {
-  "success": true,
-  "file_ids": [123, 124],
-  "message": "Files uploaded and queued for processing"
+  "task_id": "abc-123",
+  "status": "queued",
+  "original_filename": "invoice.pdf",
+  "stored_filename": "a1b2c3d4.pdf"
+}
+```
+
+**Response** (exact duplicate, when `ENABLE_DEDUPLICATION=True`):
+```json
+{
+  "status": "duplicate",
+  "original_filename": "invoice.pdf",
+  "stored_filename": "e5f6a7b8.pdf",
+  "duplicate_of": {
+    "duplicate_type": "exact",
+    "original_file_id": 42,
+    "original_filename": "invoice.pdf",
+    "message": "This file is an exact duplicate of an already-processed document. It has not been queued for processing again."
+  }
 }
 ```
 
