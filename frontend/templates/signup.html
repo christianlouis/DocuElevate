@@ -32,6 +32,14 @@
                 error: '',
                 async submit() {
                     this.error = '';
+                    if (this.username.length < 3 || this.username.length > 64) {
+                        this.error = 'Username must be between 3 and 64 characters.';
+                        return;
+                    }
+                    if (!/^[a-zA-Z0-9_-]+$/.test(this.username)) {
+                        this.error = 'Username may only contain letters, numbers, hyphens, and underscores. Dots and other special characters are not allowed.';
+                        return;
+                    }
                     if (this.password !== this.password_confirm) {
                         this.error = 'Passwords do not match.';
                         return;
@@ -58,7 +66,12 @@
                             }
                         } else {
                             const data = await resp.json();
-                            this.error = data.detail || 'Registration failed. Please try again.';
+                            const detail = data.detail;
+                            if (Array.isArray(detail)) {
+                                this.error = detail.map(e => e.msg || String(e)).join(' ') || 'Registration failed. Please try again.';
+                            } else {
+                                this.error = detail || 'Registration failed. Please try again.';
+                            }
                         }
                     } catch(e) {
                         this.error = 'Network error. Please try again.';
