@@ -3,11 +3,12 @@
 Covers:
 - ``GET /api/duplicates``            — list all exact-duplicate groups
 - ``GET /api/files/{id}/duplicates`` — per-file exact + near-duplicate info
-- ``POST /api/ui-upload``            — exact-duplicate warning in upload response
+- ``POST /api/ui-upload``            — exact-duplicate rejection at upload time
 - ``GET /duplicates``                — duplicate management UI page
 """
 
 import json
+import os
 from unittest.mock import patch
 
 import pytest
@@ -395,7 +396,6 @@ class TestUploadDuplicateRejection:
         # The stored_filename is returned so we can verify cleanup
         stored = data.get("stored_filename")
         assert stored is not None
-        import os
 
         from app.config import settings
 

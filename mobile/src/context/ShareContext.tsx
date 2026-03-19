@@ -9,6 +9,7 @@
  */
 
 import React, { createContext, useCallback, useContext, useState } from "react";
+import { normalizeFileUri } from "../utils/normalizeUri";
 
 export interface SharedFile {
   uri: string;
@@ -27,28 +28,6 @@ const ShareContext = createContext<ShareContextValue>({
   addPendingFile: () => {},
   clearPendingFiles: () => {},
 });
-
-/**
- * Aggressively normalise a file URI so that the same physical file is
- * recognised regardless of how the URI was constructed.
- *
- * - Decode percent-encoding (`%20` → ` `)
- * - Collapse consecutive slashes after the scheme (`file:////` → `file:///`)
- * - Strip trailing slashes
- */
-function normalizeFileUri(uri: string): string {
-  let norm: string;
-  try {
-    norm = decodeURIComponent(uri);
-  } catch {
-    norm = uri;
-  }
-  // Collapse multiple slashes after the scheme (e.g. file://// → file:///)
-  norm = norm.replace(/^(file:\/\/)\/{2,}/, "$1/");
-  // Strip trailing slash
-  norm = norm.replace(/\/+$/, "");
-  return norm;
-}
 
 export function ShareProvider({ children }: { children: React.ReactNode }) {
   const [pendingFiles, setPendingFiles] = useState<SharedFile[]>([]);

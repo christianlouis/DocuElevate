@@ -28,29 +28,11 @@ import {
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { useShare } from "../context/ShareContext";
+import { normalizeFileUri } from "../utils/normalizeUri";
 import api from "../services/api";
 
 /** Statuses that indicate processing has finished (no further polling needed). */
 const TERMINAL_STATUSES = new Set(["completed", "failed", "duplicate"]);
-
-/**
- * Normalise a file URI for deduplication.
- *
- * - Decode percent-encoding (`%20` → ` `)
- * - Collapse consecutive slashes after the scheme (`file:////` → `file:///`)
- * - Strip trailing slashes
- */
-function normalizeUri(uri: string): string {
-  let norm: string;
-  try {
-    norm = decodeURIComponent(uri);
-  } catch {
-    norm = uri;
-  }
-  norm = norm.replace(/^(file:\/\/)\/{2,}/, "$1/");
-  norm = norm.replace(/\/+$/, "");
-  return norm;
-}
 
 interface UploadItem {
   id: string;
@@ -130,7 +112,7 @@ export default function UploadScreen() {
     // Deduplicate: skip if this exact URI was already uploaded in this session.
     // This guards against duplicate share-sheet deliveries from iOS where the
     // Linking handler and +not-found.tsx fire for the same file.
-    const normUri = normalizeUri(uri);
+    const normUri = normalizeFileUri(uri);
     if (uploadedUrisRef.current.has(normUri)) {
       console.debug("[uploadFile] skipping duplicate URI:", uri);
       return;
