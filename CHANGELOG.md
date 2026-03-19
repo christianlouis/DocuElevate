@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.157.1 (2026-03-19)
+
+### Bug Fixes
+
+- **mobile**: Resolve iOS "unmatched route docuelevate://" error in Open In share flow
+  ([`f2b7db8`](https://github.com/christianlouis/DocuElevate/commit/f2b7db88ba86e894a9bf2e4e7d6a54cd7f423194))
+
+
 ## v0.157.0 (2026-03-19)
 
 ### Features
