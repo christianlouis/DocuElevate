@@ -46,6 +46,12 @@ async def dropbox_setup_page(
                     cfg = {}
             # Support both "folder" (DROPBOX destination) and "folder_path" (WATCH_FOLDER source)
             folder_path = cfg.get("folder", cfg.get("folder_path", ""))
+            # Determine if global credentials are available for users to reuse
+            global_creds_available = bool(
+                settings.dropbox_allow_global_credentials_for_integrations
+                and settings.dropbox_app_key
+                and settings.dropbox_app_secret
+            )
             return templates.TemplateResponse(
                 "dropbox.html",
                 {
@@ -56,9 +62,11 @@ async def dropbox_setup_page(
                     "integration_name": integration.name,
                     "integration_type": integration.integration_type,
                     "folder_path": folder_path,
-                    "app_key_value": "",
+                    # Only expose the public app key (not the secret) when global creds are allowed
+                    "app_key_value": settings.dropbox_app_key if global_creds_available else "",
                     "app_secret_value": "",
                     "refresh_token_value": "",
+                    "global_creds_available": global_creds_available,
                 },
             )
 

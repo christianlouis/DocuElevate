@@ -370,6 +370,19 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "social_auth_dropbox_use_global_credentials": {
+        "category": "Social Login",
+        "description": (
+            "When True, Dropbox social login uses the global DROPBOX_APP_KEY / DROPBOX_APP_SECRET "
+            "credentials instead of requiring separate SOCIAL_AUTH_DROPBOX_CLIENT_ID / "
+            "SOCIAL_AUTH_DROPBOX_CLIENT_SECRET values. "
+            "Requires SOCIAL_AUTH_DROPBOX_ENABLED=True and global Dropbox credentials to be set."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
     "social_auth_dropbox_enabled": {
         "category": "Social Login",
         "description": (
@@ -760,6 +773,18 @@ SETTING_METADATA = {
         "description": "Dropbox OAuth refresh token",
         "type": "string",
         "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "dropbox_allow_global_credentials_for_integrations": {
+        "category": "Storage Providers",
+        "description": (
+            "When True, users may authorize their personal Dropbox integrations using the global "
+            "DROPBOX_APP_KEY / DROPBOX_APP_SECRET credentials configured by the admin, without "
+            "needing to create their own Dropbox app."
+        ),
+        "type": "boolean",
+        "sensitive": False,
         "required": False,
         "restart_required": False,
     },
