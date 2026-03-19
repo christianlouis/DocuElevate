@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.158.4 (2026-03-19)
+
+### Bug Fixes
+
+- **ui**: Show proper error when signup username has invalid characters
+  ([`689c616`](https://github.com/christianlouis/DocuElevate/commit/689c616e448bf3edfcb91b347ae9f6fac43b1983))
+
+
 ## v0.158.3 (2026-03-19)
 
 ### Bug Fixes
