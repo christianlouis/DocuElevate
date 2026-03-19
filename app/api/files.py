@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.auth import require_login
 from app.config import settings
 from app.database import get_db
+from app.middleware.upload_rate_limit import require_upload_rate_limit
 from app.models import FileProcessingStep, FileRecord, ProcessingLog
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document
@@ -1298,7 +1299,12 @@ def _check_for_exact_duplicate(db: DbSession, target_path: str, safe_filename: s
 
 @router.post("/ui-upload")
 @require_login
-async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...)):
+async def ui_upload(
+    request: Request,
+    db: DbSession,
+    file: UploadFile = File(...),
+    _rate_ok: None = Depends(require_upload_rate_limit),
+):
     """Endpoint to accept a user-uploaded file and enqueue it for processing."""
     workdir = settings.workdir
 

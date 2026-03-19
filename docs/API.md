@@ -27,8 +27,10 @@ DocuElevate implements rate limiting to protect against abuse and DoS attacks. R
 ### Default Limits
 
 - **Default endpoints**: 100 requests per minute
-- **File upload**: 600 requests per minute
+- **File upload**: 600 requests per minute (global) + 20 per user per 60 s (per-user, health-aware)
 - **Authentication**: 10 requests per minute
+
+**Per-user upload rate limiting**: Upload endpoints (`/api/ui-upload`, `/api/process-url`) enforce a per-user sliding-window limit that adapts to system load. Under heavy queue depth or high CPU usage, the effective limit is reduced automatically. See the [Configuration Guide](ConfigurationGuide.md#per-user-upload-rate-limiting) for details.
 
 **Note**: Document processing endpoints (OCR, metadata extraction) use built-in queue throttling to control processing rates and prevent upstream API overloads. No additional API-level rate limit is applied to processing endpoints.
 
@@ -53,6 +55,10 @@ RATE_LIMITING_ENABLED=true
 RATE_LIMIT_DEFAULT=100/minute
 RATE_LIMIT_UPLOAD=600/minute
 RATE_LIMIT_AUTH=10/minute
+
+# Per-user upload rate limiting (health-aware)
+UPLOAD_RATE_LIMIT_PER_USER=20   # Max uploads per user per window
+UPLOAD_RATE_LIMIT_WINDOW=60     # Sliding window in seconds
 ```
 
 See [Configuration Guide](ConfigurationGuide.md) for more details.

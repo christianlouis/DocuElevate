@@ -11,6 +11,10 @@ Configuration is primarily done through environment variables specified in a `.e
 | **Variable**           | **Description**                                          | **Example**                    |
 |------------------------|----------------------------------------------------------|--------------------------------|
 | `DATABASE_URL`         | Path/URL to the SQLite database (or other SQL backend). Use the [Database Wizard](/database-wizard) for guided setup. See [Database Configuration](DatabaseConfiguration.md). | `sqlite:///./app/database.db`  |
+| `DB_POOL_SIZE`         | Number of persistent connections in the pool per worker (PostgreSQL/MySQL only; ignored for SQLite). | `10` |
+| `DB_MAX_OVERFLOW`      | Additional connections beyond `DB_POOL_SIZE` under burst load (PostgreSQL/MySQL only). | `20` |
+| `DB_POOL_TIMEOUT`      | Seconds to wait for a pool connection before raising `TimeoutError` (PostgreSQL/MySQL only). | `30` |
+| `DB_POOL_RECYCLE`      | Recycle connections after this many seconds to avoid stale connections (PostgreSQL/MySQL only). | `1800` |
 | `REDIS_URL`            | URL for Redis, used by Celery for broker & result store. | `redis://redis:6379/0`         |
 | `WORKDIR`              | Working directory for the application.                  | `/workdir`                     |
 | `GOTENBERG_URL`        | Gotenberg PDF processing URL.                           | `http://gotenberg:3000`        |
@@ -80,6 +84,28 @@ Control how the web UI queues and paces file uploads to avoid overwhelming the b
 **Adaptive back-off**: The browser automatically slows down if the server responds with HTTP 429 (Too Many Requests). It reads the `Retry-After` header, pauses the queue for the indicated time, doubles the inter-slot delay (exponential back-off, capped at 30 s), and reduces concurrency to 1. After 5 consecutive successes it gradually recovers toward the configured values.
 
 **Example**: With `UPLOAD_CONCURRENCY=3` and `UPLOAD_QUEUE_DELAY_MS=500`, a directory of 5,000 files is uploaded ≈ 3 at a time with 500 ms pacing – the backend processes files at its own rate while the queue drains in the background without triggering API rate limits.
+
+### Per-User Upload Rate Limiting
+
+Server-side rate limiting that prevents any single user from overwhelming the system with bulk uploads. The limiter uses a Redis-backed sliding window and dynamically adjusts limits based on system health.
+
+| **Variable**                   | **Description**                                                                                                              | **Default** |
+|--------------------------------|------------------------------------------------------------------------------------------------------------------------------|-------------|
+| `UPLOAD_RATE_LIMIT_PER_USER`   | Maximum uploads allowed per user within the sliding window. Effective limit may be reduced under load.                       | `20`        |
+| `UPLOAD_RATE_LIMIT_WINDOW`     | Sliding window size in seconds.                                                                                              | `60`        |
+
+**Health-aware dynamic limiting**: The effective per-user limit is automatically reduced when the system is under heavy load:
+
+| **System condition**           | **Effective limit** | **Trigger**                    |
+|--------------------------------|---------------------|--------------------------------|
+| Normal                         | 100 % of base       | Queue < 50, CPU load normal    |
+| Moderate load                  | 50 % of base        | Queue 50–100 or CPU > 1.5×    |
+| High load                      | 25 % of base        | Queue 100–200 or CPU > 2×     |
+| Critical load                  | 10 % of base        | Queue > 200 or CPU > 3×       |
+
+When a user exceeds the limit, the server returns **HTTP 429 Too Many Requests** with a `Retry-After` header. The browser client (see *Client-Side Upload Throttling* above) automatically pauses and retries.
+
+> **Note**: The limiter fails open — if Redis is unavailable, all uploads are allowed through so that a monitoring outage never blocks document processing.
 
 ### File Upload Size Limits
 

@@ -39,6 +39,50 @@ SETTING_METADATA = {
         "required": True,
         "restart_required": True,
     },
+    "db_pool_size": {
+        "category": "Core",
+        "description": (
+            "Number of persistent database connections kept in the pool per worker process. "
+            "Ignored for SQLite (which uses NullPool). Default: 10."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_max_overflow": {
+        "category": "Core",
+        "description": (
+            "Additional database connections allowed beyond db_pool_size under burst load. "
+            "Ignored for SQLite. Default: 20."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_pool_timeout": {
+        "category": "Core",
+        "description": (
+            "Seconds to wait for a database connection from the pool before raising a TimeoutError. "
+            "Ignored for SQLite. Default: 30."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_pool_recycle": {
+        "category": "Core",
+        "description": (
+            "Recycle (close and reopen) database connections after this many seconds "
+            "to avoid stale connections. Ignored for SQLite. Default: 1800."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
     "workdir": {
         "category": "Core",
         "description": "Working directory for file storage and processing",
@@ -2556,51 +2600,6 @@ SETTING_METADATA = {
         "sensitive": False,
         "required": False,
         "restart_required": False,
-    },
-    # Database Connection Pool
-    "db_pool_size": {
-        "category": "Core",
-        "description": (
-            "Number of persistent connections kept in the SQLAlchemy QueuePool. "
-            "Has no effect for SQLite databases. Default: 5."
-        ),
-        "type": "integer",
-        "sensitive": False,
-        "required": False,
-        "restart_required": True,
-    },
-    "db_max_overflow": {
-        "category": "Core",
-        "description": (
-            "Maximum extra connections that can be opened beyond db_pool_size. "
-            "Has no effect for SQLite databases. Default: 10."
-        ),
-        "type": "integer",
-        "sensitive": False,
-        "required": False,
-        "restart_required": True,
-    },
-    "db_pool_timeout": {
-        "category": "Core",
-        "description": (
-            "Seconds to wait for a connection from the pool before raising an error. "
-            "Has no effect for SQLite databases. Default: 30."
-        ),
-        "type": "integer",
-        "sensitive": False,
-        "required": False,
-        "restart_required": True,
-    },
-    "db_pool_recycle": {
-        "category": "Core",
-        "description": (
-            "Seconds after which idle connections are recycled to prevent stale connections. "
-            "Has no effect for SQLite databases. Default: 1800 (30 minutes)."
-        ),
-        "type": "integer",
-        "sensitive": False,
-        "required": False,
-        "restart_required": True,
     },
     # Per-user upload rate limiting
     "upload_rate_limit_per_user": {
