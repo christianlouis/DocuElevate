@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.157.0 (2026-03-19)
+
+### Features
+
+- **api**: Allow disabled tokens/devices to be deleted & reactivated; add token lifetime
+  ([`e4749b4`](https://github.com/christianlouis/DocuElevate/commit/e4749b4e7cdd78ab95627736d3fcd84fecc55e53))
+
+
 ## v0.156.3 (2026-03-18)
 
 ### Bug Fixes
