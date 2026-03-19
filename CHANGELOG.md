@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.157.2 (2026-03-19)
+
+### Bug Fixes
+
+- **ui**: Improve devices page table layout to prevent horizontal scrolling
+  ([`b12e891`](https://github.com/christianlouis/DocuElevate/commit/b12e8916824273eefb85f0bb498d4991e8c66d5e))
+
+
 ## v0.157.1 (2026-03-19)
 
 ### Bug Fixes
