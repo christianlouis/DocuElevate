@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.159.0 (2026-03-19)
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`910fb29`](https://github.com/christianlouis/DocuElevate/commit/910fb297ba1122b751250b323a330e15e276daf6))
+
+### Features
+
+- **integrations**: Add Dropbox connection test and global-credential sharing
+  ([`d1f9819`](https://github.com/christianlouis/DocuElevate/commit/d1f9819f4e12320bb901b76366fa8d4a8cd23a66))
+
+
 ## v0.158.4 (2026-03-19)
 
 ### Bug Fixes
