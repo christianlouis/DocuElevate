@@ -943,6 +943,63 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Storage Providers - SharePoint
+    "sharepoint_client_id": {
+        "category": "Storage Providers",
+        "description": "SharePoint Azure AD application (client) ID",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_client_secret": {
+        "category": "Storage Providers",
+        "description": "SharePoint Azure AD client secret",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_tenant_id": {
+        "category": "Storage Providers",
+        "description": "SharePoint Azure AD tenant ID (use 'common' for multi-tenant apps)",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_refresh_token": {
+        "category": "Storage Providers",
+        "description": "SharePoint OAuth refresh token",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_site_url": {
+        "category": "Storage Providers",
+        "description": "SharePoint site URL (e.g. https://tenant.sharepoint.com/sites/sitename)",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_document_library": {
+        "category": "Storage Providers",
+        "description": "SharePoint document library name (default: 'Documents')",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_folder_path": {
+        "category": "Storage Providers",
+        "description": "Subfolder path inside the SharePoint document library",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Storage Providers - WebDAV
     "webdav_enabled": {
         "category": "Storage Providers",
@@ -2013,14 +2070,26 @@ SETTING_METADATA = {
         "category": "Backup",
         "description": (
             "Storage provider for remote backup copies. "
-            "Accepted values: s3, dropbox, google_drive, onedrive, nextcloud, webdav, ftp, sftp, email. "
+            "Accepted values: s3, dropbox, google_drive, onedrive, sharepoint, nextcloud, webdav, ftp, sftp, email. "
             "Leave empty to keep backups local only."
         ),
         "type": "string",
         "sensitive": False,
         "required": False,
         "restart_required": False,
-        "options": ["", "s3", "dropbox", "google_drive", "onedrive", "nextcloud", "webdav", "ftp", "sftp", "email"],
+        "options": [
+            "",
+            "s3",
+            "dropbox",
+            "google_drive",
+            "onedrive",
+            "sharepoint",
+            "nextcloud",
+            "webdav",
+            "ftp",
+            "sftp",
+            "email",
+        ],
     },
     "backup_remote_folder": {
         "category": "Backup",
@@ -2528,6 +2597,72 @@ SETTING_METADATA = {
         "category": "Security",
         "description": "Comma-separated 'Key:Value' pairs of extra headers for SIEM HTTP requests.",
         "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # Database Connection Pool
+    "db_pool_size": {
+        "category": "Core",
+        "description": (
+            "Number of persistent connections kept in the SQLAlchemy QueuePool. "
+            "Has no effect for SQLite databases. Default: 5."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_max_overflow": {
+        "category": "Core",
+        "description": (
+            "Maximum extra connections that can be opened beyond db_pool_size. "
+            "Has no effect for SQLite databases. Default: 10."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_pool_timeout": {
+        "category": "Core",
+        "description": (
+            "Seconds to wait for a connection from the pool before raising an error. "
+            "Has no effect for SQLite databases. Default: 30."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_pool_recycle": {
+        "category": "Core",
+        "description": (
+            "Seconds after which idle connections are recycled to prevent stale connections. "
+            "Has no effect for SQLite databases. Default: 1800 (30 minutes)."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    # Per-user upload rate limiting
+    "upload_rate_limit_per_user": {
+        "category": "Security",
+        "description": (
+            "Maximum number of uploads a single user may submit within upload_rate_limit_window seconds. "
+            "The health-aware limiter may reduce this dynamically under high Redis queue depth or CPU load. "
+            "Default: 20."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "upload_rate_limit_window": {
+        "category": "Security",
+        "description": ("Sliding window in seconds over which upload_rate_limit_per_user is enforced. Default: 60."),
+        "type": "integer",
         "sensitive": False,
         "required": False,
         "restart_required": False,

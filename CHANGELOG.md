@@ -10,6 +10,99 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.157.1 (2026-03-19)
+
+### Bug Fixes
+
+- **mobile**: Resolve iOS "unmatched route docuelevate://" error in Open In share flow
+  ([`f2b7db8`](https://github.com/christianlouis/DocuElevate/commit/f2b7db88ba86e894a9bf2e4e7d6a54cd7f423194))
+
+
+## v0.157.0 (2026-03-19)
+
+### Features
+
+- **api**: Allow disabled tokens/devices to be deleted & reactivated; add token lifetime
+  ([`e4749b4`](https://github.com/christianlouis/DocuElevate/commit/e4749b4e7cdd78ab95627736d3fcd84fecc55e53))
+
+
+## v0.156.3 (2026-03-18)
+
+### Bug Fixes
+
+- **auth**: Exempt /api/qr-auth/claim from CSRF to fix mobile QR login
+  ([`a4aaebf`](https://github.com/christianlouis/DocuElevate/commit/a4aaebfe6649ef051790b6af24e0739bdd9ecfed))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`d8d2016`](https://github.com/christianlouis/DocuElevate/commit/d8d2016f8597f775cdf3848e7baeaae98cb998b0))
+
+
+## Unreleased
+
+
+## v0.156.2 (2026-03-18)
+
+### Bug Fixes
+
+- **qr-login**: Render QR code server-side using segno instead of CDN JS library
+  ([`a8eb650`](https://github.com/christianlouis/DocuElevate/commit/a8eb6504ac100c14b10f57511fde8f1202deeffe))
+
+### Chores
+
+- Initial plan for server-side QR code rendering
+  ([`6727253`](https://github.com/christianlouis/DocuElevate/commit/6727253958a6ae8436fc1184736ec43eef2ab820))
+
+- Remove accidentally committed =1.6.0 file
+  ([`ba8c88b`](https://github.com/christianlouis/DocuElevate/commit/ba8c88bc17d3245cba6079ac5ba3be5fddf36366))
+
+
+## v0.156.1 (2026-03-18)
+
+### Bug Fixes
+
+- Add missing SETTING_METADATA entries for db pool and upload rate limit settings
+  ([`dc0a19b`](https://github.com/christianlouis/DocuElevate/commit/dc0a19bd118d3503ad50608f55fb0bc4ce104948))
+
+
+## v0.156.0 (2026-03-17)
+
+### Bug Fixes
+
+- **storage**: Use RuntimeError instead of bare Exception in SharePoint task
+  ([`2b698cc`](https://github.com/christianlouis/DocuElevate/commit/2b698cc6940fb731b1ab87300ad0f7fdebc8f024))
+
+- **test**: Add missing _should_upload_to_sharepoint mock to send_to_all tests
+  ([`bcf2d00`](https://github.com/christianlouis/DocuElevate/commit/bcf2d00c3324a3ded3852e16759ea4d0af3af666))
+
+### Documentation
+
+- Add SharePoint setup guide and update all references
+  ([`13aa14b`](https://github.com/christianlouis/DocuElevate/commit/13aa14b8e4102437f72f6c260b2795a6ee761eb9))
+
+### Features
+
+- **storage**: Add SharePoint integration for document storage
+  ([`b85fc1d`](https://github.com/christianlouis/DocuElevate/commit/b85fc1d277475c06c1efa100c391b7a3c43e7c25))
+
+
+## v0.155.1 (2026-03-17)
+
+### Bug Fixes
+
+- **api**: Add ttl_seconds to QR challenge response and fix client-side countdown
+  ([`0f6a1ee`](https://github.com/christianlouis/DocuElevate/commit/0f6a1ee1ec8186d70afc17abe50258c968058c92))
+
+- **mobile**: Replace gap with marginLeft for React Native compatibility
+  ([`70b193e`](https://github.com/christianlouis/DocuElevate/commit/70b193e07d2f85e353b6b12c56bf5bcbf828ee24))
+
+### Documentation
+
+- Update QR code login documentation with scanner and TTL details
+  ([`723b14e`](https://github.com/christianlouis/DocuElevate/commit/723b14e660737887c454b8e8300ac38bb390841f))
+
+
 ## v0.155.0 (2026-03-17)
 
 

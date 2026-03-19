@@ -627,6 +627,15 @@ class Settings(BaseSettings):
     onedrive_refresh_token: Optional[str] = None  # Required for personal accounts
     onedrive_folder_path: Optional[str] = None
 
+    # SharePoint settings
+    sharepoint_client_id: Optional[str] = None
+    sharepoint_client_secret: Optional[str] = None
+    sharepoint_tenant_id: Optional[str] = "common"
+    sharepoint_refresh_token: Optional[str] = None
+    sharepoint_site_url: Optional[str] = None  # e.g. https://tenant.sharepoint.com/sites/sitename
+    sharepoint_document_library: Optional[str] = "Documents"  # Document library name
+    sharepoint_folder_path: Optional[str] = None  # Subfolder inside the library
+
     # AWS S3 settings
     s3_enabled: bool = Field(
         default=True,
@@ -1121,6 +1130,45 @@ class Settings(BaseSettings):
             "Default color scheme for the web interface. "
             "Options: 'system' (follow OS preference), 'light', 'dark'. "
             "Individual users can override this with the in-app toggle; their choice is persisted in localStorage."
+        ),
+    )
+
+    # Database Connection Pool Configuration
+    # Controls SQLAlchemy QueuePool behaviour for PostgreSQL/MySQL.
+    # SQLite uses NullPool and ignores these settings.
+    db_pool_size: int = Field(
+        default=5,
+        description="Number of persistent connections kept in the pool. Ignored for SQLite.",
+    )
+    db_max_overflow: int = Field(
+        default=10,
+        description=("Maximum number of connections that can be opened beyond db_pool_size. Ignored for SQLite."),
+    )
+    db_pool_timeout: int = Field(
+        default=30,
+        description="Seconds to wait for a connection from the pool before raising an error. Ignored for SQLite.",
+    )
+    db_pool_recycle: int = Field(
+        default=1800,
+        description=(
+            "Seconds after which a connection is recycled to prevent stale connections. "
+            "Ignored for SQLite. Default: 1800 (30 minutes)."
+        ),
+    )
+
+    # Per-user upload rate limiting (health-aware limiter)
+    # Controls how many uploads a single user may submit within a sliding window.
+    upload_rate_limit_per_user: int = Field(
+        default=20,
+        description=(
+            "Maximum number of uploads allowed per user within the upload_rate_limit_window. "
+            "The limiter may dynamically reduce this value when Redis queue depth or CPU load is high."
+        ),
+    )
+    upload_rate_limit_window: int = Field(
+        default=60,
+        description=(
+            "Sliding window in seconds over which upload_rate_limit_per_user is enforced. Default: 60 seconds."
         ),
     )
 

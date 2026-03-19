@@ -8,6 +8,7 @@ DocuElevate includes a native mobile application for iOS and Android built with 
 |---------|-----|---------|
 | SSO login (OAuth2) | ✅ | ✅ |
 | Local / basic auth login | ✅ | ✅ |
+| QR code login (scan from web) | ✅ | ✅ |
 | Auto-generated API token | ✅ | ✅ |
 | Camera capture → upload | ✅ | ✅ |
 | File picker upload | ✅ | ✅ |
@@ -112,6 +113,18 @@ When developing with **Expo Go** the app does not have the `docuelevate://` cust
 
 No extra configuration is needed — just run `npx expo start` and scan the QR code with the **Expo Go** app.
 
+### QR Code Login Flow
+
+As an alternative to SSO, users can log in by scanning a QR code displayed in the web UI:
+
+1. The authenticated web user navigates to **Profile → Security & Sessions → Log in on mobile via QR code**.
+2. A QR code is displayed containing a deep link: `docuelevate://qr-login?token=<challenge_token>&server=<server_url>`.
+3. In the mobile app, the user taps **Scan QR Code to Login**, which opens the device camera.
+4. The app scans the QR code, extracts both the server URL and the challenge token, and calls `POST /api/qr-auth/claim`.
+5. An API token is issued and stored securely — no need to enter the server URL manually.
+
+> **Note:** The QR code already contains the server URL, so users do not need to type it in when using QR login.
+
 ### Auto-generated Mobile Token
 
 When the mobile app completes login it automatically creates a named API token (`"Mobile App – <device name>"`) via `POST /api/mobile/generate-token`.  This token:
@@ -184,6 +197,24 @@ The app registers itself as a share target so any file can be sent directly to D
 `app.json` declares `CFBundleDocumentTypes` (with `LSHandlerRank: Alternate`) inside the iOS `infoPlist`.  This tells iOS that DocuElevate can open common document types, making it visible in the share sheet without overriding system defaults.  When the user selects DocuElevate, iOS opens the app with a URL via `application:openURL:options:`.
 
 The URL may arrive as a standard `file://` path **or** under the app's custom `docuelevate://` scheme (e.g. `docuelevate://private/var/mobile/Library/…/file.pdf`).  The root layout detects the custom-scheme form and rewrites it to a `file://` URL before forwarding it to the Upload screen through `ShareContext`.
+
+##### Handling "unmatched route" errors from "Open In…"
+
+iOS sometimes delivers the file path under the `docuelevate://` scheme, e.g.:
+
+```
+docuelevate://private/var/mobile/Library/Mobile Documents/…/Invoice.pdf
+```
+
+expo-router strips the scheme and tries to match `/private/var/mobile/…` as an in-app route.  Because no such route exists, it previously threw an **"unmatched route docuelevate://"** error and the upload never completed.
+
+The fix is a catch-all `+not-found.tsx` route (see `mobile/app/+not-found.tsx`).  When expo-router cannot match the path, it renders this screen instead.  The screen detects that the path is a filesystem path rather than a real in-app route and immediately redirects to the Upload tab.  The `Linking` listener registered in the root layout has concurrently (or will shortly) added the file to `ShareContext`, so the upload proceeds normally once the user lands on the Upload tab.
+
+##### iOS Action / Share Extension (future enhancement)
+
+Apps like DeepL ("Translate in DeepL") and Microsoft Word ("Convert to Word") appear as **Action Extensions** in the iOS share sheet — a system-level feature that requires a separate Xcode target built with Swift or Objective-C.  A proper Action Extension runs in its own process and must share authentication credentials with the main app via an iOS **App Group** (shared keychain / shared container).
+
+This level of iOS-native integration is a planned future enhancement.  Until it is available, the recommended workflow is the current one: tap **Share → DocuElevate** (the app appears in the "Open With" row of the share sheet via `CFBundleDocumentTypes`).
 
 #### Android implementation
 
@@ -286,7 +317,8 @@ mobile/
 │   ├── (auth)/                  # Unauthenticated route group
 │   │   ├── _layout.tsx          # Stack navigator (headerless)
 │   │   ├── index.tsx            # Welcome screen
-│   │   └── login.tsx            # Login screen
+│   │   ├── login.tsx            # Login screen
+│   │   └── qr-scanner.tsx       # QR code scanner screen
 │   └── (tabs)/                  # Authenticated route group
 │       ├── _layout.tsx          # Tab navigator
 │       ├── index.tsx            # Upload screen (default tab)
@@ -303,7 +335,8 @@ mobile/
     ├── hooks/
     │   └── usePushNotifications.ts  # Push token registration
     ├── screens/
-    │   ├── LoginScreen.tsx      # Server URL + SSO button
+    │   ├── LoginScreen.tsx      # Server URL + SSO button + QR code scanner
+    │   ├── QRScannerScreen.tsx  # Camera-based QR code scanner for login
     │   ├── UploadScreen.tsx     # Camera capture + photo library + file picker
     │   ├── FilesScreen.tsx      # Processed document list
     │   └── ProfileScreen.tsx    # User profile + sign out

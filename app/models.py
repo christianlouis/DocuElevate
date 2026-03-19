@@ -603,6 +603,7 @@ class IntegrationType:
     EMAIL = "EMAIL"
     PAPERLESS = "PAPERLESS"
     RCLONE = "RCLONE"
+    SHAREPOINT = "SHAREPOINT"
     ICLOUD = "ICLOUD"
 
     ALL = {
@@ -620,6 +621,7 @@ class IntegrationType:
         EMAIL,
         PAPERLESS,
         RCLONE,
+        SHAREPOINT,
         ICLOUD,
     }
 
@@ -783,6 +785,9 @@ class ApiToken(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Optional expiry: if set, the token is rejected after this timestamp.
+    expires_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class SharedLink(Base):

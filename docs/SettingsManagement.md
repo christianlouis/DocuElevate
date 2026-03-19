@@ -28,7 +28,7 @@ Settings are organized into logical categories for easy navigation:
 - **Authentication**: Login settings, session secrets, OAuth configuration, admin group
 - **AI Services**: AI provider selection, model configuration, embeddings, and credentials (OpenAI, Azure, Anthropic, Gemini, Ollama, OpenRouter, Portkey, LiteLLM)
 - **OCR Engines**: OCR provider selection and configuration (Tesseract, EasyOCR, Mistral, Google DocAI, AWS Textract)
-- **Storage Providers**: Dropbox, Google Drive, OneDrive, S3, FTP, SFTP, WebDAV, Nextcloud, Paperless
+- **Storage Providers**: Dropbox, Google Drive, OneDrive, SharePoint, S3, FTP, SFTP, WebDAV, Nextcloud, Paperless
 - **Email**: SMTP configuration for sending emails
 - **IMAP**: Email ingestion configuration (supports two mailbox accounts)
 - **Monitoring**: Uptime Kuma integration

@@ -32,7 +32,13 @@
           id="qr-container"
           aria-label="{{ _('qr_login.description') }}"
         >
-          <canvas id="qr-canvas" width="256" height="256"></canvas>
+          <img
+            :src="qrCodeSvg"
+            width="256"
+            height="256"
+            alt="{{ _('qr_login.description') }}"
+            id="qr-image"
+          />
         </div>
         <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">
           {{ _("qr_login.description") }}
@@ -110,8 +116,7 @@
   </section>
 </div>
 
-<!-- QR Code library (lightweight, no external deps) -->
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+<!-- QR code is rendered server-side; no external QR library needed -->
 
 <script>
 function qrLoginPage() {
@@ -120,12 +125,15 @@ function qrLoginPage() {
     challengeId: null,
     challengeToken: '',
     qrPayload: '',
+    qrCodeSvg: '',
     expiresAt: null,
     countdown: 0,
     deviceName: '',
     errorMsg: '',
     _pollTimer: null,
     _countdownTimer: null,
+    _ttlSeconds: 0,
+    _receivedAt: null,
 
     _csrfToken() {
       return document.cookie
@@ -155,21 +163,12 @@ function qrLoginPage() {
         this.challengeId = data.challenge_id;
         this.challengeToken = data.challenge_token;
         this.qrPayload = data.qr_payload;
+        this.qrCodeSvg = data.qr_code_svg;
         this.expiresAt = new Date(data.expires_at);
+        this._ttlSeconds = data.ttl_seconds || 120;
+        this._receivedAt = Date.now();
         this.status = 'pending';
         this.deviceName = '';
-
-        // Render QR code
-        this.$nextTick(() => {
-          const canvas = document.getElementById('qr-canvas');
-          if (canvas && typeof QRCode !== 'undefined') {
-            QRCode.toCanvas(canvas, this.qrPayload, {
-              width: 256,
-              margin: 2,
-              color: { dark: '#000000', light: '#ffffff' },
-            });
-          }
-        });
 
         // Start polling and countdown
         this._startPolling();
@@ -214,8 +213,9 @@ function qrLoginPage() {
     },
 
     _updateCountdown() {
-      if (!this.expiresAt) { this.countdown = 0; return; }
-      const remaining = Math.max(0, Math.floor((this.expiresAt - new Date()) / 1000));
+      if (!this._receivedAt) { this.countdown = 0; return; }
+      const elapsed = (Date.now() - this._receivedAt) / 1000;
+      const remaining = Math.max(0, Math.floor(this._ttlSeconds - elapsed));
       this.countdown = remaining;
     },
 

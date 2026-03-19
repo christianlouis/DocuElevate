@@ -402,6 +402,35 @@ class TestQRLogin:
         assert expires > datetime.now(timezone.utc)
 
     @patch("app.utils.session_manager.settings")
+    def test_create_qr_challenge_ttl_seconds(self, mock_settings, db_session: Session, sample_user_id: str):
+        """Test that ttl_seconds can be derived from created_at and expires_at.
+
+        The API endpoint computes ttl_seconds = (expires_at - created_at) to
+        allow the client to run a countdown timer without comparing absolute
+        timestamps (avoiding clock-skew issues).
+        """
+        from app.utils.session_manager import create_qr_challenge
+
+        mock_settings.qr_login_challenge_ttl_seconds = 120
+
+        challenge = create_qr_challenge(db_session, sample_user_id)
+
+        ttl_seconds = max(0, int((challenge.expires_at - challenge.created_at).total_seconds()))
+        assert ttl_seconds == 120
+
+    @patch("app.utils.session_manager.settings")
+    def test_create_qr_challenge_custom_ttl(self, mock_settings, db_session: Session, sample_user_id: str):
+        """Test that a custom TTL is correctly reflected in the challenge timestamps."""
+        from app.utils.session_manager import create_qr_challenge
+
+        mock_settings.qr_login_challenge_ttl_seconds = 300
+
+        challenge = create_qr_challenge(db_session, sample_user_id)
+
+        ttl_seconds = max(0, int((challenge.expires_at - challenge.created_at).total_seconds()))
+        assert ttl_seconds == 300
+
+    @patch("app.utils.session_manager.settings")
     def test_validate_qr_challenge_valid(self, mock_settings, db_session: Session, sample_user_id: str):
         """Test validating a valid QR challenge."""
         from app.utils.session_manager import create_qr_challenge, validate_qr_challenge

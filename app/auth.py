@@ -186,6 +186,16 @@ def _resolve_bearer_user(request: Request, db: Session) -> dict | None:
         logger.debug("[AUTH] _resolve_bearer_user: no active API token matched the provided hash")
         return None
 
+    # Reject tokens that have passed their optional expiry.
+    if db_token.expires_at is not None:
+        now_utc = datetime.now(timezone.utc)
+        expires_aware = db_token.expires_at
+        if expires_aware.tzinfo is None:
+            expires_aware = expires_aware.replace(tzinfo=timezone.utc)
+        if now_utc > expires_aware:
+            logger.debug("[AUTH] _resolve_bearer_user: API token id=%s has expired", db_token.id)
+            return None
+
     logger.debug(
         "[AUTH] _resolve_bearer_user: matched API token id=%s owner=%s",
         db_token.id,

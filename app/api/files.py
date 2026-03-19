@@ -347,7 +347,9 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
 
     try:
         # Find all file records
-        file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+        query = db.query(FileRecord).filter(FileRecord.id.in_(file_ids))
+        query = apply_owner_filter(query, request)
+        file_records = query.all()
 
         if not file_records:
             raise HTTPException(status_code=404, detail="No files found with the provided IDs")
@@ -386,7 +388,9 @@ def bulk_reprocess_files(request: Request, file_ids: List[int], db: DbSession):
     """
     try:
         # Find all file records
-        file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+        query = db.query(FileRecord).filter(FileRecord.id.in_(file_ids))
+        query = apply_owner_filter(query, request)
+        file_records = query.all()
 
         if not file_records:
             raise HTTPException(status_code=404, detail="No files found with the provided IDs")
@@ -458,7 +462,9 @@ def bulk_reprocess_files_cloud_ocr(request: Request, file_ids: List[int], db: Db
     Useful for re-running OCR on files with poor text quality or missing OCR text.
     """
     try:
-        file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+        query = db.query(FileRecord).filter(FileRecord.id.in_(file_ids))
+        query = apply_owner_filter(query, request)
+        file_records = query.all()
 
         if not file_records:
             raise HTTPException(status_code=404, detail="No files found with the provided IDs")
@@ -538,7 +544,9 @@ def bulk_download_files(request: Request, file_ids: List[int], db: DbSession):
     Files not found on disk are silently skipped.
     """
     try:
-        file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+        query = db.query(FileRecord).filter(FileRecord.id.in_(file_ids))
+        query = apply_owner_filter(query, request)
+        file_records = query.all()
 
         if not file_records:
             raise HTTPException(status_code=404, detail="No files found with the provided IDs")
@@ -620,7 +628,9 @@ def reprocess_single_file(request: Request, file_id: int, db: DbSession):
     """
     try:
         # Find the file record
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        query = db.query(FileRecord).filter(FileRecord.id == file_id)
+        query = apply_owner_filter(query, request)
+        file_record = query.first()
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
@@ -676,7 +686,9 @@ def reprocess_with_cloud_ocr(request: Request, file_id: int, db: DbSession):
     """
     try:
         # Find the file record
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        query = db.query(FileRecord).filter(FileRecord.id == file_id)
+        query = apply_owner_filter(query, request)
+        file_record = query.first()
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
@@ -939,7 +951,9 @@ def retry_subtask(
     """
     try:
         # Find the file record
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        query = db.query(FileRecord).filter(FileRecord.id == file_id)
+        query = apply_owner_filter(query, request)
+        file_record = query.first()
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
@@ -1081,7 +1095,9 @@ def get_file_preview(
 
     try:
         # Find the file record
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        query = db.query(FileRecord).filter(FileRecord.id == file_id)
+        query = apply_owner_filter(query, request)
+        file_record = query.first()
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
@@ -1161,7 +1177,9 @@ def download_file(
 
     try:
         # Find the file record
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        query = db.query(FileRecord).filter(FileRecord.id == file_id)
+        query = apply_owner_filter(query, request)
+        file_record = query.first()
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")

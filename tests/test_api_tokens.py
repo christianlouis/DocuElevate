@@ -314,8 +314,8 @@ class TestTokenRevoke:
             _cleanup(app)
 
     @pytest.mark.unit
-    def test_revoke_already_revoked_token(self, tok_engine):
-        """Revoking an already-revoked token should return 400."""
+    def test_delete_already_revoked_token(self, tok_engine):
+        """Deleting an already-revoked token should permanently remove it (hard-delete, 200)."""
         from app.main import app
 
         client = _make_client(tok_engine)
@@ -324,9 +324,15 @@ class TestTokenRevoke:
             token_id = create_resp.json()["id"]
             client.delete(f"/api/api-tokens/{token_id}")
 
+            # Second DELETE should hard-delete the revoked token.
             resp = client.delete(f"/api/api-tokens/{token_id}")
-            assert resp.status_code == 400
-            assert resp.json()["detail"] == "Token is already revoked"
+            assert resp.status_code == 200
+            assert resp.json()["detail"] == "Token deleted"
+
+            # Token must no longer appear in the list.
+            list_resp = client.get("/api/api-tokens/")
+            ids = [t["id"] for t in list_resp.json()]
+            assert token_id not in ids
         finally:
             _cleanup(app)
 
@@ -677,3 +683,216 @@ class TestTokenUtils:
         token = "de_test_token_value"
         expected_hash = "9b89d9adf2f390c75bf2fd0ff2bb5622ef5a9dce438354cce6e39f2f5401129e"
         assert hash_token(token) == expected_hash
+
+
+# ---------------------------------------------------------------------------
+# Tests – Token reactivation
+# ---------------------------------------------------------------------------
+
+
+class TestTokenReactivate:
+    """Tests for POST /api/api-tokens/{id}/reactivate."""
+
+    @pytest.mark.unit
+    def test_reactivate_revoked_token(self, tok_engine):
+        """Reactivating a revoked token should set is_active=True and clear revoked_at."""
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            create_resp = client.post("/api/api-tokens/", json={"name": "Reactivate Me"})
+            token_id = create_resp.json()["id"]
+            client.delete(f"/api/api-tokens/{token_id}")
+
+            resp = client.post(f"/api/api-tokens/{token_id}/reactivate")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["is_active"] is True
+            assert data["revoked_at"] is None
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_reactivate_active_token_returns_400(self, tok_engine):
+        """Reactivating an already-active token should return 400."""
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            create_resp = client.post("/api/api-tokens/", json={"name": "Already Active"})
+            token_id = create_resp.json()["id"]
+
+            resp = client.post(f"/api/api-tokens/{token_id}/reactivate")
+            assert resp.status_code == 400
+            assert resp.json()["detail"] == "Token is already active"
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_reactivate_nonexistent_token(self, tok_engine):
+        """Reactivating a non-existent token should return 404."""
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            resp = client.post("/api/api-tokens/99999/reactivate")
+            assert resp.status_code == 404
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_reactivate_other_users_token(self, tok_engine):
+        """A user cannot reactivate another user's token."""
+        from app.main import app
+
+        client_a = _make_client(tok_engine, _OWNER)
+        try:
+            create_resp = client_a.post("/api/api-tokens/", json={"name": "A Token"})
+            token_id = create_resp.json()["id"]
+            client_a.delete(f"/api/api-tokens/{token_id}")
+        finally:
+            _cleanup(app)
+
+        client_b = _make_client(tok_engine, _OTHER_OWNER)
+        try:
+            resp = client_b.post(f"/api/api-tokens/{token_id}/reactivate")
+            assert resp.status_code == 404
+        finally:
+            _cleanup(app)
+
+
+# ---------------------------------------------------------------------------
+# Tests – Token lifetime (expires_at)
+# ---------------------------------------------------------------------------
+
+
+class TestTokenExpiry:
+    """Tests for token creation with optional lifetime and expiry enforcement."""
+
+    @pytest.mark.unit
+    def test_create_token_without_expiry(self, tok_engine):
+        """Creating a token without expires_in_days should leave expires_at as None."""
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            resp = client.post("/api/api-tokens/", json={"name": "No Expiry"})
+            assert resp.status_code == 201
+            data = resp.json()
+            assert data["expires_at"] is None
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_create_token_with_expiry(self, tok_engine, tok_session):
+        """Creating a token with expires_in_days should set expires_at in the future."""
+        from datetime import datetime, timezone
+
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            resp = client.post("/api/api-tokens/", json={"name": "With Expiry", "expires_in_days": 30})
+            assert resp.status_code == 201
+            data = resp.json()
+            assert data["expires_at"] is not None
+            # Parse the returned datetime; handle both tz-aware and tz-naive serialisations
+            expires_str = data["expires_at"].replace("Z", "+00:00")
+            expires_at = datetime.fromisoformat(expires_str)
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            delta_days = (expires_at - now).days
+            assert 28 <= delta_days <= 30
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_expired_token_not_resolved(self, tok_engine, tok_session):
+        """A token past its expires_at should not authenticate."""
+        from datetime import datetime, timedelta, timezone
+        from unittest.mock import MagicMock
+
+        from app.api.api_tokens import generate_api_token, hash_token
+        from app.auth import _resolve_bearer_user
+
+        plaintext = generate_api_token()
+        token_hash = hash_token(plaintext)
+
+        db_token = ApiToken(
+            owner_id=_OWNER,
+            name="Expired Token",
+            token_hash=token_hash,
+            token_prefix=plaintext[:12],
+            is_active=True,
+            expires_at=datetime.now(timezone.utc) - timedelta(days=1),  # expired yesterday
+        )
+        tok_session.add(db_token)
+        tok_session.commit()
+
+        mock_request = MagicMock()
+        mock_request.headers = {"authorization": f"Bearer {plaintext}"}
+        mock_request.client.host = "127.0.0.1"
+
+        user = _resolve_bearer_user(mock_request, tok_session)
+        assert user is None
+
+    @pytest.mark.unit
+    def test_non_expired_token_resolves(self, tok_engine, tok_session):
+        """A token before its expires_at should authenticate normally."""
+        from datetime import datetime, timedelta, timezone
+        from unittest.mock import MagicMock
+
+        from app.api.api_tokens import generate_api_token, hash_token
+        from app.auth import _resolve_bearer_user
+
+        plaintext = generate_api_token()
+        token_hash = hash_token(plaintext)
+
+        db_token = ApiToken(
+            owner_id=_OWNER,
+            name="Valid Token",
+            token_hash=token_hash,
+            token_prefix=plaintext[:12],
+            is_active=True,
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30),  # expires in 30 days
+        )
+        tok_session.add(db_token)
+        tok_session.commit()
+
+        mock_request = MagicMock()
+        mock_request.headers = {"authorization": f"Bearer {plaintext}"}
+        mock_request.client.host = "127.0.0.1"
+
+        user = _resolve_bearer_user(mock_request, tok_session)
+        assert user is not None
+        assert user["preferred_username"] == _OWNER
+
+    @pytest.mark.unit
+    def test_create_token_expires_in_days_zero_rejected(self, tok_engine):
+        """expires_in_days=0 should be rejected with 422 (ge=1)."""
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            resp = client.post("/api/api-tokens/", json={"name": "Bad Expiry", "expires_in_days": 0})
+            assert resp.status_code == 422
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_expires_at_included_in_list_response(self, tok_engine):
+        """List endpoint should include expires_at field."""
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            client.post("/api/api-tokens/", json={"name": "Listed", "expires_in_days": 7})
+            resp = client.get("/api/api-tokens/")
+            assert resp.status_code == 200
+            tokens = resp.json()
+            assert len(tokens) == 1
+            assert "expires_at" in tokens[0]
+            assert tokens[0]["expires_at"] is not None
+        finally:
+            _cleanup(app)

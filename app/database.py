@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import create_engine, exc
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import NullPool, QueuePool
 
 from app.config import settings
 
@@ -38,6 +38,7 @@ if _parsed_url.get_backend_name() == "sqlite":
     _engine_kwargs["poolclass"] = NullPool
 else:
     # PostgreSQL / MySQL — use a bounded QueuePool with configurable limits.
+    _engine_kwargs["poolclass"] = QueuePool
     _engine_kwargs.update(
         {
             "pool_size": settings.db_pool_size,

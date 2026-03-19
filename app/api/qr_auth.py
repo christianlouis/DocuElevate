@@ -19,10 +19,13 @@ Security properties:
 
 from __future__ import annotations
 
+import base64
+import io
 import logging
 from datetime import datetime
 from typing import Annotated, Any
 
+import segno
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -70,7 +73,9 @@ class CreateChallengeResponse(BaseModel):
     challenge_id: int
     challenge_token: str
     expires_at: datetime
+    ttl_seconds: int = Field(description="Seconds until the challenge expires (use for client-side countdown).")
     qr_payload: str = Field(description="The string to encode in the QR code.")
+    qr_code_svg: str = Field(description="Base64-encoded SVG data URI of the QR code, ready for use in an <img> src.")
 
 
 class ChallengeStatusResponse(BaseModel):
@@ -106,6 +111,29 @@ class ClaimChallengeResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+# QR code rendering parameters
+_QR_ERROR_LEVEL = "M"  # Medium error correction (~15% recovery); sufficient for on-screen display
+_QR_SCALE = 4  # Each QR module is rendered as 4×4 SVG pixels
+
+
+def _generate_qr_svg(payload: str) -> str:
+    """Generate a QR code for *payload* and return it as a base64 SVG data URI.
+
+    Using ``segno`` (pure-Python, no Pillow dependency) and SVG output so the
+    QR code scales crisply at any resolution without requiring a canvas or any
+    client-side JavaScript library.
+    """
+    qr = segno.make(payload, error=_QR_ERROR_LEVEL)
+    buf = io.BytesIO()
+    qr.save(buf, kind="svg", scale=_QR_SCALE, xmldecl=False, svgclass=None, lineclass=None, omitsize=True)
+    svg_bytes = buf.getvalue()
+    return "data:image/svg+xml;base64," + base64.b64encode(svg_bytes).decode("ascii")
+
+
+# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
@@ -131,11 +159,18 @@ async def create_challenge(
     base_url = str(request.base_url).rstrip("/")
     qr_payload = f"docuelevate://qr-login?token={challenge.challenge_token}&server={base_url}"
 
+    # Compute the TTL in seconds so the client can run a countdown timer
+    # without comparing absolute timestamps (which breaks when client and
+    # server clocks are out of sync).
+    ttl_seconds = max(0, int((challenge.expires_at - challenge.created_at).total_seconds()))
+
     return {
         "challenge_id": challenge.id,
         "challenge_token": challenge.challenge_token,
         "expires_at": challenge.expires_at,
+        "ttl_seconds": ttl_seconds,
         "qr_payload": qr_payload,
+        "qr_code_svg": _generate_qr_svg(qr_payload),
     }
 
 

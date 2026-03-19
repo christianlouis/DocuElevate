@@ -33,6 +33,20 @@
           aria-required="true"
         />
       </div>
+      <div class="sm:w-44">
+        <label for="token-lifetime" class="sr-only">{{ _("api_tokens.expires_in_days_label") }}</label>
+        <input
+          id="token-lifetime"
+          type="number"
+          x-model.number="newTokenExpiresDays"
+          placeholder="{{ _('api_tokens.expires_at_placeholder') }}"
+          min="1"
+          max="3650"
+          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm
+                 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm"
+          aria-label="{{ _('api_tokens.expires_in_days_label') }}"
+        />
+      </div>
       <button
         type="submit"
         :disabled="creating || !newTokenName.trim()"
@@ -143,6 +157,7 @@
               <th scope="col" class="px-6 py-3 font-medium text-gray-500 dark:text-gray-400 uppercase text-xs tracking-wider">{{ _("api_tokens.col_created") }}</th>
               <th scope="col" class="px-6 py-3 font-medium text-gray-500 dark:text-gray-400 uppercase text-xs tracking-wider">{{ _("api_tokens.col_last_used") }}</th>
               <th scope="col" class="px-6 py-3 font-medium text-gray-500 dark:text-gray-400 uppercase text-xs tracking-wider">{{ _("api_tokens.col_last_ip") }}</th>
+              <th scope="col" class="px-6 py-3 font-medium text-gray-500 dark:text-gray-400 uppercase text-xs tracking-wider">{{ _("api_tokens.col_expires") }}</th>
               <th scope="col" class="px-6 py-3 font-medium text-gray-500 dark:text-gray-400 uppercase text-xs tracking-wider">{{ _("common.status") }}</th>
               <th scope="col" class="px-6 py-3 font-medium text-gray-500 dark:text-gray-400 uppercase text-xs tracking-wider sr-only">{{ _("common.actions") }}</th>
             </tr>
@@ -162,27 +177,61 @@
                   <code x-show="token.last_used_ip" class="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-xs font-mono" x-text="token.last_used_ip"></code>
                   <span x-show="!token.last_used_ip" class="text-gray-400">—</span>
                 </td>
+                <td class="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">
+                  <span x-text="token.expires_at ? formatDate(token.expires_at) : '{{ _('api_tokens.expires_never') }}'"></span>
+                </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span
                     class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                    :class="token.is_active ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'"
-                    x-text="token.is_active ? '{{ _('api_tokens.status_active') }}' : '{{ _('api_tokens.status_revoked') }}'"
+                    :class="tokenStatusClass(token)"
+                    x-text="tokenStatusLabel(token)"
                   ></span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right">
+                  <!-- Revoke button – shown for active tokens -->
                   <button
                     x-show="token.is_active"
                     type="button"
                     @click="revokeToken(token)"
-                    :disabled="revoking === token.id"
+                    :disabled="acting === token.id"
                     class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-800
                            dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md
                            focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 transition-colors"
                     style="min-height:36px; min-width:44px;"
                     :aria-label="'{{ _('api_tokens.revoke_prefix') }} ' + token.name"
                   >
-                    <i :class="revoking === token.id ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'" class="mr-1" aria-hidden="true"></i>
+                    <i :class="acting === token.id ? 'fas fa-spinner fa-spin' : 'fas fa-ban'" class="mr-1" aria-hidden="true"></i>
                     {{ _("api_tokens.revoke") }}
+                  </button>
+                  <!-- Reactivate button – shown for revoked tokens -->
+                  <button
+                    x-show="!token.is_active"
+                    type="button"
+                    @click="reactivateToken(token)"
+                    :disabled="acting === token.id"
+                    class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800
+                           dark:text-green-400 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-md
+                           focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 transition-colors mr-1"
+                    style="min-height:36px; min-width:44px;"
+                    :aria-label="'{{ _('api_tokens.reactivate_prefix') }} ' + token.name"
+                  >
+                    <i :class="acting === token.id ? 'fas fa-spinner fa-spin' : 'fas fa-redo'" class="mr-1" aria-hidden="true"></i>
+                    {{ _("api_tokens.reactivate") }}
+                  </button>
+                  <!-- Delete button – shown for revoked tokens -->
+                  <button
+                    x-show="!token.is_active"
+                    type="button"
+                    @click="deleteToken(token)"
+                    :disabled="acting === token.id"
+                    class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-800
+                           dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md
+                           focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 transition-colors"
+                    style="min-height:36px; min-width:44px;"
+                    :aria-label="'{{ _('api_tokens.delete_prefix') }} ' + token.name"
+                  >
+                    <i :class="acting === token.id ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'" class="mr-1" aria-hidden="true"></i>
+                    {{ _("api_tokens.delete") }}
                   </button>
                 </td>
               </tr>
@@ -209,9 +258,10 @@ function apiTokens() {
     tokens: [],
     loading: true,
     creating: false,
-    revoking: null,
+    acting: null,
     error: null,
     newTokenName: '',
+    newTokenExpiresDays: null,
     newlyCreatedToken: null,
     copied: false,
     baseUrl: window.location.origin,
@@ -238,13 +288,15 @@ function apiTokens() {
       this.error = null;
       this.newlyCreatedToken = null;
       try {
+        const body = { name: this.newTokenName.trim() };
+        if (this.newTokenExpiresDays) body.expires_in_days = parseInt(this.newTokenExpiresDays);
         const res = await fetch('/api/api-tokens/', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'X-CSRF-Token': csrfToken,
           },
-          body: JSON.stringify({ name: this.newTokenName.trim() }),
+          body: JSON.stringify(body),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -253,6 +305,7 @@ function apiTokens() {
         const data = await res.json();
         this.newlyCreatedToken = data.token;
         this.newTokenName = '';
+        this.newTokenExpiresDays = null;
         await this.loadTokens();
       } catch (e) {
         this.error = e.message;
@@ -263,7 +316,7 @@ function apiTokens() {
 
     async revokeToken(token) {
       if (!confirm(`Revoke token "${token.name}"? This cannot be undone.`)) return;
-      this.revoking = token.id;
+      this.acting = token.id;
       this.error = null;
       try {
         const res = await fetch(`/api/api-tokens/${token.id}`, {
@@ -278,8 +331,64 @@ function apiTokens() {
       } catch (e) {
         this.error = e.message;
       } finally {
-        this.revoking = null;
+        this.acting = null;
       }
+    },
+
+    async reactivateToken(token) {
+      if (!confirm({{ _("api_tokens.reactivate_confirm") | tojson }})) return;
+      this.acting = token.id;
+      this.error = null;
+      try {
+        const res = await fetch(`/api/api-tokens/${token.id}/reactivate`, {
+          method: 'POST',
+          headers: { 'X-CSRF-Token': csrfToken },
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.detail || 'Failed to reactivate token');
+        }
+        await this.loadTokens();
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.acting = null;
+      }
+    },
+
+    async deleteToken(token) {
+      if (!confirm({{ _("api_tokens.delete_confirm") | tojson }})) return;
+      this.acting = token.id;
+      this.error = null;
+      try {
+        const res = await fetch(`/api/api-tokens/${token.id}`, {
+          method: 'DELETE',
+          headers: { 'X-CSRF-Token': csrfToken },
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.detail || 'Failed to delete token');
+        }
+        await this.loadTokens();
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.acting = null;
+      }
+    },
+
+    tokenStatusClass(token) {
+      if (!token.is_active) return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+      if (token.expires_at && new Date(token.expires_at) < new Date())
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
+      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+    },
+
+    tokenStatusLabel(token) {
+      if (!token.is_active) return '{{ _("api_tokens.status_revoked") }}';
+      if (token.expires_at && new Date(token.expires_at) < new Date())
+        return '{{ _("api_tokens.status_expired") }}';
+      return '{{ _("api_tokens.status_active") }}';
     },
 
     copyToken() {
