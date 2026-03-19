@@ -78,6 +78,32 @@ export interface UploadResponse {
   };
 }
 
+export interface ProcessingLog {
+  id: number;
+  task_id: string;
+  step_name: string;
+  status: string;
+  message: string;
+  timestamp: string;
+}
+
+export interface FileDetail {
+  file: {
+    id: number;
+    filehash: string;
+    original_filename: string;
+    local_filename: string;
+    file_size: number;
+    mime_type: string;
+    created_at: string;
+  };
+  processing_status: ProcessingStatus;
+  logs: ProcessingLog[];
+  files_on_disk: {
+    original: boolean;
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Base API client
 // ---------------------------------------------------------------------------
@@ -228,6 +254,11 @@ class DocuElevateAPI {
       `/api/files/${fileId}`
     );
     return data.processing_status;
+  }
+
+  /** Get full file details including processing logs. */
+  async getFileDetail(fileId: number): Promise<FileDetail> {
+    return this.request<FileDetail>("GET", `/api/files/${fileId}`);
   }
 }
 

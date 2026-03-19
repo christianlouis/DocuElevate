@@ -12,9 +12,14 @@ DocuElevate includes a native mobile application for iOS and Android built with 
 | Auto-generated API token | ✅ | ✅ |
 | Camera capture → upload | ✅ | ✅ |
 | File picker upload | ✅ | ✅ |
+| Multi-image selection from library | ✅ | ✅ |
 | Share Sheet / Share Intent | ✅ | ✅ |
 | Push notifications | ✅ | ✅ |
-| Document list | ✅ | ✅ |
+| Document list with search | ✅ | ✅ |
+| File detail view with processing logs | ✅ | ✅ |
+| Pre-login legal pages (GDPR) | ✅ | ✅ |
+| Localization (EN, DE, ES, FR, IT) | ✅ | ✅ |
+| Language selection | ✅ | ✅ |
 | Dark mode | ✅ | ✅ |
 
 ## Getting Started (Development)
@@ -171,8 +176,8 @@ curl -X DELETE -H "Authorization: Bearer <token>" https://your-server/api/mobile
 
 1. Open the **Upload** tab.
 2. Tap **Photos**.
-3. Select an existing photo from the device's photo library.
-4. The image is uploaded and queued for processing.
+3. Select one or more photos from the device's photo library (multi-selection is supported).
+4. All selected images are uploaded and queued for processing.
 
 ### File Picker
 
@@ -240,6 +245,66 @@ If a file upload fails (e.g. due to network issues or a server error), the faile
 - **Long-press** the failed item to see a confirmation dialog with a **Retry** option.
 
 The retry re-uses the original file URI so no re-selection is needed.
+
+## Document Search
+
+The **Files** tab includes a search bar at the top that lets users search through their processed documents by filename. Searches are debounced (400ms) to avoid excessive API calls. Clear the search with the ✕ button to return to the full list.
+
+## File Detail View
+
+Tapping any document in the **Files** tab opens a detail view showing:
+
+- **File metadata**: filename, file size, MIME type, upload date, and file hash
+- **Processing status**: current status with a colour-coded icon
+- **Processing log**: chronological list of processing steps with individual status indicators and timestamps
+
+Pull-to-refresh updates the detail view. This replicates the web interface at `/files/{id}` and `/files/{id}/detail` in a mobile-friendly layout.
+
+## Legal & Compliance
+
+### GDPR & Apple App Store Compliance
+
+Privacy Policy, Terms of Service, and Imprint links are accessible **before login** from both the **Welcome Screen** and the **Login Screen**. This ensures compliance with:
+
+- **GDPR** (General Data Protection Regulation) – users must be able to review the privacy policy before providing personal data
+- **Apple App Store Review Guidelines** – apps must provide accessible privacy information before account creation
+
+Post-login, the same links are available in the **Profile** tab under the "Legal" section.
+
+## Localization (i18n)
+
+The mobile app supports five languages with automatic device-locale detection:
+
+| Language | Code | Status |
+|----------|------|--------|
+| English | `en` | ✅ Complete |
+| German (Deutsch) | `de` | ✅ Complete |
+| Spanish (Español) | `es` | ✅ Complete |
+| French (Français) | `fr` | ✅ Complete |
+| Italian (Italiano) | `it` | ✅ Complete |
+
+### How it works
+
+1. On app launch, `expo-localization` detects the device's preferred language
+2. If the device language matches a supported locale, that language is used automatically
+3. If no match is found, English is used as the fallback
+4. Users can manually switch languages from the **Profile** tab → **Settings** → **Language**
+
+### Adding a new language
+
+1. Create a new translation file in `mobile/src/i18n/` (e.g. `pt.json` for Portuguese)
+2. Copy the structure from `en.json` and translate all values
+3. Import the new file in `mobile/src/i18n/index.ts`
+4. Add it to the `translations` object and `getSupportedLanguages()` array
+
+## User Settings
+
+The **Profile** tab includes a **Settings** section where users can:
+
+- **Change language**: Select from the supported languages (English, German, Spanish, French, Italian)
+- View server connection details
+- Access legal documents (Privacy Policy, Terms of Service, Imprint)
+- Sign out or delete their account
 
 ## Mobile API Endpoints
 
@@ -346,8 +411,20 @@ mobile/
     │   ├── LoginScreen.tsx      # Server URL + SSO button + QR code scanner
     │   ├── QRScannerScreen.tsx  # Camera-based QR code scanner for login
     │   ├── UploadScreen.tsx     # Camera capture + photo library + file picker
-    │   ├── FilesScreen.tsx      # Processed document list
-    │   └── ProfileScreen.tsx    # User profile + sign out
+    │   ├── FilesScreen.tsx      # Processed document list with search
+    │   ├── FileDetailScreen.tsx # File detail view with processing logs
+    │   ├── ProfileScreen.tsx    # User profile + settings + sign out
+    │   └── WelcomeScreen.tsx    # Pre-login welcome with legal links
+    ├── i18n/                    # Localization (i18n)
+    │   ├── index.ts             # i18n module (locale detection, t() function)
+    │   ├── en.json              # English translations
+    │   ├── de.json              # German translations
+    │   ├── es.json              # Spanish translations
+    │   ├── fr.json              # French translations
+    │   └── it.json              # Italian translations
+    ├── utils/
+    │   ├── mimeTypes.ts         # MIME type mapping for file extensions
+    │   └── normalizeUri.ts      # URI normalization for deduplication
     └── services/
         └── api.ts               # DocuElevate REST API client
 ```

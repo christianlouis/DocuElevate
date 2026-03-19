@@ -87,7 +87,7 @@ DocuElevate provides multiple convenient ways to upload documents to the system.
 
 #### Supported File Types
 - **Documents**: PDF, Word (.doc, .docx), Excel (.xls, .xlsx), PowerPoint (.ppt, .pptx)
-- **Images**: JPEG, PNG, GIF, BMP, TIFF, WebP, SVG
+- **Images**: JPEG, PNG, GIF, BMP, TIFF, WebP, SVG, HEIC, HEIF
 - **Text**: Plain text (.txt), CSV, RTF, HTML, XML, Markdown
 - **Maximum file size**: 500MB per file
 

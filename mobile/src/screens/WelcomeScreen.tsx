@@ -6,6 +6,7 @@
  */
 
 import { useRouter } from "expo-router";
+import * as Linking from "expo-linking";
 import React from "react";
 import {
   Image,
@@ -87,6 +88,36 @@ export default function WelcomeScreen() {
         <Text style={styles.hint}>
           Connect to your self-hosted or cloud DocuElevate server.
         </Text>
+
+        {/* Legal links – accessible pre-login for GDPR / Apple compliance */}
+        <View style={styles.legalLinks}>
+          <Pressable
+            onPress={() => Linking.openURL("https://app.docuelevate.org/privacy")}
+            accessibilityRole="link"
+            accessibilityLabel="Privacy Policy"
+            style={styles.legalLinkButton}
+          >
+            <Text style={styles.legalLinkText}>Privacy Policy</Text>
+          </Pressable>
+          <Text style={styles.legalSeparator}>·</Text>
+          <Pressable
+            onPress={() => Linking.openURL("https://app.docuelevate.org/terms")}
+            accessibilityRole="link"
+            accessibilityLabel="Terms of Service"
+            style={styles.legalLinkButton}
+          >
+            <Text style={styles.legalLinkText}>Terms</Text>
+          </Pressable>
+          <Text style={styles.legalSeparator}>·</Text>
+          <Pressable
+            onPress={() => Linking.openURL("https://app.docuelevate.org/imprint")}
+            accessibilityRole="link"
+            accessibilityLabel="Imprint"
+            style={styles.legalLinkButton}
+          >
+            <Text style={styles.legalLinkText}>Imprint</Text>
+          </Pressable>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -205,5 +236,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "rgba(255,255,255,0.55)",
     textAlign: "center",
+  },
+  legalLinks: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 20,
+    flexWrap: "wrap",
+  },
+  legalLinkButton: {
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  legalLinkText: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.65)",
+    textDecorationLine: "underline",
+  },
+  legalSeparator: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.45)",
+    marginHorizontal: 4,
   },
 });

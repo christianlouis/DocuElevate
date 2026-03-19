@@ -4,7 +4,7 @@
 
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
-import React from "react";
+import React, { useState } from "react";
 import {
   Alert,
   Image,
@@ -15,14 +15,17 @@ import {
   View,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
+import { getLanguage, getSupportedLanguages, setLanguage } from "../i18n";
 
 const DEFAULT_SERVER_URL = "https://app.docuelevate.org";
 
 export default function ProfileScreen() {
   const { user, signOut, baseUrl } = useAuth();
+  const [selectedLanguage, setSelectedLanguage] = useState(getLanguage());
 
   const effectiveBaseUrl = baseUrl || DEFAULT_SERVER_URL;
   const appVersion = Constants.expoConfig?.version ?? "1.0.0";
+  const languages = getSupportedLanguages();
 
   function handleSignOut() {
     Alert.alert("Sign out", "Are you sure you want to sign out?", [
@@ -63,6 +66,12 @@ export default function ProfileScreen() {
   function openTermsOfService() {
     Linking.openURL(`${effectiveBaseUrl}/terms`).catch(() => {
       Alert.alert("Error", "Could not open the terms of service. Please try again.");
+    });
+  }
+
+  function openImprint() {
+    Linking.openURL(`${effectiveBaseUrl}/imprint`).catch(() => {
+      Alert.alert("Error", "Could not open the imprint page. Please try again.");
     });
   }
 
@@ -113,6 +122,39 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* Settings */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Settings</Text>
+        <Text style={styles.settingLabel}>Language</Text>
+        <View style={styles.languageGrid}>
+          {languages.map((lang) => (
+            <Pressable
+              key={lang.code}
+              style={[
+                styles.languageChip,
+                selectedLanguage === lang.code && styles.languageChipActive,
+              ]}
+              onPress={() => {
+                setLanguage(lang.code);
+                setSelectedLanguage(lang.code);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Set language to ${lang.label}`}
+              accessibilityState={{ selected: selectedLanguage === lang.code }}
+            >
+              <Text
+                style={[
+                  styles.languageChipText,
+                  selectedLanguage === lang.code && styles.languageChipTextActive,
+                ]}
+              >
+                {lang.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
       {/* Legal & Privacy */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Legal</Text>
@@ -132,6 +174,15 @@ export default function ProfileScreen() {
           accessibilityLabel="Terms of Service"
         >
           <Text style={styles.linkText}>Terms of Service</Text>
+          <Text style={styles.linkChevron}>›</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.linkRow, styles.linkRowLast]}
+          onPress={openImprint}
+          accessibilityRole="link"
+          accessibilityLabel="Imprint"
+        >
+          <Text style={styles.linkText}>Imprint</Text>
           <Text style={styles.linkChevron}>›</Text>
         </Pressable>
       </View>
@@ -264,6 +315,9 @@ const styles = StyleSheet.create({
     borderBottomColor: "#f3f4f6",
     minHeight: 44,
   },
+  linkRowLast: {
+    borderBottomWidth: 0,
+  },
   linkText: {
     fontSize: 15,
     color: "#1e40af",
@@ -304,5 +358,39 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     textAlign: "center",
     marginTop: 8,
+  },
+  settingLabel: {
+    fontSize: 14,
+    color: "#374151",
+    fontWeight: "500",
+    marginBottom: 10,
+  },
+  languageGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  languageChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    minHeight: 36,
+    justifyContent: "center",
+  },
+  languageChipActive: {
+    backgroundColor: "#dbeafe",
+    borderColor: "#1e40af",
+  },
+  languageChipText: {
+    fontSize: 13,
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  languageChipTextActive: {
+    color: "#1e40af",
+    fontWeight: "700",
   },
 });

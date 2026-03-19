@@ -67,6 +67,15 @@ export default function TabLayout() {
           headerTitle: "Profile",
         }}
       />
+      {/* File detail screen – hidden from tab bar, accessed via navigation */}
+      <Tabs.Screen
+        name="file-detail"
+        options={{
+          href: null,
+          title: "File Details",
+          headerTitle: "File Details",
+        }}
+      />
     </Tabs>
   );
 }
