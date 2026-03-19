@@ -45,7 +45,9 @@ export default function ProfileScreen() {
           text: "Delete Account",
           style: "destructive",
           onPress: () => {
-            Linking.openURL(`${effectiveBaseUrl}/account/delete`);
+            Linking.openURL(`${effectiveBaseUrl}/account/delete`).catch(() => {
+              Alert.alert("Error", "Could not open the account deletion page. Please try again.");
+            });
           },
         },
       ]
@@ -53,11 +55,15 @@ export default function ProfileScreen() {
   }
 
   function openPrivacyPolicy() {
-    Linking.openURL(`${effectiveBaseUrl}/privacy`);
+    Linking.openURL(`${effectiveBaseUrl}/privacy`).catch(() => {
+      Alert.alert("Error", "Could not open the privacy policy. Please try again.");
+    });
   }
 
   function openTermsOfService() {
-    Linking.openURL(`${effectiveBaseUrl}/terms`);
+    Linking.openURL(`${effectiveBaseUrl}/terms`).catch(() => {
+      Alert.alert("Error", "Could not open the terms of service. Please try again.");
+    });
   }
 
   if (!user) {

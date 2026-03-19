@@ -95,8 +95,9 @@ export default function UploadScreen() {
     try {
       await FileSystem.copyAsync({ from: uri, to: destUri });
       return destUri;
-    } catch {
+    } catch (copyErr) {
       // Copy failed – fall back to the original URI (might work for some paths).
+      console.warn("[ensureLocalUri] copyAsync failed:", { from: uri, to: destUri, error: copyErr });
       return uri;
     }
   }, []);

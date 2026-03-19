@@ -185,8 +185,9 @@ The privacy manifest is configured via `expo-build-properties` plugin in `app.js
 ### 4.4 Document Handling ✅
 
 - `CFBundleDocumentTypes` properly declares supported file types.
-- `LSSupportsOpeningDocumentsInPlace: true` enables direct file access from the Files app.
+- `LSSupportsOpeningDocumentsInPlace: false` ensures iOS copies shared files to the app's accessible Inbox directory, avoiding security-scoped URL issues.
 - The `+not-found.tsx` handler correctly intercepts iOS "Open In…" file paths.
+- `UploadScreen` uses `expo-file-system` to copy external files to cache before uploading for reliable file access.
 
 ### 4.5 Crash Resistance ✅
 
