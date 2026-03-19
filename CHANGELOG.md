@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.158.3 (2026-03-19)
+
+### Bug Fixes
+
+- **upload**: Reject exact duplicates at upload time and prevent duplicate mobile uploads
+  ([`d5c18cc`](https://github.com/christianlouis/DocuElevate/commit/d5c18ccf07efa28532724a78e63cc6bd7eab9515))
+
+### Refactoring
+
+- **mobile**: Extract normalizeFileUri to shared utility module
+  ([`ec88221`](https://github.com/christianlouis/DocuElevate/commit/ec882214e29d22da9d8025ea857ba754fbddae37))
+
+
 ## v0.158.2 (2026-03-19)
 
 ### Bug Fixes
