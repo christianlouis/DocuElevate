@@ -46,6 +46,7 @@ except ImportError:  # pragma: no cover
     class _DropboxBadInputError(Exception):  # type: ignore[no-redef]
         """Stub — only used when the dropbox package is missing."""
 
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
@@ -593,7 +594,10 @@ def _test_dropbox_connection(config: dict[str, Any] | None, credentials: dict[st
         return {"success": True, "message": f"Dropbox connection successful{name_str}"}
     except _DropboxAuthError as exc:
         logger.warning("Dropbox auth error: %s", exc)
-        return {"success": False, "message": "Dropbox authentication failed — check app_key, app_secret, and refresh_token"}
+        return {
+            "success": False,
+            "message": "Dropbox authentication failed — check app_key, app_secret, and refresh_token",
+        }
     except _DropboxBadInputError as exc:
         logger.warning("Dropbox bad input error: %s", exc)
         return {"success": False, "message": "Dropbox connection failed — invalid credentials format"}

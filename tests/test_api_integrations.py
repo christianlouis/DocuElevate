@@ -932,9 +932,7 @@ class TestConnectionTestEndpoint:
         with patch("app.api.integrations.dbx_lib") as mock_dbx:
             mock_instance = MagicMock()
             mock_dbx.Dropbox.return_value = mock_instance
-            mock_instance.users_get_current_account.side_effect = dbx_exc.AuthError(
-                "req_id", MagicMock()
-            )
+            mock_instance.users_get_current_account.side_effect = dbx_exc.AuthError("req_id", MagicMock())
             payload = {
                 "integration_type": "DROPBOX",
                 "config": {},
