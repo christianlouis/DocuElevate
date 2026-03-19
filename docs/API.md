@@ -115,7 +115,8 @@ curl -X GET "http://<your-docuelevate-instance>/api/files" \
 |--------|----------|-------------|
 | `POST` | `/api/api-tokens/` | Create a new token |
 | `GET` | `/api/api-tokens/` | List all your tokens |
-| `DELETE` | `/api/api-tokens/{id}` | Revoke a token |
+| `DELETE` | `/api/api-tokens/{id}` | Revoke (active) or permanently delete (revoked) a token |
+| `POST` | `/api/api-tokens/{id}/reactivate` | Reactivate a revoked token |
 
 ### Session Authentication
 
@@ -2127,12 +2128,14 @@ Usage tracking records when each token was last used and from which IP address.
 
 ### POST /api/api-tokens/
 
-Create a new API token.
+Create a new API token.  Optionally specify a lifetime in days via
+`expires_in_days` (1–3650).  If omitted the token never expires.
 
 **Request:**
 ```json
 {
-  "name": "CI Pipeline"
+  "name": "CI Pipeline",
+  "expires_in_days": 90
 }
 ```
 
@@ -2147,7 +2150,8 @@ Create a new API token.
   "last_used_at": null,
   "last_used_ip": null,
   "created_at": "2026-03-08T12:00:00Z",
-  "revoked_at": null
+  "revoked_at": null,
+  "expires_at": "2026-06-06T12:00:00Z"
 }
 ```
 
@@ -2169,15 +2173,20 @@ List all tokens for the authenticated user. The full token value is never includ
     "last_used_at": "2026-03-08T15:30:00Z",
     "last_used_ip": "203.0.113.42",
     "created_at": "2026-03-08T12:00:00Z",
-    "revoked_at": null
+    "revoked_at": null,
+    "expires_at": "2026-06-06T12:00:00Z"
   }
 ]
 ```
 
 ### DELETE /api/api-tokens/{token_id}
 
-Revoke a token. The token is soft-deleted (kept for audit purposes) and can no
-longer be used for authentication.
+Revoke or permanently delete a token:
+
+* **Active token** – soft-revoked (kept for audit purposes, marked inactive).
+  Response: `{"detail": "Token revoked"}`
+* **Already-revoked token** – permanently deleted from the database.
+  Response: `{"detail": "Token deleted"}`
 
 **Response (200):**
 ```json
@@ -2185,6 +2194,13 @@ longer be used for authentication.
   "detail": "Token revoked"
 }
 ```
+
+### POST /api/api-tokens/{token_id}/reactivate
+
+Reactivate a previously revoked token.  Clears `revoked_at` and sets
+`is_active` back to `true`.
+
+**Response (200):** The updated `TokenResponse` object.
 
 ### Using API Tokens
 
@@ -2268,9 +2284,14 @@ List all registered push-notification devices for the current user.
 
 ### DELETE /api/mobile/devices/{device_id}
 
-Deactivate a push-notification device.  The device will no longer receive push notifications.
+Deactivate or permanently delete a push-notification device:
 
-**Response (204 No Content)**
+* **Active device** – soft-deactivated (record kept, will no longer receive push notifications).
+  Response: `{"detail": "Device deactivated"}`
+* **Already-inactive device** – permanently deleted from the database.
+  Response: `{"detail": "Device deleted"}`
+
+**Response (200)**
 
 ### GET /api/mobile/whoami
 
