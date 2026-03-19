@@ -10,6 +10,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.158.0 (2026-03-19)
+
+### Bug Fixes
+
+- Address code review feedback (assertion, exc_info logging)
+  ([`faa68ad`](https://github.com/christianlouis/DocuElevate/commit/faa68adaa143774a8757fda4fd0248cc3aef551e))
+
+- **config**: Add SETTING_METADATA for db pool and upload rate limit settings
+  ([`1d7286c`](https://github.com/christianlouis/DocuElevate/commit/1d7286c4c68de903951d9819bcb58ae1300dab7b))
+
+- **config**: Remove duplicate dictionary keys and class fields from merge
+  ([`d34b8bc`](https://github.com/christianlouis/DocuElevate/commit/d34b8bceb9f96719bf5c922156d5487a4c6426b4))
+
+- **db**: Use NullPool for SQLite and expose pool tuning settings
+  ([`56bf665`](https://github.com/christianlouis/DocuElevate/commit/56bf66539757cf1d98fe251ad64fb75b481462ef))
+
+- **tests**: Add docstring to rate limiter no-op override
+  ([`c9f9001`](https://github.com/christianlouis/DocuElevate/commit/c9f900124407baa230b38f6e1d0f5ee78e0bedcc))
+
+- **tests**: Disable upload rate limiter in test client fixture
+  ([`6bf121f`](https://github.com/christianlouis/DocuElevate/commit/6bf121f02f2c32f7b73435f42d30b9681710089e))
+
+### Features
+
+- **api**: Add per-user health-aware upload rate limiting
+  ([`571cc81`](https://github.com/christianlouis/DocuElevate/commit/571cc817893a1f4cbd7cfbee7f1c46ca1a4f14d8))
+
+
 ## v0.157.2 (2026-03-19)
 
 ### Bug Fixes
