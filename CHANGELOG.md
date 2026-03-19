@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.158.1 (2026-03-19)
+
+### Bug Fixes
+
+- **mobile**: Add shared file to ShareContext directly in +not-found.tsx
+  ([`71a7a57`](https://github.com/christianlouis/DocuElevate/commit/71a7a57adc1bb6de88c060dba563afa433283e38))
+
+
 ## v0.158.0 (2026-03-19)
 
 ### Bug Fixes
