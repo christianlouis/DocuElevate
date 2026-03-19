@@ -9,6 +9,11 @@
  * sheet (CFBundleDocumentTypes) or Android via a SEND intent, the incoming
  * file:// / content:// URL is captured and forwarded to UploadScreen via
  * ShareContext.
+ *
+ * The companion `+not-found.tsx` handles the case where expo-router receives
+ * a `docuelevate://` URL with a filesystem path (from iOS "Open In…") and
+ * cannot match it to a route.  It detects the pattern and redirects to the
+ * Upload tab so the file — already in ShareContext — is uploaded transparently.
  */
 
 import * as Linking from "expo-linking";
@@ -43,10 +48,16 @@ function filenameFromUri(uri: string): string {
  * URLs to ShareContext.  Extracted as a module-level factory so the handler
  * itself is created once and can be easily unit-tested without a React context.
  *
- * On iOS the Share Sheet / "Open In" action may deliver the file path under
+ * On iOS the Share Sheet / "Open In…" action may deliver the file path under
  * the app's custom URL scheme (`docuelevate://…/file.pdf`) instead of a plain
  * `file://` URL.  When that happens we rewrite the URL to `file:///…` so the
  * upload logic can read the file normally.
+ *
+ * Note: expo-router also receives the same URL and will attempt to match it as
+ * an in-app route.  When no route matches it renders `+not-found.tsx`, which
+ * redirects to the Upload tab.  This handler and `+not-found.tsx` work in
+ * concert: this handler adds the file to ShareContext, and `+not-found.tsx`
+ * ensures the user lands on the Upload tab so the file is uploaded.
  */
 function makeUrlHandler(addPendingFile: (f: { uri: string; filename: string }) => void) {
   return ({ url }: { url: string }) => {
@@ -121,6 +132,8 @@ function AuthGuard() {
       <Stack.Screen name="index" />
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
+      {/* +not-found handles unmatched routes such as iOS "Open In…" file paths */}
+      <Stack.Screen name="+not-found" />
     </Stack>
   );
 }

@@ -198,6 +198,24 @@ The app registers itself as a share target so any file can be sent directly to D
 
 The URL may arrive as a standard `file://` path **or** under the app's custom `docuelevate://` scheme (e.g. `docuelevate://private/var/mobile/Library/…/file.pdf`).  The root layout detects the custom-scheme form and rewrites it to a `file://` URL before forwarding it to the Upload screen through `ShareContext`.
 
+##### Handling "unmatched route" errors from "Open In…"
+
+iOS sometimes delivers the file path under the `docuelevate://` scheme, e.g.:
+
+```
+docuelevate://private/var/mobile/Library/Mobile Documents/…/Invoice.pdf
+```
+
+expo-router strips the scheme and tries to match `/private/var/mobile/…` as an in-app route.  Because no such route exists, it previously threw an **"unmatched route docuelevate://"** error and the upload never completed.
+
+The fix is a catch-all `+not-found.tsx` route (see `mobile/app/+not-found.tsx`).  When expo-router cannot match the path, it renders this screen instead.  The screen detects that the path is a filesystem path rather than a real in-app route and immediately redirects to the Upload tab.  The `Linking` listener registered in the root layout has concurrently (or will shortly) added the file to `ShareContext`, so the upload proceeds normally once the user lands on the Upload tab.
+
+##### iOS Action / Share Extension (future enhancement)
+
+Apps like DeepL ("Translate in DeepL") and Microsoft Word ("Convert to Word") appear as **Action Extensions** in the iOS share sheet — a system-level feature that requires a separate Xcode target built with Swift or Objective-C.  A proper Action Extension runs in its own process and must share authentication credentials with the main app via an iOS **App Group** (shared keychain / shared container).
+
+This level of iOS-native integration is a planned future enhancement.  Until it is available, the recommended workflow is the current one: tap **Share → DocuElevate** (the app appears in the "Open With" row of the share sheet via `CFBundleDocumentTypes`).
+
 #### Android implementation
 
 `app.json` declares `ACTION_SEND` and `ACTION_SEND_MULTIPLE` intent filters for `mimeType: "*/*"` in the `android.intentFilters` section.  Incoming content URIs are received the same way as on iOS.
