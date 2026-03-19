@@ -103,11 +103,18 @@ if AUTH_ENABLED and settings.social_auth_apple_enabled:
         logger.warning("SOCIAL_AUTH_APPLE_ENABLED=true but client ID/team ID not configured")
 
 if AUTH_ENABLED and settings.social_auth_dropbox_enabled:
-    if settings.social_auth_dropbox_client_id and settings.social_auth_dropbox_client_secret:
+    # Determine which credentials to use for Dropbox social login
+    _dropbox_client_id = settings.social_auth_dropbox_client_id
+    _dropbox_client_secret = settings.social_auth_dropbox_client_secret
+    if settings.social_auth_dropbox_use_global_credentials and not _dropbox_client_id:
+        _dropbox_client_id = settings.dropbox_app_key
+        _dropbox_client_secret = settings.dropbox_app_secret
+
+    if _dropbox_client_id and _dropbox_client_secret:
         oauth.register(
             name="dropbox",
-            client_id=settings.social_auth_dropbox_client_id,
-            client_secret=settings.social_auth_dropbox_client_secret,
+            client_id=_dropbox_client_id,
+            client_secret=_dropbox_client_secret,
             authorize_url="https://www.dropbox.com/oauth2/authorize",
             access_token_url="https://api.dropboxapi.com/oauth2/token",
             userinfo_endpoint="https://api.dropboxapi.com/2/users/get_current_account",

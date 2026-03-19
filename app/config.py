@@ -120,6 +120,16 @@ class Settings(BaseSettings):
     dropbox_app_secret: Optional[str] = None
     dropbox_folder: Optional[str] = None
     dropbox_refresh_token: Optional[str] = None
+    dropbox_allow_global_credentials_for_integrations: bool = Field(
+        default=False,
+        description=(
+            "When True, users may authorize their personal Dropbox integrations using the global "
+            "DROPBOX_APP_KEY / DROPBOX_APP_SECRET credentials configured by the admin, without "
+            "needing to create their own Dropbox app. The Dropbox OAuth flow is initiated "
+            "server-side so the app secret is never exposed to the browser. "
+            "Default: False (each user must supply their own app credentials)."
+        ),
+    )
 
     # Making Nextcloud optional
     nextcloud_enabled: bool = Field(
@@ -317,6 +327,16 @@ class Settings(BaseSettings):
     social_auth_dropbox_enabled: bool = False
     social_auth_dropbox_client_id: Optional[str] = None
     social_auth_dropbox_client_secret: Optional[str] = None
+    social_auth_dropbox_use_global_credentials: bool = Field(
+        default=False,
+        description=(
+            "When True, Dropbox social login uses the global DROPBOX_APP_KEY / DROPBOX_APP_SECRET "
+            "credentials (the storage integration credentials) instead of requiring separate "
+            "SOCIAL_AUTH_DROPBOX_CLIENT_ID / SOCIAL_AUTH_DROPBOX_CLIENT_SECRET values. "
+            "Requires SOCIAL_AUTH_DROPBOX_ENABLED=True and the global Dropbox app credentials to be set. "
+            "Default: False."
+        ),
+    )
 
     # Local user signup
     allow_local_signup: bool = Field(

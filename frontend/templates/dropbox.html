@@ -116,6 +116,34 @@
     </h2>
 
     <div class="space-y-4">
+      {% if user_mode and global_creds_available %}
+      <!-- Global credentials mode: no app credentials required from the user -->
+      <div class="bg-blue-50 border border-blue-200 rounded-md p-4" role="note">
+        <div class="flex items-start">
+          <svg class="h-5 w-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+          </svg>
+          <div>
+            <p class="text-sm font-medium text-blue-800">Using shared application credentials</p>
+            <p class="text-sm text-blue-700 mt-1">Your administrator has enabled shared Dropbox app credentials. You can authorize your account without supplying your own App Key and Secret.</p>
+          </div>
+        </div>
+      </div>
+
+      {% if folder_path %}
+      <div class="bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+        <p class="text-xs text-gray-500">Target folder (from integration settings)</p>
+        <p class="text-sm font-mono text-gray-700">{{ folder_path }}</p>
+      </div>
+      {% endif %}
+
+      <div>
+        <button id="start-auth-flow-global" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+          <i class="fab fa-dropbox mr-2" aria-hidden="true"></i>
+          Authorize with Dropbox
+        </button>
+      </div>
+      {% else %}
       <div>
         <label for="app-key" class="block text-sm font-medium text-gray-700">App Key <span class="text-red-500" aria-hidden="true">*</span></label>
         <input type="text" id="app-key" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Dropbox app key" value="{{ app_key_value }}">
@@ -146,6 +174,7 @@
           Start Authentication Flow
         </button>
       </div>
+      {% endif %}
 
       <!-- Token validation and status (admin mode only) -->
       {% if not user_mode %}
@@ -268,6 +297,7 @@ DROPBOX_FOLDER={{ folder_path|default('/Documents/Uploads', true) }}</code></pre
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const userMode = {{ 'true' if user_mode else 'false' }};
+  const globalCredsAvailable = {{ 'true' if global_creds_available else 'false' }};
 
   // Store integration_id if provided (for per-user OAuth flow)
   const integrationId = "{{ integration_id or '' }}";
@@ -277,6 +307,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Elements
   const startAuthFlowBtn = document.getElementById('start-auth-flow');
+  const startAuthFlowGlobalBtn = document.getElementById('start-auth-flow-global');
   const testTokenBtn = document.getElementById('test-token');
   const refreshTokenBtn = document.getElementById('refresh-token-btn');
   const tokenStatus = document.getElementById('token-status');
@@ -328,8 +359,35 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
+  // Global-credentials "Authorize with Dropbox" button (user mode, admin-provided creds)
+  if (startAuthFlowGlobalBtn) {
+    startAuthFlowGlobalBtn.addEventListener('click', async function() {
+      startAuthFlowGlobalBtn.disabled = true;
+      startAuthFlowGlobalBtn.innerHTML = '<span class="animate-spin inline-block mr-2">⟳</span> Redirecting…';
+      try {
+        const resp = await fetch('/api/dropbox/global-authorize-url');
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          showModal('error', 'Error', err.detail || 'Could not retrieve authorization URL.');
+          startAuthFlowGlobalBtn.disabled = false;
+          startAuthFlowGlobalBtn.innerHTML = '<i class="fab fa-dropbox mr-2" aria-hidden="true"></i>Authorize with Dropbox';
+          return;
+        }
+        const data = await resp.json();
+        // Signal to the callback that global credentials should be used for the exchange
+        sessionStorage.setItem('dropbox_use_global_creds', 'true');
+        window.location.href = data.authorize_url;
+      } catch (err) {
+        showModal('error', 'Network Error', err.message || 'Unknown error');
+        startAuthFlowGlobalBtn.disabled = false;
+        startAuthFlowGlobalBtn.innerHTML = '<i class="fab fa-dropbox mr-2" aria-hidden="true"></i>Authorize with Dropbox';
+      }
+    });
+  }
+
   // Start Authentication Flow button click
-  startAuthFlowBtn.addEventListener('click', function() {
+  if (startAuthFlowBtn) {
+    startAuthFlowBtn.addEventListener('click', function() {
     const appKey = document.getElementById('app-key').value.trim();
     const appSecret = appSecretInput.value.trim();
     const redirectUri = window.location.origin + "/dropbox-callback";
@@ -362,6 +420,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Redirect the user to the Dropbox login page
     window.location.href = authUrl;
   });
+  } // end if (startAuthFlowBtn)
 
   // Test Token button click (admin mode only)
   if (testTokenBtn) {

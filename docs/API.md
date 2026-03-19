@@ -1379,7 +1379,7 @@ Test an integration connection without saving. Useful for "Test connection" UI b
 {"success": true, "message": "IMAP connection successful"}
 ```
 
-Supported connection tests: `IMAP`, `S3`, `WEBDAV`, `NEXTCLOUD`. Other types return a message that testing is not yet supported.
+Supported connection tests: `DROPBOX`, `IMAP`, `S3`, `WEBDAV`, `NEXTCLOUD`. Other types return a message that testing is not yet supported.
 
 ### GET /api/integrations/quota/
 

@@ -887,15 +887,94 @@ class TestConnectionTestEndpoint:
     def test_test_unsupported_type(self, int_client):
         """Unsupported integration types return a helpful non-error message."""
         payload = {
-            "integration_type": "DROPBOX",
+            "integration_type": "FTP",
             "config": {},
-            "credentials": {"token": "abc"},
+            "credentials": {"username": "user", "password": "pass"},
         }
         resp = int_client.post("/api/integrations/test", json=payload)
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is False
         assert "not yet supported" in data["message"]
+
+    def test_test_dropbox_missing_refresh_token(self, int_client):
+        """Dropbox test with missing refresh_token returns failure."""
+        payload = {
+            "integration_type": "DROPBOX",
+            "config": {},
+            "credentials": {"app_key": "key", "app_secret": "secret"},
+        }
+        resp = int_client.post("/api/integrations/test", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert "refresh_token" in data["message"].lower()
+
+    def test_test_dropbox_missing_app_key(self, int_client):
+        """Dropbox test with missing app_key/app_secret returns failure."""
+        payload = {
+            "integration_type": "DROPBOX",
+            "config": {},
+            "credentials": {"refresh_token": "rtoken"},
+        }
+        resp = int_client.post("/api/integrations/test", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert "app_key" in data["message"].lower()
+
+    def test_test_dropbox_invalid_credentials(self, int_client):
+        """Dropbox test with bad credentials returns an auth failure."""
+        from unittest.mock import MagicMock, patch
+
+        import dropbox.exceptions as dbx_exc
+
+        with patch("app.api.integrations.dbx_lib") as mock_dbx:
+            mock_instance = MagicMock()
+            mock_dbx.Dropbox.return_value = mock_instance
+            mock_instance.users_get_current_account.side_effect = dbx_exc.AuthError(
+                "req_id", MagicMock()
+            )
+            payload = {
+                "integration_type": "DROPBOX",
+                "config": {},
+                "credentials": {
+                    "app_key": "bad_key",
+                    "app_secret": "bad_secret",
+                    "refresh_token": "bad_token",
+                },
+            }
+            resp = int_client.post("/api/integrations/test", json=payload)
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["success"] is False
+            assert "authentication failed" in data["message"].lower()
+
+    def test_test_dropbox_success(self, int_client):
+        """Dropbox test with valid (mocked) credentials returns success."""
+        from unittest.mock import MagicMock, patch
+
+        with patch("app.api.integrations.dbx_lib") as mock_dbx:
+            mock_instance = MagicMock()
+            mock_dbx.Dropbox.return_value = mock_instance
+            mock_account = MagicMock()
+            mock_account.name.display_name = "Test User"
+            mock_instance.users_get_current_account.return_value = mock_account
+
+            payload = {
+                "integration_type": "DROPBOX",
+                "config": {},
+                "credentials": {
+                    "app_key": "valid_key",
+                    "app_secret": "valid_secret",
+                    "refresh_token": "valid_token",
+                },
+            }
+            resp = int_client.post("/api/integrations/test", json=payload)
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["success"] is True
+            assert "dropbox connection successful" in data["message"].lower()
 
     def test_test_invalid_type_returns_400(self, int_client):
         """Invalid integration_type returns 400."""
