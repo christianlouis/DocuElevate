@@ -419,6 +419,149 @@ class TestSaveDropboxSettings:
 
 
 @pytest.mark.unit
+class TestListDropboxFolders:
+    """Tests for list_dropbox_folders endpoint."""
+
+    @patch("app.api.dropbox.requests.post")
+    def test_list_folders_success(self, mock_post, client):
+        """Test successful folder listing at root."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "entries": [
+                {".tag": "folder", "name": "Documents", "path_display": "/Documents", "id": "id:1"},
+                {".tag": "folder", "name": "Photos", "path_display": "/Photos", "id": "id:2"},
+                {".tag": "file", "name": "readme.txt", "path_display": "/readme.txt", "id": "id:3"},
+            ],
+            "has_more": False,
+        }
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/dropbox/list-folders",
+            data={"access_token": "test-token", "path": ""},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["folders"]) == 2
+        assert data["folders"][0]["name"] == "Documents"
+        assert data["folders"][1]["name"] == "Photos"
+        assert data["path"] == "/"
+        assert data["has_more"] is False
+
+    @patch("app.api.dropbox.requests.post")
+    def test_list_folders_subfolder(self, mock_post, client):
+        """Test listing folders in a subfolder."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "entries": [
+                {".tag": "folder", "name": "Invoices", "path_display": "/Documents/Invoices", "id": "id:4"},
+            ],
+            "has_more": False,
+        }
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/dropbox/list-folders",
+            data={"access_token": "test-token", "path": "/Documents"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["folders"]) == 1
+        assert data["folders"][0]["path"] == "/Documents/Invoices"
+
+    @patch("app.api.dropbox.requests.post")
+    def test_list_folders_empty(self, mock_post, client):
+        """Test listing folders in an empty directory."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"entries": [], "has_more": False}
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/dropbox/list-folders",
+            data={"access_token": "test-token", "path": "/EmptyFolder"},
+        )
+
+        assert response.status_code == 200
+        assert len(response.json()["folders"]) == 0
+
+    @patch("app.api.dropbox.requests.post")
+    def test_list_folders_unauthorized(self, mock_post, client):
+        """Test listing folders with invalid token returns 401."""
+        mock_response = Mock()
+        mock_response.status_code = 401
+        mock_response.text = "Invalid access token"
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/dropbox/list-folders",
+            data={"access_token": "bad-token", "path": ""},
+        )
+
+        assert response.status_code == 401
+
+    @patch("app.api.dropbox.requests.post")
+    def test_list_folders_api_error(self, mock_post, client):
+        """Test listing folders when Dropbox API returns an error."""
+        mock_response = Mock()
+        mock_response.status_code = 500
+        mock_response.text = "Internal server error"
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/dropbox/list-folders",
+            data={"access_token": "test-token", "path": ""},
+        )
+
+        assert response.status_code == 502
+
+    @patch("app.api.dropbox.requests.post")
+    def test_list_folders_root_path_normalization(self, mock_post, client):
+        """Test that '/' is normalized to empty string for Dropbox API."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"entries": [], "has_more": False}
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/dropbox/list-folders",
+            data={"access_token": "test-token", "path": "/"},
+        )
+
+        assert response.status_code == 200
+        # Check the actual API call used empty string for root
+        call_args = mock_post.call_args
+        assert call_args[1]["json"]["path"] == ""
+
+    @patch("app.api.dropbox.requests.post")
+    def test_list_folders_sorted_alphabetically(self, mock_post, client):
+        """Test that folders are returned in alphabetical order."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "entries": [
+                {".tag": "folder", "name": "Zebra", "path_display": "/Zebra", "id": "id:1"},
+                {".tag": "folder", "name": "Alpha", "path_display": "/Alpha", "id": "id:2"},
+                {".tag": "folder", "name": "middle", "path_display": "/middle", "id": "id:3"},
+            ],
+            "has_more": False,
+        }
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/dropbox/list-folders",
+            data={"access_token": "test-token", "path": ""},
+        )
+
+        assert response.status_code == 200
+        names = [f["name"] for f in response.json()["folders"]]
+        assert names == ["Alpha", "middle", "Zebra"]
+
+
 class TestBuildDropboxRedirectUri:
     """Tests for the _build_dropbox_redirect_uri helper."""
 

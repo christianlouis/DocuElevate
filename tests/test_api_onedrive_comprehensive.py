@@ -695,3 +695,182 @@ class TestOneDriveIntegration:
 
         # Verify env format is present (exact values may vary)
         assert "env_format" in config_data
+
+
+@pytest.mark.unit
+class TestListOneDriveFolders:
+    """Tests for list_onedrive_folders endpoint."""
+
+    @patch("app.api.onedrive.requests.get")
+    def test_list_folders_success(self, mock_get, client):
+        """Test successful folder listing at root."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "value": [
+                {
+                    "name": "Documents",
+                    "id": "id:1",
+                    "folder": {"childCount": 3},
+                    "parentReference": {"path": "/drive/root:"},
+                },
+                {
+                    "name": "Pictures",
+                    "id": "id:2",
+                    "folder": {"childCount": 10},
+                    "parentReference": {"path": "/drive/root:"},
+                },
+            ],
+        }
+        mock_get.return_value = mock_response
+
+        response = client.post(
+            "/api/onedrive/list-folders",
+            data={"access_token": "test-token", "path": ""},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["folders"]) == 2
+        assert data["folders"][0]["name"] == "Documents"
+        assert data["folders"][0]["path"] == "/Documents"
+        assert data["folders"][1]["name"] == "Pictures"
+        assert data["path"] == "/"
+
+    @patch("app.api.onedrive.requests.get")
+    def test_list_folders_subfolder(self, mock_get, client):
+        """Test listing folders in a subfolder."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "value": [
+                {
+                    "name": "Invoices",
+                    "id": "id:3",
+                    "folder": {"childCount": 0},
+                    "parentReference": {"path": "/drive/root:/Documents"},
+                },
+            ],
+        }
+        mock_get.return_value = mock_response
+
+        response = client.post(
+            "/api/onedrive/list-folders",
+            data={"access_token": "test-token", "path": "Documents"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["folders"]) == 1
+        assert data["folders"][0]["path"] == "/Documents/Invoices"
+        assert data["path"] == "/Documents"
+
+    @patch("app.api.onedrive.requests.get")
+    def test_list_folders_empty(self, mock_get, client):
+        """Test listing folders in an empty directory."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"value": []}
+        mock_get.return_value = mock_response
+
+        response = client.post(
+            "/api/onedrive/list-folders",
+            data={"access_token": "test-token", "path": "EmptyFolder"},
+        )
+
+        assert response.status_code == 200
+        assert len(response.json()["folders"]) == 0
+
+    @patch("app.api.onedrive.requests.get")
+    def test_list_folders_unauthorized(self, mock_get, client):
+        """Test listing folders with invalid token returns 401."""
+        mock_response = Mock()
+        mock_response.status_code = 401
+        mock_response.text = "Invalid access token"
+        mock_get.return_value = mock_response
+
+        response = client.post(
+            "/api/onedrive/list-folders",
+            data={"access_token": "bad-token", "path": ""},
+        )
+
+        assert response.status_code == 401
+
+    @patch("app.api.onedrive.requests.get")
+    def test_list_folders_api_error(self, mock_get, client):
+        """Test listing folders when Graph API returns an error."""
+        mock_response = Mock()
+        mock_response.status_code = 500
+        mock_response.text = "Internal server error"
+        mock_get.return_value = mock_response
+
+        response = client.post(
+            "/api/onedrive/list-folders",
+            data={"access_token": "test-token", "path": ""},
+        )
+
+        assert response.status_code == 502
+
+    @patch("app.api.onedrive.requests.get")
+    def test_list_folders_sorted_alphabetically(self, mock_get, client):
+        """Test that folders are returned in alphabetical order."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "value": [
+                {
+                    "name": "Zebra",
+                    "id": "id:1",
+                    "folder": {"childCount": 0},
+                    "parentReference": {"path": "/drive/root:"},
+                },
+                {
+                    "name": "Alpha",
+                    "id": "id:2",
+                    "folder": {"childCount": 0},
+                    "parentReference": {"path": "/drive/root:"},
+                },
+                {
+                    "name": "middle",
+                    "id": "id:3",
+                    "folder": {"childCount": 0},
+                    "parentReference": {"path": "/drive/root:"},
+                },
+            ],
+        }
+        mock_get.return_value = mock_response
+
+        response = client.post(
+            "/api/onedrive/list-folders",
+            data={"access_token": "test-token", "path": ""},
+        )
+
+        assert response.status_code == 200
+        names = [f["name"] for f in response.json()["folders"]]
+        assert names == ["Alpha", "middle", "Zebra"]
+
+    @patch("app.api.onedrive.requests.get")
+    def test_list_folders_root_drive_parent(self, mock_get, client):
+        """Test folder path construction when parentReference.path is /drive/root."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "value": [
+                {
+                    "name": "TopLevel",
+                    "id": "id:1",
+                    "folder": {"childCount": 0},
+                    "parentReference": {"path": "/drive/root"},
+                },
+            ],
+        }
+        mock_get.return_value = mock_response
+
+        response = client.post(
+            "/api/onedrive/list-folders",
+            data={"access_token": "test-token", "path": ""},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["folders"][0]["path"] == "/TopLevel"
