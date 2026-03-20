@@ -144,3 +144,61 @@ class TestDropboxViews:
         assert response.status_code == 200
         assert b"/Documents/Uploads" in response.content
         assert b"Back to Integrations" in response.content
+
+    def test_dropbox_setup_user_mode_system_credentials_shown(self, client, db_session):
+        """Test that system credentials toggle appears when system creds are configured."""
+        owner_id = "user_sys_creds@example.com"
+        integration = UserIntegration(
+            owner_id=owner_id,
+            direction="DESTINATION",
+            integration_type="DROPBOX",
+            name="My Dropbox",
+            config=json.dumps({"folder": "/test"}),
+            is_active=True,
+        )
+        db_session.add(integration)
+        db_session.commit()
+        db_session.refresh(integration)
+
+        with (
+            patch("app.views.dropbox.get_current_owner_id", return_value=owner_id),
+            patch("app.views.dropbox.settings") as mock_settings,
+        ):
+            mock_settings.dropbox_app_key = "system-key"
+            mock_settings.dropbox_app_secret = "system-secret"
+            mock_settings.dropbox_refresh_token = None
+            mock_settings.dropbox_folder = None
+            response = client.get(f"/dropbox-setup?integration_id={integration.id}")
+
+        assert response.status_code == 200
+        assert b"use-system-creds" in response.content
+        assert b"DocuElevate" in response.content
+
+    def test_dropbox_setup_user_mode_no_system_credentials(self, client, db_session):
+        """Test that system credentials toggle is hidden when no system creds configured."""
+        owner_id = "user_no_sys@example.com"
+        integration = UserIntegration(
+            owner_id=owner_id,
+            direction="DESTINATION",
+            integration_type="DROPBOX",
+            name="My Dropbox",
+            config=json.dumps({"folder": "/test"}),
+            is_active=True,
+        )
+        db_session.add(integration)
+        db_session.commit()
+        db_session.refresh(integration)
+
+        with (
+            patch("app.views.dropbox.get_current_owner_id", return_value=owner_id),
+            patch("app.views.dropbox.settings") as mock_settings,
+        ):
+            mock_settings.dropbox_app_key = None
+            mock_settings.dropbox_app_secret = None
+            mock_settings.dropbox_refresh_token = None
+            mock_settings.dropbox_folder = None
+            response = client.get(f"/dropbox-setup?integration_id={integration.id}")
+
+        assert response.status_code == 200
+        # When no system credentials, hasSystemCredentials JS var should be false
+        assert b"hasSystemCredentials = false" in response.content

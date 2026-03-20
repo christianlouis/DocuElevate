@@ -61,9 +61,7 @@ async def onedrive_setup_page(
                     "client_id": bool(settings.onedrive_client_id) if has_system_credentials else False,
                     "client_id_value": settings.onedrive_client_id or "" if has_system_credentials else "",
                     "client_secret": bool(settings.onedrive_client_secret) if has_system_credentials else False,
-                    "client_secret_value": (
-                        settings.onedrive_client_secret or "" if has_system_credentials else ""
-                    ),
+                    "client_secret_value": (settings.onedrive_client_secret or "" if has_system_credentials else ""),
                     "tenant_id": settings.onedrive_tenant_id or "common",
                     "refresh_token": False,
                     "refresh_token_value": "",

@@ -270,7 +270,7 @@ async def list_onedrive_folders(
                     raw_parent = item["parentReference"]["path"]
                     prefix = "/drive/root:"
                     if raw_parent.startswith(prefix):
-                        parent_path = raw_parent[len(prefix):]
+                        parent_path = raw_parent[len(prefix) :]
                     elif raw_parent == "/drive/root":
                         parent_path = ""
 
