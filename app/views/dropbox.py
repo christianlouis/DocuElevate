@@ -46,6 +46,9 @@ async def dropbox_setup_page(
                     cfg = {}
             # Support both "folder" (DROPBOX destination) and "folder_path" (WATCH_FOLDER source)
             folder_path = cfg.get("folder", cfg.get("folder_path", ""))
+            # Provide system-wide app credentials when available so users can
+            # authorize without creating their own Dropbox app.
+            has_system_credentials = bool(settings.dropbox_app_key and settings.dropbox_app_secret)
             return templates.TemplateResponse(
                 "dropbox.html",
                 {
@@ -56,8 +59,9 @@ async def dropbox_setup_page(
                     "integration_name": integration.name,
                     "integration_type": integration.integration_type,
                     "folder_path": folder_path,
-                    "app_key_value": "",
-                    "app_secret_value": "",
+                    "has_system_credentials": has_system_credentials,
+                    "app_key_value": settings.dropbox_app_key or "" if has_system_credentials else "",
+                    "app_secret_value": settings.dropbox_app_secret or "" if has_system_credentials else "",
                     "refresh_token_value": "",
                 },
             )
@@ -71,6 +75,7 @@ async def dropbox_setup_page(
             "request": request,
             "user_mode": False,
             "is_configured": is_configured,
+            "has_system_credentials": bool(settings.dropbox_app_key and settings.dropbox_app_secret),
             "app_key_value": settings.dropbox_app_key or "",
             "app_secret_value": settings.dropbox_app_secret if settings.dropbox_app_secret else "",
             "refresh_token_value": settings.dropbox_refresh_token if settings.dropbox_refresh_token else "",
