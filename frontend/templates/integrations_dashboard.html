@@ -675,64 +675,47 @@
               </div>
             </template>
 
-            <!-- Dropbox fields -->
+            <!-- Dropbox fields (OAuth wizard flow) -->
             <template x-if="form.config.source_type === 'dropbox'">
               <div class="space-y-3">
                 <div>
-                  <label for="wf-dbx-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder Path <span class="text-red-500" aria-hidden="true">*</span></label>
-                  <input id="wf-dbx-folder" type="text" x-model="form.config.folder_path" placeholder="/Inbox/Scanner" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+                  <label for="wf-dbx-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder Path <span class="text-gray-400">(optional)</span></label>
+                  <input id="wf-dbx-folder" type="text" x-model="form.config.folder_path" placeholder="/Inbox/Scanner" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
                 </div>
-                <div>
-                  <label for="wf-dbx-token" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Refresh Token <span class="text-red-500" aria-hidden="true">*</span></label>
-                  <input id="wf-dbx-token" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.refresh_token" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label for="wf-dbx-key" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">App Key <span class="text-red-500" aria-hidden="true">*</span></label>
-                    <input id="wf-dbx-key" type="text" x-model="form.credentials.app_key" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
-                  </div>
-                  <div>
-                    <label for="wf-dbx-secret" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">App Secret <span class="text-red-500" aria-hidden="true">*</span></label>
-                    <input id="wf-dbx-secret" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.app_secret" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
-                  </div>
+                <div class="bg-blue-50 dark:bg-blue-900/30 rounded-md p-3 text-sm text-blue-700 dark:text-blue-300">
+                  <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
+                  Save this integration first, then use the <strong>Authorize</strong> button to complete the OAuth flow.
+                  Your credentials will be stored securely in your personal integration record.
                 </div>
               </div>
             </template>
 
-            <!-- Google Drive fields -->
+            <!-- Google Drive fields (OAuth wizard flow) -->
             <template x-if="form.config.source_type === 'google_drive'">
               <div class="space-y-3">
                 <div>
-                  <label for="wf-gd-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder ID <span class="text-red-500" aria-hidden="true">*</span></label>
-                  <input id="wf-gd-folder" type="text" x-model="form.config.folder_id" placeholder="1ABCdef..." required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+                  <label for="wf-gd-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder ID <span class="text-gray-400">(optional)</span></label>
+                  <input id="wf-gd-folder" type="text" x-model="form.config.folder_id" placeholder="1ABCdef..." class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
                 </div>
-                <div>
-                  <label for="wf-gd-creds" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Service Account JSON <span class="text-red-500" aria-hidden="true">*</span></label>
-                  <textarea id="wf-gd-creds" x-model="form.credentials.credentials_json" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" rows="3" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm font-mono"></textarea>
+                <div class="bg-blue-50 dark:bg-blue-900/30 rounded-md p-3 text-sm text-blue-700 dark:text-blue-300">
+                  <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
+                  Save this integration first, then use the <strong>Authorize</strong> button to complete the OAuth flow.
+                  Your credentials will be stored securely in your personal integration record.
                 </div>
               </div>
             </template>
 
-            <!-- OneDrive fields -->
+            <!-- OneDrive fields (OAuth wizard flow) -->
             <template x-if="form.config.source_type === 'onedrive'">
               <div class="space-y-3">
                 <div>
-                  <label for="wf-od-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder Path <span class="text-red-500" aria-hidden="true">*</span></label>
-                  <input id="wf-od-folder" type="text" x-model="form.config.folder_path" placeholder="/Documents/Inbox" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+                  <label for="wf-od-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder Path <span class="text-gray-400">(optional)</span></label>
+                  <input id="wf-od-folder" type="text" x-model="form.config.folder_path" placeholder="/Documents/Inbox" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
                 </div>
-                <div>
-                  <label for="wf-od-token" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Refresh Token <span class="text-red-500" aria-hidden="true">*</span></label>
-                  <input id="wf-od-token" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.refresh_token" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label for="wf-od-cid" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Client ID <span class="text-red-500" aria-hidden="true">*</span></label>
-                    <input id="wf-od-cid" type="text" x-model="form.credentials.client_id" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
-                  </div>
-                  <div>
-                    <label for="wf-od-cs" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Client Secret <span class="text-red-500" aria-hidden="true">*</span></label>
-                    <input id="wf-od-cs" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.client_secret" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
-                  </div>
+                <div class="bg-blue-50 dark:bg-blue-900/30 rounded-md p-3 text-sm text-blue-700 dark:text-blue-300">
+                  <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
+                  Save this integration first, then use the <strong>Authorize</strong> button to complete the OAuth flow.
+                  Your credentials will be stored securely in your personal integration record.
                 </div>
               </div>
             </template>
@@ -791,7 +774,7 @@
                 <input type="checkbox" x-model="form.config.delete_after_process" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                 Delete files after processing
               </label>
-              <template x-if="form.config.source_type !== 'local'">
+              <template x-if="form.config.source_type !== 'local' && form.config.source_type !== 'dropbox' && form.config.source_type !== 'google_drive' && form.config.source_type !== 'onedrive'">
                 <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
                   <input type="checkbox" x-model="showPassword" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                   Show secrets
@@ -1241,13 +1224,13 @@ function integrationsDashboard() {
         this.form.credentials = { access_key_id: '', secret_access_key: '' };
       } else if (st === 'dropbox') {
         this.form.config = { source_type: st, folder_path: '', delete_after_process: dap };
-        this.form.credentials = { refresh_token: '', app_key: '', app_secret: '' };
+        this.form.credentials = {};
       } else if (st === 'google_drive') {
         this.form.config = { source_type: st, folder_id: '', delete_after_process: dap };
-        this.form.credentials = { credentials_json: '' };
+        this.form.credentials = {};
       } else if (st === 'onedrive') {
         this.form.config = { source_type: st, folder_path: '', delete_after_process: dap };
-        this.form.credentials = { refresh_token: '', client_id: '', client_secret: '' };
+        this.form.credentials = {};
       } else if (st === 'nextcloud') {
         this.form.config = { source_type: st, url: '', folder_path: '', delete_after_process: dap };
         this.form.credentials = { username: '', password: '' };
