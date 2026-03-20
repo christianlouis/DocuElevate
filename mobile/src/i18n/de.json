@@ -99,7 +99,9 @@
     "delete_account_title": "Konto löschen",
     "delete_account_msg": "Dadurch werden Ihr Konto und alle zugehörigen Daten dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
     "could_not_open": "Konnte {page} nicht öffnen. Bitte versuchen Sie es erneut.",
-    "admin": "Admin"
+    "admin": "Admin",
+    "settings": "Einstellungen",
+    "language": "Sprache"
   },
   "legal": {
     "privacy_policy": "Datenschutz",

@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import type { FileRecord } from "../services/api";
 import api from "../services/api";
+import { useLocale, t } from "../i18n";
 
 function formatBytes(bytes: number | null): string {
   if (bytes === null || bytes === undefined) return "–";
@@ -58,6 +59,8 @@ export default function FilesScreen() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Subscribe to language changes so translated strings re-render.
+  useLocale();
 
   const fetchFiles = useCallback(
     async (pageNum: number, replace: boolean, search?: string) => {
@@ -150,7 +153,7 @@ export default function FilesScreen() {
       <View style={styles.center}>
         <Text style={styles.errorText}>{error}</Text>
         <Pressable style={styles.retryButton} onPress={handleRefresh}>
-          <Text style={styles.retryText}>Retry</Text>
+          <Text style={styles.retryText}>{t("common.retry")}</Text>
         </Pressable>
       </View>
     );
@@ -163,21 +166,21 @@ export default function FilesScreen() {
         <Ionicons name="search-outline" size={18} color="#9ca3af" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search documents…"
+          placeholder={t("files.search_placeholder")}
           placeholderTextColor="#9ca3af"
           value={searchQuery}
           onChangeText={handleSearch}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
-          accessibilityLabel="Search documents"
+          accessibilityLabel={t("common.search")}
         />
         {searchQuery.length > 0 && (
           <Pressable
             onPress={handleClearSearch}
             style={styles.clearButton}
             accessibilityRole="button"
-            accessibilityLabel="Clear search"
+            accessibilityLabel={t("common.clear_search")}
           >
             <Ionicons name="close-circle" size={18} color="#9ca3af" />
           </Pressable>
@@ -199,12 +202,10 @@ export default function FilesScreen() {
           <View style={styles.emptyState}>
             <Ionicons name="folder-open-outline" size={48} color="#9ca3af" style={{ marginBottom: 12 }} />
             <Text style={styles.emptyText}>
-              {searchQuery ? "No documents match your search." : "No documents yet."}
+              {searchQuery ? t("files.search_empty") : t("files.empty_title")}
             </Text>
             <Text style={styles.emptyHint}>
-              {searchQuery
-                ? "Try a different search term."
-                : "Upload a document from the Upload tab to get started."}
+              {searchQuery ? t("files.search_empty_hint") : t("files.empty_hint")}
             </Text>
           </View>
         }

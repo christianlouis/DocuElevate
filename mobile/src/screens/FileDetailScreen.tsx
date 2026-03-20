@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import type { FileDetail } from "../services/api";
 import api from "../services/api";
+import { useLocale, t } from "../i18n";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -88,6 +89,8 @@ export default function FileDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Subscribe to language changes so translated strings re-render.
+  useLocale();
 
   const fileId = parseInt(id ?? "0", 10);
 
@@ -127,12 +130,12 @@ export default function FileDetailScreen() {
   if (error || !detail) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorText}>{error ?? "File not found"}</Text>
+        <Text style={styles.errorText}>{error ?? t("file_detail.file_not_found")}</Text>
         <Pressable style={styles.retryButton} onPress={handleRefresh}>
-          <Text style={styles.retryText}>Retry</Text>
+          <Text style={styles.retryText}>{t("common.retry")}</Text>
         </Pressable>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Text style={styles.backButtonText}>{t("common.back")}</Text>
         </Pressable>
       </View>
     );
@@ -152,10 +155,10 @@ export default function FileDetailScreen() {
         style={styles.backRow}
         onPress={() => router.back()}
         accessibilityRole="button"
-        accessibilityLabel="Go back"
+        accessibilityLabel={t("file_detail.back")}
       >
         <Ionicons name="arrow-back" size={20} color="#1e40af" />
-        <Text style={styles.backLabel}>Back to Files</Text>
+        <Text style={styles.backLabel}>{t("file_detail.back")}</Text>
       </Pressable>
 
       {/* File info card */}
@@ -178,20 +181,20 @@ export default function FileDetailScreen() {
         </View>
 
         <View style={styles.metaGrid}>
-          <MetaRow label="File Size" value={formatBytes(file.file_size)} />
-          <MetaRow label="MIME Type" value={file.mime_type ?? "–"} />
-          <MetaRow label="Uploaded" value={formatDateTime(file.created_at)} />
-          <MetaRow label="File Hash" value={file.filehash ? `${file.filehash.slice(0, 24)}…` : "–"} />
-          <MetaRow label="Last Step" value={status.last_step ?? "–"} />
-          <MetaRow label="Total Steps" value={String(status.total_steps)} />
+          <MetaRow label={t("file_detail.file_size")} value={formatBytes(file.file_size)} />
+          <MetaRow label={t("file_detail.mime_type")} value={file.mime_type ?? "–"} />
+          <MetaRow label={t("file_detail.uploaded")} value={formatDateTime(file.created_at)} />
+          <MetaRow label={t("file_detail.file_hash")} value={file.filehash ? `${file.filehash.slice(0, 24)}…` : "–"} />
+          <MetaRow label={t("file_detail.last_step")} value={status.last_step ?? "–"} />
+          <MetaRow label={t("file_detail.total_steps")} value={String(status.total_steps)} />
         </View>
       </View>
 
       {/* Processing logs */}
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Processing Log</Text>
+        <Text style={styles.sectionTitle}>{t("file_detail.processing_log")}</Text>
         {detail.logs.length === 0 ? (
-          <Text style={styles.emptyLog}>No processing logs yet.</Text>
+          <Text style={styles.emptyLog}>{t("file_detail.no_logs")}</Text>
         ) : (
           detail.logs.map((log, idx) => {
             const icon = logStepIcon(log.status);

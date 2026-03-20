@@ -99,7 +99,9 @@
     "delete_account_title": "Elimina Account",
     "delete_account_msg": "Questo eliminerà permanentemente il tuo account e tutti i dati associati. Questa azione non può essere annullata.",
     "could_not_open": "Impossibile aprire {page}. Riprova.",
-    "admin": "Admin"
+    "admin": "Admin",
+    "settings": "Impostazioni",
+    "language": "Lingua"
   },
   "legal": {
     "privacy_policy": "Privacy",

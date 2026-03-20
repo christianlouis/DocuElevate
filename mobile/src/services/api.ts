@@ -26,6 +26,7 @@ export interface WhoAmIResponse {
   email: string | null;
   avatar_url: string | null;
   is_admin: boolean;
+  preferred_language: string | null;
 }
 
 export interface GenerateTokenResponse {
@@ -207,6 +208,11 @@ class DocuElevateAPI {
   /** Return profile information for the authenticated user. */
   async whoAmI(): Promise<WhoAmIResponse> {
     return this.request<WhoAmIResponse>("GET", "/api/mobile/whoami");
+  }
+
+  /** Sync the user's preferred UI language to the server. */
+  async setServerLanguage(lang: string): Promise<void> {
+    await this.request("POST", "/api/i18n/language", { body: { language: lang } });
   }
 
   // -------------------------------------------------------------------------
