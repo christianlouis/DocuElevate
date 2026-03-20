@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.160.2 (2026-03-20)
+
+### Bug Fixes
+
+- **dropbox**: Fix Invalid redirect_uri error by adding PUBLIC_BASE_URL config and URL-encoding
+  ([`5e3e2b1`](https://github.com/christianlouis/DocuElevate/commit/5e3e2b19997d3af6570fbaa1e75a49cbfe6cf78d))
+
+
 ## v0.160.1 (2026-03-20)
 
 ### Bug Fixes
