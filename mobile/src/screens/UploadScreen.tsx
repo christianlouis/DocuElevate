@@ -301,14 +301,17 @@ export default function UploadScreen() {
       mediaTypes: ["images"],
       quality: 0.9,
       allowsEditing: false,
+      allowsMultipleSelection: true,
     });
 
     if (!result.canceled && result.assets.length > 0) {
-      const asset = result.assets[0];
-      // Derive extension from MIME type so the filename matches the actual format
-      const ext = asset.mimeType?.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
-      const filename = asset.fileName ?? `photo_${Date.now()}.${ext}`;
-      await uploadFile(asset.uri, filename, asset.mimeType ?? "image/jpeg");
+      for (let i = 0; i < result.assets.length; i++) {
+        const asset = result.assets[i];
+        // Derive extension from MIME type so the filename matches the actual format
+        const ext = asset.mimeType?.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
+        const filename = asset.fileName ?? `photo_${Date.now()}_${i}.${ext}`;
+        await uploadFile(asset.uri, filename, asset.mimeType ?? "image/jpeg");
+      }
     }
   }
 

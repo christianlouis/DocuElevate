@@ -169,6 +169,45 @@ export default function LoginScreen() {
         >
           <Text style={styles.backLinkText}>← Back</Text>
         </Pressable>
+
+        {/* Legal links – accessible pre-login for GDPR / Apple compliance */}
+        <View style={styles.legalLinks}>
+          <Pressable
+            onPress={() => {
+              const base = serverUrl.trim() || "https://app.docuelevate.org";
+              Linking.openURL(`${base.replace(/\/$/, "")}/privacy`);
+            }}
+            accessibilityRole="link"
+            accessibilityLabel="Privacy Policy"
+            style={styles.legalLinkButton}
+          >
+            <Text style={styles.legalLinkText}>Privacy Policy</Text>
+          </Pressable>
+          <Text style={styles.legalSeparator}>·</Text>
+          <Pressable
+            onPress={() => {
+              const base = serverUrl.trim() || "https://app.docuelevate.org";
+              Linking.openURL(`${base.replace(/\/$/, "")}/terms`);
+            }}
+            accessibilityRole="link"
+            accessibilityLabel="Terms of Service"
+            style={styles.legalLinkButton}
+          >
+            <Text style={styles.legalLinkText}>Terms</Text>
+          </Pressable>
+          <Text style={styles.legalSeparator}>·</Text>
+          <Pressable
+            onPress={() => {
+              const base = serverUrl.trim() || "https://app.docuelevate.org";
+              Linking.openURL(`${base.replace(/\/$/, "")}/imprint`);
+            }}
+            accessibilityRole="link"
+            accessibilityLabel="Imprint"
+            style={styles.legalLinkButton}
+          >
+            <Text style={styles.legalLinkText}>Imprint</Text>
+          </Pressable>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -290,5 +329,27 @@ const styles = StyleSheet.create({
   backLinkText: {
     fontSize: 13,
     color: "#6b7280",
+  },
+  legalLinks: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 16,
+    flexWrap: "wrap",
+  },
+  legalLinkButton: {
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  legalLinkText: {
+    fontSize: 12,
+    color: "#9ca3af",
+    textDecorationLine: "underline",
+  },
+  legalSeparator: {
+    fontSize: 12,
+    color: "#d1d5db",
+    marginHorizontal: 4,
   },
 });

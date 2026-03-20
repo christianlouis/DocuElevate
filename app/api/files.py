@@ -1477,6 +1477,8 @@ async def ui_upload(
         ".tif",
         ".webp",
         ".svg",
+        ".heic",
+        ".heif",
     }:
         # If it's an image, convert to PDF first
         task = convert_to_pdf.delay(target_path, original_filename=safe_filename, owner_id=upload_owner_id)

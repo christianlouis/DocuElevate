@@ -1,9 +1,10 @@
 /**
- * FilesScreen – list of documents processed by DocuElevate.
+ * FilesScreen – list of documents processed by DocuElevate with search.
  */
 
 import { Ionicons } from "@expo/vector-icons";
-import React, { useCallback, useEffect, useState } from "react";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -11,6 +12,7 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import type { FileRecord } from "../services/api";
@@ -47,17 +49,20 @@ function statusIcon(status: string): { name: keyof typeof Ionicons.glyphMap; col
 }
 
 export default function FilesScreen() {
+  const router = useRouter();
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchFiles = useCallback(
-    async (pageNum: number, replace: boolean) => {
+    async (pageNum: number, replace: boolean, search?: string) => {
       try {
-        const data = await api.listFiles(pageNum, 20);
+        const data = await api.listFiles(pageNum, 20, search || undefined);
         if (replace) {
           setFiles(data);
         } else {
@@ -83,18 +88,56 @@ export default function FilesScreen() {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     setPage(1);
-    await fetchFiles(1, true);
+    await fetchFiles(1, true, searchQuery);
     setRefreshing(false);
-  }, [fetchFiles]);
+  }, [fetchFiles, searchQuery]);
 
   const handleLoadMore = useCallback(async () => {
     if (!hasMore || loading || refreshing) return;
     const next = page + 1;
     setPage(next);
-    await fetchFiles(next, false);
-  }, [fetchFiles, hasMore, loading, page, refreshing]);
+    await fetchFiles(next, false, searchQuery);
+  }, [fetchFiles, hasMore, loading, page, refreshing, searchQuery]);
 
-  if (loading) {
+  const handleSearch = useCallback(
+    (text: string) => {
+      setSearchQuery(text);
+      // Debounce search requests
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+      searchTimeoutRef.current = setTimeout(async () => {
+        setPage(1);
+        setLoading(true);
+        try {
+          await fetchFiles(1, true, text);
+        } finally {
+          setLoading(false);
+        }
+      }, 400);
+    },
+    [fetchFiles]
+  );
+
+  const handleClearSearch = useCallback(async () => {
+    setSearchQuery("");
+    setPage(1);
+    setLoading(true);
+    try {
+      await fetchFiles(1, true);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchFiles]);
+
+  const handleFilePress = useCallback(
+    (file: FileRecord) => {
+      router.push({ pathname: "/(tabs)/file-detail", params: { id: String(file.id) } });
+    },
+    [router]
+  );
+
+  if (loading && files.length === 0) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#1e40af" />
@@ -102,7 +145,7 @@ export default function FilesScreen() {
     );
   }
 
-  if (error) {
+  if (error && files.length === 0) {
     return (
       <View style={styles.center}>
         <Text style={styles.errorText}>{error}</Text>
@@ -114,40 +157,77 @@ export default function FilesScreen() {
   }
 
   return (
-    <FlatList
-      style={styles.list}
-      data={files}
-      keyExtractor={(item) => String(item.id)}
-      contentContainerStyle={styles.listContent}
-      renderItem={({ item }) => <FileRow file={item} />}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-      }
-      onEndReached={handleLoadMore}
-      onEndReachedThreshold={0.4}
-      ListEmptyComponent={
-        <View style={styles.emptyState}>
-          <Ionicons name="folder-open-outline" size={48} color="#9ca3af" style={{ marginBottom: 12 }} />
-          <Text style={styles.emptyText}>No documents yet.</Text>
-          <Text style={styles.emptyHint}>
-            Upload a document from the Upload tab to get started.
-          </Text>
-        </View>
-      }
-      ListFooterComponent={
-        hasMore && files.length > 0 ? (
-          <ActivityIndicator color="#1e40af" style={{ marginVertical: 16 }} />
-        ) : null
-      }
-    />
+    <View style={styles.container}>
+      {/* Search bar */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search-outline" size={18} color="#9ca3af" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search documents…"
+          placeholderTextColor="#9ca3af"
+          value={searchQuery}
+          onChangeText={handleSearch}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+          accessibilityLabel="Search documents"
+        />
+        {searchQuery.length > 0 && (
+          <Pressable
+            onPress={handleClearSearch}
+            style={styles.clearButton}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+          >
+            <Ionicons name="close-circle" size={18} color="#9ca3af" />
+          </Pressable>
+        )}
+      </View>
+
+      <FlatList
+        style={styles.list}
+        data={files}
+        keyExtractor={(item) => String(item.id)}
+        contentContainerStyle={styles.listContent}
+        renderItem={({ item }) => <FileRow file={item} onPress={handleFilePress} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.4}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Ionicons name="folder-open-outline" size={48} color="#9ca3af" style={{ marginBottom: 12 }} />
+            <Text style={styles.emptyText}>
+              {searchQuery ? "No documents match your search." : "No documents yet."}
+            </Text>
+            <Text style={styles.emptyHint}>
+              {searchQuery
+                ? "Try a different search term."
+                : "Upload a document from the Upload tab to get started."}
+            </Text>
+          </View>
+        }
+        ListFooterComponent={
+          hasMore && files.length > 0 ? (
+            <ActivityIndicator color="#1e40af" style={{ marginVertical: 16 }} />
+          ) : null
+        }
+      />
+    </View>
   );
 }
 
-function FileRow({ file }: { file: FileRecord }) {
+function FileRow({ file, onPress }: { file: FileRecord; onPress: (file: FileRecord) => void }) {
   const status = file.processing_status?.status ?? "pending";
   const icon = statusIcon(status);
   return (
-    <View style={rowStyles.row}>
+    <Pressable
+      style={rowStyles.row}
+      onPress={() => onPress(file)}
+      accessibilityRole="button"
+      accessibilityLabel={`View details for ${file.original_filename}`}
+    >
       <Ionicons name={icon.name} size={22} color={icon.color} style={rowStyles.icon} />
       <View style={rowStyles.info}>
         <Text style={rowStyles.filename} numberOfLines={1}>
@@ -157,14 +237,44 @@ function FileRow({ file }: { file: FileRecord }) {
           {formatDate(file.created_at)} · {formatBytes(file.file_size)}
         </Text>
       </View>
-      <Text style={rowStyles.status}>{status}</Text>
-    </View>
+      <View style={rowStyles.right}>
+        <Text style={rowStyles.status}>{status}</Text>
+        <Ionicons name="chevron-forward" size={16} color="#d1d5db" />
+      </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  list: { flex: 1, backgroundColor: "#f9fafb" },
-  listContent: { padding: 16 },
+  container: { flex: 1, backgroundColor: "#f9fafb" },
+  list: { flex: 1 },
+  listContent: { padding: 16, paddingTop: 0 },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginVertical: 12,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    minHeight: 44,
+  },
+  searchIcon: { marginRight: 8 },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: "#111827",
+    paddingVertical: 10,
+  },
+  clearButton: {
+    padding: 4,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   center: {
     flex: 1,
     alignItems: "center",
@@ -213,6 +323,11 @@ const rowStyles = StyleSheet.create({
     marginBottom: 4,
   },
   meta: { fontSize: 12, color: "#6b7280" },
+  right: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   status: {
     fontSize: 11,
     color: "#6b7280",
