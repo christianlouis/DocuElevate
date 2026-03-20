@@ -1594,6 +1594,47 @@ Lightweight endpoint returning the total number of queued + in-progress items. D
 
 ## Diagnostic
 
+### GET /api/diagnostic/healthz/live
+
+Lightweight liveness probe for Kubernetes.  Returns **200 OK** as long as the process is running.  This endpoint does **not** check external dependencies and is intentionally cheap.
+
+**Authentication:** None (designed for kubelet probes)
+
+**Response (200 OK):**
+```json
+{
+  "status": "ok"
+}
+```
+
+### GET /api/diagnostic/healthz/ready
+
+Readiness probe for Kubernetes.  Verifies that the application can serve traffic by checking database and Redis connectivity.
+
+**Authentication:** None (designed for kubelet probes)
+
+**Response (200 OK) – ready to serve traffic:**
+```json
+{
+  "status": "ready",
+  "checks": {
+    "database": {"status": "ok"},
+    "redis":    {"status": "ok"}
+  }
+}
+```
+
+**Response (503 Service Unavailable) – database unreachable:**
+```json
+{
+  "status": "not_ready",
+  "checks": {
+    "database": {"status": "error", "detail": "..."},
+    "redis":    {"status": "ok"}
+  }
+}
+```
+
 ### GET /api/diagnostic/health
 
 System health endpoint designed for monitoring tools such as Grafana, Uptime Kuma, Prometheus blackbox exporter, or any HTTP-based health checker.
