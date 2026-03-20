@@ -10,6 +10,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.163.0 (2026-03-20)
+
+### Bug Fixes
+
+- **security**: Escape HTML in folder browser to prevent XSS from folder names
+  ([`b3a2387`](https://github.com/christianlouis/DocuElevate/commit/b3a238744d1618b7f891b7c43f243dd9099ecf49))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`65cf33c`](https://github.com/christianlouis/DocuElevate/commit/65cf33ce89cfcb7f81f31278a2cf6523c32a4754))
+
+### Documentation
+
+- Update setup guides and API docs for folder browser and system credentials
+  ([`d6c21b8`](https://github.com/christianlouis/DocuElevate/commit/d6c21b8026ccc8fb71ed12394faba08214e0793d))
+
+### Features
+
+- **api**: Add folder browser API endpoints and UI for Dropbox and OneDrive
+  ([`a842306`](https://github.com/christianlouis/DocuElevate/commit/a8423064ec72bf8014ca37936960c5da9ddcea1f))
+
+- **auth**: Default to system-wide app credentials in OAuth wizards for user mode
+  ([`23c8c76`](https://github.com/christianlouis/DocuElevate/commit/23c8c76b392a95e723f25f8cb3714d4e5f256b30))
+
+- **ui**: Replace manual credential fields with OAuth wizard flow for watch folder sources
+  ([`ed01952`](https://github.com/christianlouis/DocuElevate/commit/ed0195261032fb92df5f655a73f056ac380fe8b6))
+
+### Testing
+
+- Add tests for folder browser APIs and system credentials toggle
+  ([`1e1e6e6`](https://github.com/christianlouis/DocuElevate/commit/1e1e6e62807a6d4b7bc84b2d8c967dceb97f1cb6))
+
+
 ## v0.162.0 (2026-03-20)
 
 
