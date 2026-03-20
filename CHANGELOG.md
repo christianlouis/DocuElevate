@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.160.1 (2026-03-20)
+
+### Bug Fixes
+
+- **mobile**: Update expo-localization version from ~16.0.6 to ~16.1.0
+  ([`78c3717`](https://github.com/christianlouis/DocuElevate/commit/78c3717661923b43f1762fa7728c75e803938fb7))
+
+
 ## v0.160.0 (2026-03-20)
 
 ### Bug Fixes
