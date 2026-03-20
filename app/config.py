@@ -193,6 +193,16 @@ class Settings(BaseSettings):
     google_docai_processor_id: Optional[str] = None
     google_docai_location: str = "us"  # Processor location, e.g. "us" or "eu"
     external_hostname: str = "localhost"  # Default to localhost
+    public_base_url: Optional[str] = Field(
+        default=None,
+        description=(
+            "The full public base URL of the application, including scheme "
+            "(e.g., 'https://docuelevate.example.com'). "
+            "When set, this overrides the auto-detected URL for OAuth redirect URIs. "
+            "This is required when the application is behind a reverse proxy that does "
+            "not forward X-Forwarded-Proto headers correctly."
+        ),
+    )
 
     # ---------------------------------------------------------------------------
     # Document Translation Settings

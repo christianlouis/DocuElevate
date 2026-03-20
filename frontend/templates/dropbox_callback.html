@@ -108,7 +108,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  const redirectUri = window.location.origin + "/dropbox-callback";
+  // Use server-provided callback URL (respects PUBLIC_BASE_URL) with fallback to window.location.origin
+  const redirectUri = {{ callback_url | tojson }} || (window.location.origin + "/dropbox-callback");
 
   // Automatically exchange the code for a refresh token
   if (code) {

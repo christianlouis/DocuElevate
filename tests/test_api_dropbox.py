@@ -416,3 +416,110 @@ class TestSaveDropboxSettings:
         # .env write is best-effort; endpoint should still succeed via DB write
         assert response.status_code == 200
         assert response.json()["status"] == "success"
+
+
+@pytest.mark.unit
+class TestBuildDropboxRedirectUri:
+    """Tests for the _build_dropbox_redirect_uri helper."""
+
+    def test_uses_public_base_url_when_set(self):
+        """When PUBLIC_BASE_URL is configured, redirect URI should use it."""
+        from unittest.mock import MagicMock
+
+        with patch("app.api.dropbox.settings") as mock_settings:
+            mock_settings.public_base_url = "https://myapp.example.com"
+            from app.api.dropbox import _build_dropbox_redirect_uri
+
+            mock_request = MagicMock()
+            result = _build_dropbox_redirect_uri(mock_request)
+
+        assert result == "https://myapp.example.com/dropbox-callback"
+
+    def test_uses_public_base_url_strips_trailing_slash(self):
+        """PUBLIC_BASE_URL with trailing slash should be handled correctly."""
+        from unittest.mock import MagicMock
+
+        with patch("app.api.dropbox.settings") as mock_settings:
+            mock_settings.public_base_url = "https://myapp.example.com/"
+            from app.api.dropbox import _build_dropbox_redirect_uri
+
+            mock_request = MagicMock()
+            result = _build_dropbox_redirect_uri(mock_request)
+
+        assert result == "https://myapp.example.com/dropbox-callback"
+
+    def test_falls_back_to_request_when_public_base_url_not_set(self):
+        """When PUBLIC_BASE_URL is not set, use request scheme and netloc."""
+        from unittest.mock import MagicMock
+
+        with patch("app.api.dropbox.settings") as mock_settings:
+            mock_settings.public_base_url = None
+            from app.api.dropbox import _build_dropbox_redirect_uri
+
+            mock_request = MagicMock()
+            mock_request.url.scheme = "https"
+            mock_request.url.netloc = "other.example.com"
+            result = _build_dropbox_redirect_uri(mock_request)
+
+        assert result == "https://other.example.com/dropbox-callback"
+
+
+@pytest.mark.unit
+class TestGlobalAuthorizeUrl:
+    """Tests for GET /api/dropbox/global-authorize-url endpoint."""
+
+    @patch("app.api.dropbox.settings")
+    def test_returns_authorize_url(self, mock_settings, client):
+        """Test that a valid authorize URL is returned when global creds are configured."""
+        mock_settings.dropbox_allow_global_credentials_for_integrations = True
+        mock_settings.dropbox_app_key = "test-app-key"
+        mock_settings.dropbox_app_secret = "test-app-secret"
+        mock_settings.public_base_url = "https://example.com"
+
+        response = client.get("/api/dropbox/global-authorize-url")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "authorize_url" in data
+        assert "https://www.dropbox.com/oauth2/authorize" in data["authorize_url"]
+        assert "client_id=test-app-key" in data["authorize_url"]
+        # redirect_uri should be URL-encoded
+        assert "redirect_uri=" in data["authorize_url"]
+        assert "https%3A%2F%2Fexample.com%2Fdropbox-callback" in data["authorize_url"]
+
+    @patch("app.api.dropbox.settings")
+    def test_returns_403_when_global_creds_disabled(self, mock_settings, client):
+        """Test 403 when global credentials for integrations are disabled."""
+        mock_settings.dropbox_allow_global_credentials_for_integrations = False
+        mock_settings.dropbox_app_key = "test-app-key"
+        mock_settings.dropbox_app_secret = "test-app-secret"
+
+        response = client.get("/api/dropbox/global-authorize-url")
+
+        assert response.status_code == 403
+
+    @patch("app.api.dropbox.settings")
+    def test_returns_503_when_creds_not_configured(self, mock_settings, client):
+        """Test 503 when global Dropbox credentials are not configured."""
+        mock_settings.dropbox_allow_global_credentials_for_integrations = True
+        mock_settings.dropbox_app_key = None
+        mock_settings.dropbox_app_secret = None
+
+        response = client.get("/api/dropbox/global-authorize-url")
+
+        assert response.status_code == 503
+
+    @patch("app.api.dropbox.settings")
+    def test_redirect_uri_uses_public_base_url(self, mock_settings, client):
+        """Redirect URI in authorize URL must use PUBLIC_BASE_URL when configured."""
+        mock_settings.dropbox_allow_global_credentials_for_integrations = True
+        mock_settings.dropbox_app_key = "my-key"
+        mock_settings.dropbox_app_secret = "my-secret"
+        mock_settings.public_base_url = "https://prod.example.com"
+
+        response = client.get("/api/dropbox/global-authorize-url")
+
+        assert response.status_code == 200
+        authorize_url = response.json()["authorize_url"]
+        # The redirect_uri must be URL-encoded and contain the public base URL
+        assert "https%3A%2F%2Fprod.example.com%2Fdropbox-callback" in authorize_url
