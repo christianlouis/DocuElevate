@@ -2654,8 +2654,6 @@ Automation hook deliveries follow the same retry policy as regular webhooks: up 
 
 ## Further Assistance
 
-## Further Assistance
-
 For additional help with the API, please contact our support team or refer to the [Development Guide](../CONTRIBUTING.md).
 
 ## Mobile App API
