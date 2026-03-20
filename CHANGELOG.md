@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.160.0 (2026-03-20)
+
+### Bug Fixes
+
+- **mobile**: Address code review feedback - error handling, filename collision, hash display
+  ([`6541529`](https://github.com/christianlouis/DocuElevate/commit/65415292507aa37408428400aef7e87e006abfd0))
+
+### Features
+
+- **mobile**: Add pre-login legal pages, multi-image selection, file detail view, search, i18n, HEIC
+  support
+  ([`67c17e7`](https://github.com/christianlouis/DocuElevate/commit/67c17e7baa8edf76be394d0aff42c2adeae351e1))
+
+
 ## v0.159.0 (2026-03-19)
 
 ### Code Style
