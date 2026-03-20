@@ -104,7 +104,7 @@
       <h3 class="text-xl font-medium mb-4">Step 3: Set OAuth 2 Redirect URI</h3>
       <ol class="list-decimal ml-6 space-y-3">
         <li>In your app's settings page, go to the "OAuth 2" section</li>
-        <li>Add a redirect URI: <code class="bg-gray-100 p-1">{{ request.url.scheme }}://{{ request.url.netloc }}/dropbox-callback</code></li>
+        <li>Add a redirect URI: <code class="bg-gray-100 p-1">{{ callback_url }}</code></li>
         <li>Click "Add" to save the redirect URI</li>
       </ol>
     </div>
@@ -298,6 +298,9 @@ DROPBOX_FOLDER={{ folder_path|default('/Documents/Uploads', true) }}</code></pre
 document.addEventListener('DOMContentLoaded', function() {
   const userMode = {{ 'true' if user_mode else 'false' }};
   const globalCredsAvailable = {{ 'true' if global_creds_available else 'false' }};
+  // Redirect URI for OAuth: prefer server-provided value (respects PUBLIC_BASE_URL),
+  // fall back to window.location.origin for resilience.
+  const dropboxCallbackUrl = {{ callback_url | tojson }} || (window.location.origin + "/dropbox-callback");
 
   // Store integration_id if provided (for per-user OAuth flow)
   const integrationId = "{{ integration_id or '' }}";
@@ -390,7 +393,7 @@ document.addEventListener('DOMContentLoaded', function() {
     startAuthFlowBtn.addEventListener('click', function() {
     const appKey = document.getElementById('app-key').value.trim();
     const appSecret = appSecretInput.value.trim();
-    const redirectUri = window.location.origin + "/dropbox-callback";
+    const redirectUri = dropboxCallbackUrl;
 
     if (!appKey) {
       showModal('error', 'Validation Error', 'Please enter your App Key');

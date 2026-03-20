@@ -5,6 +5,7 @@ Dropbox API endpoints
 import logging
 import os
 from typing import Annotated, Optional
+from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
@@ -21,6 +22,18 @@ from app.utils.settings_sync import notify_settings_updated
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _build_dropbox_redirect_uri(request: Request) -> str:
+    """Build the Dropbox OAuth callback redirect URI.
+
+    Uses ``PUBLIC_BASE_URL`` when configured (recommended for deployments behind
+    a reverse proxy that doesn't forward ``X-Forwarded-Proto``).  Falls back to
+    deriving the URI from the incoming request's scheme and host headers.
+    """
+    if settings.public_base_url:
+        return settings.public_base_url.rstrip("/") + "/dropbox-callback"
+    return f"{request.url.scheme}://{request.url.netloc}/dropbox-callback"
 
 
 @router.get("/dropbox/global-authorize-url")
@@ -43,13 +56,13 @@ async def dropbox_global_authorize_url(request: Request):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Global Dropbox credentials are not configured",
         )
-    redirect_uri = str(request.base_url).rstrip("/") + "/dropbox-callback"
+    redirect_uri = _build_dropbox_redirect_uri(request)
     authorize_url = (
         "https://www.dropbox.com/oauth2/authorize"
         f"?client_id={settings.dropbox_app_key}"
         "&response_type=code"
         "&token_access_type=offline"
-        f"&redirect_uri={redirect_uri}"
+        f"&redirect_uri={quote(redirect_uri, safe='')}"
     )
     return {"authorize_url": authorize_url}
 

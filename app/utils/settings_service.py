@@ -99,6 +99,18 @@ SETTING_METADATA = {
         "required": True,  # Required for OAuth redirects and external URLs
         "restart_required": True,
     },
+    "public_base_url": {
+        "category": "Core",
+        "description": (
+            "Full public base URL including scheme (e.g., https://docuelevate.example.com). "
+            "When set, overrides auto-detected URLs for OAuth redirect URIs. "
+            "Required when behind a reverse proxy that does not forward X-Forwarded-Proto."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
     "debug": {
         "category": "Core",
         "description": "Enable debug mode for verbose logging",

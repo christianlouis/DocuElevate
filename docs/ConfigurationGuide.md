@@ -19,6 +19,7 @@ Configuration is primarily done through environment variables specified in a `.e
 | `WORKDIR`              | Working directory for the application.                  | `/workdir`                     |
 | `GOTENBERG_URL`        | Gotenberg PDF processing URL.                           | `http://gotenberg:3000`        |
 | `EXTERNAL_HOSTNAME`    | The external hostname for the application.             | `docuelevate.example.com`      |
+| `PUBLIC_BASE_URL`      | Full public base URL including scheme (e.g., `https://docuelevate.example.com`). When set, overrides auto-detected URLs used for OAuth redirect URIs. **Required when your reverse proxy does not forward `X-Forwarded-Proto` headers.** | *(not set)* |
 | `ALLOW_FILE_DELETE`    | Enable file deletion in the web interface (`true`/`false`). | `true`                      |
 | `COMPLIANCE_ENABLED`   | Enable the compliance templates dashboard (GDPR, HIPAA, SOC 2). | `true`                      |
 | `FACTORY_RESET_ON_STARTUP` | Wipe all user data on every startup (demo/testing). | `false` |
