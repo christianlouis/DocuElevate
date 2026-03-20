@@ -1,0 +1,140 @@
+{
+  "expo": {
+    "name": "DocuElevate",
+    "slug": "docuelevate-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1e40af"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "org.docuelevate.mobile",
+      "appleTeamId": "975U2ZESBM",
+      "infoPlist": {
+        "NSCameraUsageDescription": "DocuElevate uses the camera to scan QR codes for login and to capture documents for upload.",
+        "NSPhotoLibraryUsageDescription": "DocuElevate accesses your photo library to select documents for upload.",
+        "NSPhotoLibraryAddUsageDescription": "DocuElevate saves scanned documents to your photo library.",
+        "UIBackgroundModes": ["remote-notification"],
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSSupportsOpeningDocumentsInPlace": false,
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "All Documents",
+            "CFBundleTypeRole": "Viewer",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": [
+              "public.content",
+              "public.data",
+              "public.image",
+              "com.adobe.pdf",
+              "public.plain-text",
+              "org.openxmlformats.wordprocessingml.document",
+              "org.openxmlformats.spreadsheetml.sheet",
+              "org.openxmlformats.presentationml.presentation",
+              "com.microsoft.word.doc",
+              "com.microsoft.excel.xls",
+              "com.microsoft.powerpoint.ppt"
+            ]
+          }
+        ]
+      },
+      "buildNumber": "7"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1e40af"
+      },
+      "package": "org.docuelevate.mobile",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ],
+      "intentFilters": [
+        {
+          "action": "SEND",
+          "data": [{ "mimeType": "*/*" }],
+          "category": ["DEFAULT"]
+        },
+        {
+          "action": "SEND_MULTIPLE",
+          "data": [{ "mimeType": "*/*" }],
+          "category": ["DEFAULT"]
+        }
+      ],
+      "versionCode": 7
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "buildReactNativeFromSource": true,
+            "privacyManifests": {
+              "NSPrivacyAccessedAPITypes": [
+                {
+                  "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+                  "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+                },
+                {
+                  "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+                  "NSPrivacyAccessedAPITypeReasons": ["C617.1"]
+                },
+                {
+                  "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
+                  "NSPrivacyAccessedAPITypeReasons": ["E174.1"]
+                },
+                {
+                  "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategorySystemBootTime",
+                  "NSPrivacyAccessedAPITypeReasons": ["35F9.1"]
+                }
+              ],
+              "NSPrivacyCollectedDataTypes": [],
+              "NSPrivacyTracking": false
+            }
+          }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#1e40af",
+          "sounds": ["./assets/notification_sound.wav"]
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "DocuElevate uses the camera to scan QR codes for login and to capture documents for upload."
+        }
+      ],
+      "expo-document-picker",
+      "expo-secure-store"
+    ],
+    "scheme": "docuelevate",
+    "owner": "christianlouis",
+    "extra": {
+      "eas": {
+        "projectId": "16925679-cb94-411c-83b5-a62c9addb872"
+      }
+    }
+  }
+}

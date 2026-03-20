@@ -128,6 +128,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const code = "{{ code }}";
 
   // Get credentials from session storage (these take precedence over server-provided values)
+  const useGlobalCreds = sessionStorage.getItem('dropbox_use_global_creds') === 'true';
   const appKey = sessionStorage.getItem('dropbox_app_key') || "{{ app_key_value }}";
   const appSecret = sessionStorage.getItem('dropbox_app_secret') || "{{ app_secret_value }}";
   const folderPath = sessionStorage.getItem('dropbox_folder_path') || "{{ folder_path }}" || '/Documents/Uploads';
@@ -141,18 +142,98 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  const redirectUri = window.location.origin + "/dropbox-callback";
+  // Use server-provided callback URL (respects PUBLIC_BASE_URL) with fallback to window.location.origin
+  const redirectUri = {{ callback_url | tojson }} || (window.location.origin + "/dropbox-callback");
 
   // Automatically exchange the code for a refresh token
   if (code) {
-    if (!appKey || !appSecret) {
-      showError("Missing App Key or App Secret. Please go back to the setup page and try again.");
-      return;
+    if (useGlobalCreds) {
+      // Global credentials: the server handles the exchange using the admin app secret
+      exchangeCodeGlobal(code, redirectUri);
+    } else {
+      if (!appKey || !appSecret) {
+        showError("Missing App Key or App Secret. Please go back to the setup page and try again.");
+        return;
+      }
+      exchangeCode(code, appKey, appSecret, redirectUri);
     }
-
-    exchangeCode(code, appKey, appSecret, redirectUri);
   } else {
     showError("No authorization code was found in the URL");
+  }
+
+  function exchangeCodeGlobal(code, redirectUri) {
+    const formData = new FormData();
+    formData.append('code', code);
+    formData.append('redirect_uri', redirectUri);
+
+    document.getElementById('processing-message').innerHTML =
+      '<p>Exchanging authorization code using shared credentials…</p>';
+
+    fetch('/api/dropbox/exchange-token-global', {
+      method: 'POST',
+      body: formData
+    })
+    .then(response => {
+      if (!response.ok) {
+        return response.json().then(err => {
+          throw new Error(err.detail || 'Failed to exchange token');
+        });
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.refresh_token) {
+        const resolvedAppKey = data.app_key || '';
+        if (integrationId) {
+          const creds = {
+            refresh_token: data.refresh_token,
+            // Store public app_key with the integration (no secret stored browser-side)
+            app_key: resolvedAppKey,
+            // Flag so the backend knows to use global app_secret for future operations
+            use_global_app_secret: true,
+          };
+
+          const body = { credentials: creds };
+
+          document.getElementById('processing-message').innerHTML =
+            '<p>Saving credentials to your integration…</p>';
+
+          return fetch(`/api/integrations/${integrationId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          }).then(response => {
+            if (!response.ok) {
+              return response.json().then(err => {
+                throw new Error('Failed to save credentials: ' + (err.detail || 'Unknown error'));
+              });
+            }
+            return response.json();
+          }).then(() => {
+            // Clean up
+            sessionStorage.removeItem('dropbox_use_global_creds');
+            sessionStorage.removeItem('oauth_integration_id');
+
+            document.getElementById('processing-message').innerHTML =
+              '<p class="text-green-600 font-semibold">✓ Dropbox authorized successfully!</p>' +
+              '<p class="text-sm text-gray-500 mt-2">Redirecting to Integrations…</p>';
+            document.querySelector('.animate-spin').parentNode.classList.add('hidden');
+            setTimeout(() => { window.location.href = '/integrations'; }, 2000);
+          });
+        }
+        // Global admin flow — the exchange-token-global endpoint is intended for
+        // per-user integrations, so reaching here without an integrationId is unexpected.
+        console.warn('dropbox_callback: global creds flow reached without integration_id');
+        sessionStorage.removeItem('dropbox_use_global_creds');
+        showSuccess(data.refresh_token, resolvedAppKey, '', folderPath);
+        setTimeout(() => { window.location.href = '/status'; }, 10000);
+      } else {
+        throw new Error('No refresh token was received from the server');
+      }
+    })
+    .catch(error => {
+      showError(error.message);
+    });
   }
 
   function exchangeCode(code, appKey, appSecret, redirectUri) {

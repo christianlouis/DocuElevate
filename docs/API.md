@@ -27,8 +27,10 @@ DocuElevate implements rate limiting to protect against abuse and DoS attacks. R
 ### Default Limits
 
 - **Default endpoints**: 100 requests per minute
-- **File upload**: 600 requests per minute
+- **File upload**: 600 requests per minute (global) + 20 per user per 60 s (per-user, health-aware)
 - **Authentication**: 10 requests per minute
+
+**Per-user upload rate limiting**: Upload endpoints (`/api/ui-upload`, `/api/process-url`) enforce a per-user sliding-window limit that adapts to system load. Under heavy queue depth or high CPU usage, the effective limit is reduced automatically. See the [Configuration Guide](ConfigurationGuide.md#per-user-upload-rate-limiting) for details.
 
 **Note**: Document processing endpoints (OCR, metadata extraction) use built-in queue throttling to control processing rates and prevent upstream API overloads. No additional API-level rate limit is applied to processing endpoints.
 
@@ -53,6 +55,10 @@ RATE_LIMITING_ENABLED=true
 RATE_LIMIT_DEFAULT=100/minute
 RATE_LIMIT_UPLOAD=600/minute
 RATE_LIMIT_AUTH=10/minute
+
+# Per-user upload rate limiting (health-aware)
+UPLOAD_RATE_LIMIT_PER_USER=20   # Max uploads per user per window
+UPLOAD_RATE_LIMIT_WINDOW=60     # Sliding window in seconds
 ```
 
 See [Configuration Guide](ConfigurationGuide.md) for more details.
@@ -115,7 +121,8 @@ curl -X GET "http://<your-docuelevate-instance>/api/files" \
 |--------|----------|-------------|
 | `POST` | `/api/api-tokens/` | Create a new token |
 | `GET` | `/api/api-tokens/` | List all your tokens |
-| `DELETE` | `/api/api-tokens/{id}` | Revoke a token |
+| `DELETE` | `/api/api-tokens/{id}` | Revoke (active) or permanently delete (revoked) a token |
+| `POST` | `/api/api-tokens/{id}/reactivate` | Reactivate a revoked token |
 
 ### Session Authentication
 
@@ -235,17 +242,33 @@ The DocuElevate browser extension uses this endpoint to send files directly from
 
 **POST** `/api/ui-upload`
 
-Upload one or more files from your computer for processing.
+Upload a file from your computer for processing.
 
 **Request**:
-- Multipart form data with file(s)
+- Multipart form data with a single `file` field
 
-**Response**:
+**Response** (new file):
 ```json
 {
-  "success": true,
-  "file_ids": [123, 124],
-  "message": "Files uploaded and queued for processing"
+  "task_id": "abc-123",
+  "status": "queued",
+  "original_filename": "invoice.pdf",
+  "stored_filename": "a1b2c3d4.pdf"
+}
+```
+
+**Response** (exact duplicate, when `ENABLE_DEDUPLICATION=True`):
+```json
+{
+  "status": "duplicate",
+  "original_filename": "invoice.pdf",
+  "stored_filename": "e5f6a7b8.pdf",
+  "duplicate_of": {
+    "duplicate_type": "exact",
+    "original_file_id": 42,
+    "original_filename": "invoice.pdf",
+    "message": "This file is an exact duplicate of an already-processed document. It has not been queued for processing again."
+  }
 }
 ```
 
@@ -1356,7 +1379,7 @@ Test an integration connection without saving. Useful for "Test connection" UI b
 {"success": true, "message": "IMAP connection successful"}
 ```
 
-Supported connection tests: `IMAP`, `S3`, `WEBDAV`, `NEXTCLOUD`. Other types return a message that testing is not yet supported.
+Supported connection tests: `DROPBOX`, `IMAP`, `S3`, `WEBDAV`, `NEXTCLOUD`. Other types return a message that testing is not yet supported.
 
 ### GET /api/integrations/quota/
 
@@ -1619,6 +1642,47 @@ Lightweight endpoint returning the total number of queued + in-progress items. D
 ```
 
 ## Diagnostic
+
+### GET /api/diagnostic/healthz/live
+
+Lightweight liveness probe for Kubernetes.  Returns **200 OK** as long as the process is running.  This endpoint does **not** check external dependencies and is intentionally cheap.
+
+**Authentication:** None (designed for kubelet probes)
+
+**Response (200 OK):**
+```json
+{
+  "status": "ok"
+}
+```
+
+### GET /api/diagnostic/healthz/ready
+
+Readiness probe for Kubernetes.  Verifies that the application can serve traffic by checking database and Redis connectivity.
+
+**Authentication:** None (designed for kubelet probes)
+
+**Response (200 OK) – ready to serve traffic:**
+```json
+{
+  "status": "ready",
+  "checks": {
+    "database": {"status": "ok"},
+    "redis":    {"status": "ok"}
+  }
+}
+```
+
+**Response (503 Service Unavailable) – database unreachable:**
+```json
+{
+  "status": "not_ready",
+  "checks": {
+    "database": {"status": "error", "detail": "..."},
+    "redis":    {"status": "ok"}
+  }
+}
+```
 
 ### GET /api/diagnostic/health
 
@@ -2009,6 +2073,160 @@ Pass no `pipeline_id` query parameter (or omit it) to clear the assignment.
 ```
 
 
+## Routing Rules
+
+Routing rules let you conditionally assign documents to different pipelines
+based on file properties such as type, size, filename, or AI-extracted
+metadata.  Rules are evaluated in **position order** (lowest first); the first
+rule that matches wins.  If no rule matches, the system falls back to the
+owner's (or global) default pipeline.
+
+### Supported operators and fields
+
+```bash
+GET /api/routing-rules/operators
+```
+
+Returns the catalogue of valid operators and built-in fields so UIs can
+populate dropdowns without hard-coding values.
+
+**Response (200):**
+```json
+{
+  "operators": ["contains", "equals", "gt", "gte", "lt", "lte", "not_contains", "not_equals", "regex"],
+  "builtin_fields": ["category", "document_type", "file_type", "filename", "size"],
+  "metadata_prefix": "metadata."
+}
+```
+
+> **Tip:** For AI metadata fields use the `metadata.` prefix, e.g.
+> `metadata.sender`, `metadata.amount`.
+
+### List routing rules
+
+```bash
+GET /api/routing-rules
+```
+
+Returns the current user's rules **plus** any system-wide rules
+(`owner_id = null`), ordered by position.
+
+**Response (200):**
+```json
+[
+  {
+    "id": 1,
+    "owner_id": "alice",
+    "name": "Route invoices",
+    "position": 0,
+    "field": "document_type",
+    "operator": "equals",
+    "value": "Invoice",
+    "target_pipeline_id": 3,
+    "is_active": true,
+    "created_at": "2026-03-09T12:00:00+00:00",
+    "updated_at": "2026-03-09T12:00:00+00:00"
+  }
+]
+```
+
+### Create routing rule
+
+```bash
+POST /api/routing-rules
+Content-Type: application/json
+
+{
+  "name": "Route invoices",
+  "field": "document_type",
+  "operator": "equals",
+  "value": "Invoice",
+  "target_pipeline_id": 3
+}
+```
+
+Optional fields: `position` (auto-assigned if omitted), `is_active` (default `true`).
+
+**Response (201 Created):** The created rule object.
+
+### Get routing rule
+
+```bash
+GET /api/routing-rules/{rule_id}
+```
+
+**Response (200):** A single rule object.
+
+### Update routing rule
+
+```bash
+PUT /api/routing-rules/{rule_id}
+Content-Type: application/json
+
+{ "name": "Renamed rule", "operator": "contains", "is_active": false }
+```
+
+Only the supplied fields are updated.
+
+**Response (200):** The updated rule object.
+
+### Delete routing rule
+
+```bash
+DELETE /api/routing-rules/{rule_id}
+```
+
+Returns **204 No Content**.
+
+### Reorder routing rules
+
+```bash
+PUT /api/routing-rules/reorder
+Content-Type: application/json
+
+{ "rule_ids": [3, 1, 2] }
+```
+
+Provide the complete ordered list of your rule IDs.  Positions are reassigned
+0, 1, 2, … in the given order.
+
+### Evaluate rules (dry run)
+
+```bash
+POST /api/routing-rules/evaluate
+Content-Type: application/json
+
+{
+  "file_type": "application/pdf",
+  "filename": "invoice_2024.pdf",
+  "size": 204800,
+  "document_type": "Invoice",
+  "metadata": { "sender": "Acme Corp" }
+}
+```
+
+Tests which rule (if any) would match the given properties **without**
+actually routing a document.
+
+**Response (200) – match found:**
+```json
+{
+  "matched": true,
+  "rule": { "id": 1, "name": "Route invoices", "..." : "..." },
+  "target_pipeline": { "id": 3, "name": "Invoice Pipeline", "is_active": true }
+}
+```
+
+**Response (200) – no match:**
+```json
+{
+  "matched": false,
+  "rule": null,
+  "target_pipeline": null
+}
+```
+
+
 ## API Tokens
 
 Personal API tokens allow programmatic access to the DocuElevate API without
@@ -2022,12 +2240,14 @@ Usage tracking records when each token was last used and from which IP address.
 
 ### POST /api/api-tokens/
 
-Create a new API token.
+Create a new API token.  Optionally specify a lifetime in days via
+`expires_in_days` (1–3650).  If omitted the token never expires.
 
 **Request:**
 ```json
 {
-  "name": "CI Pipeline"
+  "name": "CI Pipeline",
+  "expires_in_days": 90
 }
 ```
 
@@ -2042,7 +2262,8 @@ Create a new API token.
   "last_used_at": null,
   "last_used_ip": null,
   "created_at": "2026-03-08T12:00:00Z",
-  "revoked_at": null
+  "revoked_at": null,
+  "expires_at": "2026-06-06T12:00:00Z"
 }
 ```
 
@@ -2064,15 +2285,20 @@ List all tokens for the authenticated user. The full token value is never includ
     "last_used_at": "2026-03-08T15:30:00Z",
     "last_used_ip": "203.0.113.42",
     "created_at": "2026-03-08T12:00:00Z",
-    "revoked_at": null
+    "revoked_at": null,
+    "expires_at": "2026-06-06T12:00:00Z"
   }
 ]
 ```
 
 ### DELETE /api/api-tokens/{token_id}
 
-Revoke a token. The token is soft-deleted (kept for audit purposes) and can no
-longer be used for authentication.
+Revoke or permanently delete a token:
+
+* **Active token** – soft-revoked (kept for audit purposes, marked inactive).
+  Response: `{"detail": "Token revoked"}`
+* **Already-revoked token** – permanently deleted from the database.
+  Response: `{"detail": "Token deleted"}`
 
 **Response (200):**
 ```json
@@ -2080,6 +2306,13 @@ longer be used for authentication.
   "detail": "Token revoked"
 }
 ```
+
+### POST /api/api-tokens/{token_id}/reactivate
+
+Reactivate a previously revoked token.  Clears `revoked_at` and sets
+`is_active` back to `true`.
+
+**Response (200):** The updated `TokenResponse` object.
 
 ### Using API Tokens
 
@@ -2112,3 +2345,257 @@ print(response.json())
 ## Further Assistance
 
 For additional help with the API, please contact our support team or refer to the [Development Guide](../CONTRIBUTING.md).
+
+## Mobile App API
+
+The mobile API provides endpoints used by the native iOS and Android app.  All endpoints require authentication (Bearer token or active session cookie).
+
+For full mobile app documentation see [MobileApp.md](./MobileApp.md).
+
+### POST /api/mobile/generate-token
+
+Exchange an active web session for a long-lived API token scoped to the mobile app.
+
+**Request:**
+```json
+{ "device_name": "John's iPhone" }
+```
+
+**Response (201 Created):**
+```json
+{
+  "token": "de_AbCdEfGhIjKl...",
+  "token_id": 42,
+  "name": "Mobile App – John's iPhone",
+  "created_at": "2026-03-10T09:30:00Z"
+}
+```
+
+> The `token` is shown **once only**.
+
+### POST /api/mobile/register-device
+
+Register an Expo push token to receive push notifications.
+
+**Request:**
+```json
+{
+  "push_token": "ExponentPushToken[xxxxxx]",
+  "device_name": "John's iPhone",
+  "platform": "ios"
+}
+```
+
+**Response (201 Created):** Device record with `id`, `platform`, `is_active`, `created_at`.
+
+### GET /api/mobile/devices
+
+List all registered push-notification devices for the current user.
+
+**Response (200 OK):** Array of device records.
+
+### DELETE /api/mobile/devices/{device_id}
+
+Deactivate or permanently delete a push-notification device:
+
+* **Active device** – soft-deactivated (record kept, will no longer receive push notifications).
+  Response: `{"detail": "Device deactivated"}`
+* **Already-inactive device** – permanently deleted from the database.
+  Response: `{"detail": "Device deleted"}`
+
+**Response (200)**
+
+### GET /api/mobile/whoami
+
+Return basic profile information for the authenticated user.
+
+**Response (200 OK):**
+```json
+{
+  "owner_id": "john@example.com",
+  "display_name": "John Doe",
+  "email": "john@example.com",
+  "avatar_url": "https://www.gravatar.com/avatar/...",
+  "is_admin": false
+}
+```
+
+---
+
+## GraphQL API
+
+DocuElevate exposes a GraphQL API at `/graphql` alongside the REST API.  It
+supports flexible queries with field selection, making it ideal for dashboards
+and integrations that only need a subset of the available data.
+
+### Endpoint
+
+| Method | URL | Description |
+|--------|-----|-------------|
+| `POST` | `/graphql` | Execute a GraphQL query or mutation |
+| `GET`  | `/graphql` | Open the GraphiQL interactive playground |
+
+### Authentication
+
+The GraphQL endpoint honours the same authentication rules as the REST API:
+
+- **`AUTH_ENABLED=False`** (default, single-user mode): all queries are
+  allowed without credentials.
+- **`AUTH_ENABLED=True`** (multi-user mode): a valid session cookie **or**
+  an `Authorization: Bearer <token>` API token is required.  Admin-only
+  queries (settings, users) additionally require the `is_admin` flag.
+
+### Available Queries
+
+| Field | Returns | Notes |
+|-------|---------|-------|
+| `documents(ownerId, limit, offset)` | `[DocumentType]` | Paginated list of documents |
+| `document(id)` | `DocumentType` | Single document by primary key |
+| `pipelines(ownerId, limit, offset)` | `[PipelineType]` | Paginated list of pipelines with steps |
+| `pipeline(id)` | `PipelineType` | Single pipeline by primary key |
+| `settings(limit, offset)` | `[SettingType]` | Non-sensitive app settings (**admin only**) |
+| `users(limit, offset)` | `[UserType]` | User profiles (**admin only**) |
+| `user(userId)` | `UserType` | Single user profile (**admin only**) |
+
+> **Note:** Sensitive configuration keys (API secrets, passwords, tokens) are
+> automatically excluded from the `settings` query regardless of the caller's
+> privilege level.
+
+### GraphiQL Playground
+
+Navigate to `http://<your-instance>/graphql` in a browser to open the
+interactive GraphiQL IDE, which provides schema documentation, auto-complete,
+and the ability to run queries directly.
+
+### Example Queries
+
+**List recent documents:**
+```graphql
+{
+  documents(limit: 5) {
+    id
+    originalFilename
+    mimeType
+    fileSize
+    documentTitle
+    createdAt
+  }
+}
+```
+
+**Fetch a pipeline with its steps:**
+```graphql
+{
+  pipeline(id: 1) {
+    id
+    name
+    description
+    isDefault
+    isActive
+    steps {
+      position
+      stepType
+      label
+      enabled
+    }
+  }
+}
+```
+
+**List application settings (admin only):**
+```graphql
+{
+  settings {
+    key
+    value
+    updatedAt
+  }
+}
+```
+
+**List user profiles (admin only):**
+```graphql
+{
+  users(limit: 10) {
+    userId
+    displayName
+    subscriptionTier
+    isBlocked
+  }
+}
+```
+
+**Using variables:**
+```graphql
+query GetDocument($id: Int!) {
+  document(id: $id) {
+    id
+    originalFilename
+    documentTitle
+    isDuplicate
+    ocrQualityScore
+  }
+}
+```
+Variables: `{ "id": 42 }`
+
+## System Reset
+
+Admin-only endpoints for resetting the system to a clean state.  Requires `ENABLE_FACTORY_RESET=True`.
+
+### GET /api/admin/system-reset/status
+
+Check whether the system reset feature is enabled.
+
+**Response (200):**
+```json
+{
+  "enabled": true,
+  "factory_reset_on_startup": false
+}
+```
+
+### POST /api/admin/system-reset/full
+
+Wipe all user data (database + work-files).
+
+**Request:**
+```json
+{
+  "confirmation": "DELETE"
+}
+```
+
+**Response (200):**
+```json
+{
+  "status": "ok",
+  "result": {
+    "database": { "files": 42, "processing_logs": 100 },
+    "filesystem": { "deleted_dirs": 5, "deleted_files": 12 }
+  }
+}
+```
+
+### POST /api/admin/system-reset/reimport
+
+Move original files to a reimport folder, wipe everything, and configure the reimport folder as a watch folder for re-ingestion.
+
+**Request:**
+```json
+{
+  "confirmation": "REIMPORT"
+}
+```
+
+**Response (200):**
+```json
+{
+  "status": "ok",
+  "result": {
+    "database": { "files": 42 },
+    "filesystem": { "deleted_dirs": 5, "deleted_files": 12 },
+    "reimport": { "files_moved": 42, "reimport_folder": "/workdir/reimport" }
+  }
+}
+```

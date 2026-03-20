@@ -665,6 +665,8 @@ def _all_should_upload_false():
         "email",
         "onedrive",
         "s3",
+        "sharepoint",
+        "icloud",
     ]
     return [patch(f"app.tasks.send_to_all._should_upload_to_{s}", return_value=False) for s in services]
 
@@ -693,6 +695,8 @@ class TestSendToAllCoverage:
             patch("app.tasks.send_to_all._should_upload_to_email", return_value=False),
             patch("app.tasks.send_to_all._should_upload_to_onedrive", return_value=False),
             patch("app.tasks.send_to_all._should_upload_to_s3", return_value=False),
+            patch("app.tasks.send_to_all._should_upload_to_sharepoint", return_value=False),
+            patch("app.tasks.send_to_all._should_upload_to_icloud", return_value=False),
             patch("app.tasks.send_to_all.SessionLocal") as mock_session_cls,
         ):
             ms.workdir = str(tmp_path)
@@ -804,6 +808,8 @@ class TestSendToAllCoverage:
             patch("app.tasks.send_to_all._should_upload_to_email", return_value=False),
             patch("app.tasks.send_to_all._should_upload_to_onedrive", return_value=False),
             patch("app.tasks.send_to_all._should_upload_to_s3", return_value=False),
+            patch("app.tasks.send_to_all._should_upload_to_sharepoint", return_value=False),
+            patch("app.tasks.send_to_all._should_upload_to_icloud", return_value=False),
             patch("app.tasks.send_to_all.SessionLocal"),
         ):
             ms.workdir = str(tmp_path)
@@ -863,6 +869,8 @@ class TestSendToAllCoverage:
             patch("app.tasks.send_to_all._should_upload_to_email", return_value=False),
             patch("app.tasks.send_to_all._should_upload_to_onedrive", return_value=False),
             patch("app.tasks.send_to_all._should_upload_to_s3", return_value=False),
+            patch("app.tasks.send_to_all._should_upload_to_sharepoint", return_value=False),
+            patch("app.tasks.send_to_all._should_upload_to_icloud", return_value=False),
             patch("app.tasks.send_to_all.SessionLocal"),
         ):
             ms.workdir = str(tmp_path)

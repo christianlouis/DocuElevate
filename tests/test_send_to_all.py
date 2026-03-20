@@ -9,6 +9,7 @@ from app.tasks.send_to_all import (
     _should_upload_to_email,
     _should_upload_to_ftp,
     _should_upload_to_google_drive,
+    _should_upload_to_icloud,
     _should_upload_to_nextcloud,
     _should_upload_to_onedrive,
     _should_upload_to_paperless,
@@ -145,6 +146,137 @@ class TestShouldUploadFunctions:
 
         assert _should_upload_to_s3() is True
 
+    @patch("app.tasks.send_to_all.settings")
+    def test_should_upload_to_icloud_configured(self, mock_settings):
+        """Test iCloud upload check."""
+        mock_settings.icloud_username = "user@example.com"
+        mock_settings.icloud_password = "app-specific-password"
+
+        assert _should_upload_to_icloud() is True
+
+    @patch("app.tasks.send_to_all.settings")
+    def test_should_upload_to_icloud_not_configured(self, mock_settings):
+        """Test iCloud upload check when not configured."""
+        mock_settings.icloud_username = None
+        mock_settings.icloud_password = None
+
+        assert _should_upload_to_icloud() is False
+
+
+@pytest.mark.unit
+class TestShouldUploadEnabledFlag:
+    """Test that the _should_upload_to_* functions respect the explicit enabled flag."""
+
+    @patch("app.tasks.send_to_all.settings")
+    def test_dropbox_disabled_with_credentials(self, mock_settings):
+        """Test Dropbox upload is blocked when disabled even with valid credentials."""
+        mock_settings.dropbox_enabled = False
+        mock_settings.dropbox_app_key = "key"
+        mock_settings.dropbox_app_secret = "secret"
+        mock_settings.dropbox_refresh_token = "token"
+
+        assert _should_upload_to_dropbox() is False
+
+    @patch("app.tasks.send_to_all.settings")
+    def test_nextcloud_disabled_with_credentials(self, mock_settings):
+        """Test Nextcloud upload is blocked when disabled even with valid credentials."""
+        mock_settings.nextcloud_enabled = False
+        mock_settings.nextcloud_upload_url = "https://nextcloud.example.com"
+        mock_settings.nextcloud_username = "user"
+        mock_settings.nextcloud_password = "pass"
+
+        assert _should_upload_to_nextcloud() is False
+
+    @patch("app.tasks.send_to_all.settings")
+    def test_paperless_disabled_with_credentials(self, mock_settings):
+        """Test Paperless upload is blocked when disabled even with valid credentials."""
+        mock_settings.paperless_enabled = False
+        mock_settings.paperless_ngx_api_token = "token"
+        mock_settings.paperless_host = "https://paperless.example.com"
+
+        assert _should_upload_to_paperless() is False
+
+    @patch("app.tasks.send_to_all.settings")
+    def test_google_drive_disabled_with_credentials(self, mock_settings):
+        """Test Google Drive upload is blocked when disabled even with valid credentials."""
+        mock_settings.google_drive_enabled = False
+        mock_settings.google_drive_use_oauth = False
+        mock_settings.google_drive_credentials_json = '{"type": "service_account"}'
+        mock_settings.google_drive_folder_id = "folder_id"
+
+        assert _should_upload_to_google_drive() is False
+
+    @patch("app.tasks.send_to_all.settings")
+    def test_webdav_disabled_with_credentials(self, mock_settings):
+        """Test WebDAV upload is blocked when disabled even with valid credentials."""
+        mock_settings.webdav_enabled = False
+        mock_settings.webdav_url = "https://webdav.example.com"
+        mock_settings.webdav_username = "user"
+        mock_settings.webdav_password = "pass"
+
+        assert _should_upload_to_webdav() is False
+
+    @patch("app.tasks.send_to_all.settings")
+    def test_ftp_disabled_with_credentials(self, mock_settings):
+        """Test FTP upload is blocked when disabled even with valid credentials."""
+        mock_settings.ftp_enabled = False
+        mock_settings.ftp_host = "ftp.example.com"
+        mock_settings.ftp_username = "user"
+        mock_settings.ftp_password = "pass"
+
+        assert _should_upload_to_ftp() is False
+
+    @patch("app.tasks.send_to_all.settings")
+    def test_sftp_disabled_with_credentials(self, mock_settings):
+        """Test SFTP upload is blocked when disabled even with valid credentials."""
+        mock_settings.sftp_enabled = False
+        mock_settings.sftp_host = "sftp.example.com"
+        mock_settings.sftp_username = "user"
+        mock_settings.sftp_password = "pass"
+        mock_settings.sftp_private_key = None
+
+        assert _should_upload_to_sftp() is False
+
+    @patch("app.tasks.send_to_all.settings")
+    def test_email_disabled_with_credentials(self, mock_settings):
+        """Test email upload is blocked when disabled even with valid credentials."""
+        mock_settings.dest_email_enabled = False
+        mock_settings.dest_email_host = "smtp.example.com"
+        mock_settings.dest_email_username = "user"
+        mock_settings.dest_email_password = "pass"
+        mock_settings.dest_email_default_recipient = "recipient@example.com"
+
+        assert _should_upload_to_email() is False
+
+    @patch("app.tasks.send_to_all.settings")
+    def test_onedrive_disabled_with_credentials(self, mock_settings):
+        """Test OneDrive upload is blocked when disabled even with valid credentials."""
+        mock_settings.onedrive_enabled = False
+        mock_settings.onedrive_client_id = "client_id"
+        mock_settings.onedrive_client_secret = "client_secret"
+        mock_settings.onedrive_refresh_token = "refresh_token"
+
+        assert _should_upload_to_onedrive() is False
+
+    @patch("app.tasks.send_to_all.settings")
+    def test_s3_disabled_with_credentials(self, mock_settings):
+        """Test S3 upload is blocked when disabled even with valid credentials."""
+        mock_settings.s3_enabled = False
+        mock_settings.s3_bucket_name = "my-bucket"
+        mock_settings.aws_access_key_id = "key_id"
+        mock_settings.aws_secret_access_key = "secret_key"
+
+        assert _should_upload_to_s3() is False
+
+    @patch("app.tasks.send_to_all.settings")
+    def test_icloud_disabled_with_credentials(self, mock_settings):
+        """Test iCloud upload is blocked when disabled even with valid credentials."""
+        mock_settings.icloud_enabled = False
+        mock_settings.icloud_username = "user@example.com"
+        mock_settings.icloud_password = "app-specific-password"
+
+        assert _should_upload_to_icloud() is False
+
 
 @pytest.mark.unit
 class TestGetConfiguredServicesFromValidator:
@@ -154,9 +286,9 @@ class TestGetConfiguredServicesFromValidator:
     def test_returns_configured_services(self, mock_get_status):
         """Test that configured services are returned correctly."""
         mock_get_status.return_value = {
-            "Dropbox": {"configured": True},
-            "NextCloud": {"configured": False},
-            "S3 Storage": {"configured": True},
+            "Dropbox": {"configured": True, "enabled": True},
+            "NextCloud": {"configured": False, "enabled": True},
+            "S3 Storage": {"configured": True, "enabled": True},
         }
 
         result = get_configured_services_from_validator()
@@ -169,13 +301,37 @@ class TestGetConfiguredServicesFromValidator:
     def test_handles_missing_providers(self, mock_get_status):
         """Test handling when some providers are not in status."""
         mock_get_status.return_value = {
-            "Dropbox": {"configured": True},
+            "Dropbox": {"configured": True, "enabled": True},
         }
 
         result = get_configured_services_from_validator()
 
         assert result["dropbox"] is True
         # Other services not in result
+
+    @patch("app.tasks.send_to_all.get_provider_status")
+    def test_configured_but_disabled_service_not_active(self, mock_get_status):
+        """Test that a configured but disabled service is not returned as active."""
+        mock_get_status.return_value = {
+            "Dropbox": {"configured": True, "enabled": False},
+            "S3 Storage": {"configured": True, "enabled": True},
+        }
+
+        result = get_configured_services_from_validator()
+
+        assert result["dropbox"] is False
+        assert result["s3"] is True
+
+    @patch("app.tasks.send_to_all.get_provider_status")
+    def test_missing_enabled_field_defaults_to_true_for_backward_compatibility(self, mock_get_status):
+        """Test that missing 'enabled' key defaults to True (backward compatible)."""
+        mock_get_status.return_value = {
+            "Dropbox": {"configured": True},
+        }
+
+        result = get_configured_services_from_validator()
+
+        assert result["dropbox"] is True
 
 
 @pytest.mark.unit
@@ -204,12 +360,16 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_sftp")
     @patch("app.tasks.send_to_all._should_upload_to_email")
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_sharepoint")
+    @patch("app.tasks.send_to_all._should_upload_to_icloud")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
     def test_queues_single_configured_service(
         self,
         mock_upload,
         mock_s3,
+        mock_icloud,
+        mock_sharepoint,
         mock_onedrive,
         mock_email,
         mock_sftp,
@@ -239,6 +399,8 @@ class TestSendToAllDestinations:
         mock_email.return_value = False
         mock_onedrive.return_value = False
         mock_s3.return_value = False
+        mock_sharepoint.return_value = False
+        mock_icloud.return_value = False
         mock_upload.delay.return_value = MagicMock(id="task-123")
 
         result = send_to_all_destinations.apply(args=[str(test_file), False, 1])
@@ -250,6 +412,8 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all.log_task_progress")
     @patch("app.tasks.send_to_all.settings")
     @patch("app.tasks.send_to_all._should_upload_to_dropbox")
+    @patch("app.tasks.send_to_all._should_upload_to_icloud")
+    @patch("app.tasks.send_to_all._should_upload_to_sharepoint")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all._should_upload_to_nextcloud")
     @patch("app.tasks.send_to_all._should_upload_to_paperless")
@@ -274,6 +438,8 @@ class TestSendToAllDestinations:
         mock_paperless,
         mock_nextcloud,
         mock_should_s3,
+        mock_sharepoint,
+        mock_icloud,
         mock_should_dropbox,
         mock_settings,
         mock_log,
@@ -295,6 +461,8 @@ class TestSendToAllDestinations:
         mock_sftp.return_value = False
         mock_email.return_value = False
         mock_onedrive.return_value = False
+        mock_sharepoint.return_value = False
+        mock_icloud.return_value = False
         mock_dropbox_upload.delay.return_value = MagicMock(id="dropbox-task")
         mock_s3_upload.delay.return_value = MagicMock(id="s3-task")
 
@@ -316,10 +484,14 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_sftp")
     @patch("app.tasks.send_to_all._should_upload_to_email")
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_sharepoint")
+    @patch("app.tasks.send_to_all._should_upload_to_icloud")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     def test_skips_unconfigured_services(
         self,
         mock_s3,
+        mock_icloud,
+        mock_sharepoint,
         mock_onedrive,
         mock_email,
         mock_sftp,
@@ -349,6 +521,8 @@ class TestSendToAllDestinations:
         mock_email.return_value = False
         mock_onedrive.return_value = False
         mock_s3.return_value = False
+        mock_sharepoint.return_value = False
+        mock_icloud.return_value = False
 
         result = send_to_all_destinations.apply(args=[str(test_file), False, 1])
 
@@ -369,12 +543,16 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_sftp")
     @patch("app.tasks.send_to_all._should_upload_to_email")
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_sharepoint")
+    @patch("app.tasks.send_to_all._should_upload_to_icloud")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
     def test_with_file_id_parameter(
         self,
         mock_upload,
         mock_s3,
+        mock_icloud,
+        mock_sharepoint,
         mock_onedrive,
         mock_email,
         mock_sftp,
@@ -404,6 +582,8 @@ class TestSendToAllDestinations:
         mock_email.return_value = False
         mock_onedrive.return_value = False
         mock_s3.return_value = False
+        mock_sharepoint.return_value = False
+        mock_icloud.return_value = False
         mock_upload.delay.return_value = MagicMock(id="task-123")
 
         result = send_to_all_destinations.apply(args=[str(test_file), False, 42])
@@ -425,6 +605,8 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_sftp")
     @patch("app.tasks.send_to_all._should_upload_to_email")
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_sharepoint")
+    @patch("app.tasks.send_to_all._should_upload_to_icloud")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.get_configured_services_from_validator")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
@@ -433,6 +615,8 @@ class TestSendToAllDestinations:
         mock_upload,
         mock_validator,
         mock_s3,
+        mock_icloud,
+        mock_sharepoint,
         mock_onedrive,
         mock_email,
         mock_sftp,
@@ -463,6 +647,8 @@ class TestSendToAllDestinations:
         mock_email.return_value = False
         mock_onedrive.return_value = False
         mock_s3.return_value = False
+        mock_sharepoint.return_value = False
+        mock_icloud.return_value = False
         mock_upload.delay.return_value = MagicMock(id="task-123")
 
         result = send_to_all_destinations.apply(args=[str(test_file), True, 1])
@@ -482,12 +668,16 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_sftp")
     @patch("app.tasks.send_to_all._should_upload_to_email")
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_sharepoint")
+    @patch("app.tasks.send_to_all._should_upload_to_icloud")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.get_configured_services_from_validator")
     def test_validator_exception_fallback(
         self,
         mock_validator,
         mock_s3,
+        mock_icloud,
+        mock_sharepoint,
         mock_onedrive,
         mock_email,
         mock_sftp,
@@ -518,6 +708,8 @@ class TestSendToAllDestinations:
         mock_email.return_value = False
         mock_onedrive.return_value = False
         mock_s3.return_value = False
+        mock_sharepoint.return_value = False
+        mock_icloud.return_value = False
 
         # Should not raise, should fall back to individual checks
         result = send_to_all_destinations.apply(args=[str(test_file), True, 1])
@@ -536,12 +728,16 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_sftp")
     @patch("app.tasks.send_to_all._should_upload_to_email")
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_sharepoint")
+    @patch("app.tasks.send_to_all._should_upload_to_icloud")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all.upload_to_dropbox")
     def test_handles_upload_task_queue_error(
         self,
         mock_upload,
         mock_s3,
+        mock_icloud,
+        mock_sharepoint,
         mock_onedrive,
         mock_email,
         mock_sftp,
@@ -571,6 +767,8 @@ class TestSendToAllDestinations:
         mock_email.return_value = False
         mock_onedrive.return_value = False
         mock_s3.return_value = False
+        mock_sharepoint.return_value = False
+        mock_icloud.return_value = False
         mock_upload.delay.side_effect = Exception("Queue error")
 
         # Should not raise, should log error
@@ -580,6 +778,8 @@ class TestSendToAllDestinations:
         # Error should be recorded in results
         assert "dropbox_error" in result.result["tasks"]
 
+    @patch("app.tasks.send_to_all._should_upload_to_icloud")
+    @patch("app.tasks.send_to_all._should_upload_to_sharepoint")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
     @patch("app.tasks.send_to_all._should_upload_to_email")
@@ -608,6 +808,8 @@ class TestSendToAllDestinations:
         mock_email,
         mock_onedrive,
         mock_s3,
+        mock_sharepoint,
+        mock_icloud,
         tmp_path,
     ):
         """Test file_id lookup fallback when not provided."""
@@ -629,6 +831,8 @@ class TestSendToAllDestinations:
         mock_email.return_value = False
         mock_onedrive.return_value = False
         mock_s3.return_value = False
+        mock_sharepoint.return_value = False
+        mock_icloud.return_value = False
 
         # Mock database session
         mock_db = MagicMock()
@@ -656,10 +860,14 @@ class TestSendToAllDestinations:
     @patch("app.tasks.send_to_all._should_upload_to_sftp")
     @patch("app.tasks.send_to_all._should_upload_to_email")
     @patch("app.tasks.send_to_all._should_upload_to_onedrive")
+    @patch("app.tasks.send_to_all._should_upload_to_sharepoint")
+    @patch("app.tasks.send_to_all._should_upload_to_icloud")
     @patch("app.tasks.send_to_all._should_upload_to_s3")
     def test_should_upload_check_exception_handling(
         self,
         mock_s3,
+        mock_icloud,
+        mock_sharepoint,
         mock_onedrive,
         mock_email,
         mock_sftp,
@@ -689,6 +897,8 @@ class TestSendToAllDestinations:
         mock_email.return_value = False
         mock_onedrive.return_value = False
         mock_s3.return_value = False
+        mock_sharepoint.return_value = False
+        mock_icloud.return_value = False
 
         # Should not raise, should treat as not configured
         result = send_to_all_destinations.apply(args=[str(test_file), False, 1])

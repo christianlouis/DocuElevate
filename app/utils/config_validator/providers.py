@@ -144,7 +144,7 @@ def get_provider_status() -> dict[str, dict[str, object]]:
             and getattr(settings, "dropbox_app_secret", None)
             and getattr(settings, "dropbox_refresh_token", None)
         ),
-        "enabled": True,
+        "enabled": getattr(settings, "dropbox_enabled", True),
         "description": "Upload files to Dropbox cloud storage",
         "details": {
             "folder": getattr(settings, "dropbox_folder", "Not set"),
@@ -161,7 +161,7 @@ def get_provider_status() -> dict[str, dict[str, object]]:
         "configured": bool(
             getattr(settings, "dest_email_host", None) and getattr(settings, "dest_email_default_recipient", None)
         ),
-        "enabled": True,
+        "enabled": getattr(settings, "dest_email_enabled", True),
         "description": "Send documents via email",
         "details": {
             "host": getattr(settings, "dest_email_host", "Not set"),
@@ -183,7 +183,7 @@ def get_provider_status() -> dict[str, dict[str, object]]:
             and getattr(settings, "ftp_username", None)
             and getattr(settings, "ftp_password", None)
         ),
-        "enabled": True,
+        "enabled": getattr(settings, "ftp_enabled", True),
         "description": "Upload files to FTP server",
         "details": {
             "host": getattr(settings, "ftp_host", "Not set"),
@@ -214,7 +214,7 @@ def get_provider_status() -> dict[str, dict[str, object]]:
         "name": "Google Drive",
         "icon": "fa-brands fa-google-drive",
         "configured": is_configured and bool(getattr(settings, "google_drive_folder_id", None)),
-        "enabled": True,
+        "enabled": getattr(settings, "google_drive_enabled", True),
         "description": "Store documents in Google Drive",
         "details": {
             "auth_type": "OAuth" if use_oauth else "Service Account",
@@ -250,7 +250,7 @@ def get_provider_status() -> dict[str, dict[str, object]]:
             and getattr(settings, "nextcloud_username", None)
             and getattr(settings, "nextcloud_password", None)
         ),
-        "enabled": True,
+        "enabled": getattr(settings, "nextcloud_enabled", True),
         "description": "Store documents in NextCloud",
         "details": {
             "url": getattr(settings, "nextcloud_upload_url", "Not set"),
@@ -270,7 +270,7 @@ def get_provider_status() -> dict[str, dict[str, object]]:
             and getattr(settings, "onedrive_client_secret", None)
             and getattr(settings, "onedrive_refresh_token", None)
         ),
-        "enabled": True,
+        "enabled": getattr(settings, "onedrive_enabled", True),
         "description": "Store documents in Microsoft OneDrive",
         "details": {
             "client_id": getattr(settings, "onedrive_client_id", "Not set"),
@@ -288,11 +288,33 @@ def get_provider_status() -> dict[str, dict[str, object]]:
         "configured": bool(
             getattr(settings, "paperless_host", None) and getattr(settings, "paperless_ngx_api_token", None)
         ),
-        "enabled": True,
+        "enabled": getattr(settings, "paperless_enabled", True),
         "description": "Document management system for digital archives",
         "details": {
             "host": getattr(settings, "paperless_host", "Not set"),
             "api_token": mask_sensitive_value(getattr(settings, "paperless_ngx_api_token", None)),
+        },
+    }
+
+    # Check SharePoint configuration
+    providers["SharePoint"] = {
+        "name": "SharePoint",
+        "icon": "fa-brands fa-microsoft",
+        "configured": bool(
+            getattr(settings, "sharepoint_client_id", None)
+            and getattr(settings, "sharepoint_client_secret", None)
+            and getattr(settings, "sharepoint_site_url", None)
+        ),
+        "enabled": True,
+        "description": "Store documents in Microsoft SharePoint Online",
+        "details": {
+            "client_id": getattr(settings, "sharepoint_client_id", "Not set"),
+            "client_secret": mask_sensitive_value(getattr(settings, "sharepoint_client_secret", None)),
+            "tenant_id": getattr(settings, "sharepoint_tenant_id", "Not set"),
+            "refresh_token": mask_sensitive_value(getattr(settings, "sharepoint_refresh_token", None)),
+            "site_url": getattr(settings, "sharepoint_site_url", "Not set"),
+            "document_library": getattr(settings, "sharepoint_document_library", "Not set"),
+            "folder_path": getattr(settings, "sharepoint_folder_path", "Not set"),
         },
     }
 
@@ -305,7 +327,7 @@ def get_provider_status() -> dict[str, dict[str, object]]:
             and getattr(settings, "aws_access_key_id", None)
             and getattr(settings, "aws_secret_access_key", None)
         ),
-        "enabled": True,
+        "enabled": getattr(settings, "s3_enabled", True),
         "description": "Store documents in S3-compatible object storage",
         "details": {
             "bucket": getattr(settings, "s3_bucket_name", "Not set"),
@@ -327,7 +349,7 @@ def get_provider_status() -> dict[str, dict[str, object]]:
             and getattr(settings, "sftp_username", None)
             and (getattr(settings, "sftp_password", None) or getattr(settings, "sftp_private_key", None))
         ),
-        "enabled": True,
+        "enabled": getattr(settings, "sftp_enabled", True),
         "description": "Upload files to SFTP server",
         "details": {
             "host": getattr(settings, "sftp_host", "Not set"),
@@ -362,7 +384,7 @@ def get_provider_status() -> dict[str, dict[str, object]]:
             and getattr(settings, "webdav_username", None)
             and getattr(settings, "webdav_password", None)
         ),
-        "enabled": True,
+        "enabled": getattr(settings, "webdav_enabled", True),
         "description": "Store documents on WebDAV servers",
         "details": {
             "url": getattr(settings, "webdav_url", "Not set"),
@@ -370,6 +392,21 @@ def get_provider_status() -> dict[str, dict[str, object]]:
             "password": mask_sensitive_value(getattr(settings, "webdav_password", None)),
             "folder": getattr(settings, "webdav_folder", "Not set"),
             "verify_ssl": getattr(settings, "webdav_verify_ssl", "Not set"),
+        },
+    }
+
+    # Check iCloud Drive configuration
+    providers["iCloud Drive"] = {
+        "name": "iCloud Drive",
+        "icon": "fa-brands fa-apple",
+        "configured": bool(getattr(settings, "icloud_username", None) and getattr(settings, "icloud_password", None)),
+        "enabled": getattr(settings, "icloud_enabled", True),
+        "description": "Store documents in Apple iCloud Drive",
+        "details": {
+            "username": getattr(settings, "icloud_username", "Not set"),
+            "password": mask_sensitive_value(getattr(settings, "icloud_password", None)),
+            "folder": getattr(settings, "icloud_folder", "Not set"),
+            "cookie_directory": getattr(settings, "icloud_cookie_directory", "Not set"),
         },
     }
 

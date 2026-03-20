@@ -5,7 +5,7 @@ in files listed in the 90%+ coverage push issue.
 Each test class maps to a single source module.
 """
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from dropbox.exceptions import ApiError
@@ -523,7 +523,7 @@ class TestURLUploadAdditionalCoverage:
         """Cover DNS resolution failure branch (lines 67-72)."""
         import socket as _socket
 
-        from app.api.url_upload import is_private_ip
+        from app.utils.network import is_private_ip
 
         with patch("socket.getaddrinfo", side_effect=_socket.gaierror("nope")):
             result = is_private_ip("nonexistent.invalid.hostname.test")
@@ -531,7 +531,7 @@ class TestURLUploadAdditionalCoverage:
 
     def test_is_private_ip_hostname_resolves_to_private(self):
         """Cover branch where hostname resolves to a private IP (line 64-65)."""
-        from app.api.url_upload import is_private_ip
+        from app.utils.network import is_private_ip
 
         with patch("socket.getaddrinfo") as mock_gai:
             # Simulate resolving to a private IP
@@ -547,16 +547,23 @@ class TestURLUploadAdditionalCoverage:
 
         assert validate_file_type("", "noextfile") is False
 
-    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
     @patch("app.api.url_upload.process_document")
-    def test_process_url_empty_url_path(self, mock_process, mock_get, client):
+    def test_process_url_empty_url_path(self, mock_process, mock_stream, client):
         """URL with empty path defaults to 'download' filename (line 197-202)."""
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "50"}
-        mock_response.iter_content = Mock(return_value=[b"PDF"])
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b"PDF"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
         mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         mock_task = Mock()
         mock_task.id = "task-empty-path"

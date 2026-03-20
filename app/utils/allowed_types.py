@@ -68,6 +68,8 @@ IMAGE_MIME_TYPES: set[str] = {
     "image/tiff",
     "image/webp",
     "image/svg+xml",
+    "image/heic",
+    "image/heif",
 }
 
 # ---------------------------------------------------------------------------
@@ -124,6 +126,8 @@ ALLOWED_EXTENSIONS: set[str] = {
     ".tif",
     ".webp",
     ".svg",
+    ".heic",
+    ".heif",
     # Web
     ".html",
     ".htm",
@@ -131,3 +135,161 @@ ALLOWED_EXTENSIONS: set[str] = {
     ".md",
     ".markdown",
 }
+
+# ---------------------------------------------------------------------------
+# Fine-grained file-type categories used by IMAP ingestion profiles.
+# Each category groups related MIME types and extensions so that users can
+# enable/disable a logical collection of formats (e.g. "images") rather than
+# having to manage individual MIME strings.
+# ---------------------------------------------------------------------------
+
+FILE_TYPE_CATEGORIES: dict[str, dict] = {
+    "pdf": {
+        "label": "PDF",
+        "description": "PDF documents (.pdf)",
+        "mime_types": frozenset({"application/pdf"}),
+        "extensions": frozenset({".pdf"}),
+    },
+    "office": {
+        "label": "Microsoft Office",
+        "description": "Word, Excel and PowerPoint files (.doc, .docx, .xls, .xlsx, .ppt, .pptx, …)",
+        "mime_types": frozenset(
+            {
+                "application/msword",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+                "application/vnd.ms-word.document.macroEnabled.12",
+                "application/vnd.ms-word.template.macroEnabled.12",
+                "application/vnd.ms-excel",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
+                "application/vnd.ms-excel.sheet.macroEnabled.12",
+                "application/vnd.ms-excel.sheet.binary.macroEnabled.12",
+                "application/vnd.ms-powerpoint",
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                "application/vnd.openxmlformats-officedocument.presentationml.template",
+                "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+                "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+            }
+        ),
+        "extensions": frozenset(
+            {
+                ".doc",
+                ".docx",
+                ".docm",
+                ".dot",
+                ".dotx",
+                ".dotm",
+                ".xls",
+                ".xlsx",
+                ".xlsm",
+                ".xlsb",
+                ".xlt",
+                ".xltx",
+                ".xlw",
+                ".ppt",
+                ".pptx",
+                ".pptm",
+                ".pps",
+                ".ppsx",
+                ".pot",
+                ".potx",
+            }
+        ),
+    },
+    "opendocument": {
+        "label": "OpenDocument (LibreOffice)",
+        "description": "LibreOffice / OpenOffice files (.odt, .ods, .odp, …)",
+        "mime_types": frozenset(
+            {
+                "application/vnd.oasis.opendocument.text",
+                "application/vnd.oasis.opendocument.spreadsheet",
+                "application/vnd.oasis.opendocument.presentation",
+                "application/vnd.oasis.opendocument.graphics",
+                "application/vnd.oasis.opendocument.formula",
+            }
+        ),
+        "extensions": frozenset({".odt", ".ods", ".odp", ".odg", ".odf"}),
+    },
+    "text": {
+        "label": "Text & Data",
+        "description": "Plain text, CSV and RTF files (.txt, .csv, .rtf)",
+        "mime_types": frozenset(
+            {
+                "text/plain",
+                "text/csv",
+                "application/rtf",
+                "text/rtf",
+            }
+        ),
+        "extensions": frozenset({".txt", ".csv", ".rtf"}),
+    },
+    "web": {
+        "label": "Web & Markup",
+        "description": "HTML and Markdown files (.html, .htm, .md, .markdown)",
+        "mime_types": frozenset(
+            {
+                "text/html",
+                "text/markdown",
+                "text/x-markdown",
+            }
+        ),
+        "extensions": frozenset({".html", ".htm", ".md", ".markdown"}),
+    },
+    "images": {
+        "label": "Images",
+        "description": "Image files (.jpg, .png, .gif, .bmp, .tiff, .webp, .svg, .heic, .heif)",
+        "mime_types": frozenset(
+            {
+                "image/jpeg",
+                "image/jpg",
+                "image/png",
+                "image/gif",
+                "image/bmp",
+                "image/tiff",
+                "image/webp",
+                "image/svg+xml",
+                "image/heic",
+                "image/heif",
+            }
+        ),
+        "extensions": frozenset(
+            {
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".gif",
+                ".bmp",
+                ".tiff",
+                ".tif",
+                ".webp",
+                ".svg",
+                ".heic",
+                ".heif",
+            }
+        ),
+    },
+}
+
+# Default categories for the "documents only" built-in profile (no images)
+DEFAULT_CATEGORIES: list[str] = ["pdf", "office", "opendocument", "text", "web"]
+# All categories including images
+ALL_CATEGORIES: list[str] = ["pdf", "office", "opendocument", "text", "web", "images"]
+
+
+def get_allowed_types_for_categories(
+    categories: list[str],
+) -> tuple[frozenset[str], frozenset[str]]:
+    """Return ``(mime_types, extensions)`` for the given category list.
+
+    Unknown category names are silently ignored so that future categories
+    don't break existing profiles.
+    """
+    mime_types: set[str] = set()
+    extensions: set[str] = set()
+    for cat in categories:
+        info = FILE_TYPE_CATEGORIES.get(cat)
+        if info:
+            mime_types |= info["mime_types"]
+            extensions |= info["extensions"]
+    return frozenset(mime_types), frozenset(extensions)

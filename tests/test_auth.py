@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -37,6 +38,40 @@ class TestGetCurrentUser:
         mock_request.session = {"user": None}
         result = get_current_user(mock_request)
         assert result is None
+
+    def test_logs_debug_when_session_user_found(self, caplog):
+        """Test that get_current_user emits a DEBUG log when session user is found."""
+        mock_request = MagicMock(spec=Request)
+        mock_request.session = {"user": {"id": "u1", "preferred_username": "alice"}}
+        mock_request.state = MagicMock(spec=[])  # no api_token_user attribute
+
+        with caplog.at_level(logging.DEBUG, logger="app.auth"):
+            get_current_user(mock_request)
+
+        assert any("[AUTH] get_current_user: resolved from session" in m for m in caplog.messages)
+
+    def test_logs_debug_when_no_user(self, caplog):
+        """Test that get_current_user emits a DEBUG log when no user is present."""
+        mock_request = MagicMock(spec=Request)
+        mock_request.session = {}
+        mock_request.state = MagicMock(spec=[])
+
+        with caplog.at_level(logging.DEBUG, logger="app.auth"):
+            get_current_user(mock_request)
+
+        assert any("[AUTH] get_current_user: no user in session or API token" in m for m in caplog.messages)
+
+    def test_logs_debug_when_api_token_user(self, caplog):
+        """Test that get_current_user emits a DEBUG log when resolved from API token."""
+        mock_request = MagicMock(spec=Request)
+        mock_request.state.api_token_user = {"id": "tok_user"}
+        mock_request.session = {}
+
+        with caplog.at_level(logging.DEBUG, logger="app.auth"):
+            result = get_current_user(mock_request)
+
+        assert result == {"id": "tok_user"}
+        assert any("[AUTH] get_current_user: resolved from API token" in m for m in caplog.messages)
 
 
 @pytest.mark.unit

@@ -20,13 +20,33 @@ from app.database import Base
 
 # Ensure all models are imported so Base.metadata is populated.
 from app.models import (  # noqa: F401
+    ApiToken,
     ApplicationSettings,
+    AuditLog,
+    BackupRecord,
+    ComplianceTemplate,
     DocumentMetadata,
     FileProcessingStep,
     FileRecord,
+    ImapIngestionProfile,
+    InAppNotification,
+    LocalUser,
+    MobileDevice,
+    Pipeline,
+    PipelineRoutingRule,
+    PipelineStep,
     ProcessingLog,
     SavedSearch,
+    ScheduledJob,
     SettingsAuditLog,
+    SharedLink,
+    SubscriptionPlan,
+    UserImapAccount,
+    UserIntegration,
+    UserNotificationPreference,
+    UserNotificationTarget,
+    UserProfile,
+    WebhookConfig,
 )
 
 # Alembic Config object – provides access to values in alembic.ini.

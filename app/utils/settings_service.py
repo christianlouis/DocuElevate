@@ -39,6 +39,50 @@ SETTING_METADATA = {
         "required": True,
         "restart_required": True,
     },
+    "db_pool_size": {
+        "category": "Core",
+        "description": (
+            "Number of persistent database connections kept in the pool per worker process. "
+            "Ignored for SQLite (which uses NullPool). Default: 10."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_max_overflow": {
+        "category": "Core",
+        "description": (
+            "Additional database connections allowed beyond db_pool_size under burst load. "
+            "Ignored for SQLite. Default: 20."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_pool_timeout": {
+        "category": "Core",
+        "description": (
+            "Seconds to wait for a database connection from the pool before raising a TimeoutError. "
+            "Ignored for SQLite. Default: 30."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_pool_recycle": {
+        "category": "Core",
+        "description": (
+            "Recycle (close and reopen) database connections after this many seconds "
+            "to avoid stale connections. Ignored for SQLite. Default: 1800."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
     "workdir": {
         "category": "Core",
         "description": "Working directory for file storage and processing",
@@ -53,6 +97,18 @@ SETTING_METADATA = {
         "type": "string",
         "sensitive": False,
         "required": True,  # Required for OAuth redirects and external URLs
+        "restart_required": True,
+    },
+    "public_base_url": {
+        "category": "Core",
+        "description": (
+            "Full public base URL including scheme (e.g., https://docuelevate.example.com). "
+            "When set, overrides auto-detected URLs for OAuth redirect URIs. "
+            "Required when behind a reverse proxy that does not forward X-Forwarded-Proto."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
         "restart_required": True,
     },
     "debug": {
@@ -134,6 +190,30 @@ SETTING_METADATA = {
         "required": True,  # Required when auth_enabled=True (validated in config.py)
         "restart_required": True,
     },
+    "session_lifetime_days": {
+        "category": "Authentication",
+        "description": "Session lifetime in days (default 30). Determines how long a user stays logged in.",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "session_lifetime_custom_days": {
+        "category": "Authentication",
+        "description": "Override session_lifetime_days with a custom value. Takes precedence when set.",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "qr_login_challenge_ttl_seconds": {
+        "category": "Authentication",
+        "description": "Time-to-live in seconds for QR login challenges (default 120).",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "admin_username": {
         "category": "Authentication",
         "description": "Admin username for local authentication",
@@ -179,6 +259,166 @@ SETTING_METADATA = {
         "description": "Display name for OAuth provider (e.g., 'Authentik', 'Keycloak')",
         "type": "string",
         "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    # Social Login Providers
+    "social_auth_google_enabled": {
+        "category": "Social Login",
+        "description": (
+            "Enable Google Sign-In. Requires SOCIAL_AUTH_GOOGLE_CLIENT_ID and "
+            "SOCIAL_AUTH_GOOGLE_CLIENT_SECRET from the Google Cloud Console."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+        "help_link": "https://console.cloud.google.com/apis/credentials",
+        "help_link_label": "Google Cloud Console",
+    },
+    "social_auth_google_client_id": {
+        "category": "Social Login",
+        "description": "Google OAuth2 client ID from the Google Cloud Console.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_google_client_secret": {
+        "category": "Social Login",
+        "description": "Google OAuth2 client secret from the Google Cloud Console.",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_microsoft_enabled": {
+        "category": "Social Login",
+        "description": (
+            "Enable Microsoft Sign-In (Azure AD / Microsoft Entra ID). Requires "
+            "SOCIAL_AUTH_MICROSOFT_CLIENT_ID and SOCIAL_AUTH_MICROSOFT_CLIENT_SECRET "
+            "from Azure App Registrations."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+        "help_link": "https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade",
+        "help_link_label": "Azure Portal",
+    },
+    "social_auth_microsoft_client_id": {
+        "category": "Social Login",
+        "description": "Microsoft OAuth2 application (client) ID from Azure App Registrations.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_microsoft_client_secret": {
+        "category": "Social Login",
+        "description": "Microsoft OAuth2 client secret from Azure App Registrations.",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_microsoft_tenant": {
+        "category": "Social Login",
+        "description": (
+            "Azure AD tenant ID or one of 'common', 'organizations', 'consumers'. "
+            "Use 'common' to allow any Microsoft account. Use a specific GUID to "
+            "restrict to a single organization."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_apple_enabled": {
+        "category": "Social Login",
+        "description": (
+            "Enable Sign in with Apple. Requires an Apple Developer account with "
+            "a Services ID configured for Sign in with Apple."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+        "help_link": "https://developer.apple.com/account/resources/identifiers/list/serviceId",
+        "help_link_label": "Apple Developer Portal",
+    },
+    "social_auth_apple_client_id": {
+        "category": "Social Login",
+        "description": "Apple Services ID (e.g. com.example.docuelevate).",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_apple_team_id": {
+        "category": "Social Login",
+        "description": "Apple Developer Team ID (10-character alphanumeric string).",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_apple_key_id": {
+        "category": "Social Login",
+        "description": "Apple Sign-In private key ID from the Apple Developer Portal.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_apple_private_key": {
+        "category": "Social Login",
+        "description": (
+            "Apple Sign-In private key (PEM format). Generate this in the Apple Developer Portal. "
+            "Paste the entire key content including BEGIN/END headers."
+        ),
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_dropbox_use_global_credentials": {
+        "category": "Social Login",
+        "description": (
+            "When True, Dropbox social login uses the global DROPBOX_APP_KEY / DROPBOX_APP_SECRET "
+            "credentials instead of requiring separate SOCIAL_AUTH_DROPBOX_CLIENT_ID / "
+            "SOCIAL_AUTH_DROPBOX_CLIENT_SECRET values. "
+            "Requires SOCIAL_AUTH_DROPBOX_ENABLED=True and global Dropbox credentials to be set."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_dropbox_enabled": {
+        "category": "Social Login",
+        "description": (
+            "Enable Dropbox Sign-In. Uses the same Dropbox App you may already have "
+            "configured for storage, or a separate one."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_dropbox_client_id": {
+        "category": "Social Login",
+        "description": "Dropbox OAuth2 App Key from the Dropbox App Console.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_dropbox_client_secret": {
+        "category": "Social Login",
+        "description": "Dropbox OAuth2 App Secret from the Dropbox App Console.",
+        "type": "string",
+        "sensitive": True,
         "required": False,
         "restart_required": True,
     },
@@ -375,6 +615,19 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Document Translation
+    "default_document_language": {
+        "category": "AI Services",
+        "description": (
+            "ISO 639-1 language code for the default document translation target "
+            "(e.g. 'en', 'de', 'fr'). Documents whose detected language differs "
+            "are automatically translated into this language after processing."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # OCR Engine Configuration
     "ocr_providers": {
         "category": "OCR Engines",
@@ -495,6 +748,14 @@ SETTING_METADATA = {
         "options": ["us", "eu"],
     },
     # Storage Providers - Dropbox
+    "dropbox_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable Dropbox as an upload destination. When disabled, no documents will be sent to Dropbox even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "dropbox_app_key": {
         "category": "Storage Providers",
         "description": "Dropbox app key for OAuth authentication",
@@ -527,7 +788,27 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "dropbox_allow_global_credentials_for_integrations": {
+        "category": "Storage Providers",
+        "description": (
+            "When True, users may authorize their personal Dropbox integrations using the global "
+            "DROPBOX_APP_KEY / DROPBOX_APP_SECRET credentials configured by the admin, without "
+            "needing to create their own Dropbox app."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Storage Providers - Nextcloud
+    "nextcloud_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable Nextcloud as an upload destination. When disabled, no documents will be sent to Nextcloud even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "nextcloud_upload_url": {
         "category": "Storage Providers",
         "description": "Nextcloud WebDAV upload URL",
@@ -561,6 +842,14 @@ SETTING_METADATA = {
         "restart_required": False,
     },
     # Storage Providers - Paperless-ngx
+    "paperless_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable Paperless-ngx as an upload destination. When disabled, no documents will be sent to Paperless-ngx even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "paperless_ngx_api_token": {
         "category": "Storage Providers",
         "description": "Paperless-ngx API authentication token",
@@ -578,6 +867,14 @@ SETTING_METADATA = {
         "restart_required": False,
     },
     # Storage Providers - Google Drive
+    "google_drive_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable Google Drive as an upload destination. When disabled, no documents will be sent to Google Drive even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "google_drive_credentials_json": {
         "category": "Storage Providers",
         "description": "Google Drive service account credentials JSON",
@@ -635,6 +932,14 @@ SETTING_METADATA = {
         "restart_required": False,
     },
     # Storage Providers - OneDrive
+    "onedrive_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable OneDrive as an upload destination. When disabled, no documents will be sent to OneDrive even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "onedrive_client_id": {
         "category": "Storage Providers",
         "description": "OneDrive OAuth client ID",
@@ -675,7 +980,72 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Storage Providers - SharePoint
+    "sharepoint_client_id": {
+        "category": "Storage Providers",
+        "description": "SharePoint Azure AD application (client) ID",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_client_secret": {
+        "category": "Storage Providers",
+        "description": "SharePoint Azure AD client secret",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_tenant_id": {
+        "category": "Storage Providers",
+        "description": "SharePoint Azure AD tenant ID (use 'common' for multi-tenant apps)",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_refresh_token": {
+        "category": "Storage Providers",
+        "description": "SharePoint OAuth refresh token",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_site_url": {
+        "category": "Storage Providers",
+        "description": "SharePoint site URL (e.g. https://tenant.sharepoint.com/sites/sitename)",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_document_library": {
+        "category": "Storage Providers",
+        "description": "SharePoint document library name (default: 'Documents')",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_folder_path": {
+        "category": "Storage Providers",
+        "description": "Subfolder path inside the SharePoint document library",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Storage Providers - WebDAV
+    "webdav_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable WebDAV as an upload destination. When disabled, no documents will be sent to WebDAV even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "webdav_url": {
         "category": "Storage Providers",
         "description": "WebDAV server URL",
@@ -717,6 +1087,14 @@ SETTING_METADATA = {
         "restart_required": False,
     },
     # Storage Providers - FTP
+    "ftp_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable FTP as an upload destination. When disabled, no documents will be sent to FTP even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "ftp_host": {
         "category": "Storage Providers",
         "description": "FTP server hostname or IP address",
@@ -774,6 +1152,14 @@ SETTING_METADATA = {
         "restart_required": False,
     },
     # Storage Providers - SFTP
+    "sftp_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable SFTP as an upload destination. When disabled, no documents will be sent to SFTP even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "sftp_host": {
         "category": "Storage Providers",
         "description": "SFTP server hostname or IP address",
@@ -838,7 +1224,56 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Storage Providers - iCloud Drive
+    "icloud_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable iCloud Drive as an upload destination. When disabled, no documents will be sent to iCloud Drive even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "icloud_username": {
+        "category": "Storage Providers",
+        "description": "Apple ID email address for iCloud Drive authentication",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "icloud_password": {
+        "category": "Storage Providers",
+        "description": "App-specific password for iCloud Drive (generate at https://appleid.apple.com)",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "icloud_folder": {
+        "category": "Storage Providers",
+        "description": "Target folder path in iCloud Drive (e.g. Documents/Uploads)",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "icloud_cookie_directory": {
+        "category": "Storage Providers",
+        "description": "Directory for persisting iCloud session cookies (default: ~/.pyicloud)",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Storage Providers - AWS S3
+    "s3_enabled": {
+        "category": "Storage Providers",
+        "description": "Enable Amazon S3 as an upload destination. When disabled, no documents will be sent to S3 even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "aws_access_key_id": {
         "category": "Storage Providers",
         "description": "AWS access key ID for S3",
@@ -972,6 +1407,14 @@ SETTING_METADATA = {
         "restart_required": False,
     },
     # Email Destination Settings (dedicated SMTP for document delivery)
+    "dest_email_enabled": {
+        "category": "Email Destination",
+        "description": "Enable Email as an upload destination. When disabled, no documents will be delivered via email even if credentials are configured.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "dest_email_host": {
         "category": "Email Destination",
         "description": "SMTP server hostname for document delivery (separate from shared email settings)",
@@ -1392,6 +1835,18 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "imap_attachment_filter": {
+        "category": "IMAP",
+        "description": (
+            "Controls which attachment types are ingested from IMAP emails. "
+            "Accepted values: 'documents_only' (PDFs and office files only, default) or 'all' (including images). "
+            "Per-user IMAP accounts can override this global default."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Monitoring - Uptime Kuma
     "uptime_kuma_url": {
         "category": "Monitoring",
@@ -1595,6 +2050,40 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "compliance_enabled": {
+        "category": "Feature Flags",
+        "description": (
+            "Enable the compliance templates dashboard (GDPR, HIPAA, SOC 2). "
+            "When enabled, admins can view compliance status and apply "
+            "pre-built regulatory configurations. Default: True."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "factory_reset_on_startup": {
+        "category": "Feature Flags",
+        "description": (
+            "Wipe all user data on every startup so the instance always starts fresh. "
+            "Useful for demo/testing environments. Default: False."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "enable_factory_reset": {
+        "category": "Feature Flags",
+        "description": (
+            "Show the System Reset page in the admin UI.  Allows administrators to "
+            "trigger a full data wipe or a wipe-and-reimport from the web interface. Default: False."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Backup / Restore
     "backup_enabled": {
         "category": "Backup",
@@ -1618,14 +2107,26 @@ SETTING_METADATA = {
         "category": "Backup",
         "description": (
             "Storage provider for remote backup copies. "
-            "Accepted values: s3, dropbox, google_drive, onedrive, nextcloud, webdav, ftp, sftp, email. "
+            "Accepted values: s3, dropbox, google_drive, onedrive, sharepoint, nextcloud, webdav, ftp, sftp, email. "
             "Leave empty to keep backups local only."
         ),
         "type": "string",
         "sensitive": False,
         "required": False,
         "restart_required": False,
-        "options": ["", "s3", "dropbox", "google_drive", "onedrive", "nextcloud", "webdav", "ftp", "sftp", "email"],
+        "options": [
+            "",
+            "s3",
+            "dropbox",
+            "google_drive",
+            "onedrive",
+            "sharepoint",
+            "nextcloud",
+            "webdav",
+            "ftp",
+            "sftp",
+            "email",
+        ],
     },
     "backup_remote_folder": {
         "category": "Backup",
@@ -2065,6 +2566,99 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "audit_siem_enabled": {
+        "category": "Security",
+        "description": "Enable forwarding of audit events to an external SIEM system (Syslog, Splunk, Logstash, etc.).",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "audit_siem_transport": {
+        "category": "Security",
+        "description": (
+            "Transport used to forward audit events. 'syslog' sends RFC 5424 messages over UDP/TCP. "
+            "'http' sends JSON POST payloads to a webhook URL (Splunk HEC, Logstash, Grafana Loki, etc.)."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "options": ["syslog", "http"],
+    },
+    "audit_siem_syslog_host": {
+        "category": "Security",
+        "description": "Hostname or IP of the syslog receiver.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "audit_siem_syslog_port": {
+        "category": "Security",
+        "description": "Port of the syslog receiver. Default: 514.",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "audit_siem_syslog_protocol": {
+        "category": "Security",
+        "description": "Protocol for syslog transport: 'udp' or 'tcp'. Default: udp.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "options": ["udp", "tcp"],
+    },
+    "audit_siem_http_url": {
+        "category": "Security",
+        "description": (
+            "HTTP endpoint URL for SIEM webhook delivery. Supports Splunk HEC, "
+            "Logstash HTTP input, Grafana Loki push API, or any JSON-accepting endpoint."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "audit_siem_http_token": {
+        "category": "Security",
+        "description": "Bearer / HEC token included in the Authorization header of SIEM HTTP requests.",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "audit_siem_http_custom_headers": {
+        "category": "Security",
+        "description": "Comma-separated 'Key:Value' pairs of extra headers for SIEM HTTP requests.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # Per-user upload rate limiting
+    "upload_rate_limit_per_user": {
+        "category": "Security",
+        "description": (
+            "Maximum number of uploads a single user may submit within upload_rate_limit_window seconds. "
+            "The health-aware limiter may reduce this dynamically under high Redis queue depth or CPU load. "
+            "Default: 20."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "upload_rate_limit_window": {
+        "category": "Security",
+        "description": ("Sliding window in seconds over which upload_rate_limit_per_user is enforced. Default: 60."),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Rate Limiting
     "rate_limiting_enabled": {
         "category": "Security",
@@ -2263,6 +2857,63 @@ SETTING_METADATA = {
         "sensitive": False,
         "required": False,
         "restart_required": False,
+    },
+    # Logging
+    "log_level": {
+        "category": "Observability",
+        "description": (
+            "Python logging level for the application root logger. "
+            "Accepts: DEBUG, INFO, WARNING, ERROR, CRITICAL. "
+            "When DEBUG=True and LOG_LEVEL is not explicitly set, "
+            "the effective level is automatically lowered to DEBUG."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_format": {
+        "category": "Observability",
+        "description": (
+            "Log output format: 'text' (human-readable, default) or "
+            "'json' (structured JSON lines for SIEM / log aggregation)."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_syslog_enabled": {
+        "category": "Observability",
+        "description": "Forward application logs to a syslog receiver in addition to stdout.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_syslog_host": {
+        "category": "Observability",
+        "description": "Hostname or IP of the syslog receiver for application logs.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_syslog_port": {
+        "category": "Observability",
+        "description": "Port of the syslog receiver for application logs.",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_syslog_protocol": {
+        "category": "Observability",
+        "description": "Protocol for syslog transport: 'udp' or 'tcp'.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
     },
     # Observability – Sentry
     "sentry_dsn": {

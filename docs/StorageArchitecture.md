@@ -341,6 +341,7 @@ in task messages or logs.
 | `S3`            | boto3 `upload_file`, per-user access key |
 | `GOOGLE_DRIVE`  | Google Drive API v3, OAuth or service account |
 | `ONEDRIVE`      | Microsoft Graph API, MSAL confidential-client |
+| `SHAREPOINT`    | Microsoft Graph API, site/drive resolution + chunked upload |
 | `WEBDAV`        | HTTP PUT request, Basic Auth |
 | `NEXTCLOUD`     | WebDAV (same as WEBDAV, Nextcloud-compatible path) |
 | `FTP`           | ftplib FTPS (TLS preferred, plaintext configurable) |
@@ -348,6 +349,7 @@ in task messages or logs.
 | `PAPERLESS`     | Paperless-ngx REST API, API token |
 | `EMAIL`         | SMTP/STARTTLS, file as attachment |
 | `RCLONE`        | `rclone copyto` subprocess, per-user rclone config |
+| `ICLOUD`        | pyicloud library, Apple ID + app-specific password |
 
 ### Multiple Destinations
 

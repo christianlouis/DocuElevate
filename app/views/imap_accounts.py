@@ -1,11 +1,13 @@
 """User-facing view for the per-user IMAP ingestion dashboard."""
 
+import json
 import logging
 
 from fastapi import Request
 from sqlalchemy.orm import Session
 
-from app.models import UserImapAccount
+from app.models import ImapIngestionProfile, UserImapAccount
+from app.utils.allowed_types import DEFAULT_CATEGORIES, FILE_TYPE_CATEGORIES
 from app.utils.subscription import get_tier, get_user_tier_id
 from app.utils.user_scope import get_current_owner_id
 from app.views.base import APIRouter, Depends, get_db, require_login, templates
@@ -23,6 +25,22 @@ def _get_max_mailboxes(tier: dict) -> int | None:
     if max_mb == 0:
         return None
     return max_mb
+
+
+def _serialize_profile(profile: ImapIngestionProfile) -> dict:
+    """Serialize a profile for JSON embedding in the template."""
+    try:
+        categories = json.loads(profile.allowed_categories)
+    except (ValueError, TypeError):
+        categories = []
+    return {
+        "id": profile.id,
+        "name": profile.name,
+        "description": profile.description,
+        "owner_id": profile.owner_id,
+        "allowed_categories": categories,
+        "is_builtin": profile.is_builtin,
+    }
 
 
 @router.get("/imap-accounts")
@@ -49,11 +67,35 @@ async def imap_accounts_page(request: Request, db: Session = Depends(get_db)):
         max_mailboxes = _get_max_mailboxes(tier)
         can_add = max_mailboxes is None or (max_mailboxes > 0 and current_count < max_mailboxes)
 
+    # Load ingestion profiles: system-global + user's own
+    profiles = (
+        db.query(ImapIngestionProfile)
+        .filter(
+            # SQLAlchemy requires `== None` for IS NULL comparison in ORM filters
+            (ImapIngestionProfile.owner_id == None) | (ImapIngestionProfile.owner_id == owner_id)  # noqa: E711
+        )
+        .order_by(ImapIngestionProfile.is_builtin.desc(), ImapIngestionProfile.id)
+        .all()
+    )
+
+    # Category definitions for the UI checkbox builder
+    categories = [
+        {
+            "key": key,
+            "label": info["label"],
+            "description": info["description"],
+        }
+        for key, info in FILE_TYPE_CATEGORIES.items()
+    ]
+
     return templates.TemplateResponse(
         "imap_accounts.html",
         {
             "request": request,
             "accounts": accounts,
+            "profiles": [_serialize_profile(p) for p in profiles],
+            "categories": categories,
+            "default_categories": DEFAULT_CATEGORIES,
             "current_count": current_count,
             "max_mailboxes": max_mailboxes,
             "can_add": can_add,

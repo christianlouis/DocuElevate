@@ -165,11 +165,11 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
           'flex items-center gap-2 px-2 py-1 rounded-md text-gray-700 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500';
         btn.setAttribute('aria-haspopup', 'true');
         btn.setAttribute('aria-expanded', 'false');
-        btn.setAttribute('aria-label', `Account menu for ${displayName}`);
+        btn.setAttribute('aria-label', `${((window.__i18n?.accountMenuFor) || 'Account menu for {name}').replace('{name}', displayName)}`);
 
         const avatar = document.createElement('img');
         avatar.src = data.picture;
-        avatar.alt = 'Avatar';
+        avatar.alt = window.__i18n.avatar || 'Avatar';
         avatar.className = 'w-8 h-8 rounded-full';
 
         const nameSpan = document.createElement('span');
@@ -189,7 +189,7 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
         menu.className =
           'absolute right-0 mt-2 w-52 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50 hidden';
         menu.setAttribute('role', 'menu');
-        menu.setAttribute('aria-label', 'Account menu');
+        menu.setAttribute('aria-label', window.__i18n.accountMenu || 'Account menu');
 
         // User info header
         const header = document.createElement('div');
@@ -207,13 +207,19 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
         const linksDiv = document.createElement('div');
         linksDiv.className = 'py-1';
         linksDiv.appendChild(
-          _makeMenuLink('/subscription', 'fas fa-layer-group text-indigo-400', 'My Subscription', 'text-gray-700')
+          _makeMenuLink('/profile', 'fas fa-user-circle text-blue-400', window.__i18n.profileSettings || 'Profile Settings', 'text-gray-700')
         );
         linksDiv.appendChild(
-          _makeMenuLink('/api-tokens', 'fas fa-key text-yellow-500', 'API Tokens', 'text-gray-700')
+          _makeMenuLink('/subscription', 'fas fa-layer-group text-indigo-400', window.__i18n.mySubscription || 'My Subscription', 'text-gray-700')
         );
         linksDiv.appendChild(
-          _makeMenuLink('/shared-links', 'fas fa-share-alt text-blue-400', 'Shared Links', 'text-gray-700')
+          _makeMenuLink('/api-tokens', 'fas fa-key text-yellow-500', window.__i18n.apiTokens || 'API Tokens', 'text-gray-700')
+        );
+        linksDiv.appendChild(
+          _makeMenuLink('/devices', 'fas fa-mobile-alt text-blue-500', window.__i18n.devices || 'Devices', 'text-gray-700')
+        );
+        linksDiv.appendChild(
+          _makeMenuLink('/shared-links', 'fas fa-share-alt text-blue-400', window.__i18n.sharedLinks || 'Shared Links', 'text-gray-700')
         );
 
         // Divider + Sign Out
@@ -222,7 +228,7 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
         const signOutDiv = document.createElement('div');
         signOutDiv.className = 'py-1';
         signOutDiv.appendChild(
-          _makeMenuLink('/logout', 'fas fa-sign-out-alt text-red-400', 'Sign Out', 'text-red-600')
+          _makeMenuLink('/logout', 'fas fa-sign-out-alt text-red-400', window.__i18n.signOut || 'Sign Out', 'text-red-600')
         );
 
         menu.appendChild(header);
@@ -256,7 +262,7 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
         userRow.className = 'flex items-center gap-3 px-3 py-3';
         const mAvatar = document.createElement('img');
         mAvatar.src = data.picture;
-        mAvatar.alt = 'Avatar';
+        mAvatar.alt = window.__i18n.avatar || 'Avatar';
         mAvatar.className = 'w-8 h-8 rounded-full flex-shrink-0';
         const mUserInfo = document.createElement('div');
         mUserInfo.className = 'min-w-0';
@@ -272,6 +278,18 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
         userRow.appendChild(mUserInfo);
         mobileAuthSection.appendChild(userRow);
 
+        // Profile Settings link
+        const profileLink = document.createElement('a');
+        profileLink.href = '/profile';
+        profileLink.className =
+          'flex items-center px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50';
+        const profileIcon = document.createElement('i');
+        profileIcon.className = 'fas fa-user-circle mr-2 text-blue-400';
+        profileIcon.setAttribute('aria-hidden', 'true');
+        profileLink.appendChild(profileIcon);
+        profileLink.appendChild(document.createTextNode(window.__i18n.profileSettings || 'Profile Settings'));
+        mobileAuthSection.appendChild(profileLink);
+
         // Subscription link
         const subLink = document.createElement('a');
         subLink.href = '/subscription';
@@ -281,7 +299,7 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
         subIcon.className = 'fas fa-layer-group mr-2 text-indigo-400';
         subIcon.setAttribute('aria-hidden', 'true');
         subLink.appendChild(subIcon);
-        subLink.appendChild(document.createTextNode('My Subscription'));
+        subLink.appendChild(document.createTextNode(window.__i18n.mySubscription || 'My Subscription'));
         mobileAuthSection.appendChild(subLink);
 
         // API Tokens link
@@ -293,8 +311,20 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
         tokensIcon.className = 'fas fa-key mr-2 text-yellow-500';
         tokensIcon.setAttribute('aria-hidden', 'true');
         tokensLink.appendChild(tokensIcon);
-        tokensLink.appendChild(document.createTextNode('API Tokens'));
+        tokensLink.appendChild(document.createTextNode(window.__i18n.apiTokens || 'API Tokens'));
         mobileAuthSection.appendChild(tokensLink);
+
+        // Devices link
+        const devicesLink = document.createElement('a');
+        devicesLink.href = '/devices';
+        devicesLink.className =
+          'flex items-center px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50';
+        const devicesIcon = document.createElement('i');
+        devicesIcon.className = 'fas fa-mobile-alt mr-2 text-blue-500';
+        devicesIcon.setAttribute('aria-hidden', 'true');
+        devicesLink.appendChild(devicesIcon);
+        devicesLink.appendChild(document.createTextNode(window.__i18n.devices || 'Devices'));
+        mobileAuthSection.appendChild(devicesLink);
 
         // Shared Links link
         const sharedLinksLink = document.createElement('a');
@@ -305,7 +335,7 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
         sharedLinksIcon.className = 'fas fa-share-alt mr-2 text-blue-400';
         sharedLinksIcon.setAttribute('aria-hidden', 'true');
         sharedLinksLink.appendChild(sharedLinksIcon);
-        sharedLinksLink.appendChild(document.createTextNode('Shared Links'));
+        sharedLinksLink.appendChild(document.createTextNode(window.__i18n.sharedLinks || 'Shared Links'));
         mobileAuthSection.appendChild(sharedLinksLink);
 
         // Logout link
@@ -317,7 +347,7 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
         logoutIcon.className = 'fas fa-sign-out-alt mr-2';
         logoutIcon.setAttribute('aria-hidden', 'true');
         logoutLink.appendChild(logoutIcon);
-        logoutLink.appendChild(document.createTextNode('Sign Out'));
+        logoutLink.appendChild(document.createTextNode(window.__i18n.signOut || 'Sign Out'));
         mobileAuthSection.appendChild(logoutLink);
       }
     } else {
@@ -352,7 +382,7 @@ function _renderLoggedOutAuth(authSection, mobileAuthSection) {
     loginLink.href = '/login';
     loginLink.className =
       'px-3 py-1.5 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 border border-gray-300';
-    loginLink.textContent = 'Log In';
+    loginLink.textContent = window.__i18n.logIn || 'Log In';
     row.appendChild(loginLink);
 
     if (multiUser) {
@@ -360,7 +390,7 @@ function _renderLoggedOutAuth(authSection, mobileAuthSection) {
       startLink.href = startHref;
       startLink.className =
         'px-3 py-1.5 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500';
-      startLink.textContent = allowSignup ? 'Sign Up' : 'Get Started';
+      startLink.textContent = allowSignup ? (window.__i18n.signUp || 'Sign Up') : (window.__i18n.getStarted || 'Get Started');
       row.appendChild(startLink);
     }
 
@@ -378,7 +408,7 @@ function _renderLoggedOutAuth(authSection, mobileAuthSection) {
     loginIcon.className = 'fas fa-sign-in-alt mr-2';
     loginIcon.setAttribute('aria-hidden', 'true');
     loginLink.appendChild(loginIcon);
-    loginLink.appendChild(document.createTextNode('Log In'));
+    loginLink.appendChild(document.createTextNode(window.__i18n.logIn || 'Log In'));
     mobileAuthSection.appendChild(loginLink);
 
     if (multiUser) {
@@ -390,7 +420,7 @@ function _renderLoggedOutAuth(authSection, mobileAuthSection) {
       startIcon.className = 'fas fa-arrow-right mr-2';
       startIcon.setAttribute('aria-hidden', 'true');
       startLink.appendChild(startIcon);
-      startLink.appendChild(document.createTextNode(allowSignup ? 'Sign Up' : 'Get Started'));
+      startLink.appendChild(document.createTextNode(allowSignup ? (window.__i18n.signUp || 'Sign Up') : (window.__i18n.getStarted || 'Get Started')));
       mobileAuthSection.appendChild(startLink);
     }
   }

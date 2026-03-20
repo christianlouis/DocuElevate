@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Integrations – DocuElevate{% endblock %}
+{% block title %}{{ _("integrations.page_title") }} – DocuElevate{% endblock %}
 
 {% block content %}
 <div
@@ -13,10 +13,10 @@
     <div>
       <h1 class="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
         <i class="fas fa-plug text-indigo-500" aria-hidden="true"></i>
-        Integrations
+        {{ _("integrations.page_title") }}
       </h1>
       <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">
-        Manage your ingestion sources and storage destinations in one place.
+        {{ _("integrations.subtitle") }}
       </p>
     </div>
     <button
@@ -27,7 +27,7 @@
       style="min-height:44px;"
       :aria-disabled="!canAddAny"
     >
-      <i class="fas fa-plus mr-2" aria-hidden="true"></i> Add Integration
+      <i class="fas fa-plus mr-2" aria-hidden="true"></i> {{ _("integrations.add_button") }}
     </button>
   </div>
 
@@ -41,20 +41,20 @@
         </div>
         <div class="flex-1 min-w-0">
           <p class="text-sm font-medium text-gray-700 dark:text-gray-200">
-            Mailbox Sources:
+            {{ _("integrations.sources_quota_label") }}
             <strong x-text="quota.src_count"></strong>
             <template x-if="quota.max_sources !== null && quota.max_sources > 0">
               <span> / <strong x-text="quota.max_sources"></strong></span>
             </template>
             <template x-if="quota.max_sources === null">
-              <span class="text-gray-400"> / unlimited</span>
+              <span class="text-gray-400"> {{ _("integrations.quota_unlimited") }}</span>
             </template>
             <template x-if="quota.max_sources === 0">
-              <span class="text-gray-400 ml-1">(not available)</span>
+              <span class="text-gray-400 ml-1">{{ _("integrations.quota_not_available") }}</span>
             </template>
           </p>
           <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-            Plan: <span x-text="quota.tier_name"></span>
+            {{ _("integrations.plan_label") }} <span x-text="quota.tier_name"></span>
           </p>
         </div>
         <!-- Mini usage bar -->
@@ -77,7 +77,7 @@
       </div>
       <template x-if="quota.max_sources !== null && quota.src_count >= quota.max_sources && quota.max_sources >= 0">
         <a href="/subscription" class="inline-flex items-center text-xs text-indigo-600 hover:text-indigo-800 mt-2">
-          <i class="fas fa-arrow-up mr-1" aria-hidden="true"></i> Upgrade Plan
+          <i class="fas fa-arrow-up mr-1" aria-hidden="true"></i> {{ _("integrations.upgrade_plan") }}
         </a>
       </template>
     </div>
@@ -90,17 +90,17 @@
         </div>
         <div class="flex-1 min-w-0">
           <p class="text-sm font-medium text-gray-700 dark:text-gray-200">
-            Storage Destinations:
+            {{ _("integrations.destinations_quota_label") }}
             <strong x-text="quota.dest_count"></strong>
             <template x-if="quota.max_destinations !== null">
               <span> / <strong x-text="quota.max_destinations"></strong></span>
             </template>
             <template x-if="quota.max_destinations === null">
-              <span class="text-gray-400"> / unlimited</span>
+              <span class="text-gray-400"> {{ _("integrations.quota_unlimited") }}</span>
             </template>
           </p>
           <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-            Plan: <span x-text="quota.tier_name"></span>
+            {{ _("integrations.plan_label") }} <span x-text="quota.tier_name"></span>
           </p>
         </div>
         <!-- Mini usage bar -->
@@ -123,7 +123,7 @@
       </div>
       <template x-if="quota.max_destinations !== null && quota.dest_count >= quota.max_destinations">
         <a href="/subscription" class="inline-flex items-center text-xs text-indigo-600 hover:text-indigo-800 mt-2">
-          <i class="fas fa-arrow-up mr-1" aria-hidden="true"></i> Upgrade Plan
+          <i class="fas fa-arrow-up mr-1" aria-hidden="true"></i> {{ _("integrations.upgrade_plan") }}
         </a>
       </template>
     </div>
@@ -151,7 +151,7 @@
   <template x-if="loading">
     <div class="text-center py-12 text-gray-400">
       <i class="fas fa-spinner fa-spin text-3xl mb-3" aria-hidden="true"></i>
-      <p>Loading integrations…</p>
+      <p>{{ _("integrations.loading") }}</p>
     </div>
   </template>
 
@@ -159,9 +159,9 @@
   <template x-if="!loading && integrations.length === 0">
     <div class="text-center py-16 bg-white dark:bg-gray-800 rounded-lg shadow">
       <i class="fas fa-plug text-5xl text-gray-300 mb-4" aria-hidden="true"></i>
-      <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">No integrations configured</h2>
+      <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ _("integrations.empty_state") }}</h2>
       <p class="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
-        Add your first integration to connect ingestion sources (like IMAP) and storage destinations (like S3, Dropbox, or Google Drive).
+        {{ _("integrations.no_integrations_body") }}
       </p>
       <button
         type="button"
@@ -170,7 +170,7 @@
         class="inline-flex items-center px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md"
         style="min-height:44px;"
       >
-        <i class="fas fa-plus mr-2" aria-hidden="true"></i> Add Your First Integration
+        <i class="fas fa-plus mr-2" aria-hidden="true"></i> {{ _("integrations.add_first_button") }}
       </button>
     </div>
   </template>
@@ -179,7 +179,7 @@
   <template x-if="!loading && sources.length > 0">
     <section class="mb-8">
       <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
-        <i class="fas fa-inbox text-blue-500" aria-hidden="true"></i> Sources
+        <i class="fas fa-inbox text-blue-500" aria-hidden="true"></i> {{ _("integrations.sources_section") }}
       </h2>
       <div class="space-y-3">
         <template x-for="intg in sources" :key="intg.id">
@@ -196,7 +196,7 @@
                     <span
                       class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
                       :class="intg.is_active ? 'bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'"
-                      x-text="intg.is_active ? 'Active' : 'Paused'"
+                      x-text="intg.is_active ? '{{ _('common.active') }}' : '{{ _('integrations.paused') }}'"
                     ></span>
                   </p>
                   <template x-if="intg.last_error">
@@ -216,7 +216,7 @@
                     :aria-label="`${intg.has_credentials ? 'Re-authorize' : 'Authorize'} ${intg.name}`"
                   >
                     <i class="fas fa-key mr-1" aria-hidden="true"></i>
-                    <span x-text="intg.has_credentials ? 'Re-Authorize' : 'Authorize'"></span>
+                    <span x-text="intg.has_credentials ? '{{ _('integrations.authorize_reauth') }}' : '{{ _('integrations.authorize_btn') }}'"></span>
                   </a>
                 </template>
                 <button
@@ -233,7 +233,7 @@
                   <template x-if="testingId !== intg.id">
                     <i class="fas fa-plug mr-1" aria-hidden="true"></i>
                   </template>
-                  Test
+                  {{ _("common.test") }}
                 </button>
                 <button
                   type="button"
@@ -242,7 +242,7 @@
                   style="min-height:36px;"
                   :aria-label="`Edit ${intg.name}`"
                 >
-                  <i class="fas fa-edit mr-1" aria-hidden="true"></i>Edit
+                  <i class="fas fa-edit mr-1" aria-hidden="true"></i>{{ _("common.edit") }}
                 </button>
                 <button
                   type="button"
@@ -251,7 +251,7 @@
                   style="min-height:36px;"
                   :aria-label="`Delete ${intg.name}`"
                 >
-                  <i class="fas fa-trash-alt mr-1" aria-hidden="true"></i>Delete
+                  <i class="fas fa-trash-alt mr-1" aria-hidden="true"></i>{{ _("common.delete") }}
                 </button>
               </div>
             </div>
@@ -265,7 +265,7 @@
   <template x-if="!loading && destinations.length > 0">
     <section class="mb-8">
       <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
-        <i class="fas fa-hdd text-green-500" aria-hidden="true"></i> Destinations
+        <i class="fas fa-hdd text-green-500" aria-hidden="true"></i> {{ _("integrations.destinations_section") }}
       </h2>
       <div class="space-y-3">
         <template x-for="intg in destinations" :key="intg.id">
@@ -282,7 +282,7 @@
                     <span
                       class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
                       :class="intg.is_active ? 'bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'"
-                      x-text="intg.is_active ? 'Active' : 'Paused'"
+                      x-text="intg.is_active ? '{{ _('common.active') }}' : '{{ _('integrations.paused') }}'"
                     ></span>
                   </p>
                   <template x-if="intg.last_error">
@@ -302,7 +302,7 @@
                     :aria-label="`${intg.has_credentials ? 'Re-authorize' : 'Authorize'} ${intg.name}`"
                   >
                     <i class="fas fa-key mr-1" aria-hidden="true"></i>
-                    <span x-text="intg.has_credentials ? 'Re-Authorize' : 'Authorize'"></span>
+                    <span x-text="intg.has_credentials ? '{{ _('integrations.authorize_reauth') }}' : '{{ _('integrations.authorize_btn') }}'"></span>
                   </a>
                 </template>
                 <button
@@ -319,7 +319,7 @@
                   <template x-if="testingId !== intg.id">
                     <i class="fas fa-plug mr-1" aria-hidden="true"></i>
                   </template>
-                  Test
+                  {{ _("common.test") }}
                 </button>
                 <button
                   type="button"
@@ -328,7 +328,7 @@
                   style="min-height:36px;"
                   :aria-label="`Edit ${intg.name}`"
                 >
-                  <i class="fas fa-edit mr-1" aria-hidden="true"></i>Edit
+                  <i class="fas fa-edit mr-1" aria-hidden="true"></i>{{ _("common.edit") }}
                 </button>
                 <button
                   type="button"
@@ -337,7 +337,7 @@
                   style="min-height:36px;"
                   :aria-label="`Delete ${intg.name}`"
                 >
-                  <i class="fas fa-trash-alt mr-1" aria-hidden="true"></i>Delete
+                  <i class="fas fa-trash-alt mr-1" aria-hidden="true"></i>{{ _("common.delete") }}
                 </button>
               </div>
             </div>
@@ -371,13 +371,13 @@
         <h2
           :id="editingIntegration ? 'modal-title-edit' : 'modal-title-create'"
           class="text-lg font-semibold text-gray-900 dark:text-white"
-          x-text="editingIntegration ? 'Edit Integration' : 'Add Integration'"
+          x-text="editingIntegration ? '{{ _('integrations.modal_title_edit') }}' : '{{ _('integrations.modal_title_add') }}'"
         ></h2>
         <button
           type="button"
           @click="closeModal()"
           class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
-          aria-label="Close modal"
+          aria-label="{{ _('integrations.modal_close') }}"
         >
           <i class="fas fa-times text-xl" aria-hidden="true"></i>
         </button>
@@ -388,7 +388,7 @@
         <!-- Direction -->
         <div>
           <label for="intg-direction" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-            Direction <span class="text-red-500" aria-hidden="true">*</span>
+            {{ _("integrations.direction_label") }} <span class="text-red-500" aria-hidden="true">*</span>
           </label>
           <select
             id="intg-direction"
@@ -399,16 +399,16 @@
             aria-required="true"
             @change="onDirectionChange()"
           >
-            <option value="">— Select —</option>
-            <option value="SOURCE">Source (ingestion)</option>
-            <option value="DESTINATION">Destination (storage)</option>
+            <option value="">{{ _("integrations.direction_placeholder") }}</option>
+            <option value="SOURCE">{{ _("integrations.direction_source") }}</option>
+            <option value="DESTINATION">{{ _("integrations.direction_destination") }}</option>
           </select>
         </div>
 
         <!-- Integration type -->
         <div>
           <label for="intg-type" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-            Integration Type <span class="text-red-500" aria-hidden="true">*</span>
+            {{ _("integrations.type_label") }} <span class="text-red-500" aria-hidden="true">*</span>
           </label>
           <select
             id="intg-type"
@@ -419,7 +419,7 @@
             aria-required="true"
             @change="onTypeChange()"
           >
-            <option value="">— Select direction first —</option>
+            <option value="">{{ _("integrations.type_placeholder") }}</option>
             <template x-for="t in availableTypes" :key="t">
               <option :value="t" x-text="typeLabel(t)"></option>
             </template>
@@ -429,13 +429,13 @@
         <!-- Name -->
         <div>
           <label for="intg-name" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-            Label <span class="text-red-500" aria-hidden="true">*</span>
+            {{ _("integrations.name_label") }} <span class="text-red-500" aria-hidden="true">*</span>
           </label>
           <input
             id="intg-name"
             type="text"
             x-model="form.name"
-            placeholder="e.g. Work Gmail, S3 Archive"
+            placeholder="{{ _('integrations.name_placeholder') }}"
             required
             maxlength="255"
             class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm"
@@ -448,46 +448,46 @@
         <!-- IMAP fields -->
         <template x-if="form.integration_type === 'IMAP'">
           <div class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
-            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">IMAP Settings</p>
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ _("integrations.imap_settings") }}</p>
             <div class="grid grid-cols-3 gap-3">
               <div class="col-span-2">
-                <label for="imap-host" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Host <span class="text-red-500" aria-hidden="true">*</span></label>
+                <label for="imap-host" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.host_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
                 <input id="imap-host" type="text" x-model="form.config.host" placeholder="imap.example.com" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
               </div>
               <div>
-                <label for="imap-port" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Port</label>
+                <label for="imap-port" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.port_label") }}</label>
                 <input id="imap-port" type="number" x-model.number="form.config.port" min="1" max="65535" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
               </div>
             </div>
             <div>
-              <label for="imap-username" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Username <span class="text-red-500" aria-hidden="true">*</span></label>
+              <label for="imap-username" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.username_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
               <input id="imap-username" type="text" x-model="form.config.username" placeholder="user@example.com" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
             </div>
             <div>
-              <label for="imap-password" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Password <span class="text-red-500" aria-hidden="true">*</span></label>
+              <label for="imap-password" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.password_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
               <input id="imap-password" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.password" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
             </div>
             <div class="flex flex-wrap items-center gap-4">
               <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
                 <input type="checkbox" x-model="form.config.use_ssl" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                Use SSL
+                {{ _("integrations.use_ssl") }}
               </label>
               <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
                 <input type="checkbox" x-model="form.config.delete_after_process" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                Delete emails after processing
+                {{ _("integrations.delete_emails_label") }}
               </label>
               <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
                 <input type="checkbox" x-model="form.config.gmail_apply_labels" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                Apply Gmail labels &amp; star
+                {{ _("integrations.gmail_labels") }}
               </label>
               <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
                 <input type="checkbox" x-model="showPassword" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                Show password
+                {{ _("integrations.show_password") }}
               </label>
             </div>
             <p class="text-xs text-gray-500 dark:text-gray-400">
               <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
-              Gmail labels &amp; star: when enabled, processed emails are starred and tagged with an "Ingested" label in Gmail. Only applies to Gmail servers.
+              {{ _("integrations.gmail_hint") }}
             </p>
           </div>
         </template>
@@ -495,36 +495,36 @@
         <!-- S3 fields -->
         <template x-if="form.integration_type === 'S3'">
           <div class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
-            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">S3 Settings</p>
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ _("integrations.s3_settings") }}</p>
             <div>
-              <label for="s3-bucket" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Bucket <span class="text-red-500" aria-hidden="true">*</span></label>
+              <label for="s3-bucket" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.bucket_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
               <input id="s3-bucket" type="text" x-model="form.config.bucket" placeholder="my-bucket" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
             </div>
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label for="s3-region" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Region</label>
+                <label for="s3-region" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.region_label") }}</label>
                 <input id="s3-region" type="text" x-model="form.config.region" placeholder="us-east-1" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
               </div>
               <div>
-                <label for="s3-prefix" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder Prefix</label>
+                <label for="s3-prefix" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.folder_prefix_label") }}</label>
                 <input id="s3-prefix" type="text" x-model="form.config.folder_prefix" placeholder="documents/" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
               </div>
             </div>
             <div>
-              <label for="s3-endpoint" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Endpoint URL <span class="text-gray-400">(optional, for S3-compatible)</span></label>
+              <label for="s3-endpoint" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.endpoint_label") }} <span class="text-gray-400">{{ _("integrations.endpoint_optional") }}</span></label>
               <input id="s3-endpoint" type="url" x-model="form.config.endpoint_url" placeholder="https://s3.example.com" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
             </div>
             <div>
-              <label for="s3-key" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Access Key ID <span class="text-red-500" aria-hidden="true">*</span></label>
+              <label for="s3-key" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.access_key_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
               <input id="s3-key" type="text" x-model="form.credentials.access_key_id" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
             </div>
             <div>
-              <label for="s3-secret" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Secret Access Key <span class="text-red-500" aria-hidden="true">*</span></label>
+              <label for="s3-secret" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.secret_key_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
               <input id="s3-secret" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.secret_access_key" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
             </div>
             <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
               <input type="checkbox" x-model="showPassword" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-              Show secrets
+              {{ _("integrations.show_secrets") }}
             </label>
           </div>
         </template>
@@ -534,24 +534,24 @@
           <div class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
             <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider" x-text="form.integration_type === 'NEXTCLOUD' ? 'Nextcloud Settings' : 'WebDAV Settings'"></p>
             <div>
-              <label for="webdav-url" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">URL <span class="text-red-500" aria-hidden="true">*</span></label>
+              <label for="webdav-url" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.webdav_url_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
               <input id="webdav-url" type="url" x-model="form.config.url" placeholder="https://cloud.example.com/remote.php/dav/files/user/" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
             </div>
             <div>
-              <label for="webdav-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder Path</label>
+              <label for="webdav-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.folder_path_label") }}</label>
               <input id="webdav-folder" type="text" x-model="form.config.folder" placeholder="/Documents" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
             </div>
             <div>
-              <label for="webdav-user" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Username <span class="text-red-500" aria-hidden="true">*</span></label>
+              <label for="webdav-user" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.username_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
               <input id="webdav-user" type="text" x-model="form.credentials.username" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
             </div>
             <div>
-              <label for="webdav-pass" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Password <span class="text-red-500" aria-hidden="true">*</span></label>
+              <label for="webdav-pass" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.password_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
               <input id="webdav-pass" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.password" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
             </div>
             <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
               <input type="checkbox" x-model="showPassword" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-              Show password
+              {{ _("integrations.show_password") }}
             </label>
           </div>
         </template>
@@ -562,29 +562,29 @@
             <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider" x-text="form.integration_type + ' Settings'"></p>
             <div class="grid grid-cols-3 gap-3">
               <div class="col-span-2">
-                <label for="ftp-host" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Host <span class="text-red-500" aria-hidden="true">*</span></label>
+                <label for="ftp-host" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.host_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
                 <input id="ftp-host" type="text" x-model="form.config.host" placeholder="ftp.example.com" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
               </div>
               <div>
-                <label for="ftp-port" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Port</label>
+                <label for="ftp-port" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.port_label") }}</label>
                 <input id="ftp-port" type="number" x-model.number="form.config.port" :placeholder="form.integration_type === 'SFTP' ? '22' : '21'" min="1" max="65535" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
               </div>
             </div>
             <div>
-              <label for="ftp-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Remote Path</label>
+              <label for="ftp-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.remote_path_label") }}</label>
               <input id="ftp-folder" type="text" x-model="form.config.folder" placeholder="/upload" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
             </div>
             <div>
-              <label for="ftp-user" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Username <span class="text-red-500" aria-hidden="true">*</span></label>
+              <label for="ftp-user" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.username_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
               <input id="ftp-user" type="text" x-model="form.credentials.username" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
             </div>
             <div>
-              <label for="ftp-pass" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Password <span class="text-red-500" aria-hidden="true">*</span></label>
+              <label for="ftp-pass" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.password_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
               <input id="ftp-pass" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.password" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
             </div>
             <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
               <input type="checkbox" x-model="showPassword" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-              Show password
+              {{ _("integrations.show_password") }}
             </label>
           </div>
         </template>
@@ -594,13 +594,12 @@
           <div class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
             <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider" x-text="typeLabel(form.integration_type) + ' Settings'"></p>
             <div>
-              <label for="oauth-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder <span class="text-gray-400">(optional)</span></label>
+              <label for="oauth-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.oauth_folder_label") }} <span class="text-gray-400">{{ _("integrations.folder_optional") }}</span></label>
               <input id="oauth-folder" type="text" x-model="form.config.folder" placeholder="/DocuElevate" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
             </div>
             <div class="bg-blue-50 dark:bg-blue-900/30 rounded-md p-3 text-sm text-blue-700 dark:text-blue-300">
               <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
-              Save this integration first, then use the <strong>Authorize</strong> button to complete the OAuth flow.
-              Your credentials will be stored securely in your personal integration record.
+              {{ _("integrations.oauth_hint") }}
             </div>
           </div>
         </template>
@@ -608,9 +607,9 @@
         <!-- Email (destination) fields -->
         <template x-if="form.integration_type === 'EMAIL'">
           <div class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
-            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Email Forward Settings</p>
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ _("integrations.email_settings") }}</p>
             <div>
-              <label for="email-to" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Recipient Email <span class="text-red-500" aria-hidden="true">*</span></label>
+              <label for="email-to" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.recipient_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
               <input id="email-to" type="email" x-model="form.config.recipient" placeholder="archive@example.com" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
             </div>
           </div>
@@ -619,11 +618,11 @@
         <!-- Watch Folder fields -->
         <template x-if="form.integration_type === 'WATCH_FOLDER'">
           <div class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
-            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Watch Folder Settings</p>
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ _("integrations.watch_folder_settings") }}</p>
             <div>
-              <label for="wf-source-type" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Source Type <span class="text-red-500" aria-hidden="true">*</span></label>
+              <label for="wf-source-type" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.source_type_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
               <select id="wf-source-type" x-model="form.config.source_type" @change="onWatchFolderSourceTypeChange()" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true">
-                <option value="local">Local Filesystem</option>
+                <option value="local">{{ _("integrations.source_local") }}</option>
                 <option value="s3">Amazon S3</option>
                 <option value="dropbox">Dropbox</option>
                 <option value="google_drive">Google Drive</option>
@@ -636,7 +635,7 @@
             <!-- Local filesystem fields -->
             <template x-if="form.config.source_type === 'local'">
               <div>
-                <label for="wf-path" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder Path <span class="text-red-500" aria-hidden="true">*</span></label>
+                <label for="wf-path" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.folder_path_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
                 <input id="wf-path" type="text" x-model="form.config.folder_path" placeholder="/data/inbox" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
               </div>
             </template>
@@ -646,76 +645,93 @@
               <div class="space-y-3">
                 <div class="grid grid-cols-2 gap-3">
                   <div>
-                    <label for="wf-s3-bucket" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Bucket <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <label for="wf-s3-bucket" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.bucket_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
                     <input id="wf-s3-bucket" type="text" x-model="form.config.bucket" placeholder="my-bucket" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
                   </div>
                   <div>
-                    <label for="wf-s3-region" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Region</label>
+                    <label for="wf-s3-region" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.region_label") }}</label>
                     <input id="wf-s3-region" type="text" x-model="form.config.region" placeholder="us-east-1" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
                   </div>
                 </div>
                 <div>
-                  <label for="wf-s3-prefix" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Prefix (folder path)</label>
+                  <label for="wf-s3-prefix" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.s3_prefix_label") }}</label>
                   <input id="wf-s3-prefix" type="text" x-model="form.config.prefix" placeholder="inbox/" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
                 </div>
                 <div>
-                  <label for="wf-s3-endpoint" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Endpoint URL <span class="text-xs text-gray-400">(optional, for S3-compatible)</span></label>
+                  <label for="wf-s3-endpoint" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.endpoint_label") }} <span class="text-xs text-gray-400">{{ _("integrations.endpoint_optional") }}</span></label>
                   <input id="wf-s3-endpoint" type="text" x-model="form.config.endpoint_url" placeholder="https://s3.example.com" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                   <div>
-                    <label for="wf-s3-ak" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Access Key ID <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <label for="wf-s3-ak" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.access_key_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
                     <input id="wf-s3-ak" type="text" x-model="form.credentials.access_key_id" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
                   </div>
                   <div>
-                    <label for="wf-s3-sk" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Secret Access Key <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <label for="wf-s3-sk" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.secret_key_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
                     <input id="wf-s3-sk" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.secret_access_key" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
                   </div>
                 </div>
               </div>
             </template>
 
-            <!-- Dropbox fields (OAuth wizard flow) -->
+            <!-- Dropbox fields -->
             <template x-if="form.config.source_type === 'dropbox'">
               <div class="space-y-3">
                 <div>
-                  <label for="wf-dbx-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder Path <span class="text-gray-400">(optional)</span></label>
-                  <input id="wf-dbx-folder" type="text" x-model="form.config.folder_path" placeholder="/Inbox/Scanner" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+                  <label for="wf-dbx-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.folder_path_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <input id="wf-dbx-folder" type="text" x-model="form.config.folder_path" placeholder="/Inbox/Scanner" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
                 </div>
-                <div class="bg-blue-50 dark:bg-blue-900/30 rounded-md p-3 text-sm text-blue-700 dark:text-blue-300">
-                  <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
-                  Save this integration first, then use the <strong>Authorize</strong> button to complete the OAuth flow.
-                  Your credentials will be stored securely in your personal integration record.
+                <div>
+                  <label for="wf-dbx-token" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Refresh Token <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <input id="wf-dbx-token" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.refresh_token" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label for="wf-dbx-key" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">App Key <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="wf-dbx-key" type="text" x-model="form.credentials.app_key" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+                  </div>
+                  <div>
+                    <label for="wf-dbx-secret" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">App Secret <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="wf-dbx-secret" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.app_secret" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+                  </div>
                 </div>
               </div>
             </template>
 
-            <!-- Google Drive fields (OAuth wizard flow) -->
+            <!-- Google Drive fields -->
             <template x-if="form.config.source_type === 'google_drive'">
               <div class="space-y-3">
                 <div>
-                  <label for="wf-gd-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder ID <span class="text-gray-400">(optional)</span></label>
-                  <input id="wf-gd-folder" type="text" x-model="form.config.folder_id" placeholder="1ABCdef..." class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+                  <label for="wf-gd-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder ID <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <input id="wf-gd-folder" type="text" x-model="form.config.folder_id" placeholder="1ABCdef..." required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
                 </div>
-                <div class="bg-blue-50 dark:bg-blue-900/30 rounded-md p-3 text-sm text-blue-700 dark:text-blue-300">
-                  <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
-                  Save this integration first, then use the <strong>Authorize</strong> button to complete the OAuth flow.
-                  Your credentials will be stored securely in your personal integration record.
+                <div>
+                  <label for="wf-gd-creds" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Service Account JSON <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <textarea id="wf-gd-creds" x-model="form.credentials.credentials_json" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" rows="3" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm font-mono"></textarea>
                 </div>
               </div>
             </template>
 
-            <!-- OneDrive fields (OAuth wizard flow) -->
+            <!-- OneDrive fields -->
             <template x-if="form.config.source_type === 'onedrive'">
               <div class="space-y-3">
                 <div>
-                  <label for="wf-od-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder Path <span class="text-gray-400">(optional)</span></label>
-                  <input id="wf-od-folder" type="text" x-model="form.config.folder_path" placeholder="/Documents/Inbox" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+                  <label for="wf-od-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.folder_path_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <input id="wf-od-folder" type="text" x-model="form.config.folder_path" placeholder="/Documents/Inbox" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
                 </div>
-                <div class="bg-blue-50 dark:bg-blue-900/30 rounded-md p-3 text-sm text-blue-700 dark:text-blue-300">
-                  <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
-                  Save this integration first, then use the <strong>Authorize</strong> button to complete the OAuth flow.
-                  Your credentials will be stored securely in your personal integration record.
+                <div>
+                  <label for="wf-od-token" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Refresh Token <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <input id="wf-od-token" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.refresh_token" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label for="wf-od-cid" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Client ID <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="wf-od-cid" type="text" x-model="form.credentials.client_id" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
+                  </div>
+                  <div>
+                    <label for="wf-od-cs" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Client Secret <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <input id="wf-od-cs" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.client_secret" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+                  </div>
                 </div>
               </div>
             </template>
@@ -724,20 +740,20 @@
             <template x-if="form.config.source_type === 'nextcloud'">
               <div class="space-y-3">
                 <div>
-                  <label for="wf-nc-url" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Nextcloud URL <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <label for="wf-nc-url" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.nextcloud_url_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
                   <input id="wf-nc-url" type="url" x-model="form.config.url" placeholder="https://cloud.example.com" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
                 </div>
                 <div>
-                  <label for="wf-nc-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder Path <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <label for="wf-nc-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.folder_path_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
                   <input id="wf-nc-folder" type="text" x-model="form.config.folder_path" placeholder="/Documents/Inbox" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                   <div>
-                    <label for="wf-nc-user" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Username <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <label for="wf-nc-user" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.username_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
                     <input id="wf-nc-user" type="text" x-model="form.credentials.username" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
                   </div>
                   <div>
-                    <label for="wf-nc-pass" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Password <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <label for="wf-nc-pass" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.password_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
                     <input id="wf-nc-pass" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.password" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
                   </div>
                 </div>
@@ -748,20 +764,20 @@
             <template x-if="form.config.source_type === 'webdav'">
               <div class="space-y-3">
                 <div>
-                  <label for="wf-dav-url" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">WebDAV URL <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <label for="wf-dav-url" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.webdav_url_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
                   <input id="wf-dav-url" type="url" x-model="form.config.url" placeholder="https://webdav.example.com/dav/" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
                 </div>
                 <div>
-                  <label for="wf-dav-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Folder Path <span class="text-red-500" aria-hidden="true">*</span></label>
+                  <label for="wf-dav-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.folder_path_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
                   <input id="wf-dav-folder" type="text" x-model="form.config.folder_path" placeholder="/remote.php/webdav/Inbox" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                   <div>
-                    <label for="wf-dav-user" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Username <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <label for="wf-dav-user" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.username_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
                     <input id="wf-dav-user" type="text" x-model="form.credentials.username" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
                   </div>
                   <div>
-                    <label for="wf-dav-pass" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Password <span class="text-red-500" aria-hidden="true">*</span></label>
+                    <label for="wf-dav-pass" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.password_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
                     <input id="wf-dav-pass" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.password" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
                   </div>
                 </div>
@@ -772,12 +788,12 @@
             <div class="flex flex-wrap items-center gap-4 pt-2">
               <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
                 <input type="checkbox" x-model="form.config.delete_after_process" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                Delete files after processing
+                {{ _("integrations.delete_files_label") }}
               </label>
-              <template x-if="form.config.source_type !== 'local' && form.config.source_type !== 'dropbox' && form.config.source_type !== 'google_drive' && form.config.source_type !== 'onedrive'">
+              <template x-if="form.config.source_type !== 'local'">
                 <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
                   <input type="checkbox" x-model="showPassword" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                  Show secrets
+                  {{ _("integrations.show_secrets") }}
                 </label>
               </template>
             </div>
@@ -787,18 +803,18 @@
         <!-- Paperless fields -->
         <template x-if="form.integration_type === 'PAPERLESS'">
           <div class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
-            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Paperless NGX Settings</p>
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ _("integrations.paperless_settings") }}</p>
             <div>
               <label for="paperless-url" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">URL <span class="text-red-500" aria-hidden="true">*</span></label>
               <input id="paperless-url" type="url" x-model="form.config.url" placeholder="https://paperless.example.com" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
             </div>
             <div>
-              <label for="paperless-token" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">API Token <span class="text-red-500" aria-hidden="true">*</span></label>
+              <label for="paperless-token" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.api_token_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
               <input id="paperless-token" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.api_token" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
             </div>
             <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
               <input type="checkbox" x-model="showPassword" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-              Show token
+              {{ _("integrations.show_token") }}
             </label>
           </div>
         </template>
@@ -807,38 +823,33 @@
         <template x-if="form.integration_type === 'WEBHOOK'">
           <div class="space-y-4 border-t border-gray-200 dark:border-gray-700 pt-3">
             <p class="text-xs font-semibold text-purple-500 uppercase tracking-wider">
-              <i class="fas fa-bolt mr-1" aria-hidden="true"></i> Webhook Ingestion
+              <i class="fas fa-bolt mr-1" aria-hidden="true"></i> {{ _("integrations.webhook_heading") }}
             </p>
 
             <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
               <h4 class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">
                 <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
-                How Webhook Ingestion Works
+                {{ _("integrations.webhook_how_heading") }}
               </h4>
               <p class="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">
-                A webhook integration allows external systems to push documents directly into DocuElevate
-                via the REST API.  Instead of DocuElevate polling for new files (like IMAP), <strong>your
-                application sends files to DocuElevate</strong> using an HTTP request with an API token for
-                authentication.
+                {{ _("integrations.webhook_how_text") }}
               </p>
               <p class="text-sm text-blue-700 dark:text-blue-300 leading-relaxed mt-2">
-                This is ideal for <strong>CI/CD pipelines</strong>, <strong>automation scripts</strong>,
-                <strong>scanner integrations</strong>, or any system that generates documents and needs to
-                send them for processing.
+                {{ _("integrations.webhook_ideal_text") }}
               </p>
             </div>
 
             <div class="bg-gray-50 dark:bg-gray-750 rounded-lg p-4">
               <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">
                 <i class="fas fa-terminal mr-1" aria-hidden="true"></i>
-                Quick Start
+                {{ _("integrations.webhook_quick_start") }}
               </h4>
               <ol class="text-sm text-gray-600 dark:text-gray-400 space-y-2 list-decimal list-inside">
                 <li>
-                  Go to <a href="/api-tokens" class="text-indigo-600 hover:underline font-medium">API Tokens</a>
-                  and create a personal token.
+                  {% set api_tokens_link %}<a href="/api-tokens" class="text-indigo-600 hover:underline font-medium">{{ _("nav.api_tokens") }}</a>{% endset %}
+                  {{ _("integrations.webhook_step1", api_tokens_link=api_tokens_link) | safe }}
                 </li>
-                <li>Use the token to upload documents via the API:</li>
+                <li>{{ _("integrations.webhook_upload_with_token") }}</li>
               </ol>
 
               <div class="mt-3 relative">
@@ -884,9 +895,7 @@ print(response.json())</code></pre>
             <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
               <p class="text-xs text-yellow-800 dark:text-yellow-300">
                 <i class="fas fa-shield-alt mr-1" aria-hidden="true"></i>
-                <strong>Security tip:</strong> Create a dedicated API token for each integration and
-                revoke it immediately if compromised. Tokens can be managed on the
-                <a href="/api-tokens" class="underline font-medium">API Tokens</a> page.
+                {{ _("integrations.webhook_security_tip") }}
               </p>
             </div>
           </div>
@@ -897,7 +906,7 @@ print(response.json())</code></pre>
           <div class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
             <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider" x-text="form.integration_type + ' Settings'"></p>
             <p class="text-sm text-gray-500 dark:text-gray-400">
-              Configuration for this integration type can be provided as JSON after creation via the API.
+              {{ _("integrations.generic_settings_hint") }}
             </p>
           </div>
         </template>
@@ -906,7 +915,7 @@ print(response.json())</code></pre>
         <div class="flex items-center gap-2 pt-2">
           <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
             <input type="checkbox" x-model="form.is_active" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-            Active
+            {{ _("integrations.active_label") }}
           </label>
         </div>
 
@@ -917,7 +926,7 @@ print(response.json())</code></pre>
             :class="testResult.success ? 'bg-green-50 border-green-400 text-green-800 dark:bg-opacity-10' : 'bg-red-50 border-red-400 text-red-800 dark:bg-opacity-10'"
             role="status"
           >
-            <p class="font-medium" x-text="testResult.success ? 'Connection successful' : 'Connection failed'"></p>
+            <p class="font-medium" x-text="testResult.success ? '{{ _('integrations.connection_success') }}' : '{{ _('integrations.connection_failed') }}'"></p>
             <p class="text-xs mt-0.5" x-text="testResult.message"></p>
           </div>
         </template>
@@ -945,7 +954,7 @@ print(response.json())</code></pre>
             <template x-if="!testing">
               <i class="fas fa-plug mr-2" aria-hidden="true"></i>
             </template>
-            Test Connection
+            {{ _("common.test_connection") }}
           </button>
           <div class="flex gap-2">
             <button
@@ -954,7 +963,7 @@ print(response.json())</code></pre>
               class="px-4 py-2 text-sm font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
               style="min-height:40px;"
             >
-              Cancel
+              {{ _("common.cancel") }}
             </button>
             <button
               type="submit"
@@ -965,7 +974,7 @@ print(response.json())</code></pre>
               <template x-if="saving">
                 <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>
               </template>
-              <span x-text="editingIntegration ? 'Update' : 'Save'"></span>
+              <span x-text="editingIntegration ? '{{ _('common.update') }}' : '{{ _('common.save') }}'"></span>
             </button>
           </div>
         </div>
@@ -986,12 +995,12 @@ print(response.json())</code></pre>
   >
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-sm p-6" @click.stop>
       <h2 id="delete-modal-title" class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-        Delete Integration?
+        {{ _("integrations.delete_confirm_title") }}
       </h2>
       <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">
-        Are you sure you want to delete
+        {{ _("integrations.delete_confirm_are_you_sure") }}
         <strong x-text="integrationToDelete ? integrationToDelete.name : ''"></strong>?
-        This action cannot be undone.
+        {{ _("integrations.delete_confirm_undone") }}
       </p>
       <div class="flex justify-end gap-2">
         <button
@@ -1000,7 +1009,7 @@ print(response.json())</code></pre>
           class="px-4 py-2 text-sm font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
           style="min-height:40px;"
         >
-          Cancel
+          {{ _("common.cancel") }}
         </button>
         <button
           type="button"
@@ -1012,7 +1021,7 @@ print(response.json())</code></pre>
           <template x-if="deleting">
             <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>
           </template>
-          Delete
+          {{ _("common.delete") }}
         </button>
       </div>
     </div>
@@ -1224,13 +1233,13 @@ function integrationsDashboard() {
         this.form.credentials = { access_key_id: '', secret_access_key: '' };
       } else if (st === 'dropbox') {
         this.form.config = { source_type: st, folder_path: '', delete_after_process: dap };
-        this.form.credentials = {};
+        this.form.credentials = { refresh_token: '', app_key: '', app_secret: '' };
       } else if (st === 'google_drive') {
         this.form.config = { source_type: st, folder_id: '', delete_after_process: dap };
-        this.form.credentials = {};
+        this.form.credentials = { credentials_json: '' };
       } else if (st === 'onedrive') {
         this.form.config = { source_type: st, folder_path: '', delete_after_process: dap };
-        this.form.credentials = {};
+        this.form.credentials = { refresh_token: '', client_id: '', client_secret: '' };
       } else if (st === 'nextcloud') {
         this.form.config = { source_type: st, url: '', folder_path: '', delete_after_process: dap };
         this.form.credentials = { username: '', password: '' };
@@ -1383,7 +1392,7 @@ function integrationsDashboard() {
           body: JSON.stringify({
             integration_type: intg.integration_type,
             config: intg.config,
-            credentials: creds,
+            credentials: creds.credentials,
           }),
         });
         const data = await resp.json();

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Plan Designer — DocuElevate Admin{% endblock %}
+{% block title %}{{ _("admin_plans.page_title") }}{% endblock %}
 
 {% block content %}
 <main id="main-content" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
@@ -10,43 +10,41 @@
   <!-- Header -->
   <div class="flex items-center justify-between mb-6">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">Plan Designer</h1>
-      <p class="text-sm text-gray-500 mt-1">Manage subscription plans shown on the public pricing page.</p>
+      <h1 class="text-2xl font-bold text-gray-900">{{ _("admin_plans.heading") }}</h1>
+      <p class="text-sm text-gray-500 mt-1">{{ _("admin_plans.subheading") }}</p>
     </div>
     <div class="flex items-center gap-3">
       <a href="/admin/stripe-wizard"
          class="inline-flex items-center px-4 py-2 border border-indigo-300 rounded-md text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
-         title="Open the Stripe Setup Wizard to configure API keys and sync plans"
+         title="{{ _('admin_plans.btn_stripe_setup_title') }}"
       >
-        <i class="fab fa-stripe mr-2" aria-hidden="true"></i> Stripe Setup
+        <i class="fab fa-stripe mr-2" aria-hidden="true"></i> {{ _("admin_plans.btn_stripe_setup") }}
       </a>
       <button
         @click="seedDefaults()"
         :disabled="seeding"
         class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400 disabled:opacity-50"
-        title="Restore all four default plans (only if no plans exist yet)"
+        title="{{ _('admin_plans.btn_restore_defaults_title') }}"
       >
         <i class="fas fa-undo mr-2 text-gray-400" aria-hidden="true"></i>
-        <span x-show="!seeding">Restore Defaults</span>
-        <span x-show="seeding"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Restoring…</span>
+        <span x-show="!seeding">{{ _("admin_plans.btn_restore_defaults") }}</span>
+        <span x-show="seeding"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> {{ _("admin_plans.btn_restoring") }}</span>
       </button>
       <button
         @click="openCreateModal()"
         class="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500"
       >
-        <i class="fas fa-plus mr-2" aria-hidden="true"></i> Add Plan
+        <i class="fas fa-plus mr-2" aria-hidden="true"></i> {{ _("admin_plans.btn_add_plan") }}
       </button>
     </div>
   </div>
 
   <!-- Overage callout -->
   <div class="mb-6 rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-800" role="note">
-    <p class="font-semibold mb-1"><i class="fas fa-info-circle mr-1" aria-hidden="true"></i> About the Overage Buffer</p>
+    <p class="font-semibold mb-1"><i class="fas fa-info-circle mr-1" aria-hidden="true"></i> {{ _("admin_plans.overage_buffer_title") }}</p>
     <p>
-      The overage buffer is <strong>invisible to users</strong>. We advertise X docs/month but only enforce
-      at <strong>X × (1 + buffer%)</strong> docs. For example, a 150-doc/month plan with a 20% buffer
-      enforces at 180 docs. This prevents hard cutoffs at the exact announced limit, giving users a
-      graceful soft landing.
+      {{ _("admin_plans.overage_buffer_body_prefix") }} <strong>{{ _("admin_plans.overage_buffer_invisible") }}</strong>. {{ _("admin_plans.overage_buffer_body_suffix") }}
+      <strong>{{ _("admin_plans.overage_buffer_formula") }}</strong> {{ _("admin_plans.overage_buffer_tail") }}
     </p>
   </div>
 
@@ -63,29 +61,29 @@
   <!-- Loading -->
   <div x-show="loading" class="text-center py-12 text-gray-400">
     <i class="fas fa-spinner fa-spin text-2xl" aria-hidden="true"></i>
-    <p class="mt-2 text-sm">Loading plans…</p>
+    <p class="mt-2 text-sm">{{ _("admin_plans.loading") }}</p>
   </div>
 
   <!-- Plans table -->
   <div x-show="!loading" class="bg-white shadow-sm rounded-lg overflow-hidden border border-gray-200">
-    <table class="min-w-full divide-y divide-gray-200" aria-label="Subscription plans">
+    <table class="min-w-full divide-y divide-gray-200" aria-label="{{ _('admin_plans.table_aria_label') }}">
       <thead class="bg-gray-50">
         <tr>
-          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order</th>
-          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>
-          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Monthly</th>
-          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Yearly</th>
-          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Monthly Limit</th>
-          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Overage %</th>
-          <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Active</th>
-          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("admin_plans.col_order") }}</th>
+          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("admin_plans.col_plan") }}</th>
+          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("admin_plans.col_monthly") }}</th>
+          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("admin_plans.col_yearly") }}</th>
+          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("admin_plans.col_monthly_limit") }}</th>
+          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("admin_plans.col_overage_pct") }}</th>
+          <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("admin_plans.col_active") }}</th>
+          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{{ _("admin_plans.col_actions") }}</th>
         </tr>
       </thead>
       <tbody class="bg-white divide-y divide-gray-100">
         <template x-if="plans.length === 0">
           <tr>
             <td colspan="8" class="px-4 py-8 text-center text-sm text-gray-400">
-              No plans yet. Click <strong>Restore Defaults</strong> to seed the four built-in plans.
+              {{ _("admin_plans.no_plans_intro") }} <strong>{{ _("admin_plans.btn_restore_defaults") }}</strong> {{ _("admin_plans.no_plans_suffix") }}
             </td>
           </tr>
         </template>
@@ -97,13 +95,13 @@
                   @click="moveUp(idx)"
                   :disabled="idx === 0"
                   class="p-1 rounded hover:bg-gray-200 disabled:opacity-30"
-                  :aria-label="'Move ' + plan.name + ' up'"
+                  :aria-label="i18n.ariaMoveUp.replace('{name}', plan.name)"
                 ><i class="fas fa-chevron-up text-xs" aria-hidden="true"></i></button>
                 <button
                   @click="moveDown(idx)"
                   :disabled="idx === plans.length - 1"
                   class="p-1 rounded hover:bg-gray-200 disabled:opacity-30"
-                  :aria-label="'Move ' + plan.name + ' down'"
+                  :aria-label="i18n.ariaMoveDown.replace('{name}', plan.name)"
                 ><i class="fas fa-chevron-down text-xs" aria-hidden="true"></i></button>
                 <span x-text="idx + 1" class="w-5 text-center text-xs text-gray-400"></span>
               </div>
@@ -115,13 +113,13 @@
                   <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium" x-text="plan.badge_text"></span>
                 </template>
                 <template x-if="plan.is_highlighted">
-                  <span class="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-medium"><i class="fas fa-star" aria-hidden="true"></i> Featured</span>
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-medium"><i class="fas fa-star" aria-hidden="true"></i> <span x-text="i18n.featuredBadge"></span></span>
                 </template>
               </div>
               <div class="text-xs text-gray-400 mt-0.5" x-text="plan.plan_id"></div>
             </td>
             <td class="px-4 py-3 text-right text-sm text-gray-700">
-              <span x-text="plan.price_monthly === 0 ? 'Free' : '$' + plan.price_monthly.toFixed(2)"></span>
+              <span x-text="plan.price_monthly === 0 ? i18n.freeLabel : '$' + plan.price_monthly.toFixed(2)"></span>
             </td>
             <td class="px-4 py-3 text-right text-sm text-gray-700">
               <span x-text="plan.price_yearly === 0 ? '—' : '$' + plan.price_yearly.toFixed(2)"></span>
@@ -136,7 +134,7 @@
               <span
                 class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
                 :class="plan.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'"
-                x-text="plan.is_active ? 'Active' : 'Inactive'"
+                x-text="plan.is_active ? i18n.statusActive : i18n.statusInactive"
               ></span>
             </td>
             <td class="px-4 py-3 text-right">
@@ -144,16 +142,16 @@
                 <button
                   @click="openEditModal(plan)"
                   class="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
-                  :aria-label="'Edit ' + plan.name"
+                  :aria-label="i18n.ariaEditPlan.replace('{name}', plan.name)"
                 >
-                  <i class="fas fa-pencil-alt" aria-hidden="true"></i> Edit
+                  <i class="fas fa-pencil-alt" aria-hidden="true"></i> <span x-text="i18n.btnEdit"></span>
                 </button>
                 <button
                   @click="deletePlan(plan.plan_id)"
                   class="text-sm text-red-500 hover:text-red-700 font-medium"
-                  :aria-label="'Delete ' + plan.name"
+                  :aria-label="i18n.ariaDeletePlan.replace('{name}', plan.name)"
                 >
-                  <i class="fas fa-trash-alt" aria-hidden="true"></i> Delete
+                  <i class="fas fa-trash-alt" aria-hidden="true"></i> <span x-text="i18n.btnDelete"></span>
                 </button>
               </div>
             </td>
@@ -171,8 +169,8 @@
       class="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 disabled:opacity-50"
     >
       <i class="fas fa-save mr-2" aria-hidden="true"></i>
-      <span x-show="!saving">Save Order</span>
-      <span x-show="saving"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Saving…</span>
+      <span x-show="!saving">{{ _("admin_plans.btn_save_order") }}</span>
+      <span x-show="saving"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> {{ _("admin_plans.btn_saving") }}</span>
     </button>
   </div>
 
@@ -195,8 +193,8 @@
     <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl my-auto" @click.outside="modalOpen = false">
       <!-- Modal header -->
       <div class="flex items-center justify-between px-6 py-4 border-b">
-        <h2 id="modal-title" class="text-lg font-semibold text-gray-900" x-text="isCreate ? 'Add Plan' : 'Edit Plan: ' + form.name"></h2>
-        <button @click="modalOpen = false" class="text-gray-400 hover:text-gray-600" aria-label="Close modal">
+        <h2 id="modal-title" class="text-lg font-semibold text-gray-900" x-text="isCreate ? i18n.modalCreateTitle : i18n.modalEditTitlePrefix + form.name"></h2>
+        <button @click="modalOpen = false" class="text-gray-400 hover:text-gray-600" aria-label="{{ _('admin_plans.modal_close_aria') }}">
           <i class="fas fa-times" aria-hidden="true"></i>
         </button>
       </div>
@@ -205,66 +203,66 @@
 
         <!-- Basic Info -->
         <div class="px-6 py-5 space-y-4">
-          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Basic Info</h3>
+          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">{{ _("admin_plans.section_basic_info") }}</h3>
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label for="f-name" class="block text-sm font-medium text-gray-700 mb-1">Name <span class="text-red-500" aria-hidden="true">*</span></label>
+              <label for="f-name" class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_plans.field_name") }} <span class="text-red-500" aria-hidden="true">*</span></label>
               <input id="f-name" type="text" x-model="form.name" required
                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
             </div>
             <div>
-              <label for="f-plan-id" class="block text-sm font-medium text-gray-700 mb-1">Plan ID <span class="text-red-500" aria-hidden="true">*</span></label>
+              <label for="f-plan-id" class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_plans.field_plan_id") }} <span class="text-red-500" aria-hidden="true">*</span></label>
               <input id="f-plan-id" type="text" x-model="form.plan_id" :readonly="!isCreate"
                 :class="!isCreate ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : ''"
                 required pattern="[a-z0-9_-]+" title="Lowercase letters, numbers, _ and - only"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-              <p class="text-xs text-gray-400 mt-0.5">Lowercase slug, cannot be changed after creation.</p>
+              <p class="text-xs text-gray-400 mt-0.5">{{ _("admin_plans.hint_plan_id") }}</p>
             </div>
           </div>
           <div>
-            <label for="f-tagline" class="block text-sm font-medium text-gray-700 mb-1">Tagline</label>
+            <label for="f-tagline" class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_plans.field_tagline") }}</label>
             <input id="f-tagline" type="text" x-model="form.tagline" maxlength="255"
               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
           </div>
           <div class="grid grid-cols-3 gap-4">
             <div>
-              <label for="f-sort-order" class="block text-sm font-medium text-gray-700 mb-1">Sort Order</label>
+              <label for="f-sort-order" class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_plans.field_sort_order") }}</label>
               <input id="f-sort-order" type="number" x-model.number="form.sort_order" min="0"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
             </div>
             <div class="flex items-center gap-3 pt-6">
               <input id="f-active" type="checkbox" x-model="form.is_active"
                 class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-              <label for="f-active" class="text-sm font-medium text-gray-700">Active</label>
+              <label for="f-active" class="text-sm font-medium text-gray-700">{{ _("admin_plans.field_active") }}</label>
             </div>
             <div class="flex items-center gap-3 pt-6">
               <input id="f-highlighted" type="checkbox" x-model="form.is_highlighted"
                 class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-              <label for="f-highlighted" class="text-sm font-medium text-gray-700">Featured / Highlighted</label>
+              <label for="f-highlighted" class="text-sm font-medium text-gray-700">{{ _("admin_plans.field_featured") }}</label>
             </div>
           </div>
         </div>
 
         <!-- Pricing -->
         <div class="px-6 py-5 space-y-4">
-          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Pricing</h3>
+          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">{{ _("admin_plans.section_pricing") }}</h3>
           <div class="grid grid-cols-3 gap-4">
             <div>
-              <label for="f-price-monthly" class="block text-sm font-medium text-gray-700 mb-1">Monthly Price ($)</label>
+              <label for="f-price-monthly" class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_plans.field_price_monthly") }}</label>
               <input id="f-price-monthly" type="number" x-model.number="form.price_monthly" min="0" step="0.01"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
             </div>
             <div>
-              <label for="f-price-yearly" class="block text-sm font-medium text-gray-700 mb-1">Yearly Price ($)</label>
+              <label for="f-price-yearly" class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_plans.field_price_yearly") }}</label>
               <input id="f-price-yearly" type="number" x-model.number="form.price_yearly" min="0" step="0.01"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
               <p class="text-xs mt-0.5"
                 :class="yearlySavingPct > 0 ? 'text-green-600 font-medium' : 'text-gray-400'"
-                x-text="yearlySavingPct > 0 ? 'Save ' + yearlySavingPct.toFixed(0) + '% vs monthly' : 'Enter yearly price to show savings'">
+                x-text="yearlySavingPct > 0 ? i18n.yearlySave.replace('{pct}', yearlySavingPct.toFixed(0)) : i18n.yearlyEnter">
               </p>
             </div>
             <div>
-              <label for="f-trial-days" class="block text-sm font-medium text-gray-700 mb-1">Trial Days</label>
+              <label for="f-trial-days" class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_plans.field_trial_days") }}</label>
               <input id="f-trial-days" type="number" x-model.number="form.trial_days" min="0"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
             </div>
@@ -274,21 +272,21 @@
         <!-- Stripe Integration -->
         <div class="px-6 py-5 space-y-4">
           <div class="flex items-center justify-between">
-            <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Stripe Integration</h3>
+            <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">{{ _("admin_plans.section_stripe") }}</h3>
             <a href="/admin/stripe-wizard" target="_blank"
                class="text-xs text-indigo-600 hover:text-indigo-800 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-400 rounded"
-               aria-label="Open Stripe Setup Wizard in a new tab"
-            ><i class="fab fa-stripe mr-1" aria-hidden="true"></i>Stripe Wizard</a>
+               aria-label="{{ _('admin_plans.stripe_wizard_aria') }}"
+            ><i class="fab fa-stripe mr-1" aria-hidden="true"></i>{{ _("admin_plans.stripe_wizard_link") }}</a>
           </div>
           <p class="text-xs text-gray-500">
-            Enter the Stripe Price IDs for this plan, or use the
-            <a href="/admin/stripe-wizard" target="_blank" class="text-indigo-600 hover:text-indigo-800 underline">Stripe Setup Wizard</a>
-            to auto-create them. Free plans do not need Stripe Price IDs.
+            {{ _("admin_plans.stripe_desc_before") }}
+            <a href="/admin/stripe-wizard" target="_blank" class="text-indigo-600 hover:text-indigo-800 underline">{{ _("admin_plans.stripe_wizard_text") }}</a>
+            {{ _("admin_plans.stripe_desc_after") }}
           </p>
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label for="f-stripe-monthly" class="block text-sm font-medium text-gray-700 mb-1">
-                Stripe Price ID (monthly)
+                {{ _("admin_plans.field_stripe_monthly") }}
               </label>
               <input id="f-stripe-monthly" type="text" x-model="form.stripe_price_id_monthly"
                 placeholder="price_1OtAbc…"
@@ -296,7 +294,7 @@
             </div>
             <div>
               <label for="f-stripe-yearly" class="block text-sm font-medium text-gray-700 mb-1">
-                Stripe Price ID (yearly)
+                {{ _("admin_plans.field_stripe_yearly") }}
               </label>
               <input id="f-stripe-yearly" type="text" x-model="form.stripe_price_id_yearly"
                 placeholder="price_1OtAbc… (optional)"
@@ -307,36 +305,36 @@
 
         <!-- Volume Limits -->
         <div class="px-6 py-5 space-y-4">
-          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Volume Limits</h3>
-          <p class="text-xs text-gray-500">Enter <strong>0</strong> for unlimited.</p>
+          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">{{ _("admin_plans.section_volume") }}</h3>
+          <p class="text-xs text-gray-500">{{ _("admin_plans.hint_zero_unlimited") }}</p>
           <div class="grid grid-cols-3 gap-4">
             <div>
-              <label for="f-monthly-limit" class="block text-sm font-medium text-gray-700 mb-1">Docs / Month</label>
+              <label for="f-monthly-limit" class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_plans.field_docs_month") }}</label>
               <input id="f-monthly-limit" type="number" x-model.number="form.monthly_upload_limit" min="0"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
             </div>
             <div>
-              <label for="f-lifetime-limit" class="block text-sm font-medium text-gray-700 mb-1">Lifetime Docs</label>
+              <label for="f-lifetime-limit" class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_plans.field_lifetime_docs") }}</label>
               <input id="f-lifetime-limit" type="number" x-model.number="form.lifetime_file_limit" min="0"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
             </div>
             <div>
-              <label for="f-ocr-pages" class="block text-sm font-medium text-gray-700 mb-1">OCR Pages / Month</label>
+              <label for="f-ocr-pages" class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_plans.field_ocr_pages") }}</label>
               <input id="f-ocr-pages" type="number" x-model.number="form.max_ocr_pages_monthly" min="0"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
             </div>
             <div>
-              <label for="f-dests" class="block text-sm font-medium text-gray-700 mb-1">Storage Destinations</label>
+              <label for="f-dests" class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_plans.field_storage_dests") }}</label>
               <input id="f-dests" type="number" x-model.number="form.max_storage_destinations" min="0"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
             </div>
             <div>
-              <label for="f-mailboxes" class="block text-sm font-medium text-gray-700 mb-1">Email Mailboxes</label>
+              <label for="f-mailboxes" class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_plans.field_mailboxes") }}</label>
               <input id="f-mailboxes" type="number" x-model.number="form.max_mailboxes" min="0"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
             </div>
             <div>
-              <label for="f-filesize" class="block text-sm font-medium text-gray-700 mb-1">Max File Size (MB)</label>
+              <label for="f-filesize" class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_plans.field_max_file_size") }}</label>
               <input id="f-filesize" type="number" x-model.number="form.max_file_size_mb" min="0"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
             </div>
@@ -345,15 +343,15 @@
 
         <!-- Overage Designer -->
         <div class="px-6 py-5 space-y-4">
-          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Overage Designer</h3>
+          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">{{ _("admin_plans.section_overage") }}</h3>
           <div>
             <label for="f-overage-pct" class="block text-sm font-medium text-gray-700 mb-2">
-              Buffer:
+              {{ _("admin_plans.field_buffer") }}
               <span class="text-indigo-700 font-semibold" x-text="form.overage_percent + '%'"></span>
               <template x-if="form.monthly_upload_limit > 0">
                 <span class="text-gray-500 font-normal ml-2">
-                  → announce <strong x-text="form.monthly_upload_limit"></strong> docs,
-                  enforce at <strong class="text-indigo-700" x-text="Math.round(form.monthly_upload_limit * (1 + form.overage_percent / 100))"></strong> docs
+                  {{ _("admin_plans.overage_announce") }} <strong x-text="form.monthly_upload_limit"></strong> {{ _("admin_plans.overage_docs") }}
+                  {{ _("admin_plans.overage_enforce_at") }} <strong class="text-indigo-700" x-text="Math.round(form.monthly_upload_limit * (1 + form.overage_percent / 100))"></strong> {{ _("admin_plans.overage_docs_end") }}
                 </span>
               </template>
             </label>
@@ -368,27 +366,27 @@
               aria-valuemax="100"
             />
             <div class="flex justify-between text-xs text-gray-400 mt-1">
-              <span>0% (exact)</span>
-              <span>50%</span>
-              <span>100%</span>
+              <span>{{ _("admin_plans.overage_0pct") }}</span>
+              <span>{{ _("admin_plans.overage_50pct") }}</span>
+              <span>{{ _("admin_plans.overage_100pct") }}</span>
             </div>
           </div>
           <div class="grid grid-cols-2 gap-4 opacity-60">
             <div class="relative">
-              <label class="block text-sm font-medium text-gray-700 mb-1">Allow Overage Billing</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_plans.field_allow_overage") }}</label>
               <div class="flex items-center gap-2">
                 <input type="checkbox" disabled class="h-4 w-4 rounded border-gray-300 text-indigo-600" />
-                <span class="text-xs text-gray-400">Coming soon</span>
+                <span class="text-xs text-gray-400">{{ _("admin_plans.coming_soon") }}</span>
               </div>
             </div>
             <div class="relative">
-              <label class="block text-sm font-medium text-gray-700 mb-1">Overage price / doc ($)</label>
-              <input type="number" disabled placeholder="Coming soon"
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_plans.field_overage_doc_price") }}</label>
+              <input type="number" disabled placeholder="{{ _('admin_plans.coming_soon') }}"
                 class="w-full px-3 py-2 border border-gray-200 rounded-md text-sm bg-gray-50 text-gray-400 cursor-not-allowed" />
             </div>
             <div class="relative">
-              <label class="block text-sm font-medium text-gray-700 mb-1">Overage price / OCR page ($)</label>
-              <input type="number" disabled placeholder="Coming soon"
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_plans.field_overage_ocr_price") }}</label>
+              <input type="number" disabled placeholder="{{ _('admin_plans.coming_soon') }}"
                 class="w-full px-3 py-2 border border-gray-200 rounded-md text-sm bg-gray-50 text-gray-400 cursor-not-allowed" />
             </div>
           </div>
@@ -396,18 +394,18 @@
 
         <!-- Features -->
         <div class="px-6 py-5 space-y-3">
-          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Features List</h3>
-          <p class="text-xs text-gray-500">These bullet points appear on the pricing page card for this plan.</p>
+          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">{{ _("admin_plans.section_features") }}</h3>
+          <p class="text-xs text-gray-500">{{ _("admin_plans.hint_features") }}</p>
           <template x-for="(feat, i) in form.features" :key="i">
             <div class="flex items-center gap-2">
               <input
                 type="text"
                 x-model="form.features[i]"
-                :aria-label="'Feature ' + (i+1)"
+                :aria-label="i18n.ariaFeatureN.replace('{n}', i + 1)"
                 class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
               />
               <button type="button" @click="form.features.splice(i, 1)"
-                :aria-label="'Remove feature ' + (i+1)"
+                :aria-label="i18n.ariaRemoveFeatureN.replace('{n}', i + 1)"
                 class="text-red-400 hover:text-red-600 px-2 py-2">
                 <i class="fas fa-times" aria-hidden="true"></i>
               </button>
@@ -415,21 +413,21 @@
           </template>
           <button type="button" @click="form.features.push('')"
             class="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 font-medium">
-            <i class="fas fa-plus mr-1" aria-hidden="true"></i> Add Feature
+            <i class="fas fa-plus mr-1" aria-hidden="true"></i> {{ _("admin_plans.btn_add_feature") }}
           </button>
         </div>
 
         <!-- Display -->
         <div class="px-6 py-5 space-y-4">
-          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">Display</h3>
+          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">{{ _("admin_plans.section_display") }}</h3>
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label for="f-cta" class="block text-sm font-medium text-gray-700 mb-1">CTA Button Text</label>
+              <label for="f-cta" class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_plans.field_cta_text") }}</label>
               <input id="f-cta" type="text" x-model="form.cta_text" maxlength="100"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
             </div>
             <div>
-              <label for="f-badge" class="block text-sm font-medium text-gray-700 mb-1">Badge Text</label>
+              <label for="f-badge" class="block text-sm font-medium text-gray-700 mb-1">{{ _("admin_plans.field_badge_text") }}</label>
               <input id="f-badge" type="text" x-model="form.badge_text" maxlength="50"
                 placeholder="e.g. Most Popular"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
@@ -438,7 +436,7 @@
           <div class="flex items-center gap-3">
             <input id="f-api" type="checkbox" x-model="form.api_access"
               class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-            <label for="f-api" class="text-sm font-medium text-gray-700">API Access</label>
+            <label for="f-api" class="text-sm font-medium text-gray-700">{{ _("admin_plans.field_api_access") }}</label>
           </div>
         </div>
 
@@ -449,15 +447,15 @@
             @click="modalOpen = false"
             class="px-4 py-2 text-sm font-medium border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400"
           >
-            Cancel
+            {{ _("admin_plans.btn_cancel") }}
           </button>
           <button
             type="submit"
             :disabled="saving"
             class="px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span x-show="!saving" x-text="isCreate ? 'Create Plan' : 'Save Changes'"></span>
-            <span x-show="saving"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Saving…</span>
+            <span x-show="!saving" x-text="isCreate ? i18n.btnCreate : i18n.btnSaveChanges"></span>
+            <span x-show="saving"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> <span x-text="i18n.btnSaving"></span></span>
           </button>
         </div>
 
@@ -468,8 +466,45 @@
 </main>
 
 <script>
+  window.__i18nAdminPlans = {
+    modalCreateTitle: {{ _("admin_plans.modal_create_title") | tojson }},
+    modalEditTitlePrefix: {{ _("admin_plans.modal_edit_title_prefix") | tojson }},
+    statusActive: {{ _("admin_plans.status_active") | tojson }},
+    statusInactive: {{ _("admin_plans.status_inactive") | tojson }},
+    featuredBadge: {{ _("admin_plans.featured_badge") | tojson }},
+    freeLabel: {{ _("admin_plans.free_label") | tojson }},
+    btnEdit: {{ _("admin_plans.btn_edit") | tojson }},
+    btnDelete: {{ _("admin_plans.btn_delete") | tojson }},
+    btnCreate: {{ _("admin_plans.btn_create") | tojson }},
+    btnSaveChanges: {{ _("admin_plans.btn_save_changes") | tojson }},
+    btnSaving: {{ _("admin_plans.btn_saving") | tojson }},
+    ariaMoveUp: {{ _("admin_plans.aria_move_up") | tojson }},
+    ariaMoveDown: {{ _("admin_plans.aria_move_down") | tojson }},
+    ariaEditPlan: {{ _("admin_plans.aria_edit_plan") | tojson }},
+    ariaDeletePlan: {{ _("admin_plans.aria_delete_plan") | tojson }},
+    ariaFeatureN: {{ _("admin_plans.aria_feature_n") | tojson }},
+    ariaRemoveFeatureN: {{ _("admin_plans.aria_remove_feature_n") | tojson }},
+    yearlySave: {{ _("admin_plans.js_yearly_save") | tojson }},
+    yearlyEnter: {{ _("admin_plans.js_yearly_enter") | tojson }},
+    jsFailedLoad: {{ _("admin_plans.js_failed_load") | tojson }},
+    jsPlanCreated: {{ _("admin_plans.js_plan_created") | tojson }},
+    jsPlanUpdated: {{ _("admin_plans.js_plan_updated") | tojson }},
+    jsDeleteConfirm: {{ _("admin_plans.js_delete_confirm") | tojson }},
+    jsDeleteFailed: {{ _("admin_plans.js_delete_failed") | tojson }},
+    jsPlanDeleted: {{ _("admin_plans.js_plan_deleted") | tojson }},
+    jsSeedConfirm: {{ _("admin_plans.js_seed_confirm") | tojson }},
+    jsSeedFailed: {{ _("admin_plans.js_seed_failed") | tojson }},
+    jsReorderFailed: {{ _("admin_plans.js_reorder_failed") | tojson }},
+    jsOrderSaved: {{ _("admin_plans.js_order_saved") | tojson }},
+    jsSaveFailed: {{ _("admin_plans.js_save_failed") | tojson }},
+  };
+</script>
+
+<script>
 function planDesigner() {
+  const i18n = window.__i18nAdminPlans;
   return {
+    i18n,
     plans: [],
     loading: true,
     saving: false,
@@ -524,7 +559,7 @@ function planDesigner() {
       this.errorMsg = '';
       try {
         const resp = await fetch('/api/plans/admin');
-        if (!resp.ok) throw new Error('Failed to load plans');
+        if (!resp.ok) throw new Error(i18n.jsFailedLoad);
         const data = await resp.json();
         this.plans = data.plans || [];
       } catch (e) {
@@ -568,9 +603,9 @@ function planDesigner() {
         });
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-          throw new Error(err.detail || 'Save failed');
+          throw new Error(err.detail || i18n.jsSaveFailed);
         }
-        this.successMsg = this.isCreate ? 'Plan created!' : 'Plan updated!';
+        this.successMsg = this.isCreate ? i18n.jsPlanCreated : i18n.jsPlanUpdated;
         this.modalOpen = false;
         await this.loadPlans();
       } catch (e) {
@@ -581,15 +616,15 @@ function planDesigner() {
     },
 
     async deletePlan(planId) {
-      if (!confirm(`Delete plan "${planId}"? This cannot be undone.`)) return;
+      if (!confirm(i18n.jsDeleteConfirm.replace('{id}', planId))) return;
       this.errorMsg = '';
       try {
         const resp = await fetch(`/api/plans/${encodeURIComponent(planId)}`, { method: 'DELETE' });
         if (!resp.ok && resp.status !== 204) {
           const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-          throw new Error(err.detail || 'Delete failed');
+          throw new Error(err.detail || i18n.jsDeleteFailed);
         }
-        this.successMsg = `Plan "${planId}" deleted.`;
+        this.successMsg = i18n.jsPlanDeleted.replace('{id}', planId);
         await this.loadPlans();
       } catch (e) {
         this.errorMsg = e.message;
@@ -597,12 +632,12 @@ function planDesigner() {
     },
 
     async seedDefaults() {
-      if (!confirm('Seed the four default plans? This is a no-op if plans already exist.')) return;
+      if (!confirm(i18n.jsSeedConfirm)) return;
       this.seeding = true;
       this.errorMsg = '';
       try {
         const resp = await fetch('/api/plans/seed', { method: 'POST' });
-        if (!resp.ok) throw new Error('Seed failed');
+        if (!resp.ok) throw new Error(i18n.jsSeedFailed);
         const data = await resp.json();
         this.successMsg = data.message;
         await this.loadPlans();
@@ -635,8 +670,8 @@ function planDesigner() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ order }),
         });
-        if (!resp.ok) throw new Error('Reorder failed');
-        this.successMsg = 'Order saved!';
+        if (!resp.ok) throw new Error(i18n.jsReorderFailed);
+        this.successMsg = i18n.jsOrderSaved;
         this.orderDirty = false;
       } catch (e) {
         this.errorMsg = e.message;

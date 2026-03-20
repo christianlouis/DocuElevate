@@ -17,6 +17,7 @@ concurrency:
 
 env:
   IMAGE_NAME: christianlouis/docuelevate
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ══════════════════════════════════════════════════════════════════════════
@@ -42,6 +43,18 @@ jobs:
           fi
       - run: ruff check app/ tests/
       - run: ruff format --check app/ tests/
+
+  migration-chain:
+    name: Alembic Migration Chain Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validate migration chain
+        run: python scripts/check_alembic_migrations.py
 
   html-lint:
     name: HTML Accessibility Lint
@@ -137,7 +150,7 @@ jobs:
   build:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
-    needs: [run-tests, mypy, dependency-scan, html-lint]
+    needs: [run-tests, mypy, dependency-scan, html-lint, migration-chain]
     if: github.event_name == 'push'
     steps:
       - name: Checkout Code

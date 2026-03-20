@@ -145,60 +145,37 @@ class TestDropboxViews:
         assert b"/Documents/Uploads" in response.content
         assert b"Back to Integrations" in response.content
 
-    def test_dropbox_setup_user_mode_system_credentials_shown(self, client, db_session):
-        """Test that system credentials toggle appears when system creds are configured."""
-        owner_id = "user_sys_creds@example.com"
-        integration = UserIntegration(
-            owner_id=owner_id,
-            direction="DESTINATION",
-            integration_type="DROPBOX",
-            name="My Dropbox",
-            config=json.dumps({"folder": "/test"}),
-            is_active=True,
-        )
-        db_session.add(integration)
-        db_session.commit()
-        db_session.refresh(integration)
 
-        with (
-            patch("app.views.dropbox.get_current_owner_id", return_value=owner_id),
-            patch("app.views.dropbox.settings") as mock_settings,
-        ):
-            mock_settings.dropbox_app_key = "system-key"
-            mock_settings.dropbox_app_secret = "system-secret"
-            mock_settings.dropbox_refresh_token = None
-            mock_settings.dropbox_folder = None
-            response = client.get(f"/dropbox-setup?integration_id={integration.id}")
+@pytest.mark.integration
+class TestDropboxCallbackUrl:
+    """Tests that the callback_url is correctly passed to templates."""
 
+    def test_setup_page_includes_callback_url(self, client):
+        """Setup page should include the callback_url variable in its response."""
+        response = client.get("/dropbox-setup")
         assert response.status_code == 200
-        assert b"use-system-creds" in response.content
-        assert b"DocuElevate" in response.content
+        # callback_url is embedded in the JS as the dropboxCallbackUrl constant
+        assert b"dropboxCallbackUrl" in response.content
 
-    def test_dropbox_setup_user_mode_no_system_credentials(self, client, db_session):
-        """Test that system credentials toggle is hidden when no system creds configured."""
-        owner_id = "user_no_sys@example.com"
-        integration = UserIntegration(
-            owner_id=owner_id,
-            direction="DESTINATION",
-            integration_type="DROPBOX",
-            name="My Dropbox",
-            config=json.dumps({"folder": "/test"}),
-            is_active=True,
-        )
-        db_session.add(integration)
-        db_session.commit()
-        db_session.refresh(integration)
-
-        with (
-            patch("app.views.dropbox.get_current_owner_id", return_value=owner_id),
-            patch("app.views.dropbox.settings") as mock_settings,
-        ):
-            mock_settings.dropbox_app_key = None
-            mock_settings.dropbox_app_secret = None
-            mock_settings.dropbox_refresh_token = None
-            mock_settings.dropbox_folder = None
-            response = client.get(f"/dropbox-setup?integration_id={integration.id}")
-
+    def test_callback_page_includes_callback_url(self, client):
+        """Callback page should embed the server-side callback URL."""
+        response = client.get("/dropbox-callback?code=testcode")
         assert response.status_code == 200
-        # When no system credentials, hasSystemCredentials JS var should be false
-        assert b"hasSystemCredentials = false" in response.content
+        # callback_url is used as the redirectUri
+        assert b"redirectUri" in response.content
+
+    def test_setup_page_uses_public_base_url_when_set(self, client):
+        """When PUBLIC_BASE_URL is configured, it should appear in the redirect URI hint."""
+        with patch("app.views.dropbox.settings") as mock_settings:
+            mock_settings.public_base_url = "https://configured.example.com"
+            mock_settings.dropbox_app_key = ""
+            mock_settings.dropbox_app_secret = ""
+            mock_settings.dropbox_refresh_token = ""
+            mock_settings.dropbox_folder = ""
+            mock_settings.dropbox_allow_global_credentials_for_integrations = False
+            response = client.get("/dropbox-setup")
+        assert response.status_code == 200
+        # The configured public_base_url hostname must appear in the page (redirect URI display)
+        page_text = response.text
+        assert "configured.example.com/dropbox-callback" in page_text
+

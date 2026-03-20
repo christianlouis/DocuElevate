@@ -68,9 +68,74 @@ def _make_client(tok_engine, owner_id: str = _OWNER) -> TestClient:
     return client
 
 
+def _make_unauthenticated_client(tok_engine) -> TestClient:
+    """Return a TestClient that only overrides ``get_db`` (no auth injection).
+
+    This exercises the real ``_get_owner_id`` → ``get_current_owner_id``
+    authentication path.  Any request made with this client that does not
+    carry a valid session or Bearer token will receive a 401 from the
+    actual auth code, not from a mocked dependency.
+
+    The caller is responsible for clearing overrides via ``_cleanup(app)``
+    after the test completes (typically in a ``finally`` block).
+    """
+    from app.main import app
+
+    Session = sessionmaker(bind=tok_engine)
+
+    def _override_get_db():
+        session = Session()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = _override_get_db
+
+    client = TestClient(app, base_url="http://localhost", raise_server_exceptions=False)
+    return client
+
+
 def _cleanup(app):
     """Remove dependency overrides after test."""
     app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# Tests – Auth Helper
+# ---------------------------------------------------------------------------
+
+
+class TestGetOwnerId:
+    """Tests for the _get_owner_id dependency helper."""
+
+    @pytest.mark.unit
+    def test_get_owner_id_unauthenticated(self):
+        """_get_owner_id should raise a 401 if the user is not authenticated."""
+        from unittest.mock import MagicMock, patch
+
+        from fastapi import HTTPException
+
+        from app.api.api_tokens import _get_owner_id
+
+        mock_request = MagicMock()
+        with patch("app.api.api_tokens.get_current_owner_id", return_value=None):
+            with pytest.raises(HTTPException) as exc_info:
+                _get_owner_id(mock_request)
+            assert exc_info.value.status_code == 401
+            assert exc_info.value.detail == "Not authenticated"
+
+    @pytest.mark.unit
+    def test_get_owner_id_authenticated(self):
+        """_get_owner_id should return owner_id if user is authenticated."""
+        from unittest.mock import MagicMock, patch
+
+        from app.api.api_tokens import _get_owner_id
+
+        mock_request = MagicMock()
+        with patch("app.api.api_tokens.get_current_owner_id", return_value="owner123"):
+            owner_id = _get_owner_id(mock_request)
+            assert owner_id == "owner123"
 
 
 # ---------------------------------------------------------------------------
@@ -126,6 +191,46 @@ class TestTokenCreate:
         try:
             resp = client.post("/api/api-tokens/", json={"name": ""})
             assert resp.status_code == 422
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_create_token_database_error(self, tok_engine, tok_session):
+        """Creating a token should rollback and raise 500 if database commit fails."""
+        from unittest.mock import patch
+
+        from sqlalchemy.orm import Session as SASession
+
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            # Wrap commit: flush first so changes are staged in the transaction,
+            # then raise to simulate a commit failure after data has been written.
+            def _fail_after_flush(self):
+                self.flush()  # stage changes inside the open transaction
+                raise Exception("DB Failure")
+
+            # Spy on rollback so we can assert it is called.
+            rollback_called = False
+            real_rollback = SASession.rollback
+
+            def _spy_rollback(self):
+                nonlocal rollback_called
+                rollback_called = True
+                real_rollback(self)
+
+            with patch.object(SASession, "commit", _fail_after_flush):
+                with patch.object(SASession, "rollback", _spy_rollback):
+                    resp = client.post("/api/api-tokens/", json={"name": "DB Error Create Test"})
+                    assert resp.status_code == 500
+
+            # rollback() must have been called to undo the flushed changes.
+            assert rollback_called, "db.rollback() was not called after commit failure in create_token"
+
+            # After rollback the token must not exist in the database.
+            db_token = tok_session.query(ApiToken).filter(ApiToken.name == "DB Error Create Test").first()
+            assert db_token is None
         finally:
             _cleanup(app)
 
@@ -209,8 +314,8 @@ class TestTokenRevoke:
             _cleanup(app)
 
     @pytest.mark.unit
-    def test_revoke_already_revoked_token(self, tok_engine):
-        """Revoking an already-revoked token should return 400."""
+    def test_delete_already_revoked_token(self, tok_engine):
+        """Deleting an already-revoked token should permanently remove it (hard-delete, 200)."""
         from app.main import app
 
         client = _make_client(tok_engine)
@@ -219,8 +324,15 @@ class TestTokenRevoke:
             token_id = create_resp.json()["id"]
             client.delete(f"/api/api-tokens/{token_id}")
 
+            # Second DELETE should hard-delete the revoked token.
             resp = client.delete(f"/api/api-tokens/{token_id}")
-            assert resp.status_code == 400
+            assert resp.status_code == 200
+            assert resp.json()["detail"] == "Token deleted"
+
+            # Token must no longer appear in the list.
+            list_resp = client.get("/api/api-tokens/")
+            ids = [t["id"] for t in list_resp.json()]
+            assert token_id not in ids
         finally:
             _cleanup(app)
 
@@ -233,6 +345,93 @@ class TestTokenRevoke:
         try:
             resp = client.delete("/api/api-tokens/99999")
             assert resp.status_code == 404
+            assert resp.json()["detail"] == "Token not found"
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_revoke_token_unauthenticated(self, tok_engine):
+        """Revoking a token without authentication should return 401.
+
+        Uses a client that only overrides ``get_db`` so that the real
+        ``_get_owner_id`` → ``get_current_owner_id`` path is exercised.
+        Sending no session or Bearer credentials means ``get_current_owner_id``
+        returns ``None``, and ``_get_owner_id`` raises a 401.
+        """
+        from app.main import app
+
+        client = _make_unauthenticated_client(tok_engine)
+        try:
+            resp = client.delete("/api/api-tokens/1")
+            assert resp.status_code == 401
+            assert resp.json()["detail"] == "Not authenticated"
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_revoke_token_database_error(self, tok_engine, tok_session):
+        """Revoking a token should rollback and raise 500 if database commit fails.
+
+        The test verifies two properties:
+        1. ``db.rollback()`` is actually called when commit raises (not just that
+           the endpoint returns 500).
+        2. After the rollback the token remains active in the database.
+
+        To ensure the assertions are meaningful, the patched ``commit`` first
+        flushes the session (so the changes *are* staged inside the transaction)
+        before raising.  Without a subsequent ``rollback()`` the flushed state
+        would still be visible to other sessions, so the ``is_active`` check
+        would catch a missing rollback call.
+        """
+        from unittest.mock import patch
+
+        from sqlalchemy.orm import Session as SASession
+
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            create_resp = client.post("/api/api-tokens/", json={"name": "DB Error Test"})
+            token_id = create_resp.json()["id"]
+
+            # Wrap commit: flush first so changes are staged in the transaction,
+            # then raise to simulate a commit failure after data has been written.
+            def _fail_after_flush(self):
+                self.flush()  # stage changes inside the open transaction
+                raise Exception("DB Failure")
+
+            # Spy on rollback so we can assert it is called.
+            rollback_called = False
+            real_rollback = SASession.rollback
+
+            def _spy_rollback(self):
+                nonlocal rollback_called
+                rollback_called = True
+                real_rollback(self)
+
+            with patch.object(SASession, "commit", _fail_after_flush):
+                with patch.object(SASession, "rollback", _spy_rollback):
+                    resp = client.delete(f"/api/api-tokens/{token_id}")
+                    assert resp.status_code == 500
+
+            # rollback() must have been called to undo the flushed changes.
+            assert rollback_called, "db.rollback() was not called after commit failure"
+
+            # After rollback the token must still be active in the database.
+            db_token = tok_session.query(ApiToken).filter(ApiToken.id == token_id).first()
+            assert db_token.is_active is True
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_revoke_token_invalid_id_format(self, tok_engine):
+        """Revoking a token with a non-integer ID should return 422 Unprocessable Entity."""
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            resp = client.delete("/api/api-tokens/abc")
+            assert resp.status_code == 422
         finally:
             _cleanup(app)
 
@@ -417,6 +616,44 @@ class TestTokenUtils:
         assert len(tokens) == 100
 
     @pytest.mark.unit
+    def test_generate_api_token_length(self):
+        """Generated tokens should have the exact expected length based on TOKEN_BYTES."""
+        import math
+
+        from app.api.api_tokens import TOKEN_BYTES, TOKEN_PREFIX, generate_api_token
+
+        # base64url encoding of N bytes without padding: ceil(N * 4 / 3) characters
+        expected_b64_len = math.ceil(TOKEN_BYTES * 4 / 3)
+        expected_total_len = len(TOKEN_PREFIX) + expected_b64_len
+
+        token = generate_api_token()
+        assert len(token) == expected_total_len
+
+    @pytest.mark.unit
+    def test_generate_api_token_charset(self):
+        """Generated tokens should only contain URL-safe base64 characters and the prefix."""
+        import re
+
+        from app.api.api_tokens import TOKEN_PREFIX, generate_api_token
+
+        token = generate_api_token()
+        # Check it starts with prefix and the rest is base64url chars ([A-Za-z0-9_-])
+        pattern = f"^{re.escape(TOKEN_PREFIX)}[A-Za-z0-9_\\-]+$"
+        assert re.match(pattern, token) is not None
+
+    @pytest.mark.unit
+    def test_generate_api_token_uses_secrets(self):
+        """Generated tokens should use secrets.token_urlsafe with the correct number of bytes."""
+        from unittest.mock import patch
+
+        from app.api.api_tokens import TOKEN_BYTES, TOKEN_PREFIX, generate_api_token
+
+        with patch("app.api.api_tokens.secrets.token_urlsafe", return_value="mocked_token") as mock_secrets:
+            token = generate_api_token()
+            mock_secrets.assert_called_once_with(TOKEN_BYTES)
+            assert token == f"{TOKEN_PREFIX}mocked_token"
+
+    @pytest.mark.unit
     def test_hash_token_deterministic(self):
         """Hashing the same token should always produce the same result."""
         from app.api.api_tokens import hash_token
@@ -436,3 +673,226 @@ class TestTokenUtils:
         # All characters should be valid lowercase hex digits.
         int(h, 16)
         assert h == h.lower()
+
+    @pytest.mark.unit
+    def test_hash_token_known_value(self):
+        """hash_token should return the exact expected PBKDF2 digest for a known input."""
+        from app.api.api_tokens import hash_token
+
+        # PBKDF2-HMAC-SHA256 with 100,000 iterations and salt b"api-token-v1"
+        token = "de_test_token_value"
+        expected_hash = "9b89d9adf2f390c75bf2fd0ff2bb5622ef5a9dce438354cce6e39f2f5401129e"
+        assert hash_token(token) == expected_hash
+
+
+# ---------------------------------------------------------------------------
+# Tests – Token reactivation
+# ---------------------------------------------------------------------------
+
+
+class TestTokenReactivate:
+    """Tests for POST /api/api-tokens/{id}/reactivate."""
+
+    @pytest.mark.unit
+    def test_reactivate_revoked_token(self, tok_engine):
+        """Reactivating a revoked token should set is_active=True and clear revoked_at."""
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            create_resp = client.post("/api/api-tokens/", json={"name": "Reactivate Me"})
+            token_id = create_resp.json()["id"]
+            client.delete(f"/api/api-tokens/{token_id}")
+
+            resp = client.post(f"/api/api-tokens/{token_id}/reactivate")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["is_active"] is True
+            assert data["revoked_at"] is None
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_reactivate_active_token_returns_400(self, tok_engine):
+        """Reactivating an already-active token should return 400."""
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            create_resp = client.post("/api/api-tokens/", json={"name": "Already Active"})
+            token_id = create_resp.json()["id"]
+
+            resp = client.post(f"/api/api-tokens/{token_id}/reactivate")
+            assert resp.status_code == 400
+            assert resp.json()["detail"] == "Token is already active"
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_reactivate_nonexistent_token(self, tok_engine):
+        """Reactivating a non-existent token should return 404."""
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            resp = client.post("/api/api-tokens/99999/reactivate")
+            assert resp.status_code == 404
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_reactivate_other_users_token(self, tok_engine):
+        """A user cannot reactivate another user's token."""
+        from app.main import app
+
+        client_a = _make_client(tok_engine, _OWNER)
+        try:
+            create_resp = client_a.post("/api/api-tokens/", json={"name": "A Token"})
+            token_id = create_resp.json()["id"]
+            client_a.delete(f"/api/api-tokens/{token_id}")
+        finally:
+            _cleanup(app)
+
+        client_b = _make_client(tok_engine, _OTHER_OWNER)
+        try:
+            resp = client_b.post(f"/api/api-tokens/{token_id}/reactivate")
+            assert resp.status_code == 404
+        finally:
+            _cleanup(app)
+
+
+# ---------------------------------------------------------------------------
+# Tests – Token lifetime (expires_at)
+# ---------------------------------------------------------------------------
+
+
+class TestTokenExpiry:
+    """Tests for token creation with optional lifetime and expiry enforcement."""
+
+    @pytest.mark.unit
+    def test_create_token_without_expiry(self, tok_engine):
+        """Creating a token without expires_in_days should leave expires_at as None."""
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            resp = client.post("/api/api-tokens/", json={"name": "No Expiry"})
+            assert resp.status_code == 201
+            data = resp.json()
+            assert data["expires_at"] is None
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_create_token_with_expiry(self, tok_engine, tok_session):
+        """Creating a token with expires_in_days should set expires_at in the future."""
+        from datetime import datetime, timezone
+
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            resp = client.post("/api/api-tokens/", json={"name": "With Expiry", "expires_in_days": 30})
+            assert resp.status_code == 201
+            data = resp.json()
+            assert data["expires_at"] is not None
+            # Parse the returned datetime; handle both tz-aware and tz-naive serialisations
+            expires_str = data["expires_at"].replace("Z", "+00:00")
+            expires_at = datetime.fromisoformat(expires_str)
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            delta_days = (expires_at - now).days
+            assert 28 <= delta_days <= 30
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_expired_token_not_resolved(self, tok_engine, tok_session):
+        """A token past its expires_at should not authenticate."""
+        from datetime import datetime, timedelta, timezone
+        from unittest.mock import MagicMock
+
+        from app.api.api_tokens import generate_api_token, hash_token
+        from app.auth import _resolve_bearer_user
+
+        plaintext = generate_api_token()
+        token_hash = hash_token(plaintext)
+
+        db_token = ApiToken(
+            owner_id=_OWNER,
+            name="Expired Token",
+            token_hash=token_hash,
+            token_prefix=plaintext[:12],
+            is_active=True,
+            expires_at=datetime.now(timezone.utc) - timedelta(days=1),  # expired yesterday
+        )
+        tok_session.add(db_token)
+        tok_session.commit()
+
+        mock_request = MagicMock()
+        mock_request.headers = {"authorization": f"Bearer {plaintext}"}
+        mock_request.client.host = "127.0.0.1"
+
+        user = _resolve_bearer_user(mock_request, tok_session)
+        assert user is None
+
+    @pytest.mark.unit
+    def test_non_expired_token_resolves(self, tok_engine, tok_session):
+        """A token before its expires_at should authenticate normally."""
+        from datetime import datetime, timedelta, timezone
+        from unittest.mock import MagicMock
+
+        from app.api.api_tokens import generate_api_token, hash_token
+        from app.auth import _resolve_bearer_user
+
+        plaintext = generate_api_token()
+        token_hash = hash_token(plaintext)
+
+        db_token = ApiToken(
+            owner_id=_OWNER,
+            name="Valid Token",
+            token_hash=token_hash,
+            token_prefix=plaintext[:12],
+            is_active=True,
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30),  # expires in 30 days
+        )
+        tok_session.add(db_token)
+        tok_session.commit()
+
+        mock_request = MagicMock()
+        mock_request.headers = {"authorization": f"Bearer {plaintext}"}
+        mock_request.client.host = "127.0.0.1"
+
+        user = _resolve_bearer_user(mock_request, tok_session)
+        assert user is not None
+        assert user["preferred_username"] == _OWNER
+
+    @pytest.mark.unit
+    def test_create_token_expires_in_days_zero_rejected(self, tok_engine):
+        """expires_in_days=0 should be rejected with 422 (ge=1)."""
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            resp = client.post("/api/api-tokens/", json={"name": "Bad Expiry", "expires_in_days": 0})
+            assert resp.status_code == 422
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_expires_at_included_in_list_response(self, tok_engine):
+        """List endpoint should include expires_at field."""
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            client.post("/api/api-tokens/", json={"name": "Listed", "expires_in_days": 7})
+            resp = client.get("/api/api-tokens/")
+            assert resp.status_code == 200
+            tokens = resp.json()
+            assert len(tokens) == 1
+            assert "expires_at" in tokens[0]
+            assert tokens[0]["expires_at"] is not None
+        finally:
+            _cleanup(app)

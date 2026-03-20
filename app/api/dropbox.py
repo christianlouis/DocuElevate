@@ -5,8 +5,9 @@ Dropbox API endpoints
 import logging
 import os
 from typing import Annotated, Optional
+from urllib.parse import quote
 
-import requests
+import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
@@ -21,6 +22,93 @@ from app.utils.settings_sync import notify_settings_updated
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _build_dropbox_redirect_uri(request: Request) -> str:
+    """Build the Dropbox OAuth callback redirect URI.
+
+    Uses ``PUBLIC_BASE_URL`` when configured (recommended for deployments behind
+    a reverse proxy that doesn't forward ``X-Forwarded-Proto``).  Falls back to
+    deriving the URI from the incoming request's scheme and host headers.
+    """
+    if settings.public_base_url:
+        return settings.public_base_url.rstrip("/") + "/dropbox-callback"
+    return f"{request.url.scheme}://{request.url.netloc}/dropbox-callback"
+
+
+@router.get("/dropbox/global-authorize-url")
+@require_login
+async def dropbox_global_authorize_url(request: Request):
+    """Return the Dropbox OAuth authorization URL using the global app credentials.
+
+    This endpoint is used when ``DROPBOX_ALLOW_GLOBAL_CREDENTIALS_FOR_INTEGRATIONS``
+    is enabled so that users can authorize their personal Dropbox integration without
+    needing to supply their own app key/secret.  Only the public ``app_key`` is
+    embedded in the URL; the ``app_secret`` is never sent to the browser.
+    """
+    if not settings.dropbox_allow_global_credentials_for_integrations:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Global credentials for integrations are not enabled",
+        )
+    if not settings.dropbox_app_key or not settings.dropbox_app_secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Global Dropbox credentials are not configured",
+        )
+    redirect_uri = _build_dropbox_redirect_uri(request)
+    authorize_url = (
+        "https://www.dropbox.com/oauth2/authorize"
+        f"?client_id={settings.dropbox_app_key}"
+        "&response_type=code"
+        "&token_access_type=offline"
+        f"&redirect_uri={quote(redirect_uri, safe='')}"
+    )
+    return {"authorize_url": authorize_url}
+
+
+@router.post("/dropbox/exchange-token-global")
+@require_login
+async def exchange_dropbox_token_global(
+    request: Request,
+    code: Annotated[str, Form(...)],
+    redirect_uri: Annotated[str, Form(...)],
+):
+    """Exchange an authorization code using the global Dropbox app credentials.
+
+    Used when ``DROPBOX_ALLOW_GLOBAL_CREDENTIALS_FOR_INTEGRATIONS`` is enabled so
+    that the ``app_secret`` is never exposed to the browser.  Only the OAuth code
+    and redirect URI need to be supplied by the client.
+    """
+    if not settings.dropbox_allow_global_credentials_for_integrations:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Global credentials for integrations are not enabled",
+        )
+    if not settings.dropbox_app_key or not settings.dropbox_app_secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Global Dropbox credentials are not configured",
+        )
+
+    token_url = "https://api.dropboxapi.com/oauth2/token"
+    payload = {
+        "client_id": settings.dropbox_app_key,
+        "client_secret": settings.dropbox_app_secret,
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "grant_type": "authorization_code",
+    }
+
+    token_data = exchange_oauth_token(provider_name="Dropbox", token_url=token_url, payload=payload)
+
+    return {
+        "refresh_token": token_data["refresh_token"],
+        "access_token": token_data["access_token"],
+        "expires_in": token_data.get("expires_in", 14400),
+        # Return the public app_key so the callback can store it in the integration
+        "app_key": settings.dropbox_app_key,
+    }
 
 
 @router.post("/dropbox/exchange-token")
@@ -132,57 +220,60 @@ async def test_dropbox_token(request: Request):
                 "message": "Dropbox credentials are not fully configured",
             }
 
-        # Check token validity by getting current account info
-        headers = {"Authorization": f"Bearer {settings.dropbox_refresh_token}"}
-        response = requests.post(
-            "https://api.dropboxapi.com/2/users/get_current_account",
-            headers=headers,
-            timeout=settings.http_request_timeout,
-        )
-
-        # If token is invalid, try refreshing it
-        if response.status_code == 401:
-            logger.info("Dropbox access token invalid or expired, trying to refresh")
-
-            # Get a new access token using the refresh token
-            refresh_url = "https://api.dropbox.com/oauth2/token"
-            refresh_data = {
-                "grant_type": "refresh_token",
-                "refresh_token": settings.dropbox_refresh_token,
-                "client_id": settings.dropbox_app_key,
-                "client_secret": settings.dropbox_app_secret,
-            }
-
-            refresh_response = requests.post(refresh_url, data=refresh_data, timeout=settings.http_request_timeout)
-
-            if refresh_response.status_code != 200:
-                logger.error(f"Failed to refresh Dropbox token: {refresh_response.text}")
-                return {
-                    "status": "error",
-                    "message": "Refresh token has expired or is invalid",
-                    "needs_reauth": True,
-                }
-
-            token_info = refresh_response.json()
-            access_token = token_info.get("access_token")
-
-            # Try again with the new access token
-            headers = {"Authorization": f"Bearer {access_token}"}
-            response = requests.post(
+        async with httpx.AsyncClient() as client:
+            # Check token validity by getting current account info
+            headers = {"Authorization": f"Bearer {settings.dropbox_refresh_token}"}
+            response = await client.post(
                 "https://api.dropboxapi.com/2/users/get_current_account",
                 headers=headers,
                 timeout=settings.http_request_timeout,
             )
 
-        if response.status_code != 200:
-            logger.error(f"Dropbox token test failed: {response.status_code} {response.text}")
-            return {
-                "status": "error",
-                "message": f"Token validation failed with status {response.status_code}: {response.text}",
-            }
+            # If token is invalid, try refreshing it
+            if response.status_code == 401:
+                logger.info("Dropbox access token invalid or expired, trying to refresh")
 
-        # Get account info
-        account_info = response.json()
+                # Get a new access token using the refresh token
+                refresh_url = "https://api.dropbox.com/oauth2/token"
+                refresh_data = {
+                    "grant_type": "refresh_token",
+                    "refresh_token": settings.dropbox_refresh_token,
+                    "client_id": settings.dropbox_app_key,
+                    "client_secret": settings.dropbox_app_secret,
+                }
+
+                refresh_response = await client.post(
+                    refresh_url, data=refresh_data, timeout=settings.http_request_timeout
+                )
+
+                if refresh_response.status_code != 200:
+                    logger.error(f"Failed to refresh Dropbox token: {refresh_response.text}")
+                    return {
+                        "status": "error",
+                        "message": "Refresh token has expired or is invalid",
+                        "needs_reauth": True,
+                    }
+
+                token_info = refresh_response.json()
+                access_token = token_info.get("access_token")
+
+                # Try again with the new access token
+                headers = {"Authorization": f"Bearer {access_token}"}
+                response = await client.post(
+                    "https://api.dropboxapi.com/2/users/get_current_account",
+                    headers=headers,
+                    timeout=settings.http_request_timeout,
+                )
+
+            if response.status_code != 200:
+                logger.error(f"Dropbox token test failed: {response.status_code} {response.text}")
+                return {
+                    "status": "error",
+                    "message": f"Token validation failed with status {response.status_code}: {response.text}",
+                }
+
+            # Get account info
+            account_info = response.json()
         account_email = account_info.get("email", "Unknown account")
         account_name = account_info.get("name", {}).get("display_name", "Unknown user")
 

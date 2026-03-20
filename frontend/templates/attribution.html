@@ -1,40 +1,40 @@
 {% extends "base.html" %}
 
-{% block title %}DocuElevate - Third-Party Attributions{% endblock %}
+{% block title %}{{ _("attribution.page_title") }}{% endblock %}
 
 {% block content %}
 <div class="container mx-auto px-4 py-8">
-    <h1 class="text-2xl font-bold mb-4">Third-Party Software Attributions</h1>
+    <h1 class="text-2xl font-bold mb-4">{{ _("attribution.heading") }}</h1>
 
     <div class="bg-white shadow-md rounded-lg p-6 mb-6">
         <p class="mb-4">
-            DocuElevate uses several open source libraries and tools. We are grateful to the
-            developers of these projects for their contributions to open source software.
+            {{ _("attribution.intro") }}
         </p>
 
         <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
             <div class="flex">
                 <div class="flex-shrink-0">
-                    <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                         <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
                     </svg>
                 </div>
                 <div class="ml-3">
                     <p class="text-sm text-yellow-700">
-                        <strong>Special Attribution:</strong> This software includes Paramiko, which is licensed under LGPL. The source code for Paramiko is available at
+                        <strong>{{ _("attribution.special_title") }}</strong>
+                        {{ _("attribution.special_source_pre") }}
                         <a href="https://github.com/paramiko/paramiko" class="font-medium underline text-yellow-700 hover:text-yellow-600">
                             https://github.com/paramiko/paramiko
-                        </a>.
-                        A copy of the LGPL license can be found
+                        </a>{{ _("attribution.special_source_post") }}
+                        {{ _("attribution.special_lgpl_pre") }}
                         <a href="/static/licenses/lgpl.txt" class="font-medium underline text-yellow-700 hover:text-yellow-600">
-                            here
-                        </a>.
+                            {{ _("attribution.special_lgpl_link") }}
+                        </a>{{ _("attribution.special_lgpl_post") }}
                     </p>
                 </div>
             </div>
         </div>
 
-        <h2 class="text-xl font-semibold mb-2">Python Dependencies</h2>
+        <h2 class="text-xl font-semibold mb-2">{{ _("attribution.section_python") }}</h2>
         <ul class="list-disc pl-5 mb-4">
             <li class="mb-2">
                 <span class="font-semibold">FastAPI</span> (MIT License)<br>
@@ -130,7 +130,7 @@
                 <span class="font-semibold">Paramiko</span> (LGPL-2.1 License)<br>
                 Copyright (c) 2003-2009 Robey Pointer<br>
                 <a href="https://github.com/paramiko/paramiko" class="text-blue-600 hover:underline">https://github.com/paramiko/paramiko</a><br>
-                <span class="text-sm text-gray-600">Note: This library is licensed under the GNU Lesser General Public License v2.1 (LGPL-2.1)</span>
+                <span class="text-sm text-gray-600">{{ _("attribution.paramiko_lgpl_note") }}</span>
             </li>
             <li class="mb-2">
                 <span class="font-semibold">Apprise</span> (MIT License)<br>
@@ -139,7 +139,7 @@
             </li>
         </ul>
 
-        <h2 class="text-xl font-semibold mb-2">Docker Images</h2>
+        <h2 class="text-xl font-semibold mb-2">{{ _("attribution.section_docker") }}</h2>
         <ul class="list-disc pl-5 mb-4">
             <li class="mb-2">
                 <span class="font-semibold">Redis</span> (BSD License)<br>
@@ -153,7 +153,7 @@
             </li>
         </ul>
 
-        <h2 class="text-xl font-semibold mb-2">Frontend Dependencies</h2>
+        <h2 class="text-xl font-semibold mb-2">{{ _("attribution.section_frontend") }}</h2>
         <ul class="list-disc pl-5 mb-4">
             <li class="mb-2">
                 <span class="font-semibold">Tailwind CSS</span> (MIT License)<br>

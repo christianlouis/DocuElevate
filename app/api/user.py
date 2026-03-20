@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import require_login
 from app.database import get_db
-from app.models import FileRecord
+from app.models import FileRecord, UserProfile
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ router = APIRouter()
 DbSession = Annotated[Session, Depends(get_db)]
 
 
-async def whoami_handler(request: Request):
+async def whoami_handler(request: Request, db: Session):
     """
     Returns user info if logged in, else 401.
     """
@@ -41,20 +41,33 @@ async def whoami_handler(request: Request):
 
     # Add the gravatar URL to the user object instead of creating a new response
     user_response = user.copy()  # Create a copy to avoid modifying the session
-    user_response["picture"] = gravatar_url
+
+    # Check if the user has a custom avatar stored in their profile
+    user_id = user.get("sub") or user.get("preferred_username") or user.get("email") or user.get("id")
+    if user_id:
+        try:
+            profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+            if profile and profile.avatar_data:
+                user_response["picture"] = profile.avatar_data
+            else:
+                user_response["picture"] = gravatar_url
+        except Exception:
+            user_response["picture"] = gravatar_url
+    else:
+        user_response["picture"] = gravatar_url
 
     return user_response
 
 
 # Register the same handler under two different paths
 @router.get("/whoami")
-async def whoami(request: Request):
-    return await whoami_handler(request)
+async def whoami(request: Request, db: DbSession):
+    return await whoami_handler(request, db)
 
 
 @router.get("/auth/whoami")
-async def auth_whoami(request: Request):
-    return await whoami_handler(request)
+async def auth_whoami(request: Request, db: DbSession):
+    return await whoami_handler(request, db)
 
 
 @router.get("/users/search")
