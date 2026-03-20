@@ -207,6 +207,91 @@ async def test_dropbox_token(request: Request):
         return {"status": "error", "message": f"Connection error: {str(e)}"}
 
 
+@router.post("/dropbox/list-folders")
+@require_login
+async def list_dropbox_folders(
+    request: Request,
+    access_token: Annotated[str, Form(...)],
+    path: Annotated[str, Form()] = "",
+):
+    """
+    List folders in a Dropbox account for the directory selector.
+
+    Accepts an OAuth access token (short-lived) and a path to list.
+    Returns a flat list of folder entries under the given path.
+    """
+    try:
+        # Normalize path: Dropbox API uses "" for root, otherwise "/path"
+        folder_path = path.strip()
+        if folder_path == "/":
+            folder_path = ""
+        elif folder_path and not folder_path.startswith("/"):
+            folder_path = f"/{folder_path}"
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "path": folder_path,
+            "recursive": False,
+            "include_deleted": False,
+            "include_has_explicit_shared_members": False,
+            "include_mounted_folders": True,
+        }
+
+        response = requests.post(
+            "https://api.dropboxapi.com/2/files/list_folder",
+            headers=headers,
+            json=payload,
+            timeout=settings.http_request_timeout,
+        )
+
+        if response.status_code == 401:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Access token is invalid or expired. Please re-authorize.",
+            )
+
+        if response.status_code != 200:
+            logger.error(f"Dropbox list_folder failed: {response.status_code} {response.text}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to list Dropbox folders: {response.text}",
+            )
+
+        data = response.json()
+        folders = []
+        for entry in data.get("entries", []):
+            if entry.get(".tag") == "folder":
+                folders.append(
+                    {
+                        "name": entry["name"],
+                        "path": entry["path_display"],
+                        "id": entry.get("id", ""),
+                    }
+                )
+
+        # Sort folders alphabetically
+        folders.sort(key=lambda f: f["name"].lower())
+
+        return {
+            "folders": folders,
+            "path": folder_path or "/",
+            "has_more": data.get("has_more", False),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error listing Dropbox folders: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list folders: {str(e)}",
+        )
+
+
 @router.post("/dropbox/save-settings")
 @require_login
 async def save_dropbox_settings(
