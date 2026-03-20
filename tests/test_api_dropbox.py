@@ -666,4 +666,3 @@ class TestGlobalAuthorizeUrl:
         authorize_url = response.json()["authorize_url"]
         # The redirect_uri must be URL-encoded and contain the public base URL
         assert "https%3A%2F%2Fprod.example.com%2Fdropbox-callback" in authorize_url
-

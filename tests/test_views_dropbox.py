@@ -178,4 +178,3 @@ class TestDropboxCallbackUrl:
         # The configured public_base_url hostname must appear in the page (redirect URI display)
         page_text = response.text
         assert "configured.example.com/dropbox-callback" in page_text
-
