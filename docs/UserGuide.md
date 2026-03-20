@@ -582,7 +582,25 @@ Processing pipelines let you define exactly what happens to your documents when 
 | `embed_metadata` | Write extracted metadata into the PDF document properties |
 | `compute_embedding` | Compute semantic embeddings for similarity search |
 | `send_to_destinations` | Upload the processed document to all configured storage destinations |
-| `classify` | Classify the document type with AI |
+| `classify` | Classify the document type using rules (filename patterns, content keywords, metadata) |
+
+#### Classify step – rule-based document classification
+
+The `classify` step assigns a category to each document by evaluating **built-in** and **custom** classification rules.  Rules are matched against three signals:
+
+- **Filename patterns** — regex matched against the original filename (e.g. `(?i)invoice` matches filenames containing "invoice").
+- **Content keywords** — pipe-separated keywords matched against the OCR text (e.g. `invoice number|amount due`).
+- **Metadata match** — `field=value` matched against existing AI metadata (e.g. `document_type=Invoice`).
+
+**Pre-built categories** include: Invoice, Contract, Receipt, Letter, Report, Bank Statement, Tax Document, Insurance, and Payslip.  You can also define your own custom categories.
+
+The classification result is stored in the document's `ai_metadata` under the `classification` key with the matched category, confidence score, and list of matched rules.  If no `document_type` was previously set by AI metadata extraction, the classify step will also populate it.
+
+> **Tip:** Manage custom classification rules via **Settings → Classification Rules** or the `/api/classification-rules/` API.  See the [API Documentation](./API.md#classification-rules) for details.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `use_builtin_rules` | boolean | `true` | Include the pre-built classification rules |
 
 #### OCR step options
 

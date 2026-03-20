@@ -396,9 +396,7 @@ _STEP_TYPE_TO_STAGES: dict[str, list[str]] = {
     "embed_metadata": ["embed_metadata_into_pdf"],
     "compute_embedding": ["compute_embedding"],
     "send_to_destinations": ["finalize_document_storage", "send_to_all_destinations"],
-    # "classify" is defined in PIPELINE_STEP_TYPES but has no Celery log stages yet.
-    # When a classify task is implemented, add its stage key(s) here.
-    "classify": [],
+    "classify": ["classify_document"],
 }
 
 # These internal bookkeeping stages are always shown in the flow regardless of

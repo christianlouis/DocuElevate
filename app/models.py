@@ -940,6 +940,51 @@ class ScheduledJob(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class ClassificationRuleModel(Base):
+    """Custom document classification rule.
+
+    Rules are evaluated during the ``classify`` pipeline step to assign a
+    category to a document.  System-wide rules have ``owner_id IS NULL``;
+    user-specific rules belong to a single owner.
+    """
+
+    __tablename__ = "classification_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # NULL = system-wide rule visible to all users.
+    owner_id = Column(String, nullable=True, index=True)
+
+    # Human-readable rule name (unique per owner).
+    name = Column(String(255), nullable=False)
+
+    # Target category (e.g. "invoice", "contract", "receipt").
+    category = Column(String(100), nullable=False, index=True)
+
+    # Rule type: "filename_pattern", "content_keyword", or "metadata_match".
+    rule_type = Column(String(50), nullable=False)
+
+    # The matching pattern:
+    #   - filename_pattern: a regex
+    #   - content_keyword: pipe-separated keywords
+    #   - metadata_match: "field=value"
+    pattern = Column(String(1000), nullable=False)
+
+    # Higher priority rules are evaluated first (default 0).
+    priority = Column(Integer, nullable=False, default=0)
+
+    # Whether pattern matching is case-sensitive.
+    case_sensitive = Column(Boolean, nullable=False, default=False)
+
+    # Disabled rules are skipped during classification.
+    enabled = Column(Boolean, nullable=False, default=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (UniqueConstraint("owner_id", "name", name="uq_classification_rules_owner_name"),)
+
+
 class MobileDevice(Base):
     """Registered mobile device for push notifications.
 

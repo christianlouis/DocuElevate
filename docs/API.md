@@ -2293,6 +2293,163 @@ print(response.json())
 ```
 
 
+## Classification Rules
+
+The classification rules API lets you manage custom document classification rules.  Rules are evaluated during the `classify` pipeline step to assign a category to each document based on filename patterns, content keywords, and metadata fields.
+
+### Built-in Categories
+
+```bash
+GET /api/classification-rules/categories
+```
+
+Returns the pre-built classification categories.
+
+**Response (200):**
+```json
+{
+  "invoice": "Invoice",
+  "contract": "Contract",
+  "receipt": "Receipt",
+  "letter": "Letter",
+  "report": "Report",
+  "bank_statement": "Bank Statement",
+  "tax_document": "Tax Document",
+  "insurance": "Insurance Document",
+  "payslip": "Payslip",
+  "unknown": "Unknown"
+}
+```
+
+### Rule Types
+
+```bash
+GET /api/classification-rules/rule-types
+```
+
+Returns the supported rule types with descriptions.
+
+**Response (200):**
+```json
+[
+  {
+    "type": "filename_pattern",
+    "label": "Filename Pattern",
+    "description": "Regex pattern matched against the original filename."
+  },
+  {
+    "type": "content_keyword",
+    "label": "Content Keyword",
+    "description": "Pipe-separated keywords matched against the OCR text."
+  },
+  {
+    "type": "metadata_match",
+    "label": "Metadata Match",
+    "description": "field=value pattern matched against existing AI metadata."
+  }
+]
+```
+
+### List Rules
+
+```bash
+GET /api/classification-rules/
+```
+
+List all classification rules visible to the current user (system rules + own rules).
+
+**Response (200):**
+```json
+[
+  {
+    "id": 1,
+    "owner_id": "user@example.com",
+    "name": "German Invoice Filename",
+    "category": "invoice",
+    "rule_type": "filename_pattern",
+    "pattern": "(?i)rechnung",
+    "priority": 10,
+    "case_sensitive": false,
+    "enabled": true
+  }
+]
+```
+
+### Create Rule
+
+```bash
+POST /api/classification-rules/
+```
+
+Create a new custom classification rule.
+
+**Request:**
+```json
+{
+  "name": "German Invoice Filename",
+  "category": "invoice",
+  "rule_type": "filename_pattern",
+  "pattern": "(?i)rechnung",
+  "priority": 10,
+  "case_sensitive": false,
+  "enabled": true
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Unique rule name (per user) |
+| `category` | string | Yes | Target category (e.g. `invoice`, `contract`, or custom) |
+| `rule_type` | string | Yes | One of: `filename_pattern`, `content_keyword`, `metadata_match` |
+| `pattern` | string | Yes | Regex (filename), pipe-separated keywords (content), or `field=value` (metadata) |
+| `priority` | integer | No | Higher priority rules are evaluated first (default: 0) |
+| `case_sensitive` | boolean | No | Case-sensitive matching (default: false) |
+| `enabled` | boolean | No | Whether the rule is active (default: true) |
+
+**Response (201):**
+```json
+{
+  "id": 1,
+  "owner_id": "user@example.com",
+  "name": "German Invoice Filename",
+  "category": "invoice",
+  "rule_type": "filename_pattern",
+  "pattern": "(?i)rechnung",
+  "priority": 10,
+  "case_sensitive": false,
+  "enabled": true
+}
+```
+
+### Get Rule
+
+```bash
+GET /api/classification-rules/{rule_id}
+```
+
+### Update Rule
+
+```bash
+PUT /api/classification-rules/{rule_id}
+```
+
+**Request (partial update):**
+```json
+{
+  "priority": 20,
+  "enabled": false
+}
+```
+
+### Delete Rule
+
+```bash
+DELETE /api/classification-rules/{rule_id}
+```
+
+**Response:** `204 No Content`
+
+
 ## Further Assistance
 
 For additional help with the API, please contact our support team or refer to the [Development Guide](../CONTRIBUTING.md).

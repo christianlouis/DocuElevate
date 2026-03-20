@@ -62,6 +62,7 @@ from app.main import app as fastapi_app  # noqa: E402
 from app.models import (  # noqa: F401, E402
     ApiToken,
     AuditLog,
+    ClassificationRuleModel,
     ComplianceTemplate,
     DocumentMetadata,
     FileRecord,
