@@ -99,7 +99,9 @@
     "delete_account_title": "Delete Account",
     "delete_account_msg": "This will permanently delete your account and all associated data. This action cannot be undone.",
     "could_not_open": "Could not open the {page}. Please try again.",
-    "admin": "Admin"
+    "admin": "Admin",
+    "settings": "Settings",
+    "language": "Language"
   },
   "legal": {
     "privacy_policy": "Privacy Policy",

@@ -4,7 +4,7 @@
 
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
-import React, { useState } from "react";
+import React from "react";
 import {
   Alert,
   Image,
@@ -15,23 +15,33 @@ import {
   View,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
-import { getLanguage, getSupportedLanguages, setLanguage } from "../i18n";
+import { useLocale, getSupportedLanguages, t } from "../i18n";
+import api from "../services/api";
 
 const DEFAULT_SERVER_URL = "https://app.docuelevate.org";
 
 export default function ProfileScreen() {
   const { user, signOut, baseUrl } = useAuth();
-  const [selectedLanguage, setSelectedLanguage] = useState(getLanguage());
+  const { lang, setLang } = useLocale();
 
   const effectiveBaseUrl = baseUrl || DEFAULT_SERVER_URL;
   const appVersion = Constants.expoConfig?.version ?? "1.0.0";
   const languages = getSupportedLanguages();
 
+  async function handleLanguageSelect(code: string) {
+    await setLang(code);
+    // Fire-and-forget: sync the choice to the server so it persists across
+    // platforms (desktop web will reflect this preference too).
+    api.setServerLanguage(code).catch(() => {
+      // Network errors are non-critical – the local change is already applied.
+    });
+  }
+
   function handleSignOut() {
-    Alert.alert("Sign out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("profile.sign_out_title"), t("profile.sign_out_msg"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Sign out",
+        text: t("profile.sign_out"),
         style: "destructive",
         onPress: signOut,
       },
@@ -40,16 +50,16 @@ export default function ProfileScreen() {
 
   function handleDeleteAccount() {
     Alert.alert(
-      "Delete Account",
-      "This will permanently delete your account and all associated data. This action cannot be undone.",
+      t("profile.delete_account_title"),
+      t("profile.delete_account_msg"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Delete Account",
+          text: t("profile.delete_account"),
           style: "destructive",
           onPress: () => {
             Linking.openURL(`${effectiveBaseUrl}/account/delete`).catch(() => {
-              Alert.alert("Error", "Could not open the account deletion page. Please try again.");
+              Alert.alert(t("common.error"), t("profile.could_not_open", { page: t("profile.delete_account") }));
             });
           },
         },
@@ -59,26 +69,26 @@ export default function ProfileScreen() {
 
   function openPrivacyPolicy() {
     Linking.openURL(`${effectiveBaseUrl}/privacy`).catch(() => {
-      Alert.alert("Error", "Could not open the privacy policy. Please try again.");
+      Alert.alert(t("common.error"), t("profile.could_not_open", { page: t("profile.privacy_policy") }));
     });
   }
 
   function openTermsOfService() {
     Linking.openURL(`${effectiveBaseUrl}/terms`).catch(() => {
-      Alert.alert("Error", "Could not open the terms of service. Please try again.");
+      Alert.alert(t("common.error"), t("profile.could_not_open", { page: t("profile.terms_of_service") }));
     });
   }
 
   function openImprint() {
     Linking.openURL(`${effectiveBaseUrl}/imprint`).catch(() => {
-      Alert.alert("Error", "Could not open the imprint page. Please try again.");
+      Alert.alert(t("common.error"), t("profile.could_not_open", { page: t("profile.imprint") }));
     });
   }
 
   if (!user) {
     return (
       <View style={styles.center}>
-        <Text style={styles.emptyText}>Not signed in</Text>
+        <Text style={styles.emptyText}>{t("profile.not_signed_in")}</Text>
       </View>
     );
   }
@@ -102,20 +112,20 @@ export default function ProfileScreen() {
         )}
         <Text style={styles.displayName}>{user.display_name ?? user.owner_id}</Text>
         {user.email && <Text style={styles.email}>{user.email}</Text>}
-        {user.is_admin && <Text style={styles.adminBadge}>Admin</Text>}
+        {user.is_admin && <Text style={styles.adminBadge}>{t("profile.admin")}</Text>}
       </View>
 
       {/* Server info */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Connection</Text>
+        <Text style={styles.sectionTitle}>{t("profile.connection")}</Text>
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>Server</Text>
+          <Text style={styles.rowLabel}>{t("profile.server")}</Text>
           <Text style={styles.rowValue} numberOfLines={1}>
             {effectiveBaseUrl}
           </Text>
         </View>
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>User ID</Text>
+          <Text style={styles.rowLabel}>{t("profile.user_id")}</Text>
           <Text style={styles.rowValue} numberOfLines={1}>
             {user.owner_id}
           </Text>
@@ -124,31 +134,28 @@ export default function ProfileScreen() {
 
       {/* Settings */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Settings</Text>
-        <Text style={styles.settingLabel}>Language</Text>
+        <Text style={styles.sectionTitle}>{t("profile.settings")}</Text>
+        <Text style={styles.settingLabel}>{t("profile.language")}</Text>
         <View style={styles.languageGrid}>
-          {languages.map((lang) => (
+          {languages.map((l) => (
             <Pressable
-              key={lang.code}
+              key={l.code}
               style={[
                 styles.languageChip,
-                selectedLanguage === lang.code && styles.languageChipActive,
+                lang === l.code && styles.languageChipActive,
               ]}
-              onPress={() => {
-                setLanguage(lang.code);
-                setSelectedLanguage(lang.code);
-              }}
+              onPress={() => handleLanguageSelect(l.code)}
               accessibilityRole="button"
-              accessibilityLabel={`Set language to ${lang.label}`}
-              accessibilityState={{ selected: selectedLanguage === lang.code }}
+              accessibilityLabel={`Set language to ${l.label}`}
+              accessibilityState={{ selected: lang === l.code }}
             >
               <Text
                 style={[
                   styles.languageChipText,
-                  selectedLanguage === lang.code && styles.languageChipTextActive,
+                  lang === l.code && styles.languageChipTextActive,
                 ]}
               >
-                {lang.label}
+                {l.label}
               </Text>
             </Pressable>
           ))}
@@ -157,32 +164,32 @@ export default function ProfileScreen() {
 
       {/* Legal & Privacy */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Legal</Text>
+        <Text style={styles.sectionTitle}>{t("profile.legal")}</Text>
         <Pressable
           style={styles.linkRow}
           onPress={openPrivacyPolicy}
           accessibilityRole="link"
-          accessibilityLabel="Privacy Policy"
+          accessibilityLabel={t("profile.privacy_policy")}
         >
-          <Text style={styles.linkText}>Privacy Policy</Text>
+          <Text style={styles.linkText}>{t("profile.privacy_policy")}</Text>
           <Text style={styles.linkChevron}>›</Text>
         </Pressable>
         <Pressable
           style={styles.linkRow}
           onPress={openTermsOfService}
           accessibilityRole="link"
-          accessibilityLabel="Terms of Service"
+          accessibilityLabel={t("profile.terms_of_service")}
         >
-          <Text style={styles.linkText}>Terms of Service</Text>
+          <Text style={styles.linkText}>{t("profile.terms_of_service")}</Text>
           <Text style={styles.linkChevron}>›</Text>
         </Pressable>
         <Pressable
           style={[styles.linkRow, styles.linkRowLast]}
           onPress={openImprint}
           accessibilityRole="link"
-          accessibilityLabel="Imprint"
+          accessibilityLabel={t("profile.imprint")}
         >
-          <Text style={styles.linkText}>Imprint</Text>
+          <Text style={styles.linkText}>{t("profile.imprint")}</Text>
           <Text style={styles.linkChevron}>›</Text>
         </Pressable>
       </View>
@@ -193,9 +200,9 @@ export default function ProfileScreen() {
           style={styles.signOutButton}
           onPress={handleSignOut}
           accessibilityRole="button"
-          accessibilityLabel="Sign out"
+          accessibilityLabel={t("profile.sign_out")}
         >
-          <Text style={styles.signOutText}>Sign out</Text>
+          <Text style={styles.signOutText}>{t("profile.sign_out")}</Text>
         </Pressable>
       </View>
 
@@ -205,9 +212,9 @@ export default function ProfileScreen() {
           style={styles.deleteAccountButton}
           onPress={handleDeleteAccount}
           accessibilityRole="button"
-          accessibilityLabel="Delete account"
+          accessibilityLabel={t("profile.delete_account")}
         >
-          <Text style={styles.deleteAccountText}>Delete Account</Text>
+          <Text style={styles.deleteAccountText}>{t("profile.delete_account")}</Text>
         </Pressable>
       </View>
 

@@ -285,10 +285,19 @@ The mobile app supports five languages with automatic device-locale detection:
 
 ### How it works
 
-1. On app launch, `expo-localization` detects the device's preferred language
-2. If the device language matches a supported locale, that language is used automatically
-3. If no match is found, English is used as the fallback
-4. Users can manually switch languages from the **Profile** tab → **Settings** → **Language**
+Language priority (highest to lowest):
+
+1. **Server preference** — `preferred_language` returned by `GET /api/mobile/whoami` on login or app resume.  Allows a language set on the desktop web interface to propagate to mobile automatically.
+2. **AsyncStorage** — the last language explicitly selected on the device, used as an offline fallback when the server is unreachable.
+3. **Device locale** — detected via `expo-localization` on first launch.
+4. **English** — final fallback when none of the above match a supported locale.
+
+When a user selects a language on mobile the choice is:
+- Applied immediately to all screens (via `LocaleContext`)
+- Persisted locally to AsyncStorage
+- Synced to the server via `POST /api/i18n/language` (fire-and-forget), so the next desktop login reflects the same preference.
+
+> **Note**: If the server's preferred language is not supported by the mobile app (e.g. a locale added to the web frontend but not yet translated for mobile), the mobile app falls back to the next priority in the list above.
 
 ### Adding a new language
 
@@ -316,7 +325,8 @@ The backend exposes a dedicated `/api/mobile/` namespace:
 | `POST` | `/api/mobile/register-device` | Bearer | Register Expo push token |
 | `GET` | `/api/mobile/devices` | Bearer | List registered devices |
 | `DELETE` | `/api/mobile/devices/{id}` | Bearer | Deactivate a device |
-| `GET` | `/api/mobile/whoami` | Bearer | Get current user profile |
+| `GET` | `/api/mobile/whoami` | Bearer | Get current user profile (includes `preferred_language`) |
+| `POST` | `/api/i18n/language` | Bearer | Sync language preference to server |
 
 All other API endpoints (file upload, file listing, etc.) work with Bearer token authentication.
 
@@ -360,7 +370,7 @@ Re-registering the same token is safe (idempotent).
 
 ### GET /api/mobile/whoami
 
-Returns the current user's profile.
+Returns the current user's profile, including the server-stored language preference.
 
 **Response (200):**
 ```json
@@ -369,9 +379,14 @@ Returns the current user's profile.
   "display_name": "John Doe",
   "email": "john@example.com",
   "avatar_url": "https://www.gravatar.com/avatar/...",
-  "is_admin": false
+  "is_admin": false,
+  "preferred_language": "de"
 }
 ```
+
+`preferred_language` is `null` when no preference has been saved.  The mobile
+app applies this value on login / app resume, falling back to AsyncStorage and
+then the device locale when it is `null` or unsupported.
 
 ## Configuration
 

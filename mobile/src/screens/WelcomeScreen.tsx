@@ -17,27 +17,31 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-const FEATURES: { icon: string; title: string; description: string }[] = [
-  {
-    icon: "🔍",
-    title: "OCR & Text Extraction",
-    description: "Convert scanned PDFs and images into fully searchable text automatically.",
-  },
-  {
-    icon: "🤖",
-    title: "AI Metadata Extraction",
-    description: "AI classifies documents and pulls out key fields like dates, amounts, and subjects.",
-  },
-  {
-    icon: "☁️",
-    title: "Multi-Cloud Storage",
-    description: "Route processed files to Dropbox, Google Drive, OneDrive, S3, Nextcloud, and more.",
-  },
-];
+import { useLocale, t } from "../i18n";
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  // Subscribe to language changes so translated strings re-render.
+  useLocale();
+
+  const features = [
+    {
+      icon: "🔍",
+      title: t("welcome.feature_ocr_title"),
+      description: t("welcome.feature_ocr_desc"),
+    },
+    {
+      icon: "🤖",
+      title: t("welcome.feature_ai_title"),
+      description: t("welcome.feature_ai_desc"),
+    },
+    {
+      icon: "☁️",
+      title: t("welcome.feature_cloud_title"),
+      description: t("welcome.feature_cloud_desc"),
+    },
+  ];
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView
@@ -55,16 +59,13 @@ export default function WelcomeScreen() {
             />
           </View>
           <Text style={styles.appName}>DocuElevate</Text>
-          <Text style={styles.tagline}>Intelligent Document Processing</Text>
-          <Text style={styles.heroDescription}>
-            Ingest documents, run OCR, extract metadata with AI, and route files
-            to your cloud storage — all in one seamless pipeline.
-          </Text>
+          <Text style={styles.tagline}>{t("welcome.tagline")}</Text>
+          <Text style={styles.heroDescription}>{t("welcome.description")}</Text>
         </View>
 
         {/* Feature highlights */}
         <View style={styles.features}>
-          {FEATURES.map((feature) => (
+          {features.map((feature) => (
             <View key={feature.title} style={styles.featureRow}>
               <Text style={styles.featureIcon} aria-hidden={true}>{feature.icon}</Text>
               <View style={styles.featureText}>
@@ -80,42 +81,40 @@ export default function WelcomeScreen() {
           style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
           onPress={() => router.push("/(auth)/login")}
           accessibilityRole="button"
-          accessibilityLabel="Get started — connect to your DocuElevate server"
+          accessibilityLabel={t("welcome.get_started")}
         >
-          <Text style={styles.buttonText}>Get Started</Text>
+          <Text style={styles.buttonText}>{t("welcome.get_started")}</Text>
         </Pressable>
 
-        <Text style={styles.hint}>
-          Connect to your self-hosted or cloud DocuElevate server.
-        </Text>
+        <Text style={styles.hint}>{t("welcome.hint")}</Text>
 
         {/* Legal links – accessible pre-login for GDPR / Apple compliance */}
         <View style={styles.legalLinks}>
           <Pressable
             onPress={() => Linking.openURL("https://app.docuelevate.org/privacy")}
             accessibilityRole="link"
-            accessibilityLabel="Privacy Policy"
+            accessibilityLabel={t("legal.privacy_policy")}
             style={styles.legalLinkButton}
           >
-            <Text style={styles.legalLinkText}>Privacy Policy</Text>
+            <Text style={styles.legalLinkText}>{t("legal.privacy_policy")}</Text>
           </Pressable>
           <Text style={styles.legalSeparator}>·</Text>
           <Pressable
             onPress={() => Linking.openURL("https://app.docuelevate.org/terms")}
             accessibilityRole="link"
-            accessibilityLabel="Terms of Service"
+            accessibilityLabel={t("legal.terms")}
             style={styles.legalLinkButton}
           >
-            <Text style={styles.legalLinkText}>Terms</Text>
+            <Text style={styles.legalLinkText}>{t("legal.terms")}</Text>
           </Pressable>
           <Text style={styles.legalSeparator}>·</Text>
           <Pressable
             onPress={() => Linking.openURL("https://app.docuelevate.org/imprint")}
             accessibilityRole="link"
-            accessibilityLabel="Imprint"
+            accessibilityLabel={t("legal.imprint")}
             style={styles.legalLinkButton}
           >
-            <Text style={styles.legalLinkText}>Imprint</Text>
+            <Text style={styles.legalLinkText}>{t("legal.imprint")}</Text>
           </Pressable>
         </View>
       </ScrollView>

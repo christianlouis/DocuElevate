@@ -99,7 +99,9 @@
     "delete_account_title": "Supprimer le Compte",
     "delete_account_msg": "Cela supprimera définitivement votre compte et toutes les données associées. Cette action est irréversible.",
     "could_not_open": "Impossible d'ouvrir {page}. Veuillez réessayer.",
-    "admin": "Admin"
+    "admin": "Admin",
+    "settings": "Paramètres",
+    "language": "Langue"
   },
   "legal": {
     "privacy_policy": "Confidentialité",
