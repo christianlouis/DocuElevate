@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.161.0 (2026-03-20)
+
+### Documentation
+
+- Update scaling, health probe, and beat scheduler documentation
+  ([`4d019d5`](https://github.com/christianlouis/DocuElevate/commit/4d019d53d9ad161a68639d6ba2109ba3ac77df34))
+
+### Features
+
+- **scaling**: Enable horizontal scaling for API and worker pods
+  ([`f75b125`](https://github.com/christianlouis/DocuElevate/commit/f75b12599291050f97aa452d980f17547ddd7bd6))
+
+
 ## v0.160.3 (2026-03-20)
 
 ### Bug Fixes
