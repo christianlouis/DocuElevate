@@ -28,9 +28,10 @@ End users authorize their own Dropbox integration from the **Integrations** dash
 1. Navigate to `/integrations` and click **+ Add Destination** (or **+ Add Source** for Watch Folder).
 2. Create a Dropbox destination integration (or a Watch Folder with `source_type = dropbox`).
 3. Click the **Authorize** button next to the integration — it links directly to the OAuth wizard pre-loaded with your integration's configuration.
-4. Enter your Dropbox App Key and App Secret in the wizard (or use the global admin credentials if pre-configured).
+4. If the administrator has configured system-wide Dropbox app credentials (`DROPBOX_APP_KEY` / `DROPBOX_APP_SECRET`), the wizard defaults to using them — no need to register your own Dropbox app. Uncheck the toggle to use custom credentials if needed.
 5. Click **Start Authentication Flow**, authorize access in Dropbox, and the refresh token is automatically saved to your personal integration record.
-6. The page redirects back to `/integrations` on success. Re-authorization is available at any time via the **Re-Authorize** button.
+6. After authorization, an interactive **folder browser** lets you select the target folder directly from your Dropbox — no need to manually type folder paths.
+7. The page redirects to `/integrations` on success. Re-authorization is available at any time via the **Re-Authorize** button.
 
 > **Note:** Your credentials are stored encrypted per-integration and are never mixed with other users' data. Each user can have multiple Dropbox integrations with independent tokens.
 

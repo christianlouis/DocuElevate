@@ -1381,6 +1381,55 @@ Get the current user's integration quota usage.
 }
 ```
 
+## Cloud Provider Folder Browser
+
+Browse folders in connected cloud storage providers. These endpoints are used by the OAuth callback pages to let users select a target folder after authorization.
+
+### POST /api/dropbox/list-folders
+
+List folders in a Dropbox account. Requires a short-lived OAuth access token obtained during the authorization flow.
+
+**Request (form-data):**
+
+| Field          | Type   | Required | Description                          |
+|----------------|--------|----------|--------------------------------------|
+| `access_token` | string | Yes      | Dropbox OAuth access token           |
+| `path`         | string | No       | Folder path to list (default: root)  |
+
+**Response (200):**
+```json
+{
+  "folders": [
+    { "name": "Documents", "path": "/Documents", "id": "id:abc123" },
+    { "name": "Photos", "path": "/Photos", "id": "id:def456" }
+  ],
+  "path": "/",
+  "has_more": false
+}
+```
+
+### POST /api/onedrive/list-folders
+
+List folders in a OneDrive account. Requires a short-lived OAuth access token obtained during the authorization flow.
+
+**Request (form-data):**
+
+| Field          | Type   | Required | Description                          |
+|----------------|--------|----------|--------------------------------------|
+| `access_token` | string | Yes      | Microsoft Graph access token         |
+| `path`         | string | No       | Folder path to list (default: root)  |
+
+**Response (200):**
+```json
+{
+  "folders": [
+    { "name": "Documents", "path": "/Documents", "id": "abc123", "child_count": 5 },
+    { "name": "Pictures", "path": "/Pictures", "id": "def456", "child_count": 12 }
+  ],
+  "path": "/"
+}
+```
+
 ## Webhooks
 
 Manage webhook configurations for notifying external systems when document events occur. All webhook endpoints require admin access.
