@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.160.3 (2026-03-20)
+
+### Bug Fixes
+
+- **mobile**: Wire i18n reactivity, translate all screens, sync language with server
+  ([`3b5ca04`](https://github.com/christianlouis/DocuElevate/commit/3b5ca04ebc8b6dd20f877bc4797e364e0997d840))
+
+### Chores
+
+- **mobile**: Upgrade ESLint to v9 with flat config and fix expo-localization version
+  ([`0e6a4c5`](https://github.com/christianlouis/DocuElevate/commit/0e6a4c5084b3704653965f0091c36b9c78b8ad60))
+
+
 ## v0.160.2 (2026-03-20)
 
 ### Bug Fixes
