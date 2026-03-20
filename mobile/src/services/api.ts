@@ -26,6 +26,7 @@ export interface WhoAmIResponse {
   email: string | null;
   avatar_url: string | null;
   is_admin: boolean;
+  preferred_language: string | null;
 }
 
 export interface GenerateTokenResponse {
@@ -66,10 +67,42 @@ export interface FileRecord {
 }
 
 export interface UploadResponse {
-  task_id: string;
+  task_id?: string;
   status: string;
   original_filename: string;
   stored_filename: string;
+  duplicate_of?: {
+    duplicate_type: string;
+    original_file_id: number;
+    original_filename: string;
+    message: string;
+  };
+}
+
+export interface ProcessingLog {
+  id: number;
+  task_id: string;
+  step_name: string;
+  status: string;
+  message: string;
+  timestamp: string;
+}
+
+export interface FileDetail {
+  file: {
+    id: number;
+    filehash: string;
+    original_filename: string;
+    local_filename: string;
+    file_size: number;
+    mime_type: string;
+    created_at: string;
+  };
+  processing_status: ProcessingStatus;
+  logs: ProcessingLog[];
+  files_on_disk: {
+    original: boolean;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -177,6 +210,11 @@ class DocuElevateAPI {
     return this.request<WhoAmIResponse>("GET", "/api/mobile/whoami");
   }
 
+  /** Sync the user's preferred UI language to the server. */
+  async setServerLanguage(lang: string): Promise<void> {
+    await this.request("POST", "/api/i18n/language", { body: { language: lang } });
+  }
+
   // -------------------------------------------------------------------------
   // Push notifications
   // -------------------------------------------------------------------------
@@ -222,6 +260,11 @@ class DocuElevateAPI {
       `/api/files/${fileId}`
     );
     return data.processing_status;
+  }
+
+  /** Get full file details including processing logs. */
+  async getFileDetail(fileId: number): Promise<FileDetail> {
+    return this.request<FileDetail>("GET", `/api/files/${fileId}`);
   }
 }
 

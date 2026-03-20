@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.auth import require_login
 from app.config import settings
 from app.database import get_db
+from app.middleware.upload_rate_limit import require_upload_rate_limit
 from app.models import FileProcessingStep, FileRecord, ProcessingLog
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document
@@ -346,7 +347,9 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
 
     try:
         # Find all file records
-        file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+        query = db.query(FileRecord).filter(FileRecord.id.in_(file_ids))
+        query = apply_owner_filter(query, request)
+        file_records = query.all()
 
         if not file_records:
             raise HTTPException(status_code=404, detail="No files found with the provided IDs")
@@ -385,7 +388,9 @@ def bulk_reprocess_files(request: Request, file_ids: List[int], db: DbSession):
     """
     try:
         # Find all file records
-        file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+        query = db.query(FileRecord).filter(FileRecord.id.in_(file_ids))
+        query = apply_owner_filter(query, request)
+        file_records = query.all()
 
         if not file_records:
             raise HTTPException(status_code=404, detail="No files found with the provided IDs")
@@ -457,7 +462,9 @@ def bulk_reprocess_files_cloud_ocr(request: Request, file_ids: List[int], db: Db
     Useful for re-running OCR on files with poor text quality or missing OCR text.
     """
     try:
-        file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+        query = db.query(FileRecord).filter(FileRecord.id.in_(file_ids))
+        query = apply_owner_filter(query, request)
+        file_records = query.all()
 
         if not file_records:
             raise HTTPException(status_code=404, detail="No files found with the provided IDs")
@@ -537,7 +544,9 @@ def bulk_download_files(request: Request, file_ids: List[int], db: DbSession):
     Files not found on disk are silently skipped.
     """
     try:
-        file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+        query = db.query(FileRecord).filter(FileRecord.id.in_(file_ids))
+        query = apply_owner_filter(query, request)
+        file_records = query.all()
 
         if not file_records:
             raise HTTPException(status_code=404, detail="No files found with the provided IDs")
@@ -619,7 +628,9 @@ def reprocess_single_file(request: Request, file_id: int, db: DbSession):
     """
     try:
         # Find the file record
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        query = db.query(FileRecord).filter(FileRecord.id == file_id)
+        query = apply_owner_filter(query, request)
+        file_record = query.first()
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
@@ -675,7 +686,9 @@ def reprocess_with_cloud_ocr(request: Request, file_id: int, db: DbSession):
     """
     try:
         # Find the file record
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        query = db.query(FileRecord).filter(FileRecord.id == file_id)
+        query = apply_owner_filter(query, request)
+        file_record = query.first()
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
@@ -938,7 +951,9 @@ def retry_subtask(
     """
     try:
         # Find the file record
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        query = db.query(FileRecord).filter(FileRecord.id == file_id)
+        query = apply_owner_filter(query, request)
+        file_record = query.first()
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
@@ -1080,7 +1095,9 @@ def get_file_preview(
 
     try:
         # Find the file record
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        query = db.query(FileRecord).filter(FileRecord.id == file_id)
+        query = apply_owner_filter(query, request)
+        file_record = query.first()
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
@@ -1160,7 +1177,9 @@ def download_file(
 
     try:
         # Find the file record
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        query = db.query(FileRecord).filter(FileRecord.id == file_id)
+        query = apply_owner_filter(query, request)
+        file_record = query.first()
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
@@ -1249,7 +1268,12 @@ async def _save_upload_file_chunks(file: UploadFile, target_path: str, max_size:
 
 
 def _check_for_exact_duplicate(db: DbSession, target_path: str, safe_filename: str) -> dict | None:
-    """Check for an exact duplicate of the uploaded file and return a warning if found."""
+    """Check for an exact duplicate of the uploaded file.
+
+    Returns a dict with duplicate info when the file's SHA-256 hash matches an
+    already-processed document, or ``None`` when no duplicate is found (or
+    deduplication is disabled).
+    """
     if not settings.enable_deduplication:
         return None
 
@@ -1268,8 +1292,8 @@ def _check_for_exact_duplicate(db: DbSession, target_path: str, safe_filename: s
                 "original_file_id": existing.id,
                 "original_filename": existing.original_filename,
                 "message": (
-                    "This file appears to be an exact duplicate of an already-processed document. "
-                    "It will still be queued but will be flagged as a duplicate."
+                    "This file is an exact duplicate of an already-processed document. "
+                    "It has not been queued for processing again."
                 ),
             }
     except Exception as e:
@@ -1280,7 +1304,12 @@ def _check_for_exact_duplicate(db: DbSession, target_path: str, safe_filename: s
 
 @router.post("/ui-upload")
 @require_login
-async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...)):
+async def ui_upload(
+    request: Request,
+    db: DbSession,
+    file: UploadFile = File(...),
+    _rate_ok: None = Depends(require_upload_rate_limit),
+):
     """Endpoint to accept a user-uploaded file and enqueue it for processing."""
     workdir = settings.workdir
 
@@ -1366,6 +1395,25 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
     logger.info(f"Saved uploaded file '{safe_filename}' as '{target_filename}'")
     file_size = written_size
 
+    # ── Early duplicate rejection ──────────────────────────────────────────
+    # Check for exact duplicates (same SHA-256 hash) BEFORE enqueuing a
+    # processing task.  When deduplication is enabled and the file already
+    # exists, we skip processing entirely, clean up the temp file, and
+    # return the existing file's information to the caller.
+    exact_duplicate = _check_for_exact_duplicate(db, target_path, safe_filename)
+    if exact_duplicate:
+        # Remove the just-saved temp file — it's a duplicate.
+        try:
+            os.remove(target_path)
+        except OSError:
+            pass
+        return {
+            "status": "duplicate",
+            "original_filename": safe_filename,
+            "stored_filename": target_filename,
+            "duplicate_of": exact_duplicate,
+        }
+
     # Determine if the file is a PDF or needs conversion
     mime_type, _ = mimetypes.guess_type(target_path)
     file_ext = os.path.splitext(target_path)[1].lower()
@@ -1429,6 +1477,8 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
         ".tif",
         ".webp",
         ".svg",
+        ".heic",
+        ".heif",
     }:
         # If it's an image, convert to PDF first
         task = convert_to_pdf.delay(target_path, original_filename=safe_filename, owner_id=upload_owner_id)
@@ -1442,20 +1492,12 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
         logger.warning(f"Unsupported MIME type {mime_type} for {target_path}, attempting conversion")
         task = convert_to_pdf.delay(target_path, original_filename=safe_filename, owner_id=upload_owner_id)
 
-    # Check for exact duplicates (same SHA-256 hash) before returning.
-    # This gives the caller an immediate warning without waiting for the pipeline.
-    # Only performed when deduplication is enabled in settings.
-    exact_duplicate_warning = _check_for_exact_duplicate(db, target_path, safe_filename)
-
-    response: dict = {
+    return {
         "task_id": task.id,
         "status": "queued",
         "original_filename": safe_filename,
         "stored_filename": target_filename,
     }
-    if exact_duplicate_warning:
-        response["duplicate_warning"] = exact_duplicate_warning
-    return response
 
 
 # ---------------------------------------------------------------------------

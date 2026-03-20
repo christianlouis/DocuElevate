@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy import create_engine, exc
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
+from sqlalchemy.pool import NullPool, QueuePool
 
 from app.config import settings
 
@@ -17,9 +18,37 @@ logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
-# Parse the DATABASE_URL
+# ---------------------------------------------------------------------------
+# Engine construction
+# ---------------------------------------------------------------------------
 DB_URL = settings.database_url
-engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
+_parsed_url = make_url(DB_URL)
+
+_connect_args: dict[str, Any] = {}
+_engine_kwargs: dict[str, Any] = {
+    "pool_pre_ping": True,  # detect stale / dropped connections before use
+}
+
+if _parsed_url.get_backend_name() == "sqlite":
+    # SQLite does not benefit from connection pooling and is prone to
+    # QueuePool exhaustion under concurrent access.  NullPool opens a fresh
+    # connection for each request and closes it immediately afterwards,
+    # completely avoiding the "QueuePool limit reached" TimeoutError.
+    _connect_args["check_same_thread"] = False
+    _engine_kwargs["poolclass"] = NullPool
+else:
+    # PostgreSQL / MySQL — use a bounded QueuePool with configurable limits.
+    _engine_kwargs["poolclass"] = QueuePool
+    _engine_kwargs.update(
+        {
+            "pool_size": settings.db_pool_size,
+            "max_overflow": settings.db_max_overflow,
+            "pool_timeout": settings.db_pool_timeout,
+            "pool_recycle": settings.db_pool_recycle,
+        }
+    )
+
+engine = create_engine(DB_URL, connect_args=_connect_args, **_engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

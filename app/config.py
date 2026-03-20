@@ -13,6 +13,24 @@ class Settings(BaseSettings):
 
     database_url: str
     redis_url: str
+
+    # Database connection-pool tuning (ignored for SQLite, which uses NullPool).
+    db_pool_size: int = Field(
+        default=10,
+        description="Number of persistent connections kept in the pool per worker process.",
+    )
+    db_max_overflow: int = Field(
+        default=20,
+        description="Additional connections allowed beyond db_pool_size under burst load.",
+    )
+    db_pool_timeout: int = Field(
+        default=30,
+        description="Seconds to wait for a connection from the pool before raising a TimeoutError.",
+    )
+    db_pool_recycle: int = Field(
+        default=1800,
+        description="Recycle (close and reopen) connections after this many seconds to avoid stale connections.",
+    )
     openai_api_key: str
     openai_base_url: str = "https://api.openai.com/v1"  # Default to OpenAI's endpoint
     openai_model: str = "gpt-4o-mini"  # Default model
@@ -102,6 +120,16 @@ class Settings(BaseSettings):
     dropbox_app_secret: Optional[str] = None
     dropbox_folder: Optional[str] = None
     dropbox_refresh_token: Optional[str] = None
+    dropbox_allow_global_credentials_for_integrations: bool = Field(
+        default=False,
+        description=(
+            "When True, users may authorize their personal Dropbox integrations using the global "
+            "DROPBOX_APP_KEY / DROPBOX_APP_SECRET credentials configured by the admin, without "
+            "needing to create their own Dropbox app. The Dropbox OAuth flow is initiated "
+            "server-side so the app secret is never exposed to the browser. "
+            "Default: False (each user must supply their own app credentials)."
+        ),
+    )
 
     # Making Nextcloud optional
     nextcloud_enabled: bool = Field(
@@ -165,6 +193,16 @@ class Settings(BaseSettings):
     google_docai_processor_id: Optional[str] = None
     google_docai_location: str = "us"  # Processor location, e.g. "us" or "eu"
     external_hostname: str = "localhost"  # Default to localhost
+    public_base_url: Optional[str] = Field(
+        default=None,
+        description=(
+            "The full public base URL of the application, including scheme "
+            "(e.g., 'https://docuelevate.example.com'). "
+            "When set, this overrides the auto-detected URL for OAuth redirect URIs. "
+            "This is required when the application is behind a reverse proxy that does "
+            "not forward X-Forwarded-Proto headers correctly."
+        ),
+    )
 
     # ---------------------------------------------------------------------------
     # Document Translation Settings
@@ -299,6 +337,16 @@ class Settings(BaseSettings):
     social_auth_dropbox_enabled: bool = False
     social_auth_dropbox_client_id: Optional[str] = None
     social_auth_dropbox_client_secret: Optional[str] = None
+    social_auth_dropbox_use_global_credentials: bool = Field(
+        default=False,
+        description=(
+            "When True, Dropbox social login uses the global DROPBOX_APP_KEY / DROPBOX_APP_SECRET "
+            "credentials (the storage integration credentials) instead of requiring separate "
+            "SOCIAL_AUTH_DROPBOX_CLIENT_ID / SOCIAL_AUTH_DROPBOX_CLIENT_SECRET values. "
+            "Requires SOCIAL_AUTH_DROPBOX_ENABLED=True and the global Dropbox app credentials to be set. "
+            "Default: False."
+        ),
+    )
 
     # Local user signup
     allow_local_signup: bool = Field(
@@ -1113,6 +1161,20 @@ class Settings(BaseSettings):
             "Options: 'system' (follow OS preference), 'light', 'dark'. "
             "Individual users can override this with the in-app toggle; their choice is persisted in localStorage."
         ),
+    )
+
+    # Per-user upload rate limiting (health-aware, Redis-backed sliding window)
+    upload_rate_limit_per_user: int = Field(
+        default=20,
+        description=(
+            "Maximum number of file uploads allowed per user within the sliding window. "
+            "The effective limit may be reduced dynamically when the system is under heavy load "
+            "(high queue depth or CPU usage). Set to 0 to disable per-user upload rate limiting."
+        ),
+    )
+    upload_rate_limit_window: int = Field(
+        default=60,
+        description="Sliding window size in seconds for per-user upload rate limiting (default: 60).",
     )
 
     # Rate Limiting Configuration (see SECURITY_AUDIT.md and docs/API.md)

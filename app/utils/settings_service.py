@@ -39,6 +39,50 @@ SETTING_METADATA = {
         "required": True,
         "restart_required": True,
     },
+    "db_pool_size": {
+        "category": "Core",
+        "description": (
+            "Number of persistent database connections kept in the pool per worker process. "
+            "Ignored for SQLite (which uses NullPool). Default: 10."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_max_overflow": {
+        "category": "Core",
+        "description": (
+            "Additional database connections allowed beyond db_pool_size under burst load. "
+            "Ignored for SQLite. Default: 20."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_pool_timeout": {
+        "category": "Core",
+        "description": (
+            "Seconds to wait for a database connection from the pool before raising a TimeoutError. "
+            "Ignored for SQLite. Default: 30."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_pool_recycle": {
+        "category": "Core",
+        "description": (
+            "Recycle (close and reopen) database connections after this many seconds "
+            "to avoid stale connections. Ignored for SQLite. Default: 1800."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
     "workdir": {
         "category": "Core",
         "description": "Working directory for file storage and processing",
@@ -53,6 +97,18 @@ SETTING_METADATA = {
         "type": "string",
         "sensitive": False,
         "required": True,  # Required for OAuth redirects and external URLs
+        "restart_required": True,
+    },
+    "public_base_url": {
+        "category": "Core",
+        "description": (
+            "Full public base URL including scheme (e.g., https://docuelevate.example.com). "
+            "When set, overrides auto-detected URLs for OAuth redirect URIs. "
+            "Required when behind a reverse proxy that does not forward X-Forwarded-Proto."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
         "restart_required": True,
     },
     "debug": {
@@ -323,6 +379,19 @@ SETTING_METADATA = {
         ),
         "type": "string",
         "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_dropbox_use_global_credentials": {
+        "category": "Social Login",
+        "description": (
+            "When True, Dropbox social login uses the global DROPBOX_APP_KEY / DROPBOX_APP_SECRET "
+            "credentials instead of requiring separate SOCIAL_AUTH_DROPBOX_CLIENT_ID / "
+            "SOCIAL_AUTH_DROPBOX_CLIENT_SECRET values. "
+            "Requires SOCIAL_AUTH_DROPBOX_ENABLED=True and global Dropbox credentials to be set."
+        ),
+        "type": "boolean",
+        "sensitive": False,
         "required": False,
         "restart_required": True,
     },
@@ -716,6 +785,18 @@ SETTING_METADATA = {
         "description": "Dropbox OAuth refresh token",
         "type": "string",
         "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "dropbox_allow_global_credentials_for_integrations": {
+        "category": "Storage Providers",
+        "description": (
+            "When True, users may authorize their personal Dropbox integrations using the global "
+            "DROPBOX_APP_KEY / DROPBOX_APP_SECRET credentials configured by the admin, without "
+            "needing to create their own Dropbox app."
+        ),
+        "type": "boolean",
+        "sensitive": False,
         "required": False,
         "restart_required": False,
     },
@@ -2553,6 +2634,27 @@ SETTING_METADATA = {
         "category": "Security",
         "description": "Comma-separated 'Key:Value' pairs of extra headers for SIEM HTTP requests.",
         "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # Per-user upload rate limiting
+    "upload_rate_limit_per_user": {
+        "category": "Security",
+        "description": (
+            "Maximum number of uploads a single user may submit within upload_rate_limit_window seconds. "
+            "The health-aware limiter may reduce this dynamically under high Redis queue depth or CPU load. "
+            "Default: 20."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "upload_rate_limit_window": {
+        "category": "Security",
+        "description": ("Sliding window in seconds over which upload_rate_limit_per_user is enforced. Default: 60."),
+        "type": "integer",
         "sensitive": False,
         "required": False,
         "restart_required": False,

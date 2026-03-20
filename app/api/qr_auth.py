@@ -19,10 +19,13 @@ Security properties:
 
 from __future__ import annotations
 
+import base64
+import io
 import logging
 from datetime import datetime
 from typing import Annotated, Any
 
+import segno
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -72,6 +75,7 @@ class CreateChallengeResponse(BaseModel):
     expires_at: datetime
     ttl_seconds: int = Field(description="Seconds until the challenge expires (use for client-side countdown).")
     qr_payload: str = Field(description="The string to encode in the QR code.")
+    qr_code_svg: str = Field(description="Base64-encoded SVG data URI of the QR code, ready for use in an <img> src.")
 
 
 class ChallengeStatusResponse(BaseModel):
@@ -104,6 +108,29 @@ class ClaimChallengeResponse(BaseModel):
     name: str
     owner_id: str
     created_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+# QR code rendering parameters
+_QR_ERROR_LEVEL = "M"  # Medium error correction (~15% recovery); sufficient for on-screen display
+_QR_SCALE = 4  # Each QR module is rendered as 4×4 SVG pixels
+
+
+def _generate_qr_svg(payload: str) -> str:
+    """Generate a QR code for *payload* and return it as a base64 SVG data URI.
+
+    Using ``segno`` (pure-Python, no Pillow dependency) and SVG output so the
+    QR code scales crisply at any resolution without requiring a canvas or any
+    client-side JavaScript library.
+    """
+    qr = segno.make(payload, error=_QR_ERROR_LEVEL)
+    buf = io.BytesIO()
+    qr.save(buf, kind="svg", scale=_QR_SCALE, xmldecl=False, svgclass=None, lineclass=None, omitsize=True)
+    svg_bytes = buf.getvalue()
+    return "data:image/svg+xml;base64," + base64.b64encode(svg_bytes).decode("ascii")
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +170,7 @@ async def create_challenge(
         "expires_at": challenge.expires_at,
         "ttl_seconds": ttl_seconds,
         "qr_payload": qr_payload,
+        "qr_code_svg": _generate_qr_svg(qr_payload),
     }
 
 

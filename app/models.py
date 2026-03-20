@@ -786,6 +786,9 @@ class ApiToken(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     revoked_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Optional expiry: if set, the token is rejected after this timestamp.
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+
 
 class SharedLink(Base):
     """Shareable, time-limited or view-limited document link.
