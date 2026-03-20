@@ -24,6 +24,7 @@ from app.models import (  # noqa: F401
     ApplicationSettings,
     AuditLog,
     BackupRecord,
+    ClassificationRuleModel,
     ComplianceTemplate,
     DocumentMetadata,
     FileProcessingStep,

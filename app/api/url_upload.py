@@ -11,11 +11,12 @@ from typing import Optional
 
 import aiofiles
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, HttpUrl, field_validator
 
 from app.auth import require_login
 from app.config import settings
+from app.middleware.upload_rate_limit import require_upload_rate_limit
 from app.tasks.process_document import process_document
 from app.utils.allowed_types import ALLOWED_MIME_TYPES
 from app.utils.filename_utils import sanitize_filename
@@ -107,7 +108,11 @@ def validate_file_type(content_type: str, filename: str) -> bool:
 
 @router.post("/process-url")
 @require_login
-async def process_url(request: Request, url_request: URLUploadRequest):
+async def process_url(
+    request: Request,
+    url_request: URLUploadRequest,
+    _rate_ok: None = Depends(require_upload_rate_limit),
+):
     """
     Download a file from a URL and enqueue it for processing.
 

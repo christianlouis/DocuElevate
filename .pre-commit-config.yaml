@@ -48,6 +48,16 @@ repos:
             .env.demo
           )$
 
+  # Alembic migration chain validation
+  - repo: local
+    hooks:
+      - id: check-alembic-migrations
+        name: Check Alembic migration chain
+        entry: python scripts/check_alembic_migrations.py
+        language: python
+        pass_filenames: false
+        files: ^migrations/versions/.*\.py$
+
   # Conventional commits validation
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v3.0.0

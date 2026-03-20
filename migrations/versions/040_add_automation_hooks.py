@@ -1,7 +1,7 @@
 """Add automation_hooks table for Zapier / Make.com webhook subscriptions.
 
-Revision ID: 037_add_automation_hooks
-Revises: 036_add_document_translation_fields
+Revision ID: 040_add_automation_hooks
+Revises: 039_add_classification_rules
 Create Date: 2026-03-09
 """
 
@@ -10,8 +10,8 @@ from typing import Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "037_add_automation_hooks"
-down_revision: Union[str, None] = "036_add_document_translation_fields"
+revision: str = "040_add_automation_hooks"
+down_revision: Union[str, None] = "039_add_classification_rules"
 depends_on: Union[str, None] = None
 
 

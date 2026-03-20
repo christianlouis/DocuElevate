@@ -19,7 +19,7 @@ This guide covers all supported deployment methods for DocuElevate.
 - Access to required external services (if configured):
   - AI provider API key (OpenAI, Anthropic, Gemini, or other configured provider)
   - Azure Document Intelligence
-  - Dropbox, Google Drive, OneDrive, S3, or other storage APIs
+  - Dropbox, Google Drive, OneDrive, SharePoint, S3, or other storage APIs
   - SMTP / IMAP server (for email processing)
   - Notification services (Discord, Telegram, etc.)
 
@@ -349,15 +349,17 @@ workdir:
 
 ## Scaling
 
+DocuElevate is designed for horizontal scaling.  Both API and worker pods are stateless and can be scaled independently.
+
 ### Docker Compose
 
-Add more worker containers:
+Scale workers (task processing) and API pods (request handling) independently:
 
-```yaml
-worker:
-  deploy:
-    replicas: 3
+```bash
+docker compose up -d --scale worker=3 --scale api=2
 ```
+
+> **Note:** The `beat` service (Celery Beat scheduler) must always run as exactly **one** instance.  Do not scale it.  It publishes periodic tasks to the Redis broker; workers pick them up.
 
 ### Kubernetes / Helm
 
@@ -377,13 +379,15 @@ worker:
     maxReplicas: 10
 ```
 
+The Helm chart deploys a separate **beat** pod (always 1 replica, `Recreate` strategy) so that scheduled tasks are never duplicated when workers scale.
+
 ---
 
 ## Monitoring
 
 - **Docker Compose**: `docker-compose logs -f`, `docker stats`
 - **Kubernetes**: `kubectl logs -l app.kubernetes.io/component=api -f`
-- **Prometheus / Grafana**: Scrape the `/api/health` endpoint for readiness; add custom metrics as needed.
+- **Prometheus / Grafana**: Scrape the `/api/diagnostic/healthz/ready` endpoint for readiness; add custom metrics as needed.
 - **Uptime Kuma**: Set `UPTIME_KUMA_URL` to your push URL for heartbeat monitoring.
 
 ---

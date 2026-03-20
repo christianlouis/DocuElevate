@@ -103,11 +103,18 @@ if AUTH_ENABLED and settings.social_auth_apple_enabled:
         logger.warning("SOCIAL_AUTH_APPLE_ENABLED=true but client ID/team ID not configured")
 
 if AUTH_ENABLED and settings.social_auth_dropbox_enabled:
-    if settings.social_auth_dropbox_client_id and settings.social_auth_dropbox_client_secret:
+    # Determine which credentials to use for Dropbox social login
+    _dropbox_client_id = settings.social_auth_dropbox_client_id
+    _dropbox_client_secret = settings.social_auth_dropbox_client_secret
+    if settings.social_auth_dropbox_use_global_credentials and not _dropbox_client_id:
+        _dropbox_client_id = settings.dropbox_app_key
+        _dropbox_client_secret = settings.dropbox_app_secret
+
+    if _dropbox_client_id and _dropbox_client_secret:
         oauth.register(
             name="dropbox",
-            client_id=settings.social_auth_dropbox_client_id,
-            client_secret=settings.social_auth_dropbox_client_secret,
+            client_id=_dropbox_client_id,
+            client_secret=_dropbox_client_secret,
             authorize_url="https://www.dropbox.com/oauth2/authorize",
             access_token_url="https://api.dropboxapi.com/oauth2/token",
             userinfo_endpoint="https://api.dropboxapi.com/2/users/get_current_account",
@@ -129,6 +136,25 @@ def get_current_user(request: Request):
         return api_user
     session_user = request.session.get("user")
     if session_user:
+        # Validate server-side session if a session token is present
+        session_token = request.session.get("_session_token")
+        if session_token:
+            try:
+                from app.database import SessionLocal
+                from app.utils.session_manager import validate_session
+
+                db = SessionLocal()
+                try:
+                    valid = validate_session(db, session_token)
+                    if not valid:
+                        logger.debug("[AUTH] get_current_user: server-side session invalid — clearing")
+                        request.session.pop("user", None)
+                        request.session.pop("_session_token", None)
+                        return None
+                finally:
+                    db.close()
+            except Exception:
+                logger.debug("[AUTH] get_current_user: session validation error", exc_info=True)
         logger.debug(
             "[AUTH] get_current_user: resolved from session (user=%s)",
             session_user.get("preferred_username") or session_user.get("email") or session_user.get("id"),
@@ -166,6 +192,16 @@ def _resolve_bearer_user(request: Request, db: Session) -> dict | None:
     if db_token is None:
         logger.debug("[AUTH] _resolve_bearer_user: no active API token matched the provided hash")
         return None
+
+    # Reject tokens that have passed their optional expiry.
+    if db_token.expires_at is not None:
+        now_utc = datetime.now(timezone.utc)
+        expires_aware = db_token.expires_at
+        if expires_aware.tzinfo is None:
+            expires_aware = expires_aware.replace(tzinfo=timezone.utc)
+        if now_utc > expires_aware:
+            logger.debug("[AUTH] _resolve_bearer_user: API token id=%s has expired", db_token.id)
+            return None
 
     logger.debug(
         "[AUTH] _resolve_bearer_user: matched API token id=%s owner=%s",
@@ -481,6 +517,27 @@ async def social_callback(request: Request, provider: str, db: Session = Depends
 
         request.session["user"] = user_data
 
+        # Create server-side session for tracking and revocation
+        try:
+            from app.utils.session_manager import create_session
+
+            _session_user_id = (
+                user_data.get("sub")
+                or user_data.get("preferred_username")
+                or user_data.get("email")
+                or user_data.get("id")
+            )
+            if _session_user_id:
+                user_session = create_session(
+                    db,
+                    user_id=_session_user_id,
+                    ip_address=get_client_ip(request),
+                    user_agent=request.headers.get("user-agent"),
+                )
+                request.session["_session_token"] = user_session.session_token
+        except Exception:
+            logger.debug("[AUTH] Failed to create server-side session for social user", exc_info=True)
+
         # Auto-create or update UserProfile
         _ensure_user_profile(db, user_data, is_admin=False)
 
@@ -664,6 +721,27 @@ async def oauth_callback(request: Request, db: Session = Depends(get_db)):
         user_data["is_admin"] = is_admin
 
         request.session["user"] = user_data
+
+        # Create server-side session for tracking and revocation
+        try:
+            from app.utils.session_manager import create_session
+
+            _session_user_id = (
+                user_data.get("sub")
+                or user_data.get("preferred_username")
+                or user_data.get("email")
+                or user_data.get("id")
+            )
+            if _session_user_id:
+                user_session = create_session(
+                    db,
+                    user_id=_session_user_id,
+                    ip_address=get_client_ip(request),
+                    user_agent=request.headers.get("user-agent"),
+                )
+                request.session["_session_token"] = user_session.session_token
+        except Exception:
+            logger.debug("[AUTH] Failed to create server-side session for OAuth user", exc_info=True)
 
         # Auto-create or update UserProfile so the user appears in admin user management
         _ensure_user_profile(db, user_data, is_admin=is_admin)
@@ -918,6 +996,19 @@ async def auth(request: Request, db: Session = Depends(get_db)):
                 return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
             user_data = _build_session_user(local_user)
             request.session["user"] = user_data
+            # Create server-side session for tracking and revocation
+            try:
+                from app.utils.session_manager import create_session
+
+                user_session = create_session(
+                    db,
+                    user_id=local_user.email,
+                    ip_address=get_client_ip(request),
+                    user_agent=request.headers.get("user-agent"),
+                )
+                request.session["_session_token"] = user_session.session_token
+            except Exception:
+                logger.debug("[AUTH] Failed to create server-side session", exc_info=True)
             logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", local_user.email)
             _record_login_event(db, request, local_user.email, success=True)
             _ensure_user_profile(db, user_data, is_admin=bool(local_user.is_admin))
@@ -974,6 +1065,20 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             "is_admin": True,
         }
         request.session["user"] = admin_user_data
+        # Create server-side session for tracking and revocation
+        try:
+            from app.utils.session_manager import create_session
+
+            admin_user_id = settings.admin_username or "admin"
+            user_session = create_session(
+                db,
+                user_id=admin_user_id,
+                ip_address=get_client_ip(request),
+                user_agent=request.headers.get("user-agent"),
+            )
+            request.session["_session_token"] = user_session.session_token
+        except Exception:
+            logger.debug("[AUTH] Failed to create server-side session for admin", exc_info=True)
         logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", username)
         _record_login_event(db, request, username, success=True)
         _ensure_user_profile(db, admin_user_data, is_admin=True)
@@ -1024,6 +1129,20 @@ async def logout(request: Request, db: Session = Depends(get_db)):
         )
     except Exception:
         logger.debug("Failed to write logout audit event for user=%s", username, exc_info=True)
+    # Revoke server-side session
+    session_token = request.session.get("_session_token")
+    if session_token:
+        try:
+            from app.utils.session_manager import validate_session
+
+            user_session = validate_session(db, session_token)
+            if user_session:
+                user_session.is_revoked = True
+                user_session.revoked_at = datetime.now(timezone.utc)
+                db.commit()
+        except Exception:
+            logger.debug("[AUTH] Failed to revoke server-side session", exc_info=True)
+    request.session.pop("_session_token", None)
     request.session.pop("user", None)
     return RedirectResponse(url="/login?message=You+have+been+logged+out+successfully", status_code=302)
 

@@ -170,6 +170,12 @@ async def lifespan(app: FastAPI):
     # Startup: Initialize database
     init_db()  # Create tables if they don't exist
 
+    # Factory reset on startup — wipe all user data before anything else
+    if settings.factory_reset_on_startup:
+        from app.utils.system_reset import perform_startup_reset
+
+        perform_startup_reset()
+
     # Load settings from database after DB initialization
     from app.database import SessionLocal
     from app.utils.config_loader import load_settings_from_db
@@ -318,8 +324,19 @@ app.add_middleware(CSRFMiddleware, config=settings)
 #    See SECURITY_AUDIT.md – Infrastructure Security section
 app.add_middleware(AuditLogMiddleware, config=settings)
 
+
 # 3) Session Middleware (for request.session to work)
-app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+def _get_session_max_age() -> int:
+    """Compute session max-age at startup time."""
+    try:
+        from app.utils.session_manager import get_session_max_age_seconds
+
+        return get_session_max_age_seconds()
+    except Exception:
+        return 30 * 86400  # 30 days default fallback
+
+
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, max_age=_get_session_max_age())
 
 # 3a) CORS Middleware - handles cross-origin requests and preflight (OPTIONS) responses.
 #     Disabled by default: set CORS_ENABLED=True only when NOT using a reverse proxy

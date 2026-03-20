@@ -11,12 +11,19 @@ Configuration is primarily done through environment variables specified in a `.e
 | **Variable**           | **Description**                                          | **Example**                    |
 |------------------------|----------------------------------------------------------|--------------------------------|
 | `DATABASE_URL`         | Path/URL to the SQLite database (or other SQL backend). Use the [Database Wizard](/database-wizard) for guided setup. See [Database Configuration](DatabaseConfiguration.md). | `sqlite:///./app/database.db`  |
+| `DB_POOL_SIZE`         | Number of persistent connections in the pool per worker (PostgreSQL/MySQL only; ignored for SQLite). | `10` |
+| `DB_MAX_OVERFLOW`      | Additional connections beyond `DB_POOL_SIZE` under burst load (PostgreSQL/MySQL only). | `20` |
+| `DB_POOL_TIMEOUT`      | Seconds to wait for a pool connection before raising `TimeoutError` (PostgreSQL/MySQL only). | `30` |
+| `DB_POOL_RECYCLE`      | Recycle connections after this many seconds to avoid stale connections (PostgreSQL/MySQL only). | `1800` |
 | `REDIS_URL`            | URL for Redis, used by Celery for broker & result store. | `redis://redis:6379/0`         |
 | `WORKDIR`              | Working directory for the application.                  | `/workdir`                     |
 | `GOTENBERG_URL`        | Gotenberg PDF processing URL.                           | `http://gotenberg:3000`        |
 | `EXTERNAL_HOSTNAME`    | The external hostname for the application.             | `docuelevate.example.com`      |
+| `PUBLIC_BASE_URL`      | Full public base URL including scheme (e.g., `https://docuelevate.example.com`). When set, overrides auto-detected URLs used for OAuth redirect URIs. **Required when your reverse proxy does not forward `X-Forwarded-Proto` headers.** | *(not set)* |
 | `ALLOW_FILE_DELETE`    | Enable file deletion in the web interface (`true`/`false`). | `true`                      |
 | `COMPLIANCE_ENABLED`   | Enable the compliance templates dashboard (GDPR, HIPAA, SOC 2). | `true`                      |
+| `FACTORY_RESET_ON_STARTUP` | Wipe all user data on every startup (demo/testing). | `false` |
+| `ENABLE_FACTORY_RESET` | Show the System Reset page in the admin UI.         | `false` |
 
 ### Batch Processing Settings
 
@@ -78,6 +85,28 @@ Control how the web UI queues and paces file uploads to avoid overwhelming the b
 **Adaptive back-off**: The browser automatically slows down if the server responds with HTTP 429 (Too Many Requests). It reads the `Retry-After` header, pauses the queue for the indicated time, doubles the inter-slot delay (exponential back-off, capped at 30 s), and reduces concurrency to 1. After 5 consecutive successes it gradually recovers toward the configured values.
 
 **Example**: With `UPLOAD_CONCURRENCY=3` and `UPLOAD_QUEUE_DELAY_MS=500`, a directory of 5,000 files is uploaded ≈ 3 at a time with 500 ms pacing – the backend processes files at its own rate while the queue drains in the background without triggering API rate limits.
+
+### Per-User Upload Rate Limiting
+
+Server-side rate limiting that prevents any single user from overwhelming the system with bulk uploads. The limiter uses a Redis-backed sliding window and dynamically adjusts limits based on system health.
+
+| **Variable**                   | **Description**                                                                                                              | **Default** |
+|--------------------------------|------------------------------------------------------------------------------------------------------------------------------|-------------|
+| `UPLOAD_RATE_LIMIT_PER_USER`   | Maximum uploads allowed per user within the sliding window. Effective limit may be reduced under load.                       | `20`        |
+| `UPLOAD_RATE_LIMIT_WINDOW`     | Sliding window size in seconds.                                                                                              | `60`        |
+
+**Health-aware dynamic limiting**: The effective per-user limit is automatically reduced when the system is under heavy load:
+
+| **System condition**           | **Effective limit** | **Trigger**                    |
+|--------------------------------|---------------------|--------------------------------|
+| Normal                         | 100 % of base       | Queue < 50, CPU load normal    |
+| Moderate load                  | 50 % of base        | Queue 50–100 or CPU > 1.5×    |
+| High load                      | 25 % of base        | Queue 100–200 or CPU > 2×     |
+| Critical load                  | 10 % of base        | Queue > 200 or CPU > 3×       |
+
+When a user exceeds the limit, the server returns **HTTP 429 Too Many Requests** with a `Retry-After` header. The browser client (see *Client-Side Upload Throttling* above) automatically pauses and retries.
+
+> **Note**: The limiter fails open — if Redis is unavailable, all uploads are allowed through so that a monitoring outage never blocks document processing.
 
 ### File Upload Size Limits
 
@@ -364,6 +393,9 @@ Credentials are encrypted at rest using Fernet encryption.
 |-------------------------|---------------------------------------------------------------|
 | `AUTH_ENABLED`          | Enable or disable authentication (`true`/`false`).           |
 | `SESSION_SECRET`        | Secret key used to encrypt sessions and cookies (at least 32 chars). |
+| `SESSION_LIFETIME_DAYS` | Number of days before a server-side session expires. Default: `30`. |
+| `SESSION_LIFETIME_CUSTOM_DAYS` | Override for `SESSION_LIFETIME_DAYS` when set.        |
+| `QR_LOGIN_CHALLENGE_TTL_SECONDS` | How long a QR login challenge is valid (seconds). Default: `120`. |
 | `ADMIN_USERNAME`        | Username for basic authentication (when not using OIDC).     |
 | `ADMIN_PASSWORD`        | Password for basic authentication (when not using OIDC).     |
 | `ADMIN_GROUP_NAME`      | Group name in OIDC claims that grants admin access. Default: `admin`. |
@@ -1284,6 +1316,20 @@ For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveS
 
 For detailed setup instructions, see the [OneDrive Setup Guide](OneDriveSetup.md).
 
+### SharePoint Online
+
+| **Variable**                    | **Description**                                       |
+|---------------------------------|-------------------------------------------------------|
+| `SHAREPOINT_CLIENT_ID`          | Azure AD application client ID                        |
+| `SHAREPOINT_CLIENT_SECRET`      | Azure AD application client secret                    |
+| `SHAREPOINT_TENANT_ID`          | Azure AD tenant ID (use "common" for multi-tenant apps) |
+| `SHAREPOINT_REFRESH_TOKEN`      | OAuth 2.0 refresh token                               |
+| `SHAREPOINT_SITE_URL`           | SharePoint site URL (e.g. `https://tenant.sharepoint.com/sites/sitename`) |
+| `SHAREPOINT_DOCUMENT_LIBRARY`   | Document library name (default: `Documents`)          |
+| `SHAREPOINT_FOLDER_PATH`        | Subfolder path inside the document library            |
+
+SharePoint uses the same Microsoft Graph API as OneDrive. See the [OneDrive Setup Guide](OneDriveSetup.md) for Azure AD app registration instructions — the same app registration can be reused for SharePoint with the `Sites.ReadWrite.All` permission.
+
 ### Amazon S3
 
 | **Variable**                    | **Description**                                       |
@@ -1556,14 +1602,30 @@ DocuElevate detects and flags documents that share the same content, even if the
 
 ### Exact Duplicate Detection (SHA-256)
 
-When `ENABLE_DEDUPLICATION=True` (the default), each new document is hashed with SHA-256 before processing begins. If the hash matches an existing file record the new document is stored as a duplicate (`is_duplicate=True`, `duplicate_of_id=<original_id>`) and no further processing is performed.
+When `ENABLE_DEDUPLICATION=True` (the default), each new document is hashed with SHA-256 before processing begins. If the hash matches an existing file record the upload is rejected immediately — no processing task is created, and the temporary file is removed from disk. The `/api/ui-upload` response returns `"status": "duplicate"` together with a `duplicate_of` object that identifies the original file.
+
+If the same file somehow reaches the Celery worker (e.g. via a watch-folder ingest) it is still caught there and stored as a duplicate (`is_duplicate=True`, `duplicate_of_id=<original_id>`) with no further processing.
 
 | Variable | Description | Default |
 |---|---|---|
 | `ENABLE_DEDUPLICATION` | Hash-based exact duplicate detection on ingest. | `True` |
 | `SHOW_DEDUPLICATION_STEP` | Show the "Check for Duplicates" step in the processing timeline UI. | `True` |
 
-An immediate duplicate warning is also included in the `/api/ui-upload` JSON response so the frontend can alert the user before the pipeline completes.
+When the upload is an exact duplicate the `/api/ui-upload` response looks like:
+
+```json
+{
+  "status": "duplicate",
+  "original_filename": "invoice.pdf",
+  "stored_filename": "abc-123.pdf",
+  "duplicate_of": {
+    "duplicate_type": "exact",
+    "original_file_id": 42,
+    "original_filename": "invoice.pdf",
+    "message": "This file is an exact duplicate of an already-processed document. It has not been queued for processing again."
+  }
+}
+```
 
 ### Near-Duplicate Detection (Content Similarity)
 
@@ -1643,6 +1705,7 @@ For example:
 | S3           | `docs/uploads/`             | `docs/uploads/pdfa/`             |
 | Nextcloud    | `/Files`                    | `/Files/pdfa`                    |
 | OneDrive     | `Documents/Uploads`         | `Documents/Uploads/pdfa`         |
+| SharePoint   | `Uploads`                   | `Uploads/pdfa`                   |
 | Google Drive | *(folder ID)*               | `GOOGLE_DRIVE_PDFA_FOLDER_ID`    |
 
 Set `PDFA_UPLOAD_FOLDER` to an empty string to upload PDF/A files into the
@@ -1849,6 +1912,15 @@ ONEDRIVE_TENANT_ID=common
 ONEDRIVE_REFRESH_TOKEN=your_refresh_token
 ONEDRIVE_FOLDER_PATH=Documents/Uploads
 
+# SharePoint Online
+SHAREPOINT_CLIENT_ID=12345678-1234-1234-1234-123456789012
+SHAREPOINT_CLIENT_SECRET=your_client_secret
+SHAREPOINT_TENANT_ID=your-tenant-id
+SHAREPOINT_REFRESH_TOKEN=your_refresh_token
+SHAREPOINT_SITE_URL=https://tenant.sharepoint.com/sites/sitename
+SHAREPOINT_DOCUMENT_LIBRARY=Documents
+SHAREPOINT_FOLDER_PATH=Uploads
+
 # Amazon S3
 AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
 AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
@@ -1875,6 +1947,52 @@ BACKUP_RETAIN_WEEKLY=13
 ## Selective Service Configuration
 
 You can choose which document storage services to use by only including the relevant environment variables. For example, if you only want to use Dropbox, include only the Dropbox variables and omit the Paperless NGX and Nextcloud variables.
+
+## System Reset / Factory Reset
+
+DocuElevate provides two mechanisms for resetting the system to a clean state.  Both are **disabled by default** and must be explicitly enabled.
+
+### Automatic Reset on Startup
+
+Set `FACTORY_RESET_ON_STARTUP=true` to wipe all user data (database rows and work-files) every time the application starts.  This is useful for demo, testing, or ephemeral environments where you always want a fresh instance.
+
+```dotenv
+FACTORY_RESET_ON_STARTUP=true
+```
+
+> **Warning:** This destroys all documents, processing history, audit logs, and backups on every restart.  Application settings and configuration are preserved.
+
+### Admin UI Reset Page
+
+Set `ENABLE_FACTORY_RESET=true` to display the **System Reset** page in the admin navigation menu.  From this page, administrators can:
+
+| Action | Confirmation | Description |
+|--------|-------------|-------------|
+| **Full Reset** | Type `DELETE` | Wipes all database rows and work-files.  The system returns to its initial state. |
+| **Reset & Re-import** | Type `REIMPORT` | Copies original files to a `reimport/` folder inside the workdir, wipes everything, then configures the reimport folder as a watch folder so files are automatically re-ingested with the same processing pipeline, rate limits, and backoff strategy as regular uploads. |
+
+```dotenv
+ENABLE_FACTORY_RESET=true
+```
+
+### API Endpoints
+
+When `ENABLE_FACTORY_RESET=true`, two admin-only API endpoints are available:
+
+- `POST /api/admin/system-reset/full` — body: `{"confirmation": "DELETE"}`
+- `POST /api/admin/system-reset/reimport` — body: `{"confirmation": "REIMPORT"}`
+- `GET  /api/admin/system-reset/status` — returns current feature-flag state
+
+### What Gets Deleted
+
+| Deleted | Preserved |
+|---------|-----------|
+| All document records (`files` table) | Application settings (`application_settings` table) |
+| Processing logs and steps | User accounts and profiles |
+| Audit logs | Subscription plans |
+| Backup records | Pipelines and scheduled jobs |
+| Original, processed, and temporary files | The workdir directory itself |
+| Watch-folder caches and ingestion state | OAuth and integration configuration |
 
 ## Configuration File Location
 

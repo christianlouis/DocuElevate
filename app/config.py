@@ -13,6 +13,24 @@ class Settings(BaseSettings):
 
     database_url: str
     redis_url: str
+
+    # Database connection-pool tuning (ignored for SQLite, which uses NullPool).
+    db_pool_size: int = Field(
+        default=10,
+        description="Number of persistent connections kept in the pool per worker process.",
+    )
+    db_max_overflow: int = Field(
+        default=20,
+        description="Additional connections allowed beyond db_pool_size under burst load.",
+    )
+    db_pool_timeout: int = Field(
+        default=30,
+        description="Seconds to wait for a connection from the pool before raising a TimeoutError.",
+    )
+    db_pool_recycle: int = Field(
+        default=1800,
+        description="Recycle (close and reopen) connections after this many seconds to avoid stale connections.",
+    )
     openai_api_key: str
     openai_base_url: str = "https://api.openai.com/v1"  # Default to OpenAI's endpoint
     openai_model: str = "gpt-4o-mini"  # Default model
@@ -102,6 +120,16 @@ class Settings(BaseSettings):
     dropbox_app_secret: Optional[str] = None
     dropbox_folder: Optional[str] = None
     dropbox_refresh_token: Optional[str] = None
+    dropbox_allow_global_credentials_for_integrations: bool = Field(
+        default=False,
+        description=(
+            "When True, users may authorize their personal Dropbox integrations using the global "
+            "DROPBOX_APP_KEY / DROPBOX_APP_SECRET credentials configured by the admin, without "
+            "needing to create their own Dropbox app. The Dropbox OAuth flow is initiated "
+            "server-side so the app secret is never exposed to the browser. "
+            "Default: False (each user must supply their own app credentials)."
+        ),
+    )
 
     # Making Nextcloud optional
     nextcloud_enabled: bool = Field(
@@ -165,6 +193,35 @@ class Settings(BaseSettings):
     google_docai_processor_id: Optional[str] = None
     google_docai_location: str = "us"  # Processor location, e.g. "us" or "eu"
     external_hostname: str = "localhost"  # Default to localhost
+    public_base_url: Optional[str] = Field(
+        default=None,
+        description=(
+            "The full public base URL of the application, including scheme "
+            "(e.g., 'https://docuelevate.example.com'). "
+            "When set, this overrides the auto-detected URL for OAuth redirect URIs. "
+            "This is required when the application is behind a reverse proxy that does "
+            "not forward X-Forwarded-Proto headers correctly."
+        ),
+    )
+
+    # ---------------------------------------------------------------------------
+    # Document Translation Settings
+    # ---------------------------------------------------------------------------
+    # Default target language for automatic document translation (ISO 639-1 code).
+    # After OCR / metadata extraction, if the detected document language differs
+    # from this value the system translates the extracted text into this language
+    # and stores it alongside the original.  Other language translations are
+    # generated on the fly via the AI provider and are NOT persisted.
+    # Per-user overrides are stored in UserProfile.default_document_language.
+    default_document_language: str = Field(
+        default="en",
+        description=(
+            "ISO 639-1 language code for the default translation target "
+            "(e.g. 'en', 'de', 'fr'). Documents whose detected language "
+            "differs are automatically translated into this language after "
+            "processing. Default: 'en' (English)."
+        ),
+    )
 
     # ---------------------------------------------------------------------------
     # Document Translation Settings
@@ -190,6 +247,26 @@ class Settings(BaseSettings):
     admin_username: Optional[str] = None
     admin_password: Optional[str] = None
     session_secret: Optional[str] = None
+    session_lifetime_days: int = Field(
+        default=30,
+        description=(
+            "Session lifetime in days.  Common values: 30, 60, 90.  "
+            "Determines how long a user stays logged in before being required to re-authenticate.  "
+            "Applies to both browser sessions and the session cookie max_age."
+        ),
+    )
+    session_lifetime_custom_days: int | None = Field(
+        default=None,
+        description=(
+            "Override session_lifetime_days with a custom value.  "
+            "When set, this takes precedence over session_lifetime_days.  "
+            "Useful for admin-configured non-standard durations."
+        ),
+    )
+    qr_login_challenge_ttl_seconds: int = Field(
+        default=120,
+        description="Time-to-live in seconds for QR login challenges (default: 2 minutes).",
+    )
     admin_group_name: str = "admin"
 
     # Multi-user settings
@@ -279,6 +356,16 @@ class Settings(BaseSettings):
     social_auth_dropbox_enabled: bool = False
     social_auth_dropbox_client_id: Optional[str] = None
     social_auth_dropbox_client_secret: Optional[str] = None
+    social_auth_dropbox_use_global_credentials: bool = Field(
+        default=False,
+        description=(
+            "When True, Dropbox social login uses the global DROPBOX_APP_KEY / DROPBOX_APP_SECRET "
+            "credentials (the storage integration credentials) instead of requiring separate "
+            "SOCIAL_AUTH_DROPBOX_CLIENT_ID / SOCIAL_AUTH_DROPBOX_CLIENT_SECRET values. "
+            "Requires SOCIAL_AUTH_DROPBOX_ENABLED=True and the global Dropbox app credentials to be set. "
+            "Default: False."
+        ),
+    )
 
     # Local user signup
     allow_local_signup: bool = Field(
@@ -589,6 +676,15 @@ class Settings(BaseSettings):
     onedrive_refresh_token: Optional[str] = None  # Required for personal accounts
     onedrive_folder_path: Optional[str] = None
 
+    # SharePoint settings
+    sharepoint_client_id: Optional[str] = None
+    sharepoint_client_secret: Optional[str] = None
+    sharepoint_tenant_id: Optional[str] = "common"
+    sharepoint_refresh_token: Optional[str] = None
+    sharepoint_site_url: Optional[str] = None  # e.g. https://tenant.sharepoint.com/sites/sitename
+    sharepoint_document_library: Optional[str] = "Documents"  # Document library name
+    sharepoint_folder_path: Optional[str] = None  # Subfolder inside the library
+
     # AWS S3 settings
     s3_enabled: bool = Field(
         default=True,
@@ -636,6 +732,25 @@ class Settings(BaseSettings):
             "Enable the compliance templates dashboard (GDPR, HIPAA, SOC 2). "
             "When enabled, admins can view compliance status and apply "
             "pre-built regulatory configurations. Default: True."
+        ),
+    )
+
+    # System reset / factory reset settings
+    factory_reset_on_startup: bool = Field(
+        default=False,
+        description=(
+            "When enabled, DocuElevate wipes all user data (database rows and "
+            "work-files on disk) on every startup so the instance always comes "
+            "up in a clean, fresh state.  Useful for demo or testing environments. "
+            "Default: False."
+        ),
+    )
+    enable_factory_reset: bool = Field(
+        default=False,
+        description=(
+            "Show the 'System Reset' page in the admin UI.  When enabled, "
+            "administrators can trigger a full data wipe or a wipe-and-reimport "
+            "directly from the web interface.  Default: False."
         ),
     )
 
@@ -1071,6 +1186,20 @@ class Settings(BaseSettings):
             "Options: 'system' (follow OS preference), 'light', 'dark'. "
             "Individual users can override this with the in-app toggle; their choice is persisted in localStorage."
         ),
+    )
+
+    # Per-user upload rate limiting (health-aware, Redis-backed sliding window)
+    upload_rate_limit_per_user: int = Field(
+        default=20,
+        description=(
+            "Maximum number of file uploads allowed per user within the sliding window. "
+            "The effective limit may be reduced dynamically when the system is under heavy load "
+            "(high queue depth or CPU usage). Set to 0 to disable per-user upload rate limiting."
+        ),
+    )
+    upload_rate_limit_window: int = Field(
+        default=60,
+        description="Sliding window size in seconds for per-user upload rate limiting (default: 60).",
     )
 
     # Rate Limiting Configuration (see SECURITY_AUDIT.md and docs/API.md)

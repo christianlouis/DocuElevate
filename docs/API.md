@@ -27,8 +27,10 @@ DocuElevate implements rate limiting to protect against abuse and DoS attacks. R
 ### Default Limits
 
 - **Default endpoints**: 100 requests per minute
-- **File upload**: 600 requests per minute
+- **File upload**: 600 requests per minute (global) + 20 per user per 60 s (per-user, health-aware)
 - **Authentication**: 10 requests per minute
+
+**Per-user upload rate limiting**: Upload endpoints (`/api/ui-upload`, `/api/process-url`) enforce a per-user sliding-window limit that adapts to system load. Under heavy queue depth or high CPU usage, the effective limit is reduced automatically. See the [Configuration Guide](ConfigurationGuide.md#per-user-upload-rate-limiting) for details.
 
 **Note**: Document processing endpoints (OCR, metadata extraction) use built-in queue throttling to control processing rates and prevent upstream API overloads. No additional API-level rate limit is applied to processing endpoints.
 
@@ -53,6 +55,10 @@ RATE_LIMITING_ENABLED=true
 RATE_LIMIT_DEFAULT=100/minute
 RATE_LIMIT_UPLOAD=600/minute
 RATE_LIMIT_AUTH=10/minute
+
+# Per-user upload rate limiting (health-aware)
+UPLOAD_RATE_LIMIT_PER_USER=20   # Max uploads per user per window
+UPLOAD_RATE_LIMIT_WINDOW=60     # Sliding window in seconds
 ```
 
 See [Configuration Guide](ConfigurationGuide.md) for more details.
@@ -115,7 +121,8 @@ curl -X GET "http://<your-docuelevate-instance>/api/files" \
 |--------|----------|-------------|
 | `POST` | `/api/api-tokens/` | Create a new token |
 | `GET` | `/api/api-tokens/` | List all your tokens |
-| `DELETE` | `/api/api-tokens/{id}` | Revoke a token |
+| `DELETE` | `/api/api-tokens/{id}` | Revoke (active) or permanently delete (revoked) a token |
+| `POST` | `/api/api-tokens/{id}/reactivate` | Reactivate a revoked token |
 
 ### Session Authentication
 
@@ -235,17 +242,33 @@ The DocuElevate browser extension uses this endpoint to send files directly from
 
 **POST** `/api/ui-upload`
 
-Upload one or more files from your computer for processing.
+Upload a file from your computer for processing.
 
 **Request**:
-- Multipart form data with file(s)
+- Multipart form data with a single `file` field
 
-**Response**:
+**Response** (new file):
 ```json
 {
-  "success": true,
-  "file_ids": [123, 124],
-  "message": "Files uploaded and queued for processing"
+  "task_id": "abc-123",
+  "status": "queued",
+  "original_filename": "invoice.pdf",
+  "stored_filename": "a1b2c3d4.pdf"
+}
+```
+
+**Response** (exact duplicate, when `ENABLE_DEDUPLICATION=True`):
+```json
+{
+  "status": "duplicate",
+  "original_filename": "invoice.pdf",
+  "stored_filename": "e5f6a7b8.pdf",
+  "duplicate_of": {
+    "duplicate_type": "exact",
+    "original_file_id": 42,
+    "original_filename": "invoice.pdf",
+    "message": "This file is an exact duplicate of an already-processed document. It has not been queued for processing again."
+  }
 }
 ```
 
@@ -1356,7 +1379,7 @@ Test an integration connection without saving. Useful for "Test connection" UI b
 {"success": true, "message": "IMAP connection successful"}
 ```
 
-Supported connection tests: `IMAP`, `S3`, `WEBDAV`, `NEXTCLOUD`. Other types return a message that testing is not yet supported.
+Supported connection tests: `DROPBOX`, `IMAP`, `S3`, `WEBDAV`, `NEXTCLOUD`. Other types return a message that testing is not yet supported.
 
 ### GET /api/integrations/quota/
 
@@ -1378,6 +1401,55 @@ Get the current user's integration quota usage.
     "max_allowed": 1,
     "can_add": true
   }
+}
+```
+
+## Cloud Provider Folder Browser
+
+Browse folders in connected cloud storage providers. These endpoints are used by the OAuth callback pages to let users select a target folder after authorization.
+
+### POST /api/dropbox/list-folders
+
+List folders in a Dropbox account. Requires a short-lived OAuth access token obtained during the authorization flow.
+
+**Request (form-data):**
+
+| Field          | Type   | Required | Description                          |
+|----------------|--------|----------|--------------------------------------|
+| `access_token` | string | Yes      | Dropbox OAuth access token           |
+| `path`         | string | No       | Folder path to list (default: root)  |
+
+**Response (200):**
+```json
+{
+  "folders": [
+    { "name": "Documents", "path": "/Documents", "id": "id:abc123" },
+    { "name": "Photos", "path": "/Photos", "id": "id:def456" }
+  ],
+  "path": "/",
+  "has_more": false
+}
+```
+
+### POST /api/onedrive/list-folders
+
+List folders in a OneDrive account. Requires a short-lived OAuth access token obtained during the authorization flow.
+
+**Request (form-data):**
+
+| Field          | Type   | Required | Description                          |
+|----------------|--------|----------|--------------------------------------|
+| `access_token` | string | Yes      | Microsoft Graph access token         |
+| `path`         | string | No       | Folder path to list (default: root)  |
+
+**Response (200):**
+```json
+{
+  "folders": [
+    { "name": "Documents", "path": "/Documents", "id": "abc123", "child_count": 5 },
+    { "name": "Pictures", "path": "/Pictures", "id": "def456", "child_count": 12 }
+  ],
+  "path": "/"
 }
 ```
 
@@ -1570,6 +1642,47 @@ Lightweight endpoint returning the total number of queued + in-progress items. D
 ```
 
 ## Diagnostic
+
+### GET /api/diagnostic/healthz/live
+
+Lightweight liveness probe for Kubernetes.  Returns **200 OK** as long as the process is running.  This endpoint does **not** check external dependencies and is intentionally cheap.
+
+**Authentication:** None (designed for kubelet probes)
+
+**Response (200 OK):**
+```json
+{
+  "status": "ok"
+}
+```
+
+### GET /api/diagnostic/healthz/ready
+
+Readiness probe for Kubernetes.  Verifies that the application can serve traffic by checking database and Redis connectivity.
+
+**Authentication:** None (designed for kubelet probes)
+
+**Response (200 OK) – ready to serve traffic:**
+```json
+{
+  "status": "ready",
+  "checks": {
+    "database": {"status": "ok"},
+    "redis":    {"status": "ok"}
+  }
+}
+```
+
+**Response (503 Service Unavailable) – database unreachable:**
+```json
+{
+  "status": "not_ready",
+  "checks": {
+    "database": {"status": "error", "detail": "..."},
+    "redis":    {"status": "ok"}
+  }
+}
+```
 
 ### GET /api/diagnostic/health
 
@@ -2127,12 +2240,14 @@ Usage tracking records when each token was last used and from which IP address.
 
 ### POST /api/api-tokens/
 
-Create a new API token.
+Create a new API token.  Optionally specify a lifetime in days via
+`expires_in_days` (1–3650).  If omitted the token never expires.
 
 **Request:**
 ```json
 {
-  "name": "CI Pipeline"
+  "name": "CI Pipeline",
+  "expires_in_days": 90
 }
 ```
 
@@ -2147,7 +2262,8 @@ Create a new API token.
   "last_used_at": null,
   "last_used_ip": null,
   "created_at": "2026-03-08T12:00:00Z",
-  "revoked_at": null
+  "revoked_at": null,
+  "expires_at": "2026-06-06T12:00:00Z"
 }
 ```
 
@@ -2169,15 +2285,20 @@ List all tokens for the authenticated user. The full token value is never includ
     "last_used_at": "2026-03-08T15:30:00Z",
     "last_used_ip": "203.0.113.42",
     "created_at": "2026-03-08T12:00:00Z",
-    "revoked_at": null
+    "revoked_at": null,
+    "expires_at": "2026-06-06T12:00:00Z"
   }
 ]
 ```
 
 ### DELETE /api/api-tokens/{token_id}
 
-Revoke a token. The token is soft-deleted (kept for audit purposes) and can no
-longer be used for authentication.
+Revoke or permanently delete a token:
+
+* **Active token** – soft-revoked (kept for audit purposes, marked inactive).
+  Response: `{"detail": "Token revoked"}`
+* **Already-revoked token** – permanently deleted from the database.
+  Response: `{"detail": "Token deleted"}`
 
 **Response (200):**
 ```json
@@ -2185,6 +2306,13 @@ longer be used for authentication.
   "detail": "Token revoked"
 }
 ```
+
+### POST /api/api-tokens/{token_id}/reactivate
+
+Reactivate a previously revoked token.  Clears `revoked_at` and sets
+`is_active` back to `true`.
+
+**Response (200):** The updated `TokenResponse` object.
 
 ### Using API Tokens
 
@@ -2212,6 +2340,164 @@ response = requests.post(
 )
 print(response.json())
 ```
+
+
+## Classification Rules
+
+The classification rules API lets you manage custom document classification rules.  Rules are evaluated during the `classify` pipeline step to assign a category to each document based on filename patterns, content keywords, and metadata fields.
+
+### Built-in Categories
+
+```bash
+GET /api/classification-rules/categories
+```
+
+Returns the pre-built classification categories.
+
+**Response (200):**
+```json
+{
+  "invoice": "Invoice",
+  "contract": "Contract",
+  "receipt": "Receipt",
+  "letter": "Letter",
+  "report": "Report",
+  "bank_statement": "Bank Statement",
+  "tax_document": "Tax Document",
+  "insurance": "Insurance Document",
+  "payslip": "Payslip",
+  "unknown": "Unknown"
+}
+```
+
+### Rule Types
+
+```bash
+GET /api/classification-rules/rule-types
+```
+
+Returns the supported rule types with descriptions.
+
+**Response (200):**
+```json
+[
+  {
+    "type": "filename_pattern",
+    "label": "Filename Pattern",
+    "description": "Regex pattern matched against the original filename."
+  },
+  {
+    "type": "content_keyword",
+    "label": "Content Keyword",
+    "description": "Pipe-separated keywords matched against the OCR text."
+  },
+  {
+    "type": "metadata_match",
+    "label": "Metadata Match",
+    "description": "field=value pattern matched against existing AI metadata."
+  }
+]
+```
+
+### List Rules
+
+```bash
+GET /api/classification-rules/
+```
+
+List all classification rules visible to the current user (system rules + own rules).
+
+**Response (200):**
+```json
+[
+  {
+    "id": 1,
+    "owner_id": "user@example.com",
+    "name": "German Invoice Filename",
+    "category": "invoice",
+    "rule_type": "filename_pattern",
+    "pattern": "(?i)rechnung",
+    "priority": 10,
+    "case_sensitive": false,
+    "enabled": true
+  }
+]
+```
+
+### Create Rule
+
+```bash
+POST /api/classification-rules/
+```
+
+Create a new custom classification rule.
+
+**Request:**
+```json
+{
+  "name": "German Invoice Filename",
+  "category": "invoice",
+  "rule_type": "filename_pattern",
+  "pattern": "(?i)rechnung",
+  "priority": 10,
+  "case_sensitive": false,
+  "enabled": true
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Unique rule name (per user) |
+| `category` | string | Yes | Target category (e.g. `invoice`, `contract`, or custom) |
+| `rule_type` | string | Yes | One of: `filename_pattern`, `content_keyword`, `metadata_match` |
+| `pattern` | string | Yes | Regex (filename), pipe-separated keywords (content), or `field=value` (metadata) |
+| `priority` | integer | No | Higher priority rules are evaluated first (default: 0) |
+| `case_sensitive` | boolean | No | Case-sensitive matching (default: false) |
+| `enabled` | boolean | No | Whether the rule is active (default: true) |
+
+**Response (201):**
+```json
+{
+  "id": 1,
+  "owner_id": "user@example.com",
+  "name": "German Invoice Filename",
+  "category": "invoice",
+  "rule_type": "filename_pattern",
+  "pattern": "(?i)rechnung",
+  "priority": 10,
+  "case_sensitive": false,
+  "enabled": true
+}
+```
+
+### Get Rule
+
+```bash
+GET /api/classification-rules/{rule_id}
+```
+
+### Update Rule
+
+```bash
+PUT /api/classification-rules/{rule_id}
+```
+
+**Request (partial update):**
+```json
+{
+  "priority": 20,
+  "enabled": false
+}
+```
+
+### Delete Rule
+
+```bash
+DELETE /api/classification-rules/{rule_id}
+```
+
+**Response:** `204 No Content`
+
 
 
 ## Automation (Zapier / Make.com)
@@ -2368,6 +2654,8 @@ Automation hook deliveries follow the same retry policy as regular webhooks: up 
 
 ## Further Assistance
 
+## Further Assistance
+
 For additional help with the API, please contact our support team or refer to the [Development Guide](../CONTRIBUTING.md).
 
 ## Mobile App API
@@ -2420,9 +2708,14 @@ List all registered push-notification devices for the current user.
 
 ### DELETE /api/mobile/devices/{device_id}
 
-Deactivate a push-notification device.  The device will no longer receive push notifications.
+Deactivate or permanently delete a push-notification device:
 
-**Response (204 No Content)**
+* **Active device** – soft-deactivated (record kept, will no longer receive push notifications).
+  Response: `{"detail": "Device deactivated"}`
+* **Already-inactive device** – permanently deleted from the database.
+  Response: `{"detail": "Device deleted"}`
+
+**Response (200)**
 
 ### GET /api/mobile/whoami
 
@@ -2557,3 +2850,64 @@ query GetDocument($id: Int!) {
 }
 ```
 Variables: `{ "id": 42 }`
+
+## System Reset
+
+Admin-only endpoints for resetting the system to a clean state.  Requires `ENABLE_FACTORY_RESET=True`.
+
+### GET /api/admin/system-reset/status
+
+Check whether the system reset feature is enabled.
+
+**Response (200):**
+```json
+{
+  "enabled": true,
+  "factory_reset_on_startup": false
+}
+```
+
+### POST /api/admin/system-reset/full
+
+Wipe all user data (database + work-files).
+
+**Request:**
+```json
+{
+  "confirmation": "DELETE"
+}
+```
+
+**Response (200):**
+```json
+{
+  "status": "ok",
+  "result": {
+    "database": { "files": 42, "processing_logs": 100 },
+    "filesystem": { "deleted_dirs": 5, "deleted_files": 12 }
+  }
+}
+```
+
+### POST /api/admin/system-reset/reimport
+
+Move original files to a reimport folder, wipe everything, and configure the reimport folder as a watch folder for re-ingestion.
+
+**Request:**
+```json
+{
+  "confirmation": "REIMPORT"
+}
+```
+
+**Response (200):**
+```json
+{
+  "status": "ok",
+  "result": {
+    "database": { "files": 42 },
+    "filesystem": { "deleted_dirs": 5, "deleted_files": 12 },
+    "reimport": { "files_moved": 42, "reimport_folder": "/workdir/reimport" }
+  }
+}
+```

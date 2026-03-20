@@ -10,6 +10,339 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.163.0 (2026-03-20)
+
+### Bug Fixes
+
+- **security**: Escape HTML in folder browser to prevent XSS from folder names
+  ([`b3a2387`](https://github.com/christianlouis/DocuElevate/commit/b3a238744d1618b7f891b7c43f243dd9099ecf49))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`65cf33c`](https://github.com/christianlouis/DocuElevate/commit/65cf33ce89cfcb7f81f31278a2cf6523c32a4754))
+
+### Documentation
+
+- Update setup guides and API docs for folder browser and system credentials
+  ([`d6c21b8`](https://github.com/christianlouis/DocuElevate/commit/d6c21b8026ccc8fb71ed12394faba08214e0793d))
+
+### Features
+
+- **api**: Add folder browser API endpoints and UI for Dropbox and OneDrive
+  ([`a842306`](https://github.com/christianlouis/DocuElevate/commit/a8423064ec72bf8014ca37936960c5da9ddcea1f))
+
+- **auth**: Default to system-wide app credentials in OAuth wizards for user mode
+  ([`23c8c76`](https://github.com/christianlouis/DocuElevate/commit/23c8c76b392a95e723f25f8cb3714d4e5f256b30))
+
+- **ui**: Replace manual credential fields with OAuth wizard flow for watch folder sources
+  ([`ed01952`](https://github.com/christianlouis/DocuElevate/commit/ed0195261032fb92df5f655a73f056ac380fe8b6))
+
+### Testing
+
+- Add tests for folder browser APIs and system credentials toggle
+  ([`1e1e6e6`](https://github.com/christianlouis/DocuElevate/commit/1e1e6e62807a6d4b7bc84b2d8c967dceb97f1cb6))
+
+
+## v0.162.0 (2026-03-20)
+
+
+## v0.161.0 (2026-03-20)
+
+### Documentation
+
+- Update scaling, health probe, and beat scheduler documentation
+  ([`4d019d5`](https://github.com/christianlouis/DocuElevate/commit/4d019d53d9ad161a68639d6ba2109ba3ac77df34))
+
+### Features
+
+- **scaling**: Enable horizontal scaling for API and worker pods
+  ([`f75b125`](https://github.com/christianlouis/DocuElevate/commit/f75b12599291050f97aa452d980f17547ddd7bd6))
+
+
+## v0.160.3 (2026-03-20)
+
+### Bug Fixes
+
+- **mobile**: Wire i18n reactivity, translate all screens, sync language with server
+  ([`3b5ca04`](https://github.com/christianlouis/DocuElevate/commit/3b5ca04ebc8b6dd20f877bc4797e364e0997d840))
+
+### Chores
+
+- **mobile**: Upgrade ESLint to v9 with flat config and fix expo-localization version
+  ([`0e6a4c5`](https://github.com/christianlouis/DocuElevate/commit/0e6a4c5084b3704653965f0091c36b9c78b8ad60))
+
+
+## v0.160.2 (2026-03-20)
+
+### Bug Fixes
+
+- **dropbox**: Fix Invalid redirect_uri error by adding PUBLIC_BASE_URL config and URL-encoding
+  ([`5e3e2b1`](https://github.com/christianlouis/DocuElevate/commit/5e3e2b19997d3af6570fbaa1e75a49cbfe6cf78d))
+
+
+## v0.160.1 (2026-03-20)
+
+### Bug Fixes
+
+- **mobile**: Update expo-localization version from ~16.0.6 to ~16.1.0
+  ([`78c3717`](https://github.com/christianlouis/DocuElevate/commit/78c3717661923b43f1762fa7728c75e803938fb7))
+
+
+## v0.160.0 (2026-03-20)
+
+### Bug Fixes
+
+- **mobile**: Address code review feedback - error handling, filename collision, hash display
+  ([`6541529`](https://github.com/christianlouis/DocuElevate/commit/65415292507aa37408428400aef7e87e006abfd0))
+
+### Features
+
+- **mobile**: Add pre-login legal pages, multi-image selection, file detail view, search, i18n, HEIC
+  support
+  ([`67c17e7`](https://github.com/christianlouis/DocuElevate/commit/67c17e7baa8edf76be394d0aff42c2adeae351e1))
+
+
+## v0.159.0 (2026-03-19)
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`910fb29`](https://github.com/christianlouis/DocuElevate/commit/910fb297ba1122b751250b323a330e15e276daf6))
+
+### Features
+
+- **integrations**: Add Dropbox connection test and global-credential sharing
+  ([`d1f9819`](https://github.com/christianlouis/DocuElevate/commit/d1f9819f4e12320bb901b76366fa8d4a8cd23a66))
+
+
+## v0.158.4 (2026-03-19)
+
+### Bug Fixes
+
+- **ui**: Show proper error when signup username has invalid characters
+  ([`689c616`](https://github.com/christianlouis/DocuElevate/commit/689c616e448bf3edfcb91b347ae9f6fac43b1983))
+
+
+## v0.158.3 (2026-03-19)
+
+### Bug Fixes
+
+- **upload**: Reject exact duplicates at upload time and prevent duplicate mobile uploads
+  ([`d5c18cc`](https://github.com/christianlouis/DocuElevate/commit/d5c18ccf07efa28532724a78e63cc6bd7eab9515))
+
+### Refactoring
+
+- **mobile**: Extract normalizeFileUri to shared utility module
+  ([`ec88221`](https://github.com/christianlouis/DocuElevate/commit/ec882214e29d22da9d8025ea857ba754fbddae37))
+
+
+## v0.158.2 (2026-03-19)
+
+### Bug Fixes
+
+- **mobile**: Add user feedback when server URL is unavailable
+  ([`1366317`](https://github.com/christianlouis/DocuElevate/commit/136631762bc81399aecd5766663da7d923cba985))
+
+- **mobile**: Apple App Store compliance fixes
+  ([`5c15a23`](https://github.com/christianlouis/DocuElevate/commit/5c15a2395a0dcfa5fe5cf1a34a98ae743d29eabc))
+
+- **mobile**: Fix file sharing deep-link conflicts and add MIME type inference
+  ([`1559686`](https://github.com/christianlouis/DocuElevate/commit/1559686f903808e2ab4547f21575460aaeca839e))
+
+- **mobile**: Fix shared file upload hanging by copying to cache
+  ([`f549505`](https://github.com/christianlouis/DocuElevate/commit/f549505bfd625100e77a170cfcae372913680835))
+
+### Documentation
+
+- Add Apple App Store Compliance audit report
+  ([`1572f32`](https://github.com/christianlouis/DocuElevate/commit/1572f322d72583c45c88e55ea51b2456e548de4c))
+
+### Refactoring
+
+- **mobile**: Extract shared MIME type utility and improve error handling
+  ([`cfe83d7`](https://github.com/christianlouis/DocuElevate/commit/cfe83d7efa7f93ca51bfcac417cfafc650bbc36b))
+
+
+## v0.158.1 (2026-03-19)
+
+### Bug Fixes
+
+- **mobile**: Add shared file to ShareContext directly in +not-found.tsx
+  ([`71a7a57`](https://github.com/christianlouis/DocuElevate/commit/71a7a57adc1bb6de88c060dba563afa433283e38))
+
+
+## v0.158.0 (2026-03-19)
+
+### Bug Fixes
+
+- Address code review feedback (assertion, exc_info logging)
+  ([`faa68ad`](https://github.com/christianlouis/DocuElevate/commit/faa68adaa143774a8757fda4fd0248cc3aef551e))
+
+- **config**: Add SETTING_METADATA for db pool and upload rate limit settings
+  ([`1d7286c`](https://github.com/christianlouis/DocuElevate/commit/1d7286c4c68de903951d9819bcb58ae1300dab7b))
+
+- **config**: Remove duplicate dictionary keys and class fields from merge
+  ([`d34b8bc`](https://github.com/christianlouis/DocuElevate/commit/d34b8bceb9f96719bf5c922156d5487a4c6426b4))
+
+- **db**: Use NullPool for SQLite and expose pool tuning settings
+  ([`56bf665`](https://github.com/christianlouis/DocuElevate/commit/56bf66539757cf1d98fe251ad64fb75b481462ef))
+
+- **tests**: Add docstring to rate limiter no-op override
+  ([`c9f9001`](https://github.com/christianlouis/DocuElevate/commit/c9f900124407baa230b38f6e1d0f5ee78e0bedcc))
+
+- **tests**: Disable upload rate limiter in test client fixture
+  ([`6bf121f`](https://github.com/christianlouis/DocuElevate/commit/6bf121f02f2c32f7b73435f42d30b9681710089e))
+
+### Features
+
+- **api**: Add per-user health-aware upload rate limiting
+  ([`571cc81`](https://github.com/christianlouis/DocuElevate/commit/571cc817893a1f4cbd7cfbee7f1c46ca1a4f14d8))
+
+
+## v0.157.2 (2026-03-19)
+
+### Bug Fixes
+
+- **ui**: Improve devices page table layout to prevent horizontal scrolling
+  ([`b12e891`](https://github.com/christianlouis/DocuElevate/commit/b12e8916824273eefb85f0bb498d4991e8c66d5e))
+
+
+## v0.157.1 (2026-03-19)
+
+### Bug Fixes
+
+- **mobile**: Resolve iOS "unmatched route docuelevate://" error in Open In share flow
+  ([`f2b7db8`](https://github.com/christianlouis/DocuElevate/commit/f2b7db88ba86e894a9bf2e4e7d6a54cd7f423194))
+
+
+## v0.157.0 (2026-03-19)
+
+### Features
+
+- **api**: Allow disabled tokens/devices to be deleted & reactivated; add token lifetime
+  ([`e4749b4`](https://github.com/christianlouis/DocuElevate/commit/e4749b4e7cdd78ab95627736d3fcd84fecc55e53))
+
+
+## v0.156.3 (2026-03-18)
+
+### Bug Fixes
+
+- **auth**: Exempt /api/qr-auth/claim from CSRF to fix mobile QR login
+  ([`a4aaebf`](https://github.com/christianlouis/DocuElevate/commit/a4aaebfe6649ef051790b6af24e0739bdd9ecfed))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`d8d2016`](https://github.com/christianlouis/DocuElevate/commit/d8d2016f8597f775cdf3848e7baeaae98cb998b0))
+
+
+## Unreleased
+
+
+## v0.156.2 (2026-03-18)
+
+### Bug Fixes
+
+- **qr-login**: Render QR code server-side using segno instead of CDN JS library
+  ([`a8eb650`](https://github.com/christianlouis/DocuElevate/commit/a8eb6504ac100c14b10f57511fde8f1202deeffe))
+
+### Chores
+
+- Initial plan for server-side QR code rendering
+  ([`6727253`](https://github.com/christianlouis/DocuElevate/commit/6727253958a6ae8436fc1184736ec43eef2ab820))
+
+- Remove accidentally committed =1.6.0 file
+  ([`ba8c88b`](https://github.com/christianlouis/DocuElevate/commit/ba8c88bc17d3245cba6079ac5ba3be5fddf36366))
+
+
+## v0.156.1 (2026-03-18)
+
+### Bug Fixes
+
+- Add missing SETTING_METADATA entries for db pool and upload rate limit settings
+  ([`dc0a19b`](https://github.com/christianlouis/DocuElevate/commit/dc0a19bd118d3503ad50608f55fb0bc4ce104948))
+
+
+## v0.156.0 (2026-03-17)
+
+### Bug Fixes
+
+- **storage**: Use RuntimeError instead of bare Exception in SharePoint task
+  ([`2b698cc`](https://github.com/christianlouis/DocuElevate/commit/2b698cc6940fb731b1ab87300ad0f7fdebc8f024))
+
+- **test**: Add missing _should_upload_to_sharepoint mock to send_to_all tests
+  ([`bcf2d00`](https://github.com/christianlouis/DocuElevate/commit/bcf2d00c3324a3ded3852e16759ea4d0af3af666))
+
+### Documentation
+
+- Add SharePoint setup guide and update all references
+  ([`13aa14b`](https://github.com/christianlouis/DocuElevate/commit/13aa14b8e4102437f72f6c260b2795a6ee761eb9))
+
+### Features
+
+- **storage**: Add SharePoint integration for document storage
+  ([`b85fc1d`](https://github.com/christianlouis/DocuElevate/commit/b85fc1d277475c06c1efa100c391b7a3c43e7c25))
+
+
+## v0.155.1 (2026-03-17)
+
+### Bug Fixes
+
+- **api**: Add ttl_seconds to QR challenge response and fix client-side countdown
+  ([`0f6a1ee`](https://github.com/christianlouis/DocuElevate/commit/0f6a1ee1ec8186d70afc17abe50258c968058c92))
+
+- **mobile**: Replace gap with marginLeft for React Native compatibility
+  ([`70b193e`](https://github.com/christianlouis/DocuElevate/commit/70b193e07d2f85e353b6b12c56bf5bcbf828ee24))
+
+### Documentation
+
+- Update QR code login documentation with scanner and TTL details
+  ([`723b14e`](https://github.com/christianlouis/DocuElevate/commit/723b14e660737887c454b8e8300ac38bb390841f))
+
+
+## v0.155.0 (2026-03-17)
+
+
+## v0.154.0 (2026-03-17)
+
+### Bug Fixes
+
+- **db**: Address code review feedback - fix comment stripping, type hints, test skip, and docs
+  ([`a007b4f`](https://github.com/christianlouis/DocuElevate/commit/a007b4fd98ed327a9874082766e0f3b8c32a1a68))
+
+### Features
+
+- **db**: Add migration chain CI validation, pre-commit hook, script template, docs, and tests
+  ([`aa49fa3`](https://github.com/christianlouis/DocuElevate/commit/aa49fa3ae6ae0bfbb0f9efa6304cf109eca1c402))
+
+
+## v0.153.1 (2026-03-16)
+
+### Bug Fixes
+
+- **mobile**: Add root index.tsx redirect to prevent stale Hello World screen
+  ([`1350aa6`](https://github.com/christianlouis/DocuElevate/commit/1350aa6a5ede19d924a9a4c277ef8089b940ea3c))
+
+
+## v0.153.0 (2026-03-16)
+
+### Bug Fixes
+
+- **system-reset**: Address code review feedback
+  ([`7dffdc0`](https://github.com/christianlouis/DocuElevate/commit/7dffdc05542cbfe37a91f86b661790038195fef5))
+
+### Features
+
+- **system-reset**: Add system reset and factory reset feature
+  ([`a88d790`](https://github.com/christianlouis/DocuElevate/commit/a88d790445e5aae9f8ba04e735501d6c93589dec))
+
+### Testing
+
+- **system-reset**: Add comprehensive tests and documentation
+  ([`96bfba8`](https://github.com/christianlouis/DocuElevate/commit/96bfba8057e506f561d21318b0205e521cf67109))
+
+
 ## v0.152.0 (2026-03-16)
 
 ### Features

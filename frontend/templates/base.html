@@ -177,6 +177,11 @@
                   <a href="/admin/backup" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                     <i class="fas fa-database w-4 mr-2 text-green-600" aria-hidden="true"></i> {{ _("nav.backup_restore") }}
                   </a>
+                  {% if enable_factory_reset %}
+                  <a href="/admin/system-reset" role="menuitem" class="flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                    <i class="fas fa-skull-crossbones w-4 mr-2 text-red-500" aria-hidden="true"></i> {{ _("nav.system_reset") }}
+                  </a>
+                  {% endif %}
                   <a href="/admin/audit-logs" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                     <i class="fas fa-shield-halved w-4 mr-2 text-indigo-500" aria-hidden="true"></i> Audit Logs
                   </a>
@@ -445,6 +450,11 @@
                   <a href="/admin/backup" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
                     <i class="fas fa-database mr-2 text-green-500" aria-hidden="true"></i> {{ _("nav.backup_restore") }}
                   </a>
+                  {% if enable_factory_reset %}
+                  <a href="/admin/system-reset" class="block px-3 py-3 rounded-md text-base font-medium text-red-600 hover:text-red-800 hover:bg-red-50">
+                    <i class="fas fa-skull-crossbones mr-2 text-red-500" aria-hidden="true"></i> {{ _("nav.system_reset") }}
+                  </a>
+                  {% endif %}
                   <a href="/status" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
                      {% if request and request.url.path == '/status' %}aria-current="page"{% endif %}>
                     <i class="fas fa-circle-dot mr-2 text-gray-400" aria-hidden="true"></i> {{ _("nav.status") }}
@@ -560,6 +570,7 @@
         profileSettings: {{ _("nav.profile_settings") | tojson }},
         mySubscription: {{ _("nav.my_subscription") | tojson }},
         apiTokens: {{ _("nav.api_tokens") | tojson }},
+        devices: {{ _("nav.devices") | tojson }},
         sharedLinks: {{ _("nav.shared_links") | tojson }},
         signOut: {{ _("nav.sign_out") | tojson }},
         logIn: {{ _("nav.login") | tojson }},

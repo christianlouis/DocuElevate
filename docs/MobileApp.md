@@ -8,12 +8,18 @@ DocuElevate includes a native mobile application for iOS and Android built with 
 |---------|-----|---------|
 | SSO login (OAuth2) | ✅ | ✅ |
 | Local / basic auth login | ✅ | ✅ |
+| QR code login (scan from web) | ✅ | ✅ |
 | Auto-generated API token | ✅ | ✅ |
 | Camera capture → upload | ✅ | ✅ |
 | File picker upload | ✅ | ✅ |
+| Multi-image selection from library | ✅ | ✅ |
 | Share Sheet / Share Intent | ✅ | ✅ |
 | Push notifications | ✅ | ✅ |
-| Document list | ✅ | ✅ |
+| Document list with search | ✅ | ✅ |
+| File detail view with processing logs | ✅ | ✅ |
+| Pre-login legal pages (GDPR) | ✅ | ✅ |
+| Localization (EN, DE, ES, FR, IT) | ✅ | ✅ |
+| Language selection | ✅ | ✅ |
 | Dark mode | ✅ | ✅ |
 
 ## Getting Started (Development)
@@ -112,6 +118,18 @@ When developing with **Expo Go** the app does not have the `docuelevate://` cust
 
 No extra configuration is needed — just run `npx expo start` and scan the QR code with the **Expo Go** app.
 
+### QR Code Login Flow
+
+As an alternative to SSO, users can log in by scanning a QR code displayed in the web UI:
+
+1. The authenticated web user navigates to **Profile → Security & Sessions → Log in on mobile via QR code**.
+2. A QR code is displayed containing a deep link: `docuelevate://qr-login?token=<challenge_token>&server=<server_url>`.
+3. In the mobile app, the user taps **Scan QR Code to Login**, which opens the device camera.
+4. The app scans the QR code, extracts both the server URL and the challenge token, and calls `POST /api/qr-auth/claim`.
+5. An API token is issued and stored securely — no need to enter the server URL manually.
+
+> **Note:** The QR code already contains the server URL, so users do not need to type it in when using QR login.
+
 ### Auto-generated Mobile Token
 
 When the mobile app completes login it automatically creates a named API token (`"Mobile App – <device name>"`) via `POST /api/mobile/generate-token`.  This token:
@@ -158,8 +176,8 @@ curl -X DELETE -H "Authorization: Bearer <token>" https://your-server/api/mobile
 
 1. Open the **Upload** tab.
 2. Tap **Photos**.
-3. Select an existing photo from the device's photo library.
-4. The image is uploaded and queued for processing.
+3. Select one or more photos from the device's photo library (multi-selection is supported).
+4. All selected images are uploaded and queued for processing.
 
 ### File Picker
 
@@ -185,6 +203,32 @@ The app registers itself as a share target so any file can be sent directly to D
 
 The URL may arrive as a standard `file://` path **or** under the app's custom `docuelevate://` scheme (e.g. `docuelevate://private/var/mobile/Library/…/file.pdf`).  The root layout detects the custom-scheme form and rewrites it to a `file://` URL before forwarding it to the Upload screen through `ShareContext`.
 
+##### Handling "unmatched route" errors from "Open In…"
+
+iOS sometimes delivers the file path under the `docuelevate://` scheme, e.g.:
+
+```
+docuelevate://private/var/mobile/Library/Mobile Documents/…/Invoice.pdf
+```
+
+expo-router strips the scheme and tries to match `/private/var/mobile/…` as an in-app route.  Because no such route exists, it previously threw an **"unmatched route docuelevate://"** error and the upload never completed.
+
+The fix is a catch-all `+not-found.tsx` route (see `mobile/app/+not-found.tsx`).  When expo-router cannot match the path, it renders this screen instead.  The screen detects that the path is a filesystem path rather than a real in-app route, adds the file directly to `ShareContext`, and redirects to the Upload tab.  `UploadScreen` picks up the pending file and begins uploading automatically.  The `Linking` listener in the root layout may also fire for the same URL; `ShareContext.addPendingFile` deduplicates by URI so the file is only uploaded once.
+
+##### File accessibility and local caching
+
+Shared files may reference paths outside the app's sandbox or use security-scoped URLs that React Native's `fetch` cannot read directly.  To guarantee reliable uploads:
+
+- **`LSSupportsOpeningDocumentsInPlace`** is set to `false` in `app.json`, which tells iOS to copy shared files into the app's `Documents/Inbox` directory before handing them to the app.
+- **`UploadScreen`** uses `expo-file-system` (`FileSystem.copyAsync`) to copy any `file://` URI that is outside the app's cache/documents directory to a local cache path before uploading.  This ensures the file is readable regardless of its origin.
+- **MIME type inference**: Both `+not-found.tsx` and the `Linking` handler in `_layout.tsx` infer the MIME type from the file extension (e.g. `.pdf` → `application/pdf`) so the server receives a correct `Content-Type` instead of `application/octet-stream`.
+
+##### iOS Action / Share Extension (future enhancement)
+
+Apps like DeepL ("Translate in DeepL") and Microsoft Word ("Convert to Word") appear as **Action Extensions** in the iOS share sheet — a system-level feature that requires a separate Xcode target built with Swift or Objective-C.  A proper Action Extension runs in its own process and must share authentication credentials with the main app via an iOS **App Group** (shared keychain / shared container).
+
+This level of iOS-native integration is a planned future enhancement.  Until it is available, the recommended workflow is the current one: tap **Share → DocuElevate** (the app appears in the "Open With" row of the share sheet via `CFBundleDocumentTypes`).
+
 #### Android implementation
 
 `app.json` declares `ACTION_SEND` and `ACTION_SEND_MULTIPLE` intent filters for `mimeType: "*/*"` in the `android.intentFilters` section.  Incoming content URIs are received the same way as on iOS.
@@ -202,6 +246,75 @@ If a file upload fails (e.g. due to network issues or a server error), the faile
 
 The retry re-uses the original file URI so no re-selection is needed.
 
+## Document Search
+
+The **Files** tab includes a search bar at the top that lets users search through their processed documents by filename. Searches are debounced (400ms) to avoid excessive API calls. Clear the search with the ✕ button to return to the full list.
+
+## File Detail View
+
+Tapping any document in the **Files** tab opens a detail view showing:
+
+- **File metadata**: filename, file size, MIME type, upload date, and file hash
+- **Processing status**: current status with a colour-coded icon
+- **Processing log**: chronological list of processing steps with individual status indicators and timestamps
+
+Pull-to-refresh updates the detail view. This replicates the web interface at `/files/{id}` and `/files/{id}/detail` in a mobile-friendly layout.
+
+## Legal & Compliance
+
+### GDPR & Apple App Store Compliance
+
+Privacy Policy, Terms of Service, and Imprint links are accessible **before login** from both the **Welcome Screen** and the **Login Screen**. This ensures compliance with:
+
+- **GDPR** (General Data Protection Regulation) – users must be able to review the privacy policy before providing personal data
+- **Apple App Store Review Guidelines** – apps must provide accessible privacy information before account creation
+
+Post-login, the same links are available in the **Profile** tab under the "Legal" section.
+
+## Localization (i18n)
+
+The mobile app supports five languages with automatic device-locale detection:
+
+| Language | Code | Status |
+|----------|------|--------|
+| English | `en` | ✅ Complete |
+| German (Deutsch) | `de` | ✅ Complete |
+| Spanish (Español) | `es` | ✅ Complete |
+| French (Français) | `fr` | ✅ Complete |
+| Italian (Italiano) | `it` | ✅ Complete |
+
+### How it works
+
+Language priority (highest to lowest):
+
+1. **Server preference** — `preferred_language` returned by `GET /api/mobile/whoami` on login or app resume.  Allows a language set on the desktop web interface to propagate to mobile automatically.
+2. **AsyncStorage** — the last language explicitly selected on the device, used as an offline fallback when the server is unreachable.
+3. **Device locale** — detected via `expo-localization` on first launch.
+4. **English** — final fallback when none of the above match a supported locale.
+
+When a user selects a language on mobile the choice is:
+- Applied immediately to all screens (via `LocaleContext`)
+- Persisted locally to AsyncStorage
+- Synced to the server via `POST /api/i18n/language` (fire-and-forget), so the next desktop login reflects the same preference.
+
+> **Note**: If the server's preferred language is not supported by the mobile app (e.g. a locale added to the web frontend but not yet translated for mobile), the mobile app falls back to the next priority in the list above.
+
+### Adding a new language
+
+1. Create a new translation file in `mobile/src/i18n/` (e.g. `pt.json` for Portuguese)
+2. Copy the structure from `en.json` and translate all values
+3. Import the new file in `mobile/src/i18n/index.ts`
+4. Add it to the `translations` object and `getSupportedLanguages()` array
+
+## User Settings
+
+The **Profile** tab includes a **Settings** section where users can:
+
+- **Change language**: Select from the supported languages (English, German, Spanish, French, Italian)
+- View server connection details
+- Access legal documents (Privacy Policy, Terms of Service, Imprint)
+- Sign out or delete their account
+
 ## Mobile API Endpoints
 
 The backend exposes a dedicated `/api/mobile/` namespace:
@@ -212,7 +325,8 @@ The backend exposes a dedicated `/api/mobile/` namespace:
 | `POST` | `/api/mobile/register-device` | Bearer | Register Expo push token |
 | `GET` | `/api/mobile/devices` | Bearer | List registered devices |
 | `DELETE` | `/api/mobile/devices/{id}` | Bearer | Deactivate a device |
-| `GET` | `/api/mobile/whoami` | Bearer | Get current user profile |
+| `GET` | `/api/mobile/whoami` | Bearer | Get current user profile (includes `preferred_language`) |
+| `POST` | `/api/i18n/language` | Bearer | Sync language preference to server |
 
 All other API endpoints (file upload, file listing, etc.) work with Bearer token authentication.
 
@@ -256,7 +370,7 @@ Re-registering the same token is safe (idempotent).
 
 ### GET /api/mobile/whoami
 
-Returns the current user's profile.
+Returns the current user's profile, including the server-stored language preference.
 
 **Response (200):**
 ```json
@@ -265,9 +379,14 @@ Returns the current user's profile.
   "display_name": "John Doe",
   "email": "john@example.com",
   "avatar_url": "https://www.gravatar.com/avatar/...",
-  "is_admin": false
+  "is_admin": false,
+  "preferred_language": "de"
 }
 ```
+
+`preferred_language` is `null` when no preference has been saved.  The mobile
+app applies this value on login / app resume, falling back to AsyncStorage and
+then the device locale when it is `null` or unsupported.
 
 ## Configuration
 
@@ -279,7 +398,20 @@ If you wish to use **direct FCM/APNs** without Expo's relay, replace the `send_e
 
 ```
 mobile/
-├── App.tsx                      # Root component
+├── App.tsx                      # Root component (legacy, not used at runtime)
+├── app/                         # Expo Router file-based routes
+│   ├── _layout.tsx              # Root layout (AuthGuard + providers)
+│   ├── index.tsx                # Root redirect → /(auth)/
+│   ├── (auth)/                  # Unauthenticated route group
+│   │   ├── _layout.tsx          # Stack navigator (headerless)
+│   │   ├── index.tsx            # Welcome screen
+│   │   ├── login.tsx            # Login screen
+│   │   └── qr-scanner.tsx       # QR code scanner screen
+│   └── (tabs)/                  # Authenticated route group
+│       ├── _layout.tsx          # Tab navigator
+│       ├── index.tsx            # Upload screen (default tab)
+│       ├── files.tsx            # Files screen
+│       └── profile.tsx          # Profile screen
 ├── app.json                     # Expo/EAS configuration
 ├── eas.json                     # EAS Build profiles
 ├── package.json
@@ -291,15 +423,47 @@ mobile/
     ├── hooks/
     │   └── usePushNotifications.ts  # Push token registration
     ├── screens/
-    │   ├── LoginScreen.tsx      # Server URL + SSO button
+    │   ├── LoginScreen.tsx      # Server URL + SSO button + QR code scanner
+    │   ├── QRScannerScreen.tsx  # Camera-based QR code scanner for login
     │   ├── UploadScreen.tsx     # Camera capture + photo library + file picker
-    │   ├── FilesScreen.tsx      # Processed document list
-    │   └── ProfileScreen.tsx    # User profile + sign out
+    │   ├── FilesScreen.tsx      # Processed document list with search
+    │   ├── FileDetailScreen.tsx # File detail view with processing logs
+    │   ├── ProfileScreen.tsx    # User profile + settings + sign out
+    │   └── WelcomeScreen.tsx    # Pre-login welcome with legal links
+    ├── i18n/                    # Localization (i18n)
+    │   ├── index.ts             # i18n module (locale detection, t() function)
+    │   ├── en.json              # English translations
+    │   ├── de.json              # German translations
+    │   ├── es.json              # Spanish translations
+    │   ├── fr.json              # French translations
+    │   └── it.json              # Italian translations
+    ├── utils/
+    │   ├── mimeTypes.ts         # MIME type mapping for file extensions
+    │   └── normalizeUri.ts      # URI normalization for deduplication
     └── services/
         └── api.ts               # DocuElevate REST API client
 ```
 
 ## Troubleshooting
+
+### App shows "Hello World" / default Expo page after update
+
+If the iOS or Android app shows a generic "Hello World – This is the first page of your app" screen instead of the DocuElevate UI, it means a stale default `index.tsx` file (generated by Expo CLI scaffolding) is being picked up in the `mobile/app/` directory.
+
+**To fix:**
+
+1. Delete any leftover default `mobile/app/index.tsx` that is **not** the repository version (the repo version contains a `<Redirect>` to `/(auth)/`).
+2. Clear the Metro bundler cache and rebuild:
+   ```bash
+   cd mobile
+   npx expo start --clear
+   ```
+3. For production builds, run a clean EAS build:
+   ```bash
+   eas build --platform ios --clear-cache
+   ```
+
+The repository includes a root `app/index.tsx` that immediately redirects to the authentication flow, so this issue should not recur once the correct file is present.
 
 ### "Session expired Local session" during iOS build
 
@@ -362,3 +526,4 @@ eas build --platform ios
 - [API Documentation](./API.md)
 - [Configuration Guide](./ConfigurationGuide.md)
 - [Deployment Guide](./DeploymentGuide.md)
+- [Apple App Store Compliance Audit](./AppleAppStoreCompliance.md)

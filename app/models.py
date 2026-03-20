@@ -625,6 +625,7 @@ class IntegrationType:
     EMAIL = "EMAIL"
     PAPERLESS = "PAPERLESS"
     RCLONE = "RCLONE"
+    SHAREPOINT = "SHAREPOINT"
     ICLOUD = "ICLOUD"
 
     ALL = {
@@ -642,6 +643,7 @@ class IntegrationType:
         EMAIL,
         PAPERLESS,
         RCLONE,
+        SHAREPOINT,
         ICLOUD,
     }
 
@@ -806,6 +808,9 @@ class ApiToken(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     revoked_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Optional expiry: if set, the token is rejected after this timestamp.
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+
 
 class SharedLink(Base):
     """Shareable, time-limited or view-limited document link.
@@ -957,6 +962,51 @@ class ScheduledJob(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class ClassificationRuleModel(Base):
+    """Custom document classification rule.
+
+    Rules are evaluated during the ``classify`` pipeline step to assign a
+    category to a document.  System-wide rules have ``owner_id IS NULL``;
+    user-specific rules belong to a single owner.
+    """
+
+    __tablename__ = "classification_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # NULL = system-wide rule visible to all users.
+    owner_id = Column(String, nullable=True, index=True)
+
+    # Human-readable rule name (unique per owner).
+    name = Column(String(255), nullable=False)
+
+    # Target category (e.g. "invoice", "contract", "receipt").
+    category = Column(String(100), nullable=False, index=True)
+
+    # Rule type: "filename_pattern", "content_keyword", or "metadata_match".
+    rule_type = Column(String(50), nullable=False)
+
+    # The matching pattern:
+    #   - filename_pattern: a regex
+    #   - content_keyword: pipe-separated keywords
+    #   - metadata_match: "field=value"
+    pattern = Column(String(1000), nullable=False)
+
+    # Higher priority rules are evaluated first (default 0).
+    priority = Column(Integer, nullable=False, default=0)
+
+    # Whether pattern matching is case-sensitive.
+    case_sensitive = Column(Boolean, nullable=False, default=False)
+
+    # Disabled rules are skipped during classification.
+    enabled = Column(Boolean, nullable=False, default=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (UniqueConstraint("owner_id", "name", name="uq_classification_rules_owner_name"),)
+
+
 class MobileDevice(Base):
     """Registered mobile device for push notifications.
 
@@ -989,6 +1039,86 @@ class MobileDevice(Base):
     last_seen_at = Column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (UniqueConstraint("owner_id", "push_token", name="uq_mobile_device_owner_token"),)
+
+
+class UserSession(Base):
+    """Server-side session tracking for invalidation and device management.
+
+    Each row represents an active browser or app session.  The ``session_token``
+    is stored in the user's cookie and validated on every authenticated request.
+    Revoking a row (``is_revoked=True``) immediately terminates that session
+    on the next request.
+    """
+
+    __tablename__ = "user_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Cryptographically random token stored in the session cookie.
+    session_token = Column(String(128), unique=True, nullable=False, index=True)
+
+    # Stable owner identifier — matches FileRecord.owner_id.
+    user_id = Column(String, nullable=False, index=True)
+
+    # Client metadata for display in the session management UI.
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(512), nullable=True)
+    device_info = Column(String(255), nullable=True)
+
+    is_revoked = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_active_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class QRLoginChallenge(Base):
+    """Time-limited QR code login challenge for mobile app authentication.
+
+    A logged-in web user generates a challenge that produces a QR code.  The
+    mobile app scans the QR code and calls the claim endpoint with the
+    ``challenge_token``.  The server verifies the challenge is still valid,
+    unclaimed, and unexpired, then issues an API token for the mobile app.
+
+    Security properties:
+    * Time-bound (default 2 minutes).
+    * Single-use (``is_claimed`` prevents replay).
+    * Cryptographically random 64-byte token.
+    * Bound to the creating user — only that user's mobile device receives a
+      token.
+    """
+
+    __tablename__ = "qr_login_challenges"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Cryptographically random token encoded in the QR code.
+    challenge_token = Column(String(128), unique=True, nullable=False, index=True)
+
+    # The user who created this challenge (from the web session).
+    user_id = Column(String, nullable=False, index=True)
+
+    # Whether the challenge has been successfully claimed by a mobile app.
+    is_claimed = Column(Boolean, nullable=False, default=False)
+
+    # Whether the challenge has been explicitly cancelled or expired.
+    is_cancelled = Column(Boolean, nullable=False, default=False)
+
+    # IP address of the web client that created the challenge.
+    created_by_ip = Column(String(45), nullable=True)
+
+    # IP address of the mobile client that claimed the challenge.
+    claimed_by_ip = Column(String(45), nullable=True)
+
+    # Device name provided by the mobile app when claiming.
+    device_name = Column(String(255), nullable=True)
+
+    # The API token ID that was issued to the mobile app (for audit trail).
+    issued_token_id = Column(Integer, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    claimed_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class ComplianceTemplate(Base):

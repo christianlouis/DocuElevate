@@ -9,6 +9,11 @@
  * sheet (CFBundleDocumentTypes) or Android via a SEND intent, the incoming
  * file:// / content:// URL is captured and forwarded to UploadScreen via
  * ShareContext.
+ *
+ * The companion `+not-found.tsx` handles the case where expo-router receives
+ * a `docuelevate://` URL with a filesystem path (from iOS "Open In…") and
+ * cannot match it to a route.  It adds the file directly to ShareContext and
+ * redirects to the Upload tab so the file is uploaded transparently.
  */
 
 import * as Linking from "expo-linking";
@@ -18,6 +23,8 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
 import { ShareProvider, useShare } from "../src/context/ShareContext";
+import { LocaleProvider, useLocale, isLanguageSupported } from "../src/i18n";
+import { mimeTypeFromFilename } from "../src/utils/mimeTypes";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -25,6 +32,13 @@ import { ShareProvider, useShare } from "../src/context/ShareContext";
 
 /** The custom URL scheme registered in app.json. */
 const APP_SCHEME_PREFIX = "docuelevate://";
+
+/**
+ * Known deep-link path prefixes that should NOT be treated as shared files.
+ * These are in-app deep-link routes handled by their respective screens
+ * (e.g. QR login, OAuth callback).
+ */
+const DEEP_LINK_PATHS = ["qr-login", "callback"];
 
 /** Extract a display filename from a file:// or content:// URI. */
 function filenameFromUri(uri: string): string {
@@ -43,12 +57,18 @@ function filenameFromUri(uri: string): string {
  * URLs to ShareContext.  Extracted as a module-level factory so the handler
  * itself is created once and can be easily unit-tested without a React context.
  *
- * On iOS the Share Sheet / "Open In" action may deliver the file path under
+ * On iOS the Share Sheet / "Open In…" action may deliver the file path under
  * the app's custom URL scheme (`docuelevate://…/file.pdf`) instead of a plain
  * `file://` URL.  When that happens we rewrite the URL to `file:///…` so the
  * upload logic can read the file normally.
+ *
+ * Note: expo-router also receives the same URL and will attempt to match it as
+ * an in-app route.  When no route matches it renders `+not-found.tsx`, which
+ * adds the file to ShareContext directly and redirects to the Upload tab.
+ * Both this handler and `+not-found.tsx` call `addPendingFile`;
+ * `ShareContext` deduplicates by URI so the file is only uploaded once.
  */
-function makeUrlHandler(addPendingFile: (f: { uri: string; filename: string }) => void) {
+function makeUrlHandler(addPendingFile: (f: { uri: string; filename: string; mimeType?: string }) => void) {
   return ({ url }: { url: string }) => {
     let fileUri = url;
 
@@ -57,13 +77,22 @@ function makeUrlHandler(addPendingFile: (f: { uri: string; filename: string }) =
     // (expo-router groups always start with "(").
     if (url.startsWith(APP_SCHEME_PREFIX)) {
       const path = url.slice(APP_SCHEME_PREFIX.length);
-      if (path.length > 0 && !path.startsWith("(")) {
+
+      // Skip known in-app deep-link paths (e.g. qr-login, callback).
+      // These are handled by their respective screens, not the share flow.
+      const pathBase = path.split("?")[0].replace(/^\/+/, "");
+      if (DEEP_LINK_PATHS.includes(pathBase) || path.startsWith("(")) {
+        return;
+      }
+
+      if (path.length > 0) {
         fileUri = "file:///" + path.replace(/^\/+/, "");
       }
     }
 
     if (!fileUri.startsWith("file://") && !fileUri.startsWith("content://")) return;
-    addPendingFile({ uri: fileUri, filename: filenameFromUri(fileUri) });
+    const filename = filenameFromUri(fileUri);
+    addPendingFile({ uri: fileUri, filename, mimeType: mimeTypeFromFilename(filename) });
   };
 }
 
@@ -72,10 +101,21 @@ function makeUrlHandler(addPendingFile: (f: { uri: string; filename: string }) =
 // ---------------------------------------------------------------------------
 
 function AuthGuard() {
-  const { isLoading, isAuthenticated } = useAuth();
+  const { isLoading, isAuthenticated, user } = useAuth();
   const { addPendingFile } = useShare();
+  const { setLang } = useLocale();
   const segments = useSegments();
   const router = useRouter();
+
+  // Apply the server-side language preference whenever the user profile is
+  // loaded (on login or app resume).  This syncs the language set on the
+  // desktop/web client to the mobile app.  If the server language is not
+  // supported by the mobile app, we leave the current language unchanged.
+  useEffect(() => {
+    if (user?.preferred_language && isLanguageSupported(user.preferred_language)) {
+      void setLang(user.preferred_language);
+    }
+  }, [user?.preferred_language, setLang]);
 
   // Listen for files shared from other apps (iOS Share Sheet / Android Intent).
   // Both cold-start (app was not running) and warm-start (app in background)
@@ -118,8 +158,11 @@ function AuthGuard() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
+      {/* +not-found handles unmatched routes such as iOS "Open In…" file paths */}
+      <Stack.Screen name="+not-found" />
     </Stack>
   );
 }
@@ -131,11 +174,13 @@ function AuthGuard() {
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <ShareProvider>
-        <AuthProvider>
-          <AuthGuard />
-        </AuthProvider>
-      </ShareProvider>
+      <LocaleProvider>
+        <ShareProvider>
+          <AuthProvider>
+            <AuthGuard />
+          </AuthProvider>
+        </ShareProvider>
+      </LocaleProvider>
     </SafeAreaProvider>
   );
 }
