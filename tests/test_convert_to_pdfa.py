@@ -38,6 +38,11 @@ class TestConvertPdfToPdfa:
         assert "pdfa-2" in cmd
         assert "--quiet" in cmd
         assert "--invalidate-digital-signatures" in cmd
+        # SECURITY: Verify `--` end-of-options separator is present and precedes
+        # the file paths to prevent option/argument injection.
+        assert "--" in cmd
+        assert cmd.index("--") < cmd.index("/input.pdf")
+        assert cmd.index("--") < cmd.index("/output.pdf")
         assert "/input.pdf" in cmd
         assert "/output.pdf" in cmd
 
