@@ -769,6 +769,13 @@ class TestUploadRclone:
         cmd = mock_run.call_args[0][0]
         assert cmd[0] == "rclone"
         assert cmd[1] == "copyto"
+        # Verify the -- end-of-options separator is present and precedes the positional
+        # file arguments, preventing any file path starting with '-' from being
+        # misinterpreted as a flag (security hardening regression guard).
+        assert "--" in cmd
+        separator_idx = cmd.index("--")
+        file_idx = cmd.index(fp)
+        assert separator_idx < file_idx, "'--' must appear before the file_path argument"
 
     def test_raises_on_rclone_nonzero_exit(self, tmp_path):
         fp = str(tmp_path / "doc.pdf")
