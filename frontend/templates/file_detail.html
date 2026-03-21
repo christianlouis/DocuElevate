@@ -2339,7 +2339,7 @@
                 <input type="number" id="annotation-page-input" min="1" value="1" aria-label="{{ _('annotations.page') }}">
               </div>
               <div class="form-group">
-                <label for="annotation-type-input">Type</label>
+                <label for="annotation-type-input">{{ _("annotations.type") }}</label>
                 <select id="annotation-type-input" aria-label="Annotation type">
                   <option value="note">{{ _("annotations.type_note") }}</option>
                   <option value="highlight">{{ _("annotations.type_highlight") }}</option>
@@ -2384,7 +2384,8 @@
             delete_confirm: {{ _("comments.delete_confirm") | tojson }},
             reply_placeholder: {{ _("comments.reply_placeholder") | tojson }},
             body_placeholder: {{ _("comments.body_placeholder") | tojson }},
-            mention_users: {{ _("comments.mention_users") | tojson }}
+            mention_users: {{ _("comments.mention_users") | tojson }},
+            cancel: {{ _("common.cancel") | tojson }}
           };
           var annotationsI18n = {
             empty: {{ _("annotations.empty") | tojson }},
@@ -2396,7 +2397,8 @@
             type_note: {{ _("annotations.type_note") | tojson }},
             type_highlight: {{ _("annotations.type_highlight") | tojson }},
             type_underline: {{ _("annotations.type_underline") | tojson }},
-            type_strikethrough: {{ _("annotations.type_strikethrough") | tojson }}
+            type_strikethrough: {{ _("annotations.type_strikethrough") | tojson }},
+            cancel: {{ _("common.cancel") | tojson }}
           };
           if (typeof initComments === 'function') {
             initComments(fileId, userId, commentsI18n);

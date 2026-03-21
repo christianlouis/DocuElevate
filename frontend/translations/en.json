@@ -1942,5 +1942,6 @@
   "upload.uploading": "Uploading...",
   "upload.url_description": "Enter a direct link to a file (PDF, Office documents, or images)",
   "upload.url_label": "File URL",
-  "upload.url_placeholder": "https://example.com/document.pdf"
+  "upload.url_placeholder": "https://example.com/document.pdf",
+  "annotations.type": "Type"
 }

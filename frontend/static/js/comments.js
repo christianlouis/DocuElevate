@@ -255,7 +255,7 @@
     fetch('/api/files/' + _fileId + '/comments/' + commentId + '/resolve', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ resolve: resolve }),
+      body: JSON.stringify({ is_resolved: resolve }),
     })
       .then(function (r) {
         if (!r.ok) throw new Error('Failed');
@@ -357,12 +357,10 @@
     var cancelBtn = document.createElement('button');
     cancelBtn.type = 'button';
     cancelBtn.className = 'comment-cancel-btn';
-    cancelBtn.textContent = 'Cancel';
+    cancelBtn.textContent = _i18n.cancel || 'Cancel';
     cancelBtn.addEventListener('click', function () {
       bodyDiv.innerHTML = originalHTML;
     });
-
-    btns.appendChild(saveBtn);
     btns.appendChild(cancelBtn);
     form.appendChild(textarea);
     form.appendChild(btns);

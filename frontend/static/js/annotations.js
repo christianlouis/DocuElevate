@@ -275,7 +275,7 @@
     var cancelBtn = document.createElement('button');
     cancelBtn.type = 'button';
     cancelBtn.className = 'annotation-cancel-btn';
-    cancelBtn.textContent = 'Cancel';
+    cancelBtn.textContent = _i18n.cancel || 'Cancel';
     cancelBtn.addEventListener('click', function () {
       contentDiv.textContent = originalText;
     });
