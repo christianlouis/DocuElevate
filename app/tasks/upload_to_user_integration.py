@@ -555,8 +555,9 @@ def _upload_rclone(file_path: str, cfg: dict[str, Any], creds: dict[str, Any], t
     dest = dest.replace("//", "/")
 
     try:
+        # SECURITY: Separate options from positional arguments using -- to prevent command injection
         result = subprocess.run(  # nosec B603  # noqa: S603 S607
-            ["rclone", "copyto", f"--config={conf_path}", file_path, dest],  # noqa: S603 S607
+            ["rclone", "copyto", f"--config={conf_path}", "--", file_path, dest],  # noqa: S603 S607
             capture_output=True,
             text=True,
             timeout=300,
