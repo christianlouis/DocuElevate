@@ -2499,6 +2499,159 @@ DELETE /api/classification-rules/{rule_id}
 **Response:** `204 No Content`
 
 
+
+## Automation (Zapier / Make.com)
+
+Manage automation hook subscriptions for integrating DocuElevate with external platforms like Zapier and Make.com. All endpoints require API token authentication (`Authorization: Bearer <token>`).
+
+### Supported Events
+
+The automation system shares event types with the [Webhooks](#webhooks) subsystem:
+
+| Event | Description |
+|-------|-------------|
+| `document.uploaded` | A new document has been ingested |
+| `document.processed` | A document finished processing successfully |
+| `document.failed` | Document processing failed |
+| `user.signup` | A new user account was created |
+| `user.plan_changed` | A user's subscription plan changed |
+| `user.payment_issue` | A payment issue was reported for a user |
+
+### GET /api/automation/events
+
+List all valid event types that automation hooks can subscribe to.
+
+**Response (200):**
+```json
+["document.failed", "document.processed", "document.uploaded", "user.payment_issue", "user.plan_changed", "user.signup"]
+```
+
+### POST /api/automation/hooks/subscribe
+
+Subscribe to DocuElevate events. Zapier and Make.com call this endpoint to register a webhook URL that receives event notifications.
+
+**Request:**
+```bash
+curl -X POST "http://your-instance/api/automation/hooks/subscribe" \
+  -H "Authorization: Bearer de_your_token_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_url": "https://hooks.zapier.com/hooks/catch/123456/abcdef/",
+    "events": ["document.processed", "document.uploaded"],
+    "hook_type": "zapier",
+    "secret": "optional-signing-secret",
+    "description": "My Zap for processed documents"
+  }'
+```
+
+**Response (201):**
+```json
+{
+  "id": 1,
+  "target_url": "https://hooks.zapier.com/hooks/catch/123456/abcdef/",
+  "events": ["document.processed", "document.uploaded"],
+  "is_active": true,
+  "hook_type": "zapier",
+  "description": "My Zap for processed documents",
+  "has_secret": true
+}
+```
+
+### GET /api/automation/hooks
+
+List all automation hook subscriptions.
+
+**Response (200):**
+```json
+[
+  {
+    "id": 1,
+    "target_url": "https://hooks.zapier.com/hooks/catch/123456/abcdef/",
+    "events": ["document.processed", "document.uploaded"],
+    "is_active": true,
+    "hook_type": "zapier",
+    "description": "My Zap for processed documents",
+    "has_secret": true
+  }
+]
+```
+
+### DELETE /api/automation/hooks/{hook_id}
+
+Unsubscribe an automation hook. Zapier calls this when a Zap is turned off or deleted.
+
+**Response (204):** No content.
+
+### GET /api/automation/triggers/sample/{event}
+
+Get sample trigger data for Zapier field mapping. Zapier uses this during Zap setup to discover available fields.
+
+**Request:**
+```bash
+curl "http://your-instance/api/automation/triggers/sample/document.processed" \
+  -H "Authorization: Bearer de_your_token_here"
+```
+
+**Response (200):**
+```json
+[
+  {
+    "id": "evt_sample0002",
+    "event": "document.processed",
+    "timestamp": 1710000060.0,
+    "document_id": 42,
+    "filename": "invoice_2024.pdf",
+    "status": "processed",
+    "title": "Invoice #1234",
+    "owner_id": "user@example.com"
+  }
+]
+```
+
+### POST /api/automation/actions/upload
+
+Upload a document from an automation platform. This incoming action endpoint allows Zapier or Make.com to push documents into DocuElevate for processing.
+
+**Request:**
+```bash
+curl -X POST "http://your-instance/api/automation/actions/upload" \
+  -H "Authorization: Bearer de_your_token_here" \
+  -F "file=@/path/to/document.pdf"
+```
+
+**Response (200):**
+```json
+{
+  "status": "accepted",
+  "filename": "document.pdf",
+  "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
+### Zapier-Compatible Payload Format
+
+When events fire, automation hooks receive a **flat JSON payload** (no nested `data` key) that Zapier and Make.com can easily map:
+
+```json
+{
+  "id": "evt_a1b2c3d4e5f67890",
+  "event": "document.processed",
+  "timestamp": 1710000060.0,
+  "document_id": 42,
+  "filename": "invoice_2024.pdf",
+  "status": "processed",
+  "title": "Invoice #1234",
+  "owner_id": "user@example.com"
+}
+```
+
+The `id` field is unique per event and is used by Zapier for deduplication. If a `secret` was provided during subscription, an `X-Webhook-Signature` header with an HMAC-SHA256 signature is included.
+
+### Retry Behavior
+
+Automation hook deliveries follow the same retry policy as regular webhooks: up to 3 retries with exponential backoff (60 s, 300 s, 900 s) and ±20% jitter.
+
+
 ## Further Assistance
 
 For additional help with the API, please contact our support team or refer to the [Development Guide](../CONTRIBUTING.md).

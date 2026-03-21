@@ -8,6 +8,7 @@ from typing import Annotated, Optional
 from urllib.parse import quote
 
 import httpx
+import requests
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy.orm import Session
 

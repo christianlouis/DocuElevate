@@ -211,6 +211,28 @@ class WebhookConfig(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class AutomationHook(Base):
+    """Zapier / Make.com compatible webhook subscription for automation triggers.
+
+    External automation platforms subscribe to DocuElevate events via the REST
+    hooks protocol.  When an event fires, DocuElevate POSTs a Zapier-compatible
+    flat JSON payload to ``target_url``.  The ``hook_type`` field records which
+    platform created the subscription (informational only).
+    """
+
+    __tablename__ = "automation_hooks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    target_url = Column(String, nullable=False)  # URL to POST events to
+    secret = Column(String, nullable=True)  # Optional HMAC-SHA256 signing secret
+    events = Column(Text, nullable=False)  # JSON list of subscribed event names
+    is_active = Column(Boolean, default=True, nullable=False)
+    hook_type = Column(String(50), nullable=False, default="generic")  # zapier | make | generic
+    description = Column(String, nullable=True)  # Optional human-readable label
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class LocalUser(Base):
     """A locally-registered user authenticated by email and bcrypt password.
 

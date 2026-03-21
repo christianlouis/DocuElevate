@@ -9,6 +9,7 @@ from fastapi import APIRouter
 from app.api.admin_users import router as admin_users_router
 from app.api.api_tokens import router as api_tokens_router
 from app.api.audit_logs import router as audit_logs_router
+from app.api.automation import router as automation_router
 from app.api.azure import router as azure_router
 from app.api.backup import router as backup_router
 from app.api.billing import router as billing_router
@@ -106,3 +107,4 @@ router.include_router(compliance_router)
 router.include_router(system_reset_router)
 router.include_router(translation_router)
 router.include_router(classification_rules_router)
+router.include_router(automation_router)

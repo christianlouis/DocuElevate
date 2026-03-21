@@ -10,6 +10,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.164.0 (2026-03-21)
+
+### Bug Fixes
+
+- Merge main branch and renumber migration 027→037
+  ([`204000a`](https://github.com/christianlouis/DocuElevate/commit/204000aabcf94bd9eeff7cb67d8707e9af8b7fa3))
+
+- Merge main branch and renumber migration 037→040
+  ([`e518bce`](https://github.com/christianlouis/DocuElevate/commit/e518bce922524ae8a12372abe582a6feb5efe3aa))
+
+- **automation**: Address code review - path traversal fix and test marker
+  ([`6a83d51`](https://github.com/christianlouis/DocuElevate/commit/6a83d51d888a20045ad2a3e4e68d3205329e3856))
+
+- **automation**: Register automation task in celery worker and add docs
+  ([`ce2a76f`](https://github.com/christianlouis/DocuElevate/commit/ce2a76fb770da3257b31cb5958c888821a23da0c))
+
+- **docs**: Remove duplicate Further Assistance heading in API.md
+  ([`34ff7f8`](https://github.com/christianlouis/DocuElevate/commit/34ff7f8de877cc0a7ae3b000cb3199cf017be16c))
+
+### Features
+
+- **automation**: Add Zapier and Make.com integration
+  ([`d167be8`](https://github.com/christianlouis/DocuElevate/commit/d167be827421b3abf19441a2dea052abb486b567))
+
+
+## v0.163.1 (2026-03-21)
+
+### Bug Fixes
+
+- **api**: Add missing `import requests` in dropbox.py and onedrive.py to fix ruff F821
+  ([`35caf24`](https://github.com/christianlouis/DocuElevate/commit/35caf24e3c0f4034b200038fd507a4747b6785f6))
+
+### Testing
+
+- Add -- separator assertions to rclone and ocrmypdf tests
+  ([`81484ad`](https://github.com/christianlouis/DocuElevate/commit/81484ad770e859e49da2a4bb5cd0ab01edf89de1))
+
+
 ## v0.163.0 (2026-03-20)
 
 ### Bug Fixes

@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Annotated, Optional
 
 import httpx
+import requests
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
