@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Testing
+
+- Improve test coverage for app/utils/setup_wizard.py
+  ([`49cd41e`](https://github.com/christianlouis/DocuElevate/commit/49cd41e2e4eef6df3f06482a149c41b92c502e7a))
+
+- **imap**: Improve coverage for imap_tasks.py from 64% to 100%
+  ([`9dc1000`](https://github.com/christianlouis/DocuElevate/commit/9dc1000d633ff56791480122eaa875a489ec158d))
+
+
 ## v0.165.0 (2026-03-21)
 
 ### Documentation
