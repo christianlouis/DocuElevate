@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.163.1 (2026-03-21)
+
+### Bug Fixes
+
+- **api**: Add missing `import requests` in dropbox.py and onedrive.py to fix ruff F821
+  ([`35caf24`](https://github.com/christianlouis/DocuElevate/commit/35caf24e3c0f4034b200038fd507a4747b6785f6))
+
+### Testing
+
+- Add -- separator assertions to rclone and ocrmypdf tests
+  ([`81484ad`](https://github.com/christianlouis/DocuElevate/commit/81484ad770e859e49da2a4bb5cd0ab01edf89de1))
+
+
 ## v0.163.0 (2026-03-20)
 
 ### Bug Fixes
