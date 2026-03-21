@@ -2050,6 +2050,18 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "automation_hooks_enabled": {
+        "category": "Feature Flags",
+        "description": (
+            "Enable Zapier / Make.com automation hook subscriptions and delivery. "
+            "When enabled, external automation platforms can subscribe to DocuElevate events "
+            "via the REST hooks protocol. Default: True."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "compliance_enabled": {
         "category": "Feature Flags",
         "description": (
