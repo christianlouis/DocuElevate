@@ -65,6 +65,8 @@ from app.models import (  # noqa: F401, E402
     AutomationHook,
     ClassificationRuleModel,
     ComplianceTemplate,
+    DocumentAnnotation,
+    DocumentComment,
     DocumentMetadata,
     FileRecord,
     Pipeline,

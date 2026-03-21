@@ -14,6 +14,7 @@ from app.api.azure import router as azure_router
 from app.api.backup import router as backup_router
 from app.api.billing import router as billing_router
 from app.api.classification_rules import router as classification_rules_router
+from app.api.comments import router as comments_router
 from app.api.compliance import router as compliance_router
 from app.api.database import router as database_router
 from app.api.diagnostic import router as diagnostic_router
@@ -108,3 +109,4 @@ router.include_router(system_reset_router)
 router.include_router(translation_router)
 router.include_router(classification_rules_router)
 router.include_router(automation_router)
+router.include_router(comments_router)

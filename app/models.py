@@ -1192,3 +1192,48 @@ class PipelineRoutingRule(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class DocumentComment(Base):
+    """Threaded comment on a document.
+
+    Supports threaded replies via ``parent_id`` and @mentions via the
+    ``mentions`` column (comma-separated user identifiers).
+    """
+
+    __tablename__ = "document_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=False, index=True)
+    user_id = Column(String, nullable=False, index=True)
+    parent_id = Column(Integer, ForeignKey("document_comments.id"), nullable=True, index=True)
+    body = Column(Text, nullable=False)
+    mentions = Column(Text, nullable=True)
+    is_resolved = Column(Boolean, nullable=False, default=False, server_default="0")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class DocumentAnnotation(Base):
+    """Text annotation on a specific page and position of a PDF document.
+
+    Stores the bounding-box coordinates (``x``, ``y``, ``width``,
+    ``height``) relative to the page dimensions so that the annotation
+    can be rendered on top of the PDF viewer.
+    """
+
+    __tablename__ = "document_annotations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=False, index=True)
+    user_id = Column(String, nullable=False, index=True)
+    page = Column(Integer, nullable=False)
+    x = Column(Float, nullable=False)
+    y = Column(Float, nullable=False)
+    width = Column(Float, nullable=False, default=0)
+    height = Column(Float, nullable=False, default=0)
+    content = Column(Text, nullable=False)
+    annotation_type = Column(String(50), nullable=False, default="note", server_default="note")
+    color = Column(String(20), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

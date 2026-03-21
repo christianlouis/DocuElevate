@@ -2909,3 +2909,202 @@ Move original files to a reimport folder, wipe everything, and configure the rei
   }
 }
 ```
+
+---
+
+## Comments & Annotations
+
+Threaded comments and PDF annotations for document collaboration.
+
+### List Comments
+
+**GET** `/api/files/{file_id}/comments`
+
+Returns all comments for a document, organised into a threaded tree.
+
+**Response (200):**
+```json
+{
+  "file_id": 1,
+  "comments": [
+    {
+      "id": 1,
+      "file_id": 1,
+      "user_id": "alice",
+      "parent_id": null,
+      "body": "Please review section 3.",
+      "mentions": ["bob"],
+      "is_resolved": false,
+      "created_at": "2026-03-21T12:00:00+00:00",
+      "updated_at": "2026-03-21T12:00:00+00:00",
+      "replies": [
+        {
+          "id": 2,
+          "file_id": 1,
+          "user_id": "bob",
+          "parent_id": 1,
+          "body": "Done!",
+          "mentions": [],
+          "is_resolved": false,
+          "created_at": "2026-03-21T12:05:00+00:00",
+          "updated_at": "2026-03-21T12:05:00+00:00",
+          "replies": []
+        }
+      ]
+    }
+  ],
+  "total": 2
+}
+```
+
+### Create Comment
+
+**POST** `/api/files/{file_id}/comments`
+
+Create a new comment on a document.  @mentions are automatically extracted from the body.
+
+**Request:**
+```json
+{
+  "body": "Hey @bob, please review this section.",
+  "parent_id": null
+}
+```
+
+**Response (201):**
+```json
+{
+  "id": 3,
+  "file_id": 1,
+  "user_id": "alice",
+  "parent_id": null,
+  "body": "Hey @bob, please review this section.",
+  "mentions": ["bob"],
+  "is_resolved": false,
+  "created_at": "2026-03-21T12:10:00+00:00",
+  "updated_at": "2026-03-21T12:10:00+00:00"
+}
+```
+
+### Update Comment
+
+**PUT** `/api/files/{file_id}/comments/{comment_id}`
+
+Update the body of an existing comment.  Only the comment author may update it.
+
+**Request:**
+```json
+{
+  "body": "Updated comment text @charlie"
+}
+```
+
+### Delete Comment
+
+**DELETE** `/api/files/{file_id}/comments/{comment_id}`
+
+Delete a comment.  Only the comment author may delete it.
+
+**Response:** `204 No Content`
+
+### Resolve / Unresolve Comment
+
+**PATCH** `/api/files/{file_id}/comments/{comment_id}/resolve`
+
+Mark a comment thread as resolved or unresolved.
+
+**Request:**
+```json
+{
+  "is_resolved": true
+}
+```
+
+### List Annotations
+
+**GET** `/api/files/{file_id}/annotations`
+
+Returns all PDF page annotations for a document, ordered by page then creation time.
+
+**Response (200):**
+```json
+{
+  "file_id": 1,
+  "annotations": [
+    {
+      "id": 1,
+      "file_id": 1,
+      "user_id": "alice",
+      "page": 1,
+      "x": 100.0,
+      "y": 200.0,
+      "width": 150.0,
+      "height": 20.0,
+      "content": "Important paragraph",
+      "annotation_type": "highlight",
+      "color": "#ffff00",
+      "created_at": "2026-03-21T12:00:00+00:00",
+      "updated_at": "2026-03-21T12:00:00+00:00"
+    }
+  ],
+  "total": 1
+}
+```
+
+### Create Annotation
+
+**POST** `/api/files/{file_id}/annotations`
+
+Create a new annotation on a PDF page.
+
+**Request:**
+```json
+{
+  "page": 1,
+  "x": 100.0,
+  "y": 200.0,
+  "width": 150.0,
+  "height": 20.0,
+  "content": "Important paragraph",
+  "annotation_type": "highlight",
+  "color": "#ffff00"
+}
+```
+
+Allowed `annotation_type` values: `note`, `highlight`, `underline`, `strikethrough`.
+
+### Update Annotation
+
+**PUT** `/api/files/{file_id}/annotations/{annotation_id}`
+
+Update an existing annotation.  Only the annotation author may update it.
+
+**Request** (all fields optional):
+```json
+{
+  "content": "Updated note",
+  "color": "#00ff00"
+}
+```
+
+### Delete Annotation
+
+**DELETE** `/api/files/{file_id}/annotations/{annotation_id}`
+
+Delete an annotation.  Only the annotation author may delete it.
+
+**Response:** `204 No Content`
+
+### List Mentionable Users
+
+**GET** `/api/users/mentionable`
+
+Returns all non-blocked user profiles for the @mention autocomplete.
+
+**Response (200):**
+```json
+[
+  { "user_id": "alice", "display_name": "Alice Anderson" },
+  { "user_id": "bob", "display_name": "Bob Baker" }
+]
+```
