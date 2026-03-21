@@ -34,7 +34,7 @@ def upgrade() -> None:
             sa.Column("mentions", sa.Text(), nullable=True),
             sa.Column("is_resolved", sa.Boolean(), nullable=False, server_default="0"),
             sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now()),
             sa.ForeignKeyConstraint(["file_id"], ["files.id"]),
             sa.ForeignKeyConstraint(["parent_id"], ["document_comments.id"]),
             sa.PrimaryKeyConstraint("id"),
@@ -59,7 +59,7 @@ def upgrade() -> None:
             sa.Column("annotation_type", sa.String(50), nullable=False, server_default="note"),
             sa.Column("color", sa.String(20), nullable=True),
             sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now()),
             sa.ForeignKeyConstraint(["file_id"], ["files.id"]),
             sa.PrimaryKeyConstraint("id"),
         )

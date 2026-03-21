@@ -138,7 +138,7 @@ def _build_thread_tree(comments: list[DocumentComment]) -> list[dict[str, Any]]:
 @router.get("/files/{file_id}/comments")
 @require_login
 def list_comments(request: Request, file_id: int, db: DbSession):
-    """List all comments for a document, organised into threads.
+    """List all comments for a document, organized into threads.
 
     Returns a threaded tree where top-level comments contain nested
     ``replies``.
@@ -663,12 +663,7 @@ def list_mentionable_users(request: Request, db: DbSession):
     Returns:
         A list of ``{user_id, display_name}`` objects.
     """
-    profiles = (
-        db.query(UserProfile)
-        .filter(UserProfile.is_blocked == False)  # noqa: E712
-        .order_by(UserProfile.display_name)
-        .all()
-    )
+    profiles = db.query(UserProfile).filter(UserProfile.is_blocked.is_(False)).order_by(UserProfile.display_name).all()
 
     return [
         {

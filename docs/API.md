@@ -2920,7 +2920,7 @@ Threaded comments and PDF annotations for document collaboration.
 
 **GET** `/api/files/{file_id}/comments`
 
-Returns all comments for a document, organised into a threaded tree.
+Returns all comments for a document, organized into a threaded tree.
 
 **Response (200):**
 ```json
