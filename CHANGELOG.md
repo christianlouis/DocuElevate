@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Testing
+
+- **convert_to_pdfa**: Assert -- terminates option parsing before file paths
+  ([`5b04504`](https://github.com/christianlouis/DocuElevate/commit/5b04504b0eb3919a1d121ee7205f52be102a3c08))
+
+
 ## v0.164.0 (2026-03-21)
 
 ### Bug Fixes
