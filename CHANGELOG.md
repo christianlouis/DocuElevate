@@ -15,6 +15,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - **changelog**: Update changelog [skip ci]
+  ([`bd26f31`](https://github.com/christianlouis/DocuElevate/commit/bd26f31778da02d0cd439fc1ac445d45aed119d2))
+
+- **changelog**: Update changelog [skip ci]
+  ([`ae8be68`](https://github.com/christianlouis/DocuElevate/commit/ae8be68df9b1b79272ac4b4c1c074f6c58f4c7b9))
+
+### Testing
+
+- Improve coverage for app/api/files.py from 63% to 97.81%
+  ([`0a192ee`](https://github.com/christianlouis/DocuElevate/commit/0a192eeeca9d9bbb19022633926a8f02e3dc2493))
+
+- Improve test coverage for app/api/imap_profiles.py to 100%
+  ([`8cc292c`](https://github.com/christianlouis/DocuElevate/commit/8cc292c6eef0652c9ce03e9f103fc2496cf63e23))
+
+- Improve test coverage for app/api/sessions.py
+  ([`74a8c22`](https://github.com/christianlouis/DocuElevate/commit/74a8c22478e4da40116d26a141d0a09eb9463fd3))
+
+- Improve test coverage for app/tasks/upload_to_icloud.py to 100%
+  ([`982c222`](https://github.com/christianlouis/DocuElevate/commit/982c222717700a3bdb117f33ecb0d83d212e2e98))
+
+- **convert_to_pdfa**: Assert -- terminates option parsing before file paths
+  ([`5b04504`](https://github.com/christianlouis/DocuElevate/commit/5b04504b0eb3919a1d121ee7205f52be102a3c08))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
   ([`ae8be68`](https://github.com/christianlouis/DocuElevate/commit/ae8be68df9b1b79272ac4b4c1c074f6c58f4c7b9))
 
 ### Testing
