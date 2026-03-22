@@ -10,6 +10,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.166.0 (2026-03-22)
+
+### Bug Fixes
+
+- **comments**: Address code review feedback
+  ([`4b64127`](https://github.com/christianlouis/DocuElevate/commit/4b6412734b53a345e41d0531f03ff1c2318e9f55))
+
+- **ui**: Address code review feedback for comments/annotations UX
+  ([`a5a8cd9`](https://github.com/christianlouis/DocuElevate/commit/a5a8cd94c9af17f39a36993c0f419404c60055c3))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`8f09050`](https://github.com/christianlouis/DocuElevate/commit/8f0905033c4cd4269717dde64c4830c482407e41))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`c22bb66`](https://github.com/christianlouis/DocuElevate/commit/c22bb66c4b5a0a3554a43f2df90a5be1bee90e3b))
+
+### Features
+
+- **comments**: Add document comments, annotations, and @mention support
+  ([`ad795e2`](https://github.com/christianlouis/DocuElevate/commit/ad795e200ad2d4d0fc8381ed2903f4a2a905243f))
+
+- **ui**: Add comments and annotations UX to file detail page
+  ([`a7a8821`](https://github.com/christianlouis/DocuElevate/commit/a7a88218c391ba3642ef60b433e5e6a657bea239))
+
+### Testing
+
+- Improve test coverage for app/utils/setup_wizard.py
+  ([`49cd41e`](https://github.com/christianlouis/DocuElevate/commit/49cd41e2e4eef6df3f06482a149c41b92c502e7a))
+
+- **imap**: Improve coverage for imap_tasks.py from 64% to 100%
+  ([`9dc1000`](https://github.com/christianlouis/DocuElevate/commit/9dc1000d633ff56791480122eaa875a489ec158d))
+
+
 ## Unreleased
 
 ### Testing
