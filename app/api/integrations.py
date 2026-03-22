@@ -608,7 +608,7 @@ def _test_dropbox_connection(config: dict[str, Any] | None, credentials: dict[st
 
 def _test_webdav_connection(config: dict[str, Any] | None, credentials: dict[str, Any] | None) -> dict[str, Any]:
     """Test a WebDAV/Nextcloud connection by issuing an HTTP PROPFIND."""
-    import urllib.request
+    import httpx
 
     cfg = config or {}
     creds = credentials or {}
@@ -635,17 +635,14 @@ def _test_webdav_connection(config: dict[str, Any] | None, credentials: dict[str
             return {"success": False, "message": "URLs pointing to internal or private networks are not allowed"}
 
     try:
-        import base64
+        auth = (username, password) if username and password else None
+        headers = {"Depth": "0"}
 
-        req = urllib.request.Request(url, method="PROPFIND")  # noqa: S310
-        if username and password:
-            token = base64.b64encode(f"{username}:{password}".encode()).decode()
-            req.add_header("Authorization", f"Basic {token}")
-        req.add_header("Depth", "0")
-        with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
-            if resp.status < 400:
-                return {"success": True, "message": "WebDAV connection successful"}
-            return {"success": False, "message": f"WebDAV returned HTTP {resp.status}"}
+        # Use httpx for secure connection testing, avoiding urllib vulnerabilities
+        resp = httpx.request("PROPFIND", url, auth=auth, headers=headers, timeout=10.0, follow_redirects=False)
+        if resp.status_code < 400:
+            return {"success": True, "message": "WebDAV connection successful"}
+        return {"success": False, "message": f"WebDAV returned HTTP {resp.status_code}"}
     except Exception as exc:  # noqa: BLE001
         logger.warning("WebDAV connection error for %s: %s", hostname, exc)
         return {"success": False, "message": "WebDAV connection failed — check URL and credentials"}
