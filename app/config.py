@@ -1351,6 +1351,40 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ---------------------------------------------------------------------------
+    # Observability – Sentry Browser JavaScript SDK (client-side)
+    # ---------------------------------------------------------------------------
+    # The same SENTRY_DSN is reused for the browser SDK.  The DSN is a *public*
+    # key in Sentry's model and is intentionally embedded in client-side code.
+    # All three settings below default to 0.0 / disabled so that operators opt-in
+    # to the level of browser monitoring they want.
+    # ---------------------------------------------------------------------------
+    sentry_js_traces_sample_rate: float = Field(
+        default=0.0,
+        description=(
+            "Fraction of browser page-loads captured for client-side performance tracing "
+            "(0.0 – 1.0).  0.0 disables browser tracing; 1.0 captures every navigation. "
+            "Only active when SENTRY_DSN is set."
+        ),
+    )
+    sentry_js_replay_session_sample_rate: float = Field(
+        default=0.0,
+        description=(
+            "Fraction of sessions recorded by Sentry Session Replay (0.0 – 1.0). "
+            "0.0 disables session recording; 1.0 records every session. "
+            "Only active when SENTRY_DSN is set."
+        ),
+    )
+    sentry_js_replay_on_error_sample_rate: float = Field(
+        default=0.1,
+        description=(
+            "Fraction of sessions with an error that will be recorded by Sentry Session "
+            "Replay (0.0 – 1.0).  Defaults to 0.1 (10 %) so that errors are captured "
+            "with replay context even when session-level recording is disabled.  "
+            "Only active when SENTRY_DSN is set."
+        ),
+    )
+
     @model_validator(mode="before")
     @classmethod
     def strip_outer_quotes(cls, data: Any) -> Any:

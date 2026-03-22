@@ -34,6 +34,32 @@
     {% block head_extra %}{% endblock %}
     <!-- CSRF token for AJAX/fetch requests -->
     <meta name="csrf-token" content="{{ csrf_token | default('', true) }}">
+    {# ── Sentry Browser SDK ─────────────────────────────────────────────────
+         Loaded only when SENTRY_DSN is configured.  The DSN is a *public*
+         Sentry key and is intentionally embedded in client-side code.
+         Update the version pin at browser.sentry-cdn.com/releases when
+         upgrading the SDK.
+    ──────────────────────────────────────────────────────────────────────── #}
+    {% if sentry_dsn %}
+    <script src="https://browser.sentry-cdn.com/9.x.x/bundle.tracing.replay.min.js"
+            crossorigin="anonymous"></script>
+    <script>
+      if (window.Sentry) {
+        Sentry.init({
+          dsn: {{ sentry_dsn | tojson }},
+          environment: {{ sentry_environment | default("production") | tojson }},
+          release: {{ version | default(None) | tojson }},
+          integrations: [
+            Sentry.browserTracingIntegration(),
+            Sentry.replayIntegration(),
+          ],
+          tracesSampleRate: {{ sentry_js_traces_sample_rate | default(0.0) }},
+          replaysSessionSampleRate: {{ sentry_js_replay_session_sample_rate | default(0.0) }},
+          replaysOnErrorSampleRate: {{ sentry_js_replay_on_error_sample_rate | default(0.1) }},
+        });
+      }
+    </script>
+    {% endif %}
   </head>
 
   <body class="bg-gray-50 min-h-screen flex flex-col"

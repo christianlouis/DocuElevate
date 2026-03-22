@@ -96,6 +96,21 @@ def _inject_global_context(ctx: dict) -> None:
     )
     ctx.setdefault("enable_factory_reset", getattr(settings, "enable_factory_reset", False))
 
+    # Sentry Browser SDK config (injected into every page so the JS SDK can initialise)
+    # Normalize empty-string DSN to None so the {% if sentry_dsn %} template guard works correctly.
+    _raw_dsn = getattr(settings, "sentry_dsn", None)
+    ctx.setdefault("sentry_dsn", _raw_dsn if _raw_dsn else None)
+    ctx.setdefault("sentry_environment", getattr(settings, "sentry_environment", "production"))
+    ctx.setdefault("sentry_js_traces_sample_rate", getattr(settings, "sentry_js_traces_sample_rate", 0.0))
+    ctx.setdefault(
+        "sentry_js_replay_session_sample_rate",
+        getattr(settings, "sentry_js_replay_session_sample_rate", 0.0),
+    )
+    ctx.setdefault(
+        "sentry_js_replay_on_error_sample_rate",
+        getattr(settings, "sentry_js_replay_on_error_sample_rate", 0.1),
+    )
+
     req = ctx.get("request")
     if req is not None:
         # CSRF token

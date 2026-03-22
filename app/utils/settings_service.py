@@ -3196,6 +3196,43 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "sentry_js_traces_sample_rate": {
+        "category": "Observability",
+        "description": (
+            "Fraction of browser page-loads captured for client-side Sentry performance tracing (0.0–1.0). "
+            "0.0 (default) disables browser tracing; 1.0 captures every navigation. "
+            "Only active when SENTRY_DSN is set."
+        ),
+        "type": "float",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "sentry_js_replay_session_sample_rate": {
+        "category": "Observability",
+        "description": (
+            "Fraction of sessions recorded by Sentry Session Replay (0.0–1.0). "
+            "0.0 (default) disables session recording; 1.0 records every session. "
+            "Only active when SENTRY_DSN is set."
+        ),
+        "type": "float",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "sentry_js_replay_on_error_sample_rate": {
+        "category": "Observability",
+        "description": (
+            "Fraction of error sessions recorded by Sentry Session Replay (0.0–1.0). "
+            "Defaults to 0.1 (10%) so that errors are captured with replay context "
+            "even when session-level recording is disabled. "
+            "Only active when SENTRY_DSN is set."
+        ),
+        "type": "float",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
 }
 
 
