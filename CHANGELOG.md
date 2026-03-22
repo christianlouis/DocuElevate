@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.168.0 (2026-03-22)
+
+### Features
+
+- **ui**: Add Sentry Browser SDK client-side integration
+  ([`b202f10`](https://github.com/christianlouis/DocuElevate/commit/b202f10e1a437d0d07c144339ba4f4253e8f645b))
+
+
 ## v0.167.0 (2026-03-22)
 
 ### Bug Fixes
