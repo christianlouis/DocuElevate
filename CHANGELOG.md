@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.172.1 (2026-03-22)
+
+### Bug Fixes
+
+- Social login providers now work from DB config without restart
+  ([`0c7ea67`](https://github.com/christianlouis/DocuElevate/commit/0c7ea6748da554c80ef9af1b709c08aba49174e6))
+
+
 ## v0.172.0 (2026-03-22)
 
 ### Features
