@@ -189,6 +189,18 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
+    # Re-register OAuth / social-login providers now that DB settings are
+    # loaded.  auth.py runs its initial registration at import time (before
+    # the lifespan runs), so providers that are only configured in the
+    # database would not be registered yet.  Calling refresh here ensures
+    # they are active immediately on startup without any manual restart.
+    try:
+        from app.auth import refresh_social_providers
+
+        refresh_social_providers()
+    except Exception as e:
+        logging.warning(f"Could not refresh social login providers on startup: {e}")
+
     # Initialize Sentry after DB settings are loaded so that values configured
     # via the database UI (e.g. SENTRY_DSN) are respected in addition to env vars.
     init_sentry()

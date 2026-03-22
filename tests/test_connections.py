@@ -268,8 +268,6 @@ class TestConnectionsPageRoute:
             patch("app.views.settings.get_all_settings_from_db", return_value={}),
             patch("app.views.settings.templates") as mock_templates,
             patch("app.views.settings.SETTING_METADATA", {}),
-            patch("app.auth.OAUTH_CONFIGURED", False),
-            patch("app.auth.SOCIAL_PROVIDERS", {}),
             patch("app.views.settings.get_setting_metadata", return_value={}),
         ):
             mock_templates.TemplateResponse.return_value = "response"
@@ -295,6 +293,175 @@ class TestConnectionsPageRoute:
             assert "saml2" in service_keys
             assert "smtp" in service_keys
             assert "telegram" in service_keys
+
+    @pytest.mark.asyncio
+    async def test_connections_page_linked_status_from_db(self):
+        """Linked status is derived from DB/effective settings, not SOCIAL_PROVIDERS."""
+        from app.views.settings import connections_page
+
+        mock_request = MagicMock()
+        mock_request.session = {"user": {"is_admin": True}}
+        mock_db = MagicMock()
+
+        # Simulate GitHub configured only in DB (not in SOCIAL_PROVIDERS yet)
+        db_values = {
+            "social_auth_github_enabled": "true",
+            "social_auth_github_client_id": "gh-id",
+            "social_auth_github_client_secret": "gh-secret",
+        }
+
+        with (
+            patch("app.views.settings.get_all_settings_from_db", return_value=db_values),
+            patch("app.views.settings.templates") as mock_templates,
+            patch("app.views.settings.SETTING_METADATA", {}),
+            patch("app.views.settings.get_setting_metadata", return_value={}),
+        ):
+            mock_templates.TemplateResponse.return_value = "response"
+            await connections_page(mock_request, db=mock_db)
+
+            context = mock_templates.TemplateResponse.call_args[0][1]
+            services_by_key = {s["key"]: s for s in context["services"]}
+
+            # GitHub should be linked because DB values say so
+            assert services_by_key["github"]["linked"] is True
+
+    @pytest.mark.asyncio
+    async def test_connections_page_unlinked_when_credentials_missing(self):
+        """Provider is unlinked when enabled=true but credentials are absent."""
+        from app.views.settings import connections_page
+
+        mock_request = MagicMock()
+        mock_request.session = {"user": {"is_admin": True}}
+        mock_db = MagicMock()
+
+        # enabled but no credentials
+        db_values = {"social_auth_github_enabled": "true"}
+
+        with (
+            patch("app.views.settings.get_all_settings_from_db", return_value=db_values),
+            patch("app.views.settings.templates") as mock_templates,
+            patch("app.views.settings.SETTING_METADATA", {}),
+            patch("app.views.settings.get_setting_metadata", return_value={}),
+        ):
+            mock_templates.TemplateResponse.return_value = "response"
+            await connections_page(mock_request, db=mock_db)
+
+            context = mock_templates.TemplateResponse.call_args[0][1]
+            services_by_key = {s["key"]: s for s in context["services"]}
+            assert services_by_key["github"]["linked"] is False
+
+    @pytest.mark.asyncio
+    async def test_connections_page_oidc_linked_from_db(self):
+        """OIDC linked status derives from DB effective settings."""
+        from app.views.settings import connections_page
+
+        mock_request = MagicMock()
+        mock_request.session = {"user": {"is_admin": True}}
+        mock_db = MagicMock()
+
+        db_values = {
+            "authentik_client_id": "my-client-id",
+            "authentik_client_secret": "my-secret",
+            "oauth_provider_name": "My SSO",
+        }
+
+        with (
+            patch("app.views.settings.get_all_settings_from_db", return_value=db_values),
+            patch("app.views.settings.templates") as mock_templates,
+            patch("app.views.settings.SETTING_METADATA", {}),
+            patch("app.views.settings.get_setting_metadata", return_value={}),
+        ):
+            mock_templates.TemplateResponse.return_value = "response"
+            await connections_page(mock_request, db=mock_db)
+
+            context = mock_templates.TemplateResponse.call_args[0][1]
+            services_by_key = {s["key"]: s for s in context["services"]}
+            assert services_by_key["oidc"]["linked"] is True
+            assert services_by_key["oidc"]["name"] == "My SSO"
+            # oauth_configured template var should also reflect the DB state
+            assert context["oauth_configured"] is True
+
+
+@pytest.mark.unit
+class TestRefreshSocialProviders:
+    """Tests for the refresh_social_providers() mechanism."""
+
+    def test_refresh_social_providers_exists(self):
+        """refresh_social_providers is importable from app.auth."""
+        from app.auth import refresh_social_providers
+
+        assert callable(refresh_social_providers)
+
+    def test_refresh_social_providers_clears_and_repopulates(self):
+        """After refresh, SOCIAL_PROVIDERS reflects current settings."""
+        import app.auth as auth_module
+
+        with (
+            patch.object(auth_module, "AUTH_ENABLED", True),
+            patch.object(auth_module, "settings") as mock_settings,
+        ):
+            mock_settings.authentik_client_id = None
+            mock_settings.authentik_client_secret = None
+            mock_settings.social_auth_google_enabled = True
+            mock_settings.social_auth_google_client_id = "gid"
+            mock_settings.social_auth_google_client_secret = "gsecret"
+            mock_settings.social_auth_google_use_global_credentials = False
+            # All other providers disabled
+            for attr in (
+                "social_auth_microsoft_enabled",
+                "social_auth_apple_enabled",
+                "social_auth_dropbox_enabled",
+                "social_auth_github_enabled",
+                "social_auth_keycloak_enabled",
+                "social_auth_generic_oauth2_enabled",
+            ):
+                setattr(mock_settings, attr, False)
+
+            with patch.object(auth_module, "_register_oauth_client"):
+                auth_module._setup_social_providers()
+
+            assert "google" in auth_module.SOCIAL_PROVIDERS
+            assert auth_module.OAUTH_CONFIGURED is False
+
+    def test_refresh_clears_previous_providers(self):
+        """Providers removed from settings are cleared after refresh."""
+        import app.auth as auth_module
+
+        # Pre-populate with a stale entry
+        auth_module.SOCIAL_PROVIDERS["stale_provider"] = {"name": "Stale", "icon": "", "color": ""}
+
+        with (
+            patch.object(auth_module, "AUTH_ENABLED", True),
+            patch.object(auth_module, "settings") as mock_settings,
+        ):
+            mock_settings.authentik_client_id = None
+            mock_settings.authentik_client_secret = None
+            for attr in (
+                "social_auth_google_enabled",
+                "social_auth_microsoft_enabled",
+                "social_auth_apple_enabled",
+                "social_auth_dropbox_enabled",
+                "social_auth_github_enabled",
+                "social_auth_keycloak_enabled",
+                "social_auth_generic_oauth2_enabled",
+            ):
+                setattr(mock_settings, attr, False)
+
+            with patch.object(auth_module, "_register_oauth_client"):
+                auth_module._setup_social_providers()
+
+        assert "stale_provider" not in auth_module.SOCIAL_PROVIDERS
+
+    def test_register_oauth_client_clears_cache(self):
+        """_register_oauth_client removes the cached client before re-registering."""
+        import app.auth as auth_module
+
+        # Inject a fake cached client
+        auth_module.oauth._clients["test_provider"] = object()
+
+        with patch.object(auth_module.oauth, "register"):
+            auth_module._register_oauth_client("test_provider", client_id="x", client_secret="y")
+            assert "test_provider" not in auth_module.oauth._clients
 
 
 @pytest.mark.unit
