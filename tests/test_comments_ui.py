@@ -156,6 +156,49 @@ class TestCommentsUIRendering:
         assert 'id="embedpdf-viewer"' in html
         assert "@embedpdf/snippet" in html
 
+    def test_embedpdf_init_subscribes_to_page_change(self, client: TestClient, db_session, tmp_path):
+        """The EmbedPDF init script should subscribe to page change events to sync the form."""
+        f = _create_file(db_session, tmp_path)
+        resp = client.get(f"/files/{f.id}/annotations")
+        assert resp.status_code == 200
+        html = resp.text
+        # Verifies the viewer registry is awaited and scroll plugin is used
+        assert "viewer.registry" in html
+        assert "onPageChange" in html
+        assert "annotation-page-input" in html
+
+    def test_embedpdf_init_exposes_scroll_function(self, client: TestClient, db_session, tmp_path):
+        """The EmbedPDF init script must expose _embedpdfScrollToPage for the annotations panel."""
+        f = _create_file(db_session, tmp_path)
+        resp = client.get(f"/files/{f.id}/annotations")
+        assert resp.status_code == 200
+        assert "_embedpdfScrollToPage" in resp.text
+        assert "scrollToPage" in resp.text
+
+    def test_embedpdf_init_saves_viewer_annotations(self, client: TestClient, db_session, tmp_path):
+        """The EmbedPDF init script should capture annotation events and POST to the API."""
+        f = _create_file(db_session, tmp_path)
+        resp = client.get(f"/files/{f.id}/annotations")
+        assert resp.status_code == 200
+        html = resp.text
+        assert "onAnnotationEvent" in html
+        # Verifies the POST target is the annotations API for this file
+        assert "/api/files/" in html and "/annotations" in html
+
+    def test_embedpdf_init_reloads_annotation_list(self, client: TestClient, db_session, tmp_path):
+        """After auto-saving a viewer annotation, the panel list should be refreshed."""
+        f = _create_file(db_session, tmp_path)
+        resp = client.get(f"/files/{f.id}/annotations")
+        assert resp.status_code == 200
+        assert "_reloadAnnotations" in resp.text
+
+    def test_annotations_page_has_go_to_page_i18n(self, client: TestClient, db_session, tmp_path):
+        """The annotations i18n bundle should include the go_to_page key."""
+        f = _create_file(db_session, tmp_path)
+        resp = client.get(f"/files/{f.id}/annotations")
+        assert resp.status_code == 200
+        assert "go_to_page" in resp.text
+
     def test_summary_page_renders(self, client: TestClient, db_session, tmp_path):
         """The summary page at /files/{id} should render correctly."""
         f = _create_file(db_session, tmp_path)

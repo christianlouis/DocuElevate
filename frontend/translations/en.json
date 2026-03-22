@@ -321,6 +321,7 @@
   "annotations.delete_confirm": "Are you sure you want to delete this annotation?",
   "annotations.deleted": "Annotation deleted",
   "annotations.empty": "No annotations yet",
+  "annotations.go_to_page": "Go to page",
   "annotations.heading": "Annotations",
   "annotations.page": "Page",
   "annotations.save": "Save",

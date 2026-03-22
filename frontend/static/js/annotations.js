@@ -24,6 +24,10 @@
     _i18n = i18n || {};
     _loadAnnotations();
 
+    // Expose reload function so the EmbedPDF viewer init script can refresh the
+    // list after auto-saving an annotation created inside the viewer.
+    window._reloadAnnotations = _loadAnnotations;
+
     var form = document.getElementById('annotation-form');
     if (form) {
       form.addEventListener('submit', function (e) {
@@ -81,10 +85,18 @@
     typeBadge.className = 'annotation-type annotation-type--' + ann.annotation_type;
     typeBadge.textContent = _i18n['type_' + ann.annotation_type] || ann.annotation_type;
 
-    var pageInfo = document.createElement('span');
-    pageInfo.className = 'annotation-page';
+    var pageInfo = document.createElement('button');
+    pageInfo.type = 'button';
+    pageInfo.className = 'annotation-page annotation-page--link';
+    pageInfo.setAttribute('aria-label', (_i18n.go_to_page || 'Go to page') + ' ' + ann.page);
+    pageInfo.title = (_i18n.go_to_page || 'Go to page') + ' ' + ann.page;
     pageInfo.innerHTML = '<i class="fas fa-file-alt" aria-hidden="true"></i> ' +
       (_i18n.page || 'Page') + ' ' + ann.page;
+    pageInfo.addEventListener('click', function () {
+      if (typeof window._embedpdfScrollToPage === 'function') {
+        window._embedpdfScrollToPage(ann.page);
+      }
+    });
 
     header.appendChild(typeBadge);
     if (ann.color) {

@@ -380,6 +380,23 @@
       font-size: 0.75rem;
       color: #718096;
     }
+    .annotation-page--link {
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      font-size: 0.75rem;
+      color: #718096;
+      text-decoration: none;
+      min-height: 0;
+    }
+    .annotation-page--link:hover {
+      color: #3182ce;
+      text-decoration: underline;
+    }
+    .dark .annotation-page--link:hover {
+      color: #63b3ed;
+    }
     .annotation-content {
       color: #4a5568;
       font-size: 0.9375rem;
@@ -750,6 +767,7 @@
           delete_confirm: {{ _("annotations.delete_confirm") | tojson }},
           page: {{ _("annotations.page") | tojson }},
           color: {{ _("annotations.color") | tojson }},
+          go_to_page: {{ _("annotations.go_to_page") | tojson }},
           type_note: {{ _("annotations.type_note") | tojson }},
           type_highlight: {{ _("annotations.type_highlight") | tojson }},
           type_underline: {{ _("annotations.type_underline") | tojson }},
@@ -801,18 +819,98 @@
 
   const viewerEl = document.getElementById('embedpdf-viewer');
   if (viewerEl) {
+    const fileId = {{ file.id | tojson }};
     {% if processed_file_exists %}
-    const pdfUrl = '/api/files/{{ file.id }}/preview?version=processed';
+    const pdfUrl = '/api/files/' + fileId + '/preview?version=processed';
     {% else %}
-    const pdfUrl = '/api/files/{{ file.id }}/preview?version=original';
+    const pdfUrl = '/api/files/' + fileId + '/preview?version=original';
     {% endif %}
 
-    EmbedPDF.init({
+    const viewer = EmbedPDF.init({
       type: 'container',
       target: viewerEl,
       src: pdfUrl,
     });
+
+    if (viewer) {
+      viewer.registry.then(function (registry) {
+        // ── Page sync: viewer page change → update annotation form ──────────
+        var scrollPlugin = registry.getPlugin('scroll');
+        if (scrollPlugin) {
+          var scroll = scrollPlugin.provides();
+          scroll.onPageChange(function (event) {
+            var pageInput = document.getElementById('annotation-page-input');
+            if (pageInput) {
+              pageInput.value = String(event.pageNumber);
+            }
+          });
+          // Expose scrollToPage so the annotations panel can navigate the viewer
+          window._embedpdfScrollToPage = function (pageNumber) {
+            scroll.scrollToPage({ pageNumber: pageNumber });
+          };
+        }
+
+        // ── Auto-save: viewer annotation events → DocuElevate API ───────────
+        var annotationPlugin = registry.getPlugin('annotation');
+        if (annotationPlugin) {
+          var annotation = annotationPlugin.provides();
+          annotation.onAnnotationEvent(function (event) {
+            if (event.type !== 'create') return;
+            var ann = event.annotation;
+            var pageIndex = typeof ann.pageIndex === 'number' ? ann.pageIndex
+              : (typeof event.pageIndex === 'number' ? event.pageIndex : 0);
+            var page = pageIndex + 1;
+            var rect = ann.rect || { x: 0, y: 0, width: 0, height: 0 };
+            var color = ann.strokeColor || ann.color || undefined;
+            var content = (ann.contents || '').trim();
+            // Map PDF annotation subtypes to DocuElevate annotation types
+            var typeMap = {
+              highlight: 'highlight',
+              underline: 'underline',
+              strikeout: 'strikethrough',
+              squiggly: 'underline',
+              text: 'note',
+              freetext: 'note',
+              ink: 'note',
+              square: 'note',
+              circle: 'note',
+            };
+            var annType = typeMap[String(ann.type).toLowerCase()] || 'note';
+            if (!content) {
+              var typeLabel = annType.charAt(0).toUpperCase() + annType.slice(1);
+              content = typeLabel + ' \u2014 p.' + page;
+            }
+            var payload = {
+              page: page,
+              x: rect.x || 0,
+              y: rect.y || 0,
+              width: rect.width || 0,
+              height: rect.height || 0,
+              annotation_type: annType,
+              content: content,
+            };
+            if (color) {
+              payload.color = color;
+            }
+            fetch('/api/files/' + fileId + '/annotations', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            })
+              .then(function (r) {
+                if (r.ok && typeof window._reloadAnnotations === 'function') {
+                  window._reloadAnnotations();
+                }
+              })
+              .catch(function (err) {
+                console.error('Failed to save viewer annotation:', err);
+              });
+          });
+        }
+      }).catch(function () {});
+    }
   }
 </script>
 {% endif %}
 {% endblock %}
+
