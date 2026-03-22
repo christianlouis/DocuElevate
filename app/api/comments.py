@@ -264,8 +264,9 @@ def create_comment(
 
             if _settings.multi_user_enabled:
                 for mentioned_user in mentions:
-                    # Skip the commenter themselves and the file owner
-                    if mentioned_user in (owner_id, file_record.owner_id):
+                    # Skip the file owner (already has full access) and the commenter
+                    # themselves (they already have access to be posting a comment).
+                    if mentioned_user in {file_record.owner_id, owner_id}:
                         continue
                     existing_share = (
                         db.query(FileShare)

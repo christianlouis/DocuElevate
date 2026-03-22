@@ -103,7 +103,9 @@
       var roleLabel = s.role === 'editor' ? _t('role_editor') : _t('role_viewer');
       return (
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;padding:0.5rem 0;border-bottom:1px solid #f1f5f9;">' +
-          '<span style="font-size:0.875rem;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;" title="' + _esc(s.user_id) + '">' +
+          '<span style="font-size:0.875rem;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;" ' +
+            'aria-label="' + _esc(_t('user_id_label') + ': ' + (s.display_name || s.user_id)) + '" ' +
+            'title="' + _esc(s.user_id) + '">' +
             _esc(s.display_name || s.user_id) +
           '</span>' +
           '<select' +

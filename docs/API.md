@@ -3108,3 +3108,141 @@ Returns all non-blocked user profiles for the @mention autocomplete.
   { "user_id": "bob", "display_name": "Bob Baker" }
 ]
 ```
+
+---
+
+## File Sharing & Permissions
+
+DocuElevate supports per-user document sharing with role-based access control.
+
+### Roles
+
+| Role     | View | Comment / Annotate | Edit metadata | Delete | Share |
+|----------|------|--------------------|---------------|--------|-------|
+| `owner`  | ✓    | ✓                  | ✓             | ✓      | ✓     |
+| `editor` | ✓    | ✓                  | ✓             | ✗      | ✗     |
+| `viewer` | ✓    | ✓                  | ✗             | ✗      | ✗     |
+
+- Only the **file owner** can share a document, change roles, or delete the document.
+- When a user is **@mentioned** in a comment they are automatically granted `viewer` access to the document (multi-user mode only).
+
+---
+
+### List Shares
+
+**GET** `/api/files/{file_id}/shares`
+
+Returns all active shares for a document.  Only the file owner (or an admin) may call this endpoint.
+
+**Response (200):**
+```json
+[
+  {
+    "id": 1,
+    "file_id": 42,
+    "owner_id": "alice",
+    "shared_with_user_id": "bob",
+    "role": "viewer",
+    "created_at": "2026-03-22T10:00:00+00:00",
+    "updated_at": "2026-03-22T10:00:00+00:00"
+  }
+]
+```
+
+**Error Responses:**
+- `403`: Not the file owner
+- `404`: File not found
+
+---
+
+### Create Share
+
+**POST** `/api/files/{file_id}/shares`
+
+Share a document with another user.  Only the file owner may call this endpoint.  If the user already has a share, their role is updated.
+
+**Request:**
+```json
+{
+  "shared_with_user_id": "bob",
+  "role": "viewer"
+}
+```
+
+`role` must be `"viewer"` (default) or `"editor"`.
+
+**Response (201):**
+```json
+{
+  "id": 1,
+  "file_id": 42,
+  "owner_id": "alice",
+  "shared_with_user_id": "bob",
+  "role": "viewer",
+  "created_at": "2026-03-22T10:00:00+00:00",
+  "updated_at": "2026-03-22T10:00:00+00:00"
+}
+```
+
+**Error Responses:**
+- `403`: Not the file owner
+- `422`: Invalid role, empty user ID, or sharing with self
+
+---
+
+### Update Share Role
+
+**PUT** `/api/files/{file_id}/shares/{share_id}`
+
+Change the role of an existing share.  Only the file owner may call this endpoint.
+
+**Request:**
+```json
+{
+  "role": "editor"
+}
+```
+
+**Response (200):** Updated share object.
+
+**Error Responses:**
+- `403`: Not the file owner
+- `404`: Share not found
+- `422`: Invalid role
+
+---
+
+### Revoke Share
+
+**DELETE** `/api/files/{file_id}/shares/{share_id}`
+
+Remove a user's access to a document.  Only the file owner may revoke shares.
+
+**Response (200):**
+```json
+{ "status": "success", "message": "Share revoked successfully" }
+```
+
+**Error Responses:**
+- `403`: Not the file owner
+- `404`: Share not found
+
+---
+
+### List Shared With
+
+**GET** `/api/files/{file_id}/shared-with`
+
+Returns who a document is shared with.  Accessible to any user with at least `viewer` access (owner, editors, and viewers can all call this).
+
+**Response (200):**
+```json
+[
+  {
+    "share_id": 1,
+    "user_id": "bob",
+    "display_name": "Bob Baker",
+    "role": "viewer"
+  }
+]
+```

@@ -503,7 +503,11 @@ def file_annotations_page(request: Request, file_id: int, db: Session = Depends(
         current_owner_id = get_current_owner_id(request)
         user_session = request.session.get("user")
         is_admin = isinstance(user_session, dict) and bool(user_session.get("is_admin"))
-        current_user_role = "owner" if is_admin else (get_file_role(file_record, current_owner_id, db) or "viewer")
+        if is_admin:
+            current_user_role: str | None = "owner"
+        else:
+            current_user_role = get_file_role(file_record, current_owner_id, db)
+            # None means no access — the template will not show owner-only UI
 
         return templates.TemplateResponse(
             "file_annotations.html",
