@@ -406,7 +406,7 @@ Credentials are encrypted at rest using Fernet encryption.
 
 ### Social Login Providers
 
-Social login lets users sign in with their existing Google, Microsoft, Apple, or Dropbox accounts. Each provider is independently enabled and configured. For detailed setup instructions see the [Social Login Setup Guide](SocialLoginSetup.md).
+Social login lets users sign in with their existing Google, Microsoft, Apple, Dropbox, or GitHub accounts. Each provider is independently enabled and configured. For detailed setup instructions see the [Social Login Setup Guide](SocialLoginSetup.md).
 
 | **Variable** | **Description** | **Default** |
 |---|---|---|
@@ -425,6 +425,33 @@ Social login lets users sign in with their existing Google, Microsoft, Apple, or
 | `SOCIAL_AUTH_DROPBOX_ENABLED` | Enable Dropbox Sign-In. | `false` |
 | `SOCIAL_AUTH_DROPBOX_CLIENT_ID` | Dropbox OAuth2 App Key. | *(empty)* |
 | `SOCIAL_AUTH_DROPBOX_CLIENT_SECRET` | Dropbox OAuth2 App Secret. | *(empty)* |
+| `SOCIAL_AUTH_GITHUB_ENABLED` | Enable GitHub Sign-In. | `false` |
+| `SOCIAL_AUTH_GITHUB_CLIENT_ID` | GitHub OAuth2 client ID from GitHub Developer Settings. | *(empty)* |
+| `SOCIAL_AUTH_GITHUB_CLIENT_SECRET` | GitHub OAuth2 client secret. | *(empty)* |
+| `SSO_AUTO_LOGIN` | Automatically redirect to SSO login when authentication is required. | `false` |
+
+### SSO Providers
+
+| **Variable** | **Description** | **Default** |
+|---|---|---|
+| `SOCIAL_AUTH_KEYCLOAK_ENABLED` | Enable Keycloak SSO. | `false` |
+| `SOCIAL_AUTH_KEYCLOAK_CLIENT_ID` | Keycloak OAuth2 client ID. | *(empty)* |
+| `SOCIAL_AUTH_KEYCLOAK_CLIENT_SECRET` | Keycloak OAuth2 client secret. | *(empty)* |
+| `SOCIAL_AUTH_KEYCLOAK_SERVER_URL` | Keycloak server base URL (e.g. `https://keycloak.example.com`). | *(empty)* |
+| `SOCIAL_AUTH_KEYCLOAK_REALM` | Keycloak realm name. | *(empty)* |
+| `SOCIAL_AUTH_GENERIC_OAUTH2_ENABLED` | Enable a generic OAuth2 SSO provider. | `false` |
+| `SOCIAL_AUTH_GENERIC_OAUTH2_CLIENT_ID` | Generic OAuth2 client ID. | *(empty)* |
+| `SOCIAL_AUTH_GENERIC_OAUTH2_CLIENT_SECRET` | Generic OAuth2 client secret. | *(empty)* |
+| `SOCIAL_AUTH_GENERIC_OAUTH2_AUTHORIZE_URL` | Generic OAuth2 authorization URL. | *(empty)* |
+| `SOCIAL_AUTH_GENERIC_OAUTH2_TOKEN_URL` | Generic OAuth2 token endpoint URL. | *(empty)* |
+| `SOCIAL_AUTH_GENERIC_OAUTH2_USERINFO_URL` | Generic OAuth2 userinfo endpoint URL. | *(empty)* |
+| `SOCIAL_AUTH_GENERIC_OAUTH2_SCOPE` | Space-separated list of OAuth2 scopes. | `openid profile email` |
+| `SOCIAL_AUTH_GENERIC_OAUTH2_NAME` | Display name for the provider button. | `OAuth2` |
+| `SOCIAL_AUTH_SAML2_ENABLED` | Enable SAML2 SSO authentication. | `false` |
+| `SOCIAL_AUTH_SAML2_ENTITY_ID` | SAML2 Identity Provider Entity ID. | *(empty)* |
+| `SOCIAL_AUTH_SAML2_SSO_URL` | SAML2 Identity Provider SSO URL. | *(empty)* |
+| `SOCIAL_AUTH_SAML2_CERTIFICATE` | SAML2 Identity Provider X.509 certificate (PEM format). | *(empty)* |
+| `SOCIAL_AUTH_SAML2_NAME` | Display name for the SAML2 provider. | `SAML2` |
 
 ### Multi-User Mode
 
@@ -1375,6 +1402,9 @@ For detailed setup instructions, see the [Amazon S3 Setup Guide](AmazonS3Setup.m
 | `NOTIFY_ON_USER_SIGNUP`    | Send admin notification when a new user signs up (`True`/`False`, default `True`) |
 | `NOTIFY_ON_PLAN_CHANGE`    | Send admin notification when a user changes their subscription plan (`True`/`False`, default `True`) |
 | `NOTIFY_ON_PAYMENT_ISSUE`  | Send admin notification when a payment issue is reported for a user (`True`/`False`, default `True`) |
+| `TELEGRAM_ENABLED`         | Enable Telegram bot notifications. | `false` |
+| `TELEGRAM_BOT_TOKEN`       | Telegram Bot API token from @BotFather. | *(empty)* |
+| `TELEGRAM_CHAT_ID`         | Telegram chat ID to send notifications to. | *(empty)* |
 
 #### User-Event Notifications
 

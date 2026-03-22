@@ -305,6 +305,38 @@ class Settings(BaseSettings):
     authentik_client_secret: Optional[str] = None
     authentik_config_url: Optional[str] = None
     oauth_provider_name: Optional[str] = None  # Name to display for the OAuth provider
+    sso_auto_login: bool = Field(
+        default=False,
+        description=(
+            "Automatically redirect to SSO login when authentication is required. "
+            "When enabled, users are sent directly to the SSO provider instead of "
+            "seeing the login page. Only effective when OIDC is configured."
+        ),
+    )
+
+    # Keycloak SSO
+    social_auth_keycloak_enabled: bool = False
+    social_auth_keycloak_client_id: Optional[str] = None
+    social_auth_keycloak_client_secret: Optional[str] = None
+    social_auth_keycloak_server_url: Optional[str] = None
+    social_auth_keycloak_realm: Optional[str] = None
+
+    # Generic OAuth2 SSO
+    social_auth_generic_oauth2_enabled: bool = False
+    social_auth_generic_oauth2_client_id: Optional[str] = None
+    social_auth_generic_oauth2_client_secret: Optional[str] = None
+    social_auth_generic_oauth2_authorize_url: Optional[str] = None
+    social_auth_generic_oauth2_token_url: Optional[str] = None
+    social_auth_generic_oauth2_userinfo_url: Optional[str] = None
+    social_auth_generic_oauth2_scope: str = "openid profile email"
+    social_auth_generic_oauth2_name: str = "OAuth2"
+
+    # SAML2 SSO
+    social_auth_saml2_enabled: bool = False
+    social_auth_saml2_entity_id: Optional[str] = None
+    social_auth_saml2_sso_url: Optional[str] = None
+    social_auth_saml2_certificate: Optional[str] = None
+    social_auth_saml2_name: str = "SAML2"
 
     # Social Login Providers
     # Google OAuth2
@@ -347,6 +379,11 @@ class Settings(BaseSettings):
             "Default: False."
         ),
     )
+
+    # GitHub OAuth2
+    social_auth_github_enabled: bool = False
+    social_auth_github_client_id: Optional[str] = None
+    social_auth_github_client_secret: Optional[str] = None
 
     # Local user signup
     allow_local_signup: bool = Field(
@@ -843,6 +880,11 @@ class Settings(BaseSettings):
             "Staggers upload starts to smooth out server load. Default: 500 ms."
         ),
     )
+
+    # Telegram Bot
+    telegram_bot_token: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
+    telegram_enabled: bool = False
 
     # Notification settings
     notification_urls: Union[List[str], str] = Field(

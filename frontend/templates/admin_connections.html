@@ -1,0 +1,334 @@
+{% extends "base.html" %}
+
+{% block title %}{{ _("connections.title") }} - {{ _("app.name") }}{% endblock %}
+
+{% block content %}
+<main id="main-content" class="max-w-4xl mx-auto px-4 py-8">
+  <div class="mb-8">
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ _("connections.title") }}</h1>
+    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ _("connections.description") }}</p>
+  </div>
+
+  <!-- SSO Auto Login Section -->
+  {% if oauth_configured %}
+  <section class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ _("connections.sso_auto_login_title") }}</h2>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ _("connections.sso_auto_login_description") }}</p>
+      </div>
+      <div>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" id="sso-auto-login-toggle" class="sr-only peer"
+                 {% if sso_auto_login %}checked{% endif %}
+                 onchange="toggleSetting('sso_auto_login', this.checked)">
+          <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600" style="min-width:44px; min-height:24px;"></div>
+          <span class="ml-3 text-sm font-medium text-gray-700 dark:text-gray-300">{{ _("connections.sso_auto_login") }}</span>
+        </label>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Mobile Phone Upload Section -->
+  <section class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ _("connections.mobile_upload_title") }}</h2>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ _("connections.mobile_upload_description") }}</p>
+        {% if not frontend_url_configured %}
+        <p class="text-xs text-amber-600 dark:text-amber-400 mt-2">
+          <i class="fas fa-exclamation-triangle mr-1" aria-hidden="true"></i>
+          {{ _("connections.frontend_url_note") }}
+        </p>
+        {% endif %}
+      </div>
+      <div>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" id="qr-upload-toggle" class="sr-only peer"
+                 {% if qr_login_enabled %}checked{% endif %} disabled>
+          <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600" style="min-width:44px; min-height:24px;"></div>
+          <span class="ml-3 text-sm font-medium text-gray-700 dark:text-gray-300">{{ _("connections.qr_code_enabled") }}</span>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <!-- Services Section -->
+  <section class="mb-6">
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{{ _("connections.unlinked_services") }}</h2>
+    <div class="space-y-3">
+      {% for service in services %}
+      <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700">
+        <div class="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div class="flex items-center gap-3 flex-1 min-w-0">
+            <div class="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700">
+              <i class="{{ service.icon }} text-lg" aria-hidden="true"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+              <h3 class="text-base font-semibold text-gray-900 dark:text-white truncate">{{ service.name }}</h3>
+              <p class="text-sm text-gray-500 dark:text-gray-400">{{ service.description }}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            {% if service.linked %}
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+              <i class="fas fa-check-circle mr-1" aria-hidden="true"></i> {{ _("connections.linked") }}
+            </span>
+            {% else %}
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+              {{ _("connections.unlinked") }}
+            </span>
+            {% endif %}
+            <button
+              type="button"
+              class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              style="min-height:44px; min-width:44px"
+              onclick="openServiceModal('{{ service.key }}')"
+              aria-label="{{ _('connections.configure') }} {{ service.name }}"
+            >
+              <i class="fas fa-cog mr-2" aria-hidden="true"></i>
+              {{ _("connections.configure") }}
+            </button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <p class="text-xs text-gray-400 dark:text-gray-500 mt-4">
+    <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
+    {{ _("connections.save_note") }}
+  </p>
+</main>
+
+<!-- Service Configuration Modal -->
+<div id="service-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 hidden" role="dialog" aria-modal="true" aria-labelledby="service-modal-title" aria-describedby="service-modal-description">
+  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg overflow-y-auto max-h-[90vh]" onclick="event.stopPropagation()">
+    <div class="px-6 pt-6 pb-2 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
+      <div>
+        <h2 id="service-modal-title" class="text-lg font-semibold text-gray-900 dark:text-white"></h2>
+        <p id="service-modal-description" class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ _("connections.save_note") }}</p>
+      </div>
+      <button type="button" onclick="closeServiceModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md p-1" style="min-height:44px; min-width:44px" aria-label="Close">
+        <i class="fas fa-times text-xl" aria-hidden="true"></i>
+      </button>
+    </div>
+    <form id="service-form" onsubmit="saveServiceSettings(event)">
+      <div id="service-fields" class="px-6 py-4 space-y-4">
+        <!-- Dynamically populated -->
+      </div>
+      <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+        <button type="button" onclick="closeServiceModal()" class="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700" style="min-height:44px;">
+          {{ _("common.cancel") }}
+        </button>
+        <button type="submit" class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md bg-indigo-600 hover:bg-indigo-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" style="min-height:44px;">
+          <i class="fas fa-save mr-2" aria-hidden="true"></i>
+          {{ _("common.save") }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Accessible notification banner -->
+<div id="save-notification" class="fixed top-4 right-4 z-[60] hidden max-w-sm" role="alert" aria-live="assertive">
+  <div id="save-notification-inner" class="rounded-lg shadow-lg px-4 py-3 text-sm font-medium flex items-center gap-2">
+    <i id="save-notification-icon" class="fas" aria-hidden="true"></i>
+    <span id="save-notification-text"></span>
+  </div>
+</div>
+
+<script>
+const serviceSettings = {{ service_settings | tojson }};
+const settingMetadata = {};
+{% for svc_key, svc_fields in service_settings.items() %}
+{% for field in svc_fields %}
+settingMetadata['{{ field.key }}'] = {{ field.metadata | tojson }};
+{% endfor %}
+{% endfor %}
+
+let currentServiceKey = null;
+
+function openServiceModal(serviceKey) {
+  currentServiceKey = serviceKey;
+  const fields = serviceSettings[serviceKey] || [];
+  const modal = document.getElementById('service-modal');
+  const title = document.getElementById('service-modal-title');
+  const container = document.getElementById('service-fields');
+
+  // Find service name from the page
+  const serviceCards = document.querySelectorAll('[onclick*="' + serviceKey + '"]');
+  let serviceName = serviceKey;
+  if (serviceCards.length > 0) {
+    const card = serviceCards[0].closest('.bg-white, .dark\\:bg-gray-800');
+    if (card) {
+      const h3 = card.querySelector('h3');
+      if (h3) serviceName = h3.textContent.trim();
+    }
+  }
+  title.textContent = '{{ _("connections.configure") }} ' + serviceName;
+
+  container.innerHTML = '';
+  fields.forEach(function(field) {
+    const meta = field.metadata || {};
+    const div = document.createElement('div');
+
+    const label = document.createElement('label');
+    label.setAttribute('for', 'field-' + field.key);
+    label.className = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1';
+    label.textContent = field.key.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+    div.appendChild(label);
+
+    if (meta.description) {
+      const desc = document.createElement('p');
+      desc.className = 'text-xs text-gray-500 dark:text-gray-400 mb-2';
+      desc.textContent = meta.description;
+      div.appendChild(desc);
+    }
+
+    if (meta.type === 'boolean') {
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.id = 'field-' + field.key;
+      checkbox.name = field.key;
+      checkbox.className = 'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded';
+      const val = field.value;
+      if (val === true || val === 'true' || val === '1' || val === 'True') {
+        checkbox.checked = true;
+      }
+      div.appendChild(checkbox);
+    } else {
+      const input = document.createElement('input');
+      input.type = meta.sensitive ? 'password' : 'text';
+      input.id = 'field-' + field.key;
+      input.name = field.key;
+      input.className = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white text-sm';
+      input.placeholder = meta.sensitive ? '••••••••' : '';
+      // Don't pre-fill sensitive values with masked data
+      if (!meta.sensitive && field.value != null) {
+        input.value = field.value;
+      }
+      div.appendChild(input);
+    }
+
+    if (meta.help_link) {
+      const link = document.createElement('a');
+      link.href = meta.help_link;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.className = 'text-xs text-indigo-600 hover:text-indigo-500 mt-1 inline-block';
+      link.textContent = meta.help_link_label || 'Documentation';
+      div.appendChild(link);
+    }
+
+    container.appendChild(div);
+  });
+
+  modal.classList.remove('hidden');
+  // Focus first input
+  setTimeout(function() {
+    const firstInput = container.querySelector('input');
+    if (firstInput) firstInput.focus();
+  }, 100);
+}
+
+function closeServiceModal() {
+  document.getElementById('service-modal').classList.add('hidden');
+  currentServiceKey = null;
+}
+
+function saveServiceSettings(event) {
+  event.preventDefault();
+  if (!currentServiceKey) return;
+
+  const fields = serviceSettings[currentServiceKey] || [];
+  const updates = {};
+
+  fields.forEach(function(field) {
+    const meta = field.metadata || {};
+    const el = document.getElementById('field-' + field.key);
+    if (!el) return;
+
+    if (meta.type === 'boolean') {
+      updates[field.key] = el.checked ? 'true' : 'false';
+    } else {
+      // Only send non-empty values for sensitive fields (empty = no change)
+      if (meta.sensitive && !el.value) return;
+      updates[field.key] = el.value;
+    }
+  });
+
+  // Save each setting via the API
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  const promises = Object.entries(updates).map(function([key, value]) {
+    return fetch('/api/settings/' + key, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfToken,
+      },
+      body: JSON.stringify({ value: value }),
+    });
+  });
+
+  Promise.all(promises)
+    .then(function(responses) {
+      const allOk = responses.every(function(r) { return r.ok; });
+      if (allOk) {
+        closeServiceModal();
+        location.reload();
+      } else {
+        showNotification('error', 'Some settings failed to save. Please check the values and try again.');
+      }
+    })
+    .catch(function(err) {
+      console.error('Error saving settings:', err);
+      showNotification('error', 'Failed to save settings. Please try again.');
+    });
+}
+
+function toggleSetting(key, value) {
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  fetch('/api/settings/' + key, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+    body: JSON.stringify({ value: value ? 'true' : 'false' }),
+  }).catch(function(err) {
+    console.error('Error toggling setting:', err);
+  });
+}
+
+// Close modal on Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeServiceModal();
+});
+
+// Close modal on backdrop click
+document.getElementById('service-modal')?.addEventListener('click', function(e) {
+  if (e.target === this) closeServiceModal();
+});
+
+function showNotification(type, message) {
+  var el = document.getElementById('save-notification');
+  var inner = document.getElementById('save-notification-inner');
+  var icon = document.getElementById('save-notification-icon');
+  var text = document.getElementById('save-notification-text');
+  if (!el) return;
+  text.textContent = message;
+  if (type === 'error') {
+    inner.className = 'rounded-lg shadow-lg px-4 py-3 text-sm font-medium flex items-center gap-2 bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+    icon.className = 'fas fa-exclamation-circle';
+  } else {
+    inner.className = 'rounded-lg shadow-lg px-4 py-3 text-sm font-medium flex items-center gap-2 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+    icon.className = 'fas fa-check-circle';
+  }
+  el.classList.remove('hidden');
+  setTimeout(function() { el.classList.add('hidden'); }, 5000);
+}
+</script>
+{% endblock %}

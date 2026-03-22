@@ -195,6 +195,299 @@ async def credentials_page(request: Request, db: Session = Depends(get_db)):
         )
 
 
+@router.get("/admin/connections")
+@require_login
+@require_admin_access
+async def connections_page(request: Request, db: Session = Depends(get_db)):
+    """
+    Connections management page - admin only.
+
+    Allows administrators to configure external authentication providers,
+    SSO settings, and service integrations through a wizard-like interface.
+    """
+    try:
+        from app.auth import OAUTH_CONFIGURED, SOCIAL_PROVIDERS
+
+        db_settings = get_all_settings_from_db(db)
+
+        def _get_effective(key: str):
+            """Return DB value if present, else fall back to settings attr."""
+            if key in db_settings and db_settings[key] is not None:
+                return db_settings[key]
+            return getattr(settings, key, None)
+
+        def _is_truthy(val) -> bool:
+            if isinstance(val, bool):
+                return val
+            if isinstance(val, str):
+                return val.lower() in ("true", "1", "yes")
+            return bool(val)
+
+        # Build service status list
+        services = []
+
+        # --- SSO (Authentik / OIDC) ---
+        services.append(
+            {
+                "key": "oidc",
+                "name": settings.oauth_provider_name or "Single Sign-On",
+                "icon": "fas fa-lock",
+                "type": "SSO",
+                "linked": OAUTH_CONFIGURED,
+                "description": "OpenID Connect SSO provider",
+                "settings_keys": [
+                    "authentik_client_id",
+                    "authentik_client_secret",
+                    "authentik_config_url",
+                    "oauth_provider_name",
+                ],
+            }
+        )
+
+        # --- Google ---
+        services.append(
+            {
+                "key": "google",
+                "name": "Google",
+                "icon": "fab fa-google",
+                "type": "Sign-in authentication",
+                "linked": "google" in SOCIAL_PROVIDERS,
+                "description": "Sign-in authentication",
+                "settings_keys": [
+                    "social_auth_google_enabled",
+                    "social_auth_google_client_id",
+                    "social_auth_google_client_secret",
+                ],
+            }
+        )
+
+        # --- GitHub ---
+        services.append(
+            {
+                "key": "github",
+                "name": "GitHub",
+                "icon": "fab fa-github",
+                "type": "Sign-in authentication",
+                "linked": "github" in SOCIAL_PROVIDERS,
+                "description": "Sign-in authentication",
+                "settings_keys": [
+                    "social_auth_github_enabled",
+                    "social_auth_github_client_id",
+                    "social_auth_github_client_secret",
+                ],
+            }
+        )
+
+        # --- Microsoft ---
+        services.append(
+            {
+                "key": "microsoft",
+                "name": "Microsoft",
+                "icon": "fab fa-microsoft",
+                "type": "Sign-in authentication",
+                "linked": "microsoft" in SOCIAL_PROVIDERS,
+                "description": "Sign-in authentication",
+                "settings_keys": [
+                    "social_auth_microsoft_enabled",
+                    "social_auth_microsoft_client_id",
+                    "social_auth_microsoft_client_secret",
+                    "social_auth_microsoft_tenant",
+                ],
+            }
+        )
+
+        # --- Apple ---
+        services.append(
+            {
+                "key": "apple",
+                "name": "Apple",
+                "icon": "fab fa-apple",
+                "type": "Sign-in authentication",
+                "linked": "apple" in SOCIAL_PROVIDERS,
+                "description": "Sign-in authentication",
+                "settings_keys": [
+                    "social_auth_apple_enabled",
+                    "social_auth_apple_client_id",
+                    "social_auth_apple_team_id",
+                    "social_auth_apple_key_id",
+                    "social_auth_apple_private_key",
+                ],
+            }
+        )
+
+        # --- Dropbox ---
+        services.append(
+            {
+                "key": "dropbox",
+                "name": "Dropbox",
+                "icon": "fab fa-dropbox",
+                "type": "Sign-in authentication",
+                "linked": "dropbox" in SOCIAL_PROVIDERS,
+                "description": "Sign-in authentication",
+                "settings_keys": [
+                    "social_auth_dropbox_enabled",
+                    "social_auth_dropbox_client_id",
+                    "social_auth_dropbox_client_secret",
+                    "social_auth_dropbox_use_global_credentials",
+                ],
+            }
+        )
+
+        # --- Keycloak ---
+        services.append(
+            {
+                "key": "keycloak",
+                "name": "Keycloak",
+                "icon": "fas fa-key",
+                "type": "SSO",
+                "linked": "keycloak" in SOCIAL_PROVIDERS,
+                "description": "SSO",
+                "settings_keys": [
+                    "social_auth_keycloak_enabled",
+                    "social_auth_keycloak_client_id",
+                    "social_auth_keycloak_client_secret",
+                    "social_auth_keycloak_server_url",
+                    "social_auth_keycloak_realm",
+                ],
+            }
+        )
+
+        # --- Generic OAuth2 ---
+        services.append(
+            {
+                "key": "generic_oauth2",
+                "name": "Generic OAuth2",
+                "icon": "fas fa-sign-in-alt",
+                "type": "SSO",
+                "linked": "generic_oauth2" in SOCIAL_PROVIDERS,
+                "description": "SSO",
+                "settings_keys": [
+                    "social_auth_generic_oauth2_enabled",
+                    "social_auth_generic_oauth2_client_id",
+                    "social_auth_generic_oauth2_client_secret",
+                    "social_auth_generic_oauth2_authorize_url",
+                    "social_auth_generic_oauth2_token_url",
+                    "social_auth_generic_oauth2_userinfo_url",
+                    "social_auth_generic_oauth2_scope",
+                    "social_auth_generic_oauth2_name",
+                ],
+            }
+        )
+
+        # --- SAML2 ---
+        _saml2_configured = bool(
+            _is_truthy(_get_effective("social_auth_saml2_enabled"))
+            and _get_effective("social_auth_saml2_sso_url")
+            and _get_effective("social_auth_saml2_entity_id")
+        )
+        services.append(
+            {
+                "key": "saml2",
+                "name": settings.social_auth_saml2_name or "SAML2",
+                "icon": "fas fa-id-badge",
+                "type": "SSO (SAML)",
+                "linked": _saml2_configured,
+                "description": "SSO (SAML)",
+                "settings_keys": [
+                    "social_auth_saml2_enabled",
+                    "social_auth_saml2_entity_id",
+                    "social_auth_saml2_sso_url",
+                    "social_auth_saml2_certificate",
+                    "social_auth_saml2_name",
+                ],
+            }
+        )
+
+        # --- SMTP Mail ---
+        _smtp_configured = bool(_get_effective("email_host") and _get_effective("email_username"))
+        services.append(
+            {
+                "key": "smtp",
+                "name": "SMTP Mail",
+                "icon": "fas fa-envelope",
+                "type": "Email Notifications",
+                "linked": _smtp_configured,
+                "description": "Email Notifications",
+                "settings_keys": [
+                    "email_host",
+                    "email_port",
+                    "email_username",
+                    "email_password",
+                    "email_use_tls",
+                    "email_sender",
+                ],
+            }
+        )
+
+        # --- Telegram Bot ---
+        _telegram_configured = bool(
+            _is_truthy(_get_effective("telegram_enabled")) and _get_effective("telegram_bot_token")
+        )
+        services.append(
+            {
+                "key": "telegram",
+                "name": "Telegram Bot",
+                "icon": "fab fa-telegram",
+                "type": "Notifications",
+                "linked": _telegram_configured,
+                "description": "Configure Telegram bot connectivity, access controls, and feedback behavior.",
+                "settings_keys": [
+                    "telegram_enabled",
+                    "telegram_bot_token",
+                    "telegram_chat_id",
+                ],
+            }
+        )
+
+        # Get setting details for the modal forms
+        service_settings = {}
+        for svc in services:
+            svc_settings = []
+            for skey in svc["settings_keys"]:
+                meta = get_setting_metadata(skey)
+                # Get current effective value
+                val = _get_effective(skey)
+                display_val = val
+                if meta.get("sensitive") and val:
+                    display_val = mask_sensitive_value(val)
+                svc_settings.append(
+                    {
+                        "key": skey,
+                        "value": val,
+                        "display_value": display_val if display_val is not None else "",
+                        "metadata": meta,
+                    }
+                )
+            service_settings[svc["key"]] = svc_settings
+
+        # Feature toggles
+        sso_auto_login = _is_truthy(_get_effective("sso_auto_login"))
+        qr_login_enabled = _is_truthy(_get_effective("qr_login_challenge_ttl_seconds"))
+        frontend_url_configured = bool(_get_effective("public_base_url"))
+
+        return templates.TemplateResponse(
+            "admin_connections.html",
+            {
+                "request": request,
+                "services": services,
+                "service_settings": service_settings,
+                "sso_auto_login": sso_auto_login,
+                "oauth_configured": OAUTH_CONFIGURED,
+                "qr_login_enabled": qr_login_enabled,
+                "frontend_url_configured": frontend_url_configured,
+                "app_version": settings.version,
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading connections page: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load connections page",
+        )
+
+
 @router.get("/admin/settings/audit-log")
 @require_login
 @require_admin_access
