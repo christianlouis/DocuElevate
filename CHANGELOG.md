@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.169.0 (2026-03-22)
+
+### Bug Fixes
+
+- **migrations**: Fix down_revision type annotation in 042_add_file_shares
+  ([`5f5e18d`](https://github.com/christianlouis/DocuElevate/commit/5f5e18d26165edbeb18be099c23b3178655068f0))
+
+- **sharing**: Address code review: fix default role, auto-share logic, aria labels
+  ([`124b802`](https://github.com/christianlouis/DocuElevate/commit/124b802c8f49a63e032f46cf8e1980e526b4ea89))
+
+### Features
+
+- **sharing**: Add file sharing and role-based access management
+  ([`6f2752b`](https://github.com/christianlouis/DocuElevate/commit/6f2752bdf804789e704983a71afe42e04ea852b6))
+
+
 ## v0.168.1 (2026-03-22)
 
 ### Bug Fixes
