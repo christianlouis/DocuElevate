@@ -15,7 +15,15 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user_id, require_login
 from app.database import get_db
-from app.models import DocumentAnnotation, DocumentComment, FileRecord, UserProfile
+from app.models import (
+    FILE_SHARE_ROLE_VIEWER,
+    DocumentAnnotation,
+    DocumentComment,
+    FileRecord,
+    FileShare,
+    UserProfile,
+)
+from app.utils.user_scope import get_current_owner_id, has_file_role
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +149,7 @@ def list_comments(request: Request, file_id: int, db: DbSession):
     """List all comments for a document, organized into threads.
 
     Returns a threaded tree where top-level comments contain nested
-    ``replies``.
+    ``replies``.  Requires at least viewer access.
 
     Path Parameters:
         file_id: The ID of the document.
@@ -149,8 +157,15 @@ def list_comments(request: Request, file_id: int, db: DbSession):
     Returns:
         A dict with ``file_id``, ``comments`` (threaded), and ``total``.
     """
+    user_id = get_current_owner_id(request)
+    user = request.session.get("user")
+    is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
+
     file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
     if not file_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    if not is_admin and not has_file_role(file_record, user_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     comments = (
@@ -176,7 +191,10 @@ def create_comment(
     """Create a new comment on a document.
 
     Automatically extracts @mentions from the comment body and stores
-    them for later notification or UI highlighting.
+    them for later notification or UI highlighting.  When multi-user
+    mode is enabled, any mentioned user that does not already have
+    access to the document is automatically granted ``viewer`` access by
+    the file owner so they can read the file and continue the discussion.
 
     Path Parameters:
         file_id: The ID of the document to comment on.
@@ -189,9 +207,15 @@ def create_comment(
         The created comment object.
     """
     user_id = get_current_user_id(request)
+    owner_id = get_current_owner_id(request)
+    user = request.session.get("user")
+    is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
 
     file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
     if not file_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    if not is_admin and not has_file_role(file_record, owner_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     if not isinstance(body, str) or not body.strip():
@@ -230,8 +254,45 @@ def create_comment(
 
     try:
         db.add(comment)
+        db.flush()  # write comment so we can get its id before committing
+
+        # Auto-share the file with mentioned users that don't have access yet.
+        # Only do this in multi-user mode and only when the file has an owner
+        # (unowned files are already visible to all authenticated users).
+        if mentions and file_record.owner_id is not None:
+            from app.config import settings as _settings
+
+            if _settings.multi_user_enabled:
+                for mentioned_user in mentions:
+                    # Skip the commenter themselves and the file owner
+                    if mentioned_user in (owner_id, file_record.owner_id):
+                        continue
+                    existing_share = (
+                        db.query(FileShare)
+                        .filter(
+                            FileShare.file_id == file_id,
+                            FileShare.shared_with_user_id == mentioned_user,
+                        )
+                        .first()
+                    )
+                    if not existing_share:
+                        auto_share = FileShare(
+                            file_id=file_id,
+                            owner_id=file_record.owner_id,
+                            shared_with_user_id=mentioned_user,
+                            role=FILE_SHARE_ROLE_VIEWER,
+                        )
+                        db.add(auto_share)
+                        logger.info(
+                            "Auto-shared file_id=%s with mentioned user=%s as viewer",
+                            file_id,
+                            mentioned_user,
+                        )
+
         db.commit()
         db.refresh(comment)
+    except HTTPException:
+        raise
     except Exception:
         db.rollback()
         logger.exception("Failed to create comment on file_id=%s", file_id)
@@ -402,14 +463,23 @@ def resolve_comment(
 def list_annotations(request: Request, file_id: int, db: DbSession):
     """List all annotations for a document.
 
+    Requires at least viewer access.
+
     Path Parameters:
         file_id: The ID of the document.
 
     Returns:
         A dict with ``file_id``, ``annotations``, and ``total``.
     """
+    user_id = get_current_owner_id(request)
+    user = request.session.get("user")
+    is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
+
     file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
     if not file_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    if not is_admin and not has_file_role(file_record, user_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     annotations = (
@@ -461,9 +531,15 @@ def create_annotation(
         The created annotation object.
     """
     user_id = get_current_user_id(request)
+    owner_id = get_current_owner_id(request)
+    user = request.session.get("user")
+    is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
 
     file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
     if not file_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    if not is_admin and not has_file_role(file_record, owner_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     if not isinstance(content, str) or not content.strip():

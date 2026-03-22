@@ -46,6 +46,7 @@ from app.api.sessions import router as sessions_router
 from app.api.settings import router as settings_router
 from app.api.shared_links import public_router as shared_links_public_router
 from app.api.shared_links import router as shared_links_router
+from app.api.sharing import router as sharing_router
 from app.api.similarity import router as similarity_router
 from app.api.subscriptions import router as subscriptions_router
 from app.api.system_reset import router as system_reset_router
@@ -110,3 +111,4 @@ router.include_router(translation_router)
 router.include_router(classification_rules_router)
 router.include_router(automation_router)
 router.include_router(comments_router)
+router.include_router(sharing_router)
