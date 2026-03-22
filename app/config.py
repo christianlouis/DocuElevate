@@ -244,6 +244,10 @@ class Settings(BaseSettings):
             "Useful for admin-configured non-standard durations."
         ),
     )
+    qr_login_enabled: bool = Field(
+        default=True,
+        description="Enable QR code-based login for mobile device authentication (default: True).",
+    )
     qr_login_challenge_ttl_seconds: int = Field(
         default=120,
         description="Time-to-live in seconds for QR login challenges (default: 2 minutes).",

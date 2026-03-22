@@ -206,6 +206,14 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "qr_login_enabled": {
+        "category": "Authentication",
+        "description": "Enable QR code-based login for mobile device authentication.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "qr_login_challenge_ttl_seconds": {
         "category": "Authentication",
         "description": "Time-to-live in seconds for QR login challenges (default 120).",
