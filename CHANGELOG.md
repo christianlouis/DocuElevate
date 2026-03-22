@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.170.0 (2026-03-22)
+
+### Features
+
+- **ui**: Integrate EmbedPDF viewer with annotations panel for bidirectional sync
+  ([`9c98a84`](https://github.com/christianlouis/DocuElevate/commit/9c98a8438ab81c70cc497191449378b914775731))
+
+
 ## v0.169.1 (2026-03-22)
 
 ### Bug Fixes
