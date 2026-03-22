@@ -238,3 +238,81 @@ html.dark ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
 
 /* ---- Settings page: sidebar active state (dark) ---- */
 html.dark .bg-blue-50 { background-color: #1e3a5f; }
+
+/* =============================================================
+   DOC-TOGGLE  –  cross-browser toggle switch
+   Works with Tailwind v2 CDN (which lacks after:* utilities).
+   Usage:
+     <label class="doc-toggle">
+       <input type="checkbox" class="sr-only" onchange="...">
+       <span class="doc-toggle-track" aria-hidden="true"></span>
+       <span class="ml-3 ...">Label text</span>
+     </label>
+   ============================================================= */
+
+.doc-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.doc-toggle-track {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  min-width: 44px;
+  height: 24px;
+  background-color: #e5e7eb; /* gray-200 */
+  border-radius: 9999px;
+  transition: background-color 0.2s ease-in-out;
+  flex-shrink: 0;
+}
+
+.doc-toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background-color: #ffffff;
+  border: 1px solid #d1d5db; /* gray-300 */
+  border-radius: 9999px;
+  transition: transform 0.2s ease-in-out, border-color 0.2s ease-in-out;
+}
+
+.doc-toggle input[type="checkbox"]:checked + .doc-toggle-track {
+  background-color: #4f46e5; /* indigo-600 */
+}
+
+.doc-toggle input[type="checkbox"]:checked + .doc-toggle-track::after {
+  transform: translateX(20px);
+  border-color: #ffffff;
+}
+
+.doc-toggle input[type="checkbox"]:focus-visible + .doc-toggle-track {
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #6366f1; /* ring-2 ring-indigo-500 with offset */
+}
+
+/* Dark mode overrides */
+html.dark .doc-toggle-track {
+  background-color: #374151; /* gray-700 */
+}
+
+html.dark .doc-toggle-track::after {
+  background-color: #ffffff;
+  border-color: #4b5563; /* gray-600 */
+}
+
+html.dark .doc-toggle input[type="checkbox"]:checked + .doc-toggle-track {
+  background-color: #4f46e5; /* indigo-600 */
+}
+
+html.dark .doc-toggle input[type="checkbox"]:checked + .doc-toggle-track::after {
+  border-color: #ffffff;
+}
+
+html.dark .doc-toggle input[type="checkbox"]:focus-visible + .doc-toggle-track {
+  box-shadow: 0 0 0 2px #111827, 0 0 0 4px #6366f1; /* dark background offset */
+}
