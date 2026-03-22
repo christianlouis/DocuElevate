@@ -464,7 +464,7 @@ async def connections_page(request: Request, db: Session = Depends(get_db)):
 
         # Feature toggles
         sso_auto_login = _is_truthy(_get_effective("sso_auto_login"))
-        qr_login_enabled = _is_truthy(_get_effective("qr_login_challenge_ttl_seconds"))
+        qr_login_enabled = _is_truthy(_get_effective("qr_login_enabled"))
         frontend_url_configured = bool(_get_effective("public_base_url"))
 
         return templates.TemplateResponse(
