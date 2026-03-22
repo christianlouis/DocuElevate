@@ -206,12 +206,12 @@ class TestFileDetailPage:
         db_session.add(file)
         db_session.commit()
 
-        response = client.get(f"/files/{file.id}/detail")
+        response = client.get(f"/files/{file.id}/process")
         assert response.status_code == 200
 
     def test_file_detail_page_not_found(self, client: TestClient, db_session):
         """Test file detail page for non-existent file."""
-        response = client.get("/files/99999/detail")
+        response = client.get("/files/99999/process")
         assert response.status_code == 200  # Still renders template with error
 
     def test_file_detail_page_with_processing_logs(self, client: TestClient, db_session, tmp_path):
@@ -244,7 +244,7 @@ class TestFileDetailPage:
         db_session.add(log2)
         db_session.commit()
 
-        response = client.get(f"/files/{file.id}/detail")
+        response = client.get(f"/files/{file.id}/process")
         assert response.status_code == 200
 
     def test_file_detail_page_with_metadata_json(self, client: TestClient, db_session, tmp_path):
@@ -272,7 +272,7 @@ class TestFileDetailPage:
         db_session.add(file)
         db_session.commit()
 
-        response = client.get(f"/files/{file.id}/detail")
+        response = client.get(f"/files/{file.id}/process")
         assert response.status_code == 200
 
     def test_file_detail_checks_original_file_exists(self, client: TestClient, db_session, tmp_path):
@@ -289,7 +289,7 @@ class TestFileDetailPage:
         db_session.add(file)
         db_session.commit()
 
-        response = client.get(f"/files/{file.id}/detail")
+        response = client.get(f"/files/{file.id}/process")
         assert response.status_code == 200
 
     def test_file_detail_error_handling(self, client: TestClient, db_session):
@@ -1113,7 +1113,7 @@ class TestFileDetailPageAdditional:
         db_session.add(file)
         db_session.commit()
 
-        response = client.get(f"/files/{file.id}/detail")
+        response = client.get(f"/files/{file.id}/process")
         assert response.status_code == 200
 
     def test_file_detail_step_summary_fallback(self, client: TestClient, db_session, tmp_path):
@@ -1144,7 +1144,7 @@ class TestFileDetailPageAdditional:
         db_session.commit()
 
         with patch("app.utils.step_manager.get_step_summary", side_effect=Exception("Table not found")):
-            response = client.get(f"/files/{file.id}/detail")
+            response = client.get(f"/files/{file.id}/process")
             assert response.status_code == 200
 
     def test_file_detail_error_handling(self, client: TestClient, db_session):
@@ -1155,7 +1155,7 @@ class TestFileDetailPageAdditional:
                 Mock(status_code=200),
             ]
             try:
-                response = client.get("/files/1/detail")
+                response = client.get("/files/1/process")
                 assert response.status_code in (200, 500)
             except Exception:
                 pass
@@ -1638,7 +1638,7 @@ class TestFileDetailNoJsonSidecar:
         db_session.add(file)
         db_session.commit()
 
-        response = client.get(f"/files/{file.id}/detail")
+        response = client.get(f"/files/{file.id}/process")
         assert response.status_code == 200
 
 
@@ -1936,7 +1936,7 @@ class TestPipelineInfoInViews:
         pipeline = self._make_system_pipeline(db_session)
         file_rec = self._make_file(db_session, pipeline_id=None)
 
-        response = client.get(f"/files/{file_rec.id}/detail")
+        response = client.get(f"/files/{file_rec.id}/process")
 
         assert response.status_code == 200
         assert b"Standard Processing Pipeline" in response.content
@@ -1946,7 +1946,7 @@ class TestPipelineInfoInViews:
         self._make_system_pipeline(db_session)
         file_rec = self._make_file(db_session, pipeline_id=None)
 
-        response = client.get(f"/files/{file_rec.id}/detail")
+        response = client.get(f"/files/{file_rec.id}/process")
 
         assert response.status_code == 200
         assert b"System Default" in response.content
@@ -1956,28 +1956,28 @@ class TestPipelineInfoInViews:
         pipeline = self._make_custom_pipeline(db_session)
         file_rec = self._make_file(db_session, pipeline_id=pipeline.id)
 
-        response = client.get(f"/files/{file_rec.id}/detail")
+        response = client.get(f"/files/{file_rec.id}/process")
 
         assert response.status_code == 200
         assert b"My Custom Pipeline" in response.content
         assert b"Custom" in response.content
 
     def test_file_view_page_includes_pipeline_name(self, client, db_session):
-        """GET /files/{id} response body contains the pipeline name in the sidebar."""
+        """GET /files/{id}/detail response body contains the pipeline name in the sidebar."""
         pipeline = self._make_system_pipeline(db_session)
         file_rec = self._make_file(db_session, pipeline_id=None)
 
-        response = client.get(f"/files/{file_rec.id}")
+        response = client.get(f"/files/{file_rec.id}/detail")
 
         assert response.status_code == 200
         assert b"Standard Processing Pipeline" in response.content
 
     def test_file_view_page_no_pipeline_shows_standard(self, client, db_session):
-        """When no pipeline exists, file view shows 'Standard' fallback text."""
+        """When no pipeline exists, file detail view shows 'Standard' fallback text."""
         # No pipeline in DB
         file_rec = self._make_file(db_session, pipeline_id=None)
 
-        response = client.get(f"/files/{file_rec.id}")
+        response = client.get(f"/files/{file_rec.id}/detail")
 
         assert response.status_code == 200
         assert b"Standard" in response.content

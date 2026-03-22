@@ -159,8 +159,8 @@
   {% elif file %}
 
   <!-- ── Back + header ── -->
-  <a href="/files" style="display:inline-flex;align-items:center;gap:0.4rem;color:#3b82f6;font-weight:600;text-decoration:none;margin-bottom:1.25rem;" aria-label="Back to Files">
-    <i class="fas fa-arrow-left" aria-hidden="true"></i> Back to Files
+  <a href="/files/{{ file.id }}" style="display:inline-flex;align-items:center;gap:0.4rem;color:#3b82f6;font-weight:600;text-decoration:none;margin-bottom:1.25rem;" aria-label="Back to File Summary">
+    <i class="fas fa-arrow-left" aria-hidden="true"></i> Back to File Summary
   </a>
 
   <div class="doc-header">
@@ -195,8 +195,8 @@
       {% endif %}
 
       <!-- Process detail link -->
-      <a href="/files/{{ file.id }}/detail" class="action-btn btn-process">
-        <i class="fas fa-cogs" aria-hidden="true"></i> Processing Details
+      <a href="/files/{{ file.id }}/process" class="action-btn btn-process">
+        <i class="fas fa-cogs" aria-hidden="true"></i> Processing
       </a>
     </div>
   </div>
