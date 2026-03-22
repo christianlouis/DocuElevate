@@ -174,12 +174,22 @@ function openServiceModal(serviceKey) {
   fields.forEach(function(field) {
     const meta = field.metadata || {};
     const div = document.createElement('div');
+    div.setAttribute('data-field-key', field.key);
 
-    const label = document.createElement('label');
-    label.setAttribute('for', 'field-' + field.key);
-    label.className = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1';
-    label.textContent = field.key.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
-    div.appendChild(label);
+    if (meta.type === 'boolean') {
+      // For boolean fields use a plain paragraph for the title so the toggle's
+      // own <label> wrapper is the only interactive label (no nested <label>s).
+      const titleEl = document.createElement('p');
+      titleEl.className = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1';
+      titleEl.textContent = field.key.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+      div.appendChild(titleEl);
+    } else {
+      const label = document.createElement('label');
+      label.setAttribute('for', 'field-' + field.key);
+      label.className = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1';
+      label.textContent = field.key.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+      div.appendChild(label);
+    }
 
     if (meta.description) {
       const desc = document.createElement('p');
@@ -189,16 +199,36 @@ function openServiceModal(serviceKey) {
     }
 
     if (meta.type === 'boolean') {
+      // Styled Tailwind toggle switch (matches the page-level toggles)
+      const toggleWrapper = document.createElement('label');
+      toggleWrapper.className = 'relative inline-flex items-center cursor-pointer';
+      toggleWrapper.setAttribute('aria-label', field.key.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); }));
+
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.id = 'field-' + field.key;
       checkbox.name = field.key;
-      checkbox.className = 'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded';
+      checkbox.className = 'sr-only peer';
       const val = field.value;
       if (val === true || val === 'true' || val === '1' || val === 'True') {
         checkbox.checked = true;
       }
-      div.appendChild(checkbox);
+
+      const slider = document.createElement('div');
+      slider.className = "w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600";
+      slider.style.cssText = 'min-width:44px; min-height:24px;';
+
+      toggleWrapper.appendChild(checkbox);
+      toggleWrapper.appendChild(slider);
+      div.appendChild(toggleWrapper);
+
+      // When the Dropbox "use global credentials" toggle changes, update the
+      // visibility of the separate client-id / client-secret fields.
+      if (field.key === 'social_auth_dropbox_use_global_credentials') {
+        checkbox.addEventListener('change', function() {
+          updateDropboxCredentialFieldsVisibility(this.checked);
+        });
+      }
     } else {
       const input = document.createElement('input');
       input.type = meta.sensitive ? 'password' : 'text';
@@ -225,6 +255,17 @@ function openServiceModal(serviceKey) {
 
     container.appendChild(div);
   });
+
+  // Apply initial visibility for Dropbox credential fields based on the
+  // current value of the "use global credentials" toggle.
+  if (currentServiceKey === 'dropbox') {
+    const useGlobalField = fields.find(function(f) { return f.key === 'social_auth_dropbox_use_global_credentials'; });
+    if (useGlobalField) {
+      const val = useGlobalField.value;
+      const isGlobal = val === true || val === 'true' || val === '1' || val === 'True';
+      updateDropboxCredentialFieldsVisibility(isGlobal);
+    }
+  }
 
   modal.classList.remove('hidden');
   // Focus first input
@@ -287,6 +328,17 @@ function saveServiceSettings(event) {
       console.error('Error saving settings:', err);
       showNotification('error', 'Failed to save settings. Please try again.');
     });
+}
+
+// Show or hide the Dropbox client-id / client-secret fields depending on
+// whether the "use global credentials" toggle is enabled.
+function updateDropboxCredentialFieldsVisibility(useGlobal) {
+  ['social_auth_dropbox_client_id', 'social_auth_dropbox_client_secret'].forEach(function(key) {
+    const el = document.querySelector('[data-field-key="' + key + '"]');
+    if (el) {
+      el.style.display = useGlobal ? 'none' : '';
+    }
+  });
 }
 
 function toggleSetting(key, value) {
