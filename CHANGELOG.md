@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.168.1 (2026-03-22)
+
+### Bug Fixes
+
+- **ui**: Styled toggle switches and Dropbox global-credentials field visibility in admin
+  connections
+  ([`b2912da`](https://github.com/christianlouis/DocuElevate/commit/b2912da4dcad7bf7f11000a5ba0bc267fd5956cc))
+
+
 ## v0.168.0 (2026-03-22)
 
 ### Features
