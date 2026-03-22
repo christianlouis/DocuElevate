@@ -435,7 +435,7 @@ async def login(request: Request):
     show_oauth = OAUTH_CONFIGURED
 
     # SSO Auto Login: redirect directly to SSO provider if configured
-    if show_oauth and settings.sso_auto_login and not error and not message:
+    if show_oauth and getattr(settings, "sso_auto_login", False) is True and not error and not message:
         return RedirectResponse(url="/oauth-login", status_code=status.HTTP_302_FOUND)
 
     return templates.TemplateResponse(
