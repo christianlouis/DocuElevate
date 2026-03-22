@@ -1146,7 +1146,7 @@ class Settings(BaseSettings):
     security_header_csp_enabled: bool = Field(default=True, description="Enable CSP header.")
     security_header_csp_value: str = Field(
         default=(
-            "default-src 'self'; script-src 'self' 'unsafe-inline';"
+            "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com;"
             " style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
         ),
         description="CSP header value. Customize based on your application's resource loading needs.",

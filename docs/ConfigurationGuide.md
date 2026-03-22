@@ -792,7 +792,7 @@ SECURITY_HEADER_CSP_VALUE="default-src 'self'; script-src 'self'; style-src 'sel
 SECURITY_HEADER_CSP_VALUE="default-src 'self'; script-src 'self' https://cdn.example.com; style-src 'self' 'unsafe-inline';"
 ```
 
-**Note:** The default policy includes `'unsafe-inline'` for compatibility with Tailwind CSS and inline JavaScript. For stricter security, use nonces or hashes.
+**Note:** The default policy includes `'unsafe-inline'` and `https://cdn.tailwindcss.com` for compatibility with Tailwind CSS v3 Play CDN and inline JavaScript. For stricter security, use nonces or hashes.
 
 #### X-Frame-Options
 
