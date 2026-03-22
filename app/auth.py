@@ -102,6 +102,24 @@ if AUTH_ENABLED and settings.social_auth_apple_enabled:
     else:
         logger.warning("SOCIAL_AUTH_APPLE_ENABLED=true but client ID/team ID not configured")
 
+
+def _dropbox_userinfo_compliance_fix(client, user_cls, token, data):
+    """Normalize Dropbox userinfo response for authlib compatibility.
+
+    Dropbox's /2/users/get_current_account returns a non-standard response
+    format. This compliance fix normalizes the response data — the HTTP
+    method (POST) is handled by authlib's compliance infrastructure.
+    """
+    # Dropbox returns account_id instead of sub
+    if "account_id" in data and "sub" not in data:
+        data["sub"] = data["account_id"]
+    # Normalize name field
+    name_info = data.get("name", {})
+    if isinstance(name_info, dict) and "display_name" in name_info:
+        data["name"] = name_info["display_name"]
+    return data
+
+
 if AUTH_ENABLED and settings.social_auth_dropbox_enabled:
     # Determine which credentials to use for Dropbox social login
     _dropbox_client_id = settings.social_auth_dropbox_client_id
@@ -118,12 +136,76 @@ if AUTH_ENABLED and settings.social_auth_dropbox_enabled:
             authorize_url="https://www.dropbox.com/oauth2/authorize",
             access_token_url="https://api.dropboxapi.com/oauth2/token",
             userinfo_endpoint="https://api.dropboxapi.com/2/users/get_current_account",
-            client_kwargs={"token_endpoint_auth_method": "client_secret_post"},
+            userinfo_compliance_fix=_dropbox_userinfo_compliance_fix,
+            client_kwargs={
+                "token_endpoint_auth_method": "client_secret_post",
+                "token_access_type": "offline",
+            },
         )
         SOCIAL_PROVIDERS["dropbox"] = {"name": "Dropbox", "icon": "fab fa-dropbox", "color": "blue"}
         logger.info("Social login provider registered: Dropbox")
     else:
         logger.warning("SOCIAL_AUTH_DROPBOX_ENABLED=true but client ID/secret not configured")
+
+if AUTH_ENABLED and settings.social_auth_github_enabled:
+    if settings.social_auth_github_client_id and settings.social_auth_github_client_secret:
+        oauth.register(
+            name="github",
+            client_id=settings.social_auth_github_client_id,
+            client_secret=settings.social_auth_github_client_secret,
+            authorize_url="https://github.com/login/oauth/authorize",
+            access_token_url="https://github.com/login/oauth/access_token",
+            userinfo_endpoint="https://api.github.com/user",
+            client_kwargs={"scope": "read:user user:email"},
+        )
+        SOCIAL_PROVIDERS["github"] = {"name": "GitHub", "icon": "fab fa-github", "color": "gray"}
+        logger.info("Social login provider registered: GitHub")
+    else:
+        logger.warning("SOCIAL_AUTH_GITHUB_ENABLED=true but client ID/secret not configured")
+
+if AUTH_ENABLED and settings.social_auth_keycloak_enabled:
+    _kc_server = settings.social_auth_keycloak_server_url
+    _kc_realm = settings.social_auth_keycloak_realm
+    if (
+        settings.social_auth_keycloak_client_id
+        and settings.social_auth_keycloak_client_secret
+        and _kc_server
+        and _kc_realm
+    ):
+        _kc_base = f"{_kc_server.rstrip('/')}/realms/{_kc_realm}"
+        oauth.register(
+            name="keycloak",
+            client_id=settings.social_auth_keycloak_client_id,
+            client_secret=settings.social_auth_keycloak_client_secret,
+            server_metadata_url=f"{_kc_base}/.well-known/openid-configuration",
+            client_kwargs={"scope": "openid profile email"},
+        )
+        SOCIAL_PROVIDERS["keycloak"] = {"name": "Keycloak", "icon": "fas fa-key", "color": "gray"}
+        logger.info("Social login provider registered: Keycloak (realm=%s)", _kc_realm)
+    else:
+        logger.warning("SOCIAL_AUTH_KEYCLOAK_ENABLED=true but required settings not configured")
+
+if AUTH_ENABLED and settings.social_auth_generic_oauth2_enabled:
+    if (
+        settings.social_auth_generic_oauth2_client_id
+        and settings.social_auth_generic_oauth2_client_secret
+        and settings.social_auth_generic_oauth2_authorize_url
+        and settings.social_auth_generic_oauth2_token_url
+    ):
+        oauth.register(
+            name="generic_oauth2",
+            client_id=settings.social_auth_generic_oauth2_client_id,
+            client_secret=settings.social_auth_generic_oauth2_client_secret,
+            authorize_url=settings.social_auth_generic_oauth2_authorize_url,
+            access_token_url=settings.social_auth_generic_oauth2_token_url,
+            userinfo_endpoint=settings.social_auth_generic_oauth2_userinfo_url,
+            client_kwargs={"scope": settings.social_auth_generic_oauth2_scope},
+        )
+        _generic_name = settings.social_auth_generic_oauth2_name or "OAuth2"
+        SOCIAL_PROVIDERS["generic_oauth2"] = {"name": _generic_name, "icon": "fas fa-sign-in-alt", "color": "indigo"}
+        logger.info("Social login provider registered: Generic OAuth2 (%s)", _generic_name)
+    else:
+        logger.warning("SOCIAL_AUTH_GENERIC_OAUTH2_ENABLED=true but required settings not configured")
 
 router = APIRouter()
 
@@ -348,13 +430,21 @@ async def login(request: Request):
             get_client_ip(request),
         )
 
+    error = request.query_params.get("error")
+    message = request.query_params.get("message")
+    show_oauth = OAUTH_CONFIGURED
+
+    # SSO Auto Login: redirect directly to SSO provider if configured
+    if show_oauth and settings.sso_auto_login and not error and not message:
+        return RedirectResponse(url="/oauth-login", status_code=status.HTTP_302_FOUND)
+
     return templates.TemplateResponse(
         "login.html",
         {
             "request": request,
-            "error": request.query_params.get("error"),
-            "message": request.query_params.get("message"),
-            "show_oauth": OAUTH_CONFIGURED,
+            "error": error,
+            "message": message,
+            "show_oauth": show_oauth,
             "oauth_provider_name": OAUTH_PROVIDER_NAME,
             "social_providers": SOCIAL_PROVIDERS,
             "app_version": settings.version,
@@ -438,6 +528,17 @@ def _normalize_social_userinfo(provider: str, token: dict, raw_userinfo: dict | 
             "name": display_name,
             "preferred_username": email,
             "picture": userinfo.get("profile_photo_url", ""),
+        }
+
+    if provider == "github":
+        # GitHub returns login, id, name, email, avatar_url
+        email = userinfo.get("email", "")
+        return {
+            "sub": str(userinfo.get("id", "")),
+            "email": email,
+            "name": userinfo.get("name", "") or userinfo.get("login", ""),
+            "preferred_username": userinfo.get("login", email),
+            "picture": userinfo.get("avatar_url", ""),
         }
 
     # Standard OIDC providers (Google, Microsoft, Apple)
