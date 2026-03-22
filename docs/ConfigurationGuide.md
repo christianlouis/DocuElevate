@@ -1575,6 +1575,8 @@ No additional configuration is required — the auto-fill uses the authenticated
 
 DocuElevate integrates with [Sentry](https://sentry.io) for real-time error tracking and performance monitoring.  See [SentrySetup.md](./SentrySetup.md) for a full setup guide.
 
+### Server-side (Python SDK)
+
 | Variable | Description | Default |
 |---|---|---|
 | `SENTRY_DSN` | Sentry DSN URL.  When set, error reporting and performance tracing are enabled automatically.  Leave blank to disable. | *(unset)* |
@@ -1583,18 +1585,33 @@ DocuElevate integrates with [Sentry](https://sentry.io) for real-time error trac
 | `SENTRY_PROFILES_SAMPLE_RATE` | Fraction of profiled transactions sent to Sentry (0.0 – 1.0).  Only active when traces > 0. | `0.0` |
 | `SENTRY_SEND_DEFAULT_PII` | Attach PII (IP addresses, user agents) to Sentry events.  Disabled by default for GDPR/CCPA compliance. | `false` |
 
+### Browser SDK (JavaScript)
+
+The Sentry Browser SDK is loaded automatically on every rendered page when `SENTRY_DSN` is set.  The same DSN is used for both server and browser — the DSN is a *public* key in Sentry's security model and is intentionally embedded in client-side code.
+
+| Variable | Description | Default |
+|---|---|---|
+| `SENTRY_JS_TRACES_SAMPLE_RATE` | Fraction of browser page-loads captured for client-side performance tracing (0.0 – 1.0). | `0.0` |
+| `SENTRY_JS_REPLAY_SESSION_SAMPLE_RATE` | Fraction of sessions recorded by [Sentry Session Replay](https://docs.sentry.io/product/session-replay/) (0.0 – 1.0). | `0.0` |
+| `SENTRY_JS_REPLAY_ON_ERROR_SAMPLE_RATE` | Fraction of error sessions captured with session replay context (0.0 – 1.0). | `0.1` |
+
 ```bash
-# Minimal example
+# Minimal example (server + browser)
 SENTRY_DSN=https://<key>@o<org>.ingest.sentry.io/<project>
 SENTRY_ENVIRONMENT=production
 
-# Optional tuning
+# Optional server-side tuning
 SENTRY_TRACES_SAMPLE_RATE=0.1
 SENTRY_PROFILES_SAMPLE_RATE=0.0
 SENTRY_SEND_DEFAULT_PII=false
+
+# Optional browser-side tuning
+SENTRY_JS_TRACES_SAMPLE_RATE=0.1
+SENTRY_JS_REPLAY_SESSION_SAMPLE_RATE=0.0
+SENTRY_JS_REPLAY_ON_ERROR_SAMPLE_RATE=0.1
 ```
 
-> **Note:** Sentry is completely opt-in — if `SENTRY_DSN` is not set, the SDK is never initialised and no data leaves your infrastructure.
+> **Note:** Sentry is completely opt-in — if `SENTRY_DSN` is not set, neither SDK is initialised and no data leaves your infrastructure.
 
 ## Duplicate Document Detection
 
