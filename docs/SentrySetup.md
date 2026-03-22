@@ -181,7 +181,7 @@ Simply leave `SENTRY_DSN` unset (or set it to an empty string).  Neither the Pyt
 ## SDK Version
 
 - **Server:** DocuElevate uses [`sentry-sdk`](https://pypi.org/project/sentry-sdk/) `>=2.20.0,<3.0.0` with the `fastapi`, `celery`, and `sqlalchemy` extras.
-- **Browser:** The `bundle.tracing.replay.min.js` bundle is loaded from the official Sentry CDN (`browser.sentry-cdn.com`).  The version pin is in `frontend/templates/base.html`.
+- **Browser:** The `bundle.tracing.replay.min.js` bundle from the Sentry Browser SDK **v10** is loaded from the official Sentry CDN (`browser.sentry-cdn.com`).  The version pin is in `frontend/templates/base.html`.
 
 ---
 
