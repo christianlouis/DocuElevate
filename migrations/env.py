@@ -26,6 +26,8 @@ from app.models import (  # noqa: F401
     BackupRecord,
     ClassificationRuleModel,
     ComplianceTemplate,
+    DocumentAnnotation,
+    DocumentComment,
     DocumentMetadata,
     FileProcessingStep,
     FileRecord,

@@ -1091,6 +1091,513 @@
     }
   </script>
   {% endif %}
+
+  <!-- Comments & Annotations panel styles -->
+  <style>
+    /* ── Comments panel ───────────────────────────────────────────────────── */
+    .comments-panel, .annotations-panel {
+      margin-top: 0;
+    }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .panel-header h3 {
+      margin-bottom: 0;
+    }
+    .comments-empty, .annotations-empty {
+      text-align: center;
+      padding: 2rem;
+      color: #718096;
+    }
+    .comments-loading, .annotations-loading {
+      text-align: center;
+      padding: 1.5rem;
+      color: #718096;
+    }
+    .comments-error {
+      text-align: center;
+      padding: 1rem;
+      color: #991B1B;
+    }
+
+    /* Individual comment */
+    .comment-item {
+      background-color: #f7fafc;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+      border-left: 3px solid #4299e1;
+    }
+    .dark .comment-item {
+      background-color: #2d3748;
+      border-left-color: #63b3ed;
+    }
+    .comment-item.comment-reply {
+      margin-left: 1.5rem;
+      border-left-color: #a0aec0;
+      background-color: #edf2f7;
+    }
+    .dark .comment-item.comment-reply {
+      background-color: #1a202c;
+      border-left-color: #4a5568;
+    }
+    .comment-item.comment-resolved {
+      opacity: 0.75;
+      border-left-color: #48bb78;
+    }
+    .comment-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .comment-author {
+      font-weight: 600;
+      color: #2d3748;
+      font-size: 0.875rem;
+    }
+    .dark .comment-author {
+      color: #e2e8f0;
+    }
+    .comment-time {
+      font-size: 0.75rem;
+      color: #718096;
+    }
+    .comment-resolved-badge {
+      font-size: 0.75rem;
+      color: #065F46;
+      background-color: #D1FAE5;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      font-weight: 600;
+    }
+    .dark .comment-resolved-badge {
+      background-color: #065F46;
+      color: #D1FAE5;
+    }
+    .comment-body {
+      color: #4a5568;
+      font-size: 0.9375rem;
+      line-height: 1.5;
+      margin-bottom: 0.5rem;
+      word-break: break-word;
+    }
+    .dark .comment-body {
+      color: #cbd5e0;
+    }
+    .comment-mention {
+      color: #3182ce;
+      font-weight: 600;
+    }
+    .dark .comment-mention {
+      color: #63b3ed;
+    }
+    .comment-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .comment-action-btn {
+      background: none;
+      border: 1px solid #e2e8f0;
+      color: #718096;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      min-height: 28px;
+    }
+    .comment-action-btn:hover {
+      background-color: #edf2f7;
+      color: #2d3748;
+    }
+    .dark .comment-action-btn {
+      border-color: #4a5568;
+      color: #a0aec0;
+    }
+    .dark .comment-action-btn:hover {
+      background-color: #4a5568;
+      color: #e2e8f0;
+    }
+    .comment-action-btn--danger:hover {
+      background-color: #FEE2E2;
+      color: #991B1B;
+      border-color: #f56565;
+    }
+    .dark .comment-action-btn--danger:hover {
+      background-color: #742a2a;
+      color: #feb2b2;
+      border-color: #f56565;
+    }
+    .comment-replies {
+      margin-top: 0.75rem;
+    }
+
+    /* Comment form */
+    .comment-form-wrapper {
+      margin-top: 1rem;
+    }
+    .comment-textarea {
+      width: 100%;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.375rem;
+      padding: 0.75rem;
+      font-size: 0.875rem;
+      resize: vertical;
+      min-height: 60px;
+      font-family: inherit;
+    }
+    .dark .comment-textarea {
+      background-color: #2d3748;
+      border-color: #4a5568;
+      color: #e2e8f0;
+    }
+    .comment-textarea:focus {
+      outline: none;
+      border-color: #4299e1;
+      box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.3);
+    }
+    .comment-submit-btn {
+      background-color: #4299e1;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 0.375rem;
+      font-size: 0.875rem;
+      cursor: pointer;
+      font-weight: 600;
+      margin-top: 0.5rem;
+      min-height: 36px;
+    }
+    .comment-submit-btn:hover {
+      background-color: #3182ce;
+    }
+    .comment-cancel-btn {
+      background-color: #e2e8f0;
+      color: #4a5568;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 0.375rem;
+      font-size: 0.875rem;
+      cursor: pointer;
+      margin-top: 0.5rem;
+      margin-left: 0.5rem;
+      min-height: 36px;
+    }
+    .dark .comment-cancel-btn {
+      background-color: #4a5568;
+      color: #e2e8f0;
+    }
+    .comment-edit-btns, .annotation-edit-btns {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    .comment-reply-form {
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid #e2e8f0;
+    }
+    .dark .comment-reply-form {
+      border-top-color: #4a5568;
+    }
+
+    /* @mention dropdown */
+    .mention-dropdown-wrapper {
+      position: relative;
+    }
+    #mention-dropdown {
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      width: 280px;
+      max-height: 200px;
+      overflow-y: auto;
+      background-color: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.375rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 50;
+      margin-bottom: 0.25rem;
+    }
+    .dark #mention-dropdown {
+      background-color: #2d3748;
+      border-color: #4a5568;
+    }
+    .mention-item {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 0.875rem;
+      min-height: 44px;
+      justify-content: center;
+    }
+    .mention-item:hover, .mention-item:focus {
+      background-color: #edf2f7;
+      outline: none;
+    }
+    .dark .mention-item:hover, .dark .mention-item:focus {
+      background-color: #4a5568;
+    }
+    .mention-user-id {
+      font-weight: 600;
+      color: #2d3748;
+    }
+    .dark .mention-user-id {
+      color: #e2e8f0;
+    }
+    .mention-display-name {
+      font-size: 0.75rem;
+      color: #718096;
+    }
+
+    /* ── Annotations panel ────────────────────────────────────────────────── */
+    .annotation-item {
+      background-color: #f7fafc;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+      border-left: 3px solid #ecc94b;
+    }
+    .dark .annotation-item {
+      background-color: #2d3748;
+      border-left-color: #d69e2e;
+    }
+    .annotation-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .annotation-type {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      text-transform: capitalize;
+    }
+    .annotation-type--note {
+      background-color: #DBEAFE;
+      color: #1E3A8A;
+    }
+    .annotation-type--highlight {
+      background-color: #FEF3C7;
+      color: #92400E;
+    }
+    .annotation-type--underline {
+      background-color: #D1FAE5;
+      color: #065F46;
+    }
+    .annotation-type--strikethrough {
+      background-color: #FEE2E2;
+      color: #991B1B;
+    }
+    .dark .annotation-type--note {
+      background-color: #1E3A8A;
+      color: #DBEAFE;
+    }
+    .dark .annotation-type--highlight {
+      background-color: #92400E;
+      color: #FEF3C7;
+    }
+    .dark .annotation-type--underline {
+      background-color: #065F46;
+      color: #D1FAE5;
+    }
+    .dark .annotation-type--strikethrough {
+      background-color: #991B1B;
+      color: #FEE2E2;
+    }
+    .annotation-color-dot {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 0, 0, 0.2);
+    }
+    .annotation-page {
+      font-size: 0.75rem;
+      color: #718096;
+    }
+    .annotation-content {
+      color: #4a5568;
+      font-size: 0.9375rem;
+      line-height: 1.5;
+      margin-bottom: 0.5rem;
+      word-break: break-word;
+    }
+    .dark .annotation-content {
+      color: #cbd5e0;
+    }
+    .annotation-meta {
+      display: flex;
+      gap: 0.75rem;
+      font-size: 0.75rem;
+      color: #718096;
+      margin-bottom: 0.5rem;
+    }
+    .annotation-author {
+      font-weight: 600;
+    }
+    .annotation-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .annotation-action-btn {
+      background: none;
+      border: 1px solid #e2e8f0;
+      color: #718096;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      cursor: pointer;
+      min-height: 28px;
+    }
+    .annotation-action-btn:hover {
+      background-color: #edf2f7;
+      color: #2d3748;
+    }
+    .dark .annotation-action-btn {
+      border-color: #4a5568;
+      color: #a0aec0;
+    }
+    .dark .annotation-action-btn:hover {
+      background-color: #4a5568;
+      color: #e2e8f0;
+    }
+    .annotation-action-btn--danger:hover {
+      background-color: #FEE2E2;
+      color: #991B1B;
+      border-color: #f56565;
+    }
+    .dark .annotation-action-btn--danger:hover {
+      background-color: #742a2a;
+      color: #feb2b2;
+    }
+    .annotation-textarea {
+      width: 100%;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.375rem;
+      padding: 0.75rem;
+      font-size: 0.875rem;
+      resize: vertical;
+      min-height: 60px;
+      font-family: inherit;
+    }
+    .dark .annotation-textarea {
+      background-color: #2d3748;
+      border-color: #4a5568;
+      color: #e2e8f0;
+    }
+    .annotation-textarea:focus {
+      outline: none;
+      border-color: #ecc94b;
+      box-shadow: 0 0 0 2px rgba(236, 201, 75, 0.3);
+    }
+    .annotation-select {
+      border: 1px solid #e2e8f0;
+      border-radius: 0.375rem;
+      padding: 0.5rem;
+      font-size: 0.875rem;
+      margin-top: 0.5rem;
+      width: 100%;
+    }
+    .dark .annotation-select {
+      background-color: #2d3748;
+      border-color: #4a5568;
+      color: #e2e8f0;
+    }
+    .annotation-submit-btn {
+      background-color: #ecc94b;
+      color: #744210;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 0.375rem;
+      font-size: 0.875rem;
+      cursor: pointer;
+      font-weight: 600;
+      margin-top: 0.5rem;
+      min-height: 36px;
+    }
+    .annotation-submit-btn:hover {
+      background-color: #d69e2e;
+    }
+    .annotation-cancel-btn {
+      background-color: #e2e8f0;
+      color: #4a5568;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 0.375rem;
+      font-size: 0.875rem;
+      cursor: pointer;
+      margin-top: 0.5rem;
+      margin-left: 0.5rem;
+      min-height: 36px;
+    }
+    .dark .annotation-cancel-btn {
+      background-color: #4a5568;
+      color: #e2e8f0;
+    }
+
+    /* Annotation form layout */
+    .annotation-form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-top: 0.75rem;
+    }
+    .annotation-form-grid .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .annotation-form-grid label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #4a5568;
+      margin-bottom: 0.25rem;
+    }
+    .dark .annotation-form-grid label {
+      color: #a0aec0;
+    }
+    .annotation-form-grid input,
+    .annotation-form-grid select {
+      border: 1px solid #e2e8f0;
+      border-radius: 0.375rem;
+      padding: 0.5rem;
+      font-size: 0.875rem;
+    }
+    .dark .annotation-form-grid input,
+    .dark .annotation-form-grid select {
+      background-color: #2d3748;
+      border-color: #4a5568;
+      color: #e2e8f0;
+    }
+
+    /* ── Collaboration panels grid ────────────────────────────────────────── */
+    .collab-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+    @media (max-width: 768px) {
+      .collab-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 {% endblock %}
 
 {% block content %}
@@ -1776,6 +2283,137 @@
     </div>
   </div>
   {% endif %}
+
+  <!-- ── Comments & Annotations ──────────────────────────────────────────── -->
+  <div class="detail-card">
+    <div class="collab-grid">
+      <!-- Comments Panel -->
+      <section class="comments-panel" aria-label="{{ _('comments.heading') }}">
+        <div class="panel-header">
+          <h3><i class="fas fa-comments" aria-hidden="true"></i> {{ _("comments.heading") }}</h3>
+        </div>
+        <div id="comments-list" aria-live="polite"></div>
+
+        <!-- New comment form -->
+        <div class="comment-form-wrapper">
+          <form id="comment-form" aria-label="{{ _('comments.add_comment') }}">
+            <div class="mention-dropdown-wrapper">
+              <div id="mention-dropdown" class="hidden" role="listbox" aria-label="{{ _('comments.mention_users') }}"></div>
+              <textarea
+                id="comment-input"
+                class="comment-textarea"
+                placeholder="{{ _('comments.body_placeholder') }}"
+                rows="3"
+                aria-label="{{ _('comments.body_placeholder') }}"
+                maxlength="10000"
+              ></textarea>
+            </div>
+            <button type="submit" class="comment-submit-btn">
+              <i class="fas fa-paper-plane" aria-hidden="true"></i> {{ _("comments.add_comment") }}
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <!-- Annotations Panel -->
+      <section class="annotations-panel" aria-label="{{ _('annotations.heading') }}">
+        <div class="panel-header">
+          <h3><i class="fas fa-sticky-note" aria-hidden="true"></i> {{ _("annotations.heading") }}</h3>
+        </div>
+        <div id="annotations-list" aria-live="polite"></div>
+
+        <!-- New annotation form -->
+        <div class="comment-form-wrapper">
+          <form id="annotation-form" aria-label="{{ _('annotations.add') }}">
+            <textarea
+              id="annotation-content-input"
+              class="annotation-textarea"
+              placeholder="{{ _('annotations.content_placeholder') }}"
+              rows="2"
+              aria-label="{{ _('annotations.content_placeholder') }}"
+              maxlength="5000"
+            ></textarea>
+            <div class="annotation-form-grid">
+              <div class="form-group">
+                <label for="annotation-page-input">{{ _("annotations.page") }}</label>
+                <input type="number" id="annotation-page-input" min="1" value="1" aria-label="{{ _('annotations.page') }}">
+              </div>
+              <div class="form-group">
+                <label for="annotation-type-input">{{ _("annotations.type") }}</label>
+                <select id="annotation-type-input" aria-label="Annotation type">
+                  <option value="note">{{ _("annotations.type_note") }}</option>
+                  <option value="highlight">{{ _("annotations.type_highlight") }}</option>
+                  <option value="underline">{{ _("annotations.type_underline") }}</option>
+                  <option value="strikethrough">{{ _("annotations.type_strikethrough") }}</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="annotation-color-input">{{ _("annotations.color") }}</label>
+                <input type="color" id="annotation-color-input" value="#ffff00" aria-label="{{ _('annotations.color') }}">
+              </div>
+            </div>
+            <button type="submit" class="annotation-submit-btn">
+              <i class="fas fa-plus" aria-hidden="true"></i> {{ _("annotations.add") }}
+            </button>
+          </form>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Comments & Annotations JS -->
+  <script src="{{ url_for('static', path='js/comments.js') }}" defer></script>
+  <script src="{{ url_for('static', path='js/annotations.js') }}" defer></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var fileId = {{ file.id | tojson }};
+      // Detect current user from whoami endpoint
+      fetch('/api/auth/whoami')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          var userId = (data && (data.email || data.preferred_username)) || '';
+          var commentsI18n = {
+            empty: {{ _("comments.empty") | tojson }},
+            add_comment: {{ _("comments.add_comment") | tojson }},
+            add_reply: {{ _("comments.add_reply") | tojson }},
+            edit: {{ _("comments.edit") | tojson }},
+            save: {{ _("comments.save") | tojson }},
+            resolve: {{ _("comments.resolve") | tojson }},
+            resolved: {{ _("comments.resolved") | tojson }},
+            unresolve: {{ _("comments.unresolve") | tojson }},
+            delete_confirm: {{ _("comments.delete_confirm") | tojson }},
+            reply_placeholder: {{ _("comments.reply_placeholder") | tojson }},
+            body_placeholder: {{ _("comments.body_placeholder") | tojson }},
+            mention_users: {{ _("comments.mention_users") | tojson }},
+            cancel: {{ _("common.cancel") | tojson }}
+          };
+          var annotationsI18n = {
+            empty: {{ _("annotations.empty") | tojson }},
+            add: {{ _("annotations.add") | tojson }},
+            save: {{ _("annotations.save") | tojson }},
+            delete_confirm: {{ _("annotations.delete_confirm") | tojson }},
+            page: {{ _("annotations.page") | tojson }},
+            color: {{ _("annotations.color") | tojson }},
+            type_note: {{ _("annotations.type_note") | tojson }},
+            type_highlight: {{ _("annotations.type_highlight") | tojson }},
+            type_underline: {{ _("annotations.type_underline") | tojson }},
+            type_strikethrough: {{ _("annotations.type_strikethrough") | tojson }},
+            cancel: {{ _("common.cancel") | tojson }}
+          };
+          if (typeof initComments === 'function') {
+            initComments(fileId, userId, commentsI18n);
+          }
+          if (typeof initAnnotations === 'function') {
+            initAnnotations(fileId, userId, annotationsI18n);
+          }
+        })
+        .catch(function () {
+          // Auth disabled — initialise with empty user
+          if (typeof initComments === 'function') initComments(fileId, '', {});
+          if (typeof initAnnotations === 'function') initAnnotations(fileId, '', {});
+        });
+    });
+  </script>
 
   {% endif %}
 </div>
