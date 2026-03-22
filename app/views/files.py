@@ -206,10 +206,91 @@ def files_page(
 
 @router.get("/files/{file_id}")
 @require_login
+def file_summary_page(request: Request, file_id: int, db: Session = Depends(get_db)):
+    """
+    Return the file summary page — a concise overview with links to detail, processing, and annotations views.
+    """
+    try:
+        import json
+        import os
+
+        from app.models import FileRecord
+
+        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+
+        if not file_record:
+            return templates.TemplateResponse(
+                "file_summary.html",
+                {"request": request, "file": None, "error": f"File with ID {file_id} not found"},
+            )
+
+        from app.config import settings
+
+        workdir = os.path.realpath(settings.workdir)
+
+        def _safe_exists(path: str | None) -> bool:
+            """Return True only when *path* exists and resides within workdir."""
+            if not path:
+                return False
+            resolved = os.path.realpath(path)
+            try:
+                common = os.path.commonpath([resolved, workdir])
+            except ValueError:
+                return False
+            return common == workdir and os.path.exists(resolved)
+
+        original_file_exists = _safe_exists(file_record.original_file_path)
+        processed_file_exists = _safe_exists(file_record.processed_file_path)
+
+        # Load AI metadata — JSON sidecar file first, then DB column
+        gpt_metadata = None
+        if file_record.processed_file_path:
+            metadata_path = os.path.splitext(os.path.realpath(file_record.processed_file_path))[0] + ".json"
+            if _safe_exists(metadata_path):
+                try:
+                    with open(metadata_path, "r", encoding="utf-8") as f:
+                        gpt_metadata = json.load(f)
+                except Exception as e:
+                    logger.warning(f"Failed to load metadata sidecar for file {file_id}: {e}")
+
+        if gpt_metadata is None and file_record.ai_metadata:
+            try:
+                gpt_metadata = json.loads(file_record.ai_metadata)
+            except Exception as e:
+                logger.warning(f"Failed to parse ai_metadata for file {file_id}: {e}")
+
+        # Quick processing status
+        try:
+            from app.utils.step_manager import get_step_summary as _get_step_summary
+
+            step_summary = _get_step_summary(db, file_id)
+        except Exception:
+            step_summary = None
+
+        pipeline_info = _resolve_pipeline(db, file_record)
+
+        return templates.TemplateResponse(
+            "file_summary.html",
+            {
+                "request": request,
+                "file": file_record,
+                "gpt_metadata": gpt_metadata,
+                "original_file_exists": original_file_exists,
+                "processed_file_exists": processed_file_exists,
+                "step_summary": step_summary,
+                "pipeline_info": pipeline_info,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving file summary {file_id}: {str(e)}")
+        return templates.TemplateResponse("file_summary.html", {"request": request, "file": None, "error": str(e)})
+
+
+@router.get("/files/{file_id}/detail")
+@require_login
 def file_view_page(request: Request, file_id: int, db: Session = Depends(get_db)):
     """
-    Return the document view page — document-centric view with metadata, preview, and extracted text.
-    Process-oriented details are available via /files/{file_id}/detail.
+    Return the document detail page — document-centric view with metadata, preview, and extracted text.
     """
     try:
         import json
@@ -290,11 +371,11 @@ def file_view_page(request: Request, file_id: int, db: Session = Depends(get_db)
         return templates.TemplateResponse("file_view.html", {"request": request, "file": None, "error": str(e)})
 
 
-@router.get("/files/{file_id}/detail")
+@router.get("/files/{file_id}/process")
 @require_login
 def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_db)):
     """
-    Return the file detail page showing processing history and file information
+    Return the file processing page showing processing history and pipeline information.
     """
     try:
         import json
@@ -373,6 +454,73 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
     except Exception as e:
         logger.error(f"Error retrieving file details: {str(e)}")
         return templates.TemplateResponse("file_detail.html", {"request": request, "file": None, "error": str(e)})
+
+
+@router.get("/files/{file_id}/annotations")
+@require_login
+def file_annotations_page(request: Request, file_id: int, db: Session = Depends(get_db)):
+    """
+    Return the comments & annotations page for a file.
+    """
+    try:
+        import os
+
+        from app.models import FileRecord
+
+        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+
+        if not file_record:
+            return templates.TemplateResponse(
+                "file_annotations.html",
+                {"request": request, "file": None, "error": f"File with ID {file_id} not found"},
+            )
+
+        from app.config import settings
+
+        workdir = os.path.realpath(settings.workdir)
+
+        def _safe_exists(path: str | None) -> bool:
+            """Return True only when *path* exists and resides within workdir."""
+            if not path:
+                return False
+            resolved = os.path.realpath(path)
+            try:
+                common = os.path.commonpath([resolved, workdir])
+            except ValueError:
+                return False
+            return common == workdir and os.path.exists(resolved)
+
+        original_file_exists = _safe_exists(file_record.original_file_path)
+        processed_file_exists = _safe_exists(file_record.processed_file_path)
+
+        # Determine whether the file is a PDF (for EmbedPDF viewer)
+        mime = file_record.mime_type or ""
+        is_pdf = mime == "application/pdf" or (file_record.original_filename or "").lower().endswith(".pdf")
+
+        return templates.TemplateResponse(
+            "file_annotations.html",
+            {
+                "request": request,
+                "file": file_record,
+                "original_file_exists": original_file_exists,
+                "processed_file_exists": processed_file_exists,
+                "is_pdf": is_pdf,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving annotations for file {file_id}: {str(e)}")
+        return templates.TemplateResponse("file_annotations.html", {"request": request, "file": None, "error": str(e)})
+
+
+@router.get("/files/{file_id}/comments")
+@require_login
+def file_comments_redirect(request: Request, file_id: int):
+    """
+    Redirect /files/{file_id}/comments to /files/{file_id}/annotations.
+    """
+    from starlette.responses import RedirectResponse
+
+    return RedirectResponse(url=f"/files/{file_id}/annotations", status_code=302)
 
 
 # ---------------------------------------------------------------------------
