@@ -316,6 +316,12 @@
             {% endif %}
           </span>
         </div>
+        {% if multi_user_enabled %}
+        <div class="info-row">
+          <span class="info-key">{{ _("file.owner_label") }}</span>
+          <span class="info-val">{{ owner_display or _("file.owner_unowned") }}</span>
+        </div>
+        {% endif %}
       </div>
 
       <!-- Actions -->
@@ -344,7 +350,18 @@
           <a href="/shared-links?file_id={{ file.id }}" class="action-btn btn-secondary">
             <i class="fas fa-share-alt" aria-hidden="true"></i> Share
           </a>
+          {% if multi_user_enabled and file.owner_id is none %}
+          <button
+            class="action-btn btn-primary"
+            id="claim-btn"
+            aria-label="{{ _('file.claim_ownership') }}"
+            style="background:#10b981;border:none;cursor:pointer;"
+          >
+            <i class="fas fa-user-check" aria-hidden="true"></i> {{ _("file.claim_ownership") }}
+          </button>
+          {% endif %}
         </div>
+        <p id="claim-msg" style="margin-top:0.5rem;font-size:0.875rem;display:none;" role="alert"></p>
       </div>
     </div>
 
@@ -937,6 +954,16 @@
         pdfInit('/api/files/{{ file.id }}/preview?version={{ pv }}');
       {% endif %}
     {% endif %}
+    {% if multi_user_enabled and file and file.owner_id is none %}
+    initClaimOwnership({{ file.id | tojson }}, {
+      confirm: {{ _("file.claim_ownership_confirm") | tojson }},
+      success: {{ _("file.claim_ownership_success") | tojson }},
+      failed:  {{ _("file.claim_ownership_failed") | tojson }}
+    });
+    {% endif %}
   });
 </script>
+{% if multi_user_enabled and file and file.owner_id is none %}
+<script src="{{ url_for('static', path='js/claim.js') }}" defer></script>
+{% endif %}
 {% endblock %}
