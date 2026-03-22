@@ -109,6 +109,15 @@ def _dropbox_userinfo_compliance_fix(client, user_cls, token, data):
     Dropbox's /2/users/get_current_account returns a non-standard response
     format. This compliance fix normalizes the response data — the HTTP
     method (POST) is handled by authlib's compliance infrastructure.
+
+    Args:
+        client: The OAuth client instance (required by authlib compliance fix interface).
+        user_cls: The user class (required by authlib compliance fix interface).
+        token: The OAuth token dict.
+        data: The raw userinfo response dict from Dropbox.
+
+    Returns:
+        The normalized userinfo dict with ``sub`` and ``name`` fields.
     """
     # Dropbox returns account_id instead of sub
     if "account_id" in data and "sub" not in data:
@@ -435,7 +444,7 @@ async def login(request: Request):
     show_oauth = OAUTH_CONFIGURED
 
     # SSO Auto Login: redirect directly to SSO provider if configured
-    if show_oauth and getattr(settings, "sso_auto_login", False) is True and not error and not message:
+    if show_oauth and settings.sso_auto_login is True and not error and not message:
         return RedirectResponse(url="/oauth-login", status_code=status.HTTP_302_FOUND)
 
     return templates.TemplateResponse(

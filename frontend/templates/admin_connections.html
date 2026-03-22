@@ -104,10 +104,13 @@
 </main>
 
 <!-- Service Configuration Modal -->
-<div id="service-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 hidden" role="dialog" aria-modal="true" aria-labelledby="service-modal-title">
+<div id="service-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 hidden" role="dialog" aria-modal="true" aria-labelledby="service-modal-title" aria-describedby="service-modal-description">
   <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg overflow-y-auto max-h-[90vh]" onclick="event.stopPropagation()">
     <div class="px-6 pt-6 pb-2 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
-      <h2 id="service-modal-title" class="text-lg font-semibold text-gray-900 dark:text-white"></h2>
+      <div>
+        <h2 id="service-modal-title" class="text-lg font-semibold text-gray-900 dark:text-white"></h2>
+        <p id="service-modal-description" class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ _("connections.save_note") }}</p>
+      </div>
       <button type="button" onclick="closeServiceModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md p-1" style="min-height:44px; min-width:44px" aria-label="Close">
         <i class="fas fa-times text-xl" aria-hidden="true"></i>
       </button>
@@ -126,6 +129,14 @@
         </button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Accessible notification banner -->
+<div id="save-notification" class="fixed top-4 right-4 z-[60] hidden max-w-sm" role="alert" aria-live="assertive">
+  <div id="save-notification-inner" class="rounded-lg shadow-lg px-4 py-3 text-sm font-medium flex items-center gap-2">
+    <i id="save-notification-icon" class="fas" aria-hidden="true"></i>
+    <span id="save-notification-text"></span>
   </div>
 </div>
 
@@ -269,12 +280,12 @@ function saveServiceSettings(event) {
         closeServiceModal();
         location.reload();
       } else {
-        alert('Some settings failed to save. Please check the values and try again.');
+        showNotification('error', 'Some settings failed to save. Please check the values and try again.');
       }
     })
     .catch(function(err) {
       console.error('Error saving settings:', err);
-      alert('Failed to save settings. Please try again.');
+      showNotification('error', 'Failed to save settings. Please try again.');
     });
 }
 
@@ -301,5 +312,23 @@ document.addEventListener('keydown', function(e) {
 document.getElementById('service-modal')?.addEventListener('click', function(e) {
   if (e.target === this) closeServiceModal();
 });
+
+function showNotification(type, message) {
+  var el = document.getElementById('save-notification');
+  var inner = document.getElementById('save-notification-inner');
+  var icon = document.getElementById('save-notification-icon');
+  var text = document.getElementById('save-notification-text');
+  if (!el) return;
+  text.textContent = message;
+  if (type === 'error') {
+    inner.className = 'rounded-lg shadow-lg px-4 py-3 text-sm font-medium flex items-center gap-2 bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+    icon.className = 'fas fa-exclamation-circle';
+  } else {
+    inner.className = 'rounded-lg shadow-lg px-4 py-3 text-sm font-medium flex items-center gap-2 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+    icon.className = 'fas fa-check-circle';
+  }
+  el.classList.remove('hidden');
+  setTimeout(function() { el.classList.add('hidden'); }, 5000);
+}
 </script>
 {% endblock %}

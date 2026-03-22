@@ -306,7 +306,7 @@ class TestTranslationKeys:
         import json
         from pathlib import Path
 
-        en_path = Path("/home/runner/work/DocuElevate/DocuElevate/frontend/translations/en.json")
+        en_path = Path(__file__).parents[1] / "frontend" / "translations" / "en.json"
         translations = json.loads(en_path.read_text())
 
         expected_keys = [
