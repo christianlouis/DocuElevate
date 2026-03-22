@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.171.3 (2026-03-22)
+
+### Bug Fixes
+
+- **ui**: Add missing opening script tag in base.html Sentry block
+  ([`425472c`](https://github.com/christianlouis/DocuElevate/commit/425472c839b3564c20a29b6e983fa6b9e7d6cf9c))
+
+
 ## v0.171.2 (2026-03-22)
 
 ### Bug Fixes
