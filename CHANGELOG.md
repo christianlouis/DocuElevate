@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.169.1 (2026-03-22)
+
+### Bug Fixes
+
+- **api**: Add PUT /api/settings/{key} endpoint and shared credentials for Google/Microsoft social
+  login
+  ([`7d6128d`](https://github.com/christianlouis/DocuElevate/commit/7d6128d78f7782d4a687b51220747714ab59df6d))
+
+
 ## v0.169.0 (2026-03-22)
 
 ### Bug Fixes
