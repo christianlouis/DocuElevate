@@ -58,11 +58,18 @@ if AUTH_ENABLED and settings.authentik_client_id and settings.authentik_client_s
 
 # --- Social Login Providers ---------------------------------------------------
 if AUTH_ENABLED and settings.social_auth_google_enabled:
-    if settings.social_auth_google_client_id and settings.social_auth_google_client_secret:
+    # Determine which credentials to use for Google social login
+    _google_client_id = settings.social_auth_google_client_id
+    _google_client_secret = settings.social_auth_google_client_secret
+    if settings.social_auth_google_use_global_credentials and not (_google_client_id and _google_client_secret):
+        _google_client_id = settings.google_drive_client_id
+        _google_client_secret = settings.google_drive_client_secret
+
+    if _google_client_id and _google_client_secret:
         oauth.register(
             name="google",
-            client_id=settings.social_auth_google_client_id,
-            client_secret=settings.social_auth_google_client_secret,
+            client_id=_google_client_id,
+            client_secret=_google_client_secret,
             server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
             client_kwargs={"scope": "openid profile email"},
         )
@@ -72,12 +79,21 @@ if AUTH_ENABLED and settings.social_auth_google_enabled:
         logger.warning("SOCIAL_AUTH_GOOGLE_ENABLED=true but client ID/secret not configured")
 
 if AUTH_ENABLED and settings.social_auth_microsoft_enabled:
-    if settings.social_auth_microsoft_client_id and settings.social_auth_microsoft_client_secret:
+    # Determine which credentials to use for Microsoft social login
+    _microsoft_client_id = settings.social_auth_microsoft_client_id
+    _microsoft_client_secret = settings.social_auth_microsoft_client_secret
+    if settings.social_auth_microsoft_use_global_credentials and not (
+        _microsoft_client_id and _microsoft_client_secret
+    ):
+        _microsoft_client_id = settings.onedrive_client_id
+        _microsoft_client_secret = settings.onedrive_client_secret
+
+    if _microsoft_client_id and _microsoft_client_secret:
         tenant = settings.social_auth_microsoft_tenant or "common"
         oauth.register(
             name="microsoft",
-            client_id=settings.social_auth_microsoft_client_id,
-            client_secret=settings.social_auth_microsoft_client_secret,
+            client_id=_microsoft_client_id,
+            client_secret=_microsoft_client_secret,
             server_metadata_url=f"https://login.microsoftonline.com/{tenant}/v2.0/.well-known/openid-configuration",
             client_kwargs={"scope": "openid profile email"},
         )
@@ -133,7 +149,7 @@ if AUTH_ENABLED and settings.social_auth_dropbox_enabled:
     # Determine which credentials to use for Dropbox social login
     _dropbox_client_id = settings.social_auth_dropbox_client_id
     _dropbox_client_secret = settings.social_auth_dropbox_client_secret
-    if settings.social_auth_dropbox_use_global_credentials and not _dropbox_client_id:
+    if settings.social_auth_dropbox_use_global_credentials and not (_dropbox_client_id and _dropbox_client_secret):
         _dropbox_client_id = settings.dropbox_app_key
         _dropbox_client_secret = settings.dropbox_app_secret
 

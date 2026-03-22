@@ -257,6 +257,7 @@ async def connections_page(request: Request, db: Session = Depends(get_db)):
                     "social_auth_google_enabled",
                     "social_auth_google_client_id",
                     "social_auth_google_client_secret",
+                    "social_auth_google_use_global_credentials",
                 ],
             }
         )
@@ -292,6 +293,7 @@ async def connections_page(request: Request, db: Session = Depends(get_db)):
                     "social_auth_microsoft_client_id",
                     "social_auth_microsoft_client_secret",
                     "social_auth_microsoft_tenant",
+                    "social_auth_microsoft_use_global_credentials",
                 ],
             }
         )

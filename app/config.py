@@ -343,6 +343,17 @@ class Settings(BaseSettings):
     social_auth_google_enabled: bool = False
     social_auth_google_client_id: Optional[str] = None
     social_auth_google_client_secret: Optional[str] = None
+    social_auth_google_use_global_credentials: bool = Field(
+        default=False,
+        description=(
+            "When True, Google social login uses the global GOOGLE_DRIVE_CLIENT_ID / "
+            "GOOGLE_DRIVE_CLIENT_SECRET credentials (the Google Drive OAuth integration credentials) "
+            "instead of requiring separate SOCIAL_AUTH_GOOGLE_CLIENT_ID / "
+            "SOCIAL_AUTH_GOOGLE_CLIENT_SECRET values. "
+            "Requires SOCIAL_AUTH_GOOGLE_ENABLED=True and the global Google Drive OAuth credentials to be set. "
+            "Default: False."
+        ),
+    )
 
     # Microsoft OAuth2 (Azure AD / Microsoft Entra ID)
     social_auth_microsoft_enabled: bool = False
@@ -355,6 +366,17 @@ class Settings(BaseSettings):
             "Use 'common' to allow any Microsoft account and any Azure AD org. "
             "Use a specific tenant ID (GUID) to restrict to a single organization. "
             "Default: common."
+        ),
+    )
+    social_auth_microsoft_use_global_credentials: bool = Field(
+        default=False,
+        description=(
+            "When True, Microsoft social login uses the global ONEDRIVE_CLIENT_ID / "
+            "ONEDRIVE_CLIENT_SECRET credentials (the OneDrive integration credentials) "
+            "instead of requiring separate SOCIAL_AUTH_MICROSOFT_CLIENT_ID / "
+            "SOCIAL_AUTH_MICROSOFT_CLIENT_SECRET values. "
+            "Requires SOCIAL_AUTH_MICROSOFT_ENABLED=True and the global OneDrive credentials to be set. "
+            "Default: False."
         ),
     )
 
