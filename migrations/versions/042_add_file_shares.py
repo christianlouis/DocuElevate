@@ -6,12 +6,14 @@ Create Date: 2026-03-22
 
 """
 
+from typing import Union
+
 import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "042_add_file_shares"
-down_revision: str = "041_add_document_comments_and_annotations"
+down_revision: Union[str, None] = "041_add_document_comments_and_annotations"
 branch_labels = None
 depends_on = None
 
