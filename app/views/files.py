@@ -497,6 +497,18 @@ def file_annotations_page(request: Request, file_id: int, db: Session = Depends(
         mime = file_record.mime_type or ""
         is_pdf = mime == "application/pdf" or (file_record.original_filename or "").lower().endswith(".pdf")
 
+        # Determine the current user's role on this file
+        from app.utils.user_scope import get_current_owner_id, get_file_role
+
+        current_owner_id = get_current_owner_id(request)
+        user_session = request.session.get("user")
+        is_admin = isinstance(user_session, dict) and bool(user_session.get("is_admin"))
+        if is_admin:
+            current_user_role: str | None = "owner"
+        else:
+            current_user_role = get_file_role(file_record, current_owner_id, db)
+            # None means no access — the template will not show owner-only UI
+
         return templates.TemplateResponse(
             "file_annotations.html",
             {
@@ -505,6 +517,7 @@ def file_annotations_page(request: Request, file_id: int, db: Session = Depends(
                 "original_file_exists": original_file_exists,
                 "processed_file_exists": processed_file_exists,
                 "is_pdf": is_pdf,
+                "current_user_role": current_user_role,
             },
         )
     except Exception as e:

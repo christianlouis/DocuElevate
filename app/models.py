@@ -1237,3 +1237,52 @@ class DocumentAnnotation(Base):
     color = Column(String(20), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# ---------------------------------------------------------------------------
+# File sharing
+# ---------------------------------------------------------------------------
+
+# Valid roles for FileShare.role
+FILE_SHARE_ROLE_VIEWER = "viewer"
+FILE_SHARE_ROLE_EDITOR = "editor"
+FILE_SHARE_ROLES = (FILE_SHARE_ROLE_VIEWER, FILE_SHARE_ROLE_EDITOR)
+
+
+class FileShare(Base):
+    """Grants a named user access to a ``FileRecord`` owned by someone else.
+
+    The ``owner_id`` column records who created the share (must be the file
+    owner).  ``shared_with_user_id`` is the recipient's stable user
+    identifier (the same kind of string used in ``FileRecord.owner_id``).
+
+    Roles
+    -----
+    ``viewer``  — can read the file, comments, and annotations; may add
+                  comments/annotations; cannot delete or share.
+    ``editor``  — all viewer rights plus the ability to edit document
+                  metadata; cannot delete or re-share.
+
+    Only the file owner may create, update, or revoke shares.
+    """
+
+    __tablename__ = "file_shares"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # The document being shared.
+    file_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=False, index=True)
+
+    # The user who granted the share (must match FileRecord.owner_id).
+    owner_id = Column(String, nullable=False, index=True)
+
+    # The user receiving the share.
+    shared_with_user_id = Column(String, nullable=False, index=True)
+
+    # "viewer" or "editor"
+    role = Column(String(20), nullable=False, default=FILE_SHARE_ROLE_VIEWER)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (UniqueConstraint("file_id", "shared_with_user_id", name="uq_file_share_file_user"),)

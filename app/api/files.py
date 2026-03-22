@@ -30,7 +30,7 @@ from app.utils.file_queries import apply_status_filter
 from app.utils.file_status import get_files_processing_status
 from app.utils.filename_utils import sanitize_filename
 from app.utils.input_validation import validate_search_query, validate_sort_field, validate_sort_order
-from app.utils.user_scope import apply_owner_filter, get_current_owner_id
+from app.utils.user_scope import apply_owner_filter, get_current_owner_id, get_file_role
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -300,6 +300,7 @@ def delete_file_record(request: Request, file_id: int, db: DbSession):
     """
     Delete a file record from the database.
     This only removes the database entry, not the actual file.
+    Only the file owner (or an admin) may delete a document.
     """
     # Check if file deletion is allowed
     if not settings.allow_file_delete:
@@ -313,6 +314,18 @@ def delete_file_record(request: Request, file_id: int, db: DbSession):
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File record with ID {file_id} not found")
+
+        # Enforce owner-only deletion in multi-user mode
+        user = request.session.get("user")
+        is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
+        if not is_admin:
+            owner_id = get_current_owner_id(request)
+            role = get_file_role(file_record, owner_id, db)
+            if role != "owner":
+                raise HTTPException(
+                    status_code=403,
+                    detail="Only the file owner can delete this document",
+                )
 
         # Log the deletion
         logger.info(f"Deleting file record: ID={file_id}, Filename={file_record.original_filename}")
@@ -340,6 +353,7 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
     """
     Delete multiple file records from the database.
     This only removes the database entries, not the actual files.
+    Only the file owner (or an admin) may delete each document.
     """
     # Check if file deletion is allowed
     if not settings.allow_file_delete:
@@ -353,6 +367,18 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
 
         if not file_records:
             raise HTTPException(status_code=404, detail="No files found with the provided IDs")
+
+        # Enforce owner-only deletion in multi-user mode
+        user = request.session.get("user")
+        is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
+        if not is_admin:
+            owner_id = get_current_owner_id(request)
+            non_owner_ids = [f.id for f in file_records if get_file_role(f, owner_id, db) != "owner"]
+            if non_owner_ids:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"You can only delete files you own. Not owner of file IDs: {non_owner_ids}",
+                )
 
         deleted_count = len(file_records)
         deleted_ids = [f.id for f in file_records]

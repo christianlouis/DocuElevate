@@ -69,6 +69,7 @@ from app.models import (  # noqa: F401, E402
     DocumentComment,
     DocumentMetadata,
     FileRecord,
+    FileShare,
     Pipeline,
     PipelineRoutingRule,
     PipelineStep,

@@ -660,6 +660,55 @@
     </div>
   </div>
 
+  <!-- ── Sharing & Permissions ──────────────────────────────────────────── -->
+  {% if current_user_role == 'owner' %}
+  <div class="collab-card" id="sharing-panel" style="margin-top:1.5rem;">
+    <div class="panel-header" style="padding:1rem 1.25rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:0.5rem;">
+      <h3 style="font-size:1rem;font-weight:600;color:#1e293b;margin:0;">
+        <i class="fas fa-share-alt" aria-hidden="true" style="color:#3b82f6;"></i>
+        {{ _("sharing.heading") }}
+      </h3>
+    </div>
+    <div style="padding:1rem 1.25rem;">
+      <!-- Current shares list -->
+      <div id="sharing-list" aria-live="polite" style="margin-bottom:1rem;">
+        <p style="color:#64748b;font-size:0.875rem;">{{ _("sharing.loading") }}</p>
+      </div>
+
+      <!-- Add share form -->
+      <form id="sharing-form" aria-label="{{ _('sharing.add_share') }}" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;">
+        <div style="flex:1;min-width:180px;">
+          <label for="share-user-input" style="display:block;font-size:0.8rem;color:#475569;margin-bottom:0.25rem;">
+            {{ _("sharing.user_id_label") }}
+          </label>
+          <input
+            type="text"
+            id="share-user-input"
+            placeholder="{{ _('sharing.user_id_placeholder') }}"
+            style="width:100%;padding:0.5rem 0.75rem;border:1px solid #cbd5e1;border-radius:0.375rem;font-size:0.875rem;"
+          />
+        </div>
+        <div style="min-width:120px;">
+          <label for="share-role-input" style="display:block;font-size:0.8rem;color:#475569;margin-bottom:0.25rem;">
+            {{ _("sharing.role_label") }}
+          </label>
+          <select
+            id="share-role-input"
+            style="width:100%;padding:0.5rem 0.75rem;border:1px solid #cbd5e1;border-radius:0.375rem;font-size:0.875rem;background:#fff;"
+          >
+            <option value="viewer">{{ _("sharing.role_viewer") }}</option>
+            <option value="editor">{{ _("sharing.role_editor") }}</option>
+          </select>
+        </div>
+        <button type="submit" style="padding:0.5rem 1rem;background:#3b82f6;color:#fff;border:none;border-radius:0.375rem;font-size:0.875rem;font-weight:600;cursor:pointer;min-height:2.25rem;" aria-label="{{ _('sharing.add_share') }}">
+          <i class="fas fa-user-plus" aria-hidden="true"></i> {{ _("sharing.add_share") }}
+        </button>
+      </form>
+      <p id="sharing-form-error" style="color:#ef4444;font-size:0.8rem;margin-top:0.5rem;display:none;" role="alert"></p>
+    </div>
+  </div>
+  {% endif %}
+
   {% else %}
   <!-- file is None without error -->
   <div class="error-box">Document not found.</div>
@@ -713,6 +762,25 @@
         if (typeof initAnnotations === 'function') {
           initAnnotations(fileId, userId, annotationsI18n);
         }
+        {% if current_user_role == 'owner' %}
+        if (typeof initSharing === 'function') {
+          initSharing(fileId, {
+            heading: {{ _("sharing.heading") | tojson }},
+            loading: {{ _("sharing.loading") | tojson }},
+            no_shares: {{ _("sharing.no_shares") | tojson }},
+            add_share: {{ _("sharing.add_share") | tojson }},
+            role_viewer: {{ _("sharing.role_viewer") | tojson }},
+            role_editor: {{ _("sharing.role_editor") | tojson }},
+            revoke: {{ _("sharing.revoke") | tojson }},
+            revoke_confirm: {{ _("sharing.revoke_confirm") | tojson }},
+            user_id_label: {{ _("sharing.user_id_label") | tojson }},
+            user_id_placeholder: {{ _("sharing.user_id_placeholder") | tojson }},
+            role_label: {{ _("sharing.role_label") | tojson }},
+            error_empty_user: {{ _("sharing.error_empty_user") | tojson }},
+            change_role: {{ _("sharing.change_role") | tojson }},
+          });
+        }
+        {% endif %}
       })
       .catch(function () {
         // Auth disabled — initialise with empty user
@@ -722,6 +790,10 @@
     {% endif %}
   });
 </script>
+<!-- Sharing JS -->
+{% if current_user_role == 'owner' %}
+<script src="{{ url_for('static', path='js/sharing.js') }}" defer></script>
+{% endif %}
 <!-- ── EmbedPDF Viewer init ── -->
 {% if file and is_pdf and (processed_file_exists or original_file_exists) %}
 <script async type="module">
