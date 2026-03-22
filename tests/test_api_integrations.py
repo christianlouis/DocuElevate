@@ -1,6 +1,7 @@
 """Tests for the per-user integrations API (app/api/integrations.py)."""
 
 import unittest.mock
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
