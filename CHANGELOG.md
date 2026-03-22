@@ -10,6 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.171.2 (2026-03-22)
+
+### Bug Fixes
+
+- **ui**: Fix greyed-out toggle switches on admin connections page
+  ([`46772fc`](https://github.com/christianlouis/DocuElevate/commit/46772fc7461f9f8333b399b301ec969f5caa4c1e))
+
+### Chores
+
+- Upgrade Sentry Browser SDK CDN bundle from v9.x.x to v10.x.x
+  ([`3d0bdf7`](https://github.com/christianlouis/DocuElevate/commit/3d0bdf783649019d631fa0b1156db66e5e3269b4))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`25d32a9`](https://github.com/christianlouis/DocuElevate/commit/25d32a9006161b433dc6bbac3810ab560e5e5847))
+
+- **changelog**: Update changelog [skip ci]
+  ([`9822ba5`](https://github.com/christianlouis/DocuElevate/commit/9822ba583d076671692699cd9856d8fbc7d0218d))
+
+
 ## Unreleased
 
 ### Chores
