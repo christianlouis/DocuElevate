@@ -10,6 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.167.0 (2026-03-22)
+
+### Bug Fixes
+
+- **auth**: Address code review feedback - accessibility, docstrings, portable test paths
+  ([`c17afe8`](https://github.com/christianlouis/DocuElevate/commit/c17afe8c11789cced8e5edde7bd61a5dfbbac9a7))
+
+- **auth**: Fix SSO auto-login check to use strict boolean comparison and add tests
+  ([`840a5bc`](https://github.com/christianlouis/DocuElevate/commit/840a5bcd5b73b0dbed1d16174b937e877352afe0))
+
+### Documentation
+
+- **auth**: Update documentation for new auth providers and connections page
+  ([`0287a16`](https://github.com/christianlouis/DocuElevate/commit/0287a165cfc27bda8166b61f629b103ef3269bb9))
+
+### Features
+
+- **auth**: Add GitHub, Keycloak, Generic OAuth2 social login providers and connections page
+  ([`54a0ba1`](https://github.com/christianlouis/DocuElevate/commit/54a0ba1023d8e39fc133a2312beab349181f308b))
+
+
 ## v0.166.1 (2026-03-22)
 
 ### Bug Fixes
