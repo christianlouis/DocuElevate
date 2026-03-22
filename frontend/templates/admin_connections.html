@@ -229,6 +229,18 @@ function openServiceModal(serviceKey) {
           updateDropboxCredentialFieldsVisibility(this.checked);
         });
       }
+      // When the Google "use global credentials" toggle changes, update visibility.
+      if (field.key === 'social_auth_google_use_global_credentials') {
+        checkbox.addEventListener('change', function() {
+          updateGoogleCredentialFieldsVisibility(this.checked);
+        });
+      }
+      // When the Microsoft "use global credentials" toggle changes, update visibility.
+      if (field.key === 'social_auth_microsoft_use_global_credentials') {
+        checkbox.addEventListener('change', function() {
+          updateMicrosoftCredentialFieldsVisibility(this.checked);
+        });
+      }
     } else {
       const input = document.createElement('input');
       input.type = meta.sensitive ? 'password' : 'text';
@@ -264,6 +276,24 @@ function openServiceModal(serviceKey) {
       const val = useGlobalField.value;
       const isGlobal = val === true || val === 'true' || val === '1' || val === 'True';
       updateDropboxCredentialFieldsVisibility(isGlobal);
+    }
+  }
+  // Apply initial visibility for Google credential fields.
+  if (currentServiceKey === 'google') {
+    const useGlobalField = fields.find(function(f) { return f.key === 'social_auth_google_use_global_credentials'; });
+    if (useGlobalField) {
+      const val = useGlobalField.value;
+      const isGlobal = val === true || val === 'true' || val === '1' || val === 'True';
+      updateGoogleCredentialFieldsVisibility(isGlobal);
+    }
+  }
+  // Apply initial visibility for Microsoft credential fields.
+  if (currentServiceKey === 'microsoft') {
+    const useGlobalField = fields.find(function(f) { return f.key === 'social_auth_microsoft_use_global_credentials'; });
+    if (useGlobalField) {
+      const val = useGlobalField.value;
+      const isGlobal = val === true || val === 'true' || val === '1' || val === 'True';
+      updateMicrosoftCredentialFieldsVisibility(isGlobal);
     }
   }
 
@@ -334,6 +364,28 @@ function saveServiceSettings(event) {
 // whether the "use global credentials" toggle is enabled.
 function updateDropboxCredentialFieldsVisibility(useGlobal) {
   ['social_auth_dropbox_client_id', 'social_auth_dropbox_client_secret'].forEach(function(key) {
+    const el = document.querySelector('[data-field-key="' + key + '"]');
+    if (el) {
+      el.style.display = useGlobal ? 'none' : '';
+    }
+  });
+}
+
+// Show or hide the Google client-id / client-secret fields depending on
+// whether the "use global credentials" toggle is enabled.
+function updateGoogleCredentialFieldsVisibility(useGlobal) {
+  ['social_auth_google_client_id', 'social_auth_google_client_secret'].forEach(function(key) {
+    const el = document.querySelector('[data-field-key="' + key + '"]');
+    if (el) {
+      el.style.display = useGlobal ? 'none' : '';
+    }
+  });
+}
+
+// Show or hide the Microsoft client-id / client-secret fields depending on
+// whether the "use global credentials" toggle is enabled.
+function updateMicrosoftCredentialFieldsVisibility(useGlobal) {
+  ['social_auth_microsoft_client_id', 'social_auth_microsoft_client_secret'].forEach(function(key) {
     const el = document.querySelector('[data-field-key="' + key + '"]');
     if (el) {
       el.style.display = useGlobal ? 'none' : '';

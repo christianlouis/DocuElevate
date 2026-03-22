@@ -303,6 +303,20 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "social_auth_google_use_global_credentials": {
+        "category": "Social Login",
+        "description": (
+            "When True, Google social login uses the global GOOGLE_DRIVE_CLIENT_ID / "
+            "GOOGLE_DRIVE_CLIENT_SECRET credentials (the Google Drive OAuth integration) "
+            "instead of requiring separate SOCIAL_AUTH_GOOGLE_CLIENT_ID / "
+            "SOCIAL_AUTH_GOOGLE_CLIENT_SECRET values. "
+            "Requires SOCIAL_AUTH_GOOGLE_ENABLED=True and global Google Drive OAuth credentials to be set."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
     "social_auth_microsoft_enabled": {
         "category": "Social Login",
         "description": (
@@ -341,6 +355,20 @@ SETTING_METADATA = {
             "restrict to a single organization."
         ),
         "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_microsoft_use_global_credentials": {
+        "category": "Social Login",
+        "description": (
+            "When True, Microsoft social login uses the global ONEDRIVE_CLIENT_ID / "
+            "ONEDRIVE_CLIENT_SECRET credentials (the OneDrive integration credentials) "
+            "instead of requiring separate SOCIAL_AUTH_MICROSOFT_CLIENT_ID / "
+            "SOCIAL_AUTH_MICROSOFT_CLIENT_SECRET values. "
+            "Requires SOCIAL_AUTH_MICROSOFT_ENABLED=True and global OneDrive credentials to be set."
+        ),
+        "type": "boolean",
         "sensitive": False,
         "required": False,
         "restart_required": True,
