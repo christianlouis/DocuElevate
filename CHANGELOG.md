@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.166.1 (2026-03-22)
+
+### Bug Fixes
+
+- Make back-link text consistent with aria-labels across file views
+  ([`d71add1`](https://github.com/christianlouis/DocuElevate/commit/d71add1484d01e4598a61f2e59c106afa8971d6a))
+
+### Refactoring
+
+- Initial step - remove comments/annotations from file_detail and file_view templates
+  ([`5a3ddcc`](https://github.com/christianlouis/DocuElevate/commit/5a3ddcc1f0d9e2daa674d5098ab1bafe4d2e0bc8))
+
+- **views**: Split file views into summary, detail, process, and annotations pages
+  ([`f852ba9`](https://github.com/christianlouis/DocuElevate/commit/f852ba978343934631f70aa12aec49ec79da8288))
+
+
 ## v0.166.0 (2026-03-22)
 
 ### Bug Fixes
