@@ -18,11 +18,11 @@
         <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ _("connections.sso_auto_login_description") }}</p>
       </div>
       <div>
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" id="sso-auto-login-toggle" class="sr-only peer"
+        <label class="doc-toggle">
+          <input type="checkbox" id="sso-auto-login-toggle" class="sr-only"
                  {% if sso_auto_login %}checked{% endif %}
                  onchange="toggleSetting('sso_auto_login', this.checked)">
-          <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600" style="min-width:44px; min-height:24px;"></div>
+          <span class="doc-toggle-track" aria-hidden="true"></span>
           <span class="ml-3 text-sm font-medium text-gray-700 dark:text-gray-300">{{ _("connections.sso_auto_login") }}</span>
         </label>
       </div>
@@ -44,11 +44,11 @@
         {% endif %}
       </div>
       <div>
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" id="qr-upload-toggle" class="sr-only peer"
+        <label class="doc-toggle">
+          <input type="checkbox" id="qr-upload-toggle" class="sr-only"
                  {% if qr_login_enabled %}checked{% endif %}
                  onchange="toggleSetting('qr_login_enabled', this.checked)">
-          <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600" style="min-width:44px; min-height:24px;"></div>
+          <span class="doc-toggle-track" aria-hidden="true"></span>
           <span class="ml-3 text-sm font-medium text-gray-700 dark:text-gray-300">{{ _("connections.qr_code_enabled") }}</span>
         </label>
       </div>
@@ -200,24 +200,24 @@ function openServiceModal(serviceKey) {
     }
 
     if (meta.type === 'boolean') {
-      // Styled Tailwind toggle switch (matches the page-level toggles)
+      // Styled toggle switch using .doc-toggle CSS class (compatible with Tailwind v2 CDN).
       const toggleWrapper = document.createElement('label');
-      toggleWrapper.className = 'relative inline-flex items-center cursor-pointer';
+      toggleWrapper.className = 'doc-toggle';
       toggleWrapper.setAttribute('aria-label', field.key.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); }));
 
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.id = 'field-' + field.key;
       checkbox.name = field.key;
-      checkbox.className = 'sr-only peer';
+      checkbox.className = 'sr-only';
       const val = field.value;
       if (val === true || val === 'true' || val === '1' || val === 'True') {
         checkbox.checked = true;
       }
 
-      const slider = document.createElement('div');
-      slider.className = "w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600";
-      slider.style.cssText = 'min-width:44px; min-height:24px;';
+      const slider = document.createElement('span');
+      slider.className = 'doc-toggle-track';
+      slider.setAttribute('aria-hidden', 'true');
 
       toggleWrapper.appendChild(checkbox);
       toggleWrapper.appendChild(slider);
