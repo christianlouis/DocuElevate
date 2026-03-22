@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.171.0 (2026-03-22)
+
+### Features
+
+- **ui**: Show file owner, add claim ownership on file summary, detail, and annotations pages
+  ([`9458055`](https://github.com/christianlouis/DocuElevate/commit/9458055661e5458256b51cfe1965b0607d6a478e))
+
+
 ## v0.170.0 (2026-03-22)
 
 ### Features
