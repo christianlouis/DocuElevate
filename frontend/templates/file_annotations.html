@@ -586,6 +586,23 @@
         Comments &amp; Annotations
       </div>
       <div class="annotations-subtitle">{{ file.original_filename }}</div>
+      {% if multi_user_enabled %}
+      <div class="annotations-subtitle" style="margin-top:0.25rem;">
+        <i class="fas fa-user" aria-hidden="true" style="margin-right:0.25rem;"></i>
+        {{ _("file.owner_label") }}: <strong>{{ owner_display or _("file.owner_unowned") }}</strong>
+        {% if file.owner_id is none %}
+        &mdash;
+        <button
+          id="claim-btn"
+          aria-label="{{ _('file.claim_ownership') }}"
+          style="background:#10b981;color:#fff;border:none;border-radius:0.375rem;padding:0.25rem 0.75rem;font-size:0.8rem;font-weight:600;cursor:pointer;"
+        >
+          <i class="fas fa-user-check" aria-hidden="true"></i> {{ _("file.claim_ownership") }}
+        </button>
+        <span id="claim-msg" style="font-size:0.8rem;margin-left:0.5rem;display:none;" role="alert"></span>
+        {% endif %}
+      </div>
+      {% endif %}
     </div>
   </div>
 
@@ -910,6 +927,18 @@
       }).catch(function () {});
     }
   }
+</script>
+{% endif %}
+{% if multi_user_enabled and file and file.owner_id is none %}
+<script src="{{ url_for('static', path='js/claim.js') }}" defer></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  initClaimOwnership({{ file.id | tojson }}, {
+    confirm: {{ _("file.claim_ownership_confirm") | tojson }},
+    success: {{ _("file.claim_ownership_success") | tojson }},
+    failed:  {{ _("file.claim_ownership_failed") | tojson }}
+  });
+});
 </script>
 {% endif %}
 {% endblock %}

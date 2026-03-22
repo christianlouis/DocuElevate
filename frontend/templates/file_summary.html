@@ -165,6 +165,12 @@
     {% if file.document_title %}
     <div class="info-row"><span class="info-key">Document Title</span><span class="info-val">{{ file.document_title }}</span></div>
     {% endif %}
+    {% if multi_user_enabled %}
+    <div class="info-row">
+      <span class="info-key">{{ _("file.owner_label") }}</span>
+      <span class="info-val">{{ owner_display or _("file.owner_unowned") }}</span>
+    </div>
+    {% endif %}
   </div>
 
   <!-- ── Quick actions ── -->
@@ -184,7 +190,18 @@
       <a href="/files/{{ file.id }}/detail" class="action-btn btn-secondary">
         <i class="fas fa-eye" aria-hidden="true"></i> View Detail
       </a>
+      {% if multi_user_enabled and file.owner_id is none %}
+      <button
+        class="action-btn btn-primary"
+        id="claim-btn"
+        aria-label="{{ _('file.claim_ownership') }}"
+        style="background:#10b981;"
+      >
+        <i class="fas fa-user-check" aria-hidden="true"></i> {{ _("file.claim_ownership") }}
+      </button>
+      {% endif %}
     </div>
+    <p id="claim-msg" style="margin-top:0.5rem;font-size:0.875rem;display:none;" role="alert"></p>
   </div>
 
   {% else %}
@@ -193,4 +210,17 @@
   {% endif %}
 
 </div>
+
+{% if multi_user_enabled and file and file.owner_id is none %}
+<script src="{{ url_for('static', path='js/claim.js') }}" defer></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  initClaimOwnership({{ file.id | tojson }}, {
+    confirm: {{ _("file.claim_ownership_confirm") | tojson }},
+    success: {{ _("file.claim_ownership_success") | tojson }},
+    failed:  {{ _("file.claim_ownership_failed") | tojson }}
+  });
+});
+</script>
+{% endif %}
 {% endblock %}

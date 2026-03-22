@@ -19,6 +19,43 @@ router = APIRouter()
 _FILE_NOT_FOUND = "File not found"
 
 
+def _resolve_owner_context(request: Request, file_record, db: Session) -> dict:
+    """Return owner display info and the current user's effective role.
+
+    Returns a dict with:
+    - ``current_user_role``: one of "owner" / "editor" / "viewer" / None
+    - ``owner_display``: human-readable owner string (display_name or user_id)
+    - ``multi_user_enabled``: whether multi-user mode is active
+    """
+    from app.config import settings
+    from app.models import UserProfile
+    from app.utils.user_scope import get_current_owner_id, get_file_role
+
+    multi_user_enabled = settings.multi_user_enabled
+
+    current_owner_id = get_current_owner_id(request)
+    user_session = request.session.get("user")
+    is_admin = isinstance(user_session, dict) and bool(user_session.get("is_admin"))
+
+    if is_admin:
+        current_user_role: str | None = "owner"
+    else:
+        current_user_role = get_file_role(file_record, current_owner_id, db)
+
+    # Build a human-readable owner label
+    if file_record.owner_id:
+        profile = db.query(UserProfile).filter(UserProfile.user_id == file_record.owner_id).first()
+        owner_display: str | None = profile.display_name if profile and profile.display_name else file_record.owner_id
+    else:
+        owner_display = None  # No owner (unowned)
+
+    return {
+        "current_user_role": current_user_role,
+        "owner_display": owner_display,
+        "multi_user_enabled": multi_user_enabled,
+    }
+
+
 @router.get("/files")
 @require_login
 def files_page(
@@ -268,6 +305,7 @@ def file_summary_page(request: Request, file_id: int, db: Session = Depends(get_
             step_summary = None
 
         pipeline_info = _resolve_pipeline(db, file_record)
+        owner_ctx = _resolve_owner_context(request, file_record, db)
 
         return templates.TemplateResponse(
             "file_summary.html",
@@ -279,6 +317,7 @@ def file_summary_page(request: Request, file_id: int, db: Session = Depends(get_
                 "processed_file_exists": processed_file_exists,
                 "step_summary": step_summary,
                 "pipeline_info": pipeline_info,
+                **owner_ctx,
             },
         )
     except Exception as e:
@@ -353,6 +392,7 @@ def file_view_page(request: Request, file_id: int, db: Session = Depends(get_db)
 
         # Resolve the pipeline assigned to this file (explicit or system default)
         pipeline_info = _resolve_pipeline(db, file_record)
+        owner_ctx = _resolve_owner_context(request, file_record, db)
 
         return templates.TemplateResponse(
             "file_view.html",
@@ -364,6 +404,7 @@ def file_view_page(request: Request, file_id: int, db: Session = Depends(get_db)
                 "processed_file_exists": processed_file_exists,
                 "step_summary": step_summary,
                 "pipeline_info": pipeline_info,
+                **owner_ctx,
             },
         )
     except Exception as e:
@@ -497,17 +538,8 @@ def file_annotations_page(request: Request, file_id: int, db: Session = Depends(
         mime = file_record.mime_type or ""
         is_pdf = mime == "application/pdf" or (file_record.original_filename or "").lower().endswith(".pdf")
 
-        # Determine the current user's role on this file
-        from app.utils.user_scope import get_current_owner_id, get_file_role
-
-        current_owner_id = get_current_owner_id(request)
-        user_session = request.session.get("user")
-        is_admin = isinstance(user_session, dict) and bool(user_session.get("is_admin"))
-        if is_admin:
-            current_user_role: str | None = "owner"
-        else:
-            current_user_role = get_file_role(file_record, current_owner_id, db)
-            # None means no access — the template will not show owner-only UI
+        # Determine the current user's role on this file (and owner display info)
+        owner_ctx = _resolve_owner_context(request, file_record, db)
 
         return templates.TemplateResponse(
             "file_annotations.html",
@@ -517,7 +549,7 @@ def file_annotations_page(request: Request, file_id: int, db: Session = Depends(
                 "original_file_exists": original_file_exists,
                 "processed_file_exists": processed_file_exists,
                 "is_pdf": is_pdf,
-                "current_user_role": current_user_role,
+                **owner_ctx,
             },
         )
     except Exception as e:
