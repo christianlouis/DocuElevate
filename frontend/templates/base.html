@@ -41,9 +41,10 @@
          upgrading the SDK.
     ──────────────────────────────────────────────────────────────────────── #}
     {% if sentry_dsn %}
-    <script src="https://browser.sentry-cdn.com/10.x.x/bundle.tracing.replay.min.js"
-            crossorigin="anonymous"></script>
-    <script>
+    <script src="https://browser.sentry-cdn.com/10.45.0/bundle.tracing.replay.feedback.logs.metrics.min.js"
+      integrity="sha384-TCY3xw5Ej940LIWfS6PwhCCBl7lvEsxBpHy+BirF+EycSQUvXbfZsgsLi0oU18yZ"
+      crossorigin="anonymous"
+    ></script>
       if (window.Sentry) {
         Sentry.init({
           dsn: {{ sentry_dsn | tojson }},
