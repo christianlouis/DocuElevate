@@ -206,8 +206,6 @@ async def connections_page(request: Request, db: Session = Depends(get_db)):
     SSO settings, and service integrations through a wizard-like interface.
     """
     try:
-        from app.auth import OAUTH_CONFIGURED, SOCIAL_PROVIDERS
-
         db_settings = get_all_settings_from_db(db)
 
         def _get_effective(key: str):
@@ -227,13 +225,14 @@ async def connections_page(request: Request, db: Session = Depends(get_db)):
         services = []
 
         # --- SSO (Authentik / OIDC) ---
+        _oidc_linked = bool(_get_effective("authentik_client_id") and _get_effective("authentik_client_secret"))
         services.append(
             {
                 "key": "oidc",
-                "name": settings.oauth_provider_name or "Single Sign-On",
+                "name": _get_effective("oauth_provider_name") or "Single Sign-On",
                 "icon": "fas fa-lock",
                 "type": "SSO",
-                "linked": OAUTH_CONFIGURED,
+                "linked": _oidc_linked,
                 "description": "OpenID Connect SSO provider",
                 "settings_keys": [
                     "authentik_client_id",
@@ -245,13 +244,23 @@ async def connections_page(request: Request, db: Session = Depends(get_db)):
         )
 
         # --- Google ---
+        _google_id = _get_effective("social_auth_google_client_id")
+        _google_secret = _get_effective("social_auth_google_client_secret")
+        if _is_truthy(_get_effective("social_auth_google_use_global_credentials")) and not (
+            _google_id and _google_secret
+        ):
+            _google_id = _google_id or _get_effective("google_drive_client_id")
+            _google_secret = _google_secret or _get_effective("google_drive_client_secret")
+        _google_linked = bool(
+            _is_truthy(_get_effective("social_auth_google_enabled")) and _google_id and _google_secret
+        )
         services.append(
             {
                 "key": "google",
                 "name": "Google",
                 "icon": "fab fa-google",
                 "type": "Sign-in authentication",
-                "linked": "google" in SOCIAL_PROVIDERS,
+                "linked": _google_linked,
                 "description": "Sign-in authentication",
                 "settings_keys": [
                     "social_auth_google_enabled",
@@ -263,13 +272,18 @@ async def connections_page(request: Request, db: Session = Depends(get_db)):
         )
 
         # --- GitHub ---
+        _github_linked = bool(
+            _is_truthy(_get_effective("social_auth_github_enabled"))
+            and _get_effective("social_auth_github_client_id")
+            and _get_effective("social_auth_github_client_secret")
+        )
         services.append(
             {
                 "key": "github",
                 "name": "GitHub",
                 "icon": "fab fa-github",
                 "type": "Sign-in authentication",
-                "linked": "github" in SOCIAL_PROVIDERS,
+                "linked": _github_linked,
                 "description": "Sign-in authentication",
                 "settings_keys": [
                     "social_auth_github_enabled",
@@ -280,13 +294,19 @@ async def connections_page(request: Request, db: Session = Depends(get_db)):
         )
 
         # --- Microsoft ---
+        _ms_id = _get_effective("social_auth_microsoft_client_id")
+        _ms_secret = _get_effective("social_auth_microsoft_client_secret")
+        if _is_truthy(_get_effective("social_auth_microsoft_use_global_credentials")) and not (_ms_id and _ms_secret):
+            _ms_id = _ms_id or _get_effective("onedrive_client_id")
+            _ms_secret = _ms_secret or _get_effective("onedrive_client_secret")
+        _microsoft_linked = bool(_is_truthy(_get_effective("social_auth_microsoft_enabled")) and _ms_id and _ms_secret)
         services.append(
             {
                 "key": "microsoft",
                 "name": "Microsoft",
                 "icon": "fab fa-microsoft",
                 "type": "Sign-in authentication",
-                "linked": "microsoft" in SOCIAL_PROVIDERS,
+                "linked": _microsoft_linked,
                 "description": "Sign-in authentication",
                 "settings_keys": [
                     "social_auth_microsoft_enabled",
@@ -299,13 +319,18 @@ async def connections_page(request: Request, db: Session = Depends(get_db)):
         )
 
         # --- Apple ---
+        _apple_linked = bool(
+            _is_truthy(_get_effective("social_auth_apple_enabled"))
+            and _get_effective("social_auth_apple_client_id")
+            and _get_effective("social_auth_apple_team_id")
+        )
         services.append(
             {
                 "key": "apple",
                 "name": "Apple",
                 "icon": "fab fa-apple",
                 "type": "Sign-in authentication",
-                "linked": "apple" in SOCIAL_PROVIDERS,
+                "linked": _apple_linked,
                 "description": "Sign-in authentication",
                 "settings_keys": [
                     "social_auth_apple_enabled",
@@ -318,13 +343,19 @@ async def connections_page(request: Request, db: Session = Depends(get_db)):
         )
 
         # --- Dropbox ---
+        _dbx_id = _get_effective("social_auth_dropbox_client_id")
+        _dbx_secret = _get_effective("social_auth_dropbox_client_secret")
+        if _is_truthy(_get_effective("social_auth_dropbox_use_global_credentials")) and not (_dbx_id and _dbx_secret):
+            _dbx_id = _dbx_id or _get_effective("dropbox_app_key")
+            _dbx_secret = _dbx_secret or _get_effective("dropbox_app_secret")
+        _dropbox_linked = bool(_is_truthy(_get_effective("social_auth_dropbox_enabled")) and _dbx_id and _dbx_secret)
         services.append(
             {
                 "key": "dropbox",
                 "name": "Dropbox",
                 "icon": "fab fa-dropbox",
                 "type": "Sign-in authentication",
-                "linked": "dropbox" in SOCIAL_PROVIDERS,
+                "linked": _dropbox_linked,
                 "description": "Sign-in authentication",
                 "settings_keys": [
                     "social_auth_dropbox_enabled",
@@ -336,13 +367,20 @@ async def connections_page(request: Request, db: Session = Depends(get_db)):
         )
 
         # --- Keycloak ---
+        _keycloak_linked = bool(
+            _is_truthy(_get_effective("social_auth_keycloak_enabled"))
+            and _get_effective("social_auth_keycloak_client_id")
+            and _get_effective("social_auth_keycloak_client_secret")
+            and _get_effective("social_auth_keycloak_server_url")
+            and _get_effective("social_auth_keycloak_realm")
+        )
         services.append(
             {
                 "key": "keycloak",
                 "name": "Keycloak",
                 "icon": "fas fa-key",
                 "type": "SSO",
-                "linked": "keycloak" in SOCIAL_PROVIDERS,
+                "linked": _keycloak_linked,
                 "description": "SSO",
                 "settings_keys": [
                     "social_auth_keycloak_enabled",
@@ -355,13 +393,20 @@ async def connections_page(request: Request, db: Session = Depends(get_db)):
         )
 
         # --- Generic OAuth2 ---
+        _generic_oauth2_linked = bool(
+            _is_truthy(_get_effective("social_auth_generic_oauth2_enabled"))
+            and _get_effective("social_auth_generic_oauth2_client_id")
+            and _get_effective("social_auth_generic_oauth2_client_secret")
+            and _get_effective("social_auth_generic_oauth2_authorize_url")
+            and _get_effective("social_auth_generic_oauth2_token_url")
+        )
         services.append(
             {
                 "key": "generic_oauth2",
                 "name": "Generic OAuth2",
                 "icon": "fas fa-sign-in-alt",
                 "type": "SSO",
-                "linked": "generic_oauth2" in SOCIAL_PROVIDERS,
+                "linked": _generic_oauth2_linked,
                 "description": "SSO",
                 "settings_keys": [
                     "social_auth_generic_oauth2_enabled",
@@ -474,7 +519,7 @@ async def connections_page(request: Request, db: Session = Depends(get_db)):
                 "services": services,
                 "service_settings": service_settings,
                 "sso_auto_login": sso_auto_login,
-                "oauth_configured": OAUTH_CONFIGURED,
+                "oauth_configured": _oidc_linked,
                 "qr_login_enabled": qr_login_enabled,
                 "frontend_url_configured": frontend_url_configured,
                 "app_version": settings.version,
