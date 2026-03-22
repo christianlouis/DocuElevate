@@ -45,6 +45,7 @@
       integrity="sha384-TCY3xw5Ej940LIWfS6PwhCCBl7lvEsxBpHy+BirF+EycSQUvXbfZsgsLi0oU18yZ"
       crossorigin="anonymous"
     ></script>
+    <script>
       if (window.Sentry) {
         Sentry.init({
           dsn: {{ sentry_dsn | tojson }},
