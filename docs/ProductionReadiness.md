@@ -157,10 +157,10 @@ Recommended headers to configure at the proxy level:
 
 #### Content-Security-Policy Notes
 
-DocuElevate's frontend uses Tailwind CSS v3 Play CDN.  In production, ensure your CSP allows loading scripts from `https://cdn.tailwindcss.com`.  A starting point:
+DocuElevate's frontend uses Tailwind CSS v3 compiled at Docker build time. No external CDN requests are needed for CSS. In production, your CSP does not need to allow any external style sources beyond your own static file origin.  A starting point:
 
 ```
-Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:;
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;
 ```
 
 Audit and tighten this policy for your specific deployment.
