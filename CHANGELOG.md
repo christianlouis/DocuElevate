@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.172.0 (2026-03-22)
+
+### Features
+
+- **ui**: Migrate Tailwind CSS from v2 CDN to v3 Play CDN (interim step)
+  ([`1d7df13`](https://github.com/christianlouis/DocuElevate/commit/1d7df13c943cc9138dc3ed514f9ab81d861bfbac))
+
+- **ui**: Replace Tailwind CSS CDN with compiled v3 production build
+  ([`14b3031`](https://github.com/christianlouis/DocuElevate/commit/14b3031e63e8645c4048dd73a594e9a53a919c17))
+
+
 ## v0.171.3 (2026-03-22)
 
 ### Bug Fixes
