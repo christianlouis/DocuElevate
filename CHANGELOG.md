@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.171.1 (2026-03-22)
+
+### Bug Fixes
+
+- **admin**: Fix greyed-out QR login toggle on admin connections page
+  ([`d4cc44a`](https://github.com/christianlouis/DocuElevate/commit/d4cc44a72f7821360ffce1c9743efb85dbc65f22))
+
+
 ## v0.171.0 (2026-03-22)
 
 ### Features
