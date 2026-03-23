@@ -499,6 +499,7 @@ class TestPullAllInboxes:
 class TestPullInbox:
     """Tests for pull_inbox function."""
 
+    @patch("app.tasks.imap_tasks.is_private_ip", new=lambda _: False)
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.save_processed_emails")
@@ -528,6 +529,7 @@ class TestPullInbox:
         mock_mail.close.assert_called_once()
         mock_mail.logout.assert_called_once()
 
+    @patch("app.tasks.imap_tasks.is_private_ip", new=lambda _: False)
     @patch("app.tasks.imap_tasks.imaplib.IMAP4")
     @patch("app.tasks.imap_tasks.load_processed_emails")
     def test_non_ssl_connection(self, mock_load, mock_imap_class):
@@ -606,6 +608,7 @@ class TestPullInbox:
         # Should select INBOX as fallback
         assert any(call_args[0][0] == "INBOX" for call_args in mock_mail.select.call_args_list)
 
+    @patch("app.tasks.imap_tasks.is_private_ip", new=lambda _: False)
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
     def test_search_failure_handling(self, mock_load, mock_imap_class):
@@ -632,6 +635,7 @@ class TestPullInbox:
         mock_mail.close.assert_called_once()
         mock_mail.logout.assert_called_once()
 
+    @patch("app.tasks.imap_tasks.is_private_ip", new=lambda _: False)
     @patch("app.tasks.imap_tasks.fetch_attachments_and_enqueue")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
@@ -674,6 +678,7 @@ class TestPullInbox:
         mock_mail.store.assert_called_with(b"1", "-FLAGS", "\\Seen")
         mock_save.assert_called()
 
+    @patch("app.tasks.imap_tasks.is_private_ip", new=lambda _: False)
     @patch("app.tasks.imap_tasks.fetch_attachments_and_enqueue")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
@@ -917,6 +922,7 @@ class TestPullInbox:
         # Should not process the message
         mock_mail.store.assert_not_called()
 
+    @patch("app.tasks.imap_tasks.is_private_ip", new=lambda _: False)
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
     def test_handles_fetch_failure(self, mock_load, mock_imap_class):
@@ -1019,6 +1025,7 @@ class TestPullInbox:
         # Processed emails cache should still be updated
         mock_save.assert_called()
 
+    @patch("app.tasks.imap_tasks.is_private_ip", new=lambda _: False)
     @patch("app.tasks.imap_tasks.fetch_attachments_and_enqueue")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
@@ -1378,6 +1385,7 @@ class TestAcquireReleaseLockEdgeCases:
 class TestPullInboxEdgeCases:
     """Test edge cases for pull_inbox function."""
 
+    @patch("app.tasks.imap_tasks.is_private_ip", new=lambda _: False)
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.settings")
@@ -1428,6 +1436,7 @@ class TestPullInboxEdgeCases:
         # Should skip processing since no Message-ID
         mock_fetch.assert_not_called()
 
+    @patch("app.tasks.imap_tasks.is_private_ip", new=lambda _: False)
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.settings")

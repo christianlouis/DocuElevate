@@ -11,9 +11,10 @@ import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth import require_login
+from app.auth import AUTH_ENABLED, require_login
 from app.config import settings
 from app.database import get_db
+from app.utils.env_utils import update_env_file as _update_env_file_auto
 from app.utils.oauth_helper import exchange_oauth_token
 from app.utils.settings_service import save_setting_to_db, update_env_file
 from app.utils.settings_sync import notify_settings_updated
@@ -25,7 +26,13 @@ router = APIRouter()
 
 
 def _require_admin(request: Request) -> dict:
-    """Dependency to ensure the current user is an admin."""
+    """Dependency to ensure the current user is an admin.
+
+    When AUTH_ENABLED=False (single-user/development mode), admin checks are
+    skipped because there is no authentication at all.
+    """
+    if not AUTH_ENABLED:
+        return {}
     user = request.session.get("user")
     if not user or not user.get("is_admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
@@ -127,7 +134,7 @@ async def test_onedrive_token(request: Request):
             settings.onedrive_refresh_token = new_refresh_token
 
             # Also try to update .env file if it exists
-            update_env_file({"ONEDRIVE_REFRESH_TOKEN": new_refresh_token})
+            _update_env_file_auto({"ONEDRIVE_REFRESH_TOKEN": new_refresh_token})
 
             # Persist the rotated refresh token to the database
             try:

@@ -10,7 +10,7 @@ import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth import require_login
+from app.auth import AUTH_ENABLED, require_login
 from app.config import settings
 from app.database import get_db
 from app.utils.oauth_helper import exchange_oauth_token
@@ -24,7 +24,13 @@ router = APIRouter()
 
 
 def _require_admin(request: Request) -> dict:
-    """Dependency to ensure the current user is an admin."""
+    """Dependency to ensure the current user is an admin.
+
+    When AUTH_ENABLED=False (single-user/development mode), admin checks are
+    skipped because there is no authentication at all.
+    """
+    if not AUTH_ENABLED:
+        return {}
     user = request.session.get("user")
     if not user or not user.get("is_admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
