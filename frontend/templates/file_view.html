@@ -439,10 +439,105 @@
         </button>
       </div>
     </div>
+    {% if file.detected_language %}
+    <div style="font-size:0.75rem;color:#6b7280;margin-bottom:0.5rem;">
+      <i class="fas fa-globe" aria-hidden="true" style="margin-right:0.25rem;"></i>
+      Detected language: <strong>{{ file.detected_language }}</strong>
+    </div>
+    {% endif %}
     <div id="ocr-text-block" style="display:none;">
       <pre class="ocr-text" id="ocr-text-content">{{ file.ocr_text }}</pre>
     </div>
   </div>
+
+  <!-- ── Default-language translation ── -->
+  {% if file.default_language_text %}
+  <div class="doc-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+      <div class="doc-card-title" style="margin:0;">
+        <i class="fas fa-language" aria-hidden="true" style="color:#3b82f6;margin-right:0.4rem;"></i>
+        Default Language Version
+        {% if file.default_language_code %}
+        <span style="font-size:0.75rem;color:#6b7280;font-weight:normal;margin-left:0.5rem;">({{ file.default_language_code }})</span>
+        {% endif %}
+      </div>
+      <div style="display:flex;gap:0.5rem;">
+        <button class="text-toggle" onclick="toggleDefaultLangText()" aria-expanded="false" aria-controls="default-lang-text-block">
+          <i id="default-lang-toggle-icon" class="fas fa-chevron-down" aria-hidden="true"></i>
+          <span id="default-lang-toggle-label">Show text</span>
+        </button>
+        <button class="text-toggle" onclick="copyDefaultLangText()" id="default-lang-copy-btn" style="color:#10b981;" aria-label="Copy default language text">
+          <i class="fas fa-copy" aria-hidden="true"></i> Copy
+        </button>
+      </div>
+    </div>
+    <div id="default-lang-text-block" style="display:none;">
+      <pre class="ocr-text" id="default-lang-text-content">{{ file.default_language_text }}</pre>
+    </div>
+  </div>
+  {% elif file.detected_language %}
+  <!-- Translation pending or document already in default language -->
+  <div class="doc-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div class="doc-card-title" style="margin:0;">
+        <i class="fas fa-language" aria-hidden="true" style="color:#3b82f6;margin-right:0.4rem;"></i>
+        Default Language Version
+      </div>
+      <button class="action-btn btn-secondary" onclick="loadDefaultLangText({{ file.id }})">
+        <i class="fas fa-language" aria-hidden="true"></i> Load translation
+      </button>
+    </div>
+    <div id="default-lang-load-area" style="margin-top:0.75rem;"></div>
+  </div>
+  {% endif %}
+
+  <!-- ── On-the-fly translation ── -->
+  {% if file.ocr_text %}
+  <div class="doc-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+      <div class="doc-card-title" style="margin:0;">
+        <i class="fas fa-exchange-alt" aria-hidden="true" style="color:#f59e0b;margin-right:0.4rem;"></i>
+        Translate to Another Language
+      </div>
+    </div>
+    <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+      <label for="translate-lang-select" class="sr-only">Target language</label>
+      <select id="translate-lang-select" style="padding:0.4rem 0.6rem;border:1px solid #d1d5db;border-radius:0.375rem;font-size:0.85rem;min-width:160px;" aria-label="Select target language for translation">
+        <option value="">Select language…</option>
+        <option value="en">English</option>
+        <option value="de">Deutsch</option>
+        <option value="fr">Français</option>
+        <option value="es">Español</option>
+        <option value="it">Italiano</option>
+        <option value="pt">Português</option>
+        <option value="nl">Nederlands</option>
+        <option value="pl">Polski</option>
+        <option value="ru">Русский</option>
+        <option value="zh">中文</option>
+        <option value="ja">日本語</option>
+        <option value="ko">한국어</option>
+        <option value="ar">العربية</option>
+        <option value="hi">हिन्दी</option>
+        <option value="tr">Türkçe</option>
+        <option value="sv">Svenska</option>
+        <option value="da">Dansk</option>
+        <option value="no">Norsk</option>
+        <option value="fi">Suomi</option>
+        <option value="cs">Čeština</option>
+        <option value="ro">Română</option>
+        <option value="uk">Українська</option>
+      </select>
+      <button class="action-btn btn-secondary" onclick="translateOnTheFly({{ file.id }})" id="translate-btn" style="min-height:44px;min-width:44px;">
+        <i class="fas fa-language" aria-hidden="true"></i> Translate
+      </button>
+      <button class="text-toggle" onclick="copyTranslatedText()" id="translate-copy-btn" style="color:#10b981;display:none;" aria-label="Copy translated text">
+        <i class="fas fa-copy" aria-hidden="true"></i> Copy
+      </button>
+    </div>
+    <div id="translate-result-area" style="margin-top:0.75rem;"></div>
+  </div>
+  {% endif %}
+
   {% elif processed_file_exists or original_file_exists %}
   <div class="doc-card">
     <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -677,6 +772,149 @@
       try {
         var ta = document.createElement('textarea');
         ta.value = text.join('\n');
+        ta.style.cssText = 'position:fixed;opacity:0;';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+        setTimeout(function() { btn.innerHTML = orig; }, 2000);
+      } catch(e) {}
+    });
+  }
+
+  // ── Default-language text toggle ──
+  function toggleDefaultLangText() {
+    var block = document.getElementById('default-lang-text-block');
+    var icon  = document.getElementById('default-lang-toggle-icon');
+    var label = document.getElementById('default-lang-toggle-label');
+    var btn   = icon ? icon.closest('button') : null;
+    if (!block) return;
+    if (block.style.display === 'none') {
+      block.style.display = 'block';
+      if (icon) icon.className = 'fas fa-chevron-up';
+      if (label) label.textContent = 'Hide text';
+      if (btn) btn.setAttribute('aria-expanded', 'true');
+    } else {
+      block.style.display = 'none';
+      if (icon) icon.className = 'fas fa-chevron-down';
+      if (label) label.textContent = 'Show text';
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+  }
+
+  // ── Copy default-language text ──
+  function copyDefaultLangText() {
+    var content = document.getElementById('default-lang-text-content');
+    if (!content) return;
+    var text = content.textContent;
+    var btn = document.getElementById('default-lang-copy-btn');
+    if (!btn) return;
+    var orig = btn.innerHTML;
+    navigator.clipboard.writeText(text).then(function() {
+      btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+      setTimeout(function() { btn.innerHTML = orig; }, 2000);
+    }).catch(function() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;opacity:0;';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+        setTimeout(function() { btn.innerHTML = orig; }, 2000);
+      } catch(e) {}
+    });
+  }
+
+  // ── Load default-language text on demand ──
+  function loadDefaultLangText(fileId) {
+    var area = document.getElementById('default-lang-load-area');
+    if (!area) return;
+    area.innerHTML = '<div style="text-align:center;padding:1.5rem;color:#6b7280;"><i class="fas fa-spinner fa-spin fa-2x" aria-hidden="true"></i><p style="margin-top:0.5rem;">Loading translation…</p></div>';
+    fetch('/files/' + fileId + '/text/default-language')
+      .then(function(r) {
+        if (r.status === 404) throw new Error('No translation available yet — it may still be processing');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function(data) {
+        area.innerHTML = '';
+        var info = document.createElement('div');
+        info.style.cssText = 'font-size:0.75rem;color:#6b7280;margin-bottom:0.5rem;';
+        info.textContent = 'Translated to: ' + data.language_code + (data.detected_language ? ' (from ' + data.detected_language + ')' : '');
+        area.appendChild(info);
+        var pre = document.createElement('pre');
+        pre.className = 'ocr-text';
+        pre.textContent = data.text;
+        area.appendChild(pre);
+      })
+      .catch(function(err) {
+        area.innerHTML = '<div style="color:#92400e;padding:0.75rem;background:#fef3c7;border-radius:0.375rem;font-size:0.875rem;"><i class="fas fa-info-circle" aria-hidden="true"></i> ' + err.message + '</div>';
+      });
+  }
+
+  // ── On-the-fly translation ──
+  var _translateCache = {};
+  function translateOnTheFly(fileId) {
+    var select = document.getElementById('translate-lang-select');
+    var area = document.getElementById('translate-result-area');
+    var copyBtn = document.getElementById('translate-copy-btn');
+    if (!select || !area) return;
+    var lang = select.value;
+    if (!lang) { area.innerHTML = '<div style="color:#92400e;padding:0.75rem;background:#fef3c7;border-radius:0.375rem;font-size:0.875rem;">Please select a target language.</div>'; return; }
+
+    // Check cache
+    if (_translateCache[lang]) {
+      renderTranslation(area, _translateCache[lang], lang);
+      if (copyBtn) copyBtn.style.display = '';
+      return;
+    }
+
+    area.innerHTML = '<div style="text-align:center;padding:1.5rem;color:#6b7280;" aria-live="polite"><i class="fas fa-spinner fa-spin fa-2x" aria-hidden="true"></i><p style="margin-top:0.5rem;">Translating…</p></div>';
+    if (copyBtn) copyBtn.style.display = 'none';
+
+    fetch('/api/files/' + fileId + '/translate?lang=' + encodeURIComponent(lang))
+      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(data) {
+        _translateCache[lang] = data.text;
+        renderTranslation(area, data.text, lang);
+        if (copyBtn) copyBtn.style.display = '';
+      })
+      .catch(function(err) {
+        area.innerHTML = '<div style="color:#dc2626;padding:0.75rem;background:#fee2e2;border-radius:0.375rem;font-size:0.875rem;"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> Translation failed: ' + err.message + '</div>';
+      });
+  }
+
+  function renderTranslation(container, text, lang) {
+    container.innerHTML = '';
+    var info = document.createElement('div');
+    info.style.cssText = 'font-size:0.75rem;color:#6b7280;margin-bottom:0.5rem;';
+    info.textContent = 'Translated to: ' + lang;
+    container.appendChild(info);
+    var pre = document.createElement('pre');
+    pre.className = 'ocr-text';
+    pre.id = 'translated-text-content';
+    pre.textContent = text;
+    container.appendChild(pre);
+  }
+
+  function copyTranslatedText() {
+    var content = document.getElementById('translated-text-content');
+    if (!content) return;
+    var text = content.textContent;
+    var btn = document.getElementById('translate-copy-btn');
+    if (!btn) return;
+    var orig = btn.innerHTML;
+    navigator.clipboard.writeText(text).then(function() {
+      btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+      setTimeout(function() { btn.innerHTML = orig; }, 2000);
+    }).catch(function() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
         ta.style.cssText = 'position:fixed;opacity:0;';
         document.body.appendChild(ta);
         ta.select();

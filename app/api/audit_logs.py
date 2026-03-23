@@ -7,7 +7,7 @@ Events are append-only — there are no update or delete endpoints.
 
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
@@ -20,20 +20,22 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+DbSession = Annotated[Session, Depends(get_db)]
+
 
 @router.get("/audit-logs")
 @require_login
 async def list_audit_logs(
     request: Request,
-    db: Session = Depends(get_db),
-    action: str | None = Query(None, description="Filter by action (exact match)"),
-    user: str | None = Query(None, description="Filter by username"),
-    resource_type: str | None = Query(None, description="Filter by resource type"),
-    severity: str | None = Query(None, description="Filter by severity level"),
-    since: datetime | None = Query(None, description="Only events at or after this ISO-8601 timestamp"),
-    until: datetime | None = Query(None, description="Only events at or before this ISO-8601 timestamp"),
-    limit: int = Query(50, ge=1, le=500, description="Max rows to return"),
-    offset: int = Query(0, ge=0, description="Rows to skip for pagination"),
+    db: DbSession,
+    action: Annotated[str | None, Query(description="Filter by action (exact match)")] = None,
+    user: Annotated[str | None, Query(description="Filter by username")] = None,
+    resource_type: Annotated[str | None, Query(description="Filter by resource type")] = None,
+    severity: Annotated[str | None, Query(description="Filter by severity level")] = None,
+    since: Annotated[datetime | None, Query(description="Only events at or after this ISO-8601 timestamp")] = None,
+    until: Annotated[datetime | None, Query(description="Only events at or before this ISO-8601 timestamp")] = None,
+    limit: Annotated[int, Query(ge=1, le=500, description="Max rows to return")] = 50,
+    offset: Annotated[int, Query(ge=0, description="Rows to skip for pagination")] = 0,
 ) -> dict[str, Any]:
     """Return audit log entries with optional filtering and pagination.
 
@@ -71,7 +73,7 @@ async def list_audit_logs(
 @require_login
 async def list_distinct_actions(
     request: Request,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ) -> list[str]:
     """Return the distinct action values present in the audit log."""
     from app.models import AuditLog
@@ -84,7 +86,7 @@ async def list_distinct_actions(
 @require_login
 async def list_distinct_users(
     request: Request,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ) -> list[str]:
     """Return the distinct user values present in the audit log."""
     from app.models import AuditLog

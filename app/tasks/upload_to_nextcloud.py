@@ -11,6 +11,7 @@ from app.config import settings
 from app.tasks.retry_config import UploadTaskWithRetry
 from app.utils import log_task_progress
 from app.utils.filename_utils import extract_remote_path, get_unique_filename
+from app.utils.network import join_url
 
 logger = logging.getLogger(__name__)
 
@@ -64,17 +65,11 @@ def upload_to_nextcloud(self, file_path: str, file_id: int = None, folder_overri
             folder_override if folder_override is not None else (getattr(settings, "nextcloud_folder", "") or "")
         )
         remote_path = extract_remote_path(file_path, settings.workdir, remote_base)
-        full_url = f"{webdav_url}/{remote_path}"
-
-        # Remove any double slashes (except in http://)
-        full_url = full_url.replace("://", "$PLACEHOLDER$")
-        while "//" in full_url:
-            full_url = full_url.replace("//", "/")
-        full_url = full_url.replace("$PLACEHOLDER$", "://")
+        full_url = join_url(webdav_url, remote_path)
 
         # Function to check if file exists in Nextcloud
         def check_exists_in_nextcloud(path):
-            check_url = f"{webdav_url}{os.path.dirname(path)}"
+            check_url = join_url(webdav_url, os.path.dirname(path))
             try:
                 response = requests.request(
                     "PROPFIND",
@@ -91,13 +86,7 @@ def upload_to_nextcloud(self, file_path: str, file_id: int = None, folder_overri
 
         # Check for potential file collision and get a unique name if needed
         remote_path = get_unique_filename(remote_path, check_exists_in_nextcloud)
-        full_url = f"{webdav_url}/{remote_path}"
-
-        # Fix double slashes again
-        full_url = full_url.replace("://", "$PLACEHOLDER$")
-        while "//" in full_url:
-            full_url = full_url.replace("//", "/")
-        full_url = full_url.replace("$PLACEHOLDER$", "://")
+        full_url = join_url(webdav_url, remote_path)
 
         # Create necessary parent folders
         parent_dirs = os.path.dirname(remote_path)
@@ -107,12 +96,7 @@ def upload_to_nextcloud(self, file_path: str, file_id: int = None, folder_overri
                 if not folder:
                     continue
                 current_path += f"{folder}/"
-                mkdir_url = f"{webdav_url}/{current_path}"
-                # Fix double slashes
-                mkdir_url = mkdir_url.replace("://", "$PLACEHOLDER$")
-                while "//" in mkdir_url:
-                    mkdir_url = mkdir_url.replace("//", "/")
-                mkdir_url = mkdir_url.replace("$PLACEHOLDER$", "://")
+                mkdir_url = join_url(webdav_url, current_path)
 
                 requests.request(
                     "MKCOL",

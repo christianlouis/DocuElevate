@@ -832,6 +832,34 @@ def get_processed_text(request: Request, file_id: int, db: Session = Depends(get
         )
 
 
+@router.get("/files/{file_id}/text/default-language")
+@require_login
+def get_default_language_text(request: Request, file_id: int, db: Session = Depends(get_db)):
+    """Return the persisted default-language translation for the file view."""
+    from fastapi import status
+    from fastapi.responses import JSONResponse
+
+    from app.models import FileRecord
+
+    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    if not file_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_FILE_NOT_FOUND)
+
+    if not file_record.default_language_text:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No default-language translation available",
+        )
+
+    return JSONResponse(
+        content={
+            "text": file_record.default_language_text,
+            "language_code": file_record.default_language_code,
+            "detected_language": file_record.detected_language,
+        }
+    )
+
+
 @router.get("/duplicates")
 @require_login
 def duplicates_page(

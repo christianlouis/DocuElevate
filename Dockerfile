@@ -1,14 +1,34 @@
-# Use multi-stage build for a smaller final image
-FROM python:3.14.1 AS builder
+# syntax=docker/dockerfile:1
 
-WORKDIR /app
+# ── Stage 1: Python dependency builder ──────────────────────────────────────
+# Use the same slim variant as the runtime to keep Python versions in sync.
+# build-essential + libffi-dev cover the few packages (e.g. cryptography) that
+# need a C compiler; they are discarded after this stage.
+FROM python:3.14.3-slim AS builder
 
-# Copy requirements first for better layer caching
-COPY requirements.txt /app/
-RUN pip install --no-cache-dir -r requirements.txt
+WORKDIR /build
 
-# ── Documentation build stage ───────────────────────────────────────────────
-FROM python:3.14.1-slim AS docs-builder
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create an isolated virtual environment so only installed packages are copied
+# to the runtime image (no pip, setuptools, or other builder artefacts).
+RUN python -m venv /opt/venv
+
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1
+
+COPY requirements.txt /build/
+RUN pip install --no-cache-dir -r requirements.txt \
+    # Remove bytecode and cache to keep the venv lean
+    && find /opt/venv -type f -name "*.pyc" -delete \
+    && find /opt/venv -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+
+# ── Stage 2: Documentation builder ──────────────────────────────────────────
+FROM python:3.14.3-slim AS docs-builder
 
 WORKDIR /docs
 
@@ -23,14 +43,13 @@ COPY mkdocs.yml /docs/mkdocs.yml
 # Build the static documentation site
 RUN mkdocs build --config-file /docs/mkdocs.yml --site-dir /docs/docs_build
 
-# Second stage for the actual runtime
+# ── Stage 3: Runtime image ───────────────────────────────────────────────────
 FROM python:3.14.3-slim
 
 WORKDIR /app
 
-# Copy installed packages from builder stage
-COPY --from=builder /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+# Copy only the pre-built virtual environment from the builder
+COPY --from=builder /opt/venv /opt/venv
 
 # Install system-level OCR tools required for local OCR workflows:
 #   tesseract-ocr   – OCR engine used by pytesseract and ocrmypdf
@@ -62,15 +81,14 @@ COPY ./RUNTIME_INFO /app/RUNTIME_INFO
 # Copy the pre-built MkDocs documentation site (served at /help)
 COPY --from=docs-builder /docs/docs_build /app/docs_build
 
-# Create runtime_info directory
-RUN mkdir -p /app/runtime_info
-
-# Create necessary directories
-RUN mkdir -p /workdir
+# Create necessary runtime directories in a single layer
+RUN mkdir -p /app/runtime_info /workdir
 
 # Set environment variables
-ENV PYTHONPATH=/app
-ENV PYTHONUNBUFFERED=1
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
 # Expose the port the app runs on
 EXPOSE 8000

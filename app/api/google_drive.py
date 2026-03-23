@@ -14,13 +14,24 @@ from app.auth import require_login
 from app.config import settings
 from app.database import get_db
 from app.utils.oauth_helper import exchange_oauth_token
-from app.utils.settings_service import save_setting_to_db
+from app.utils.settings_service import save_setting_to_db, update_env_file
 from app.utils.settings_sync import notify_settings_updated
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _require_admin(request: Request) -> dict:
+    """Dependency to ensure the current user is an admin."""
+    user = request.session.get("user")
+    if not user or not user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user
+
+
+AdminUser = Annotated[dict, Depends(_require_admin)]
 
 
 @router.post("/google-drive/exchange-token")
@@ -362,9 +373,9 @@ def format_time_remaining(time_delta):
 
 
 @router.post("/google-drive/save-settings")
-@require_login
-async def save_dropbox_settings(
+async def save_google_drive_settings(
     request: Request,
+    _admin: AdminUser,
     refresh_token: Annotated[str, Form(...)],
     client_id: Annotated[Optional[str], Form()] = None,
     client_secret: Annotated[Optional[str], Form()] = None,
@@ -404,46 +415,9 @@ async def save_dropbox_settings(
             drive_settings["GOOGLE_DRIVE_FOLDER_ID"] = folder_id
 
         # Try to update the .env file, but don't fail if it doesn't exist (for Docker containers)
-        if os.path.exists(env_path):
-            try:
-                logger.info(f"Updating Google Drive settings in {env_path}")
-
-                # Read the current .env file
-                with open(env_path, "r") as f:
-                    env_lines = f.readlines()
-
-                # Process each line and update or add settings
-                updated = set()
-                new_env_lines = []
-                for line in env_lines:
-                    stripped_line = line.rstrip()
-                    is_updated = False
-                    for key, value in drive_settings.items():
-                        if stripped_line.startswith(f"{key}=") or stripped_line.startswith(f"# {key}="):
-                            # Uncomment if commented out - check the original stripped line
-                            new_env_lines.append(f"{key}={value}")
-                            updated.add(key)
-                            is_updated = True
-                            break
-                    if not is_updated:
-                        new_env_lines.append(stripped_line)
-
-                # Add any settings that weren't updated (they weren't in the file)
-                for key, value in drive_settings.items():
-                    if key not in updated:
-                        new_env_lines.append(f"{key}={value}")
-
-                # Write the updated .env file
-                with open(env_path, "w") as f:
-                    f.write("\n".join(new_env_lines) + "\n")
-
-                logger.info("Successfully updated Google Drive settings in .env file")
-            except Exception as e:
-                logger.warning(f"Failed to update .env file: {str(e)}, but will continue with in-memory update")
-        else:
-            logger.warning(
-                f".env file not found at {env_path}, skipping file update but continuing with in-memory update"
-            )
+        env_write_success = update_env_file(env_path, drive_settings)
+        if not env_write_success:
+            logger.info("Continuing with in-memory update despite .env file update failure or skip")
 
         # Update the settings in memory (this always happens)
         if refresh_token:
@@ -481,7 +455,7 @@ async def save_dropbox_settings(
         return {
             "status": "success",
             "message": "Google Drive settings have been saved",
-            "in_memory_only": not os.path.exists(env_path),
+            "in_memory_only": not env_write_success,
         }
 
     except Exception as e:

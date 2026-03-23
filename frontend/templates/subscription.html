@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}My Subscription – DocuElevate{% endblock %}
+{% block title %}{{ _("subscription.page_title") }}{% endblock %}
 
 {% block content %}
 <div class="container mx-auto px-4 py-8 max-w-4xl">
@@ -8,9 +8,9 @@
   <div class="mb-8">
     <h1 class="text-3xl font-bold text-gray-900 flex items-center gap-3">
       <i class="fas fa-layer-group text-indigo-500" aria-hidden="true"></i>
-      My Subscription
+      {{ _("subscription.heading") }}
     </h1>
-    <p class="text-gray-500 text-sm mt-1">Your current plan, usage and available upgrades.</p>
+    <p class="text-gray-500 text-sm mt-1">{{ _("subscription.subtitle") }}</p>
   </div>
 
   <!-- Flash messages -->
@@ -21,11 +21,10 @@
   <div class="bg-blue-50 border border-blue-200 rounded-xl p-6 flex items-start gap-4">
     <i class="fas fa-info-circle text-blue-500 text-2xl flex-shrink-0 mt-0.5" aria-hidden="true"></i>
     <div>
-      <p class="font-semibold text-blue-800">Multi-user mode is not enabled.</p>
+      <p class="font-semibold text-blue-800">{{ _("subscription.single_user_title") }}</p>
       <p class="text-blue-700 text-sm mt-1">
-        Subscription tiers apply when multi-user mode is active. Your instance currently runs in
-        single-user mode with no processing limits.
-        An admin can enable multi-user mode via <a href="/settings" class="underline hover:text-blue-900">Settings</a>.
+        {% set settings_link %}<a href="/settings" class="underline hover:text-blue-900">{{ _("nav.settings") }}</a>{% endset %}
+        {{ _("subscription.single_user_body", settings_link=settings_link) | safe }}
       </p>
     </div>
   </div>
@@ -37,17 +36,17 @@
   <div class="bg-amber-50 border border-amber-300 rounded-xl p-4 mb-6 flex items-start gap-3">
     <i class="fas fa-clock text-amber-500 text-xl flex-shrink-0 mt-0.5" aria-hidden="true"></i>
     <div class="flex-1">
-      <p class="font-semibold text-amber-800">Pending plan change scheduled</p>
+      <p class="font-semibold text-amber-800">{{ _("subscription.pending_title") }}</p>
       <p class="text-amber-700 text-sm mt-1">
-        Your plan will change to <strong>{{ pending_tier.name }}</strong>
-        on <strong>{% if pending_date %}{{ pending_date.strftime('%B') }} {{ pending_date.day }}, {{ pending_date.year }}{% endif %}</strong>.
-        You keep all current plan benefits until then.
+        {{ _("subscription.pending_will_change") }} <strong>{{ pending_tier.name }}</strong>
+        {{ _("subscription.pending_on") }} <strong>{% if pending_date %}{{ pending_date.strftime('%B') }} {{ pending_date.day }}, {{ pending_date.year }}{% endif %}</strong>.
+        {{ _("subscription.pending_benefits") }}
       </p>
     </div>
     <button type="button" onclick="cancelPendingChange()"
             class="ml-auto flex-shrink-0 text-sm text-amber-700 underline hover:text-amber-900 font-medium"
-            aria-label="Cancel pending plan change">
-      Cancel change
+            aria-label="{{ _('subscription.cancel_pending') }}">
+      {{ _("subscription.cancel_pending") }}
     </button>
   </div>
   {% endif %}
@@ -68,18 +67,18 @@
           {% else %}fa-bolt text-purple-600{% endif %}
           text-2xl" aria-hidden="true"></i>
       </div>
-      <p class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Current Plan</p>
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-widest">{{ _("subscription.current_plan") }}</p>
       <p class="text-2xl font-extrabold text-gray-900 mt-1">{{ tier.name }}</p>
       <p class="text-gray-500 text-sm mt-1">{{ tier.tagline }}</p>
       {% if tier.price_monthly > 0 %}
-      <p class="mt-3 text-lg font-bold text-indigo-600">${{ tier.price_monthly }}<span class="text-sm font-normal text-gray-400">/month</span></p>
+      <p class="mt-3 text-lg font-bold text-indigo-600">${{ tier.price_monthly }}<span class="text-sm font-normal text-gray-400">{{ _("subscription.per_month") }}</span></p>
       {% else %}
-      <p class="mt-3 text-lg font-bold text-gray-500">Free</p>
+      <p class="mt-3 text-lg font-bold text-gray-500">{{ _("subscription.free") }}</p>
       {% endif %}
       {% if period_start %}
       <p class="text-xs text-gray-400 mt-2">
         <i class="fas fa-calendar-alt mr-1" aria-hidden="true"></i>
-        Since {{ period_start.strftime('%b') }} {{ period_start.day }}, {{ period_start.year }}
+        {{ _("subscription.since") }} {{ period_start.strftime('%b') }} {{ period_start.day }}, {{ period_start.year }}
       </p>
       {% endif %}
     </div>
@@ -87,13 +86,13 @@
     <!-- Usage this period -->
     {% if usage %}
     <div class="md:col-span-2 bg-white rounded-xl shadow p-6">
-      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-widest mb-4">Usage</h2>
+      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-widest mb-4">{{ _("subscription.usage_heading") }}</h2>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
 
         <!-- Lifetime -->
         <div class="text-center">
           <p class="text-3xl font-extrabold text-gray-900">{{ usage.lifetime }}</p>
-          <p class="text-xs text-gray-500 mt-1">Total files (lifetime)</p>
+          <p class="text-xs text-gray-500 mt-1">{{ _("subscription.lifetime_files") }}</p>
           {% if tier.lifetime_file_limit > 0 %}
           <div class="mt-2">
             {% set lifetime_pct = ((usage.lifetime / tier.lifetime_file_limit) * 100) | int %}
@@ -106,14 +105,14 @@
             <p class="text-xs text-gray-400 mt-1">{{ usage.lifetime }} / {{ tier.lifetime_file_limit }}</p>
           </div>
           {% else %}
-          <p class="text-xs text-green-600 mt-1">Unlimited</p>
+          <p class="text-xs text-green-600 mt-1">{{ _("subscription.unlimited") }}</p>
           {% endif %}
         </div>
 
         <!-- Today -->
         <div class="text-center">
           <p class="text-3xl font-extrabold text-gray-900">{{ usage.today }}</p>
-          <p class="text-xs text-gray-500 mt-1">Files today</p>
+          <p class="text-xs text-gray-500 mt-1">{{ _("subscription.today_files") }}</p>
           {% if tier.daily_upload_limit > 0 %}
           <div class="mt-2">
             {% set today_pct = ((usage.today / tier.daily_upload_limit) * 100) | int %}
@@ -123,17 +122,17 @@
                 {% if today_pct >= 90 %}bg-red-500{% elif today_pct >= 70 %}bg-yellow-500{% else %}bg-blue-500{% endif %}"
                    style="width: {{ [today_pct, 100] | min }}%"></div>
             </div>
-            <p class="text-xs text-gray-400 mt-1">{{ usage.today }} / {{ tier.daily_upload_limit }} today</p>
+            <p class="text-xs text-gray-400 mt-1">{{ usage.today }} / {{ tier.daily_upload_limit }} {{ _("subscription.today_label") }}</p>
           </div>
           {% else %}
-          <p class="text-xs text-green-600 mt-1">Unlimited</p>
+          <p class="text-xs text-green-600 mt-1">{{ _("subscription.unlimited") }}</p>
           {% endif %}
         </div>
 
         <!-- This month -->
         <div class="text-center">
           <p class="text-3xl font-extrabold text-gray-900">{{ usage.month }}</p>
-          <p class="text-xs text-gray-500 mt-1">Files this month</p>
+          <p class="text-xs text-gray-500 mt-1">{{ _("subscription.month_files") }}</p>
           {% if tier.monthly_upload_limit > 0 %}
           <div class="mt-2">
             {% set month_pct = ((usage.month / tier.monthly_upload_limit) * 100) | int %}
@@ -143,10 +142,10 @@
                 {% if month_pct >= 90 %}bg-red-500{% elif month_pct >= 70 %}bg-yellow-500{% else %}bg-indigo-500{% endif %}"
                    style="width: {{ [month_pct, 100] | min }}%"></div>
             </div>
-            <p class="text-xs text-gray-400 mt-1">{{ usage.month }} / {{ tier.monthly_upload_limit }} this month</p>
+            <p class="text-xs text-gray-400 mt-1">{{ usage.month }} / {{ tier.monthly_upload_limit }} {{ _("subscription.this_month_label") }}</p>
           </div>
           {% else %}
-          <p class="text-xs text-green-600 mt-1">Unlimited</p>
+          <p class="text-xs text-green-600 mt-1">{{ _("subscription.unlimited") }}</p>
           {% endif %}
         </div>
 
@@ -160,7 +159,7 @@
   <div class="bg-white rounded-xl shadow p-6 mb-8">
     <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
       <i class="fas fa-list-check text-green-500" aria-hidden="true"></i>
-      What's included in your plan
+      {{ _("subscription.features_heading") }}
     </h2>
     <ul class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-600">
       {% for feature in tier.features %}
@@ -176,7 +175,7 @@
   <div class="mb-8">
     <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
       <i class="fas fa-layer-group text-indigo-500" aria-hidden="true"></i>
-      Available Plans
+      {{ _("subscription.available_plans_heading") }}
     </h2>
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {% for t in all_tiers %}
@@ -192,11 +191,11 @@
 
         {% if is_current %}
         <span class="absolute top-3 right-3 text-xs bg-indigo-100 text-indigo-700 font-semibold rounded-full px-2 py-0.5">
-          Current
+          {{ _("subscription.current_badge") }}
         </span>
         {% elif is_pending %}
         <span class="absolute top-3 right-3 text-xs bg-amber-100 text-amber-700 font-semibold rounded-full px-2 py-0.5">
-          Pending
+          {{ _("subscription.pending_badge") }}
         </span>
         {% elif t.badge %}
         <span class="absolute top-3 right-3 text-xs bg-indigo-100 text-indigo-700 font-semibold rounded-full px-2 py-0.5">
@@ -208,9 +207,9 @@
           <p class="font-bold text-gray-900 pr-16">{{ t.name }}</p>
           <p class="text-gray-500 text-xs mt-1 mb-3">{{ t.tagline }}</p>
           {% if t.price_monthly > 0 %}
-          <p class="text-xl font-extrabold text-gray-900">${{ t.price_monthly }}<span class="text-sm font-normal text-gray-400">/mo</span></p>
+          <p class="text-xl font-extrabold text-gray-900">${{ t.price_monthly }}<span class="text-sm font-normal text-gray-400">{{ _("subscription.per_mo") }}</span></p>
           {% else %}
-          <p class="text-xl font-extrabold text-gray-500">Free</p>
+          <p class="text-xl font-extrabold text-gray-500">{{ _("subscription.free") }}</p>
           {% endif %}
           <ul class="mt-3 space-y-1 text-xs text-gray-600">
             {% for feature in t.features[:3] %}
@@ -220,7 +219,7 @@
             </li>
             {% endfor %}
             {% if t.features | length > 3 %}
-            <li class="text-indigo-500 font-medium">+ {{ (t.features | length) - 3 }} more</li>
+            <li class="text-indigo-500 font-medium">+ {{ (t.features | length) - 3 }} {{ _("subscription.more_features_label") }}</li>
             {% endif %}
           </ul>
         </div>
@@ -228,14 +227,14 @@
         <div class="mt-4">
           {% if is_current and not pending_tier_id %}
           <span class="block text-center py-2 px-4 rounded-lg bg-gray-100 text-gray-400 text-sm font-semibold cursor-default">
-            Your current plan
+            {{ _("subscription.current_plan_cta") }}
           </span>
           {% elif is_current and pending_tier_id %}
           <!-- Keep current plan (cancel pending downgrade) -->
           <button type="button"
                   onclick="changePlan('{{ t.id }}')"
                   class="block w-full text-center py-2 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition">
-            Keep {{ t.name }}
+            {{ _("subscription.keep_plan_prefix") }} {{ t.name }}
           </button>
           {% elif is_upgrade %}
           {% if t.id == 'business' %}
@@ -247,21 +246,21 @@
           <button type="button"
                   onclick="changePlan('{{ t.id }}')"
                   class="block w-full text-center py-2 px-4 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold transition">
-            Upgrade to {{ t.name }}
+            {{ _("subscription.upgrade_to_prefix") }} {{ t.name }}
           </button>
           {% endif %}
           {% elif is_pending %}
           <button type="button"
                   onclick="cancelPendingChange()"
                   class="block w-full text-center py-2 px-4 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 text-sm font-semibold transition">
-            Cancel scheduled change
+            {{ _("subscription.cancel_scheduled") }}
           </button>
           {% else %}
           <!-- Downgrade -->
           <button type="button"
                   onclick="changePlan('{{ t.id }}')"
                   class="block w-full text-center py-2 px-4 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold transition">
-            Downgrade to {{ t.name }}
+            {{ _("subscription.downgrade_to_prefix") }} {{ t.name }}
           </button>
           {% endif %}
         </div>
@@ -270,7 +269,7 @@
     </div>
     <p class="text-xs text-gray-400 mt-3">
       <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
-      Upgrades take effect immediately. Downgrades are scheduled for the end of your current billing period.
+      {{ _("subscription.upgrade_info") }}
     </p>
   </div>
 
@@ -279,7 +278,7 @@
   <!-- Back link -->
   <div class="mt-8">
     <a href="/" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1">
-      <i class="fas fa-arrow-left text-xs" aria-hidden="true"></i> Back to Dashboard
+      <i class="fas fa-arrow-left text-xs" aria-hidden="true"></i> {{ _("subscription.back_to_dashboard") }}
     </a>
   </div>
 

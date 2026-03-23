@@ -35,27 +35,41 @@ export interface GenerateTokenResponse {
   created_at: string;
 }
 
+export interface QRClaimResponse {
+  token: string;
+  token_id: number;
+  name: string;
+  owner_id: string;
+  created_at: string;
+}
+
 export interface DeviceRegistration {
   push_token: string;
   device_name?: string;
   platform: "ios" | "android" | "web";
 }
 
+export interface ProcessingStatus {
+  status: string;
+  last_step: string | null;
+  has_errors: boolean;
+  total_steps: number;
+}
+
 export interface FileRecord {
   id: number;
-  filename: string;
-  status: string;
-  created_at: string;
+  original_filename: string;
   file_size: number | null;
-  content_type: string | null;
-  owner_id: string | null;
+  mime_type: string | null;
+  created_at: string;
+  processing_status: ProcessingStatus;
 }
 
 export interface UploadResponse {
   task_id: string;
   status: string;
-  message: string;
-  filename: string;
+  original_filename: string;
+  stored_filename: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -107,7 +121,7 @@ class DocuElevateAPI {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    let body: BodyInit | undefined;
+    let body: string | FormData | undefined;
     if (options?.formData) {
       body = options.formData;
       // Let fetch set multipart content-type with boundary automatically
@@ -151,6 +165,13 @@ class DocuElevateAPI {
     });
   }
 
+  /** Claim a QR login challenge and receive an API token. */
+  async claimQRChallenge(challengeToken: string, deviceName: string): Promise<QRClaimResponse> {
+    return this.request<QRClaimResponse>("POST", "/api/qr-auth/claim", {
+      body: { challenge_token: challengeToken, device_name: deviceName },
+    });
+  }
+
   /** Return profile information for the authenticated user. */
   async whoAmI(): Promise<WhoAmIResponse> {
     return this.request<WhoAmIResponse>("GET", "/api/mobile/whoami");
@@ -186,12 +207,21 @@ class DocuElevateAPI {
     return this.request<UploadResponse>("POST", "/api/ui-upload", { formData });
   }
 
-  /** List recently processed files. */
-  async listFiles(page = 1, pageSize = 20): Promise<FileRecord[]> {
-    return this.request<FileRecord[]>(
+  /** List recently processed files, optionally filtered by filename search. */
+  async listFiles(page = 1, pageSize = 20, search?: string): Promise<FileRecord[]> {
+    let url = `/api/files?page=${page}&per_page=${pageSize}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    const data = await this.request<{ files: FileRecord[]; pagination: unknown }>("GET", url);
+    return data.files;
+  }
+
+  /** Get the processing status for a single file by its ID. */
+  async getFileStatus(fileId: number): Promise<ProcessingStatus> {
+    const data = await this.request<{ processing_status: ProcessingStatus }>(
       "GET",
-      `/api/files?page=${page}&page_size=${pageSize}`
+      `/api/files/${fileId}`
     );
+    return data.processing_status;
   }
 }
 

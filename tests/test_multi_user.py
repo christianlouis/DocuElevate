@@ -18,7 +18,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.config import settings
 from app.database import Base
-from app.models import FileRecord
+from app.models import ApiToken, FileRecord
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -161,6 +161,122 @@ class TestGetCurrentOwnerId:
         request = MagicMock()
         request.session = {}
         assert get_current_owner_id(request) is None
+
+    @pytest.mark.unit
+    def test_resolves_from_api_token_user_state(self):
+        """get_current_owner_id should resolve from request.state.api_token_user."""
+        from app.utils.user_scope import get_current_owner_id
+
+        request = MagicMock()
+        request.session = {}
+        request.state.api_token_user = {
+            "id": "tok-owner",
+            "preferred_username": "tok-owner",
+            "email": "tok-owner",
+        }
+        assert get_current_owner_id(request) == "tok-owner"
+
+    @pytest.mark.unit
+    def test_session_takes_precedence_over_api_token_user(self):
+        """Session auth should take precedence over api_token_user in state."""
+        from app.utils.user_scope import get_current_owner_id
+
+        request = MagicMock()
+        request.session = {"user": {"sub": "session-sub", "email": "session@example.com"}}
+        request.state.api_token_user = {"id": "tok-owner"}
+        assert get_current_owner_id(request) == "session-sub"
+
+    @pytest.mark.unit
+    def test_resolves_bearer_token_directly(self, mu_engine, mu_session):
+        """get_current_owner_id should resolve a Bearer token when no session exists."""
+        from types import SimpleNamespace
+
+        from app.api.api_tokens import generate_api_token, hash_token
+        from app.utils.user_scope import get_current_owner_id
+
+        # Create a token in the DB
+        plaintext = generate_api_token()
+        token_hash = hash_token(plaintext)
+        db_token = ApiToken(
+            owner_id="bearer-owner",
+            name="Test Bearer",
+            token_hash=token_hash,
+            token_prefix=plaintext[:12],
+            is_active=True,
+        )
+        mu_session.add(db_token)
+        mu_session.commit()
+
+        # Build a mock request with Bearer header but no session.
+        # SimpleNamespace starts with no attributes so getattr(..., None) works.
+        request = MagicMock()
+        request.session = {}
+        request.state = SimpleNamespace()
+        request.headers = {"authorization": f"Bearer {plaintext}"}
+        request.client.host = "127.0.0.1"
+
+        # Provide the test session and make close() a no-op so the shared
+        # session is not torn down prematurely.
+        noop_close = MagicMock()
+        with patch("app.database.SessionLocal", return_value=mu_session), patch.object(mu_session, "close", noop_close):
+            result = get_current_owner_id(request)
+
+        assert result == "bearer-owner"
+        # Verify the resolved user was cached in request.state
+        assert request.state.api_token_user["id"] == "bearer-owner"
+
+    @pytest.mark.unit
+    def test_returns_none_for_invalid_bearer_token(self, mu_engine, mu_session):
+        """get_current_owner_id should return None for an invalid Bearer token."""
+        from types import SimpleNamespace
+
+        from app.utils.user_scope import get_current_owner_id
+
+        request = MagicMock()
+        request.session = {}
+        request.state = SimpleNamespace()
+        request.headers = {"authorization": "Bearer de_invalid_token_value"}
+        request.client.host = "127.0.0.1"
+
+        noop_close = MagicMock()
+        with patch("app.database.SessionLocal", return_value=mu_session), patch.object(mu_session, "close", noop_close):
+            result = get_current_owner_id(request)
+
+        assert result is None
+
+
+class TestOwnerIdFromUser:
+    """Tests for the _owner_id_from_user helper."""
+
+    @pytest.mark.unit
+    def test_prefers_sub(self):
+        from app.utils.user_scope import _owner_id_from_user
+
+        assert _owner_id_from_user({"sub": "s", "preferred_username": "u", "email": "e"}) == "s"
+
+    @pytest.mark.unit
+    def test_falls_back_to_preferred_username(self):
+        from app.utils.user_scope import _owner_id_from_user
+
+        assert _owner_id_from_user({"preferred_username": "u", "email": "e"}) == "u"
+
+    @pytest.mark.unit
+    def test_falls_back_to_email(self):
+        from app.utils.user_scope import _owner_id_from_user
+
+        assert _owner_id_from_user({"email": "e"}) == "e"
+
+    @pytest.mark.unit
+    def test_falls_back_to_id(self):
+        from app.utils.user_scope import _owner_id_from_user
+
+        assert _owner_id_from_user({"id": "i"}) == "i"
+
+    @pytest.mark.unit
+    def test_returns_none_for_empty_dict(self):
+        from app.utils.user_scope import _owner_id_from_user
+
+        assert _owner_id_from_user({}) is None
 
 
 class TestApplyOwnerFilter:

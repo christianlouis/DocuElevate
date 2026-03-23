@@ -18,6 +18,7 @@ from app.utils.allowed_types import (
     DEFAULT_CATEGORIES,
     get_allowed_types_for_categories,
 )
+from app.utils.network import is_private_ip
 
 # Database session for per-user IMAP accounts (imported lazily to avoid circular imports)
 _db_session_factory = None
@@ -404,6 +405,11 @@ def pull_inbox(
         allowed_categories,
     )
     processed_emails = load_processed_emails()
+
+    # Security: Prevent SSRF by blocking connections to internal IPs
+    if is_private_ip(host):
+        logger.warning("SSRF blocked: Attempt to pull mailbox from private IP %s", host)
+        return
 
     try:
         mail = imaplib.IMAP4_SSL(host, port) if use_ssl else imaplib.IMAP4(host, port)

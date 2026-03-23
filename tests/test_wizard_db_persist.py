@@ -129,6 +129,15 @@ class TestSetupWizardUndoSkip:
 class TestDropboxSaveSettingsDbPersist:
     """Unit tests for save_dropbox_settings DB persistence."""
 
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.dropbox import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+
     @patch("app.api.dropbox.settings")
     @patch("app.api.dropbox.notify_settings_updated")
     @patch("app.api.dropbox.save_setting_to_db")
@@ -267,6 +276,15 @@ class TestGoogleDriveUpdateSettingsDbPersist:
 @pytest.mark.unit
 class TestOneDriveSaveSettingsDbPersist:
     """Unit tests for save_onedrive_settings DB persistence."""
+
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.onedrive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
 
     @patch("app.api.onedrive.settings")
     @patch("app.api.onedrive.notify_settings_updated")

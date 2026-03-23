@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Annotated, Optional
 
-import requests
+import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
@@ -14,13 +14,24 @@ from app.auth import require_login
 from app.config import settings
 from app.database import get_db
 from app.utils.oauth_helper import exchange_oauth_token
-from app.utils.settings_service import save_setting_to_db
+from app.utils.settings_service import save_setting_to_db, update_env_file
 from app.utils.settings_sync import notify_settings_updated
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _require_admin(request: Request) -> dict:
+    """Dependency to ensure the current user is an admin."""
+    user = request.session.get("user")
+    if not user or not user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user
+
+
+AdminUser = Annotated[dict, Depends(_require_admin)]
 
 
 @router.post("/dropbox/exchange-token")
@@ -132,57 +143,60 @@ async def test_dropbox_token(request: Request):
                 "message": "Dropbox credentials are not fully configured",
             }
 
-        # Check token validity by getting current account info
-        headers = {"Authorization": f"Bearer {settings.dropbox_refresh_token}"}
-        response = requests.post(
-            "https://api.dropboxapi.com/2/users/get_current_account",
-            headers=headers,
-            timeout=settings.http_request_timeout,
-        )
-
-        # If token is invalid, try refreshing it
-        if response.status_code == 401:
-            logger.info("Dropbox access token invalid or expired, trying to refresh")
-
-            # Get a new access token using the refresh token
-            refresh_url = "https://api.dropbox.com/oauth2/token"
-            refresh_data = {
-                "grant_type": "refresh_token",
-                "refresh_token": settings.dropbox_refresh_token,
-                "client_id": settings.dropbox_app_key,
-                "client_secret": settings.dropbox_app_secret,
-            }
-
-            refresh_response = requests.post(refresh_url, data=refresh_data, timeout=settings.http_request_timeout)
-
-            if refresh_response.status_code != 200:
-                logger.error(f"Failed to refresh Dropbox token: {refresh_response.text}")
-                return {
-                    "status": "error",
-                    "message": "Refresh token has expired or is invalid",
-                    "needs_reauth": True,
-                }
-
-            token_info = refresh_response.json()
-            access_token = token_info.get("access_token")
-
-            # Try again with the new access token
-            headers = {"Authorization": f"Bearer {access_token}"}
-            response = requests.post(
+        async with httpx.AsyncClient() as client:
+            # Check token validity by getting current account info
+            headers = {"Authorization": f"Bearer {settings.dropbox_refresh_token}"}
+            response = await client.post(
                 "https://api.dropboxapi.com/2/users/get_current_account",
                 headers=headers,
                 timeout=settings.http_request_timeout,
             )
 
-        if response.status_code != 200:
-            logger.error(f"Dropbox token test failed: {response.status_code} {response.text}")
-            return {
-                "status": "error",
-                "message": f"Token validation failed with status {response.status_code}: {response.text}",
-            }
+            # If token is invalid, try refreshing it
+            if response.status_code == 401:
+                logger.info("Dropbox access token invalid or expired, trying to refresh")
 
-        # Get account info
-        account_info = response.json()
+                # Get a new access token using the refresh token
+                refresh_url = "https://api.dropbox.com/oauth2/token"
+                refresh_data = {
+                    "grant_type": "refresh_token",
+                    "refresh_token": settings.dropbox_refresh_token,
+                    "client_id": settings.dropbox_app_key,
+                    "client_secret": settings.dropbox_app_secret,
+                }
+
+                refresh_response = await client.post(
+                    refresh_url, data=refresh_data, timeout=settings.http_request_timeout
+                )
+
+                if refresh_response.status_code != 200:
+                    logger.error(f"Failed to refresh Dropbox token: {refresh_response.text}")
+                    return {
+                        "status": "error",
+                        "message": "Refresh token has expired or is invalid",
+                        "needs_reauth": True,
+                    }
+
+                token_info = refresh_response.json()
+                access_token = token_info.get("access_token")
+
+                # Try again with the new access token
+                headers = {"Authorization": f"Bearer {access_token}"}
+                response = await client.post(
+                    "https://api.dropboxapi.com/2/users/get_current_account",
+                    headers=headers,
+                    timeout=settings.http_request_timeout,
+                )
+
+            if response.status_code != 200:
+                logger.error(f"Dropbox token test failed: {response.status_code} {response.text}")
+                return {
+                    "status": "error",
+                    "message": f"Token validation failed with status {response.status_code}: {response.text}",
+                }
+
+            # Get account info
+            account_info = response.json()
         account_email = account_info.get("email", "Unknown account")
         account_name = account_info.get("name", {}).get("display_name", "Unknown user")
 
@@ -208,9 +222,9 @@ async def test_dropbox_token(request: Request):
 
 
 @router.post("/dropbox/save-settings")
-@require_login
 async def save_dropbox_settings(
     request: Request,
+    _admin: AdminUser,
     refresh_token: Annotated[str, Form(...)],
     app_key: Annotated[Optional[str], Form()] = None,
     app_secret: Annotated[Optional[str], Form()] = None,
@@ -249,44 +263,16 @@ async def save_dropbox_settings(
         # Best-effort .env file write
         try:
             env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
-            if not os.path.exists(env_path):
-                logger.warning(f".env file not found at {env_path}, skipping file write")
-            else:
-                logger.info(f"Updating Dropbox settings in {env_path}")
+            dropbox_settings = {"DROPBOX_REFRESH_TOKEN": refresh_token}
+            if app_key:
+                dropbox_settings["DROPBOX_APP_KEY"] = app_key
+            if app_secret:
+                dropbox_settings["DROPBOX_APP_SECRET"] = app_secret
+            if folder_path:
+                dropbox_settings["DROPBOX_FOLDER"] = folder_path
 
-                with open(env_path, "r") as f:
-                    env_lines = f.readlines()
-
-                dropbox_settings = {"DROPBOX_REFRESH_TOKEN": refresh_token}
-                if app_key:
-                    dropbox_settings["DROPBOX_APP_KEY"] = app_key
-                if app_secret:
-                    dropbox_settings["DROPBOX_APP_SECRET"] = app_secret
-                if folder_path:
-                    dropbox_settings["DROPBOX_FOLDER"] = folder_path
-
-                updated = set()
-                new_env_lines = []
-                for line in env_lines:
-                    stripped_line = line.rstrip()
-                    is_updated = False
-                    for key, value in dropbox_settings.items():
-                        if stripped_line.startswith(f"{key}=") or stripped_line.startswith(f"# {key}="):
-                            new_env_lines.append(f"{key}={value}")
-                            updated.add(key)
-                            is_updated = True
-                            break
-                    if not is_updated:
-                        new_env_lines.append(stripped_line)
-
-                for key, value in dropbox_settings.items():
-                    if key not in updated:
-                        new_env_lines.append(f"{key}={value}")
-
-                with open(env_path, "w") as f:
-                    f.write("\n".join(new_env_lines) + "\n")
-
-                logger.info("Successfully updated Dropbox settings in .env file")
+            if not update_env_file(env_path, dropbox_settings):
+                logger.info("Continuing with in-memory update despite .env file update failure or skip")
         except Exception as env_err:
             logger.warning(f"Failed to write .env file (non-fatal): {env_err}")
 
