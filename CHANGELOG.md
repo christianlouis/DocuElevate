@@ -10,6 +10,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.172.3 (2026-03-23)
+
+### Bug Fixes
+
+- Improve join_url - use walrus op, remove posixpath.normpath
+  ([`15dd1a8`](https://github.com/christianlouis/DocuElevate/commit/15dd1a847133aa02aedf65e7fc75d857151cc26e))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`b50a534`](https://github.com/christianlouis/DocuElevate/commit/b50a534454f0432e2ada8140e0090535b7c97051))
+
+- Apply ruff auto-fix
+  ([`326adb1`](https://github.com/christianlouis/DocuElevate/commit/326adb185853e17ac02d30b1bcce33b3a1cf4c5c))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`248619d`](https://github.com/christianlouis/DocuElevate/commit/248619d91e91aa9c5660267813367e4cd6f5040f))
+
+- **changelog**: Update changelog [skip ci]
+  ([`26963a8`](https://github.com/christianlouis/DocuElevate/commit/26963a84643c8c5caeb8536ed4dc55302a517adf))
+
+- **changelog**: Update changelog [skip ci]
+  ([`78bd5b5`](https://github.com/christianlouis/DocuElevate/commit/78bd5b5904d41d77d8df2a0e3978f630be080f0f))
+
+- **changelog**: Update changelog [skip ci]
+  ([`cc5e879`](https://github.com/christianlouis/DocuElevate/commit/cc5e879ea98507ec5656cce7162a69d385ee00f2))
+
+- **changelog**: Update changelog [skip ci]
+  ([`0497fbb`](https://github.com/christianlouis/DocuElevate/commit/0497fbbbad71fd728e528498508bbfc7802dab70))
+
+- **changelog**: Update changelog [skip ci]
+  ([`45d3ac8`](https://github.com/christianlouis/DocuElevate/commit/45d3ac8cf07d39d49930dd6866f76e6015067b08))
+
+### Testing
+
+- Add assertions for task enqueuing parameters
+  ([`eeae47d`](https://github.com/christianlouis/DocuElevate/commit/eeae47ddec01339421e503ba484157e798750b8a))
+
+
 ## Unreleased
 
 ### Documentation
