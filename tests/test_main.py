@@ -145,6 +145,58 @@ class TestLifespanEvents:
             # load_settings_from_db must also have been called
             mock_load_settings.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_lifespan_shutdown_logging_exception_is_silenced(self):
+        """Exceptions raised by logging.info during shutdown are silently ignored."""
+
+        def _raise_on_shutdown(msg, *args, **kwargs):
+            if "shutting down" in str(msg):
+                raise OSError("stream closed")
+
+        with (
+            patch("app.database.init_db"),
+            patch("app.database.SessionLocal") as mock_session_cls,
+            patch("app.utils.config_loader.load_settings_from_db"),
+            patch("app.utils.config_validator.dump_all_settings"),
+            patch("app.utils.config_validator.check_all_configs", return_value={"email": [], "storage": {}}),
+            patch("app.utils.notification.init_apprise"),
+            patch("app.utils.notification.notify_startup"),
+            patch("app.utils.notification.notify_shutdown"),
+            patch("app.main.init_sentry"),
+            patch("app.main.logging.info", side_effect=_raise_on_shutdown),
+        ):
+            mock_db = MagicMock()
+            mock_session_cls.return_value = mock_db
+
+            from app.main import app, lifespan
+
+            # Should complete without raising despite the logging error
+            async with lifespan(app):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_lifespan_shutdown_notify_exception_is_silenced(self):
+        """Exceptions raised by notify_shutdown during shutdown are silently ignored."""
+        with (
+            patch("app.database.init_db"),
+            patch("app.database.SessionLocal") as mock_session_cls,
+            patch("app.utils.config_loader.load_settings_from_db"),
+            patch("app.utils.config_validator.dump_all_settings"),
+            patch("app.utils.config_validator.check_all_configs", return_value={"email": [], "storage": {}}),
+            patch("app.utils.notification.init_apprise"),
+            patch("app.utils.notification.notify_startup"),
+            patch("app.main.notify_shutdown", side_effect=OSError("stream closed")),
+            patch("app.main.init_sentry"),
+        ):
+            mock_db = MagicMock()
+            mock_session_cls.return_value = mock_db
+
+            from app.main import app, lifespan
+
+            # Should complete without raising despite the notify_shutdown error
+            async with lifespan(app):
+                pass
+
 
 @pytest.mark.unit
 class TestExceptionHandlers:
