@@ -18,6 +18,7 @@ from app.tasks.upload_to_onedrive import upload_to_onedrive
 from app.tasks.upload_to_paperless import upload_to_paperless
 from app.tasks.upload_to_s3 import upload_to_s3
 from app.tasks.upload_to_sftp import upload_to_sftp
+from app.tasks.upload_to_sharepoint import upload_to_sharepoint
 from app.tasks.upload_to_webdav import upload_to_webdav
 from app.utils.config_validator import get_provider_status
 from app.utils.logging import log_task_progress
@@ -121,6 +122,18 @@ def _should_upload_to_icloud():
     return bool(getattr(settings, "icloud_enabled", True) and settings.icloud_username and settings.icloud_password)
 
 
+def _should_upload_to_sharepoint():
+    return bool(
+        settings.sharepoint_client_id
+        and settings.sharepoint_client_secret
+        and settings.sharepoint_site_url
+        and (
+            settings.sharepoint_refresh_token
+            or (settings.sharepoint_tenant_id and settings.sharepoint_tenant_id != "common")
+        )
+    )
+
+
 def get_configured_services_from_validator():
     """
     Use the config validator to determine which services are configured and enabled.
@@ -140,6 +153,7 @@ def get_configured_services_from_validator():
         "Email": "email",
         "OneDrive": "onedrive",
         "S3 Storage": "s3",
+        "SharePoint": "sharepoint",
         "iCloud Drive": "icloud",
     }
 
@@ -249,6 +263,11 @@ def send_to_all_destinations(self, file_path: str, use_validator=True, file_id: 
             "name": "s3",
             "should_upload": _should_upload_to_s3,
             "upload_func": upload_to_s3,
+        },
+        {
+            "name": "sharepoint",
+            "should_upload": _should_upload_to_sharepoint,
+            "upload_func": upload_to_sharepoint,
         },
         {
             "name": "icloud",

@@ -1,0 +1,91 @@
+# =============================================================================
+# Docker build context exclusions
+# Reducing the build context speeds up builds and prevents unnecessary cache
+# invalidation when unrelated files change.
+# =============================================================================
+
+# ── Version control ──────────────────────────────────────────────────────────
+.git
+
+# ── GitHub / CI tooling ──────────────────────────────────────────────────────
+.github
+
+# ── IDE / local dev ──────────────────────────────────────────────────────────
+.vscode
+.jules
+
+# ── Pre-commit / linting config (not needed at runtime) ──────────────────────
+.pre-commit-config.yaml
+pyproject.toml
+codecov.yml
+crowdin.yml
+
+# ── Test suite ───────────────────────────────────────────────────────────────
+tests/
+requirements-dev.txt
+coverage.json
+COVERAGE_REPORT.md
+.coverage
+htmlcov/
+.pytest_cache/
+junit.xml
+coverage.xml
+
+# ── Mobile app / browser extension / legacy placeholder ─────────────────────
+# backend/ is an empty placeholder directory not part of the Python application
+mobile/
+browser-extension/
+backend/
+
+# ── Helm charts ──────────────────────────────────────────────────────────────
+helm/
+
+# ── Scripts (run before Docker build, output files are COPYd separately) ─────
+scripts/
+
+# ── Benchmark and one-off utility scripts ────────────────────────────────────
+benchmark_*.py
+fix_test*.py
+run_fast_tests.sh
+
+# ── Root-level Markdown files (docs/ is kept for docs-builder stage) ─────────
+# Note: *.md only matches files at the root level, not inside subdirectories
+*.md
+
+# ── Python bytecode / compiled artifacts ─────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── Environment / secret files ───────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── Runtime state files ───────────────────────────────────────────────────────
+*.log
+celerybeat-schedule
+celerybeat.pid
+
+# ── Build artifacts ───────────────────────────────────────────────────────────
+build/
+dist/
+.cache/
+.mypy_cache/
+.ruff_cache/
+site/
+docs_build/
+
+# ── Editor temp files ─────────────────────────────────────────────────────────
+*.swp
+*.swo
+*~

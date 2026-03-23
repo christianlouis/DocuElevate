@@ -6,6 +6,7 @@ Native mobile application for DocuElevate, built with **React Native** and **Exp
 
 - 🔐 **SSO Login** – authenticate via your DocuElevate server's OAuth2/SSO provider; an API token is auto-generated and stored securely in the device keychain
 - 📷 **Camera Capture** – scan documents directly with the device camera
+- 🖼️ **Photo Library** – select existing photos from the device's photo library for upload
 - 📄 **File Picker** – upload PDFs, images, and Office documents from the device's Files app
 - 🔗 **Share Extension** – send files from any app directly to DocuElevate via the iOS/Android share sheet
 - 🔔 **Push Notifications** – receive real-time push notifications when documents finish processing (via Expo push notifications)
@@ -78,6 +79,25 @@ eas build --platform all
 - The app runs and bundles correctly without `google-services.json`; only Android push notifications will be unavailable
 - For Play Store submission: create a service account in Google Play Console, download the JSON key as `google-play-service-account.json`, and update `eas.json`
 
+## CI/CD
+
+An EAS Cloud Workflow (`mobile/.eas/workflows/create-builds.yml`) runs automatically when changes inside `mobile/` are pushed to `main`:
+
+1. **Path filtering** — only commits that modify files under `mobile/` trigger a build; backend-only changes are skipped.
+2. **Parallel builds** — iOS and Android production builds run at the same time on EAS Build.
+3. **Auto-submit to Apple** — after the iOS build succeeds, the workflow submits the binary to App Store Connect (TestFlight) using the credentials in `eas.json` → `submit.production.ios`.
+
+> An [App Store Connect API Key](https://docs.expo.dev/app-signing/app-credentials/#app-store-connect-api-key) must be configured in EAS (`eas credentials`) for non-interactive submission.
+
+### Version management
+
+Build numbers (`ios.buildNumber` / `android.versionCode`) are managed **remotely** by EAS — see `eas.json`:
+
+- `"appVersionSource": "remote"` — EAS tracks the current build number on its servers, so each CI build automatically receives a unique, incrementing number without committing changes back to the repo.
+- `"autoIncrement": true` (production profile) — EAS bumps the build number before every production build.
+
+The values in `app.json` are used as the **initial seed** when the remote version is first created; after that they are informational only. Use `eas build:version:get` / `eas build:version:set` to inspect or override the remote version.
+
 ## Configuration
 
 No code changes are needed to point the app at a different server.  The server URL is entered by the user on the login screen and stored in the device's secure store.
@@ -119,29 +139,58 @@ mobile/
 ├── tsconfig.json
 └── src/
     ├── context/
-    │   └── AuthContext.tsx        # Authentication state management
+    │   ├── AuthContext.tsx        # Authentication state management
+    │   └── ShareContext.tsx       # Shared-file queue (iOS Share Sheet / Android Intent)
     ├── hooks/
     │   └── usePushNotifications.ts  # Push notification registration
     ├── screens/
     │   ├── WelcomeScreen.tsx      # Branded intro / onboarding
     │   ├── LoginScreen.tsx        # SSO login
-    │   ├── UploadScreen.tsx       # Camera capture + file picker
+    │   ├── UploadScreen.tsx       # Camera capture + photo library + file picker
     │   ├── FilesScreen.tsx        # Document list
     │   └── ProfileScreen.tsx      # User profile + sign out
     └── services/
         └── api.ts                 # DocuElevate API client
 ```
 
-## Share Extension (iOS)
+## Share Sheet (iOS) / Share Intent (Android)
 
-The app registers the `docuelevate://` URL scheme and the `com.docuelevate.app` bundle identifier.  To enable the share sheet:
+The app registers itself as a share target so any file can be sent directly to DocuElevate from another app.
 
-1. Ensure the app is installed on the device
-2. Open any file in Files, Mail, Safari, etc.
-3. Tap the share icon → find **DocuElevate** in the share sheet
-4. The file is uploaded immediately
+### iOS – how it works
 
-Android uses a similar intent filter configured in `app.json`.
+`app.json` declares `CFBundleDocumentTypes` in the iOS `infoPlist` section.  This tells iOS which file types the app can receive, causing it to appear in the share sheet when the user shares a matching file.  When the user taps **DocuElevate** in the share sheet, iOS passes the file path to the app via `application:openURL:options:`.  The URL may arrive as a standard `file://` path or under the app's custom `docuelevate://` scheme.
+
+The root layout (`app/_layout.tsx`) listens for incoming URLs via `Linking.addEventListener` (warm start) and `Linking.getInitialURL()` (cold start).  If the URL uses the `docuelevate://` scheme it is automatically rewritten to `file://` before being forwarded.  Incoming files are stored in `ShareContext` and automatically uploaded by `UploadScreen`.
+
+#### Handling "unmatched route" errors from "Open In…"
+
+iOS sometimes delivers the file path under the `docuelevate://` scheme:
+
+```
+docuelevate://private/var/mobile/Library/Mobile Documents/…/Invoice.pdf
+```
+
+expo-router strips the scheme and tries to match `/private/var/mobile/…` as an in-app route.  The catch-all `app/+not-found.tsx` intercepts this, detects the filesystem-path pattern, adds the file directly to `ShareContext`, and redirects to the Upload tab.  `UploadScreen` picks up the pending file and begins uploading automatically.  The `Linking` listener in the root layout may also fire for the same URL; `ShareContext` deduplicates by URI to prevent double uploads.
+
+**Supported iOS file types:** PDF, images (JPEG / PNG / GIF / BMP / TIFF / WebP), plain text, Word (`.docx`, `.doc`), Excel (`.xlsx`, `.xls`), PowerPoint (`.pptx`, `.ppt`), and any other file (`public.data`).
+
+To use the share sheet:
+
+1. Ensure the app is installed on the device.
+2. Open any supported file in Files, Mail, Safari, etc.
+3. Tap the **Share** button → find **DocuElevate** in the share sheet.
+4. The file is uploaded immediately.
+
+> **Note:** `CFBundleDocumentTypes` with `LSHandlerRank: Alternate` means DocuElevate appears in the share sheet as an option but does **not** become the default app for any file type.
+
+#### iOS Action Extension (future enhancement)
+
+Apps like DeepL ("Translate in DeepL") appear as **Action Extensions** in the iOS share sheet, which requires a separate Xcode target and native Swift code.  This is planned as a future enhancement.  The current `CFBundleDocumentTypes` approach places DocuElevate in the "Open With" row of the share sheet.
+
+### Android – how it works
+
+`app.json` declares `intentFilters` for `ACTION_SEND` and `ACTION_SEND_MULTIPLE` with `mimeType: "*/*"`.  When a user shares a file from another app and selects DocuElevate, Android delivers the content URI through the share intent, which is captured via `Linking.getInitialURL()` and processed the same way as on iOS.
 
 ## Backend API
 
@@ -156,6 +205,7 @@ The mobile app uses the following backend endpoints:
 | `GET`    | `/api/mobile/whoami`                | Get current user profile              |
 | `POST`   | `/api/ui-upload`                    | Upload file for processing            |
 | `GET`    | `/api/files`                        | List processed documents              |
+| `GET`    | `/api/files/{id}`                   | Get processing status of a single file |
 
 Authentication uses `Authorization: Bearer <api_token>` on all requests.
 

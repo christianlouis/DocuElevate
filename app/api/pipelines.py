@@ -117,8 +117,14 @@ PIPELINE_STEP_TYPES: dict[str, dict[str, Any]] = {
     },
     "classify": {
         "label": "Document Classification",
-        "description": "Classify the document type using AI without full metadata extraction.",
-        "config_schema": {},
+        "description": "Classify the document type using built-in and custom rules (filename patterns, content keywords, metadata matching).",
+        "config_schema": {
+            "use_builtin_rules": {
+                "type": "boolean",
+                "default": True,
+                "description": "Include the pre-built classification rules (invoice, contract, receipt, etc.).",
+            },
+        },
     },
 }
 

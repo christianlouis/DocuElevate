@@ -363,7 +363,7 @@ def format_time_remaining(time_delta):
 
 @router.post("/google-drive/save-settings")
 @require_login
-async def save_dropbox_settings(
+async def save_google_drive_settings(
     request: Request,
     refresh_token: Annotated[str, Form(...)],
     client_id: Annotated[Optional[str], Form()] = None,

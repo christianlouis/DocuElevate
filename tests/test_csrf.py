@@ -337,6 +337,27 @@ class TestCSRFMiddlewareDispatch:
 
         call_next.assert_called_once_with(request)
 
+    @pytest.mark.asyncio
+    async def test_qr_auth_claim_is_exempt(self):
+        """QR auth claim path is exempt from CSRF validation.
+
+        The mobile app calls this endpoint without a browser session and
+        therefore without a CSRF token.  The cryptographically-random,
+        single-use challenge token provides equivalent protection.
+        """
+        middleware = self._make_middleware()
+        request = self._make_request(
+            method="POST",
+            path="/api/qr-auth/claim",
+            session={},
+        )
+        call_next = AsyncMock(return_value=MagicMock())
+
+        with patch.object(CSRFMiddleware, "_get_submitted_token", new=AsyncMock(return_value=None)):
+            result = await middleware.dispatch(request, call_next)
+
+        call_next.assert_called_once_with(request)
+
 
 # ---------------------------------------------------------------------------
 # Integration tests – via TestClient
@@ -362,6 +383,7 @@ class TestCSRFIntegration:
         assert "PATCH" in CSRF_PROTECTED_METHODS
         assert "GET" not in CSRF_PROTECTED_METHODS
         assert "/oauth-callback" in CSRF_EXEMPT_PATHS
+        assert "/api/qr-auth/claim" in CSRF_EXEMPT_PATHS
 
     def test_csrf_middleware_noop_when_auth_disabled(self):
         """When AUTH_ENABLED=False the middleware dispatch is a no-op (no validation)."""
