@@ -1,4 +1,3 @@
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -7,13 +6,13 @@ from app.tasks.upload_to_nextcloud import upload_to_nextcloud
 
 
 @pytest.fixture
-def mock_settings():
+def mock_settings(tmp_path):
     with patch("app.tasks.upload_to_nextcloud.settings") as mock:
         mock.nextcloud_upload_url = "http://nextcloud.local/"
         mock.nextcloud_username = "testuser"
         mock.nextcloud_password = "testpassword"
         mock.nextcloud_folder = "uploads"
-        mock.workdir = "/tmp/workdir"
+        mock.workdir = str(tmp_path)
         mock.http_request_timeout = 30
         yield mock
 
@@ -31,11 +30,10 @@ def mock_requests():
         yield mock
 
 
-def test_upload_to_nextcloud_url_construction(mock_settings, mock_requests):
-    file_path = "/tmp/workdir/test_file.txt"
+def test_upload_to_nextcloud_url_construction(tmp_path, mock_settings, mock_requests):
+    file_path = str(tmp_path / "test_file.txt")
 
     # Create dummy file
-    os.makedirs("/tmp/workdir", exist_ok=True)
     with open(file_path, "w") as f:
         f.write("test content")
 
