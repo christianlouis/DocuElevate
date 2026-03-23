@@ -1,13 +1,16 @@
 /**
- * LoginScreen – server URL entry and SSO sign-in.
+ * LoginScreen – server URL entry, SSO sign-in, and QR code login.
  *
- * Renders a server URL input and a "Sign in with SSO" button that opens the
- * DocuElevate web login page in the system browser.  On success the
- * AuthContext stores the API token and navigates to the main app.
+ * Renders a server URL input, a "Sign in with SSO" button that opens the
+ * DocuElevate web login page in the system browser, and a "Scan QR Code"
+ * button that opens the device camera to scan a QR code generated from the
+ * web interface.  On success the AuthContext stores the API token and
+ * navigates to the main app.
  */
 
+import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -23,10 +26,46 @@ import {
 import { useAuth } from "../context/AuthContext";
 
 export default function LoginScreen() {
-  const { signIn } = useAuth();
+  const { signIn, signInWithQR } = useAuth();
   const router = useRouter();
   const [serverUrl, setServerUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [qrLoading, setQrLoading] = useState(false);
+
+  // Handle incoming deep links for QR login (docuelevate://qr-login?token=...&server=...)
+  const handleDeepLink = useCallback(
+    async (event: { url: string }) => {
+      try {
+        const url = new URL(event.url);
+        if (url.hostname === "qr-login" || url.pathname === "/qr-login") {
+          const token = url.searchParams.get("token");
+          const server = url.searchParams.get("server");
+          if (token && server) {
+            setQrLoading(true);
+            await signInWithQR(server, token);
+          }
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "QR login failed";
+        Alert.alert("QR Login Failed", message);
+      } finally {
+        setQrLoading(false);
+      }
+    },
+    [signInWithQR]
+  );
+
+  useEffect(() => {
+    // Listen for incoming deep links
+    const subscription = Linking.addEventListener("url", handleDeepLink);
+
+    // Check if the app was opened via a deep link
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink({ url });
+    });
+
+    return () => subscription.remove();
+  }, [handleDeepLink]);
 
   async function handleSignIn() {
     const url = serverUrl.trim();
@@ -85,7 +124,7 @@ export default function LoginScreen() {
         <Pressable
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleSignIn}
-          disabled={loading}
+          disabled={loading || qrLoading}
           accessibilityRole="button"
           accessibilityLabel="Sign in with SSO"
         >
@@ -96,8 +135,30 @@ export default function LoginScreen() {
           )}
         </Pressable>
 
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>or</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <Pressable
+          style={[styles.qrButton, qrLoading && styles.buttonDisabled]}
+          onPress={() => {
+            router.push("/(auth)/qr-scanner");
+          }}
+          disabled={loading || qrLoading}
+          accessibilityRole="button"
+          accessibilityLabel="Sign in with QR code"
+        >
+          {qrLoading ? (
+            <ActivityIndicator color="#1e40af" />
+          ) : (
+            <Text style={styles.qrButtonText}>📱 Scan QR Code to Login</Text>
+          )}
+        </Pressable>
+
         <Text style={styles.hint}>
-          You will be redirected to your organisation's sign-in page.
+          Sign in via SSO or scan a QR code from the web app.
         </Text>
 
         <Pressable
@@ -182,6 +243,36 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#ffffff",
     fontSize: 16,
+    fontWeight: "600",
+  },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 16,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#e5e7eb",
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    fontSize: 12,
+    color: "#9ca3af",
+  },
+  qrButton: {
+    borderWidth: 1,
+    borderColor: "#1e40af",
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+    backgroundColor: "#eff6ff",
+  },
+  qrButtonText: {
+    color: "#1e40af",
+    fontSize: 15,
     fontWeight: "600",
   },
   hint: {

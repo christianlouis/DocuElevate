@@ -195,6 +195,15 @@ class TestGetGoogleDriveTokenInfo:
 class TestSaveGoogleDriveSettings:
     """Test save_google_drive_settings endpoint edge cases."""
 
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.google_drive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+
     @patch("app.api.google_drive.settings")
     @patch("os.path.exists")
     def test_save_settings_env_file_not_exists(self, mock_exists, mock_settings, client: TestClient):

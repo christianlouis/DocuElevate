@@ -5,7 +5,7 @@ This test module serves as a regression prevention mechanism to ensure
 that endpoints remain accessible after code refactoring or reorganization.
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -17,17 +17,24 @@ TEST_URL = "https://example.com/test.pdf"
 class TestEndpointRegistration:
     """Verify that critical API endpoints are registered in the FastAPI app"""
 
-    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
     @patch("app.api.url_upload.process_document")
-    def test_process_url_endpoint_exists(self, mock_process_document, mock_requests_get, client):
+    def test_process_url_endpoint_exists(self, mock_process_document, mock_stream, client):
         """Verify that /api/process-url endpoint is registered and accessible"""
         # Mock successful download to prevent actual HTTP requests
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "1024"}
-        mock_response.iter_content = Mock(return_value=[b"PDF content"])
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b"PDF content"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         # Mock Celery task
         mock_task = Mock()
@@ -46,17 +53,24 @@ class TestEndpointRegistration:
             "Verify that url_upload_router is included in app/api/__init__.py"
         )
 
-    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
     @patch("app.api.url_upload.process_document")
-    def test_process_url_endpoint_accepts_post(self, mock_process_document, mock_requests_get, client):
+    def test_process_url_endpoint_accepts_post(self, mock_process_document, mock_stream, client):
         """Verify that /api/process-url accepts POST requests"""
         # Mock successful download to prevent actual HTTP requests
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "1024"}
-        mock_response.iter_content = Mock(return_value=[b"PDF content"])
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b"PDF content"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         # Mock Celery task
         mock_task = Mock()
@@ -72,17 +86,24 @@ class TestEndpointRegistration:
             "Verify the endpoint is decorated with @router.post()"
         )
 
-    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
     @patch("app.api.url_upload.process_document")
-    def test_api_router_included_in_app(self, mock_process_document, mock_requests_get, client):
+    def test_api_router_included_in_app(self, mock_process_document, mock_stream, client):
         """Verify that the main API router is included in the FastAPI app"""
         # Mock successful download for /api/process-url test
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "1024"}
-        mock_response.iter_content = Mock(return_value=[b"PDF content"])
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b"PDF content"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         # Mock Celery task
         mock_task = Mock()

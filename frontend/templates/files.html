@@ -524,6 +524,7 @@
           <option value="webdav" {% if storage_provider == "webdav" %}selected{% endif %}>WebDAV</option>
           <option value="ftp" {% if storage_provider == "ftp" %}selected{% endif %}>FTP</option>
           <option value="sftp" {% if storage_provider == "sftp" %}selected{% endif %}>SFTP</option>
+          <option value="sharepoint" {% if storage_provider == "sharepoint" %}selected{% endif %}>SharePoint</option>
           <option value="icloud" {% if storage_provider == "icloud" %}selected{% endif %}>iCloud Drive</option>
         </select>
       </div>
@@ -716,19 +717,19 @@
           <td>{{ file.mime_type }}</td>
           <td>
             <span class="status-badge status-{{ file.processing_status }}">
-              {{ file.processing_status | title }}
+              {% if file.processing_status == 'pending' %}{{ _("common.pending") }}{% elif file.processing_status == 'processing' %}{{ _("common.processing") }}{% elif file.processing_status == 'completed' %}{{ _("common.completed") }}{% elif file.processing_status == 'failed' %}{{ _("common.failed") }}{% elif file.processing_status == 'duplicate' %}{{ _("files.status_duplicate") }}{% else %}{{ file.processing_status | title }}{% endif %}
             </span>
           </td>
-          <td>{{ file.created_at.strftime('%Y-%m-%d %H:%M:%S') if file.created_at else 'N/A' }}</td>
+          <td>{{ file.created_at.strftime('%Y-%m-%d %H:%M:%S') if file.created_at else _('common.not_available') }}</td>
           <td>
             <div style="display: flex; align-items: center;">
-              <button onclick="openPreviewModal({{ file.id }}, '{{ file.mime_type or '' }}', '{{ file.original_filename | e }}', event)" class="action-btn" title="Quick preview" aria-label="Preview {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
+              <button onclick="openPreviewModal({{ file.id }}, '{{ file.mime_type or '' }}', '{{ file.original_filename | e }}', event)" class="action-btn" title="{{ _('files.action_preview') }}" aria-label="{{ _('files.action_preview') }} {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
                 <i class="fas fa-eye" aria-hidden="true"></i>
               </button>
-              <button onclick="viewFileDetail({{ file.id }}, event)" class="action-btn" title="View details" aria-label="View details for {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
+              <button onclick="viewFileDetail({{ file.id }}, event)" class="action-btn" title="{{ _('files.action_details') }}" aria-label="{{ _('files.action_details') }} {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
                 <i class="fas fa-info-circle" aria-hidden="true"></i>
               </button>
-              <button onclick="showDeleteModal({{ file.id }}, event)" class="action-btn delete" title="Delete file" aria-label="Delete {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
+              <button onclick="showDeleteModal({{ file.id }}, event)" class="action-btn delete" title="{{ _('files.action_delete') }}" aria-label="{{ _('files.action_delete') }} {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
                 <i class="fas fa-trash" aria-hidden="true"></i>
               </button>
             </div>
@@ -752,25 +753,25 @@
       tabindex="0"
       onclick="viewFileDetail({{ file.id }}, event)"
       onkeydown="if(event.key==='Enter'||event.key===' '){viewFileDetail({{ file.id }}, event);}"
-      aria-label="View details for {{ file.original_filename }}"
+      aria-label="{{ _('files.action_details') }} {{ file.original_filename }}"
     >
       <div class="flex items-start justify-between gap-2">
         <div class="flex-1 min-w-0">
           <p class="font-semibold text-gray-800 truncate">{{ file.original_filename }}</p>
           <p class="text-xs text-gray-500 mt-1">ID: {{ file.id }} &middot; {{ (file.file_size / 1024) | round(2) }} KB</p>
           <p class="text-xs text-gray-500 mt-0.5">{{ file.mime_type }}</p>
-          <p class="text-xs text-gray-400 mt-0.5">{{ file.created_at.strftime('%Y-%m-%d %H:%M') if file.created_at else 'N/A' }}</p>
+          <p class="text-xs text-gray-400 mt-0.5">{{ file.created_at.strftime('%Y-%m-%d %H:%M') if file.created_at else _('common.not_available') }}</p>
         </div>
         <div class="flex flex-col items-end gap-2 flex-shrink-0">
-          <span class="status-badge status-{{ file.processing_status }}">{{ file.processing_status | title }}</span>
-          <div class="flex gap-1" role="group" aria-label="File actions" onclick="event.stopPropagation();" onkeydown="event.stopPropagation();">
-            <button onclick="openPreviewModal({{ file.id }}, '{{ file.mime_type or '' }}', '{{ file.original_filename | e }}', event)" class="action-btn" title="Quick preview" aria-label="Preview {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
+          <span class="status-badge status-{{ file.processing_status }}">{% if file.processing_status == 'pending' %}{{ _("common.pending") }}{% elif file.processing_status == 'processing' %}{{ _("common.processing") }}{% elif file.processing_status == 'completed' %}{{ _("common.completed") }}{% elif file.processing_status == 'failed' %}{{ _("common.failed") }}{% elif file.processing_status == 'duplicate' %}{{ _("files.status_duplicate") }}{% else %}{{ file.processing_status | title }}{% endif %}</span>
+          <div class="flex gap-1" role="group" aria-label="{{ _('files.file_actions_aria') }}" onclick="event.stopPropagation();" onkeydown="event.stopPropagation();">
+            <button onclick="openPreviewModal({{ file.id }}, '{{ file.mime_type or '' }}', '{{ file.original_filename | e }}', event)" class="action-btn" title="{{ _('files.action_preview') }}" aria-label="{{ _('files.action_preview') }} {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
               <i class="fas fa-eye" aria-hidden="true"></i>
             </button>
-            <button onclick="viewFileDetail({{ file.id }}, event)" class="action-btn" title="View details" aria-label="View details for {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
+            <button onclick="viewFileDetail({{ file.id }}, event)" class="action-btn" title="{{ _('files.action_details') }}" aria-label="{{ _('files.action_details') }} {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
               <i class="fas fa-info-circle" aria-hidden="true"></i>
             </button>
-            <button onclick="showDeleteModal({{ file.id }}, event)" class="action-btn delete" title="Delete file" aria-label="Delete {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
+            <button onclick="showDeleteModal({{ file.id }}, event)" class="action-btn delete" title="{{ _('files.action_delete') }}" aria-label="{{ _('files.action_delete') }} {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
               <i class="fas fa-trash" aria-hidden="true"></i>
             </button>
           </div>
@@ -841,6 +842,54 @@
   </div>
 
   <script>
+    // ── Translations for JavaScript ──
+    const __i18n = {
+      previewFallback: {{ _("files.js_preview_fallback") | tojson }},
+      fullView: {{ _("files.js_full_view") | tojson }},
+      download: {{ _("files.js_download") | tojson }},
+      loading: {{ _("files.js_loading") | tojson }},
+      failedLoadPdf: {{ _("files.js_failed_load_pdf") | tojson }},
+      pdfPageInfo: {{ _("files.js_pdf_page_info") | tojson }},
+      failedLoadFile: {{ _("files.js_failed_load_file") | tojson }},
+      openFullViewAria: {{ _("files.js_open_full_view_aria") | tojson }},
+      downloadFileAria: {{ _("files.js_download_file_aria") | tojson }},
+      failedDeleteFile: {{ _("files.js_failed_delete_file") | tojson }},
+      errorDeletingFile: {{ _("files.js_error_deleting_file") | tojson }},
+      noSavedSearches: {{ _("files.js_no_saved_searches") | tojson }},
+      loadSavedSearchesError: {{ _("files.js_load_saved_searches_error") | tojson }},
+      noFiltersToSave: {{ _("files.js_no_filters_to_save") | tojson }},
+      enterSearchName: {{ _("files.js_enter_search_name") | tojson }},
+      deleteSavedSearchConfirm: {{ _("files.js_delete_saved_search_confirm") | tojson }},
+      deleteSavedSearchAria: {{ _("files.js_delete_saved_search_aria") | tojson }},
+      selectFilesDelete: {{ _("files.js_select_files_delete") | tojson }},
+      confirmDeleteFiles: {{ _("files.js_confirm_delete_files") | tojson }},
+      failedDeleteFiles: {{ _("files.js_failed_delete_files") | tojson }},
+      errorDeletingFiles: {{ _("files.js_error_deleting_files") | tojson }},
+      selectFilesReprocess: {{ _("files.js_select_files_reprocess") | tojson }},
+      confirmReprocessFiles: {{ _("files.js_confirm_reprocess_files") | tojson }},
+      failedReprocessFiles: {{ _("files.js_failed_reprocess_files") | tojson }},
+      errorReprocessingFiles: {{ _("files.js_error_reprocessing_files") | tojson }},
+      selectFilesCloudOcr: {{ _("files.js_select_files_cloud_ocr") | tojson }},
+      confirmCloudOcr: {{ _("files.js_confirm_cloud_ocr") | tojson }},
+      failedQueueCloudOcr: {{ _("files.js_failed_queue_cloud_ocr") | tojson }},
+      errorQueuingCloudOcr: {{ _("files.js_error_queuing_cloud_ocr") | tojson }},
+      selectFilesDownload: {{ _("files.js_select_files_download") | tojson }},
+      failedCreateZip: {{ _("files.js_failed_create_zip") | tojson }},
+      errorDownloadingFiles: {{ _("files.js_error_downloading_files") | tojson }},
+      searching: {{ _("files.js_searching") | tojson }},
+      searchUnavailable: {{ _("files.js_search_unavailable") | tojson }},
+      searchResultsCount: {{ _("files.js_search_results_count") | tojson }},
+      noResults: {{ _("files.js_no_results") | tojson }},
+      untitled: {{ _("files.js_untitled") | tojson }},
+      viewFile: {{ _("files.js_view_file") | tojson }},
+      prevPage: {{ _("files.js_prev_page") | tojson }},
+      pageInfo: {{ _("files.js_page_info") | tojson }},
+      nextPage: {{ _("files.js_next_page") | tojson }},
+      zoomIn: {{ _("files.js_zoom_in") | tojson }},
+      zoomOut: {{ _("files.js_zoom_out") | tojson }},
+      resetZoom: {{ _("files.js_reset_zoom") | tojson }},
+    };
+
     // Modal functionality
     const deleteModal = document.getElementById('deleteModal');
     const cancelDelete = document.getElementById('cancelDelete');
@@ -868,7 +917,7 @@
       const title = document.getElementById('previewTitle');
       const body = document.getElementById('previewBody');
       const footer = document.getElementById('previewFooter');
-      title.textContent = filename || 'Preview';
+      title.textContent = filename || __i18n.previewFallback;
       body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:300px;color:#9ca3af;"><i class="fas fa-spinner fa-spin" style="font-size:2rem;"></i></div>';
       footer.innerHTML = '';
       _pmPdf = { doc: null, page: 1, total: 0 };
@@ -877,8 +926,8 @@
       document.body.style.overflow = 'hidden';
 
       footer.innerHTML =
-        `<a href="/files/${fileId}" aria-label="Open full view"><i class="fas fa-expand" aria-hidden="true"></i> Full view</a>` +
-        `<a href="/api/files/${fileId}/download?version=processed" aria-label="Download file"><i class="fas fa-download" aria-hidden="true"></i> Download</a>`;
+        `<a href="/files/${fileId}" aria-label="${__i18n.openFullViewAria}"><i class="fas fa-expand" aria-hidden="true"></i> ${__i18n.fullView}</a>` +
+        `<a href="/api/files/${fileId}/download?version=processed" aria-label="${__i18n.downloadFileAria}"><i class="fas fa-download" aria-hidden="true"></i> ${__i18n.download}</a>`;
 
       // Try "processed" first; fall back to "original" on 404
       _pmLoadPreview(body, fileId, mime, filename, 'processed');
@@ -911,7 +960,7 @@
       body.innerHTML =
         '<div class="pm-pdf-controls">' +
           '<button onclick="_pmPdfPage(-1)" id="pm-prev" aria-label="Previous page"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>' +
-          '<span id="pm-page-info" style="font-size:0.8rem;min-width:100px;text-align:center;">Loading…</span>' +
+          '<span id="pm-page-info" style="font-size:0.8rem;min-width:100px;text-align:center;">' + __i18n.loading + '</span>' +
           '<button onclick="_pmPdfPage(1)" id="pm-next" aria-label="Next page"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>' +
         '</div>' +
         '<div class="pm-canvas-wrap" id="pm-canvas-wrap"><div style="text-align:center;padding:3rem;color:#94a3b8;"><i class="fas fa-spinner fa-spin" style="font-size:2rem;"></i></div></div>';
@@ -923,7 +972,7 @@
         _pmPdfRender();
       }).catch(function() {
         if (onError) { onError(); return; }
-        document.getElementById('pm-canvas-wrap').innerHTML = '<div style="text-align:center;padding:2rem;color:#f87171;"><i class="fas fa-exclamation-triangle" style="font-size:2rem;margin-bottom:0.5rem;"></i><p>Failed to load PDF</p></div>';
+        document.getElementById('pm-canvas-wrap').innerHTML = '<div style="text-align:center;padding:2rem;color:#f87171;"><i class="fas fa-exclamation-triangle" style="font-size:2rem;margin-bottom:0.5rem;"></i><p>' + __i18n.failedLoadPdf + '</p></div>';
       });
     }
 
@@ -953,7 +1002,7 @@
 
     function _pmPdfUpdateInfo() {
       var info = document.getElementById('pm-page-info');
-      if (info) info.textContent = 'Page ' + _pmPdf.page + ' of ' + _pmPdf.total;
+      if (info) info.textContent = __i18n.pdfPageInfo.replace('{page}', _pmPdf.page).replace('{total}', _pmPdf.total);
       var prev = document.getElementById('pm-prev');
       var next = document.getElementById('pm-next');
       if (prev) prev.disabled = _pmPdf.page <= 1;
@@ -964,12 +1013,12 @@
     function _pmRenderImage(body, url, alt) {
       body.innerHTML =
         '<div class="pm-img-controls">' +
-          '<button onclick="_pmImgZoom(1.25)" title="Zoom in" aria-label="Zoom in"><i class="fas fa-search-plus" aria-hidden="true"></i></button>' +
-          '<button onclick="_pmImgZoom(0.8)" title="Zoom out" aria-label="Zoom out"><i class="fas fa-search-minus" aria-hidden="true"></i></button>' +
-          '<button onclick="_pmImgReset()" title="Reset" aria-label="Reset zoom"><i class="fas fa-expand" aria-hidden="true"></i></button>' +
+          '<button onclick="_pmImgZoom(1.25)" title="' + __i18n.zoomIn + '" aria-label="' + __i18n.zoomIn + '"><i class="fas fa-search-plus" aria-hidden="true"></i></button>' +
+          '<button onclick="_pmImgZoom(0.8)" title="' + __i18n.zoomOut + '" aria-label="' + __i18n.zoomOut + '"><i class="fas fa-search-minus" aria-hidden="true"></i></button>' +
+          '<button onclick="_pmImgReset()" title="' + __i18n.resetZoom + '" aria-label="' + __i18n.resetZoom + '"><i class="fas fa-expand" aria-hidden="true"></i></button>' +
           '<span id="pm-zoom-level" style="font-size:0.8rem;color:#6b7280;">100%</span>' +
         '</div>' +
-        '<div class="pm-img-wrap" id="pm-img-wrap"><img id="pm-preview-img" src="' + url + '" alt="' + (alt || 'Preview') + '" draggable="false" style="max-width:100%;height:auto;"></div>';
+        '<div class="pm-img-wrap" id="pm-img-wrap"><img id="pm-preview-img" src="' + url + '" alt="' + (alt || __i18n.previewFallback) + '" draggable="false" style="max-width:100%;height:auto;"></div>';
       // Drag-pan
       var wrap = document.getElementById('pm-img-wrap');
       if (wrap) {
@@ -1000,7 +1049,7 @@
 
     // Text rendering inside preview modal
     function _pmRenderText(body, url, onError) {
-      body.innerHTML = '<div class="pm-text-content" id="pm-text-content"><div style="text-align:center;padding:2rem;color:#94a3b8;"><i class="fas fa-spinner fa-spin"></i> Loading…</div></div>';
+      body.innerHTML = '<div class="pm-text-content" id="pm-text-content"><div style="text-align:center;padding:2rem;color:#94a3b8;"><i class="fas fa-spinner fa-spin"></i> ' + __i18n.loading + '</div></div>';
       fetch(url)
         .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
         .then(function(text) {
@@ -1021,7 +1070,7 @@
         .catch(function() {
           if (onError) { onError(); return; }
           var c = document.getElementById('pm-text-content');
-          if (c) c.innerHTML = '<div style="color:#f87171;padding:1rem;">Failed to load file</div>';
+          if (c) c.innerHTML = '<div style="color:#f87171;padding:1rem;">' + __i18n.failedLoadFile + '</div>';
         });
     }
 
@@ -1065,7 +1114,7 @@
           const contentType = response.headers.get('content-type');
           if (contentType && contentType.includes('application/json')) {
             return response.json().then(err => {
-              throw new Error(err.detail || 'Failed to delete file');
+              throw new Error(err.detail || __i18n.failedDeleteFile);
             });
           } else {
             // Non-JSON response (likely HTML error page)
@@ -1084,7 +1133,7 @@
       })
       .catch(error => {
         console.error('Error:', error);
-        alert(`Error deleting file: ${error.message}`);
+        alert(__i18n.errorDeletingFile.replace('{error}', error.message));
       });
     }
 
@@ -1124,14 +1173,14 @@
           const container = document.getElementById('saved-searches-list');
           if (!container) return;
           if (!searches || searches.length === 0) {
-            container.innerHTML = '<span style="color: var(--text-muted); font-size: 0.85rem;">No saved searches yet</span>';
+            container.innerHTML = '<span style="color: var(--text-muted); font-size: 0.85rem;">' + __i18n.noSavedSearches + '</span>';
             return;
           }
           container.innerHTML = searches.map(s => {
             const params = new URLSearchParams(s.filters);
             return `<span class="saved-search-tag" style="display: inline-flex; align-items: center; gap: 0.25rem; background: var(--bg-tertiary, #e5e7eb); padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-size: 0.8rem;">
               <a href="/files?${params.toString()}" style="text-decoration: none; color: inherit;">${s.name}</a>
-              <button type="button" onclick="deleteSavedSearch(${s.id})" style="border: none; background: none; cursor: pointer; color: var(--text-muted); padding: 0; line-height: 1;" aria-label="Delete saved search ${s.name}">
+              <button type="button" onclick="deleteSavedSearch(${s.id})" style="border: none; background: none; cursor: pointer; color: var(--text-muted); padding: 0; line-height: 1;" aria-label="${__i18n.deleteSavedSearchAria.replace('{name}', s.name)}">
                 <i class="fas fa-times" aria-hidden="true"></i>
               </button>
             </span>`;
@@ -1139,7 +1188,7 @@
         })
         .catch(() => {
           const container = document.getElementById('saved-searches-list');
-          if (container) container.innerHTML = '<span style="color: var(--text-muted); font-size: 0.85rem;">Could not load saved searches</span>';
+          if (container) container.innerHTML = '<span style="color: var(--text-muted); font-size: 0.85rem;">' + __i18n.loadSavedSearchesError + '</span>';
         });
     }
 
@@ -1152,10 +1201,10 @@
         if (val) filters[key] = val;
       });
       if (Object.keys(filters).length === 0) {
-        alert('No filters to save. Please apply at least one filter (search, date, status, tags, etc.) before saving.');
+        alert(__i18n.noFiltersToSave);
         return;
       }
-      const name = prompt('Enter a name for this saved search:');
+      const name = prompt(__i18n.enterSearchName);
       if (!name || !name.trim()) return;
       fetch('/api/saved-searches', {
         method: 'POST',
@@ -1171,7 +1220,7 @@
     }
 
     function deleteSavedSearch(id) {
-      if (!confirm('Delete this saved search?')) return;
+      if (!confirm(__i18n.deleteSavedSearchConfirm)) return;
       fetch(`/api/saved-searches/${id}`, { method: 'DELETE' })
         .then(response => {
           if (!response.ok) throw new Error('Failed to delete');
@@ -1226,11 +1275,11 @@
     function bulkDelete() {
       const fileIds = getSelectedFileIds();
       if (fileIds.length === 0) {
-        alert('Please select files to delete');
+        alert(__i18n.selectFilesDelete);
         return;
       }
 
-      if (!confirm(`Are you sure you want to delete ${fileIds.length} file(s)?`)) {
+      if (!confirm(__i18n.confirmDeleteFiles.replace('{count}', fileIds.length))) {
         return;
       }
 
@@ -1244,7 +1293,7 @@
       .then(response => {
         if (!response.ok) {
           return response.json().then(err => {
-            throw new Error(err.detail || 'Failed to delete files');
+            throw new Error(err.detail || __i18n.failedDeleteFiles);
           });
         }
         return response.json();
@@ -1255,18 +1304,18 @@
       })
       .catch(error => {
         console.error('Error:', error);
-        alert(`Error deleting files: ${error.message}`);
+        alert(__i18n.errorDeletingFiles.replace('{error}', error.message));
       });
     }
 
     function bulkReprocess() {
       const fileIds = getSelectedFileIds();
       if (fileIds.length === 0) {
-        alert('Please select files to reprocess');
+        alert(__i18n.selectFilesReprocess);
         return;
       }
 
-      if (!confirm(`Are you sure you want to reprocess ${fileIds.length} file(s)?`)) {
+      if (!confirm(__i18n.confirmReprocessFiles.replace('{count}', fileIds.length))) {
         return;
       }
 
@@ -1280,7 +1329,7 @@
       .then(response => {
         if (!response.ok) {
           return response.json().then(err => {
-            throw new Error(err.detail || 'Failed to reprocess files');
+            throw new Error(err.detail || __i18n.failedReprocessFiles);
           });
         }
         return response.json();
@@ -1297,18 +1346,18 @@
       })
       .catch(error => {
         console.error('Error:', error);
-        alert(`Error reprocessing files: ${error.message}`);
+        alert(__i18n.errorReprocessingFiles.replace('{error}', error.message));
       });
     }
 
     function bulkReprocessCloudOcr() {
       const fileIds = getSelectedFileIds();
       if (fileIds.length === 0) {
-        alert('Please select files to re-run Cloud OCR on');
+        alert(__i18n.selectFilesCloudOcr);
         return;
       }
 
-      if (!confirm(`Are you sure you want to re-run Cloud OCR on ${fileIds.length} file(s)?`)) {
+      if (!confirm(__i18n.confirmCloudOcr.replace('{count}', fileIds.length))) {
         return;
       }
 
@@ -1322,7 +1371,7 @@
       .then(response => {
         if (!response.ok) {
           return response.json().then(err => {
-            throw new Error(err.detail || 'Failed to queue Cloud OCR');
+            throw new Error(err.detail || __i18n.failedQueueCloudOcr);
           });
         }
         return response.json();
@@ -1339,14 +1388,14 @@
       })
       .catch(error => {
         console.error('Error:', error);
-        alert(`Error queuing Cloud OCR: ${error.message}`);
+        alert(__i18n.errorQueuingCloudOcr.replace('{error}', error.message));
       });
     }
 
     function bulkDownload() {
       const fileIds = getSelectedFileIds();
       if (fileIds.length === 0) {
-        alert('Please select files to download');
+        alert(__i18n.selectFilesDownload);
         return;
       }
 
@@ -1360,7 +1409,7 @@
       .then(response => {
         if (!response.ok) {
           return response.json().then(err => {
-            throw new Error(err.detail || 'Failed to create ZIP download');
+            throw new Error(err.detail || __i18n.failedCreateZip);
           });
         }
         return response.blob();
@@ -1377,7 +1426,7 @@
       })
       .catch(error => {
         console.error('Error:', error);
-        alert(`Error downloading files: ${error.message}`);
+        alert(__i18n.errorDownloadingFiles.replace('{error}', error.message));
       });
     }
 
@@ -1471,7 +1520,7 @@
       const summary = document.getElementById('search-results-summary');
       const pagination = document.getElementById('search-results-pagination');
 
-      list.innerHTML = '<div style="padding: 1rem; color: #6b7280; font-size: 0.875rem;"><i class="fas fa-spinner fa-spin"></i> Searching…</div>';
+      list.innerHTML = '<div style="padding: 1rem; color: #6b7280; font-size: 0.875rem;"><i class="fas fa-spinner fa-spin"></i> ' + __i18n.searching + '</div>';
       summary.textContent = '';
       pagination.innerHTML = '';
       panel.style.display = 'block';
@@ -1484,7 +1533,7 @@
         })
         .then(data => renderSearchResults(data, q))
         .catch(err => {
-          list.innerHTML = `<div style="padding: 1rem; color: #dc2626; font-size: 0.875rem;"><i class="fas fa-exclamation-triangle"></i> Search unavailable: ${err.message}</div>`;
+          list.innerHTML = '<div style="padding: 1rem; color: #dc2626; font-size: 0.875rem;"><i class="fas fa-exclamation-triangle"></i> ' + __i18n.searchUnavailable.replace('{error}', err.message) + '</div>';
           summary.textContent = '';
         });
     }
@@ -1496,17 +1545,17 @@
       const pagination = document.getElementById('search-results-pagination');
 
       const { results, total, page, pages } = data;
-      summary.textContent = `${total} result${total !== 1 ? 's' : ''} for "${q}"`;
+      summary.textContent = __i18n.searchResultsCount.replace('{total}', total).replace('{query}', q);
 
       if (!results || results.length === 0) {
-        list.innerHTML = '<div style="padding: 1rem; color: #6b7280; font-size: 0.875rem;">No results found.</div>';
+        list.innerHTML = '<div style="padding: 1rem; color: #6b7280; font-size: 0.875rem;">' + __i18n.noResults + '</div>';
         pagination.innerHTML = '';
         return;
       }
 
       list.innerHTML = results.map(hit => {
         const fmt = hit._formatted || {};
-        const title = fmt.document_title || hit.document_title || hit.original_filename || '(untitled)';
+        const title = fmt.document_title || hit.document_title || hit.original_filename || __i18n.untitled;
         const filename = fmt.original_filename || hit.original_filename || '';
         const snippet = fmt.ocr_text || '';
         const tags = Array.isArray(hit.tags) ? hit.tags.join(', ') : (hit.tags || '');
@@ -1524,7 +1573,7 @@
             ${snippet ? `<div style="margin-top: 0.4rem; font-size: 0.8rem; color: #374151; white-space: pre-wrap; word-break: break-word;">…${snippet}…</div>` : ''}
           </div>
           <div style="flex-shrink: 0;">
-            <a href="/files/${hit.file_id}" style="padding: 0.25rem 0.6rem; background: #f3f4f6; color: #374151; border-radius: 0.25rem; font-size: 0.8rem; text-decoration: none; white-space: nowrap;" title="View file">
+            <a href="/files/${hit.file_id}" style="padding: 0.25rem 0.6rem; background: #f3f4f6; color: #374151; border-radius: 0.25rem; font-size: 0.8rem; text-decoration: none; white-space: nowrap;" title="${__i18n.viewFile}">
               <i class="fas fa-external-link-alt"></i>
             </a>
           </div>
@@ -1535,11 +1584,11 @@
       if (pages > 1) {
         const btns = [];
         if (page > 1) {
-          btns.push(`<button onclick="runFullTextSearch(${page - 1})" style="padding: 0.25rem 0.6rem; border: 1px solid #d1d5db; border-radius: 0.25rem; font-size: 0.8rem; cursor: pointer; background: white;">« Prev</button>`);
+          btns.push(`<button onclick="runFullTextSearch(${page - 1})" style="padding: 0.25rem 0.6rem; border: 1px solid #d1d5db; border-radius: 0.25rem; font-size: 0.8rem; cursor: pointer; background: white;">${__i18n.prevPage}</button>`);
         }
-        btns.push(`<span style="padding: 0.25rem 0.6rem; font-size: 0.8rem; color: #6b7280;">Page ${page} / ${pages}</span>`);
+        btns.push(`<span style="padding: 0.25rem 0.6rem; font-size: 0.8rem; color: #6b7280;">${__i18n.pageInfo.replace('{page}', page).replace('{pages}', pages)}</span>`);
         if (page < pages) {
-          btns.push(`<button onclick="runFullTextSearch(${page + 1})" style="padding: 0.25rem 0.6rem; border: 1px solid #d1d5db; border-radius: 0.25rem; font-size: 0.8rem; cursor: pointer; background: white;">Next »</button>`);
+          btns.push(`<button onclick="runFullTextSearch(${page + 1})" style="padding: 0.25rem 0.6rem; border: 1px solid #d1d5db; border-radius: 0.25rem; font-size: 0.8rem; cursor: pointer; background: white;">${__i18n.nextPage}</button>`);
         }
         pagination.innerHTML = btns.join('');
       } else {

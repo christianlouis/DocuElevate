@@ -7,7 +7,7 @@ import os
 from datetime import datetime, timedelta
 from typing import Annotated, Optional
 
-import requests
+import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
@@ -22,6 +22,17 @@ from app.utils.settings_sync import notify_settings_updated
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _require_admin(request: Request) -> dict:
+    """Dependency to ensure the current user is an admin."""
+    user = request.session.get("user")
+    if not user or not user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user
+
+
+AdminUser = Annotated[dict, Depends(_require_admin)]
 
 
 @router.post("/onedrive/exchange-token")
@@ -92,17 +103,18 @@ async def test_onedrive_token(request: Request):
             "scope": "offline_access Files.ReadWrite",
         }
 
-        response = requests.post(token_url, data=refresh_data, timeout=settings.http_request_timeout)
+        async with httpx.AsyncClient(timeout=settings.http_request_timeout) as client:
+            response = await client.post(token_url, data=refresh_data)
 
-        if response.status_code != 200:
-            logger.error(f"Failed to refresh OneDrive token: {response.text}")
-            return {
-                "status": "error",
-                "message": "Refresh token has expired or is invalid",
-                "needs_reauth": True,
-            }
+            if response.status_code != 200:
+                logger.error(f"Failed to refresh OneDrive token: {response.text}")
+                return {
+                    "status": "error",
+                    "message": "Refresh token has expired or is invalid",
+                    "needs_reauth": True,
+                }
 
-        token_data = response.json()
+            token_data = response.json()
         access_token = token_data.get("access_token")
         expires_in = token_data.get("expires_in", 3600)  # Default to 1 hour if not specified
 
@@ -115,32 +127,7 @@ async def test_onedrive_token(request: Request):
             settings.onedrive_refresh_token = new_refresh_token
 
             # Also try to update .env file if it exists
-            try:
-                env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
-                if os.path.exists(env_path):
-                    with open(env_path, "r") as f:
-                        env_lines = f.readlines()
-
-                    updated_lines = []
-                    updated = False
-
-                    for line in env_lines:
-                        if line.startswith("ONEDRIVE_REFRESH_TOKEN="):
-                            updated_lines.append(f"ONEDRIVE_REFRESH_TOKEN={new_refresh_token}\n")
-                            updated = True
-                        else:
-                            updated_lines.append(line)
-
-                    if not updated:
-                        updated_lines.append(f"ONEDRIVE_REFRESH_TOKEN={new_refresh_token}\n")
-
-                    with open(env_path, "w") as f:
-                        f.writelines(updated_lines)
-
-                    logger.info("Updated refresh token in .env file")
-
-            except Exception as e:
-                logger.warning(f"Failed to update refresh token in .env file: {e}")
+            update_env_file({"ONEDRIVE_REFRESH_TOKEN": new_refresh_token})
 
             # Persist the rotated refresh token to the database
             try:
@@ -164,17 +151,18 @@ async def test_onedrive_token(request: Request):
         user_info_url = "https://graph.microsoft.com/v1.0/me"
         headers = {"Authorization": f"Bearer {access_token}"}
 
-        user_response = requests.get(user_info_url, headers=headers, timeout=settings.http_request_timeout)
+        async with httpx.AsyncClient(timeout=settings.http_request_timeout) as client:
+            user_response = await client.get(user_info_url, headers=headers)
 
-        if user_response.status_code != 200:
-            logger.error(f"OneDrive token test failed: {user_response.status_code} {user_response.text}")
-            return {
-                "status": "error",
-                "message": f"Token validation failed with status {user_response.status_code}: {user_response.text}",
-            }
+            if user_response.status_code != 200:
+                logger.error(f"OneDrive token test failed: {user_response.status_code} {user_response.text}")
+                return {
+                    "status": "error",
+                    "message": f"Token validation failed with status {user_response.status_code}: {user_response.text}",
+                }
 
-        # Get user info
-        user_info = user_response.json()
+            # Get user info
+            user_info = user_response.json()
         display_name = user_info.get("displayName", "Unknown user")
         email = user_info.get("userPrincipalName", "Unknown email")
 
@@ -227,9 +215,9 @@ def format_time_remaining(time_delta):
 
 
 @router.post("/onedrive/save-settings")
-@require_login
 async def save_onedrive_settings(
     request: Request,
+    _admin: AdminUser,
     refresh_token: Annotated[str, Form(...)],
     client_id: Annotated[Optional[str], Form()] = None,
     client_secret: Annotated[Optional[str], Form()] = None,
@@ -247,22 +235,19 @@ async def save_onedrive_settings(
         )
 
         # Best-effort .env file write
-        try:
-            env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
-            onedrive_settings = {"ONEDRIVE_REFRESH_TOKEN": refresh_token}
-            if client_id:
-                onedrive_settings["ONEDRIVE_CLIENT_ID"] = client_id
-            if client_secret:
-                onedrive_settings["ONEDRIVE_CLIENT_SECRET"] = client_secret
-            if tenant_id:
-                onedrive_settings["ONEDRIVE_TENANT_ID"] = tenant_id
-            if folder_path:
-                onedrive_settings["ONEDRIVE_FOLDER_PATH"] = folder_path
+        env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
+        onedrive_settings = {"ONEDRIVE_REFRESH_TOKEN": refresh_token}
+        if client_id:
+            onedrive_settings["ONEDRIVE_CLIENT_ID"] = client_id
+        if client_secret:
+            onedrive_settings["ONEDRIVE_CLIENT_SECRET"] = client_secret
+        if tenant_id:
+            onedrive_settings["ONEDRIVE_TENANT_ID"] = tenant_id
+        if folder_path:
+            onedrive_settings["ONEDRIVE_FOLDER_PATH"] = folder_path
 
-            if not update_env_file(env_path, onedrive_settings):
-                logger.info("Continuing with in-memory update despite .env file update failure or skip")
-        except Exception as env_err:
-            logger.warning(f"Failed to write .env file (non-fatal): {env_err}")
+        if not update_env_file(env_path, onedrive_settings):
+            logger.info("Continuing with in-memory update despite .env file update failure or skip")
 
         # Update the settings in memory
         if refresh_token:

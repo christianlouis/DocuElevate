@@ -19,7 +19,7 @@ This guide covers all supported deployment methods for DocuElevate.
 - Access to required external services (if configured):
   - AI provider API key (OpenAI, Anthropic, Gemini, or other configured provider)
   - Azure Document Intelligence
-  - Dropbox, Google Drive, OneDrive, S3, or other storage APIs
+  - Dropbox, Google Drive, OneDrive, SharePoint, S3, or other storage APIs
   - SMTP / IMAP server (for email processing)
   - Notification services (Discord, Telegram, etc.)
 

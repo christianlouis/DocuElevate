@@ -36,11 +36,11 @@ function formatDate(iso: string): string {
 
 function statusEmoji(status: string): string {
   const map: Record<string, string> = {
-    processed: "✅",
+    completed: "✅",
     processing: "⚙️",
-    queued: "⏳",
+    pending: "⏳",
     failed: "❌",
-    uploaded: "⬆️",
+    duplicate: "🔁",
   };
   return map[status?.toLowerCase()] ?? "📄";
 }
@@ -143,18 +143,19 @@ export default function FilesScreen() {
 }
 
 function FileRow({ file }: { file: FileRecord }) {
+  const status = file.processing_status?.status ?? "pending";
   return (
     <View style={rowStyles.row}>
-      <Text style={rowStyles.icon}>{statusEmoji(file.status)}</Text>
+      <Text style={rowStyles.icon}>{statusEmoji(status)}</Text>
       <View style={rowStyles.info}>
         <Text style={rowStyles.filename} numberOfLines={1}>
-          {file.filename}
+          {file.original_filename}
         </Text>
         <Text style={rowStyles.meta}>
           {formatDate(file.created_at)} · {formatBytes(file.file_size)}
         </Text>
       </View>
-      <Text style={rowStyles.status}>{file.status}</Text>
+      <Text style={rowStyles.status}>{status}</Text>
     </View>
   );
 }

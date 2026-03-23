@@ -84,8 +84,8 @@ class TestUpdateDropboxSettings:
 class TestTestDropboxToken:
     """Tests for GET /dropbox/test-token endpoint."""
 
-    @patch("app.api.dropbox.requests.post")
-    def test_test_token_success(self, mock_post):
+    @patch("app.api.dropbox.httpx.AsyncClient")
+    def test_test_token_success(self, mock_client_cls):
         """Test successful token validation."""
         from app.config import settings
 
@@ -95,7 +95,7 @@ class TestTestDropboxToken:
             "email": "test@example.com",
             "name": {"display_name": "Test User"},
         }
-        mock_post.return_value = mock_response
+        mock_client_cls.return_value.__aenter__.return_value.post.return_value = mock_response
 
         with patch.object(settings, "dropbox_refresh_token", "token"):
             with patch.object(settings, "dropbox_app_key", "key"):
@@ -104,8 +104,8 @@ class TestTestDropboxToken:
                     # Should include account email and name
                     pass
 
-    @patch("app.api.dropbox.requests.post")
-    def test_test_token_not_configured(self, mock_post):
+    @patch("app.api.dropbox.httpx.AsyncClient")
+    def test_test_token_not_configured(self, mock_client_cls):
         """Test when credentials are not configured."""
         from app.config import settings
 
@@ -113,8 +113,8 @@ class TestTestDropboxToken:
             # Should return error indicating not configured
             pass
 
-    @patch("app.api.dropbox.requests.post")
-    def test_test_token_partial_config(self, mock_post):
+    @patch("app.api.dropbox.httpx.AsyncClient")
+    def test_test_token_partial_config(self, mock_client_cls):
         """Test with partial configuration (missing some credentials)."""
         from app.config import settings
 
@@ -123,8 +123,8 @@ class TestTestDropboxToken:
                 # Should return error
                 pass
 
-    @patch("app.api.dropbox.requests.post")
-    def test_test_token_expired_requires_refresh(self, mock_post):
+    @patch("app.api.dropbox.httpx.AsyncClient")
+    def test_test_token_expired_requires_refresh(self, mock_client_cls):
         """Test when access token is expired and needs refresh."""
         from app.config import settings
 
@@ -145,7 +145,9 @@ class TestTestDropboxToken:
             "name": {"display_name": "Test User"},
         }
 
-        mock_post.side_effect = [mock_response_401, mock_refresh_response, mock_success_response]
+        mock_client = MagicMock()
+        mock_client.post.side_effect = [mock_response_401, mock_refresh_response, mock_success_response]
+        mock_client_cls.return_value.__aenter__.return_value = mock_client
 
         with patch.object(settings, "dropbox_refresh_token", "token"):
             with patch.object(settings, "dropbox_app_key", "key"):
@@ -153,8 +155,8 @@ class TestTestDropboxToken:
                     # Should refresh and succeed
                     pass
 
-    @patch("app.api.dropbox.requests.post")
-    def test_test_token_refresh_failed(self, mock_post):
+    @patch("app.api.dropbox.httpx.AsyncClient")
+    def test_test_token_refresh_failed(self, mock_client_cls):
         """Test when refresh token is invalid."""
         from app.config import settings
 
@@ -167,7 +169,9 @@ class TestTestDropboxToken:
         mock_refresh_response.status_code = 400
         mock_refresh_response.text = "Invalid refresh token"
 
-        mock_post.side_effect = [mock_response_401, mock_refresh_response]
+        mock_client = MagicMock()
+        mock_client.post.side_effect = [mock_response_401, mock_refresh_response]
+        mock_client_cls.return_value.__aenter__.return_value = mock_client
 
         with patch.object(settings, "dropbox_refresh_token", "token"):
             with patch.object(settings, "dropbox_app_key", "key"):
@@ -175,8 +179,8 @@ class TestTestDropboxToken:
                     # Should return error with needs_reauth: True
                     pass
 
-    @patch("app.api.dropbox.requests.post")
-    def test_test_token_perpetual_token_info(self, mock_post):
+    @patch("app.api.dropbox.httpx.AsyncClient")
+    def test_test_token_perpetual_token_info(self, mock_client_cls):
         """Test that perpetual token info is returned."""
         from app.config import settings
 
@@ -186,7 +190,7 @@ class TestTestDropboxToken:
             "email": "test@example.com",
             "name": {"display_name": "Test User"},
         }
-        mock_post.return_value = mock_response
+        mock_client_cls.return_value.__aenter__.return_value.post.return_value = mock_response
 
         with patch.object(settings, "dropbox_refresh_token", "token"):
             with patch.object(settings, "dropbox_app_key", "key"):
@@ -194,12 +198,12 @@ class TestTestDropboxToken:
                     # token_info should indicate never expires
                     pass
 
-    @patch("app.api.dropbox.requests.post")
-    def test_test_token_exception_handling(self, mock_post):
+    @patch("app.api.dropbox.httpx.AsyncClient")
+    def test_test_token_exception_handling(self, mock_client_cls):
         """Test handling of exceptions."""
         from app.config import settings
 
-        mock_post.side_effect = Exception("Network error")
+        mock_client_cls.return_value.__aenter__.return_value.post.side_effect = Exception("Network error")
 
         with patch.object(settings, "dropbox_refresh_token", "token"):
             with patch.object(settings, "dropbox_app_key", "key"):

@@ -135,6 +135,30 @@ SETTING_METADATA = {
         "required": True,  # Required when auth_enabled=True (validated in config.py)
         "restart_required": True,
     },
+    "session_lifetime_days": {
+        "category": "Authentication",
+        "description": "Session lifetime in days (default 30). Determines how long a user stays logged in.",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "session_lifetime_custom_days": {
+        "category": "Authentication",
+        "description": "Override session_lifetime_days with a custom value. Takes precedence when set.",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "qr_login_challenge_ttl_seconds": {
+        "category": "Authentication",
+        "description": "Time-to-live in seconds for QR login challenges (default 120).",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "admin_username": {
         "category": "Authentication",
         "description": "Admin username for local authentication",
@@ -523,6 +547,19 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Document Translation
+    "default_document_language": {
+        "category": "AI Services",
+        "description": (
+            "ISO 639-1 language code for the default document translation target "
+            "(e.g. 'en', 'de', 'fr'). Documents whose detected language differs "
+            "are automatically translated into this language after processing."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # OCR Engine Configuration
     "ocr_providers": {
         "category": "OCR Engines",
@@ -858,6 +895,63 @@ SETTING_METADATA = {
     "onedrive_folder_path": {
         "category": "Storage Providers",
         "description": "OneDrive folder path for document storage",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # Storage Providers - SharePoint
+    "sharepoint_client_id": {
+        "category": "Storage Providers",
+        "description": "SharePoint Azure AD application (client) ID",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_client_secret": {
+        "category": "Storage Providers",
+        "description": "SharePoint Azure AD client secret",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_tenant_id": {
+        "category": "Storage Providers",
+        "description": "SharePoint Azure AD tenant ID (use 'common' for multi-tenant apps)",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_refresh_token": {
+        "category": "Storage Providers",
+        "description": "SharePoint OAuth refresh token",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_site_url": {
+        "category": "Storage Providers",
+        "description": "SharePoint site URL (e.g. https://tenant.sharepoint.com/sites/sitename)",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_document_library": {
+        "category": "Storage Providers",
+        "description": "SharePoint document library name (default: 'Documents')",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_folder_path": {
+        "category": "Storage Providers",
+        "description": "Subfolder path inside the SharePoint document library",
         "type": "string",
         "sensitive": False,
         "required": False,
@@ -1888,6 +1982,28 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "factory_reset_on_startup": {
+        "category": "Feature Flags",
+        "description": (
+            "Wipe all user data on every startup so the instance always starts fresh. "
+            "Useful for demo/testing environments. Default: False."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "enable_factory_reset": {
+        "category": "Feature Flags",
+        "description": (
+            "Show the System Reset page in the admin UI.  Allows administrators to "
+            "trigger a full data wipe or a wipe-and-reimport from the web interface. Default: False."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Backup / Restore
     "backup_enabled": {
         "category": "Backup",
@@ -1911,14 +2027,26 @@ SETTING_METADATA = {
         "category": "Backup",
         "description": (
             "Storage provider for remote backup copies. "
-            "Accepted values: s3, dropbox, google_drive, onedrive, nextcloud, webdav, ftp, sftp, email. "
+            "Accepted values: s3, dropbox, google_drive, onedrive, sharepoint, nextcloud, webdav, ftp, sftp, email. "
             "Leave empty to keep backups local only."
         ),
         "type": "string",
         "sensitive": False,
         "required": False,
         "restart_required": False,
-        "options": ["", "s3", "dropbox", "google_drive", "onedrive", "nextcloud", "webdav", "ftp", "sftp", "email"],
+        "options": [
+            "",
+            "s3",
+            "dropbox",
+            "google_drive",
+            "onedrive",
+            "sharepoint",
+            "nextcloud",
+            "webdav",
+            "ftp",
+            "sftp",
+            "email",
+        ],
     },
     "backup_remote_folder": {
         "category": "Backup",
@@ -2430,6 +2558,72 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Database Connection Pool
+    "db_pool_size": {
+        "category": "Core",
+        "description": (
+            "Number of persistent connections kept in the SQLAlchemy QueuePool. "
+            "Has no effect for SQLite databases. Default: 5."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_max_overflow": {
+        "category": "Core",
+        "description": (
+            "Maximum extra connections that can be opened beyond db_pool_size. "
+            "Has no effect for SQLite databases. Default: 10."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_pool_timeout": {
+        "category": "Core",
+        "description": (
+            "Seconds to wait for a connection from the pool before raising an error. "
+            "Has no effect for SQLite databases. Default: 30."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_pool_recycle": {
+        "category": "Core",
+        "description": (
+            "Seconds after which idle connections are recycled to prevent stale connections. "
+            "Has no effect for SQLite databases. Default: 1800 (30 minutes)."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    # Per-user upload rate limiting
+    "upload_rate_limit_per_user": {
+        "category": "Security",
+        "description": (
+            "Maximum number of uploads a single user may submit within upload_rate_limit_window seconds. "
+            "The health-aware limiter may reduce this dynamically under high Redis queue depth or CPU load. "
+            "Default: 20."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "upload_rate_limit_window": {
+        "category": "Security",
+        "description": ("Sliding window in seconds over which upload_rate_limit_per_user is enforced. Default: 60."),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Rate Limiting
     "rate_limiting_enabled": {
         "category": "Security",
@@ -2628,6 +2822,63 @@ SETTING_METADATA = {
         "sensitive": False,
         "required": False,
         "restart_required": False,
+    },
+    # Logging
+    "log_level": {
+        "category": "Observability",
+        "description": (
+            "Python logging level for the application root logger. "
+            "Accepts: DEBUG, INFO, WARNING, ERROR, CRITICAL. "
+            "When DEBUG=True and LOG_LEVEL is not explicitly set, "
+            "the effective level is automatically lowered to DEBUG."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_format": {
+        "category": "Observability",
+        "description": (
+            "Log output format: 'text' (human-readable, default) or "
+            "'json' (structured JSON lines for SIEM / log aggregation)."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_syslog_enabled": {
+        "category": "Observability",
+        "description": "Forward application logs to a syslog receiver in addition to stdout.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_syslog_host": {
+        "category": "Observability",
+        "description": "Hostname or IP of the syslog receiver for application logs.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_syslog_port": {
+        "category": "Observability",
+        "description": "Port of the syslog receiver for application logs.",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_syslog_protocol": {
+        "category": "Observability",
+        "description": "Protocol for syslog transport: 'udp' or 'tcp'.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
     },
     # Observability – Sentry
     "sentry_dsn": {
@@ -3123,7 +3374,7 @@ def get_settings_for_export(db: Session, source: str = "db") -> Dict[str, str]:
         return {k.upper(): v for k, v in sorted(db_settings.items()) if v is not None}
 
 
-def update_env_file(env_path: str, settings_to_update: Dict[str, str]) -> bool:
+def update_env_file(env_path: str, settings_to_update: dict[str, str]) -> bool:
     """
     Update an .env file with new settings.
 
