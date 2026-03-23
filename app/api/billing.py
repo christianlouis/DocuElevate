@@ -168,9 +168,8 @@ async def create_checkout_session(
     checkout_session = client.checkout.sessions.create(params=session_params)
 
     logger.info(
-        "Created Stripe checkout session %s for user %s plan %s",
+        "Created Stripe checkout session %s for plan %s",
         checkout_session.id,
-        owner_id,
         body.plan_id,
     )
     return {"checkout_url": checkout_session.url, "session_id": checkout_session.id}
@@ -213,7 +212,7 @@ async def create_portal_session(
         }
     )
 
-    logger.info("Created Stripe portal session for user %s", owner_id)
+    logger.info("Created Stripe portal session for user")
     return {"portal_url": portal.url}
 
 
@@ -261,7 +260,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)) -> dic
 @require_login
 async def billing_success(request: Request) -> Any:
     """Show a success page after a completed Stripe Checkout."""
-    return _templates.TemplateResponse("billing_success.html", {"request": request})
+    return _templates.TemplateResponse(request, "billing_success.html")
 
 
 # ---------------------------------------------------------------------------

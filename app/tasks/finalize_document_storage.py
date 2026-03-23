@@ -21,8 +21,9 @@ from app.tasks.send_to_all import (
 # Import database and logging utils from main
 from app.utils import log_task_progress
 
-# Import notification utility
+# Import notification utilities
 from app.utils.notification import notify_file_processed
+from app.utils.user_notification import notify_user_document_processed
 
 logger = logging.getLogger(__name__)
 
@@ -138,5 +139,16 @@ def finalize_document_storage(self, original_file: str, processed_file: str, met
         )
     except Exception as e:
         logger.warning(f"[WARNING] Failed to send file processed notification: {e}")
+
+    # 6. Send per-user notification
+    if owner_id:
+        try:
+            notify_user_document_processed(
+                owner_id=owner_id,
+                filename=os.path.basename(processed_file),
+                file_id=file_id,
+            )
+        except Exception as e:
+            logger.warning(f"[WARNING] Failed to send per-user processed notification: {e}")
 
     return {"status": "Completed", "file": processed_file}

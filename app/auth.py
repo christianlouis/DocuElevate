@@ -4,12 +4,13 @@ import logging
 import pathlib
 from datetime import datetime, timezone
 from functools import wraps
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from starlette.responses import RedirectResponse
 
@@ -44,78 +45,264 @@ OAUTH_PROVIDER_NAME = "Single Sign-On"
 # Social login providers that are enabled and registered
 SOCIAL_PROVIDERS: dict[str, dict[str, str]] = {}
 
-if AUTH_ENABLED and settings.authentik_client_id and settings.authentik_client_secret:
-    oauth.register(
-        name="authentik",
-        client_id=settings.authentik_client_id,
-        client_secret=settings.authentik_client_secret,
-        server_metadata_url=settings.authentik_config_url,
-        client_kwargs={"scope": "openid profile email"},
-    )
-    OAUTH_CONFIGURED = True
-    OAUTH_PROVIDER_NAME = settings.oauth_provider_name or "Authentik SSO"
 
-# --- Social Login Providers ---------------------------------------------------
-if AUTH_ENABLED and settings.social_auth_google_enabled:
-    if settings.social_auth_google_client_id and settings.social_auth_google_client_secret:
-        oauth.register(
-            name="google",
-            client_id=settings.social_auth_google_client_id,
-            client_secret=settings.social_auth_google_client_secret,
-            server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+# ---------------------------------------------------------------------------
+# Helpers for dynamic (re-)registration of OAuth providers
+# ---------------------------------------------------------------------------
+
+
+def _register_oauth_client(name: str, **kwargs: object) -> None:
+    """Register (or re-register) an authlib OAuth client, clearing any cached instance.
+
+    authlib caches the constructed client object in ``oauth._clients`` after the
+    first ``register()`` call.  Subsequent ``register()`` calls overwrite the
+    registry entry but the stale cached client is still returned by
+    ``create_client()`` / ``__getattr__``.  Popping the name from ``_clients``
+    before re-registering ensures the new credentials are picked up immediately.
+
+    Args:
+        name: Provider name (e.g. ``"google"``, ``"github"``).
+        **kwargs: Keyword arguments forwarded verbatim to ``oauth.register()``.
+    """
+    oauth._clients.pop(name, None)
+    oauth.register(name, **kwargs)
+
+
+def _dropbox_userinfo_compliance_fix(client, user_cls, token, data):
+    """Normalize Dropbox userinfo response for authlib compatibility.
+
+    Dropbox's /2/users/get_current_account returns a non-standard response
+    format. This compliance fix normalizes the response data — the HTTP
+    method (POST) is handled by authlib's compliance infrastructure.
+
+    Args:
+        client: The OAuth client instance (required by authlib compliance fix interface).
+        user_cls: The user class (required by authlib compliance fix interface).
+        token: The OAuth token dict.
+        data: The raw userinfo response dict from Dropbox.
+
+    Returns:
+        The normalized userinfo dict with ``sub`` and ``name`` fields.
+    """
+    # Dropbox returns account_id instead of sub
+    if "account_id" in data and "sub" not in data:
+        data["sub"] = data["account_id"]
+    # Normalize name field
+    name_info = data.get("name", {})
+    if isinstance(name_info, dict) and "display_name" in name_info:
+        data["name"] = name_info["display_name"]
+    return data
+
+
+def _setup_social_providers() -> None:
+    """Register all configured OAuth / social-login providers from current settings.
+
+    This function is **idempotent**: it clears ``SOCIAL_PROVIDERS``,
+    ``OAUTH_CONFIGURED``, and ``OAUTH_PROVIDER_NAME`` before rebuilding them,
+    and calls :func:`_register_oauth_client` (which also clears the authlib
+    client cache) so that credential changes in the database are reflected
+    without an application restart.
+
+    Can safely be called multiple times, e.g. after a settings reload.
+    """
+    global OAUTH_CONFIGURED, OAUTH_PROVIDER_NAME
+
+    SOCIAL_PROVIDERS.clear()
+    OAUTH_CONFIGURED = False
+    OAUTH_PROVIDER_NAME = "Single Sign-On"
+
+    if not AUTH_ENABLED:
+        return
+
+    # --- Authentik / OIDC ---
+    if settings.authentik_client_id and settings.authentik_client_secret:
+        _register_oauth_client(
+            "authentik",
+            client_id=settings.authentik_client_id,
+            client_secret=settings.authentik_client_secret,
+            server_metadata_url=settings.authentik_config_url,
             client_kwargs={"scope": "openid profile email"},
         )
-        SOCIAL_PROVIDERS["google"] = {"name": "Google", "icon": "fab fa-google", "color": "red"}
-        logger.info("Social login provider registered: Google")
-    else:
-        logger.warning("SOCIAL_AUTH_GOOGLE_ENABLED=true but client ID/secret not configured")
+        OAUTH_CONFIGURED = True
+        OAUTH_PROVIDER_NAME = settings.oauth_provider_name or "Authentik SSO"
 
-if AUTH_ENABLED and settings.social_auth_microsoft_enabled:
-    if settings.social_auth_microsoft_client_id and settings.social_auth_microsoft_client_secret:
-        tenant = settings.social_auth_microsoft_tenant or "common"
-        oauth.register(
-            name="microsoft",
-            client_id=settings.social_auth_microsoft_client_id,
-            client_secret=settings.social_auth_microsoft_client_secret,
-            server_metadata_url=f"https://login.microsoftonline.com/{tenant}/v2.0/.well-known/openid-configuration",
-            client_kwargs={"scope": "openid profile email"},
-        )
-        SOCIAL_PROVIDERS["microsoft"] = {"name": "Microsoft", "icon": "fab fa-microsoft", "color": "blue"}
-        logger.info("Social login provider registered: Microsoft (tenant=%s)", tenant)
-    else:
-        logger.warning("SOCIAL_AUTH_MICROSOFT_ENABLED=true but client ID/secret not configured")
+    # --- Social Login Providers ---
 
-if AUTH_ENABLED and settings.social_auth_apple_enabled:
-    if settings.social_auth_apple_client_id and settings.social_auth_apple_team_id:
-        oauth.register(
-            name="apple",
-            client_id=settings.social_auth_apple_client_id,
-            server_metadata_url="https://appleid.apple.com/.well-known/openid-configuration",
-            client_kwargs={
-                "scope": "openid name email",
-                "response_mode": "form_post",
-            },
-        )
-        SOCIAL_PROVIDERS["apple"] = {"name": "Apple", "icon": "fab fa-apple", "color": "gray"}
-        logger.info("Social login provider registered: Apple")
-    else:
-        logger.warning("SOCIAL_AUTH_APPLE_ENABLED=true but client ID/team ID not configured")
+    # Google
+    if settings.social_auth_google_enabled:
+        _google_client_id = settings.social_auth_google_client_id
+        _google_client_secret = settings.social_auth_google_client_secret
+        if settings.social_auth_google_use_global_credentials and not (_google_client_id and _google_client_secret):
+            _google_client_id = settings.google_drive_client_id
+            _google_client_secret = settings.google_drive_client_secret
 
-if AUTH_ENABLED and settings.social_auth_dropbox_enabled:
-    if settings.social_auth_dropbox_client_id and settings.social_auth_dropbox_client_secret:
-        oauth.register(
-            name="dropbox",
-            client_id=settings.social_auth_dropbox_client_id,
-            client_secret=settings.social_auth_dropbox_client_secret,
-            authorize_url="https://www.dropbox.com/oauth2/authorize",
-            access_token_url="https://api.dropboxapi.com/oauth2/token",
-            userinfo_endpoint="https://api.dropboxapi.com/2/users/get_current_account",
-            client_kwargs={"token_endpoint_auth_method": "client_secret_post"},
-        )
-        SOCIAL_PROVIDERS["dropbox"] = {"name": "Dropbox", "icon": "fab fa-dropbox", "color": "blue"}
-        logger.info("Social login provider registered: Dropbox")
-    else:
-        logger.warning("SOCIAL_AUTH_DROPBOX_ENABLED=true but client ID/secret not configured")
+        if _google_client_id and _google_client_secret:
+            _register_oauth_client(
+                "google",
+                client_id=_google_client_id,
+                client_secret=_google_client_secret,
+                server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+                client_kwargs={"scope": "openid profile email"},
+            )
+            SOCIAL_PROVIDERS["google"] = {"name": "Google", "icon": "fab fa-google", "color": "red"}
+            logger.info("Social login provider registered: Google")
+        else:
+            logger.warning("SOCIAL_AUTH_GOOGLE_ENABLED=true but client ID/secret not configured")
+
+    # Microsoft
+    if settings.social_auth_microsoft_enabled:
+        _microsoft_client_id = settings.social_auth_microsoft_client_id
+        _microsoft_client_secret = settings.social_auth_microsoft_client_secret
+        if settings.social_auth_microsoft_use_global_credentials and not (
+            _microsoft_client_id and _microsoft_client_secret
+        ):
+            _microsoft_client_id = settings.onedrive_client_id
+            _microsoft_client_secret = settings.onedrive_client_secret
+
+        if _microsoft_client_id and _microsoft_client_secret:
+            tenant = settings.social_auth_microsoft_tenant or "common"
+            _register_oauth_client(
+                "microsoft",
+                client_id=_microsoft_client_id,
+                client_secret=_microsoft_client_secret,
+                server_metadata_url=f"https://login.microsoftonline.com/{tenant}/v2.0/.well-known/openid-configuration",
+                client_kwargs={"scope": "openid profile email"},
+            )
+            SOCIAL_PROVIDERS["microsoft"] = {"name": "Microsoft", "icon": "fab fa-microsoft", "color": "blue"}
+            logger.info("Social login provider registered: Microsoft (tenant=%s)", tenant)
+        else:
+            logger.warning("SOCIAL_AUTH_MICROSOFT_ENABLED=true but client ID/secret not configured")
+
+    # Apple
+    if settings.social_auth_apple_enabled:
+        if settings.social_auth_apple_client_id and settings.social_auth_apple_team_id:
+            _register_oauth_client(
+                "apple",
+                client_id=settings.social_auth_apple_client_id,
+                server_metadata_url="https://appleid.apple.com/.well-known/openid-configuration",
+                client_kwargs={
+                    "scope": "openid name email",
+                    "response_mode": "form_post",
+                },
+            )
+            SOCIAL_PROVIDERS["apple"] = {"name": "Apple", "icon": "fab fa-apple", "color": "gray"}
+            logger.info("Social login provider registered: Apple")
+        else:
+            logger.warning("SOCIAL_AUTH_APPLE_ENABLED=true but client ID/team ID not configured")
+
+    # Dropbox
+    if settings.social_auth_dropbox_enabled:
+        _dropbox_client_id = settings.social_auth_dropbox_client_id
+        _dropbox_client_secret = settings.social_auth_dropbox_client_secret
+        if settings.social_auth_dropbox_use_global_credentials and not (_dropbox_client_id and _dropbox_client_secret):
+            _dropbox_client_id = settings.dropbox_app_key
+            _dropbox_client_secret = settings.dropbox_app_secret
+
+        if _dropbox_client_id and _dropbox_client_secret:
+            _register_oauth_client(
+                "dropbox",
+                client_id=_dropbox_client_id,
+                client_secret=_dropbox_client_secret,
+                authorize_url="https://www.dropbox.com/oauth2/authorize",
+                access_token_url="https://api.dropboxapi.com/oauth2/token",
+                userinfo_endpoint="https://api.dropboxapi.com/2/users/get_current_account",
+                userinfo_compliance_fix=_dropbox_userinfo_compliance_fix,
+                client_kwargs={
+                    "token_endpoint_auth_method": "client_secret_post",
+                    "token_access_type": "offline",
+                },
+            )
+            SOCIAL_PROVIDERS["dropbox"] = {"name": "Dropbox", "icon": "fab fa-dropbox", "color": "blue"}
+            logger.info("Social login provider registered: Dropbox")
+        else:
+            logger.warning("SOCIAL_AUTH_DROPBOX_ENABLED=true but client ID/secret not configured")
+
+    # GitHub
+    if settings.social_auth_github_enabled:
+        if settings.social_auth_github_client_id and settings.social_auth_github_client_secret:
+            _register_oauth_client(
+                "github",
+                client_id=settings.social_auth_github_client_id,
+                client_secret=settings.social_auth_github_client_secret,
+                authorize_url="https://github.com/login/oauth/authorize",
+                access_token_url="https://github.com/login/oauth/access_token",
+                userinfo_endpoint="https://api.github.com/user",
+                client_kwargs={"scope": "read:user user:email"},
+            )
+            SOCIAL_PROVIDERS["github"] = {"name": "GitHub", "icon": "fab fa-github", "color": "gray"}
+            logger.info("Social login provider registered: GitHub")
+        else:
+            logger.warning("SOCIAL_AUTH_GITHUB_ENABLED=true but client ID/secret not configured")
+
+    # Keycloak
+    if settings.social_auth_keycloak_enabled:
+        _kc_server = settings.social_auth_keycloak_server_url
+        _kc_realm = settings.social_auth_keycloak_realm
+        if (
+            settings.social_auth_keycloak_client_id
+            and settings.social_auth_keycloak_client_secret
+            and _kc_server
+            and _kc_realm
+        ):
+            _kc_base = f"{_kc_server.rstrip('/')}/realms/{_kc_realm}"
+            _register_oauth_client(
+                "keycloak",
+                client_id=settings.social_auth_keycloak_client_id,
+                client_secret=settings.social_auth_keycloak_client_secret,
+                server_metadata_url=f"{_kc_base}/.well-known/openid-configuration",
+                client_kwargs={"scope": "openid profile email"},
+            )
+            SOCIAL_PROVIDERS["keycloak"] = {"name": "Keycloak", "icon": "fas fa-key", "color": "gray"}
+            logger.info("Social login provider registered: Keycloak (realm=%s)", _kc_realm)
+        else:
+            logger.warning("SOCIAL_AUTH_KEYCLOAK_ENABLED=true but required settings not configured")
+
+    # Generic OAuth2
+    if settings.social_auth_generic_oauth2_enabled:
+        if (
+            settings.social_auth_generic_oauth2_client_id
+            and settings.social_auth_generic_oauth2_client_secret
+            and settings.social_auth_generic_oauth2_authorize_url
+            and settings.social_auth_generic_oauth2_token_url
+        ):
+            _register_oauth_client(
+                "generic_oauth2",
+                client_id=settings.social_auth_generic_oauth2_client_id,
+                client_secret=settings.social_auth_generic_oauth2_client_secret,
+                authorize_url=settings.social_auth_generic_oauth2_authorize_url,
+                access_token_url=settings.social_auth_generic_oauth2_token_url,
+                userinfo_endpoint=settings.social_auth_generic_oauth2_userinfo_url,
+                client_kwargs={"scope": settings.social_auth_generic_oauth2_scope},
+            )
+            _generic_name = settings.social_auth_generic_oauth2_name or "OAuth2"
+            SOCIAL_PROVIDERS["generic_oauth2"] = {
+                "name": _generic_name,
+                "icon": "fas fa-sign-in-alt",
+                "color": "indigo",
+            }
+            logger.info("Social login provider registered: Generic OAuth2")
+        else:
+            logger.warning("SOCIAL_AUTH_GENERIC_OAUTH2_ENABLED=true but required settings not configured")
+
+
+def refresh_social_providers() -> None:
+    """Re-register all OAuth providers from the *current* settings object.
+
+    Call this after loading or reloading settings from the database so that
+    providers configured (or updated) through the admin UI take effect
+    immediately — **no application restart required**.
+
+    This function is safe to call multiple times and is idempotent.
+    """
+    logger.info("Refreshing social login provider registrations from current settings")
+    _setup_social_providers()
+
+
+# Perform the initial registration from environment / default settings at
+# import time.  The lifespan hook and settings_sync will call
+# refresh_social_providers() again after DB settings are loaded so that
+# any providers configured only in the database are also active.
+_setup_social_providers()
 
 router = APIRouter()
 
@@ -124,8 +311,36 @@ def get_current_user(request: Request):
     # Check for Bearer token auth first (API tokens)
     api_user = getattr(request.state, "api_token_user", None)
     if isinstance(api_user, dict):
+        logger.debug("[AUTH] get_current_user: resolved from API token (user_id=%s)", api_user.get("id"))
         return api_user
-    return request.session.get("user")
+    session_user = request.session.get("user")
+    if session_user:
+        # Validate server-side session if a session token is present
+        session_token = request.session.get("_session_token")
+        if session_token:
+            try:
+                from app.database import SessionLocal
+                from app.utils.session_manager import validate_session
+
+                db = SessionLocal()
+                try:
+                    valid = validate_session(db, session_token)
+                    if not valid:
+                        logger.debug("[AUTH] get_current_user: server-side session invalid — clearing")
+                        request.session.pop("user", None)
+                        request.session.pop("_session_token", None)
+                        return None
+                finally:
+                    db.close()
+            except Exception:
+                logger.debug("[AUTH] get_current_user: session validation error", exc_info=True)
+        logger.debug(
+            "[AUTH] get_current_user: resolved from session (user=%s)",
+            session_user.get("preferred_username") or session_user.get("email") or session_user.get("id"),
+        )
+    else:
+        logger.debug("[AUTH] get_current_user: no user in session or API token")
+    return session_user
 
 
 def _resolve_bearer_user(request: Request, db: Session) -> dict | None:
@@ -140,10 +355,12 @@ def _resolve_bearer_user(request: Request, db: Session) -> dict | None:
     """
     auth_header = request.headers.get("authorization", "")
     if not isinstance(auth_header, str) or not auth_header.startswith("Bearer "):
+        logger.debug("[AUTH] _resolve_bearer_user: no Bearer token in Authorization header")
         return None
 
     raw_token = auth_header[7:]
     if not raw_token or not isinstance(raw_token, str):
+        logger.debug("[AUTH] _resolve_bearer_user: empty or invalid token after 'Bearer ' prefix")
         return None
 
     from app.api.api_tokens import hash_token
@@ -152,7 +369,24 @@ def _resolve_bearer_user(request: Request, db: Session) -> dict | None:
     token_hash = hash_token(raw_token)
     db_token = db.query(ApiToken).filter(ApiToken.token_hash == token_hash, ApiToken.is_active.is_(True)).first()
     if db_token is None:
+        logger.debug("[AUTH] _resolve_bearer_user: no active API token matched the provided hash")
         return None
+
+    # Reject tokens that have passed their optional expiry.
+    if db_token.expires_at is not None:
+        now_utc = datetime.now(timezone.utc)
+        expires_aware = db_token.expires_at
+        if expires_aware.tzinfo is None:
+            expires_aware = expires_aware.replace(tzinfo=timezone.utc)
+        if now_utc > expires_aware:
+            logger.debug("[AUTH] _resolve_bearer_user: API token id=%s has expired", db_token.id)
+            return None
+
+    logger.debug(
+        "[AUTH] _resolve_bearer_user: matched API token id=%s owner=%s",
+        db_token.id,
+        db_token.owner_id,
+    )
 
     # Update usage tracking
     try:
@@ -204,16 +438,18 @@ def require_login(func):
 
     @wraps(func)
     async def wrapper(request: Request, *args, **kwargs):
+        url_path = urlparse(str(request.url)).path
         # Check session auth first
         if request.session.get("user"):
+            logger.debug("[AUTH] require_login: session auth OK for %s", url_path)
             if inspect.iscoroutinefunction(func):
                 return await func(*args, request=request, **kwargs)
             else:
                 return func(*args, request=request, **kwargs)
 
         # Fall back to Bearer token auth for API endpoints
-        url_path = urlparse(str(request.url)).path
         if url_path.startswith("/api/"):
+            logger.debug("[AUTH] require_login: no session, trying Bearer token for %s", url_path)
             try:
                 from app.database import SessionLocal
 
@@ -227,17 +463,22 @@ def require_login(func):
 
             if api_user:
                 request.state.api_token_user = api_user
+                logger.debug(
+                    "[AUTH] require_login: Bearer token auth OK for %s (user=%s)", url_path, api_user.get("id")
+                )
                 if inspect.iscoroutinefunction(func):
                     return await func(*args, request=request, **kwargs)
                 else:
                     return func(*args, request=request, **kwargs)
 
+            logger.debug("[AUTH] require_login: no valid auth for API endpoint %s — returning 401", url_path)
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={"error": "Not authenticated"},
             )
 
         # Non-API endpoint with no session — redirect to login
+        logger.debug("[AUTH] require_login: no session for %s — redirecting to /login", url_path)
         request.session["redirect_after_login"] = str(request.url)
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
 
@@ -254,13 +495,53 @@ def get_gravatar_url(email):
 
 async def login(request: Request):
     """Show login page with appropriate authentication options."""
+    # Persist the mobile deep-link redirect URI in the session so it survives
+    # the OAuth provider round-trip and is available when auth completes.
+    # Accepted schemes:
+    #   • "docuelevate://" — production / EAS builds (custom app scheme)
+    #   • "exp://"         — Expo Go development client
+    # Only custom (non-HTTP) schemes are accepted to prevent open-redirect abuse.
+    _MOBILE_ALLOWED_SCHEMES = ("docuelevate://", "exp://")
+    if request.query_params.get("mobile") == "1":
+        redirect_uri = request.query_params.get("redirect_uri", "")
+        logger.debug(
+            "[MOBILE] Login page opened with mobile=1: redirect_uri=%r client_ip=%s",
+            redirect_uri,
+            get_client_ip(request),
+        )
+        if any(redirect_uri.startswith(s) for s in _MOBILE_ALLOWED_SCHEMES):
+            request.session["mobile_redirect_uri"] = redirect_uri
+            logger.info(
+                "[MOBILE] Mobile redirect URI stored in session: %r",
+                redirect_uri,
+            )
+        else:
+            logger.warning(
+                "[MOBILE] Rejected redirect_uri with disallowed scheme: %r (allowed: %s)",
+                redirect_uri,
+                ", ".join(_MOBILE_ALLOWED_SCHEMES),
+            )
+    else:
+        logger.debug(
+            "[MOBILE] Login page opened without mobile=1 (standard browser flow) client_ip=%s",
+            get_client_ip(request),
+        )
+
+    error = request.query_params.get("error")
+    message = request.query_params.get("message")
+    show_oauth = OAUTH_CONFIGURED
+
+    # SSO Auto Login: redirect directly to SSO provider if configured
+    if show_oauth and settings.sso_auto_login is True and not error and not message:
+        return RedirectResponse(url="/oauth-login", status_code=status.HTTP_302_FOUND)
+
     return templates.TemplateResponse(
+        request,
         "login.html",
-        {
-            "request": request,
-            "error": request.query_params.get("error"),
-            "message": request.query_params.get("message"),
-            "show_oauth": OAUTH_CONFIGURED,
+        context={
+            "error": error,
+            "message": message,
+            "show_oauth": show_oauth,
             "oauth_provider_name": OAUTH_PROVIDER_NAME,
             "social_providers": SOCIAL_PROVIDERS,
             "app_version": settings.version,
@@ -274,9 +555,15 @@ async def login(request: Request):
 async def oauth_login(request: Request):
     """Handle OAuth login flow"""
     if not OAUTH_CONFIGURED:
+        logger.debug("[AUTH] oauth_login: OAuth not configured — redirecting to /login")
         return RedirectResponse(url="/login?error=OAuth+not+configured", status_code=status.HTTP_302_FOUND)
 
     redirect_uri = request.url_for("oauth_callback")
+    logger.debug(
+        "[AUTH] oauth_login: initiating Authentik OAuth redirect_uri=%s session_keys=%s",
+        redirect_uri,
+        list(request.session.keys()),
+    )
     return await oauth.authentik.authorize_redirect(request, redirect_uri)
 
 
@@ -291,13 +578,23 @@ async def social_login(request: Request, provider: str):
         A redirect to the provider's authorization page, or back to /login on error.
     """
     if provider not in SOCIAL_PROVIDERS:
+        logger.debug(
+            "[AUTH] social_login: unknown provider=%r (registered=%s)", provider, list(SOCIAL_PROVIDERS.keys())
+        )
         return RedirectResponse(url="/login?error=Unknown+social+provider", status_code=status.HTTP_302_FOUND)
 
     redirect_uri = request.url_for("social_callback", provider=provider)
     oauth_client = getattr(oauth, provider, None)
     if oauth_client is None:
+        logger.debug("[AUTH] social_login: provider=%r registered but OAuth client not configured", provider)
         return RedirectResponse(url="/login?error=Provider+not+configured", status_code=status.HTTP_302_FOUND)
 
+    logger.debug(
+        "[AUTH] social_login: initiating %s OAuth, redirect_uri=%s session_keys=%s",
+        provider,
+        redirect_uri,
+        list(request.session.keys()),
+    )
     return await oauth_client.authorize_redirect(request, redirect_uri)
 
 
@@ -330,6 +627,17 @@ def _normalize_social_userinfo(provider: str, token: dict, raw_userinfo: dict | 
             "picture": userinfo.get("profile_photo_url", ""),
         }
 
+    if provider == "github":
+        # GitHub returns login, id, name, email, avatar_url
+        email = userinfo.get("email", "")
+        return {
+            "sub": str(userinfo.get("id", "")),
+            "email": email,
+            "name": userinfo.get("name", "") or userinfo.get("login", ""),
+            "preferred_username": userinfo.get("login", email),
+            "picture": userinfo.get("avatar_url", ""),
+        }
+
     # Standard OIDC providers (Google, Microsoft, Apple)
     return {
         "sub": userinfo.get("sub", ""),
@@ -356,27 +664,39 @@ async def social_callback(request: Request, provider: str, db: Session = Depends
         A redirect to the user's original destination or the upload page.
     """
     if provider not in SOCIAL_PROVIDERS:
+        logger.debug("[AUTH] social_callback: unknown provider=%r", provider)
         return RedirectResponse(url="/login?error=Unknown+social+provider", status_code=status.HTTP_302_FOUND)
 
     oauth_client = getattr(oauth, provider, None)
     if oauth_client is None:
+        logger.debug("[AUTH] social_callback: provider=%r not configured", provider)
         return RedirectResponse(url="/login?error=Provider+not+configured", status_code=status.HTTP_302_FOUND)
 
     try:
+        logger.debug("[AUTH] social_callback: exchanging auth code for provider=%s", provider)
         token = await oauth_client.authorize_access_token(request)
 
         # Try standard OIDC userinfo first, fall back to token-embedded userinfo
         raw_userinfo = token.get("userinfo")
         if not raw_userinfo:
+            logger.debug("[AUTH] social_callback: no userinfo in token, fetching from userinfo endpoint")
             try:
                 resp = await oauth_client.userinfo(token=token)
                 raw_userinfo = resp if isinstance(resp, dict) else resp.json() if hasattr(resp, "json") else {}
             except Exception:
+                logger.debug("[AUTH] social_callback: userinfo endpoint failed, using empty dict", exc_info=True)
                 raw_userinfo = {}
 
         user_data = _normalize_social_userinfo(provider, token, raw_userinfo)
+        logger.debug(
+            "[AUTH] social_callback: normalized user_data email=%s sub=%s provider=%s",
+            user_data.get("email"),
+            user_data.get("sub"),
+            provider,
+        )
 
         if not user_data.get("email"):
+            logger.debug("[AUTH] social_callback: no email in user_data — aborting")
             return RedirectResponse(
                 url="/login?error=Could+not+retrieve+email+from+provider",
                 status_code=status.HTTP_302_FOUND,
@@ -395,6 +715,27 @@ async def social_callback(request: Request, provider: str, db: Session = Depends
 
         request.session["user"] = user_data
 
+        # Create server-side session for tracking and revocation
+        try:
+            from app.utils.session_manager import create_session
+
+            _session_user_id = (
+                user_data.get("sub")
+                or user_data.get("preferred_username")
+                or user_data.get("email")
+                or user_data.get("id")
+            )
+            if _session_user_id:
+                user_session = create_session(
+                    db,
+                    user_id=_session_user_id,
+                    ip_address=get_client_ip(request),
+                    user_agent=request.headers.get("user-agent"),
+                )
+                request.session["_session_token"] = user_session.session_token
+        except Exception:
+            logger.debug("[AUTH] Failed to create server-side session for social user", exc_info=True)
+
         # Auto-create or update UserProfile
         _ensure_user_profile(db, user_data, is_admin=False)
 
@@ -407,17 +748,31 @@ async def social_callback(request: Request, provider: str, db: Session = Depends
         user_id = (
             user_data.get("sub") or user_data.get("preferred_username") or user_data.get("email") or user_data.get("id")
         )
+
+        # Mobile app flow: issue an inline API token and redirect back to the app.
+        logger.debug(
+            "[MOBILE] social_callback: checking for mobile redirect (session has mobile_redirect_uri=%s)",
+            "mobile_redirect_uri" in request.session,
+        )
+        mobile_resp = _create_mobile_redirect(request, db)
+        if mobile_resp:
+            logger.info("[MOBILE] social_callback: returning mobile redirect response for provider=%s", provider)
+            return mobile_resp
+
         if user_id:
             profile = db.query(_UserProfile).filter(_UserProfile.user_id == user_id).first()
             if profile and not profile.onboarding_completed:
+                logger.debug("[AUTH] social_callback: user=%s needs onboarding, redirecting", user_id)
                 post_onboarding = request.session.pop("redirect_after_login", "/upload")
                 request.session["post_onboarding_redirect"] = post_onboarding
                 return RedirectResponse(url="/onboarding", status_code=status.HTTP_302_FOUND)
 
         redirect_url = request.session.pop("redirect_after_login", "/upload")
+        logger.debug("[AUTH] social_callback: login complete, redirecting to %s", redirect_url)
         return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
     except Exception as e:
         logger.warning("[SECURITY] SOCIAL_LOGIN_FAILURE provider=%s error=%s", provider, type(e).__name__)
+        logger.debug("[AUTH] social_callback: full exception for provider=%s", provider, exc_info=True)
         return RedirectResponse(
             url="/login?error=Social+login+failed.+Please+try+again.", status_code=status.HTTP_302_FOUND
         )
@@ -522,15 +877,23 @@ def _ensure_user_profile(db: Session, user_data: dict, is_admin: bool = False) -
 async def oauth_callback(request: Request, db: Session = Depends(get_db)):
     """Handle OAuth callback from provider"""
     try:
+        logger.debug("[AUTH] oauth_callback: exchanging authorization code for token")
         token = await oauth.authentik.authorize_access_token(request)
         userinfo = token.get("userinfo")
         if not userinfo:
+            logger.debug("[AUTH] oauth_callback: no userinfo in token response — aborting")
             return RedirectResponse(
                 url="/login?error=Failed+to+retrieve+user+information", status_code=status.HTTP_302_FOUND
             )
 
         # Store user info in session
         user_data = dict(userinfo)
+        logger.debug(
+            "[AUTH] oauth_callback: received userinfo email=%s sub=%s groups=%s",
+            user_data.get("email"),
+            user_data.get("sub"),
+            user_data.get("groups", []),
+        )
 
         # Add Gravatar picture if no picture is provided
         if not user_data.get("picture") and user_data.get("email"):
@@ -545,11 +908,38 @@ async def oauth_callback(request: Request, db: Session = Depends(get_db)):
             groups = user_data.get("groups", [])
             admin_group = (settings.admin_group_name or "admin").strip().lower()
             is_admin = admin_group in [group.lower() for group in groups]
+            logger.debug(
+                "[AUTH] oauth_callback: admin group check — looking for %r in %s → is_admin=%s",
+                admin_group,
+                [g.lower() for g in groups],
+                is_admin,
+            )
 
         # Set is_admin flag (defaults to False for OAuth users unless they're in admin group)
         user_data["is_admin"] = is_admin
 
         request.session["user"] = user_data
+
+        # Create server-side session for tracking and revocation
+        try:
+            from app.utils.session_manager import create_session
+
+            _session_user_id = (
+                user_data.get("sub")
+                or user_data.get("preferred_username")
+                or user_data.get("email")
+                or user_data.get("id")
+            )
+            if _session_user_id:
+                user_session = create_session(
+                    db,
+                    user_id=_session_user_id,
+                    ip_address=get_client_ip(request),
+                    user_agent=request.headers.get("user-agent"),
+                )
+                request.session["_session_token"] = user_session.session_token
+        except Exception:
+            logger.debug("[AUTH] Failed to create server-side session for OAuth user", exc_info=True)
 
         # Auto-create or update UserProfile so the user appears in admin user management
         _ensure_user_profile(db, user_data, is_admin=is_admin)
@@ -568,18 +958,34 @@ async def oauth_callback(request: Request, db: Session = Depends(get_db)):
         user_id = (
             user_data.get("sub") or user_data.get("preferred_username") or user_data.get("email") or user_data.get("id")
         )
+
+        # Mobile app flow: issue an inline API token and redirect back to the app.
+        # This check runs before onboarding so native-app users are never sent
+        # to the web-based onboarding wizard.
+        logger.debug(
+            "[MOBILE] oauth_callback: checking for mobile redirect (session has mobile_redirect_uri=%s)",
+            "mobile_redirect_uri" in request.session,
+        )
+        mobile_resp = _create_mobile_redirect(request, db)
+        if mobile_resp:
+            logger.info("[MOBILE] oauth_callback: returning mobile redirect response")
+            return mobile_resp
+
         if user_id:
             profile = db.query(_UserProfile).filter(_UserProfile.user_id == user_id).first()
             if profile and not profile.onboarding_completed:
+                logger.debug("[AUTH] oauth_callback: user=%s needs onboarding, redirecting", user_id)
                 post_onboarding = request.session.pop("redirect_after_login", "/upload")
                 request.session["post_onboarding_redirect"] = post_onboarding
                 return RedirectResponse(url="/onboarding", status_code=status.HTTP_302_FOUND)
 
         # Redirect to original destination or default
         redirect_url = request.session.pop("redirect_after_login", "/upload")
+        logger.debug("[AUTH] oauth_callback: login complete, redirecting to %s", redirect_url)
         return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
     except Exception as e:
         logger.warning(f"[SECURITY] OAUTH_LOGIN_FAILURE error={type(e).__name__}")
+        logger.debug("[AUTH] oauth_callback: full exception details", exc_info=True)
         return RedirectResponse(url=f"/login?error=Authentication+failed:+{str(e)}", status_code=status.HTTP_302_FOUND)
 
 
@@ -625,6 +1031,98 @@ def _record_login_event(
         logger.debug("Failed to write login audit event for user=%s", username, exc_info=True)
 
 
+def _create_mobile_redirect(request: Request, db: Session) -> RedirectResponse | None:
+    """Generate a mobile API token and return a redirect to the mobile app.
+
+    If ``mobile_redirect_uri`` is stored in the session (set when the login
+    page was opened with ``?mobile=1&redirect_uri=docuelevate://...``), this
+    function creates a long-lived API token, appends it as a ``?token=``
+    query parameter to the redirect URI, and returns the redirect so that
+    ``WebBrowser.openAuthSessionAsync`` in the Expo app intercepts the
+    deep link and stores the token.
+
+    Returns ``None`` when the request is not part of a mobile SSO flow.
+
+    Args:
+        request: The current FastAPI request.  The ``user`` dict must already
+            be stored in ``request.session`` before calling this function.
+        db: Active database session used to persist the new API token.
+
+    Returns:
+        A ``RedirectResponse`` to the deep-link URI with ``?token=<plaintext>``,
+        or ``None`` if no mobile redirect URI is pending.
+    """
+    mobile_redirect_uri = request.session.pop("mobile_redirect_uri", None)
+    if not mobile_redirect_uri:
+        logger.debug("[MOBILE] _create_mobile_redirect: no mobile_redirect_uri in session — skipping mobile flow")
+        return None
+
+    logger.info(
+        "[MOBILE] _create_mobile_redirect: mobile flow detected, redirect_uri=%r",
+        mobile_redirect_uri,
+    )
+
+    user = request.session.get("user") or {}
+    owner_id = user.get("sub") or user.get("preferred_username") or user.get("email") or user.get("id")
+    logger.debug(
+        "[MOBILE] Resolving owner_id from session user: sub=%r preferred_username=%r email=%r id=%r → owner_id=%r",
+        user.get("sub"),
+        user.get("preferred_username"),
+        user.get("email"),
+        user.get("id"),
+        owner_id,
+    )
+    if not owner_id:
+        logger.warning("Mobile SSO redirect requested but no owner_id could be resolved from session")
+        return None
+
+    # Lazy imports to avoid circular dependency via app.api.__init__
+    from app.api.api_tokens import generate_api_token, hash_token
+    from app.models import ApiToken as _ApiToken
+
+    plaintext = generate_api_token()
+    token_hash_value = hash_token(plaintext)
+    prefix = plaintext[:12]
+
+    db_token = _ApiToken(
+        owner_id=owner_id,
+        name="Mobile App",
+        token_hash=token_hash_value,
+        token_prefix=prefix,
+    )
+    try:
+        db.add(db_token)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to create mobile API token for owner_id=%s", owner_id)
+        return None
+
+    # Safely append the token as a query parameter, preserving any existing params.
+    separator = "&" if "?" in mobile_redirect_uri else "?"
+    redirect_url = f"{mobile_redirect_uri}{separator}{urlencode({'token': plaintext})}"
+
+    # Log the full redirect URL at DEBUG so it's visible when debug logging is enabled.
+    # At INFO level, log a sanitised version (scheme + host only, token prefix only)
+    # so the plaintext token is never written to persistent info logs.
+    parsed = urlparse(redirect_url)
+    existing_params = f"&{parsed.query.replace(f'token={plaintext}', '')}" if parsed.query else ""
+    sanitised_url = (
+        f"{parsed.scheme}://{parsed.netloc}{parsed.path}?token={prefix}…[redacted]{existing_params.rstrip('&')}"
+    )
+    logger.info(
+        "[MOBILE] MOBILE_SSO_TOKEN_ISSUED owner=%s token_id=%s redirect_target=%s",
+        owner_id,
+        db_token.id,
+        sanitised_url,
+    )
+    logger.debug(
+        "[MOBILE] Full redirect URL being sent to client: %s",
+        redirect_url,
+    )
+    return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+
+
 async def auth(request: Request, db: Session = Depends(get_db)):
     """Handle local username/password authentication.
 
@@ -659,8 +1157,13 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             )
             return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
 
+        username_lower = username.lower()
         local_user = (
-            db.query(_LocalUser).filter((_LocalUser.username == username) | (_LocalUser.email == username)).first()
+            db.query(_LocalUser)
+            .filter(
+                (func.lower(_LocalUser.username) == username_lower) | (func.lower(_LocalUser.email) == username_lower)
+            )
+            .first()
         )
         logger.debug(
             "[AUTH] LocalUser lookup: username=%r found=%s",
@@ -691,9 +1194,33 @@ async def auth(request: Request, db: Session = Depends(get_db)):
                 return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
             user_data = _build_session_user(local_user)
             request.session["user"] = user_data
+            # Create server-side session for tracking and revocation
+            try:
+                from app.utils.session_manager import create_session
+
+                user_session = create_session(
+                    db,
+                    user_id=local_user.email,
+                    ip_address=get_client_ip(request),
+                    user_agent=request.headers.get("user-agent"),
+                )
+                request.session["_session_token"] = user_session.session_token
+            except Exception:
+                logger.debug("[AUTH] Failed to create server-side session", exc_info=True)
             logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", local_user.email)
             _record_login_event(db, request, local_user.email, success=True)
             _ensure_user_profile(db, user_data, is_admin=bool(local_user.is_admin))
+
+            # Mobile app flow: issue an inline API token and redirect back to the app.
+            logger.debug(
+                "[MOBILE] local auth: checking for mobile redirect (session has mobile_redirect_uri=%s)",
+                "mobile_redirect_uri" in request.session,
+            )
+            mobile_resp = _create_mobile_redirect(request, db)
+            if mobile_resp:
+                logger.info("[MOBILE] local auth: returning mobile redirect response")
+                return mobile_resp
+
             profile = db.query(_UserProfile).filter(_UserProfile.user_id == local_user.email).first()
             if profile and not profile.onboarding_completed:
                 post_onboarding = request.session.pop("redirect_after_login", "/upload")
@@ -718,13 +1245,13 @@ async def auth(request: Request, db: Session = Depends(get_db)):
     logger.debug(
         "[AUTH] Admin credential check: admin_configured=%s username_match=%s multi_user_enabled=%s",
         admin_configured,
-        username == settings.admin_username if admin_configured else False,
+        (username or "").lower() == settings.admin_username.lower() if admin_configured else False,
         settings.multi_user_enabled,
     )
     if (
         settings.admin_username
         and settings.admin_password
-        and username == settings.admin_username
+        and (username or "").lower() == settings.admin_username.lower()
         and password == settings.admin_password
     ):
         admin_user_data = {
@@ -736,9 +1263,34 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             "is_admin": True,
         }
         request.session["user"] = admin_user_data
+        # Create server-side session for tracking and revocation
+        try:
+            from app.utils.session_manager import create_session
+
+            admin_user_id = settings.admin_username or "admin"
+            user_session = create_session(
+                db,
+                user_id=admin_user_id,
+                ip_address=get_client_ip(request),
+                user_agent=request.headers.get("user-agent"),
+            )
+            request.session["_session_token"] = user_session.session_token
+        except Exception:
+            logger.debug("[AUTH] Failed to create server-side session for admin", exc_info=True)
         logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", username)
         _record_login_event(db, request, username, success=True)
         _ensure_user_profile(db, admin_user_data, is_admin=True)
+
+        # Mobile app flow: issue an inline API token and redirect back to the app.
+        logger.debug(
+            "[MOBILE] admin auth: checking for mobile redirect (session has mobile_redirect_uri=%s)",
+            "mobile_redirect_uri" in request.session,
+        )
+        mobile_resp = _create_mobile_redirect(request, db)
+        if mobile_resp:
+            logger.info("[MOBILE] admin auth: returning mobile redirect response")
+            return mobile_resp
+
         redirect_url = request.session.pop("redirect_after_login", "/upload")
         return RedirectResponse(url=redirect_url, status_code=302)
     else:
@@ -760,6 +1312,7 @@ async def logout(request: Request, db: Session = Depends(get_db)):
     username = "unknown"
     if isinstance(user, dict):
         username = user.get("preferred_username") or user.get("email") or "unknown"
+    logger.debug("[AUTH] logout: clearing session for user=%s client_ip=%s", username, get_client_ip(request))
     logger.info(f"[SECURITY] LOGOUT user={username}")
     try:
         from app.utils.audit_service import record_event
@@ -774,6 +1327,20 @@ async def logout(request: Request, db: Session = Depends(get_db)):
         )
     except Exception:
         logger.debug("Failed to write logout audit event for user=%s", username, exc_info=True)
+    # Revoke server-side session
+    session_token = request.session.get("_session_token")
+    if session_token:
+        try:
+            from app.utils.session_manager import validate_session
+
+            user_session = validate_session(db, session_token)
+            if user_session:
+                user_session.is_revoked = True
+                user_session.revoked_at = datetime.now(timezone.utc)
+                db.commit()
+        except Exception:
+            logger.debug("[AUTH] Failed to revoke server-side session", exc_info=True)
+    request.session.pop("_session_token", None)
     request.session.pop("user", None)
     return RedirectResponse(url="/login?message=You+have+been+logged+out+successfully", status_code=302)
 

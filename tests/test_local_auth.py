@@ -323,6 +323,35 @@ def test_signup_duplicate_username(la_client, active_user):
 
 
 @pytest.mark.integration
+def test_signup_invalid_username_with_dot(la_client):
+    """POST /api/auth/signup returns 422 with a list detail when username contains a dot.
+
+    This is a regression test for the bug where ``data.detail`` was an array,
+    causing the frontend to display ``[object Object]`` instead of a message.
+    """
+    with patch("app.api.local_auth.settings") as mock_settings:
+        mock_settings.allow_local_signup = True
+        mock_settings.multi_user_enabled = True
+        mock_settings.email_host = "smtp.example.com"
+        resp = la_client.post(
+            "/api/auth/signup",
+            json={
+                "email": "a@example.com",
+                "username": "christian.louis",
+                "password": "password1",
+                "password_confirm": "password1",
+            },
+        )
+    assert resp.status_code == 422
+    detail = resp.json()["detail"]
+    # FastAPI returns a list of validation errors for Pydantic constraint failures.
+    # Each entry must be a dict with a "msg" key so the frontend can extract a readable message.
+    assert isinstance(detail, list), "detail should be a list for Pydantic validation errors"
+    assert len(detail) > 0
+    assert "msg" in detail[0]
+
+
+@pytest.mark.integration
 def test_signup_smtp_failure_cleans_up(la_client, la_session):
     """POST /api/auth/signup cleans up user records if email send fails."""
     with (
@@ -749,6 +778,85 @@ async def test_single_user_mode_skips_local_user_table(la_session, active_user):
     # Admin path sets is_admin=True and id="admin"
     assert mock_request.session["user"]["is_admin"] is True
     assert mock_request.session["user"]["id"] == "admin"
+
+
+# ---------------------------------------------------------------------------
+# Case-insensitive login
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@patch.object(settings, "multi_user_enabled", True)
+async def test_local_login_username_case_insensitive(la_session, active_user):
+    """auth() accepts username with different casing (e.g. 'ActiveUser' for 'activeuser')."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from fastapi import Request
+
+    from app.auth import auth
+
+    mock_request = MagicMock(spec=Request)
+    mock_request.form = AsyncMock(return_value={"username": "ActiveUser", "password": "password123"})
+    mock_request.session = {}
+    mock_request.headers.get.return_value = None
+    mock_request.client = None
+
+    result = await auth(mock_request, db=la_session)
+    assert result.status_code == 302
+    assert "user" in mock_request.session
+    assert mock_request.session["user"]["email"] == "active@example.com"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@patch.object(settings, "multi_user_enabled", True)
+async def test_local_login_email_case_insensitive(la_session, active_user):
+    """auth() accepts email with different casing (e.g. 'Active@Example.com' for 'active@example.com')."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from fastapi import Request
+
+    from app.auth import auth
+
+    mock_request = MagicMock(spec=Request)
+    mock_request.form = AsyncMock(return_value={"username": "Active@Example.com", "password": "password123"})
+    mock_request.session = {}
+    mock_request.headers.get.return_value = None
+    mock_request.client = None
+
+    result = await auth(mock_request, db=la_session)
+    assert result.status_code == 302
+    assert "user" in mock_request.session
+    assert mock_request.session["user"]["email"] == "active@example.com"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_admin_login_username_case_insensitive():
+    """auth() admin credential check is case-insensitive for username."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from fastapi import Request
+
+    from app.auth import auth
+
+    mock_request = MagicMock(spec=Request)
+    mock_request.form = AsyncMock(return_value={"username": "ADMIN", "password": "adminpass"})
+    mock_request.session = {}
+    mock_request.headers.get.return_value = None
+    mock_request.client = None
+
+    with patch("app.auth.settings") as mock_settings:
+        mock_settings.admin_username = "admin"
+        mock_settings.admin_password = "adminpass"
+        mock_settings.multi_user_enabled = False
+
+        result = await auth(mock_request, db=MagicMock())
+
+    assert result.status_code == 302
+    assert "user" in mock_request.session
+    assert mock_request.session["user"]["is_admin"] is True
 
 
 # ---------------------------------------------------------------------------

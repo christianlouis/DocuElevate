@@ -69,8 +69,9 @@ class TestViewsBase:
             context = {"request": req}
             template_response_with_version("template.html", context)
 
-        args, _ = mock_orig.call_args
-        assert args[1].get("csrf_token") == "my-csrf"
+        args, kwargs = mock_orig.call_args
+        context = kwargs.get("context", {})
+        assert context.get("csrf_token") == "my-csrf"
 
     def test_kwargs_context_no_request(self):
         """Test kwargs context path when request is not in context."""
@@ -704,6 +705,18 @@ def _set_minimal_provider_settings(mock_settings):
 class TestSettingsSyncAdditional:
     """Additional tests for settings_sync covering reload failure branch."""
 
+    def test_notify_settings_updated_redis_failure_logs_warning(self):
+        """Test that a Redis failure is logged, not raised (lines 58-59)."""
+        from app.utils.settings_sync import notify_settings_updated
+
+        with patch("app.utils.settings_sync.redis") as mock_redis_module:
+            mock_redis_module.from_url.side_effect = Exception("Redis connection failed")
+            with patch("app.utils.settings_sync.logger") as mock_logger:
+                notify_settings_updated()
+                mock_logger.warning.assert_any_call(
+                    "Could not publish settings update to Redis: Redis connection failed"
+                )
+
     def test_reload_failure_is_logged_not_raised(self):
         """Test that a reload failure is logged, not raised (lines 71-72)."""
         from app.utils.settings_sync import notify_settings_updated
@@ -711,8 +724,66 @@ class TestSettingsSyncAdditional:
         with patch("app.utils.settings_sync.redis") as mock_redis_module:
             mock_redis_module.from_url.return_value = MagicMock()  # Redis OK
             with patch("app.utils.config_loader.reload_settings_from_db", side_effect=Exception("reload failed")):
-                # Should not raise despite reload failure
-                notify_settings_updated()
+                with patch("app.utils.settings_sync.logger") as mock_logger:
+                    # Should not raise despite reload failure
+                    notify_settings_updated()
+                    mock_logger.warning.assert_any_call("Could not reload in-process settings: reload failed")
+
+    def test_notify_settings_updated_ocr_failure_logs_warning(self):
+        """Test that OCR check failure is logged, not raised (lines 82-83)."""
+        from app.utils.settings_sync import notify_settings_updated
+
+        with patch("app.utils.settings_sync.redis") as mock_redis_module:
+            mock_redis_module.from_url.return_value = MagicMock()  # Redis OK
+            with patch("app.utils.config_loader.reload_settings_from_db"):
+                with patch(
+                    "app.utils.ocr_language_manager.ensure_ocr_languages_async", side_effect=Exception("OCR failed")
+                ):
+                    with patch("app.utils.settings_sync.logger") as mock_logger:
+                        notify_settings_updated()
+                        mock_logger.warning.assert_any_call("Could not schedule OCR language check: OCR failed")
+
+    def test_signal_handler_ocr_check_failure_logs_warning(self):
+        """Test that signal handler logs warning if OCR language check fails on worker (lines 115-116)."""
+        from app.utils.settings_sync import register_settings_reload_signal
+
+        handler_fn = None
+
+        def capture_connect(fn=None, weak=None, **kwargs):
+            nonlocal handler_fn
+            if fn is not None:
+                handler_fn = fn
+                return fn
+
+            def decorator(func):
+                nonlocal handler_fn
+                handler_fn = func
+                return func
+
+            return decorator
+
+        with patch("app.utils.settings_sync.task_prerun") as mock_signal:
+            mock_signal.connect = capture_connect
+            register_settings_reload_signal()
+
+        assert handler_fn is not None
+
+        mock_redis = MagicMock()
+        mock_redis.get.return_value = b"1234567890.0"
+
+        with patch("app.utils.settings_sync.redis") as mock_redis_mod:
+            mock_redis_mod.from_url.return_value = mock_redis
+            with patch("app.utils.config_loader.reload_settings_from_db"):
+                with patch("app.utils.settings_sync._last_seen_version", ""):
+                    with patch(
+                        "app.utils.ocr_language_manager.ensure_ocr_languages_async",
+                        side_effect=Exception("Worker OCR fail"),
+                    ):
+                        with patch("app.utils.settings_sync.logger") as mock_logger:
+                            handler_fn(sender=None)
+                            mock_logger.warning.assert_any_call(
+                                "Could not schedule OCR language check on worker: Worker OCR fail"
+                            )
 
     def test_signal_handler_reloads_on_version_change(self):
         """Test the task_prerun signal handler reloads settings when version changes (lines 95-98)."""
@@ -819,6 +890,83 @@ class TestSettingsSyncAdditional:
             mock_redis_mod.from_url.side_effect = Exception("Redis down")
             # Should not raise
             handler_fn(sender=None)
+
+    def test_signal_handler_no_version_returned(self):
+        """Test that handler does nothing if Redis returns None for version."""
+        from app.utils.settings_sync import register_settings_reload_signal
+
+        handler_fn = None
+
+        def capture_connect(fn=None, weak=None, **kwargs):
+            nonlocal handler_fn
+            if fn is not None:
+                handler_fn = fn
+                return fn
+
+            def decorator(func):
+                nonlocal handler_fn
+                handler_fn = func
+                return func
+
+            return decorator
+
+        with patch("app.utils.settings_sync.task_prerun") as mock_signal:
+            mock_signal.connect = capture_connect
+            register_settings_reload_signal()
+
+        assert handler_fn is not None
+
+        mock_redis = MagicMock()
+        mock_redis.get.return_value = None  # Return None for version
+
+        with patch("app.utils.settings_sync.redis") as mock_redis_mod:
+            mock_redis_mod.from_url.return_value = mock_redis
+            with patch("app.utils.config_loader.reload_settings_from_db") as mock_reload:
+                handler_fn(sender=None)
+                mock_reload.assert_not_called()
+
+    def test_signal_handler_ocr_language_manager_exception(self):
+        """Test that OCR language check exception inside handler is caught and logged."""
+        from app.utils.settings_sync import register_settings_reload_signal
+
+        handler_fn = None
+
+        def capture_connect(fn=None, weak=None, **kwargs):
+            nonlocal handler_fn
+            if fn is not None:
+                handler_fn = fn
+                return fn
+
+            def decorator(func):
+                nonlocal handler_fn
+                handler_fn = func
+                return func
+
+            return decorator
+
+        with patch("app.utils.settings_sync.task_prerun") as mock_signal:
+            mock_signal.connect = capture_connect
+            register_settings_reload_signal()
+
+        assert handler_fn is not None
+
+        mock_redis = MagicMock()
+        mock_redis.get.return_value = b"9999999.0"  # New version
+
+        with patch("app.utils.settings_sync.redis") as mock_redis_mod:
+            mock_redis_mod.from_url.return_value = mock_redis
+            with patch("app.utils.config_loader.reload_settings_from_db") as mock_reload:
+                with patch("app.utils.settings_sync._last_seen_version", "111.0"):
+                    with patch("app.utils.settings_sync.logger") as mock_logger:
+                        with patch(
+                            "app.utils.ocr_language_manager.ensure_ocr_languages_async",
+                            side_effect=Exception("OCR failed"),
+                        ):
+                            handler_fn(sender=None)
+                            mock_reload.assert_called_once()
+                            mock_logger.warning.assert_called_with(
+                                "Could not schedule OCR language check on worker: OCR failed"
+                            )
 
 
 # ===========================================================================

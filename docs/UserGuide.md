@@ -63,6 +63,15 @@ DocuElevate features a simple navigation system with the following main sections
 - **Search**: Dedicated full-text search across all document content
 - **About**: Information about DocuElevate
 
+### Other Ways to Use DocuElevate
+
+Beyond the web interface, DocuElevate is available through several additional clients:
+
+- **Mobile App (iOS & Android)** — Capture documents with your phone camera or upload from your photo library. See the [Mobile App Guide](MobileApp.md) for setup and usage.
+- **Browser Extension** — Clip web pages or send files to DocuElevate directly from Chrome, Firefox, or Edge. See the [Browser Extension Guide](BrowserExtension.md) for installation.
+- **CLI Tool** — Upload, download, search, and manage documents from the command line or scripts. See the [CLI Guide](CLIGuide.md) for details.
+- **REST & GraphQL API** — Full programmatic access for automation and integrations. See the [API Documentation](API.md).
+
 ## Uploading Documents
 
 DocuElevate provides multiple convenient ways to upload documents to the system.
@@ -78,7 +87,7 @@ DocuElevate provides multiple convenient ways to upload documents to the system.
 
 #### Supported File Types
 - **Documents**: PDF, Word (.doc, .docx), Excel (.xls, .xlsx), PowerPoint (.ppt, .pptx)
-- **Images**: JPEG, PNG, GIF, BMP, TIFF, WebP, SVG
+- **Images**: JPEG, PNG, GIF, BMP, TIFF, WebP, SVG, HEIC, HEIF
 - **Text**: Plain text (.txt), CSV, RTF, HTML, XML, Markdown
 - **Maximum file size**: 500MB per file
 
@@ -161,7 +170,7 @@ The **Integrations** page (`/integrations`) provides a unified view of all your 
    - **S3** — bucket, region, access key, secret key
    - **WebDAV / Nextcloud** — URL, folder, username, password
    - **FTP / SFTP** — host, port, remote path, username, password
-   - **Dropbox / Google Drive / OneDrive** — folder path, with a link to the OAuth setup page
+   - **Dropbox / Google Drive / OneDrive / SharePoint** — folder path, with a link to the OAuth setup page
    - **Email Forward** — recipient email address
    - **Watch Folder** — source type (Local, S3, Dropbox, Google Drive, OneDrive, Nextcloud, WebDAV), per-type config fields, delete after processing toggle
    - **Paperless NGX** — URL and API token
@@ -573,7 +582,25 @@ Processing pipelines let you define exactly what happens to your documents when 
 | `embed_metadata` | Write extracted metadata into the PDF document properties |
 | `compute_embedding` | Compute semantic embeddings for similarity search |
 | `send_to_destinations` | Upload the processed document to all configured storage destinations |
-| `classify` | Classify the document type with AI |
+| `classify` | Classify the document type using rules (filename patterns, content keywords, metadata) |
+
+#### Classify step – rule-based document classification
+
+The `classify` step assigns a category to each document by evaluating **built-in** and **custom** classification rules.  Rules are matched against three signals:
+
+- **Filename patterns** — regex matched against the original filename (e.g. `(?i)invoice` matches filenames containing "invoice").
+- **Content keywords** — pipe-separated keywords matched against the OCR text (e.g. `invoice number|amount due`).
+- **Metadata match** — `field=value` matched against existing AI metadata (e.g. `document_type=Invoice`).
+
+**Pre-built categories** include: Invoice, Contract, Receipt, Letter, Report, Bank Statement, Tax Document, Insurance, and Payslip.  You can also define your own custom categories.
+
+The classification result is stored in the document's `ai_metadata` under the `classification` key with the matched category, confidence score, and list of matched rules.  If no `document_type` was previously set by AI metadata extraction, the classify step will also populate it.
+
+> **Tip:** Manage custom classification rules via **Settings → Classification Rules** or the `/api/classification-rules/` API.  See the [API Documentation](./API.md#classification-rules) for details.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `use_builtin_rules` | boolean | `true` | Include the pre-built classification rules |
 
 #### OCR step options
 
@@ -677,6 +704,64 @@ pipeline.
 You can test your rules without actually routing a document using the
 **evaluate** endpoint (`POST /api/routing-rules/evaluate`).  For the full
 API reference, see [API Documentation](API.md#routing-rules).
+
+## Comments & Annotations
+
+The file detail page includes a **collaboration panel** for threaded
+comments and PDF annotations, allowing team members to discuss documents
+directly within DocuElevate.
+
+### Comments
+
+The **Comments** panel is on the left side of the collaboration section at
+the bottom of the file detail page.
+
+#### Viewing Comments
+Open any file's detail page (`/files/{id}/detail`). Existing comments load
+automatically, displayed in a threaded tree — replies are nested under their
+parent.
+
+#### Adding a Comment
+1. Type your comment in the text area at the bottom of the Comments panel.
+2. Use `@username` to mention another user — an autocomplete dropdown
+   appears as you type after the `@` symbol. Use arrow keys and Enter to
+   select a user.
+3. Click **Add comment** to post.
+
+#### Replying to a Comment
+Click the **Reply** button on any top-level comment. A reply text area
+appears inline; type your response and click **Reply** to post.
+
+#### Editing & Deleting
+You can edit or delete your own comments using the **Edit** and trash
+buttons. Edits re-extract @mentions automatically.
+
+#### Resolving Threads
+Click **Resolve** on a top-level comment to mark the thread as resolved
+(shown with a green badge). Click **Reopen** to re-open it.
+
+### Annotations
+
+The **Annotations** panel is on the right side of the collaboration
+section.
+
+#### Adding an Annotation
+1. Type the annotation content in the text area.
+2. Set the **Page** number the annotation refers to.
+3. Choose a **Type**: Note, Highlight, Underline, or Strikethrough.
+4. Pick a **Color** using the color picker.
+5. Click **Add annotation** to save.
+
+#### Editing & Deleting
+You can edit or delete your own annotations using the pencil and trash
+buttons. When editing, you can also change the annotation type.
+
+### @Mention Autocomplete
+
+When typing `@` followed by characters in the comment input, an
+autocomplete dropdown shows matching users (sourced from the
+`/api/users/mentionable` endpoint). Navigate with arrow keys and press
+Enter or click to insert the mention.
 
 ## API Access
 

@@ -76,7 +76,7 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
         "Your task is to analyze the given text and return a well-structured JSON object.\n\n"
         "Extract and return the following fields:\n"
         "1. **filename**: Machine-readable filename "
-        "(YYYY-MM-DD_DescriptiveTitle, use only letters, numbers, periods, and underscores).\n"
+        "(YYYY-MM-DD_DescriptiveTitle, use only letters, numbers, spaces, dashes, periods, and underscores).\n"
         '2. **empfaenger**: The recipient, or "Unknown" if not found.\n'
         '3. **absender**: The sender, or "Unknown" if not found.\n'
         "4. **correspondent**: The entity or company that issued the document "

@@ -671,6 +671,75 @@ class TestMultiVersionMigrations:
 
         engine.dispose()
 
+    def test_migration_drops_unique_index_with_quoted_name(self, tmp_path):
+        """Test that a unique filehash index whose name requires quoting is dropped correctly.
+
+        Index names containing special characters such as dashes must be quoted by
+        the dialect's identifier_preparer before being interpolated into raw SQL.
+        This test verifies that _run_schema_migrations() handles such names without
+        SQL errors and leaves the underlying table and its data intact.
+        """
+        from sqlalchemy import create_engine, inspect, text
+
+        from app.database import _run_schema_migrations
+
+        db_path = str(tmp_path / "quoted_index.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+
+        # Build a files table that contains all columns the migration expects,
+        # then add a unique index on filehash whose name contains a dash — a
+        # character that requires quoting by the dialect's identifier_preparer.
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "CREATE TABLE files ("
+                    "id INTEGER PRIMARY KEY, "
+                    "filename VARCHAR, "
+                    "filehash VARCHAR, "
+                    "original_file_path VARCHAR, "
+                    "processed_file_path VARCHAR, "
+                    "is_duplicate BOOLEAN DEFAULT FALSE NOT NULL, "
+                    "duplicate_of_id INTEGER)"
+                )
+            )
+            # Index name deliberately contains a dash to exercise the quoting path.
+            conn.execute(text('CREATE UNIQUE INDEX "ix-filehash-unique" ON files (filehash)'))
+            conn.execute(text("INSERT INTO files (filename, filehash) VALUES ('doc.pdf', 'abc123')"))
+
+        # Confirm the index exists before migration.
+        inspector = inspect(engine)
+        pre_indexes = [idx["name"] for idx in inspector.get_indexes("files")]
+        assert "ix-filehash-unique" in pre_indexes
+
+        # Run migration — must not raise despite the special character in the index name.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            _run_schema_migrations(engine)
+
+        # The unique index on filehash must have been dropped.
+        inspector = inspect(engine)
+        post_indexes = inspector.get_indexes("files")
+        remaining_unique_filehash = [
+            idx for idx in post_indexes if idx.get("unique") and "filehash" in idx.get("column_names", [])
+        ]
+        assert remaining_unique_filehash == [], (
+            f"Expected unique filehash index to be dropped, but found: {remaining_unique_filehash}"
+        )
+
+        # The table and its data must still be intact.
+        files_columns = {col["name"] for col in inspector.get_columns("files")}
+        assert "id" in files_columns
+        assert "filename" in files_columns
+        assert "filehash" in files_columns
+
+        with engine.connect() as conn:
+            row = conn.execute(text("SELECT filename, filehash FROM files WHERE filehash = 'abc123'")).fetchone()
+        assert row is not None
+        assert row[0] == "doc.pdf"
+        assert row[1] == "abc123"
+
+        engine.dispose()
+
     def test_migration_exception_handling(self, tmp_path):
         """Test that migration handles exceptions gracefully for index operations."""
         from sqlalchemy import create_engine, text
@@ -929,3 +998,49 @@ class TestAlembicUpgrade:
         # Verify head is reachable
         heads = script.get_heads()
         assert len(heads) == 1  # Should be a single linear chain
+
+
+@pytest.mark.unit
+class TestEnginePoolConfiguration:
+    """Tests for database engine pool configuration (pool class and options)."""
+
+    def test_sqlite_engine_uses_null_pool(self):
+        """SQLite engines must use NullPool to prevent QueuePool exhaustion."""
+        from sqlalchemy.pool import NullPool
+
+        from app.database import engine
+
+        # The test environment uses SQLite, so NullPool should be in effect.
+        assert isinstance(engine.pool, NullPool)
+
+    def test_create_engine_sqlite_null_pool(self):
+        """Explicitly create a SQLite engine to confirm NullPool is applied."""
+        from sqlalchemy import create_engine
+        from sqlalchemy.pool import NullPool
+
+        test_engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=NullPool,
+        )
+        assert isinstance(test_engine.pool, NullPool)
+        test_engine.dispose()
+
+    def test_pool_settings_exist_in_config(self):
+        """Verify that pool tuning settings are exposed through config."""
+        from app.config import settings
+
+        assert hasattr(settings, "db_pool_size")
+        assert hasattr(settings, "db_max_overflow")
+        assert hasattr(settings, "db_pool_timeout")
+        assert hasattr(settings, "db_pool_recycle")
+
+    def test_pool_settings_have_sensible_defaults(self):
+        """Default pool settings should be larger than SQLAlchemy's built-in defaults."""
+        from app.config import settings
+
+        # SQLAlchemy defaults: pool_size=5, max_overflow=10
+        assert settings.db_pool_size >= 10
+        assert settings.db_max_overflow >= 20
+        assert settings.db_pool_timeout >= 30
+        assert settings.db_pool_recycle >= 1800

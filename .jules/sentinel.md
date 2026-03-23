@@ -1,0 +1,4 @@
+## 2025-05-18 - [SSRF Bypass via DNS Resolution Failure]
+**Vulnerability:** The `is_private_ip` function in `app/utils/network.py` failed open (returned `False`) when a hostname could not be resolved (`socket.gaierror`).
+**Learning:** This fail-open pattern was originally added to allow external domains in tests, but in production, it created a severe SSRF risk. An attacker could bypass SSRF protections by providing a URL that fails to resolve during the security check but resolves later (DNS rebinding), or by exploiting internal routing behaviors via unresolvable addresses.
+**Prevention:** Always fail securely in network authorization functions. If a domain cannot be resolved to verify its safety, the request must be blocked (`return True` / default-deny). Tests should mock DNS resolution correctly instead of compromising production security logic.

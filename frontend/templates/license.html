@@ -1,36 +1,35 @@
 {% extends "base.html" %}
 
-{% block title %}DocuElevate - License{% endblock %}
+{% block title %}{{ _("license.page_title") }}{% endblock %}
 
 {% block content %}
 <div class="container mx-auto px-4 py-8">
-    <h1 class="text-2xl font-bold mb-4">License Information</h1>
+    <h1 class="text-2xl font-bold mb-4">{{ _("license.heading") }}</h1>
 
     <div class="bg-white shadow-md rounded-lg p-6 mb-6">
-        <h2 class="text-xl font-semibold mb-4">Apache License 2.0</h2>
+        <h2 class="text-xl font-semibold mb-4">{{ _("license.apache_heading") }}</h2>
 
         <div class="prose">
             <pre class="whitespace-pre-wrap text-sm font-mono bg-gray-50 p-4 rounded border overflow-auto max-h-96 mb-4">{{ license_text }}</pre>
         </div>
 
         <p class="mt-4 text-gray-600">
-            DocuElevate is distributed under the Apache License 2.0, which is a permissive
-            open-source software license that allows you to use, modify, distribute, and
-            contribute to the project.
+            {{ _("license.apache_description") }}
         </p>
     </div>
 
     <div class="bg-white shadow-md rounded-lg p-6">
-        <h2 class="text-xl font-semibold mb-4">Related Information</h2>
+        <h2 class="text-xl font-semibold mb-4">{{ _("license.related_heading") }}</h2>
         <p class="mb-3 text-gray-600">
-            While this license governs the use of our software, please also review our
-            <a href="/terms" class="text-blue-600 hover:underline">Terms of Service</a> and
-            <a href="/privacy" class="text-blue-600 hover:underline">Privacy Policy</a> for
-            information about using the DocuElevate service.
+            {{ _("license.related_p1_pre") }}
+            <a href="/terms" class="text-blue-600 hover:underline">{{ _("license.related_terms_link") }}</a>
+            {{ _("license.related_and") }}
+            <a href="/privacy" class="text-blue-600 hover:underline">{{ _("license.related_privacy_link") }}</a>
+            {{ _("license.related_p1_post") }}
         </p>
         <p class="text-gray-600">
-            For more information about DocuElevate, please visit the
-            <a href="/about" class="text-blue-600 hover:underline">About page</a>.
+            {{ _("license.related_p2_pre") }}
+            <a href="/about" class="text-blue-600 hover:underline">{{ _("license.related_about_link") }}</a>{{ _("license.related_p2_post") }}
         </p>
     </div>
 </div>
