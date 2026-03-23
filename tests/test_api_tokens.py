@@ -102,6 +102,43 @@ def _cleanup(app):
 
 
 # ---------------------------------------------------------------------------
+# Tests – Auth Helper
+# ---------------------------------------------------------------------------
+
+
+class TestGetOwnerId:
+    """Tests for the _get_owner_id dependency helper."""
+
+    @pytest.mark.unit
+    def test_get_owner_id_unauthenticated(self):
+        """_get_owner_id should raise a 401 if the user is not authenticated."""
+        from unittest.mock import MagicMock, patch
+
+        from fastapi import HTTPException
+
+        from app.api.api_tokens import _get_owner_id
+
+        mock_request = MagicMock()
+        with patch("app.api.api_tokens.get_current_owner_id", return_value=None):
+            with pytest.raises(HTTPException) as exc_info:
+                _get_owner_id(mock_request)
+            assert exc_info.value.status_code == 401
+            assert exc_info.value.detail == "Not authenticated"
+
+    @pytest.mark.unit
+    def test_get_owner_id_authenticated(self):
+        """_get_owner_id should return owner_id if user is authenticated."""
+        from unittest.mock import MagicMock, patch
+
+        from app.api.api_tokens import _get_owner_id
+
+        mock_request = MagicMock()
+        with patch("app.api.api_tokens.get_current_owner_id", return_value="owner123"):
+            owner_id = _get_owner_id(mock_request)
+            assert owner_id == "owner123"
+
+
+# ---------------------------------------------------------------------------
 # Tests – Token CRUD
 # ---------------------------------------------------------------------------
 
@@ -154,6 +191,46 @@ class TestTokenCreate:
         try:
             resp = client.post("/api/api-tokens/", json={"name": ""})
             assert resp.status_code == 422
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_create_token_database_error(self, tok_engine, tok_session):
+        """Creating a token should rollback and raise 500 if database commit fails."""
+        from unittest.mock import patch
+
+        from sqlalchemy.orm import Session as SASession
+
+        from app.main import app
+
+        client = _make_client(tok_engine)
+        try:
+            # Wrap commit: flush first so changes are staged in the transaction,
+            # then raise to simulate a commit failure after data has been written.
+            def _fail_after_flush(self):
+                self.flush()  # stage changes inside the open transaction
+                raise Exception("DB Failure")
+
+            # Spy on rollback so we can assert it is called.
+            rollback_called = False
+            real_rollback = SASession.rollback
+
+            def _spy_rollback(self):
+                nonlocal rollback_called
+                rollback_called = True
+                real_rollback(self)
+
+            with patch.object(SASession, "commit", _fail_after_flush):
+                with patch.object(SASession, "rollback", _spy_rollback):
+                    resp = client.post("/api/api-tokens/", json={"name": "DB Error Create Test"})
+                    assert resp.status_code == 500
+
+            # rollback() must have been called to undo the flushed changes.
+            assert rollback_called, "db.rollback() was not called after commit failure in create_token"
+
+            # After rollback the token must not exist in the database.
+            db_token = tok_session.query(ApiToken).filter(ApiToken.name == "DB Error Create Test").first()
+            assert db_token is None
         finally:
             _cleanup(app)
 
@@ -326,12 +403,10 @@ class TestTokenRevoke:
                 rollback_called = True
                 real_rollback(self)
 
-            with (
-                patch.object(SASession, "commit", _fail_after_flush),
-                patch.object(SASession, "rollback", _spy_rollback),
-            ):
-                resp = client.delete(f"/api/api-tokens/{token_id}")
-                assert resp.status_code == 500
+            with patch.object(SASession, "commit", _fail_after_flush):
+                with patch.object(SASession, "rollback", _spy_rollback):
+                    resp = client.delete(f"/api/api-tokens/{token_id}")
+                    assert resp.status_code == 500
 
             # rollback() must have been called to undo the flushed changes.
             assert rollback_called, "db.rollback() was not called after commit failure"
@@ -535,6 +610,44 @@ class TestTokenUtils:
         assert len(tokens) == 100
 
     @pytest.mark.unit
+    def test_generate_api_token_length(self):
+        """Generated tokens should have the exact expected length based on TOKEN_BYTES."""
+        import math
+
+        from app.api.api_tokens import TOKEN_BYTES, TOKEN_PREFIX, generate_api_token
+
+        # base64url encoding of N bytes without padding: ceil(N * 4 / 3) characters
+        expected_b64_len = math.ceil(TOKEN_BYTES * 4 / 3)
+        expected_total_len = len(TOKEN_PREFIX) + expected_b64_len
+
+        token = generate_api_token()
+        assert len(token) == expected_total_len
+
+    @pytest.mark.unit
+    def test_generate_api_token_charset(self):
+        """Generated tokens should only contain URL-safe base64 characters and the prefix."""
+        import re
+
+        from app.api.api_tokens import TOKEN_PREFIX, generate_api_token
+
+        token = generate_api_token()
+        # Check it starts with prefix and the rest is base64url chars ([A-Za-z0-9_-])
+        pattern = f"^{re.escape(TOKEN_PREFIX)}[A-Za-z0-9_\\-]+$"
+        assert re.match(pattern, token) is not None
+
+    @pytest.mark.unit
+    def test_generate_api_token_uses_secrets(self):
+        """Generated tokens should use secrets.token_urlsafe with the correct number of bytes."""
+        from unittest.mock import patch
+
+        from app.api.api_tokens import TOKEN_BYTES, TOKEN_PREFIX, generate_api_token
+
+        with patch("app.api.api_tokens.secrets.token_urlsafe", return_value="mocked_token") as mock_secrets:
+            token = generate_api_token()
+            mock_secrets.assert_called_once_with(TOKEN_BYTES)
+            assert token == f"{TOKEN_PREFIX}mocked_token"
+
+    @pytest.mark.unit
     def test_hash_token_deterministic(self):
         """Hashing the same token should always produce the same result."""
         from app.api.api_tokens import hash_token
@@ -554,3 +667,13 @@ class TestTokenUtils:
         # All characters should be valid lowercase hex digits.
         int(h, 16)
         assert h == h.lower()
+
+    @pytest.mark.unit
+    def test_hash_token_known_value(self):
+        """hash_token should return the exact expected PBKDF2 digest for a known input."""
+        from app.api.api_tokens import hash_token
+
+        # PBKDF2-HMAC-SHA256 with 100,000 iterations and salt b"api-token-v1"
+        token = "de_test_token_value"
+        expected_hash = "9b89d9adf2f390c75bf2fd0ff2bb5622ef5a9dce438354cce6e39f2f5401129e"
+        assert hash_token(token) == expected_hash

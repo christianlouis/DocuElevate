@@ -287,6 +287,27 @@ alembic revision --autogenerate -m "describe your change"
 
 Review the generated file in `migrations/versions/` before applying it.
 
+> **Tip:** For detailed guidance on naming conventions, idempotent patterns, parallel-branch workflows, and resolving merge conflicts, see the [Migration Workflow Guide](MigrationWorkflow.md).
+
+### Validating the Migration Chain
+
+A CI check and pre-commit hook validate that the migration chain has no broken
+references, duplicate revisions, or diverged heads.  Run the check locally:
+
+```bash
+python scripts/check_alembic_migrations.py
+python scripts/check_alembic_migrations.py --verbose   # extra detail
+```
+
+If you see **"Multiple migration heads detected"**, two branches added
+migrations from the same parent.  Create a merge migration:
+
+```bash
+alembic merge heads -m "merge_parallel_branches"
+```
+
+For a complete walk-through, see the [Migration Workflow Guide](MigrationWorkflow.md).
+
 ### Automating Migrations in Docker Compose
 
 Add a short-lived `migrate` service that runs before the API and Worker:

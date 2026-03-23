@@ -42,6 +42,9 @@ TOKEN_HASH_ITERATIONS = 100_000
 #: PBKDF2 salt for API token hashing (not secret, but fixed for determinism).
 TOKEN_HASH_SALT = b"api-token-v1"
 
+#: Name prefix used for tokens created by the mobile app flow.
+MOBILE_TOKEN_PREFIX = "Mobile App"
+
 
 # ---------------------------------------------------------------------------
 # Auth helper
@@ -89,6 +92,20 @@ def hash_token(token: str) -> str:
         TOKEN_HASH_ITERATIONS,
     )
     return dk.hex()
+
+
+def _token_to_dict(t: ApiToken) -> dict[str, Any]:
+    """Convert an ``ApiToken`` ORM instance to a serialisable dict."""
+    return {
+        "id": t.id,
+        "name": t.name,
+        "token_prefix": t.token_prefix,
+        "is_active": t.is_active,
+        "last_used_at": t.last_used_at,
+        "last_used_ip": t.last_used_ip,
+        "created_at": t.created_at,
+        "revoked_at": t.revoked_at,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -177,21 +194,44 @@ async def list_tokens(
     owner_id: CurrentOwner,
     db: DbSession,
 ) -> list[dict[str, Any]]:
-    """List all API tokens for the authenticated user."""
-    tokens = db.query(ApiToken).filter(ApiToken.owner_id == owner_id).order_by(ApiToken.created_at.desc()).all()
-    return [
-        {
-            "id": t.id,
-            "name": t.name,
-            "token_prefix": t.token_prefix,
-            "is_active": t.is_active,
-            "last_used_at": t.last_used_at,
-            "last_used_ip": t.last_used_ip,
-            "created_at": t.created_at,
-            "revoked_at": t.revoked_at,
-        }
-        for t in tokens
-    ]
+    """List non-mobile API tokens for the authenticated user.
+
+    Mobile tokens (whose names start with ``"Mobile App"``) are excluded
+    from this list; they are managed on the dedicated Devices page via
+    ``GET /api/api-tokens/mobile``.
+    """
+    tokens = (
+        db.query(ApiToken)
+        .filter(
+            ApiToken.owner_id == owner_id,
+            ~ApiToken.name.startswith(MOBILE_TOKEN_PREFIX),
+        )
+        .order_by(ApiToken.created_at.desc())
+        .all()
+    )
+    return [_token_to_dict(t) for t in tokens]
+
+
+@router.get("/mobile", response_model=list[TokenResponse])
+async def list_mobile_tokens(
+    owner_id: CurrentOwner,
+    db: DbSession,
+) -> list[dict[str, Any]]:
+    """List mobile API tokens for the authenticated user.
+
+    Returns tokens whose names start with ``"Mobile App"`` — these are
+    created via the mobile SSO flow or QR code login.
+    """
+    tokens = (
+        db.query(ApiToken)
+        .filter(
+            ApiToken.owner_id == owner_id,
+            ApiToken.name.startswith(MOBILE_TOKEN_PREFIX),
+        )
+        .order_by(ApiToken.created_at.desc())
+        .all()
+    )
+    return [_token_to_dict(t) for t in tokens]
 
 
 @router.delete("/{token_id}", status_code=status.HTTP_200_OK)

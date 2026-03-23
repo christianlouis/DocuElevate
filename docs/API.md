@@ -2405,3 +2405,64 @@ query GetDocument($id: Int!) {
 }
 ```
 Variables: `{ "id": 42 }`
+
+## System Reset
+
+Admin-only endpoints for resetting the system to a clean state.  Requires `ENABLE_FACTORY_RESET=True`.
+
+### GET /api/admin/system-reset/status
+
+Check whether the system reset feature is enabled.
+
+**Response (200):**
+```json
+{
+  "enabled": true,
+  "factory_reset_on_startup": false
+}
+```
+
+### POST /api/admin/system-reset/full
+
+Wipe all user data (database + work-files).
+
+**Request:**
+```json
+{
+  "confirmation": "DELETE"
+}
+```
+
+**Response (200):**
+```json
+{
+  "status": "ok",
+  "result": {
+    "database": { "files": 42, "processing_logs": 100 },
+    "filesystem": { "deleted_dirs": 5, "deleted_files": 12 }
+  }
+}
+```
+
+### POST /api/admin/system-reset/reimport
+
+Move original files to a reimport folder, wipe everything, and configure the reimport folder as a watch folder for re-ingestion.
+
+**Request:**
+```json
+{
+  "confirmation": "REIMPORT"
+}
+```
+
+**Response (200):**
+```json
+{
+  "status": "ok",
+  "result": {
+    "database": { "files": 42 },
+    "filesystem": { "deleted_dirs": 5, "deleted_files": 12 },
+    "reimport": { "files_moved": 42, "reimport_folder": "/workdir/reimport" }
+  }
+}
+```

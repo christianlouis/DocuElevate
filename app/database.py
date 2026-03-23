@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy import create_engine, exc
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
+from sqlalchemy.pool import NullPool, QueuePool
 
 from app.config import settings
 
@@ -19,7 +20,20 @@ Base = declarative_base()
 
 # Parse the DATABASE_URL
 DB_URL = settings.database_url
-engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
+_db_url = make_url(DB_URL)
+if _db_url.get_backend_name() == "sqlite":
+    # SQLite does not benefit from connection pooling; NullPool avoids contention.
+    engine = create_engine(DB_URL, connect_args={"check_same_thread": False}, poolclass=NullPool)
+else:
+    # PostgreSQL / MySQL / other: use a configurable QueuePool.
+    engine = create_engine(
+        DB_URL,
+        poolclass=QueuePool,
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_max_overflow,
+        pool_timeout=settings.db_pool_timeout,
+        pool_recycle=settings.db_pool_recycle,
+    )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -271,6 +285,7 @@ def _ensure_indexes(engine: Any, inspector: Any) -> None:
                 if table not in columns_by_table:
                     columns_by_table[table] = {col["name"] for col in inspector.get_columns(table)}
                 if column in columns_by_table[table]:
+                    # SECURITY: Quoted identifiers to prevent SQL injection during index creation
                     quoted_idx = preparer.quote(idx_name)
                     quoted_table = preparer.quote(table)
                     quoted_col = preparer.quote(column)

@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import UserImapAccount
 from app.utils.encryption import decrypt_value, encrypt_value
+from app.utils.network import is_private_ip
 from app.utils.subscription import get_tier, get_user_tier_id
 from app.utils.user_scope import get_current_owner_id
 
@@ -187,6 +188,11 @@ def _test_imap_connection(host: str, port: int, username: str, password: str, us
 
     Returns a dict with ``{"success": bool, "message": str}``.
     """
+
+    # Security: Prevent SSRF by blocking connections to internal IPs
+    if is_private_ip(host):
+        logger.warning("SSRF blocked: Attempt to connect to private IP %s", host)
+        return {"success": False, "message": "Connection error: Invalid hostname or IP address"}
     try:
         if use_ssl:
             mail = imaplib.IMAP4_SSL(host, port)

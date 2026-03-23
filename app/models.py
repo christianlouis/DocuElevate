@@ -84,6 +84,19 @@ class FileRecord(Base):
     # Processing pipeline assigned to this file (NULL = use system default)
     pipeline_id = Column(Integer, ForeignKey(_PIPELINES_ID_FK), nullable=True, index=True)
 
+    # Detected document language (ISO 639-1 code, e.g. "de", "en", "fr")
+    # Extracted from AI metadata during processing; cached here for fast access.
+    detected_language = Column(String(10), nullable=True)
+
+    # Default-language translation of the extracted text.
+    # Stored when the detected language differs from the user's/system default
+    # document language.  Only the original text and this translation are persisted;
+    # other languages are translated on the fly via the AI provider.
+    default_language_text = Column(Text, nullable=True)
+
+    # ISO 639-1 code of the default-language translation stored above (e.g. "en").
+    default_language_code = Column(String(10), nullable=True)
+
     # Timestamp when we inserted this record
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
@@ -281,6 +294,12 @@ class UserProfile(Base):
     # UI language preference for i18n (ISO 639-1 code, e.g. "en", "de", "fr")
     # NULL means "auto-detect from browser Accept-Language header"
     preferred_language = Column(String(10), nullable=True)
+
+    # Default document language for translated versions (ISO 639-1 code).
+    # When a document's detected language differs from this value, the system
+    # automatically generates and stores a translation into this language.
+    # NULL means "use the global DEFAULT_DOCUMENT_LANGUAGE setting".
+    default_document_language = Column(String(10), nullable=True)
 
     # UI colour scheme preference: "light" | "dark" | "system" (NULL = "system")
     preferred_theme = Column(String(10), nullable=True)
@@ -584,6 +603,7 @@ class IntegrationType:
     EMAIL = "EMAIL"
     PAPERLESS = "PAPERLESS"
     RCLONE = "RCLONE"
+    SHAREPOINT = "SHAREPOINT"
     ICLOUD = "ICLOUD"
 
     ALL = {
@@ -601,6 +621,7 @@ class IntegrationType:
         EMAIL,
         PAPERLESS,
         RCLONE,
+        SHAREPOINT,
         ICLOUD,
     }
 
@@ -948,6 +969,86 @@ class MobileDevice(Base):
     last_seen_at = Column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (UniqueConstraint("owner_id", "push_token", name="uq_mobile_device_owner_token"),)
+
+
+class UserSession(Base):
+    """Server-side session tracking for invalidation and device management.
+
+    Each row represents an active browser or app session.  The ``session_token``
+    is stored in the user's cookie and validated on every authenticated request.
+    Revoking a row (``is_revoked=True``) immediately terminates that session
+    on the next request.
+    """
+
+    __tablename__ = "user_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Cryptographically random token stored in the session cookie.
+    session_token = Column(String(128), unique=True, nullable=False, index=True)
+
+    # Stable owner identifier — matches FileRecord.owner_id.
+    user_id = Column(String, nullable=False, index=True)
+
+    # Client metadata for display in the session management UI.
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(512), nullable=True)
+    device_info = Column(String(255), nullable=True)
+
+    is_revoked = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_active_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class QRLoginChallenge(Base):
+    """Time-limited QR code login challenge for mobile app authentication.
+
+    A logged-in web user generates a challenge that produces a QR code.  The
+    mobile app scans the QR code and calls the claim endpoint with the
+    ``challenge_token``.  The server verifies the challenge is still valid,
+    unclaimed, and unexpired, then issues an API token for the mobile app.
+
+    Security properties:
+    * Time-bound (default 2 minutes).
+    * Single-use (``is_claimed`` prevents replay).
+    * Cryptographically random 64-byte token.
+    * Bound to the creating user — only that user's mobile device receives a
+      token.
+    """
+
+    __tablename__ = "qr_login_challenges"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Cryptographically random token encoded in the QR code.
+    challenge_token = Column(String(128), unique=True, nullable=False, index=True)
+
+    # The user who created this challenge (from the web session).
+    user_id = Column(String, nullable=False, index=True)
+
+    # Whether the challenge has been successfully claimed by a mobile app.
+    is_claimed = Column(Boolean, nullable=False, default=False)
+
+    # Whether the challenge has been explicitly cancelled or expired.
+    is_cancelled = Column(Boolean, nullable=False, default=False)
+
+    # IP address of the web client that created the challenge.
+    created_by_ip = Column(String(45), nullable=True)
+
+    # IP address of the mobile client that claimed the challenge.
+    claimed_by_ip = Column(String(45), nullable=True)
+
+    # Device name provided by the mobile app when claiming.
+    device_name = Column(String(255), nullable=True)
+
+    # The API token ID that was issued to the mobile app (for audit trail).
+    issued_token_id = Column(Integer, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    claimed_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class ComplianceTemplate(Base):

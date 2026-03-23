@@ -8,6 +8,7 @@ DocuElevate includes a native mobile application for iOS and Android built with 
 |---------|-----|---------|
 | SSO login (OAuth2) | ✅ | ✅ |
 | Local / basic auth login | ✅ | ✅ |
+| QR code login (scan from web) | ✅ | ✅ |
 | Auto-generated API token | ✅ | ✅ |
 | Camera capture → upload | ✅ | ✅ |
 | File picker upload | ✅ | ✅ |
@@ -57,6 +58,34 @@ eas build --platform android
 
 See the [EAS Build documentation](https://docs.expo.dev/build/introduction/) for full setup instructions.
 
+## Automated CI/CD
+
+An **EAS Cloud Workflow** (`mobile/.eas/workflows/create-builds.yml`) automates production builds and iOS submission:
+
+- **Path filtering:** The workflow only triggers on pushes to `main` that include changes inside the `mobile/` directory.  Backend-only or documentation-only changes do not trigger a mobile build.
+- **Build:** Both iOS and Android production builds run in parallel on EAS Build.
+- **Auto-submit (iOS):** After a successful iOS build, the workflow automatically submits the binary to **App Store Connect** using the credentials configured in `eas.json` (`submit.production.ios`).  The build then appears in **TestFlight** for internal testing and can be promoted to the App Store from App Store Connect.
+
+> **Prerequisite:** An App Store Connect API Key must be configured in EAS for non-interactive submission.  See [Troubleshooting → "Session expired"](#session-expired-local-session-during-ios-build) below for setup instructions.
+
+### Version Management
+
+Build numbers (iOS `buildNumber` / Android `versionCode`) are managed **remotely** by EAS.  The `eas.json` configuration uses:
+
+```json
+{
+  "cli": { "appVersionSource": "remote" },
+  "build": { "production": { "autoIncrement": true } }
+}
+```
+
+- **`appVersionSource: "remote"`** — EAS stores the current build number on its servers instead of reading it from `app.json`.  This ensures every CI build gets a unique, ever-increasing number without needing to commit version bumps back to the repository.
+- **`autoIncrement: true`** — EAS automatically increments the build number before each production build.
+
+The `ios.buildNumber` and `android.versionCode` values in `app.json` serve as the **initial seed** when the remote version is first created; after that they are informational only.  Do not rely on them for the actual version submitted to the stores.
+
+> **Tip:** To check or manually set the remote version, use `eas build:version:get` and `eas build:version:set`.
+
 ## Authentication
 
 ### SSO Login Flow
@@ -83,6 +112,18 @@ When developing with **Expo Go** the app does not have the `docuelevate://` cust
 4. `WebBrowser.openAuthSessionAsync` intercepts the deep link and the Expo Go app receives the token.
 
 No extra configuration is needed — just run `npx expo start` and scan the QR code with the **Expo Go** app.
+
+### QR Code Login Flow
+
+As an alternative to SSO, users can log in by scanning a QR code displayed in the web UI:
+
+1. The authenticated web user navigates to **Profile → Security & Sessions → Log in on mobile via QR code**.
+2. A QR code is displayed containing a deep link: `docuelevate://qr-login?token=<challenge_token>&server=<server_url>`.
+3. In the mobile app, the user taps **Scan QR Code to Login**, which opens the device camera.
+4. The app scans the QR code, extracts both the server URL and the challenge token, and calls `POST /api/qr-auth/claim`.
+5. An API token is issued and stored securely — no need to enter the server URL manually.
+
+> **Note:** The QR code already contains the server URL, so users do not need to type it in when using QR login.
 
 ### Auto-generated Mobile Token
 
@@ -126,10 +167,17 @@ curl -X DELETE -H "Authorization: Bearer <token>" https://your-server/api/mobile
 3. Point the camera at the document and take a photo.
 4. The image is immediately uploaded and queued for processing.
 
+### Photo Library
+
+1. Open the **Upload** tab.
+2. Tap **Photos**.
+3. Select an existing photo from the device's photo library.
+4. The image is uploaded and queued for processing.
+
 ### File Picker
 
 1. Open the **Upload** tab.
-2. Tap **File Picker**.
+2. Tap **Files**.
 3. Browse to and select one or more files (PDF, DOCX, images, etc.).
 4. Files are uploaded and queued for processing.
 
@@ -140,9 +188,32 @@ The app registers itself as a share target so any file can be sent directly to D
 1. Open a file in Files, Mail, Safari, or any other app.
 2. Tap the **Share** button (iOS) or **Share** (Android).
 3. Find and tap **DocuElevate** in the share sheet.
-4. The file is immediately uploaded.
+4. The file is immediately uploaded and queued for processing.
 
 > **Note:** The app must be installed on the device for it to appear in the share sheet.
+
+#### iOS implementation
+
+`app.json` declares `CFBundleDocumentTypes` (with `LSHandlerRank: Alternate`) inside the iOS `infoPlist`.  This tells iOS that DocuElevate can open common document types, making it visible in the share sheet without overriding system defaults.  When the user selects DocuElevate, iOS opens the app with a URL via `application:openURL:options:`.
+
+The URL may arrive as a standard `file://` path **or** under the app's custom `docuelevate://` scheme (e.g. `docuelevate://private/var/mobile/Library/…/file.pdf`).  The root layout detects the custom-scheme form and rewrites it to a `file://` URL before forwarding it to the Upload screen through `ShareContext`.
+
+#### Android implementation
+
+`app.json` declares `ACTION_SEND` and `ACTION_SEND_MULTIPLE` intent filters for `mimeType: "*/*"` in the `android.intentFilters` section.  Incoming content URIs are received the same way as on iOS.
+
+#### Upload status polling
+
+After a file is uploaded the app polls `/api/files?search=<filename>` every 5 seconds to find the corresponding `FileRecord`, then polls `/api/files/{id}` to track the processing status in real time.  Polling stops automatically once the status reaches a terminal state (`completed`, `failed`, or `duplicate`).
+
+#### Retrying failed uploads
+
+If a file upload fails (e.g. due to network issues or a server error), the failed item stays visible in the upload list with an error message and a **"Tap to retry"** hint.  Users can retry the upload in two ways:
+
+- **Tap** the failed item to immediately retry the upload.
+- **Long-press** the failed item to see a confirmation dialog with a **Retry** option.
+
+The retry re-uses the original file URI so no re-selection is needed.
 
 ## Mobile API Endpoints
 
@@ -221,19 +292,34 @@ If you wish to use **direct FCM/APNs** without Expo's relay, replace the `send_e
 
 ```
 mobile/
-├── App.tsx                      # Root component
+├── App.tsx                      # Root component (legacy, not used at runtime)
+├── app/                         # Expo Router file-based routes
+│   ├── _layout.tsx              # Root layout (AuthGuard + providers)
+│   ├── index.tsx                # Root redirect → /(auth)/
+│   ├── (auth)/                  # Unauthenticated route group
+│   │   ├── _layout.tsx          # Stack navigator (headerless)
+│   │   ├── index.tsx            # Welcome screen
+│   │   ├── login.tsx            # Login screen
+│   │   └── qr-scanner.tsx       # QR code scanner screen
+│   └── (tabs)/                  # Authenticated route group
+│       ├── _layout.tsx          # Tab navigator
+│       ├── index.tsx            # Upload screen (default tab)
+│       ├── files.tsx            # Files screen
+│       └── profile.tsx          # Profile screen
 ├── app.json                     # Expo/EAS configuration
 ├── eas.json                     # EAS Build profiles
 ├── package.json
 ├── tsconfig.json
 └── src/
     ├── context/
-    │   └── AuthContext.tsx      # Auth state + SSO login flow
+    │   ├── AuthContext.tsx      # Auth state + SSO login flow
+    │   └── ShareContext.tsx     # Shared-file queue (iOS Share Sheet / Android Intent)
     ├── hooks/
     │   └── usePushNotifications.ts  # Push token registration
     ├── screens/
-    │   ├── LoginScreen.tsx      # Server URL + SSO button
-    │   ├── UploadScreen.tsx     # Camera capture + file picker
+    │   ├── LoginScreen.tsx      # Server URL + SSO button + QR code scanner
+    │   ├── QRScannerScreen.tsx  # Camera-based QR code scanner for login
+    │   ├── UploadScreen.tsx     # Camera capture + photo library + file picker
     │   ├── FilesScreen.tsx      # Processed document list
     │   └── ProfileScreen.tsx    # User profile + sign out
     └── services/
@@ -241,6 +327,25 @@ mobile/
 ```
 
 ## Troubleshooting
+
+### App shows "Hello World" / default Expo page after update
+
+If the iOS or Android app shows a generic "Hello World – This is the first page of your app" screen instead of the DocuElevate UI, it means a stale default `index.tsx` file (generated by Expo CLI scaffolding) is being picked up in the `mobile/app/` directory.
+
+**To fix:**
+
+1. Delete any leftover default `mobile/app/index.tsx` that is **not** the repository version (the repo version contains a `<Redirect>` to `/(auth)/`).
+2. Clear the Metro bundler cache and rebuild:
+   ```bash
+   cd mobile
+   npx expo start --clear
+   ```
+3. For production builds, run a clean EAS build:
+   ```bash
+   eas build --platform ios --clear-cache
+   ```
+
+The repository includes a root `app/index.tsx` that immediately redirects to the authentication flow, so this issue should not recur once the correct file is present.
 
 ### "Session expired Local session" during iOS build
 

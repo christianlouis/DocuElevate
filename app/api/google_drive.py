@@ -23,6 +23,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _require_admin(request: Request) -> dict:
+    """Dependency to ensure the current user is an admin."""
+    user = request.session.get("user")
+    if not user or not user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user
+
+
+AdminUser = Annotated[dict, Depends(_require_admin)]
+
+
 @router.post("/google-drive/exchange-token")
 @require_login
 async def exchange_google_drive_token(
@@ -362,9 +373,9 @@ def format_time_remaining(time_delta):
 
 
 @router.post("/google-drive/save-settings")
-@require_login
 async def save_google_drive_settings(
     request: Request,
+    _admin: AdminUser,
     refresh_token: Annotated[str, Form(...)],
     client_id: Annotated[Optional[str], Form()] = None,
     client_secret: Annotated[Optional[str], Form()] = None,
@@ -404,7 +415,8 @@ async def save_google_drive_settings(
             drive_settings["GOOGLE_DRIVE_FOLDER_ID"] = folder_id
 
         # Try to update the .env file, but don't fail if it doesn't exist (for Docker containers)
-        if not update_env_file(env_path, drive_settings):
+        env_write_success = update_env_file(env_path, drive_settings)
+        if not env_write_success:
             logger.info("Continuing with in-memory update despite .env file update failure or skip")
 
         # Update the settings in memory (this always happens)
@@ -443,7 +455,7 @@ async def save_google_drive_settings(
         return {
             "status": "success",
             "message": "Google Drive settings have been saved",
-            "in_memory_only": not os.path.exists(env_path),
+            "in_memory_only": not env_write_success,
         }
 
     except Exception as e:
