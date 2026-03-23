@@ -8,6 +8,7 @@ This module provides functionality to:
 """
 
 import logging
+import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -3120,3 +3121,60 @@ def get_settings_for_export(db: Session, source: str = "db") -> Dict[str, str]:
         # DB only
         db_settings = get_all_settings_from_db(db)
         return {k.upper(): v for k, v in sorted(db_settings.items()) if v is not None}
+
+
+def update_env_file(env_path: str, settings_to_update: Dict[str, str]) -> bool:
+    """
+    Update an .env file with new settings.
+
+    Reads the file, updates matching settings (even if commented),
+    appends any that weren't found, and writes the result back.
+
+    Args:
+        env_path: Path to the .env file
+        settings_to_update: Dictionary mapping setting names (e.g. 'GOOGLE_DRIVE_USE_OAUTH') to string values
+
+    Returns:
+        True if the file was successfully updated, False otherwise (e.g. file not found or write error)
+    """
+    if not os.path.exists(env_path):
+        logger.warning(f".env file not found at {env_path}, skipping file update")
+        return False
+
+    try:
+        logger.info(f"Updating settings in {env_path}")
+
+        # Read the current .env file
+        with open(env_path, "r") as f:
+            env_lines = f.readlines()
+
+        # Process each line and update or add settings
+        updated = set()
+        new_env_lines = []
+        for line in env_lines:
+            stripped_line = line.rstrip()
+            is_updated = False
+            for key, value in settings_to_update.items():
+                if stripped_line.startswith(f"{key}=") or stripped_line.startswith(f"# {key}="):
+                    # Uncomment if commented out - check the original stripped line
+                    new_env_lines.append(f"{key}={value}")
+                    updated.add(key)
+                    is_updated = True
+                    break
+            if not is_updated:
+                new_env_lines.append(stripped_line)
+
+        # Add any settings that weren't updated (they weren't in the file)
+        for key, value in settings_to_update.items():
+            if key not in updated:
+                new_env_lines.append(f"{key}={value}")
+
+        # Write the updated .env file
+        with open(env_path, "w") as f:
+            f.write("\n".join(new_env_lines) + "\n")
+
+        logger.info(f"Successfully updated settings in {env_path}")
+        return True
+    except Exception as e:
+        logger.warning(f"Failed to update {env_path}: {str(e)}")
+        return False

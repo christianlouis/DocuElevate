@@ -7,9 +7,9 @@ Targets the remaining uncovered branches from the 97.03% baseline:
   - 214     : test_google_drive_token — generic connection error (not token-related)
   - 302->306: get_google_drive_token_info — credentials already valid (no refresh)
   - 307->318: get_google_drive_token_info — credentials have no expiry
-  - 395->397: save_dropbox_settings — refresh_token falsy inside use_oauth block
-  - 449->451: save_dropbox_settings — refresh_token falsy in in-memory update
-  - 468->470: save_dropbox_settings — folder_id falsy in db-persist block
+  - 395->397: save_google_drive_settings — refresh_token falsy inside use_oauth block
+  - 449->451: save_google_drive_settings — refresh_token falsy in in-memory update
+  - 468->470: save_google_drive_settings — folder_id falsy in db-persist block
 """
 
 from datetime import datetime, timedelta
@@ -152,11 +152,7 @@ class TestGetTokenInfoCredentialsBranches:
 
 @pytest.mark.unit
 class TestSaveGoogleDriveSettingsFalsyFields:
-    """Cover branches 395->397, 449->451, 468->470 in save_dropbox_settings.
-
-    Note: the Google Drive save endpoint is named save_dropbox_settings in the
-    source (app/api/google_drive.py) due to an existing naming inconsistency.
-    """
+    """Cover branches 395->397, 449->451, 468->470 in save_google_drive_settings."""
 
     @patch("app.api.google_drive.settings")
     @patch("os.path.exists", return_value=False)
@@ -167,7 +163,7 @@ class TestSaveGoogleDriveSettingsFalsyFields:
 
         from starlette.requests import Request as StarletteRequest
 
-        from app.api.google_drive import save_dropbox_settings
+        from app.api.google_drive import save_google_drive_settings
 
         mock_request = MagicMock(spec=StarletteRequest)
         mock_request.session = {}
@@ -175,7 +171,7 @@ class TestSaveGoogleDriveSettingsFalsyFields:
 
         with patch("app.api.google_drive.save_setting_to_db"):
             with patch("app.api.google_drive.notify_settings_updated"):
-                result = await save_dropbox_settings(
+                result = await save_google_drive_settings(
                     request=mock_request,
                     refresh_token="",  # falsy → branches 395->397 and 449->451
                     client_id="cid",

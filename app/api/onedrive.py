@@ -15,7 +15,7 @@ from app.auth import require_login
 from app.config import settings
 from app.database import get_db
 from app.utils.oauth_helper import exchange_oauth_token
-from app.utils.settings_service import save_setting_to_db
+from app.utils.settings_service import save_setting_to_db, update_env_file
 from app.utils.settings_sync import notify_settings_updated
 
 # Set up logging
@@ -249,46 +249,18 @@ async def save_onedrive_settings(
         # Best-effort .env file write
         try:
             env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
-            if not os.path.exists(env_path):
-                logger.warning(f".env file not found at {env_path}, skipping file write")
-            else:
-                logger.info(f"Updating OneDrive settings in {env_path}")
+            onedrive_settings = {"ONEDRIVE_REFRESH_TOKEN": refresh_token}
+            if client_id:
+                onedrive_settings["ONEDRIVE_CLIENT_ID"] = client_id
+            if client_secret:
+                onedrive_settings["ONEDRIVE_CLIENT_SECRET"] = client_secret
+            if tenant_id:
+                onedrive_settings["ONEDRIVE_TENANT_ID"] = tenant_id
+            if folder_path:
+                onedrive_settings["ONEDRIVE_FOLDER_PATH"] = folder_path
 
-                with open(env_path, "r") as f:
-                    env_lines = f.readlines()
-
-                onedrive_settings = {"ONEDRIVE_REFRESH_TOKEN": refresh_token}
-                if client_id:
-                    onedrive_settings["ONEDRIVE_CLIENT_ID"] = client_id
-                if client_secret:
-                    onedrive_settings["ONEDRIVE_CLIENT_SECRET"] = client_secret
-                if tenant_id:
-                    onedrive_settings["ONEDRIVE_TENANT_ID"] = tenant_id
-                if folder_path:
-                    onedrive_settings["ONEDRIVE_FOLDER_PATH"] = folder_path
-
-                updated = set()
-                new_env_lines = []
-                for line in env_lines:
-                    stripped_line = line.rstrip()
-                    is_updated = False
-                    for key, value in onedrive_settings.items():
-                        if stripped_line.startswith(f"{key}=") or stripped_line.startswith(f"# {key}="):
-                            new_env_lines.append(f"{key}={value}")
-                            updated.add(key)
-                            is_updated = True
-                            break
-                    if not is_updated:
-                        new_env_lines.append(stripped_line)
-
-                for key, value in onedrive_settings.items():
-                    if key not in updated:
-                        new_env_lines.append(f"{key}={value}")
-
-                with open(env_path, "w") as f:
-                    f.write("\n".join(new_env_lines) + "\n")
-
-                logger.info("Successfully updated OneDrive settings in .env file")
+            if not update_env_file(env_path, onedrive_settings):
+                logger.info("Continuing with in-memory update despite .env file update failure or skip")
         except Exception as env_err:
             logger.warning(f"Failed to write .env file (non-fatal): {env_err}")
 
