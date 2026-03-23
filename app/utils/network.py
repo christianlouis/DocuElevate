@@ -27,8 +27,21 @@ def is_private_ip(hostname: str) -> bool:
                     return True
             return False
         except (socket.gaierror, socket.error):
-            # Cannot resolve - allow for testing/development
-            # In production, DNS should work properly
-            # Log this for debugging
-            logger.warning(f"Could not resolve hostname: {hostname}")
-            return False  # Changed from True to False to allow external domains in tests
+            # Cannot resolve.
+            # Fail securely: block unresolved domains to prevent DNS rebinding
+            # and SSRF bypasses via unresolvable addresses.
+            logger.warning(f"Could not resolve hostname (blocking securely): {hostname}")
+            return True
+
+
+def join_url(base: str, *parts: str) -> str:
+    """
+    Safely join a base URL and multiple path parts.
+    Handles double slashes while preserving the protocol '://'.
+    """
+    url = "/".join([base, *parts])
+    url = url.replace("://", "$PLACEHOLDER$")
+    while "//" in url:
+        url = url.replace("//", "/")
+    url = url.replace("$PLACEHOLDER$", "://")
+    return url

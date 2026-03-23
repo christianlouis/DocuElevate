@@ -34,7 +34,7 @@ WORKDIR /frontend
 
 # Install dependencies first (layer-cached unless package.json/lockfile changes)
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci
 
 # Copy source files and compile Tailwind CSS
 COPY frontend/ ./
