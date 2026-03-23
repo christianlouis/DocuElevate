@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Chores
+
+- Simplify and fix naming for save settings endpoints
+  ([`341839f`](https://github.com/christianlouis/DocuElevate/commit/341839fe5edafa3451f89e2bb57092882d8fd6f0))
+
+- Simplify and fix naming for save settings endpoints
+  ([`57795ee`](https://github.com/christianlouis/DocuElevate/commit/57795ee4871bb0bb0727037a889542bf46a8bb9e))
+
+
 ## v0.172.3 (2026-03-23)
 
 ### Bug Fixes
