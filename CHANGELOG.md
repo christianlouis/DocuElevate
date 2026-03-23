@@ -130,6 +130,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 
+## v0.172.2 (2026-03-23)
+
+### Bug Fixes
+
+- Adapt TemplateResponse calls to Starlette 1.0 new-style API
+  ([`c4e10be`](https://github.com/christianlouis/DocuElevate/commit/c4e10bee5e096e71a5bc4fac4928f69e5c04f2fb))
+
+- Update test assertions and lint fixes for Starlette 1.0 TemplateResponse API
+  ([`93629ff`](https://github.com/christianlouis/DocuElevate/commit/93629ff44083d43f79fdd49431457023e53d13e4))
+
+- **build**: Remove --omit=dev from npm ci in Dockerfile frontend-builder stage
+  ([`b4e0067`](https://github.com/christianlouis/DocuElevate/commit/b4e0067a27e2fb161349bd38c6d3b3f3bcb86972))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`0841713`](https://github.com/christianlouis/DocuElevate/commit/084171395d1076c716aa500a516118db49468ff5))
+
+
+## Unreleased
+
+
 ## v0.172.1 (2026-03-22)
 
 ### Bug Fixes
