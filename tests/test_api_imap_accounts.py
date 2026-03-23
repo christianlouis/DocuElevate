@@ -524,7 +524,10 @@ class TestTestImapConnection:
         from app.api.imap_accounts import _test_imap_connection
 
         mock_mail = MagicMock()
-        with patch("imaplib.IMAP4_SSL", return_value=mock_mail):
+        with (
+            patch("app.api.imap_accounts.is_private_ip", return_value=False),
+            patch("imaplib.IMAP4_SSL", return_value=mock_mail),
+        ):
             result = _test_imap_connection(
                 "imap.example.com",
                 993,
@@ -541,7 +544,10 @@ class TestTestImapConnection:
         """An exception raised by IMAP4_SSL returns success=False."""
         from app.api.imap_accounts import _test_imap_connection
 
-        with patch("imaplib.IMAP4_SSL", side_effect=Exception("auth failed")):
+        with (
+            patch("app.api.imap_accounts.is_private_ip", return_value=False),
+            patch("imaplib.IMAP4_SSL", side_effect=Exception("auth failed")),
+        ):
             result = _test_imap_connection(
                 "imap.example.com",
                 993,
@@ -557,7 +563,10 @@ class TestTestImapConnection:
         """An OSError returns success=False with a network error message."""
         from app.api.imap_accounts import _test_imap_connection
 
-        with patch("imaplib.IMAP4", side_effect=OSError("connection refused")):
+        with (
+            patch("app.api.imap_accounts.is_private_ip", return_value=False),
+            patch("imaplib.IMAP4", side_effect=OSError("connection refused")),
+        ):
             result = _test_imap_connection(
                 "bad-host",
                 143,

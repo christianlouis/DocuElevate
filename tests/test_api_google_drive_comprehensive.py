@@ -494,14 +494,14 @@ class TestSaveGoogleDriveSettings:
     @patch("os.path.dirname")
     @patch("app.config.settings")
     def test_save_settings_exception_handling(self, mock_settings, mock_dirname, mock_exists, client: TestClient):
-        """Test exception handling in save settings."""
+        """Test that exceptions in .env write are non-fatal — DB write still succeeds."""
         mock_exists.side_effect = Exception("Unexpected error")
 
         response = client.post("/api/google-drive/save-settings", data={"refresh_token": "token", "use_oauth": "true"})
 
-        assert response.status_code == 500
-        data = response.json()
-        assert "failed to save" in data["detail"].lower()
+        # .env write exception is caught; endpoint succeeds via DB write
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
 
 
 @pytest.mark.unit

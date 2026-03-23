@@ -284,13 +284,13 @@ async def lifespan(app: FastAPI):
     # Shutdown: Cleanup tasks
     try:
         logging.info("Application shutting down")
-    except Exception:
+    except Exception:  # noqa: S110
         pass  # During test teardown, logging streams may already be closed
 
     # Send shutdown notification
     try:
         notify_shutdown()
-    except Exception:
+    except Exception:  # noqa: S110
         pass  # During test teardown, I/O streams may already be closed
 
 
