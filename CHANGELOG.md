@@ -10,6 +10,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.172.4 (2026-03-23)
+
+### Bug Fixes
+
+- Resolve failing tests in main
+  ([`3be93be`](https://github.com/christianlouis/DocuElevate/commit/3be93be35a1564cb6009c5b7d2229820c2b8fafd))
+
+- **api/dropbox**: _require_admin bypasses auth when AUTH_ENABLED=False,
+  ([`3be93be`](https://github.com/christianlouis/DocuElevate/commit/3be93be35a1564cb6009c5b7d2229820c2b8fafd))
+
+### Chores
+
+- Simplify and fix naming for save settings endpoints
+  ([`341839f`](https://github.com/christianlouis/DocuElevate/commit/341839fe5edafa3451f89e2bb57092882d8fd6f0))
+
+- Simplify and fix naming for save settings endpoints
+  ([`57795ee`](https://github.com/christianlouis/DocuElevate/commit/57795ee4871bb0bb0727037a889542bf46a8bb9e))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`2014a93`](https://github.com/christianlouis/DocuElevate/commit/2014a93c1ba4f41b8cfb589584be8d39baeaffe1))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`bcdbf9d`](https://github.com/christianlouis/DocuElevate/commit/bcdbf9d17885ab3f8750d8426c0ee9f181ced736))
+
+
 ## Unreleased
 
 ### Chores
