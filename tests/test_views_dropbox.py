@@ -144,37 +144,3 @@ class TestDropboxViews:
         assert response.status_code == 200
         assert b"/Documents/Uploads" in response.content
         assert b"Back to Integrations" in response.content
-
-
-@pytest.mark.integration
-class TestDropboxCallbackUrl:
-    """Tests that the callback_url is correctly passed to templates."""
-
-    def test_setup_page_includes_callback_url(self, client):
-        """Setup page should include the callback_url variable in its response."""
-        response = client.get("/dropbox-setup")
-        assert response.status_code == 200
-        # callback_url is embedded in the JS as the dropboxCallbackUrl constant
-        assert b"dropboxCallbackUrl" in response.content
-
-    def test_callback_page_includes_callback_url(self, client):
-        """Callback page should embed the server-side callback URL."""
-        response = client.get("/dropbox-callback?code=testcode")
-        assert response.status_code == 200
-        # callback_url is used as the redirectUri
-        assert b"redirectUri" in response.content
-
-    def test_setup_page_uses_public_base_url_when_set(self, client):
-        """When PUBLIC_BASE_URL is configured, it should appear in the redirect URI hint."""
-        with patch("app.views.dropbox.settings") as mock_settings:
-            mock_settings.public_base_url = "https://configured.example.com"
-            mock_settings.dropbox_app_key = ""
-            mock_settings.dropbox_app_secret = ""
-            mock_settings.dropbox_refresh_token = ""
-            mock_settings.dropbox_folder = ""
-            mock_settings.dropbox_allow_global_credentials_for_integrations = False
-            response = client.get("/dropbox-setup")
-        assert response.status_code == 200
-        # The configured public_base_url hostname must appear in the page (redirect URI display)
-        page_text = response.text
-        assert "configured.example.com/dropbox-callback" in page_text

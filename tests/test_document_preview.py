@@ -57,7 +57,7 @@ class TestFileViewPdfJs:
         pdf.write_bytes(b"%PDF-1.4 test")
         rec = _create_file_record(db_session, file_path=str(pdf), mime_type="application/pdf")
 
-        response = client.get(f"/files/{rec.id}/detail")
+        response = client.get(f"/files/{rec.id}")
         assert response.status_code == 200
         html = response.text
 
@@ -80,7 +80,7 @@ class TestFileViewPdfJs:
         pdf.write_bytes(b"%PDF-1.4 test")
         rec = _create_file_record(db_session, file_path=str(pdf), mime_type="application/pdf")
 
-        response = client.get(f"/files/{rec.id}/detail")
+        response = client.get(f"/files/{rec.id}")
         html = response.text
 
         # The preview section should use pdf-viewer, not iframe
@@ -93,7 +93,7 @@ class TestFileViewPdfJs:
         pdf.write_bytes(b"%PDF-1.4 test")
         rec = _create_file_record(db_session, file_path=str(pdf), mime_type="application/pdf")
 
-        response = client.get(f"/files/{rec.id}/detail")
+        response = client.get(f"/files/{rec.id}")
         html = response.text
 
         assert 'id="pdf-prev-btn"' in html
@@ -116,7 +116,7 @@ class TestFileViewImagePreview:
         img.write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 100)  # minimal JPEG header
         rec = _create_file_record(db_session, filename="photo.jpg", mime_type="image/jpeg", file_path=str(img))
 
-        response = client.get(f"/files/{rec.id}/detail")
+        response = client.get(f"/files/{rec.id}")
         assert response.status_code == 200
         html = response.text
 
@@ -132,7 +132,7 @@ class TestFileViewImagePreview:
         img.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 50)
         rec = _create_file_record(db_session, filename="photo.png", mime_type="image/png", file_path=str(img))
 
-        response = client.get(f"/files/{rec.id}/detail")
+        response = client.get(f"/files/{rec.id}")
         html = response.text
 
         assert 'aria-label="Zoom in"' in html
@@ -146,7 +146,7 @@ class TestFileViewImagePreview:
         img.write_bytes(b"RIFF" + b"\x00" * 50)
         rec = _create_file_record(db_session, filename="wide.webp", mime_type="image/webp", file_path=str(img))
 
-        response = client.get(f"/files/{rec.id}/detail")
+        response = client.get(f"/files/{rec.id}")
         html = response.text
 
         # Pan support is implemented via JavaScript on img-wrap
@@ -170,7 +170,7 @@ class TestFileViewTextPreview:
         txt.write_text("Hello world\nSecond line\n")
         rec = _create_file_record(db_session, filename="readme.txt", mime_type="text/plain", file_path=str(txt))
 
-        response = client.get(f"/files/{rec.id}/detail")
+        response = client.get(f"/files/{rec.id}")
         assert response.status_code == 200
         html = response.text
 
@@ -184,7 +184,7 @@ class TestFileViewTextPreview:
         txt.write_text("print('hello')\n")
         rec = _create_file_record(db_session, filename="code.py", mime_type="text/x-python", file_path=str(txt))
 
-        response = client.get(f"/files/{rec.id}/detail")
+        response = client.get(f"/files/{rec.id}")
         html = response.text
 
         assert "copyTextPreview" in html
@@ -196,7 +196,7 @@ class TestFileViewTextPreview:
         txt.write_text("a,b,c\n1,2,3\n")
         rec = _create_file_record(db_session, filename="data.csv", mime_type="text/csv", file_path=str(txt))
 
-        response = client.get(f"/files/{rec.id}/detail")
+        response = client.get(f"/files/{rec.id}")
         html = response.text
 
         # JS builds line-number spans
@@ -218,7 +218,7 @@ class TestFileViewPreviewIcon:
         pdf.write_bytes(b"%PDF-1.4")
         rec = _create_file_record(db_session, file_path=str(pdf), mime_type="application/pdf")
 
-        html = client.get(f"/files/{rec.id}/detail").text
+        html = client.get(f"/files/{rec.id}").text
         assert "fa-file-pdf" in html
 
     def test_image_icon(self, client: TestClient, db_session, tmp_path):
@@ -227,7 +227,7 @@ class TestFileViewPreviewIcon:
         img.write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 10)
         rec = _create_file_record(db_session, filename="p.jpg", mime_type="image/jpeg", file_path=str(img))
 
-        html = client.get(f"/files/{rec.id}/detail").text
+        html = client.get(f"/files/{rec.id}").text
         assert "fa-image" in html
 
     def test_text_icon(self, client: TestClient, db_session, tmp_path):
@@ -236,7 +236,7 @@ class TestFileViewPreviewIcon:
         txt.write_text("hello")
         rec = _create_file_record(db_session, filename="t.txt", mime_type="text/plain", file_path=str(txt))
 
-        html = client.get(f"/files/{rec.id}/detail").text
+        html = client.get(f"/files/{rec.id}").text
         assert "fa-file-code" in html
 
 
@@ -321,7 +321,7 @@ class TestFileDetailBottomPreview:
         pdf.write_bytes(b"%PDF-1.4")
         rec = _create_file_record(db_session, file_path=str(pdf), processed_path=str(pdf))
 
-        response = client.get(f"/files/{rec.id}/process")
+        response = client.get(f"/files/{rec.id}/detail")
         assert response.status_code == 200
         html = response.text
 
@@ -335,7 +335,7 @@ class TestFileDetailBottomPreview:
         pdf.write_bytes(b"%PDF-1.4")
         rec = _create_file_record(db_session, file_path=str(pdf), processed_path=str(pdf))
 
-        response = client.get(f"/files/{rec.id}/process")
+        response = client.get(f"/files/{rec.id}/detail")
         html = response.text
         assert f"/api/files/{rec.id}/download" in html
 
@@ -350,7 +350,7 @@ class TestFileDetailBottomPreview:
             file_path=str(img),
         )
 
-        response = client.get(f"/files/{rec.id}/process")
+        response = client.get(f"/files/{rec.id}/detail")
         html = response.text
         assert f"/api/files/{rec.id}/preview?version=original" in html
 
@@ -372,7 +372,7 @@ class TestFileViewOcrText:
         rec.ocr_text = "Sample extracted OCR text content"
         db_session.commit()
 
-        html = client.get(f"/files/{rec.id}/detail").text
+        html = client.get(f"/files/{rec.id}").text
         assert "toggleOcrText" in html
         assert "ocr-text-block" in html
         assert "Sample extracted OCR text content" in html
@@ -383,7 +383,7 @@ class TestFileViewOcrText:
         pdf.write_bytes(b"%PDF-1.4")
         rec = _create_file_record(db_session, file_path=str(pdf))
 
-        html = client.get(f"/files/{rec.id}/detail").text
+        html = client.get(f"/files/{rec.id}").text
         assert "loadText" in html or "Extract" in html
 
 
@@ -409,5 +409,5 @@ class TestFileViewNoFile:
         db_session.commit()
         db_session.refresh(rec)
 
-        html = client.get(f"/files/{rec.id}/detail").text
+        html = client.get(f"/files/{rec.id}").text
         assert "No file available for preview" in html

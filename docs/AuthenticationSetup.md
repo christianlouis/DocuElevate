@@ -15,7 +15,6 @@ This guide explains how to configure authentication for DocuElevate to secure yo
 | `AUTHENTIK_CLIENT_SECRET`  | Client secret for OpenID Connect authentication          |
 | `AUTHENTIK_CONFIG_URL`     | OpenID Connect discovery URL                             |
 | `OAUTH_PROVIDER_NAME`      | Display name for the OAuth provider button               |
-| `SSO_AUTO_LOGIN`           | Auto-redirect to SSO login (skips the login page)        |
 
 For a complete list of configuration options, see the [Configuration Guide](ConfigurationGuide.md).
 
@@ -25,12 +24,7 @@ DocuElevate supports multiple authentication methods that can be used independen
 
 1. **Simple Authentication** - Basic username/password authentication managed by DocuElevate
 2. **OpenID Connect** - Integration with identity providers like Authentik, Keycloak, or Auth0
-3. **Social Login** - Sign in with Google, Microsoft, Apple, Dropbox, or GitHub accounts (see [Social Login Setup Guide](SocialLoginSetup.md))
-4. **Keycloak SSO** - Self-hosted identity management via Keycloak
-5. **Generic OAuth2** - Any OAuth2-compatible identity provider
-6. **SAML2** - Enterprise SSO via SAML 2.0
-
-> **Admin Connections Page:** You can configure all authentication providers through the admin **Connections** page at `/admin/connections`.
+3. **Social Login** - Sign in with Google, Microsoft, Apple, or Dropbox accounts (see [Social Login Setup Guide](SocialLoginSetup.md))
 
 ## Session Security
 

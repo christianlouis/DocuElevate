@@ -373,8 +373,6 @@ worker:
   replicaCount: 4
 ```
 
-> **Beat scheduler:** The Helm chart deploys a dedicated `beat` pod (always exactly 1 replica with `Recreate` strategy) that publishes periodic tasks to the Redis broker.  Workers consume these tasks — scaling workers does **not** duplicate scheduled jobs.
-
 ### Horizontal Pod Autoscaler
 
 ```yaml
@@ -435,29 +433,23 @@ externalRedis:
 
 ### Kubernetes Probes
 
-The Helm chart configures **unauthenticated** liveness and readiness probes on the API pods so kubelet can reach them without credentials.  Default settings:
+The Helm chart configures liveness and readiness probes on the API pods via `/api/health`.  Default settings:
 
 ```yaml
 api:
   livenessProbe:
     httpGet:
-      path: /api/diagnostic/healthz/live
+      path: /api/health
       port: 8000
     initialDelaySeconds: 30
-    periodSeconds: 20
+    periodSeconds: 30
   readinessProbe:
     httpGet:
-      path: /api/diagnostic/healthz/ready
+      path: /api/health
       port: 8000
-    initialDelaySeconds: 15
+    initialDelaySeconds: 10
     periodSeconds: 10
 ```
-
-| Endpoint | Auth | Purpose |
-|----------|------|---------|
-| `/api/diagnostic/healthz/live` | None | Lightweight liveness check — returns 200 if the process is running |
-| `/api/diagnostic/healthz/ready` | None | Readiness check — verifies database and Redis connectivity (503 when DB is down) |
-| `/api/diagnostic/health` | Required | Full health status for monitoring dashboards (Grafana, Uptime Kuma) |
 
 ### Prometheus Scraping
 

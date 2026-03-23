@@ -21,67 +21,6 @@ _DEFAULT_REDIS_URL = "redis://localhost:6379/0"
 
 router = APIRouter()
 
-# ---------------------------------------------------------------------------
-# Unauthenticated probe endpoints for Kubernetes liveness / readiness checks.
-# These intentionally skip authentication so that kubelet can reach them
-# without credentials.  They live under /diagnostic/healthz/* so that the
-# existing authenticated /diagnostic/health endpoint is unaffected.
-# ---------------------------------------------------------------------------
-
-
-@router.get("/diagnostic/healthz/live")
-async def liveness_probe() -> JSONResponse:
-    """Lightweight liveness probe for Kubernetes.
-
-    Returns **200 OK** as long as the process is running.  Kubernetes uses
-    this to decide whether to *restart* the container — it should therefore
-    be as cheap as possible and **never** check external dependencies.
-
-    **Authentication:** None (designed for kubelet probes).
-    """
-    return JSONResponse(content={"status": "ok"}, status_code=200)
-
-
-@router.get("/diagnostic/healthz/ready")
-async def readiness_probe() -> JSONResponse:
-    """Readiness probe for Kubernetes.
-
-    Verifies that the application can serve traffic by checking the database
-    and Redis.  Kubernetes uses this to decide whether to *route traffic* to
-    the pod.
-
-    Returns **200 OK** when all critical subsystems are reachable, or
-    **503 Service Unavailable** when the database is down.
-
-    **Authentication:** None (designed for kubelet probes).
-    """
-    checks: dict[str, dict[str, str]] = {}
-    db_ok = False
-
-    # ── Database check ─────────────────────────────────────────────────
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        checks["database"] = {"status": "ok"}
-        db_ok = True
-    except Exception as exc:
-        logger.warning("Readiness probe: database check failed: %s", exc)
-        checks["database"] = {"status": "error", "detail": str(exc)}
-
-    # ── Redis check ────────────────────────────────────────────────────
-    try:
-        redis_url = settings.redis_url or _DEFAULT_REDIS_URL
-        r = redis_lib.from_url(redis_url, socket_connect_timeout=2, socket_timeout=2)
-        r.ping()
-        checks["redis"] = {"status": "ok"}
-    except Exception as exc:
-        logger.warning("Readiness probe: Redis check failed: %s", exc)
-        checks["redis"] = {"status": "error", "detail": str(exc)}
-
-    http_status = 503 if not db_ok else 200
-    overall = "ready" if db_ok else "not_ready"
-    return JSONResponse(content={"status": overall, "checks": checks}, status_code=http_status)
-
 
 @router.get("/diagnostic/health")
 @require_login

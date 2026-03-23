@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from typing import Annotated, Optional
 
 import httpx
-import requests
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
@@ -57,7 +56,6 @@ async def exchange_onedrive_token(
     # Return just what's needed by the frontend
     return {
         "refresh_token": token_data["refresh_token"],
-        "access_token": token_data.get("access_token", ""),
         "expires_in": token_data.get("expires_in", 3600),
     }
 
@@ -183,102 +181,6 @@ async def test_onedrive_token(request: Request):
     except Exception as e:
         logger.exception(f"Unexpected error testing OneDrive token: {str(e)}")
         return {"status": "error", "message": f"Connection error: {str(e)}"}
-
-
-@router.post("/onedrive/list-folders")
-@require_login
-async def list_onedrive_folders(
-    request: Request,
-    access_token: Annotated[str, Form(...)],
-    path: Annotated[str, Form()] = "",
-):
-    """
-    List folders in a OneDrive account for the directory selector.
-
-    Accepts an OAuth access token (short-lived) and a path to list.
-    Returns a flat list of folder entries under the given path.
-    """
-    try:
-        folder_path = path.strip().strip("/")
-
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-        }
-
-        # Build the Graph API URL for listing children
-        if not folder_path or folder_path == "root":
-            url = "https://graph.microsoft.com/v1.0/me/drive/root/children"
-        else:
-            url = f"https://graph.microsoft.com/v1.0/me/drive/root:/{folder_path}:/children"
-
-        # Only request folders and minimal fields
-        params = {
-            "$filter": "folder ne null",
-            "$select": "name,id,parentReference,folder",
-            "$top": "200",
-        }
-
-        response = requests.get(
-            url,
-            headers=headers,
-            params=params,
-            timeout=settings.http_request_timeout,
-        )
-
-        if response.status_code == 401:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Access token is invalid or expired. Please re-authorize.",
-            )
-
-        if response.status_code != 200:
-            logger.error(f"OneDrive list children failed: {response.status_code} {response.text}")
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Failed to list OneDrive folders: {response.text}",
-            )
-
-        data = response.json()
-        folders = []
-        for item in data.get("value", []):
-            if "folder" in item:
-                parent_path = ""
-                if item.get("parentReference", {}).get("path"):
-                    # parentReference.path looks like /drive/root:/some/path
-                    raw_parent = item["parentReference"]["path"]
-                    prefix = "/drive/root:"
-                    if raw_parent.startswith(prefix):
-                        parent_path = raw_parent[len(prefix) :]
-                    elif raw_parent == "/drive/root":
-                        parent_path = ""
-
-                item_path = f"{parent_path}/{item['name']}" if parent_path else f"/{item['name']}"
-
-                folders.append(
-                    {
-                        "name": item["name"],
-                        "path": item_path,
-                        "id": item.get("id", ""),
-                        "child_count": item.get("folder", {}).get("childCount", 0),
-                    }
-                )
-
-        # Sort folders alphabetically
-        folders.sort(key=lambda f: f["name"].lower())
-
-        return {
-            "folders": folders,
-            "path": f"/{folder_path}" if folder_path else "/",
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"Error listing OneDrive folders: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list folders: {str(e)}",
-        )
 
 
 def format_time_remaining(time_delta):

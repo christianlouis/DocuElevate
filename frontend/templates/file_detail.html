@@ -1056,7 +1056,7 @@
 
           html += `
             <div role="listitem">
-            <a href="/files/${doc.file_id}" aria-label="${title} — ${scorePercent}% similarity (${scoreLabel})" style="text-decoration: none; color: inherit; display: block;">
+            <a href="/files/${doc.file_id}/detail" aria-label="${title} — ${scorePercent}% similarity (${scoreLabel})" style="text-decoration: none; color: inherit; display: block;">
               <div style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1rem; background-color: #f7fafc; border-radius: 0.5rem; border: 1px solid #e2e8f0; transition: border-color 0.2s; cursor: pointer;" onmouseover="this.style.borderColor='#4299e1'" onmouseout="this.style.borderColor='#e2e8f0'">
                 <div style="flex-shrink: 0; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.875rem; color: white; background-color: ${scorePercent >= 80 ? '#48bb78' : scorePercent >= 50 ? '#ecc94b' : '#718096'};" aria-hidden="true">
                   ${scorePercent}%
@@ -1091,20 +1091,19 @@
     }
   </script>
   {% endif %}
-
 {% endblock %}
 
 {% block content %}
 <div class="detail-container">
   <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap;">
-    <a href="/files/{{ file.id }}" class="back-button" style="margin-bottom:0;" aria-label="Back to File Summary">
+    <a href="/files" class="back-button" style="margin-bottom:0;" aria-label="Back to File List">
       <i class="fas fa-arrow-left" aria-hidden="true"></i>
-      Back to File Summary
+      Back to File List
     </a>
     {% if file %}
-    <a href="/files/{{ file.id }}/detail" class="back-button" style="margin-bottom:0;" aria-label="View document detail for {{ file.original_filename }}">
+    <a href="/files/{{ file.id }}" class="back-button" style="margin-bottom:0;" aria-label="View document for {{ file.original_filename }}">
       <i class="fas fa-eye" aria-hidden="true"></i>
-      Document Detail
+      View Document
     </a>
     {% endif %}
   </div>

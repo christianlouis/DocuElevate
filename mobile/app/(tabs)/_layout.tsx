@@ -11,15 +11,10 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { usePushNotifications } from "../../src/hooks/usePushNotifications";
 import { useAuth } from "../../src/context/AuthContext";
-import { useLocale, t } from "../../src/i18n";
 
 export default function TabLayout() {
   const { isAuthenticated } = useAuth();
   usePushNotifications(isAuthenticated);
-  // Subscribe to language changes so tab labels re-render when the language
-  // is switched.  The `lang` variable is intentionally unused – its only
-  // purpose is to make this component a consumer of LocaleContext.
-  useLocale();
 
   return (
     <Tabs
@@ -42,8 +37,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: t("tabs.upload"),
-          tabBarLabel: t("tabs.upload"),
+          title: "Upload",
+          tabBarLabel: "Upload",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="cloud-upload-outline" size={size} color={color} />
           ),
@@ -53,32 +48,23 @@ export default function TabLayout() {
       <Tabs.Screen
         name="files"
         options={{
-          title: t("tabs.files"),
-          tabBarLabel: t("tabs.files"),
+          title: "Files",
+          tabBarLabel: "Files",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="document-text-outline" size={size} color={color} />
           ),
-          headerTitle: t("files.title"),
+          headerTitle: "My Documents",
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: t("tabs.profile"),
-          tabBarLabel: t("tabs.profile"),
+          title: "Profile",
+          tabBarLabel: "Profile",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-circle-outline" size={size} color={color} />
           ),
-          headerTitle: t("tabs.profile"),
-        }}
-      />
-      {/* File detail screen – hidden from tab bar, accessed via navigation */}
-      <Tabs.Screen
-        name="file-detail"
-        options={{
-          href: null,
-          title: t("file_detail.title"),
-          headerTitle: t("file_detail.title"),
+          headerTitle: "Profile",
         }}
       />
     </Tabs>

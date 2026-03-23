@@ -163,16 +163,6 @@ The app registers itself as a share target so any file can be sent directly to D
 
 The root layout (`app/_layout.tsx`) listens for incoming URLs via `Linking.addEventListener` (warm start) and `Linking.getInitialURL()` (cold start).  If the URL uses the `docuelevate://` scheme it is automatically rewritten to `file://` before being forwarded.  Incoming files are stored in `ShareContext` and automatically uploaded by `UploadScreen`.
 
-#### Handling "unmatched route" errors from "Open In…"
-
-iOS sometimes delivers the file path under the `docuelevate://` scheme:
-
-```
-docuelevate://private/var/mobile/Library/Mobile Documents/…/Invoice.pdf
-```
-
-expo-router strips the scheme and tries to match `/private/var/mobile/…` as an in-app route.  The catch-all `app/+not-found.tsx` intercepts this, detects the filesystem-path pattern, adds the file directly to `ShareContext`, and redirects to the Upload tab.  `UploadScreen` picks up the pending file and begins uploading automatically.  The `Linking` listener in the root layout may also fire for the same URL; `ShareContext` deduplicates by URI to prevent double uploads.
-
 **Supported iOS file types:** PDF, images (JPEG / PNG / GIF / BMP / TIFF / WebP), plain text, Word (`.docx`, `.doc`), Excel (`.xlsx`, `.xls`), PowerPoint (`.pptx`, `.ppt`), and any other file (`public.data`).
 
 To use the share sheet:
@@ -183,10 +173,6 @@ To use the share sheet:
 4. The file is uploaded immediately.
 
 > **Note:** `CFBundleDocumentTypes` with `LSHandlerRank: Alternate` means DocuElevate appears in the share sheet as an option but does **not** become the default app for any file type.
-
-#### iOS Action Extension (future enhancement)
-
-Apps like DeepL ("Translate in DeepL") appear as **Action Extensions** in the iOS share sheet, which requires a separate Xcode target and native Swift code.  This is planned as a future enhancement.  The current `CFBundleDocumentTypes` approach places DocuElevate in the "Open With" row of the share sheet.
 
 ### Android – how it works
 

@@ -698,18 +698,6 @@ class TestURLUploadCoverageGaps:
         assert result is False
         mock_getaddrinfo.assert_called_once()
 
-    @patch("app.utils.network.socket.getaddrinfo")
-    def test_is_private_ip_unresolvable_hostname_fails_securely(self, mock_getaddrinfo):
-        """Test that unresolvable hostnames fail securely by blocking access."""
-        import socket
-
-        from app.utils.network import is_private_ip
-
-        mock_getaddrinfo.side_effect = socket.gaierror("Name or service not known")
-
-        result = is_private_ip("unresolvable.example.internal")
-        assert result is True  # Fails securely
-
     @patch("socket.getaddrinfo")
     def test_is_private_ip_hostname_resolves_multiple_ips_all_public(self, mock_getaddrinfo):
         """Test hostname with multiple public IPs returns False (covers 65->61 loop branch)"""

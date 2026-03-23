@@ -447,7 +447,7 @@ class TestFileDetailView:
         db_session.commit()
 
         # Test detail view
-        response = client.get(f"/files/{file_record.id}/process")
+        response = client.get(f"/files/{file_record.id}/detail")
         assert response.status_code == 200
         # Check that response contains HTML with file information
         assert b"File Information" in response.content
@@ -504,7 +504,7 @@ class TestFileDetailView:
         db_session.commit()
 
         # Test detail view
-        response = client.get(f"/files/{file_record.id}/process")
+        response = client.get(f"/files/{file_record.id}/detail")
         assert response.status_code == 200
         # Check that response contains branching visualization elements
         assert b"Process Flow Visualization" in response.content
@@ -514,7 +514,7 @@ class TestFileDetailView:
 
     def test_file_detail_view_nonexistent(self, client: TestClient):
         """Test file detail view for nonexistent file."""
-        response = client.get("/files/99999/process")
+        response = client.get("/files/99999/detail")
         assert response.status_code == 200  # Returns page with error message
         assert b"not found" in response.content.lower()
 
