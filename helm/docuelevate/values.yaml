@@ -121,10 +121,10 @@ api:
     type: ClusterIP
     port: 8000
 
-  # Liveness / readiness probes
+  # Liveness / readiness probes (unauthenticated endpoints for kubelet)
   livenessProbe:
     httpGet:
-      path: /api/health
+      path: /api/diagnostic/healthz/live
       port: 8000
     initialDelaySeconds: 30
     periodSeconds: 20
@@ -132,7 +132,7 @@ api:
 
   readinessProbe:
     httpGet:
-      path: /api/health
+      path: /api/diagnostic/healthz/ready
       port: 8000
     initialDelaySeconds: 15
     periodSeconds: 10
@@ -191,7 +191,36 @@ worker:
       drop: ["ALL"]
 
 # ---------------------------------------------------------------------------
-# Shared workdir volume (api + worker mount the same PVC)
+# Celery Beat scheduler (singleton — always exactly 1 replica)
+# Beat publishes periodic tasks; workers consume them from the broker.
+# ---------------------------------------------------------------------------
+beat:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop: ["ALL"]
+
+# ---------------------------------------------------------------------------
+# Shared workdir volume (api + worker + beat mount the same PVC)
 # ---------------------------------------------------------------------------
 workdir:
   persistence:

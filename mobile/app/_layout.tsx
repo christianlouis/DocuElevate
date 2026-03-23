@@ -23,6 +23,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
 import { ShareProvider, useShare } from "../src/context/ShareContext";
+import { LocaleProvider, useLocale, isLanguageSupported } from "../src/i18n";
 import { mimeTypeFromFilename } from "../src/utils/mimeTypes";
 
 // ---------------------------------------------------------------------------
@@ -100,10 +101,21 @@ function makeUrlHandler(addPendingFile: (f: { uri: string; filename: string; mim
 // ---------------------------------------------------------------------------
 
 function AuthGuard() {
-  const { isLoading, isAuthenticated } = useAuth();
+  const { isLoading, isAuthenticated, user } = useAuth();
   const { addPendingFile } = useShare();
+  const { setLang } = useLocale();
   const segments = useSegments();
   const router = useRouter();
+
+  // Apply the server-side language preference whenever the user profile is
+  // loaded (on login or app resume).  This syncs the language set on the
+  // desktop/web client to the mobile app.  If the server language is not
+  // supported by the mobile app, we leave the current language unchanged.
+  useEffect(() => {
+    if (user?.preferred_language && isLanguageSupported(user.preferred_language)) {
+      void setLang(user.preferred_language);
+    }
+  }, [user?.preferred_language, setLang]);
 
   // Listen for files shared from other apps (iOS Share Sheet / Android Intent).
   // Both cold-start (app was not running) and warm-start (app in background)
@@ -162,11 +174,13 @@ function AuthGuard() {
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <ShareProvider>
-        <AuthProvider>
-          <AuthGuard />
-        </AuthProvider>
-      </ShareProvider>
+      <LocaleProvider>
+        <ShareProvider>
+          <AuthProvider>
+            <AuthGuard />
+          </AuthProvider>
+        </ShareProvider>
+      </LocaleProvider>
     </SafeAreaProvider>
   );
 }

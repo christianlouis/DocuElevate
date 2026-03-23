@@ -12,9 +12,14 @@ DocuElevate includes a native mobile application for iOS and Android built with 
 | Auto-generated API token | ✅ | ✅ |
 | Camera capture → upload | ✅ | ✅ |
 | File picker upload | ✅ | ✅ |
+| Multi-image selection from library | ✅ | ✅ |
 | Share Sheet / Share Intent | ✅ | ✅ |
 | Push notifications | ✅ | ✅ |
-| Document list | ✅ | ✅ |
+| Document list with search | ✅ | ✅ |
+| File detail view with processing logs | ✅ | ✅ |
+| Pre-login legal pages (GDPR) | ✅ | ✅ |
+| Localization (EN, DE, ES, FR, IT) | ✅ | ✅ |
+| Language selection | ✅ | ✅ |
 | Dark mode | ✅ | ✅ |
 
 ## Getting Started (Development)
@@ -171,8 +176,8 @@ curl -X DELETE -H "Authorization: Bearer <token>" https://your-server/api/mobile
 
 1. Open the **Upload** tab.
 2. Tap **Photos**.
-3. Select an existing photo from the device's photo library.
-4. The image is uploaded and queued for processing.
+3. Select one or more photos from the device's photo library (multi-selection is supported).
+4. All selected images are uploaded and queued for processing.
 
 ### File Picker
 
@@ -241,6 +246,75 @@ If a file upload fails (e.g. due to network issues or a server error), the faile
 
 The retry re-uses the original file URI so no re-selection is needed.
 
+## Document Search
+
+The **Files** tab includes a search bar at the top that lets users search through their processed documents by filename. Searches are debounced (400ms) to avoid excessive API calls. Clear the search with the ✕ button to return to the full list.
+
+## File Detail View
+
+Tapping any document in the **Files** tab opens a detail view showing:
+
+- **File metadata**: filename, file size, MIME type, upload date, and file hash
+- **Processing status**: current status with a colour-coded icon
+- **Processing log**: chronological list of processing steps with individual status indicators and timestamps
+
+Pull-to-refresh updates the detail view. This replicates the web interface at `/files/{id}` and `/files/{id}/detail` in a mobile-friendly layout.
+
+## Legal & Compliance
+
+### GDPR & Apple App Store Compliance
+
+Privacy Policy, Terms of Service, and Imprint links are accessible **before login** from both the **Welcome Screen** and the **Login Screen**. This ensures compliance with:
+
+- **GDPR** (General Data Protection Regulation) – users must be able to review the privacy policy before providing personal data
+- **Apple App Store Review Guidelines** – apps must provide accessible privacy information before account creation
+
+Post-login, the same links are available in the **Profile** tab under the "Legal" section.
+
+## Localization (i18n)
+
+The mobile app supports five languages with automatic device-locale detection:
+
+| Language | Code | Status |
+|----------|------|--------|
+| English | `en` | ✅ Complete |
+| German (Deutsch) | `de` | ✅ Complete |
+| Spanish (Español) | `es` | ✅ Complete |
+| French (Français) | `fr` | ✅ Complete |
+| Italian (Italiano) | `it` | ✅ Complete |
+
+### How it works
+
+Language priority (highest to lowest):
+
+1. **Server preference** — `preferred_language` returned by `GET /api/mobile/whoami` on login or app resume.  Allows a language set on the desktop web interface to propagate to mobile automatically.
+2. **AsyncStorage** — the last language explicitly selected on the device, used as an offline fallback when the server is unreachable.
+3. **Device locale** — detected via `expo-localization` on first launch.
+4. **English** — final fallback when none of the above match a supported locale.
+
+When a user selects a language on mobile the choice is:
+- Applied immediately to all screens (via `LocaleContext`)
+- Persisted locally to AsyncStorage
+- Synced to the server via `POST /api/i18n/language` (fire-and-forget), so the next desktop login reflects the same preference.
+
+> **Note**: If the server's preferred language is not supported by the mobile app (e.g. a locale added to the web frontend but not yet translated for mobile), the mobile app falls back to the next priority in the list above.
+
+### Adding a new language
+
+1. Create a new translation file in `mobile/src/i18n/` (e.g. `pt.json` for Portuguese)
+2. Copy the structure from `en.json` and translate all values
+3. Import the new file in `mobile/src/i18n/index.ts`
+4. Add it to the `translations` object and `getSupportedLanguages()` array
+
+## User Settings
+
+The **Profile** tab includes a **Settings** section where users can:
+
+- **Change language**: Select from the supported languages (English, German, Spanish, French, Italian)
+- View server connection details
+- Access legal documents (Privacy Policy, Terms of Service, Imprint)
+- Sign out or delete their account
+
 ## Mobile API Endpoints
 
 The backend exposes a dedicated `/api/mobile/` namespace:
@@ -251,7 +325,8 @@ The backend exposes a dedicated `/api/mobile/` namespace:
 | `POST` | `/api/mobile/register-device` | Bearer | Register Expo push token |
 | `GET` | `/api/mobile/devices` | Bearer | List registered devices |
 | `DELETE` | `/api/mobile/devices/{id}` | Bearer | Deactivate a device |
-| `GET` | `/api/mobile/whoami` | Bearer | Get current user profile |
+| `GET` | `/api/mobile/whoami` | Bearer | Get current user profile (includes `preferred_language`) |
+| `POST` | `/api/i18n/language` | Bearer | Sync language preference to server |
 
 All other API endpoints (file upload, file listing, etc.) work with Bearer token authentication.
 
@@ -295,7 +370,7 @@ Re-registering the same token is safe (idempotent).
 
 ### GET /api/mobile/whoami
 
-Returns the current user's profile.
+Returns the current user's profile, including the server-stored language preference.
 
 **Response (200):**
 ```json
@@ -304,9 +379,14 @@ Returns the current user's profile.
   "display_name": "John Doe",
   "email": "john@example.com",
   "avatar_url": "https://www.gravatar.com/avatar/...",
-  "is_admin": false
+  "is_admin": false,
+  "preferred_language": "de"
 }
 ```
+
+`preferred_language` is `null` when no preference has been saved.  The mobile
+app applies this value on login / app resume, falling back to AsyncStorage and
+then the device locale when it is `null` or unsupported.
 
 ## Configuration
 
@@ -346,8 +426,20 @@ mobile/
     │   ├── LoginScreen.tsx      # Server URL + SSO button + QR code scanner
     │   ├── QRScannerScreen.tsx  # Camera-based QR code scanner for login
     │   ├── UploadScreen.tsx     # Camera capture + photo library + file picker
-    │   ├── FilesScreen.tsx      # Processed document list
-    │   └── ProfileScreen.tsx    # User profile + sign out
+    │   ├── FilesScreen.tsx      # Processed document list with search
+    │   ├── FileDetailScreen.tsx # File detail view with processing logs
+    │   ├── ProfileScreen.tsx    # User profile + settings + sign out
+    │   └── WelcomeScreen.tsx    # Pre-login welcome with legal links
+    ├── i18n/                    # Localization (i18n)
+    │   ├── index.ts             # i18n module (locale detection, t() function)
+    │   ├── en.json              # English translations
+    │   ├── de.json              # German translations
+    │   ├── es.json              # Spanish translations
+    │   ├── fr.json              # French translations
+    │   └── it.json              # Italian translations
+    ├── utils/
+    │   ├── mimeTypes.ts         # MIME type mapping for file extensions
+    │   └── normalizeUri.ts      # URI normalization for deduplication
     └── services/
         └── api.ts               # DocuElevate REST API client
 ```

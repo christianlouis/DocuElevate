@@ -120,6 +120,7 @@ class WhoAmIResponse(BaseModel):
     email: str | None
     avatar_url: str | None
     is_admin: bool
+    preferred_language: str | None
 
 
 # ---------------------------------------------------------------------------
@@ -357,4 +358,5 @@ async def whoami(
         "email": email,
         "avatar_url": avatar_url,
         "is_admin": is_admin,
+        "preferred_language": profile.preferred_language if profile else None,
     }

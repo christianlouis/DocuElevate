@@ -211,6 +211,28 @@ class WebhookConfig(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class AutomationHook(Base):
+    """Zapier / Make.com compatible webhook subscription for automation triggers.
+
+    External automation platforms subscribe to DocuElevate events via the REST
+    hooks protocol.  When an event fires, DocuElevate POSTs a Zapier-compatible
+    flat JSON payload to ``target_url``.  The ``hook_type`` field records which
+    platform created the subscription (informational only).
+    """
+
+    __tablename__ = "automation_hooks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    target_url = Column(String, nullable=False)  # URL to POST events to
+    secret = Column(String, nullable=True)  # Optional HMAC-SHA256 signing secret
+    events = Column(Text, nullable=False)  # JSON list of subscribed event names
+    is_active = Column(Boolean, default=True, nullable=False)
+    hook_type = Column(String(50), nullable=False, default="generic")  # zapier | make | generic
+    description = Column(String, nullable=True)  # Optional human-readable label
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class LocalUser(Base):
     """A locally-registered user authenticated by email and bcrypt password.
 
@@ -940,6 +962,51 @@ class ScheduledJob(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class ClassificationRuleModel(Base):
+    """Custom document classification rule.
+
+    Rules are evaluated during the ``classify`` pipeline step to assign a
+    category to a document.  System-wide rules have ``owner_id IS NULL``;
+    user-specific rules belong to a single owner.
+    """
+
+    __tablename__ = "classification_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # NULL = system-wide rule visible to all users.
+    owner_id = Column(String, nullable=True, index=True)
+
+    # Human-readable rule name (unique per owner).
+    name = Column(String(255), nullable=False)
+
+    # Target category (e.g. "invoice", "contract", "receipt").
+    category = Column(String(100), nullable=False, index=True)
+
+    # Rule type: "filename_pattern", "content_keyword", or "metadata_match".
+    rule_type = Column(String(50), nullable=False)
+
+    # The matching pattern:
+    #   - filename_pattern: a regex
+    #   - content_keyword: pipe-separated keywords
+    #   - metadata_match: "field=value"
+    pattern = Column(String(1000), nullable=False)
+
+    # Higher priority rules are evaluated first (default 0).
+    priority = Column(Integer, nullable=False, default=0)
+
+    # Whether pattern matching is case-sensitive.
+    case_sensitive = Column(Boolean, nullable=False, default=False)
+
+    # Disabled rules are skipped during classification.
+    enabled = Column(Boolean, nullable=False, default=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (UniqueConstraint("owner_id", "name", name="uq_classification_rules_owner_name"),)
+
+
 class MobileDevice(Base):
     """Registered mobile device for push notifications.
 
@@ -1125,3 +1192,97 @@ class PipelineRoutingRule(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class DocumentComment(Base):
+    """Threaded comment on a document.
+
+    Supports threaded replies via ``parent_id`` and @mentions via the
+    ``mentions`` column (comma-separated user identifiers).
+    """
+
+    __tablename__ = "document_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=False, index=True)
+    user_id = Column(String, nullable=False, index=True)
+    parent_id = Column(Integer, ForeignKey("document_comments.id"), nullable=True, index=True)
+    body = Column(Text, nullable=False)
+    mentions = Column(Text, nullable=True)
+    is_resolved = Column(Boolean, nullable=False, default=False, server_default="0")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class DocumentAnnotation(Base):
+    """Text annotation on a specific page and position of a PDF document.
+
+    Stores the bounding-box coordinates (``x``, ``y``, ``width``,
+    ``height``) relative to the page dimensions so that the annotation
+    can be rendered on top of the PDF viewer.
+    """
+
+    __tablename__ = "document_annotations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=False, index=True)
+    user_id = Column(String, nullable=False, index=True)
+    page = Column(Integer, nullable=False)
+    x = Column(Float, nullable=False)
+    y = Column(Float, nullable=False)
+    width = Column(Float, nullable=False, default=0)
+    height = Column(Float, nullable=False, default=0)
+    content = Column(Text, nullable=False)
+    annotation_type = Column(String(50), nullable=False, default="note", server_default="note")
+    color = Column(String(20), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# ---------------------------------------------------------------------------
+# File sharing
+# ---------------------------------------------------------------------------
+
+# Valid roles for FileShare.role
+FILE_SHARE_ROLE_VIEWER = "viewer"
+FILE_SHARE_ROLE_EDITOR = "editor"
+FILE_SHARE_ROLES = (FILE_SHARE_ROLE_VIEWER, FILE_SHARE_ROLE_EDITOR)
+
+
+class FileShare(Base):
+    """Grants a named user access to a ``FileRecord`` owned by someone else.
+
+    The ``owner_id`` column records who created the share (must be the file
+    owner).  ``shared_with_user_id`` is the recipient's stable user
+    identifier (the same kind of string used in ``FileRecord.owner_id``).
+
+    Roles
+    -----
+    ``viewer``  — can read the file, comments, and annotations; may add
+                  comments/annotations; cannot delete or share.
+    ``editor``  — all viewer rights plus the ability to edit document
+                  metadata; cannot delete or re-share.
+
+    Only the file owner may create, update, or revoke shares.
+    """
+
+    __tablename__ = "file_shares"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # The document being shared.
+    file_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=False, index=True)
+
+    # The user who granted the share (must match FileRecord.owner_id).
+    owner_id = Column(String, nullable=False, index=True)
+
+    # The user receiving the share.
+    shared_with_user_id = Column(String, nullable=False, index=True)
+
+    # "viewer" or "editor"
+    role = Column(String(20), nullable=False, default=FILE_SHARE_ROLE_VIEWER)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (UniqueConstraint("file_id", "shared_with_user_id", name="uq_file_share_file_user"),)

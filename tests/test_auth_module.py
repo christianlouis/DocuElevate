@@ -281,7 +281,7 @@ class TestLoginEndpoint:
                             # Verify template was rendered with OAuth enabled
                             mock_templates.TemplateResponse.assert_called_once()
                             call_args = mock_templates.TemplateResponse.call_args
-                            context = call_args[0][1]
+                            context = call_args.kwargs["context"]
                             assert context["show_oauth"] is True
                             assert context["oauth_provider_name"] == "Test SSO"
 

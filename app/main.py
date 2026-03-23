@@ -189,6 +189,18 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
+    # Re-register OAuth / social-login providers now that DB settings are
+    # loaded.  auth.py runs its initial registration at import time (before
+    # the lifespan runs), so providers that are only configured in the
+    # database would not be registered yet.  Calling refresh here ensures
+    # they are active immediately on startup without any manual restart.
+    try:
+        from app.auth import refresh_social_providers
+
+        refresh_social_providers()
+    except Exception as e:
+        logging.warning(f"Could not refresh social login providers on startup: {e}")
+
     # Initialize Sentry after DB settings are loaded so that values configured
     # via the database UI (e.g. SENTRY_DSN) are respected in addition to env vars.
     init_sentry()
@@ -412,15 +424,13 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     # For frontend routes, return appropriate HTML templates
     # Handle 404 errors with a custom template
     if exc.status_code == 404:
-        return _error_templates.TemplateResponse(
-            "404.html", {"request": request}, status_code=status.HTTP_404_NOT_FOUND
-        )
+        return _error_templates.TemplateResponse(request, "404.html", status_code=status.HTTP_404_NOT_FOUND)
 
     # For other HTTP errors, we could create specific templates or use a generic one
     # For now, return a simple error page
     return _error_templates.TemplateResponse(
+        request,
         "404.html",  # Reuse 404 template for other errors, or create a generic error template
-        {"request": request},
         status_code=exc.status_code,
     )
 
@@ -440,8 +450,9 @@ async def custom_500_handler(request: Request, exc: Exception):
 
     # Serve the 500 template for non-API routes
     return _error_templates.TemplateResponse(
+        request,
         "500.html",
-        {"request": request, "exc": exc},
+        context={"exc": exc},
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
     )
 

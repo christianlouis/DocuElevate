@@ -10,6 +10,492 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`45d3ac8`](https://github.com/christianlouis/DocuElevate/commit/45d3ac8cf07d39d49930dd6866f76e6015067b08))
+
+### Testing
+
+- Add assertions for task enqueuing parameters
+  ([`eeae47d`](https://github.com/christianlouis/DocuElevate/commit/eeae47ddec01339421e503ba484157e798750b8a))
+
+
+## Unreleased
+
+
+## v0.172.2 (2026-03-23)
+
+### Bug Fixes
+
+- Adapt TemplateResponse calls to Starlette 1.0 new-style API
+  ([`c4e10be`](https://github.com/christianlouis/DocuElevate/commit/c4e10bee5e096e71a5bc4fac4928f69e5c04f2fb))
+
+- Update test assertions and lint fixes for Starlette 1.0 TemplateResponse API
+  ([`93629ff`](https://github.com/christianlouis/DocuElevate/commit/93629ff44083d43f79fdd49431457023e53d13e4))
+
+- **build**: Remove --omit=dev from npm ci in Dockerfile frontend-builder stage
+  ([`b4e0067`](https://github.com/christianlouis/DocuElevate/commit/b4e0067a27e2fb161349bd38c6d3b3f3bcb86972))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`0841713`](https://github.com/christianlouis/DocuElevate/commit/084171395d1076c716aa500a516118db49468ff5))
+
+
+## Unreleased
+
+
+## v0.172.1 (2026-03-22)
+
+### Bug Fixes
+
+- Social login providers now work from DB config without restart
+  ([`0c7ea67`](https://github.com/christianlouis/DocuElevate/commit/0c7ea6748da554c80ef9af1b709c08aba49174e6))
+
+
+## v0.172.0 (2026-03-22)
+
+### Features
+
+- **ui**: Migrate Tailwind CSS from v2 CDN to v3 Play CDN (interim step)
+  ([`1d7df13`](https://github.com/christianlouis/DocuElevate/commit/1d7df13c943cc9138dc3ed514f9ab81d861bfbac))
+
+- **ui**: Replace Tailwind CSS CDN with compiled v3 production build
+  ([`14b3031`](https://github.com/christianlouis/DocuElevate/commit/14b3031e63e8645c4048dd73a594e9a53a919c17))
+
+
+## v0.171.3 (2026-03-22)
+
+### Bug Fixes
+
+- **ui**: Add missing opening script tag in base.html Sentry block
+  ([`425472c`](https://github.com/christianlouis/DocuElevate/commit/425472c839b3564c20a29b6e983fa6b9e7d6cf9c))
+
+
+## v0.171.2 (2026-03-22)
+
+### Bug Fixes
+
+- **ui**: Fix greyed-out toggle switches on admin connections page
+  ([`46772fc`](https://github.com/christianlouis/DocuElevate/commit/46772fc7461f9f8333b399b301ec969f5caa4c1e))
+
+### Chores
+
+- Upgrade Sentry Browser SDK CDN bundle from v9.x.x to v10.x.x
+  ([`3d0bdf7`](https://github.com/christianlouis/DocuElevate/commit/3d0bdf783649019d631fa0b1156db66e5e3269b4))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`25d32a9`](https://github.com/christianlouis/DocuElevate/commit/25d32a9006161b433dc6bbac3810ab560e5e5847))
+
+- **changelog**: Update changelog [skip ci]
+  ([`9822ba5`](https://github.com/christianlouis/DocuElevate/commit/9822ba583d076671692699cd9856d8fbc7d0218d))
+
+
+## Unreleased
+
+### Chores
+
+- Upgrade Sentry Browser SDK CDN bundle from v9.x.x to v10.x.x
+  ([`3d0bdf7`](https://github.com/christianlouis/DocuElevate/commit/3d0bdf783649019d631fa0b1156db66e5e3269b4))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`9822ba5`](https://github.com/christianlouis/DocuElevate/commit/9822ba583d076671692699cd9856d8fbc7d0218d))
+
+
+## Unreleased
+
+### Chores
+
+- Upgrade Sentry Browser SDK CDN bundle from v9.x.x to v10.x.x
+  ([`3d0bdf7`](https://github.com/christianlouis/DocuElevate/commit/3d0bdf783649019d631fa0b1156db66e5e3269b4))
+
+
+## v0.171.1 (2026-03-22)
+
+### Bug Fixes
+
+- **admin**: Fix greyed-out QR login toggle on admin connections page
+  ([`d4cc44a`](https://github.com/christianlouis/DocuElevate/commit/d4cc44a72f7821360ffce1c9743efb85dbc65f22))
+
+
+## v0.171.0 (2026-03-22)
+
+### Features
+
+- **ui**: Show file owner, add claim ownership on file summary, detail, and annotations pages
+  ([`9458055`](https://github.com/christianlouis/DocuElevate/commit/9458055661e5458256b51cfe1965b0607d6a478e))
+
+
+## v0.170.0 (2026-03-22)
+
+### Features
+
+- **ui**: Integrate EmbedPDF viewer with annotations panel for bidirectional sync
+  ([`9c98a84`](https://github.com/christianlouis/DocuElevate/commit/9c98a8438ab81c70cc497191449378b914775731))
+
+
+## v0.169.1 (2026-03-22)
+
+### Bug Fixes
+
+- **api**: Add PUT /api/settings/{key} endpoint and shared credentials for Google/Microsoft social
+  login
+  ([`7d6128d`](https://github.com/christianlouis/DocuElevate/commit/7d6128d78f7782d4a687b51220747714ab59df6d))
+
+
+## v0.169.0 (2026-03-22)
+
+### Bug Fixes
+
+- **migrations**: Fix down_revision type annotation in 042_add_file_shares
+  ([`5f5e18d`](https://github.com/christianlouis/DocuElevate/commit/5f5e18d26165edbeb18be099c23b3178655068f0))
+
+- **sharing**: Address code review: fix default role, auto-share logic, aria labels
+  ([`124b802`](https://github.com/christianlouis/DocuElevate/commit/124b802c8f49a63e032f46cf8e1980e526b4ea89))
+
+### Features
+
+- **sharing**: Add file sharing and role-based access management
+  ([`6f2752b`](https://github.com/christianlouis/DocuElevate/commit/6f2752bdf804789e704983a71afe42e04ea852b6))
+
+
+## v0.168.1 (2026-03-22)
+
+### Bug Fixes
+
+- **ui**: Styled toggle switches and Dropbox global-credentials field visibility in admin
+  connections
+  ([`b2912da`](https://github.com/christianlouis/DocuElevate/commit/b2912da4dcad7bf7f11000a5ba0bc267fd5956cc))
+
+
+## v0.168.0 (2026-03-22)
+
+### Features
+
+- **ui**: Add Sentry Browser SDK client-side integration
+  ([`b202f10`](https://github.com/christianlouis/DocuElevate/commit/b202f10e1a437d0d07c144339ba4f4253e8f645b))
+
+
+## v0.167.0 (2026-03-22)
+
+### Bug Fixes
+
+- **auth**: Address code review feedback - accessibility, docstrings, portable test paths
+  ([`c17afe8`](https://github.com/christianlouis/DocuElevate/commit/c17afe8c11789cced8e5edde7bd61a5dfbbac9a7))
+
+- **auth**: Fix SSO auto-login check to use strict boolean comparison and add tests
+  ([`840a5bc`](https://github.com/christianlouis/DocuElevate/commit/840a5bcd5b73b0dbed1d16174b937e877352afe0))
+
+### Documentation
+
+- **auth**: Update documentation for new auth providers and connections page
+  ([`0287a16`](https://github.com/christianlouis/DocuElevate/commit/0287a165cfc27bda8166b61f629b103ef3269bb9))
+
+### Features
+
+- **auth**: Add GitHub, Keycloak, Generic OAuth2 social login providers and connections page
+  ([`54a0ba1`](https://github.com/christianlouis/DocuElevate/commit/54a0ba1023d8e39fc133a2312beab349181f308b))
+
+
+## v0.166.1 (2026-03-22)
+
+### Bug Fixes
+
+- Make back-link text consistent with aria-labels across file views
+  ([`d71add1`](https://github.com/christianlouis/DocuElevate/commit/d71add1484d01e4598a61f2e59c106afa8971d6a))
+
+### Refactoring
+
+- Initial step - remove comments/annotations from file_detail and file_view templates
+  ([`5a3ddcc`](https://github.com/christianlouis/DocuElevate/commit/5a3ddcc1f0d9e2daa674d5098ab1bafe4d2e0bc8))
+
+- **views**: Split file views into summary, detail, process, and annotations pages
+  ([`f852ba9`](https://github.com/christianlouis/DocuElevate/commit/f852ba978343934631f70aa12aec49ec79da8288))
+
+
+## v0.166.0 (2026-03-22)
+
+### Bug Fixes
+
+- **comments**: Address code review feedback
+  ([`4b64127`](https://github.com/christianlouis/DocuElevate/commit/4b6412734b53a345e41d0531f03ff1c2318e9f55))
+
+- **ui**: Address code review feedback for comments/annotations UX
+  ([`a5a8cd9`](https://github.com/christianlouis/DocuElevate/commit/a5a8cd94c9af17f39a36993c0f419404c60055c3))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`8f09050`](https://github.com/christianlouis/DocuElevate/commit/8f0905033c4cd4269717dde64c4830c482407e41))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`c22bb66`](https://github.com/christianlouis/DocuElevate/commit/c22bb66c4b5a0a3554a43f2df90a5be1bee90e3b))
+
+### Features
+
+- **comments**: Add document comments, annotations, and @mention support
+  ([`ad795e2`](https://github.com/christianlouis/DocuElevate/commit/ad795e200ad2d4d0fc8381ed2903f4a2a905243f))
+
+- **ui**: Add comments and annotations UX to file detail page
+  ([`a7a8821`](https://github.com/christianlouis/DocuElevate/commit/a7a88218c391ba3642ef60b433e5e6a657bea239))
+
+### Testing
+
+- Improve test coverage for app/utils/setup_wizard.py
+  ([`49cd41e`](https://github.com/christianlouis/DocuElevate/commit/49cd41e2e4eef6df3f06482a149c41b92c502e7a))
+
+- **imap**: Improve coverage for imap_tasks.py from 64% to 100%
+  ([`9dc1000`](https://github.com/christianlouis/DocuElevate/commit/9dc1000d633ff56791480122eaa875a489ec158d))
+
+
+## Unreleased
+
+### Testing
+
+- Improve test coverage for app/utils/setup_wizard.py
+  ([`49cd41e`](https://github.com/christianlouis/DocuElevate/commit/49cd41e2e4eef6df3f06482a149c41b92c502e7a))
+
+- **imap**: Improve coverage for imap_tasks.py from 64% to 100%
+  ([`9dc1000`](https://github.com/christianlouis/DocuElevate/commit/9dc1000d633ff56791480122eaa875a489ec158d))
+
+
+## v0.165.0 (2026-03-21)
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`3e6fbb4`](https://github.com/christianlouis/DocuElevate/commit/3e6fbb49c41b57e71091b68c670370340cc2f1ce))
+
+- **changelog**: Update changelog [skip ci]
+  ([`bd26f31`](https://github.com/christianlouis/DocuElevate/commit/bd26f31778da02d0cd439fc1ac445d45aed119d2))
+
+- **changelog**: Update changelog [skip ci]
+  ([`ae8be68`](https://github.com/christianlouis/DocuElevate/commit/ae8be68df9b1b79272ac4b4c1c074f6c58f4c7b9))
+
+### Features
+
+- **tests**: Improve app/auth.py coverage from 70% to 97.74%
+  ([`e5feee5`](https://github.com/christianlouis/DocuElevate/commit/e5feee5aae5c0a0ae8e30e8c24a92a29dec4223c))
+
+### Testing
+
+- Improve coverage for app/api/files.py from 63% to 97.81%
+  ([`0a192ee`](https://github.com/christianlouis/DocuElevate/commit/0a192eeeca9d9bbb19022633926a8f02e3dc2493))
+
+- Improve coverage for app/views/audit_logs.py from 61% to 100%
+  ([`00e0d5f`](https://github.com/christianlouis/DocuElevate/commit/00e0d5fa45714ae76ed3302007b38b14852605d5))
+
+- Improve test coverage for app/api/imap_profiles.py to 100%
+  ([`8cc292c`](https://github.com/christianlouis/DocuElevate/commit/8cc292c6eef0652c9ce03e9f103fc2496cf63e23))
+
+- Improve test coverage for app/api/sessions.py
+  ([`74a8c22`](https://github.com/christianlouis/DocuElevate/commit/74a8c22478e4da40116d26a141d0a09eb9463fd3))
+
+- Improve test coverage for app/tasks/upload_to_icloud.py to 100%
+  ([`982c222`](https://github.com/christianlouis/DocuElevate/commit/982c222717700a3bdb117f33ecb0d83d212e2e98))
+
+- **convert_to_pdfa**: Assert -- terminates option parsing before file paths
+  ([`5b04504`](https://github.com/christianlouis/DocuElevate/commit/5b04504b0eb3919a1d121ee7205f52be102a3c08))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`bd26f31`](https://github.com/christianlouis/DocuElevate/commit/bd26f31778da02d0cd439fc1ac445d45aed119d2))
+
+- **changelog**: Update changelog [skip ci]
+  ([`ae8be68`](https://github.com/christianlouis/DocuElevate/commit/ae8be68df9b1b79272ac4b4c1c074f6c58f4c7b9))
+
+### Testing
+
+- Improve coverage for app/api/files.py from 63% to 97.81%
+  ([`0a192ee`](https://github.com/christianlouis/DocuElevate/commit/0a192eeeca9d9bbb19022633926a8f02e3dc2493))
+
+- Improve test coverage for app/api/imap_profiles.py to 100%
+  ([`8cc292c`](https://github.com/christianlouis/DocuElevate/commit/8cc292c6eef0652c9ce03e9f103fc2496cf63e23))
+
+- Improve test coverage for app/api/sessions.py
+  ([`74a8c22`](https://github.com/christianlouis/DocuElevate/commit/74a8c22478e4da40116d26a141d0a09eb9463fd3))
+
+- Improve test coverage for app/tasks/upload_to_icloud.py to 100%
+  ([`982c222`](https://github.com/christianlouis/DocuElevate/commit/982c222717700a3bdb117f33ecb0d83d212e2e98))
+
+- **convert_to_pdfa**: Assert -- terminates option parsing before file paths
+  ([`5b04504`](https://github.com/christianlouis/DocuElevate/commit/5b04504b0eb3919a1d121ee7205f52be102a3c08))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`ae8be68`](https://github.com/christianlouis/DocuElevate/commit/ae8be68df9b1b79272ac4b4c1c074f6c58f4c7b9))
+
+### Testing
+
+- Improve test coverage for app/api/imap_profiles.py to 100%
+  ([`8cc292c`](https://github.com/christianlouis/DocuElevate/commit/8cc292c6eef0652c9ce03e9f103fc2496cf63e23))
+
+- Improve test coverage for app/api/sessions.py
+  ([`74a8c22`](https://github.com/christianlouis/DocuElevate/commit/74a8c22478e4da40116d26a141d0a09eb9463fd3))
+
+- Improve test coverage for app/tasks/upload_to_icloud.py to 100%
+  ([`982c222`](https://github.com/christianlouis/DocuElevate/commit/982c222717700a3bdb117f33ecb0d83d212e2e98))
+
+- **convert_to_pdfa**: Assert -- terminates option parsing before file paths
+  ([`5b04504`](https://github.com/christianlouis/DocuElevate/commit/5b04504b0eb3919a1d121ee7205f52be102a3c08))
+
+
+## Unreleased
+
+### Testing
+
+- **convert_to_pdfa**: Assert -- terminates option parsing before file paths
+  ([`5b04504`](https://github.com/christianlouis/DocuElevate/commit/5b04504b0eb3919a1d121ee7205f52be102a3c08))
+
+
+## v0.164.0 (2026-03-21)
+
+### Bug Fixes
+
+- Merge main branch and renumber migration 027→037
+  ([`204000a`](https://github.com/christianlouis/DocuElevate/commit/204000aabcf94bd9eeff7cb67d8707e9af8b7fa3))
+
+- Merge main branch and renumber migration 037→040
+  ([`e518bce`](https://github.com/christianlouis/DocuElevate/commit/e518bce922524ae8a12372abe582a6feb5efe3aa))
+
+- **automation**: Address code review - path traversal fix and test marker
+  ([`6a83d51`](https://github.com/christianlouis/DocuElevate/commit/6a83d51d888a20045ad2a3e4e68d3205329e3856))
+
+- **automation**: Register automation task in celery worker and add docs
+  ([`ce2a76f`](https://github.com/christianlouis/DocuElevate/commit/ce2a76fb770da3257b31cb5958c888821a23da0c))
+
+- **docs**: Remove duplicate Further Assistance heading in API.md
+  ([`34ff7f8`](https://github.com/christianlouis/DocuElevate/commit/34ff7f8de877cc0a7ae3b000cb3199cf017be16c))
+
+### Features
+
+- **automation**: Add Zapier and Make.com integration
+  ([`d167be8`](https://github.com/christianlouis/DocuElevate/commit/d167be827421b3abf19441a2dea052abb486b567))
+
+
+## v0.163.1 (2026-03-21)
+
+### Bug Fixes
+
+- **api**: Add missing `import requests` in dropbox.py and onedrive.py to fix ruff F821
+  ([`35caf24`](https://github.com/christianlouis/DocuElevate/commit/35caf24e3c0f4034b200038fd507a4747b6785f6))
+
+### Testing
+
+- Add -- separator assertions to rclone and ocrmypdf tests
+  ([`81484ad`](https://github.com/christianlouis/DocuElevate/commit/81484ad770e859e49da2a4bb5cd0ab01edf89de1))
+
+
+## v0.163.0 (2026-03-20)
+
+### Bug Fixes
+
+- **security**: Escape HTML in folder browser to prevent XSS from folder names
+  ([`b3a2387`](https://github.com/christianlouis/DocuElevate/commit/b3a238744d1618b7f891b7c43f243dd9099ecf49))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`65cf33c`](https://github.com/christianlouis/DocuElevate/commit/65cf33ce89cfcb7f81f31278a2cf6523c32a4754))
+
+### Documentation
+
+- Update setup guides and API docs for folder browser and system credentials
+  ([`d6c21b8`](https://github.com/christianlouis/DocuElevate/commit/d6c21b8026ccc8fb71ed12394faba08214e0793d))
+
+### Features
+
+- **api**: Add folder browser API endpoints and UI for Dropbox and OneDrive
+  ([`a842306`](https://github.com/christianlouis/DocuElevate/commit/a8423064ec72bf8014ca37936960c5da9ddcea1f))
+
+- **auth**: Default to system-wide app credentials in OAuth wizards for user mode
+  ([`23c8c76`](https://github.com/christianlouis/DocuElevate/commit/23c8c76b392a95e723f25f8cb3714d4e5f256b30))
+
+- **ui**: Replace manual credential fields with OAuth wizard flow for watch folder sources
+  ([`ed01952`](https://github.com/christianlouis/DocuElevate/commit/ed0195261032fb92df5f655a73f056ac380fe8b6))
+
+### Testing
+
+- Add tests for folder browser APIs and system credentials toggle
+  ([`1e1e6e6`](https://github.com/christianlouis/DocuElevate/commit/1e1e6e62807a6d4b7bc84b2d8c967dceb97f1cb6))
+
+
+## v0.162.0 (2026-03-20)
+
+
+## v0.161.0 (2026-03-20)
+
+### Documentation
+
+- Update scaling, health probe, and beat scheduler documentation
+  ([`4d019d5`](https://github.com/christianlouis/DocuElevate/commit/4d019d53d9ad161a68639d6ba2109ba3ac77df34))
+
+### Features
+
+- **scaling**: Enable horizontal scaling for API and worker pods
+  ([`f75b125`](https://github.com/christianlouis/DocuElevate/commit/f75b12599291050f97aa452d980f17547ddd7bd6))
+
+
+## v0.160.3 (2026-03-20)
+
+### Bug Fixes
+
+- **mobile**: Wire i18n reactivity, translate all screens, sync language with server
+  ([`3b5ca04`](https://github.com/christianlouis/DocuElevate/commit/3b5ca04ebc8b6dd20f877bc4797e364e0997d840))
+
+### Chores
+
+- **mobile**: Upgrade ESLint to v9 with flat config and fix expo-localization version
+  ([`0e6a4c5`](https://github.com/christianlouis/DocuElevate/commit/0e6a4c5084b3704653965f0091c36b9c78b8ad60))
+
+
+## v0.160.2 (2026-03-20)
+
+### Bug Fixes
+
+- **dropbox**: Fix Invalid redirect_uri error by adding PUBLIC_BASE_URL config and URL-encoding
+  ([`5e3e2b1`](https://github.com/christianlouis/DocuElevate/commit/5e3e2b19997d3af6570fbaa1e75a49cbfe6cf78d))
+
+
+## v0.160.1 (2026-03-20)
+
+### Bug Fixes
+
+- **mobile**: Update expo-localization version from ~16.0.6 to ~16.1.0
+  ([`78c3717`](https://github.com/christianlouis/DocuElevate/commit/78c3717661923b43f1762fa7728c75e803938fb7))
+
+
+## v0.160.0 (2026-03-20)
+
+### Bug Fixes
+
+- **mobile**: Address code review feedback - error handling, filename collision, hash display
+  ([`6541529`](https://github.com/christianlouis/DocuElevate/commit/65415292507aa37408428400aef7e87e006abfd0))
+
+### Features
+
+- **mobile**: Add pre-login legal pages, multi-image selection, file detail view, search, i18n, HEIC
+  support
+  ([`67c17e7`](https://github.com/christianlouis/DocuElevate/commit/67c17e7baa8edf76be394d0aff42c2adeae351e1))
+
+
 ## v0.159.0 (2026-03-19)
 
 ### Code Style

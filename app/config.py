@@ -193,6 +193,16 @@ class Settings(BaseSettings):
     google_docai_processor_id: Optional[str] = None
     google_docai_location: str = "us"  # Processor location, e.g. "us" or "eu"
     external_hostname: str = "localhost"  # Default to localhost
+    public_base_url: Optional[str] = Field(
+        default=None,
+        description=(
+            "The full public base URL of the application, including scheme "
+            "(e.g., 'https://docuelevate.example.com'). "
+            "When set, this overrides the auto-detected URL for OAuth redirect URIs. "
+            "This is required when the application is behind a reverse proxy that does "
+            "not forward X-Forwarded-Proto headers correctly."
+        ),
+    )
 
     # ---------------------------------------------------------------------------
     # Document Translation Settings
@@ -233,6 +243,10 @@ class Settings(BaseSettings):
             "When set, this takes precedence over session_lifetime_days.  "
             "Useful for admin-configured non-standard durations."
         ),
+    )
+    qr_login_enabled: bool = Field(
+        default=True,
+        description="Enable QR code-based login for mobile device authentication (default: True).",
     )
     qr_login_challenge_ttl_seconds: int = Field(
         default=120,
@@ -295,12 +309,55 @@ class Settings(BaseSettings):
     authentik_client_secret: Optional[str] = None
     authentik_config_url: Optional[str] = None
     oauth_provider_name: Optional[str] = None  # Name to display for the OAuth provider
+    sso_auto_login: bool = Field(
+        default=False,
+        description=(
+            "Automatically redirect to SSO login when authentication is required. "
+            "When enabled, users are sent directly to the SSO provider instead of "
+            "seeing the login page. Only effective when OIDC is configured."
+        ),
+    )
+
+    # Keycloak SSO
+    social_auth_keycloak_enabled: bool = False
+    social_auth_keycloak_client_id: Optional[str] = None
+    social_auth_keycloak_client_secret: Optional[str] = None
+    social_auth_keycloak_server_url: Optional[str] = None
+    social_auth_keycloak_realm: Optional[str] = None
+
+    # Generic OAuth2 SSO
+    social_auth_generic_oauth2_enabled: bool = False
+    social_auth_generic_oauth2_client_id: Optional[str] = None
+    social_auth_generic_oauth2_client_secret: Optional[str] = None
+    social_auth_generic_oauth2_authorize_url: Optional[str] = None
+    social_auth_generic_oauth2_token_url: Optional[str] = None
+    social_auth_generic_oauth2_userinfo_url: Optional[str] = None
+    social_auth_generic_oauth2_scope: str = "openid profile email"
+    social_auth_generic_oauth2_name: str = "OAuth2"
+
+    # SAML2 SSO
+    social_auth_saml2_enabled: bool = False
+    social_auth_saml2_entity_id: Optional[str] = None
+    social_auth_saml2_sso_url: Optional[str] = None
+    social_auth_saml2_certificate: Optional[str] = None
+    social_auth_saml2_name: str = "SAML2"
 
     # Social Login Providers
     # Google OAuth2
     social_auth_google_enabled: bool = False
     social_auth_google_client_id: Optional[str] = None
     social_auth_google_client_secret: Optional[str] = None
+    social_auth_google_use_global_credentials: bool = Field(
+        default=False,
+        description=(
+            "When True, Google social login uses the global GOOGLE_DRIVE_CLIENT_ID / "
+            "GOOGLE_DRIVE_CLIENT_SECRET credentials (the Google Drive OAuth integration credentials) "
+            "instead of requiring separate SOCIAL_AUTH_GOOGLE_CLIENT_ID / "
+            "SOCIAL_AUTH_GOOGLE_CLIENT_SECRET values. "
+            "Requires SOCIAL_AUTH_GOOGLE_ENABLED=True and the global Google Drive OAuth credentials to be set. "
+            "Default: False."
+        ),
+    )
 
     # Microsoft OAuth2 (Azure AD / Microsoft Entra ID)
     social_auth_microsoft_enabled: bool = False
@@ -313,6 +370,17 @@ class Settings(BaseSettings):
             "Use 'common' to allow any Microsoft account and any Azure AD org. "
             "Use a specific tenant ID (GUID) to restrict to a single organization. "
             "Default: common."
+        ),
+    )
+    social_auth_microsoft_use_global_credentials: bool = Field(
+        default=False,
+        description=(
+            "When True, Microsoft social login uses the global ONEDRIVE_CLIENT_ID / "
+            "ONEDRIVE_CLIENT_SECRET credentials (the OneDrive integration credentials) "
+            "instead of requiring separate SOCIAL_AUTH_MICROSOFT_CLIENT_ID / "
+            "SOCIAL_AUTH_MICROSOFT_CLIENT_SECRET values. "
+            "Requires SOCIAL_AUTH_MICROSOFT_ENABLED=True and the global OneDrive credentials to be set. "
+            "Default: False."
         ),
     )
 
@@ -337,6 +405,11 @@ class Settings(BaseSettings):
             "Default: False."
         ),
     )
+
+    # GitHub OAuth2
+    social_auth_github_enabled: bool = False
+    social_auth_github_client_id: Optional[str] = None
+    social_auth_github_client_secret: Optional[str] = None
 
     # Local user signup
     allow_local_signup: bool = Field(
@@ -834,6 +907,11 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Telegram Bot
+    telegram_bot_token: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
+    telegram_enabled: bool = False
+
     # Notification settings
     notification_urls: Union[List[str], str] = Field(
         default_factory=list,
@@ -866,6 +944,12 @@ class Settings(BaseSettings):
     webhook_enabled: bool = Field(
         default=True,
         description="Enable webhook delivery for document events",
+    )
+
+    # Automation hooks (Zapier / Make.com)
+    automation_hooks_enabled: bool = Field(
+        default=True,
+        description="Enable Zapier / Make.com automation hook subscriptions and delivery",
     )
 
     # ── Backup / restore settings ──────────────────────────────────────────────
@@ -1290,6 +1374,40 @@ class Settings(BaseSettings):
             "IP addresses and user agents – to Sentry events.  Disabled by default "
             "for privacy compliance (GDPR / CCPA).  Enable only if your Sentry "
             "project is configured to handle PII."
+        ),
+    )
+
+    # ---------------------------------------------------------------------------
+    # Observability – Sentry Browser JavaScript SDK (client-side)
+    # ---------------------------------------------------------------------------
+    # The same SENTRY_DSN is reused for the browser SDK.  The DSN is a *public*
+    # key in Sentry's model and is intentionally embedded in client-side code.
+    # All three settings below default to 0.0 / disabled so that operators opt-in
+    # to the level of browser monitoring they want.
+    # ---------------------------------------------------------------------------
+    sentry_js_traces_sample_rate: float = Field(
+        default=0.0,
+        description=(
+            "Fraction of browser page-loads captured for client-side performance tracing "
+            "(0.0 – 1.0).  0.0 disables browser tracing; 1.0 captures every navigation. "
+            "Only active when SENTRY_DSN is set."
+        ),
+    )
+    sentry_js_replay_session_sample_rate: float = Field(
+        default=0.0,
+        description=(
+            "Fraction of sessions recorded by Sentry Session Replay (0.0 – 1.0). "
+            "0.0 disables session recording; 1.0 records every session. "
+            "Only active when SENTRY_DSN is set."
+        ),
+    )
+    sentry_js_replay_on_error_sample_rate: float = Field(
+        default=0.1,
+        description=(
+            "Fraction of sessions with an error that will be recorded by Sentry Session "
+            "Replay (0.0 – 1.0).  Defaults to 0.1 (10 %) so that errors are captured "
+            "with replay context even when session-level recording is disabled.  "
+            "Only active when SENTRY_DSN is set."
         ),
     )
 

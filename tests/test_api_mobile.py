@@ -467,6 +467,42 @@ class TestWhoAmI:
             assert data["email"] == _OWNER
             assert data["avatar_url"] is not None  # Gravatar URL
             assert data["is_admin"] is False
+            assert data["preferred_language"] is None  # not set yet
+        finally:
+            _cleanup(app)
+
+    def test_whoami_returns_preferred_language(self, mob_engine, mob_session):
+        """preferred_language from UserProfile is included in the whoami response."""
+        from app.main import app
+        from app.models import UserProfile
+
+        profile = UserProfile(
+            user_id=_OWNER,
+            display_name="Bob Test",
+            preferred_language="de",
+        )
+        mob_session.add(profile)
+        mob_session.commit()
+
+        client = _make_client(mob_engine)
+        try:
+            resp = client.get("/api/mobile/whoami")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["preferred_language"] == "de"
+        finally:
+            _cleanup(app)
+
+    def test_whoami_no_profile_preferred_language_is_null(self, mob_engine):
+        """preferred_language is null when no UserProfile exists."""
+        from app.main import app
+
+        client = _make_client(mob_engine)
+        try:
+            resp = client.get("/api/mobile/whoami")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["preferred_language"] is None
         finally:
             _cleanup(app)
 

@@ -1404,6 +1404,55 @@ Get the current user's integration quota usage.
 }
 ```
 
+## Cloud Provider Folder Browser
+
+Browse folders in connected cloud storage providers. These endpoints are used by the OAuth callback pages to let users select a target folder after authorization.
+
+### POST /api/dropbox/list-folders
+
+List folders in a Dropbox account. Requires a short-lived OAuth access token obtained during the authorization flow.
+
+**Request (form-data):**
+
+| Field          | Type   | Required | Description                          |
+|----------------|--------|----------|--------------------------------------|
+| `access_token` | string | Yes      | Dropbox OAuth access token           |
+| `path`         | string | No       | Folder path to list (default: root)  |
+
+**Response (200):**
+```json
+{
+  "folders": [
+    { "name": "Documents", "path": "/Documents", "id": "id:abc123" },
+    { "name": "Photos", "path": "/Photos", "id": "id:def456" }
+  ],
+  "path": "/",
+  "has_more": false
+}
+```
+
+### POST /api/onedrive/list-folders
+
+List folders in a OneDrive account. Requires a short-lived OAuth access token obtained during the authorization flow.
+
+**Request (form-data):**
+
+| Field          | Type   | Required | Description                          |
+|----------------|--------|----------|--------------------------------------|
+| `access_token` | string | Yes      | Microsoft Graph access token         |
+| `path`         | string | No       | Folder path to list (default: root)  |
+
+**Response (200):**
+```json
+{
+  "folders": [
+    { "name": "Documents", "path": "/Documents", "id": "abc123", "child_count": 5 },
+    { "name": "Pictures", "path": "/Pictures", "id": "def456", "child_count": 12 }
+  ],
+  "path": "/"
+}
+```
+
 ## Webhooks
 
 Manage webhook configurations for notifying external systems when document events occur. All webhook endpoints require admin access.
@@ -1593,6 +1642,47 @@ Lightweight endpoint returning the total number of queued + in-progress items. D
 ```
 
 ## Diagnostic
+
+### GET /api/diagnostic/healthz/live
+
+Lightweight liveness probe for Kubernetes.  Returns **200 OK** as long as the process is running.  This endpoint does **not** check external dependencies and is intentionally cheap.
+
+**Authentication:** None (designed for kubelet probes)
+
+**Response (200 OK):**
+```json
+{
+  "status": "ok"
+}
+```
+
+### GET /api/diagnostic/healthz/ready
+
+Readiness probe for Kubernetes.  Verifies that the application can serve traffic by checking database and Redis connectivity.
+
+**Authentication:** None (designed for kubelet probes)
+
+**Response (200 OK) – ready to serve traffic:**
+```json
+{
+  "status": "ready",
+  "checks": {
+    "database": {"status": "ok"},
+    "redis":    {"status": "ok"}
+  }
+}
+```
+
+**Response (503 Service Unavailable) – database unreachable:**
+```json
+{
+  "status": "not_ready",
+  "checks": {
+    "database": {"status": "error", "detail": "..."},
+    "redis":    {"status": "ok"}
+  }
+}
+```
 
 ### GET /api/diagnostic/health
 
@@ -2252,6 +2342,316 @@ print(response.json())
 ```
 
 
+## Classification Rules
+
+The classification rules API lets you manage custom document classification rules.  Rules are evaluated during the `classify` pipeline step to assign a category to each document based on filename patterns, content keywords, and metadata fields.
+
+### Built-in Categories
+
+```bash
+GET /api/classification-rules/categories
+```
+
+Returns the pre-built classification categories.
+
+**Response (200):**
+```json
+{
+  "invoice": "Invoice",
+  "contract": "Contract",
+  "receipt": "Receipt",
+  "letter": "Letter",
+  "report": "Report",
+  "bank_statement": "Bank Statement",
+  "tax_document": "Tax Document",
+  "insurance": "Insurance Document",
+  "payslip": "Payslip",
+  "unknown": "Unknown"
+}
+```
+
+### Rule Types
+
+```bash
+GET /api/classification-rules/rule-types
+```
+
+Returns the supported rule types with descriptions.
+
+**Response (200):**
+```json
+[
+  {
+    "type": "filename_pattern",
+    "label": "Filename Pattern",
+    "description": "Regex pattern matched against the original filename."
+  },
+  {
+    "type": "content_keyword",
+    "label": "Content Keyword",
+    "description": "Pipe-separated keywords matched against the OCR text."
+  },
+  {
+    "type": "metadata_match",
+    "label": "Metadata Match",
+    "description": "field=value pattern matched against existing AI metadata."
+  }
+]
+```
+
+### List Rules
+
+```bash
+GET /api/classification-rules/
+```
+
+List all classification rules visible to the current user (system rules + own rules).
+
+**Response (200):**
+```json
+[
+  {
+    "id": 1,
+    "owner_id": "user@example.com",
+    "name": "German Invoice Filename",
+    "category": "invoice",
+    "rule_type": "filename_pattern",
+    "pattern": "(?i)rechnung",
+    "priority": 10,
+    "case_sensitive": false,
+    "enabled": true
+  }
+]
+```
+
+### Create Rule
+
+```bash
+POST /api/classification-rules/
+```
+
+Create a new custom classification rule.
+
+**Request:**
+```json
+{
+  "name": "German Invoice Filename",
+  "category": "invoice",
+  "rule_type": "filename_pattern",
+  "pattern": "(?i)rechnung",
+  "priority": 10,
+  "case_sensitive": false,
+  "enabled": true
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Unique rule name (per user) |
+| `category` | string | Yes | Target category (e.g. `invoice`, `contract`, or custom) |
+| `rule_type` | string | Yes | One of: `filename_pattern`, `content_keyword`, `metadata_match` |
+| `pattern` | string | Yes | Regex (filename), pipe-separated keywords (content), or `field=value` (metadata) |
+| `priority` | integer | No | Higher priority rules are evaluated first (default: 0) |
+| `case_sensitive` | boolean | No | Case-sensitive matching (default: false) |
+| `enabled` | boolean | No | Whether the rule is active (default: true) |
+
+**Response (201):**
+```json
+{
+  "id": 1,
+  "owner_id": "user@example.com",
+  "name": "German Invoice Filename",
+  "category": "invoice",
+  "rule_type": "filename_pattern",
+  "pattern": "(?i)rechnung",
+  "priority": 10,
+  "case_sensitive": false,
+  "enabled": true
+}
+```
+
+### Get Rule
+
+```bash
+GET /api/classification-rules/{rule_id}
+```
+
+### Update Rule
+
+```bash
+PUT /api/classification-rules/{rule_id}
+```
+
+**Request (partial update):**
+```json
+{
+  "priority": 20,
+  "enabled": false
+}
+```
+
+### Delete Rule
+
+```bash
+DELETE /api/classification-rules/{rule_id}
+```
+
+**Response:** `204 No Content`
+
+
+
+## Automation (Zapier / Make.com)
+
+Manage automation hook subscriptions for integrating DocuElevate with external platforms like Zapier and Make.com. All endpoints require API token authentication (`Authorization: Bearer <token>`).
+
+### Supported Events
+
+The automation system shares event types with the [Webhooks](#webhooks) subsystem:
+
+| Event | Description |
+|-------|-------------|
+| `document.uploaded` | A new document has been ingested |
+| `document.processed` | A document finished processing successfully |
+| `document.failed` | Document processing failed |
+| `user.signup` | A new user account was created |
+| `user.plan_changed` | A user's subscription plan changed |
+| `user.payment_issue` | A payment issue was reported for a user |
+
+### GET /api/automation/events
+
+List all valid event types that automation hooks can subscribe to.
+
+**Response (200):**
+```json
+["document.failed", "document.processed", "document.uploaded", "user.payment_issue", "user.plan_changed", "user.signup"]
+```
+
+### POST /api/automation/hooks/subscribe
+
+Subscribe to DocuElevate events. Zapier and Make.com call this endpoint to register a webhook URL that receives event notifications.
+
+**Request:**
+```bash
+curl -X POST "http://your-instance/api/automation/hooks/subscribe" \
+  -H "Authorization: Bearer de_your_token_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_url": "https://hooks.zapier.com/hooks/catch/123456/abcdef/",
+    "events": ["document.processed", "document.uploaded"],
+    "hook_type": "zapier",
+    "secret": "optional-signing-secret",
+    "description": "My Zap for processed documents"
+  }'
+```
+
+**Response (201):**
+```json
+{
+  "id": 1,
+  "target_url": "https://hooks.zapier.com/hooks/catch/123456/abcdef/",
+  "events": ["document.processed", "document.uploaded"],
+  "is_active": true,
+  "hook_type": "zapier",
+  "description": "My Zap for processed documents",
+  "has_secret": true
+}
+```
+
+### GET /api/automation/hooks
+
+List all automation hook subscriptions.
+
+**Response (200):**
+```json
+[
+  {
+    "id": 1,
+    "target_url": "https://hooks.zapier.com/hooks/catch/123456/abcdef/",
+    "events": ["document.processed", "document.uploaded"],
+    "is_active": true,
+    "hook_type": "zapier",
+    "description": "My Zap for processed documents",
+    "has_secret": true
+  }
+]
+```
+
+### DELETE /api/automation/hooks/{hook_id}
+
+Unsubscribe an automation hook. Zapier calls this when a Zap is turned off or deleted.
+
+**Response (204):** No content.
+
+### GET /api/automation/triggers/sample/{event}
+
+Get sample trigger data for Zapier field mapping. Zapier uses this during Zap setup to discover available fields.
+
+**Request:**
+```bash
+curl "http://your-instance/api/automation/triggers/sample/document.processed" \
+  -H "Authorization: Bearer de_your_token_here"
+```
+
+**Response (200):**
+```json
+[
+  {
+    "id": "evt_sample0002",
+    "event": "document.processed",
+    "timestamp": 1710000060.0,
+    "document_id": 42,
+    "filename": "invoice_2024.pdf",
+    "status": "processed",
+    "title": "Invoice #1234",
+    "owner_id": "user@example.com"
+  }
+]
+```
+
+### POST /api/automation/actions/upload
+
+Upload a document from an automation platform. This incoming action endpoint allows Zapier or Make.com to push documents into DocuElevate for processing.
+
+**Request:**
+```bash
+curl -X POST "http://your-instance/api/automation/actions/upload" \
+  -H "Authorization: Bearer de_your_token_here" \
+  -F "file=@/path/to/document.pdf"
+```
+
+**Response (200):**
+```json
+{
+  "status": "accepted",
+  "filename": "document.pdf",
+  "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
+### Zapier-Compatible Payload Format
+
+When events fire, automation hooks receive a **flat JSON payload** (no nested `data` key) that Zapier and Make.com can easily map:
+
+```json
+{
+  "id": "evt_a1b2c3d4e5f67890",
+  "event": "document.processed",
+  "timestamp": 1710000060.0,
+  "document_id": 42,
+  "filename": "invoice_2024.pdf",
+  "status": "processed",
+  "title": "Invoice #1234",
+  "owner_id": "user@example.com"
+}
+```
+
+The `id` field is unique per event and is used by Zapier for deduplication. If a `secret` was provided during subscription, an `X-Webhook-Signature` header with an HMAC-SHA256 signature is included.
+
+### Retry Behavior
+
+Automation hook deliveries follow the same retry policy as regular webhooks: up to 3 retries with exponential backoff (60 s, 300 s, 900 s) and ±20% jitter.
+
+
 ## Further Assistance
 
 For additional help with the API, please contact our support team or refer to the [Development Guide](../CONTRIBUTING.md).
@@ -2508,4 +2908,341 @@ Move original files to a reimport folder, wipe everything, and configure the rei
     "reimport": { "files_moved": 42, "reimport_folder": "/workdir/reimport" }
   }
 }
+```
+
+---
+
+## Comments & Annotations
+
+Threaded comments and PDF annotations for document collaboration.
+
+### List Comments
+
+**GET** `/api/files/{file_id}/comments`
+
+Returns all comments for a document, organized into a threaded tree.
+
+**Response (200):**
+```json
+{
+  "file_id": 1,
+  "comments": [
+    {
+      "id": 1,
+      "file_id": 1,
+      "user_id": "alice",
+      "parent_id": null,
+      "body": "Please review section 3.",
+      "mentions": ["bob"],
+      "is_resolved": false,
+      "created_at": "2026-03-21T12:00:00+00:00",
+      "updated_at": "2026-03-21T12:00:00+00:00",
+      "replies": [
+        {
+          "id": 2,
+          "file_id": 1,
+          "user_id": "bob",
+          "parent_id": 1,
+          "body": "Done!",
+          "mentions": [],
+          "is_resolved": false,
+          "created_at": "2026-03-21T12:05:00+00:00",
+          "updated_at": "2026-03-21T12:05:00+00:00",
+          "replies": []
+        }
+      ]
+    }
+  ],
+  "total": 2
+}
+```
+
+### Create Comment
+
+**POST** `/api/files/{file_id}/comments`
+
+Create a new comment on a document.  @mentions are automatically extracted from the body.
+
+**Request:**
+```json
+{
+  "body": "Hey @bob, please review this section.",
+  "parent_id": null
+}
+```
+
+**Response (201):**
+```json
+{
+  "id": 3,
+  "file_id": 1,
+  "user_id": "alice",
+  "parent_id": null,
+  "body": "Hey @bob, please review this section.",
+  "mentions": ["bob"],
+  "is_resolved": false,
+  "created_at": "2026-03-21T12:10:00+00:00",
+  "updated_at": "2026-03-21T12:10:00+00:00"
+}
+```
+
+### Update Comment
+
+**PUT** `/api/files/{file_id}/comments/{comment_id}`
+
+Update the body of an existing comment.  Only the comment author may update it.
+
+**Request:**
+```json
+{
+  "body": "Updated comment text @charlie"
+}
+```
+
+### Delete Comment
+
+**DELETE** `/api/files/{file_id}/comments/{comment_id}`
+
+Delete a comment.  Only the comment author may delete it.
+
+**Response:** `204 No Content`
+
+### Resolve / Unresolve Comment
+
+**PATCH** `/api/files/{file_id}/comments/{comment_id}/resolve`
+
+Mark a comment thread as resolved or unresolved.
+
+**Request:**
+```json
+{
+  "is_resolved": true
+}
+```
+
+### List Annotations
+
+**GET** `/api/files/{file_id}/annotations`
+
+Returns all PDF page annotations for a document, ordered by page then creation time.
+
+**Response (200):**
+```json
+{
+  "file_id": 1,
+  "annotations": [
+    {
+      "id": 1,
+      "file_id": 1,
+      "user_id": "alice",
+      "page": 1,
+      "x": 100.0,
+      "y": 200.0,
+      "width": 150.0,
+      "height": 20.0,
+      "content": "Important paragraph",
+      "annotation_type": "highlight",
+      "color": "#ffff00",
+      "created_at": "2026-03-21T12:00:00+00:00",
+      "updated_at": "2026-03-21T12:00:00+00:00"
+    }
+  ],
+  "total": 1
+}
+```
+
+### Create Annotation
+
+**POST** `/api/files/{file_id}/annotations`
+
+Create a new annotation on a PDF page.
+
+**Request:**
+```json
+{
+  "page": 1,
+  "x": 100.0,
+  "y": 200.0,
+  "width": 150.0,
+  "height": 20.0,
+  "content": "Important paragraph",
+  "annotation_type": "highlight",
+  "color": "#ffff00"
+}
+```
+
+Allowed `annotation_type` values: `note`, `highlight`, `underline`, `strikethrough`.
+
+### Update Annotation
+
+**PUT** `/api/files/{file_id}/annotations/{annotation_id}`
+
+Update an existing annotation.  Only the annotation author may update it.
+
+**Request** (all fields optional):
+```json
+{
+  "content": "Updated note",
+  "color": "#00ff00"
+}
+```
+
+### Delete Annotation
+
+**DELETE** `/api/files/{file_id}/annotations/{annotation_id}`
+
+Delete an annotation.  Only the annotation author may delete it.
+
+**Response:** `204 No Content`
+
+### List Mentionable Users
+
+**GET** `/api/users/mentionable`
+
+Returns all non-blocked user profiles for the @mention autocomplete.
+
+**Response (200):**
+```json
+[
+  { "user_id": "alice", "display_name": "Alice Anderson" },
+  { "user_id": "bob", "display_name": "Bob Baker" }
+]
+```
+
+---
+
+## File Sharing & Permissions
+
+DocuElevate supports per-user document sharing with role-based access control.
+
+### Roles
+
+| Role     | View | Comment / Annotate | Edit metadata | Delete | Share |
+|----------|------|--------------------|---------------|--------|-------|
+| `owner`  | ✓    | ✓                  | ✓             | ✓      | ✓     |
+| `editor` | ✓    | ✓                  | ✓             | ✗      | ✗     |
+| `viewer` | ✓    | ✓                  | ✗             | ✗      | ✗     |
+
+- Only the **file owner** can share a document, change roles, or delete the document.
+- When a user is **@mentioned** in a comment they are automatically granted `viewer` access to the document (multi-user mode only).
+
+---
+
+### List Shares
+
+**GET** `/api/files/{file_id}/shares`
+
+Returns all active shares for a document.  Only the file owner (or an admin) may call this endpoint.
+
+**Response (200):**
+```json
+[
+  {
+    "id": 1,
+    "file_id": 42,
+    "owner_id": "alice",
+    "shared_with_user_id": "bob",
+    "role": "viewer",
+    "created_at": "2026-03-22T10:00:00+00:00",
+    "updated_at": "2026-03-22T10:00:00+00:00"
+  }
+]
+```
+
+**Error Responses:**
+- `403`: Not the file owner
+- `404`: File not found
+
+---
+
+### Create Share
+
+**POST** `/api/files/{file_id}/shares`
+
+Share a document with another user.  Only the file owner may call this endpoint.  If the user already has a share, their role is updated.
+
+**Request:**
+```json
+{
+  "shared_with_user_id": "bob",
+  "role": "viewer"
+}
+```
+
+`role` must be `"viewer"` (default) or `"editor"`.
+
+**Response (201):**
+```json
+{
+  "id": 1,
+  "file_id": 42,
+  "owner_id": "alice",
+  "shared_with_user_id": "bob",
+  "role": "viewer",
+  "created_at": "2026-03-22T10:00:00+00:00",
+  "updated_at": "2026-03-22T10:00:00+00:00"
+}
+```
+
+**Error Responses:**
+- `403`: Not the file owner
+- `422`: Invalid role, empty user ID, or sharing with self
+
+---
+
+### Update Share Role
+
+**PUT** `/api/files/{file_id}/shares/{share_id}`
+
+Change the role of an existing share.  Only the file owner may call this endpoint.
+
+**Request:**
+```json
+{
+  "role": "editor"
+}
+```
+
+**Response (200):** Updated share object.
+
+**Error Responses:**
+- `403`: Not the file owner
+- `404`: Share not found
+- `422`: Invalid role
+
+---
+
+### Revoke Share
+
+**DELETE** `/api/files/{file_id}/shares/{share_id}`
+
+Remove a user's access to a document.  Only the file owner may revoke shares.
+
+**Response (200):**
+```json
+{ "status": "success", "message": "Share revoked successfully" }
+```
+
+**Error Responses:**
+- `403`: Not the file owner
+- `404`: Share not found
+
+---
+
+### List Shared With
+
+**GET** `/api/files/{file_id}/shared-with`
+
+Returns who a document is shared with.  Accessible to any user with at least `viewer` access (owner, editors, and viewers can all call this).
+
+**Response (200):**
+```json
+[
+  {
+    "share_id": 1,
+    "user_id": "bob",
+    "display_name": "Bob Baker",
+    "role": "viewer"
+  }
+]
 ```

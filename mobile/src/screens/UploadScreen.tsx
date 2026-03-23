@@ -30,6 +30,7 @@ import { useAuth } from "../context/AuthContext";
 import { useShare } from "../context/ShareContext";
 import { normalizeFileUri } from "../utils/normalizeUri";
 import api from "../services/api";
+import { useLocale, t } from "../i18n";
 
 /** Statuses that indicate processing has finished (no further polling needed). */
 const TERMINAL_STATUSES = new Set(["completed", "failed", "duplicate"]);
@@ -56,6 +57,8 @@ export default function UploadScreen() {
   const { isAuthenticated } = useAuth();
   const { pendingFiles, clearPendingFiles } = useShare();
   const [uploads, setUploads] = useState<UploadItem[]>([]);
+  // Subscribe to language changes so translated strings re-render.
+  useLocale();
 
   // Keep a ref in sync so the polling interval can read current state without
   // capturing a stale closure.
@@ -268,8 +271,8 @@ export default function UploadScreen() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
       Alert.alert(
-        "Camera access required",
-        "Please grant camera access in Settings to capture documents."
+        t("upload.camera_access_title"),
+        t("upload.camera_access_msg")
       );
       return;
     }
@@ -291,8 +294,8 @@ export default function UploadScreen() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
       Alert.alert(
-        "Photo library access required",
-        "Please grant photo library access in Settings to select images."
+        t("upload.photo_access_title"),
+        t("upload.photo_access_msg")
       );
       return;
     }
@@ -301,14 +304,17 @@ export default function UploadScreen() {
       mediaTypes: ["images"],
       quality: 0.9,
       allowsEditing: false,
+      allowsMultipleSelection: true,
     });
 
     if (!result.canceled && result.assets.length > 0) {
-      const asset = result.assets[0];
-      // Derive extension from MIME type so the filename matches the actual format
-      const ext = asset.mimeType?.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
-      const filename = asset.fileName ?? `photo_${Date.now()}.${ext}`;
-      await uploadFile(asset.uri, filename, asset.mimeType ?? "image/jpeg");
+      for (let i = 0; i < result.assets.length; i++) {
+        const asset = result.assets[i];
+        // Derive extension from MIME type so the filename matches the actual format
+        const ext = asset.mimeType?.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
+        const filename = asset.fileName ?? `photo_${Date.now()}_${i}.${ext}`;
+        await uploadFile(asset.uri, filename, asset.mimeType ?? "image/jpeg");
+      }
     }
   }
 
@@ -326,14 +332,14 @@ export default function UploadScreen() {
         }
       }
     } catch (err: unknown) {
-      Alert.alert("File picker error", err instanceof Error ? err.message : "Could not open file picker");
+      Alert.alert(t("upload.file_picker_error"), err instanceof Error ? err.message : t("upload.file_picker_error_msg"));
     }
   }
 
   if (!isAuthenticated) {
     return (
       <View style={styles.center}>
-        <Text style={styles.emptyText}>Please sign in to upload documents.</Text>
+        <Text style={styles.emptyText}>{t("upload.sign_in_required")}</Text>
       </View>
     );
   }
@@ -346,30 +352,30 @@ export default function UploadScreen() {
           style={[styles.actionButton, styles.cameraButton]}
           onPress={handleCamera}
           accessibilityRole="button"
-          accessibilityLabel="Capture document with camera"
+          accessibilityLabel={t("upload.capture_label")}
         >
           <Ionicons name="camera-outline" size={28} color="#fff" style={styles.actionIcon} />
-          <Text style={styles.actionLabel}>Camera</Text>
+          <Text style={styles.actionLabel}>{t("upload.camera")}</Text>
         </Pressable>
 
         <Pressable
           style={[styles.actionButton, styles.photoLibraryButton]}
           onPress={handlePhotoLibrary}
           accessibilityRole="button"
-          accessibilityLabel="Select photo from library"
+          accessibilityLabel={t("upload.photo_label")}
         >
           <Ionicons name="images-outline" size={28} color="#fff" style={styles.actionIcon} />
-          <Text style={styles.actionLabel}>Photos</Text>
+          <Text style={styles.actionLabel}>{t("upload.photos")}</Text>
         </Pressable>
 
         <Pressable
           style={[styles.actionButton, styles.fileButton]}
           onPress={handleFilePicker}
           accessibilityRole="button"
-          accessibilityLabel="Pick file from device"
+          accessibilityLabel={t("upload.file_label")}
         >
           <Ionicons name="document-outline" size={28} color="#fff" style={styles.actionIcon} />
-          <Text style={styles.actionLabel}>Files</Text>
+          <Text style={styles.actionLabel}>{t("upload.files")}</Text>
         </Pressable>
       </View>
 
@@ -378,12 +384,8 @@ export default function UploadScreen() {
         {uploads.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="cloud-upload-outline" size={48} color="#9ca3af" style={{ marginBottom: 12 }} />
-            <Text style={styles.emptyText}>
-              Tap Camera, Photos, or Files to upload a document.
-            </Text>
-            <Text style={styles.emptyHint}>
-              You can also share files from other apps directly to DocuElevate.
-            </Text>
+            <Text style={styles.emptyText}>{t("upload.empty_title")}</Text>
+            <Text style={styles.emptyHint}>{t("upload.empty_hint")}</Text>
           </View>
         ) : (
           uploads.map((item) => (
@@ -396,6 +398,9 @@ export default function UploadScreen() {
 }
 
 function UploadRow({ item, onRetry }: { item: UploadItem; onRetry: (item: UploadItem) => void }) {
+  // Subscribe to language changes so status labels re-render.
+  useLocale();
+
   const uploadIconProps: Record<UploadItem["status"], { name: keyof typeof Ionicons.glyphMap; color: string }> = {
     pending: { name: "time-outline", color: "#6b7280" },
     uploading: { name: "arrow-up-circle-outline", color: "#1e40af" },
@@ -406,11 +411,11 @@ function UploadRow({ item, onRetry }: { item: UploadItem; onRetry: (item: Upload
   /** Human-readable label for the server-side processing status. */
   function serverStatusLabel(s: string): string {
     const labels: Record<string, string> = {
-      pending: "Queued for processing…",
-      processing: "Processing…",
-      completed: "Processed",
-      failed: "Processing failed",
-      duplicate: "Duplicate – already processed",
+      pending: t("upload.status_queued"),
+      processing: t("upload.status_processing"),
+      completed: t("upload.status_completed"),
+      failed: t("upload.status_failed"),
+      duplicate: t("upload.status_duplicate"),
     };
     return labels[s] ?? s;
   }
@@ -419,9 +424,9 @@ function UploadRow({ item, onRetry }: { item: UploadItem; onRetry: (item: Upload
 
   function handleLongPress() {
     if (!canRetry) return;
-    Alert.alert("Retry Upload", `Do you want to retry uploading "${item.filename}"?`, [
-      { text: "Cancel", style: "cancel" },
-      { text: "Retry", onPress: () => onRetry(item) },
+    Alert.alert(t("upload.retry_title"), t("upload.retry_msg", { filename: item.filename }), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("common.retry"), onPress: () => onRetry(item) },
     ]);
   }
 
@@ -431,7 +436,7 @@ function UploadRow({ item, onRetry }: { item: UploadItem; onRetry: (item: Upload
       onPress={canRetry ? () => onRetry(item) : undefined}
       style={rowStyles.row}
       accessibilityRole={canRetry ? "button" : "none"}
-      accessibilityLabel={canRetry ? `Retry uploading ${item.filename}` : undefined}
+      accessibilityLabel={canRetry ? `${t("common.retry")} ${item.filename}` : undefined}
       accessibilityHint={canRetry ? "Tap or long-press to retry this upload" : undefined}
     >
       <Ionicons name={uploadIconProps[item.status].name} size={22} color={uploadIconProps[item.status].color} style={rowStyles.icon} />
@@ -443,7 +448,7 @@ function UploadRow({ item, onRetry }: { item: UploadItem; onRetry: (item: Upload
           <ActivityIndicator size="small" color="#1e40af" />
         )}
         {item.status === "done" && !item.serverStatus && (
-          <Text style={rowStyles.statusQueued}>Queued for processing…</Text>
+          <Text style={rowStyles.statusQueued}>{t("upload.status_queued")}</Text>
         )}
         {item.status === "done" && item.serverStatus && (
           <Text
@@ -462,7 +467,7 @@ function UploadRow({ item, onRetry }: { item: UploadItem; onRetry: (item: Upload
           <View>
             <Text style={rowStyles.statusError}>{item.error}</Text>
             {canRetry && (
-              <Text style={rowStyles.retryHint}>Tap to retry</Text>
+              <Text style={rowStyles.retryHint}>{t("upload.tap_retry")}</Text>
             )}
           </View>
         )}
