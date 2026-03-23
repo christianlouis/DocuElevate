@@ -224,3 +224,142 @@ class TestTaskFailureHandler:
         # Simply verify that importing the handler doesn't cause errors
         # The actual signal connection is tested implicitly by the other tests
         assert callable(task_failure_handler)
+
+
+@pytest.mark.unit
+class TestDispatchUserFailureNotification:
+    """Tests for _dispatch_user_failure_notification helper."""
+
+    @patch("app.celery_app._dispatch_user_failure_notification")
+    @patch("app.celery_app.settings")
+    @patch("app.utils.notification.notify_celery_failure")
+    def test_task_failure_handler_calls_user_failure_dispatch(self, mock_notify_sys, mock_settings, mock_dispatch):
+        """task_failure_handler also calls _dispatch_user_failure_notification."""
+        mock_settings.notify_on_task_failure = True
+
+        from app.celery_app import task_failure_handler
+
+        mock_sender = MagicMock()
+        mock_sender.name = "app.tasks.process_document.process_document"
+        exc = ValueError("OCR timeout")
+
+        task_failure_handler(
+            sender=mock_sender,
+            task_id="tid",
+            exception=exc,
+            args=["/tmp/f.pdf"],
+            kwargs={"file_id": 42},
+        )
+
+        mock_dispatch.assert_called_once_with(mock_sender, exc, ["/tmp/f.pdf"], {"file_id": 42})
+
+    def test_dispatch_ignores_non_document_tasks(self):
+        """Non app.tasks.* tasks should be silently ignored."""
+        from app.celery_app import _dispatch_user_failure_notification
+
+        sender = MagicMock()
+        sender.name = "celery.backend_cleanup"
+
+        # Should complete without error or DB access
+        _dispatch_user_failure_notification(sender, ValueError("x"), [], {})
+
+    def test_dispatch_ignores_when_no_file_id(self):
+        """If file_id is not in args or kwargs, nothing happens."""
+        from app.celery_app import _dispatch_user_failure_notification
+
+        sender = MagicMock()
+        sender.name = "app.tasks.process_document.process_document"
+
+        # No file_id anywhere
+        _dispatch_user_failure_notification(sender, ValueError("x"), ["/tmp/f.pdf"], {})
+
+    @patch("app.database.SessionLocal")
+    def test_dispatch_extracts_file_id_from_kwargs(self, mock_session):
+        """file_id should be extracted from kwargs when present."""
+        from app.celery_app import _dispatch_user_failure_notification
+
+        mock_db = MagicMock()
+        mock_record = MagicMock()
+        mock_record.owner_id = "alice@example.com"
+        mock_record.original_filename = "invoice.pdf"
+        mock_record.local_filename = "/tmp/invoice.pdf"
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_record
+        mock_session.return_value.__enter__.return_value = mock_db
+
+        sender = MagicMock()
+        sender.name = "app.tasks.finalize_document_storage.finalize_document_storage"
+        exc = RuntimeError("Upload failed")
+
+        with patch("app.utils.user_notification.notify_user_document_failed") as mock_notify:
+            _dispatch_user_failure_notification(sender, exc, ["/tmp/f.pdf"], {"file_id": 10})
+
+        mock_notify.assert_called_once_with(
+            owner_id="alice@example.com",
+            filename="invoice.pdf",
+            error="RuntimeError: Upload failed",
+            file_id=10,
+        )
+
+    @patch("app.database.SessionLocal")
+    def test_dispatch_extracts_file_id_from_positional_args(self, mock_session):
+        """file_id should be extracted from positional args for known tasks."""
+        from app.celery_app import _dispatch_user_failure_notification
+
+        mock_db = MagicMock()
+        mock_record = MagicMock()
+        mock_record.owner_id = "bob@test.com"
+        mock_record.original_filename = "scan.pdf"
+        mock_record.local_filename = "/tmp/scan.pdf"
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_record
+        mock_session.return_value.__enter__.return_value = mock_db
+
+        sender = MagicMock()
+        sender.name = "app.tasks.process_with_ocr.process_with_ocr"
+        exc = ValueError("OCR error")
+
+        with patch("app.utils.user_notification.notify_user_document_failed") as mock_notify:
+            # process_with_ocr: file_id is args[1]
+            _dispatch_user_failure_notification(sender, exc, ["filename.pdf", 77], {})
+
+        mock_notify.assert_called_once_with(
+            owner_id="bob@test.com",
+            filename="scan.pdf",
+            error="ValueError: OCR error",
+            file_id=77,
+        )
+
+    @patch("app.database.SessionLocal")
+    def test_dispatch_skips_when_no_owner(self, mock_session):
+        """When file record has no owner_id, no notification is sent."""
+        from app.celery_app import _dispatch_user_failure_notification
+
+        mock_db = MagicMock()
+        mock_record = MagicMock()
+        mock_record.owner_id = None
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_record
+        mock_session.return_value.__enter__.return_value = mock_db
+
+        sender = MagicMock()
+        sender.name = "app.tasks.process_document.process_document"
+
+        with patch("app.utils.user_notification.notify_user_document_failed") as mock_notify:
+            _dispatch_user_failure_notification(sender, ValueError("x"), [], {"file_id": 5})
+
+        mock_notify.assert_not_called()
+
+    @patch("app.database.SessionLocal")
+    def test_dispatch_skips_when_record_not_found(self, mock_session):
+        """When file record doesn't exist, no notification is sent."""
+        from app.celery_app import _dispatch_user_failure_notification
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_session.return_value.__enter__.return_value = mock_db
+
+        sender = MagicMock()
+        sender.name = "app.tasks.process_document.process_document"
+
+        with patch("app.utils.user_notification.notify_user_document_failed") as mock_notify:
+            _dispatch_user_failure_notification(sender, ValueError("x"), [], {"file_id": 999})
+
+        mock_notify.assert_not_called()

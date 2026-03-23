@@ -205,7 +205,7 @@ def convert_to_pdf(
         ".pdf",  # PDF (already in PDF format but can be processed)
     }
 
-    IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".webp", ".svg"}
+    IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".webp", ".svg", ".heic", ".heif"}
 
     HTML_EXTENSIONS = {".html", ".htm"}
 

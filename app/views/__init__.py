@@ -10,6 +10,7 @@ from app.views.audit_logs import router as audit_logs_router
 from app.views.backup import router as backup_router
 from app.views.compliance import router as compliance_router
 from app.views.db_wizard import router as db_wizard_router
+from app.views.devices import router as devices_router  # Mobile devices dashboard
 from app.views.dropbox import router as dropbox_router
 from app.views.filemanager import router as filemanager_router
 
@@ -26,6 +27,7 @@ from app.views.onedrive import router as onedrive_router
 from app.views.pipelines import router as pipelines_router  # Processing pipelines
 from app.views.plans import router as plans_router  # Admin Plan Designer
 from app.views.profile import router as profile_router  # User self-service profile
+from app.views.qr_login import router as qr_login_router  # QR code mobile login
 from app.views.queue import router as queue_router
 from app.views.scheduled_jobs import router as scheduled_jobs_router  # Scheduled batch jobs
 from app.views.search import router as search_router
@@ -34,6 +36,7 @@ from app.views.share import router as share_router
 from app.views.shared_links import router as shared_links_router
 from app.views.status import router as status_router
 from app.views.subscriptions import router as subscriptions_router  # Pricing + subscription pages
+from app.views.system_reset import router as system_reset_router  # System reset / factory reset
 from app.views.wizard import router as wizard_router
 
 # Create a main router that includes all the view routers
@@ -60,6 +63,7 @@ router.include_router(plans_router)  # Admin Plan Designer
 router.include_router(onboarding_router)  # User onboarding wizard
 router.include_router(pipelines_router)  # Processing pipelines
 router.include_router(profile_router)  # User self-service profile settings
+router.include_router(qr_login_router)  # QR code mobile login page
 router.include_router(imap_accounts_router)  # Per-user IMAP ingestion accounts
 router.include_router(integrations_router)  # Unified integrations dashboard
 router.include_router(notifications_router)  # User notification dashboard
@@ -67,3 +71,5 @@ router.include_router(scheduled_jobs_router)  # Admin scheduled batch jobs
 router.include_router(audit_logs_router)  # Comprehensive audit log viewer
 router.include_router(help_router)  # Built-in help / How-To docs
 router.include_router(compliance_router)  # Compliance templates dashboard
+router.include_router(devices_router)  # Mobile devices dashboard
+router.include_router(system_reset_router)  # System reset / factory reset

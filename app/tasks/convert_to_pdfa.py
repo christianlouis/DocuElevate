@@ -78,6 +78,7 @@ def _convert_pdf_to_pdfa(input_path: str, output_path: str, pdfa_format: str = "
         output_type,
         "--quiet",
         "--invalidate-digital-signatures",
+        "--",
         input_path,
         output_path,
     ]

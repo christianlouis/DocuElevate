@@ -99,6 +99,8 @@ class ProfileResponse(BaseModel):
     contact_email: str | None
     preferred_language: str | None
     preferred_theme: str | None
+    default_document_language: str | None
+    """ISO 639-1 code for the user's preferred document translation target language."""
     avatar_url: str
     """Gravatar URL or ``data:`` URI for a custom uploaded avatar."""
     is_local_user: bool
@@ -112,6 +114,10 @@ class ProfileUpdateRequest(BaseModel):
     contact_email: str | None = Field(default=None, max_length=255, description="Contact / notification e-mail")
     preferred_language: str | None = Field(default=None, description="ISO 639-1 language code, e.g. 'en', 'de'")
     preferred_theme: str | None = Field(default=None, description="Colour scheme: 'light', 'dark', or 'system'")
+    default_document_language: str | None = Field(
+        default=None,
+        description="ISO 639-1 code for the default document translation target language, e.g. 'en', 'de'",
+    )
 
 
 class ChangePasswordRequest(BaseModel):
@@ -149,6 +155,7 @@ async def get_profile(request: Request, db: DbSession) -> ProfileResponse:
         contact_email=profile.contact_email,  # type: ignore[arg-type]
         preferred_language=profile.preferred_language,  # type: ignore[arg-type]
         preferred_theme=profile.preferred_theme,  # type: ignore[arg-type]
+        default_document_language=profile.default_document_language,  # type: ignore[arg-type]
         avatar_url=avatar_url,
         is_local_user=is_local,
     )
@@ -201,6 +208,16 @@ async def update_profile(
             )
         profile.preferred_theme = theme or None  # type: ignore[assignment]
 
+    # Validate default document language
+    if body.default_document_language is not None:
+        doc_lang = body.default_document_language.lower().strip()
+        if doc_lang and doc_lang not in SUPPORTED_LANGUAGE_CODES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Unsupported language code: {doc_lang}",
+            )
+        profile.default_document_language = doc_lang or None  # type: ignore[assignment]
+
     if body.display_name is not None:
         profile.display_name = body.display_name.strip() or None  # type: ignore[assignment]
 
@@ -225,6 +242,7 @@ async def update_profile(
         contact_email=profile.contact_email,  # type: ignore[arg-type]
         preferred_language=profile.preferred_language,  # type: ignore[arg-type]
         preferred_theme=profile.preferred_theme,  # type: ignore[arg-type]
+        default_document_language=profile.default_document_language,  # type: ignore[arg-type]
         avatar_url=avatar_url,
         is_local_user=is_local,
     )

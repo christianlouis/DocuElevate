@@ -216,6 +216,9 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
           _makeMenuLink('/api-tokens', 'fas fa-key text-yellow-500', window.__i18n.apiTokens || 'API Tokens', 'text-gray-700')
         );
         linksDiv.appendChild(
+          _makeMenuLink('/devices', 'fas fa-mobile-alt text-blue-500', window.__i18n.devices || 'Devices', 'text-gray-700')
+        );
+        linksDiv.appendChild(
           _makeMenuLink('/shared-links', 'fas fa-share-alt text-blue-400', window.__i18n.sharedLinks || 'Shared Links', 'text-gray-700')
         );
 
@@ -310,6 +313,18 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
         tokensLink.appendChild(tokensIcon);
         tokensLink.appendChild(document.createTextNode(window.__i18n.apiTokens || 'API Tokens'));
         mobileAuthSection.appendChild(tokensLink);
+
+        // Devices link
+        const devicesLink = document.createElement('a');
+        devicesLink.href = '/devices';
+        devicesLink.className =
+          'flex items-center px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50';
+        const devicesIcon = document.createElement('i');
+        devicesIcon.className = 'fas fa-mobile-alt mr-2 text-blue-500';
+        devicesIcon.setAttribute('aria-hidden', 'true');
+        devicesLink.appendChild(devicesIcon);
+        devicesLink.appendChild(document.createTextNode(window.__i18n.devices || 'Devices'));
+        mobileAuthSection.appendChild(devicesLink);
 
         // Shared Links link
         const sharedLinksLink = document.createElement('a');

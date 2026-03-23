@@ -38,6 +38,7 @@ export interface AuthState {
   user: WhoAmIResponse | null;
   baseUrl: string;
   signIn: (serverUrl: string) => Promise<void>;
+  signInWithQR: (serverUrl: string, challengeToken: string) => Promise<void>;
   signOut: () => Promise<void>;
   setToken: (token: string) => Promise<void>;
 }
@@ -52,6 +53,7 @@ const AuthContext = createContext<AuthState>({
   user: null,
   baseUrl: "",
   signIn: async () => {},
+  signInWithQR: async () => {},
   signOut: async () => {},
   setToken: async () => {},
 });
@@ -143,6 +145,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [setToken]
   );
 
+  const signInWithQR = useCallback(
+    async (serverUrl: string, challengeToken: string) => {
+      const cleanUrl = serverUrl.replace(/\/$/, "");
+      await api.init(cleanUrl);
+      setBaseUrl(cleanUrl);
+
+      const deviceInfo = await _getDeviceName();
+      const resp = await api.claimQRChallenge(challengeToken, deviceInfo);
+      await setToken(resp.token);
+    },
+    [setToken]
+  );
+
   const signOut = useCallback(async () => {
     await SecureStore.deleteItemAsync(SECURE_STORE_API_TOKEN_KEY);
     await SecureStore.deleteItemAsync(SECURE_STORE_OWNER_ID_KEY);
@@ -158,6 +173,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         baseUrl,
         signIn,
+        signInWithQR,
         signOut,
         setToken,
       }}

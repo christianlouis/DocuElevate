@@ -555,8 +555,9 @@ def _upload_rclone(file_path: str, cfg: dict[str, Any], creds: dict[str, Any], t
     dest = dest.replace("//", "/")
 
     try:
+        # SECURITY: Separate options from positional arguments using -- to prevent command injection
         result = subprocess.run(  # nosec B603  # noqa: S603 S607
-            ["rclone", "copyto", f"--config={conf_path}", file_path, dest],  # noqa: S603 S607
+            ["rclone", "copyto", f"--config={conf_path}", "--", file_path, dest],  # noqa: S603 S607
             capture_output=True,
             text=True,
             timeout=300,
@@ -569,6 +570,113 @@ def _upload_rclone(file_path: str, cfg: dict[str, Any], creds: dict[str, Any], t
 
     logger.info("[%s] Rclone upload complete: %s", task_id, dest)
     return {"status": "Completed", "rclone_dest": dest}
+
+
+def _upload_sharepoint(file_path: str, cfg: dict[str, Any], creds: dict[str, Any], task_id: str) -> dict[str, Any]:
+    """Upload *file_path* to SharePoint using per-user MSAL credentials."""
+    import urllib.parse
+
+    import msal
+    import requests as _requests
+
+    client_id = creds.get("client_id") or ""
+    client_secret = creds.get("client_secret") or ""
+    refresh_token = creds.get("refresh_token") or ""
+    tenant = cfg.get("tenant_id") or "common"
+    site_url = cfg.get("site_url") or ""
+    library_name = cfg.get("document_library") or "Documents"
+    folder_path = cfg.get("folder_path") or ""
+
+    if not (client_id and client_secret):
+        raise ValueError("SharePoint integration is missing client_id or client_secret in credentials")
+    if not site_url:
+        raise ValueError("SharePoint integration is missing site_url in config")
+
+    scopes = ["https://graph.microsoft.com/.default"]
+    msal_app = msal.ConfidentialClientApplication(
+        client_id=client_id,
+        client_credential=client_secret,
+        authority=f"https://login.microsoftonline.com/{tenant}",
+    )
+
+    if refresh_token:
+        token_resp = msal_app.acquire_token_by_refresh_token(refresh_token=refresh_token, scopes=scopes)
+    else:
+        token_resp = msal_app.acquire_token_for_client(scopes=scopes)
+
+    if "access_token" not in token_resp:
+        raise ValueError(f"SharePoint token acquisition failed: {token_resp.get('error_description', 'unknown')}")
+
+    access_token = token_resp["access_token"]
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    # Resolve site ID
+    parsed = urllib.parse.urlparse(site_url)
+    hostname = parsed.hostname
+    site_path = parsed.path.rstrip("/")
+    if not hostname or not site_path:
+        raise ValueError(f"Invalid SharePoint site URL: {site_url}")
+
+    resp = _requests.get(f"https://graph.microsoft.com/v1.0/sites/{hostname}:{site_path}", headers=headers, timeout=30)
+    resp.raise_for_status()
+    site_id = resp.json()["id"]
+
+    # Resolve drive ID
+    resp = _requests.get(f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives", headers=headers, timeout=30)
+    resp.raise_for_status()
+    drive_id = None
+    for drive in resp.json().get("value", []):
+        if drive.get("name", "").lower() == library_name.lower():
+            drive_id = drive["id"]
+            break
+    if not drive_id:
+        raise RuntimeError(f"Document library '{library_name}' not found on SharePoint site")
+
+    filename = os.path.basename(file_path)
+
+    # Build upload-session URL
+    base_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}"
+    if folder_path:
+        folder_path = folder_path.strip("/")
+        encoded_path = "/".join(urllib.parse.quote(p) for p in folder_path.split("/"))
+        encoded_file = urllib.parse.quote(filename)
+        item_path = f"/root:/{encoded_path}/{encoded_file}:/createUploadSession"
+    else:
+        encoded_file = urllib.parse.quote(filename)
+        item_path = f"/root:/{encoded_file}:/createUploadSession"
+
+    session_url = f"{base_url}{item_path}"
+    session_headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+    resp = _requests.post(
+        session_url,
+        headers=session_headers,
+        json={"item": {"@microsoft.graph.conflictBehavior": "replace"}},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    upload_url = resp.json()["uploadUrl"]
+
+    file_size = os.path.getsize(file_path)
+    chunk_size = 10 * 1024 * 1024
+    with open(file_path, "rb") as fh:
+        chunk_num = 0
+        while True:
+            chunk = fh.read(chunk_size)
+            if not chunk:
+                break
+            start = chunk_num * chunk_size
+            end = start + len(chunk) - 1
+            upload_headers = {
+                "Content-Length": str(len(chunk)),
+                "Content-Range": f"bytes {start}-{end}/{file_size}",
+            }
+            upload_resp = _requests.put(upload_url, headers=upload_headers, data=chunk, timeout=120)
+            if upload_resp.status_code not in (201, 202):
+                raise RuntimeError(f"SharePoint chunk upload failed: {upload_resp.status_code}")
+            chunk_num += 1
+
+    logger.info("[%s] SharePoint upload complete: %s/%s", task_id, folder_path, filename)
+    return {"status": "Completed", "sharepoint_folder": folder_path, "filename": filename}
 
 
 def _upload_icloud(file_path: str, cfg: dict[str, Any], creds: dict[str, Any], task_id: str) -> dict[str, Any]:
@@ -615,6 +723,7 @@ _UPLOAD_HANDLERS = {
     IntegrationType.PAPERLESS: _upload_paperless,
     IntegrationType.EMAIL: _upload_email,
     IntegrationType.RCLONE: _upload_rclone,
+    IntegrationType.SHAREPOINT: _upload_sharepoint,
     IntegrationType.ICLOUD: _upload_icloud,
 }
 

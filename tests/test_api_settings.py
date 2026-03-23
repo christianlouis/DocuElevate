@@ -180,6 +180,27 @@ class TestSettingModels:
         assert update.key == "test_key"
         assert update.value is None
 
+    def test_setting_value_update_model(self):
+        """Test SettingValueUpdate model (PUT body — no key required)."""
+        from app.api.settings import SettingValueUpdate
+
+        body = SettingValueUpdate(value="test_value")
+        assert body.value == "test_value"
+
+    def test_setting_value_update_model_with_none_value(self):
+        """Test SettingValueUpdate model accepts None value."""
+        from app.api.settings import SettingValueUpdate
+
+        body = SettingValueUpdate(value=None)
+        assert body.value is None
+
+    def test_setting_value_update_model_defaults_to_none(self):
+        """Test SettingValueUpdate model value defaults to None when omitted."""
+        from app.api.settings import SettingValueUpdate
+
+        body = SettingValueUpdate()
+        assert body.value is None
+
     def test_setting_response_model(self):
         """Test SettingResponse model."""
         from app.api.settings import SettingResponse
@@ -205,8 +226,100 @@ class TestSettingModels:
         assert "test_key" in response.db_settings
 
 
-@pytest.mark.unit
-class TestListCredentials:
+@pytest.mark.integration
+class TestPutSettingEndpoint:
+    """Tests for PUT /api/settings/{key} endpoint."""
+
+    def test_put_setting_requires_admin(self, client):
+        """Test PUT /settings/{key} requires admin access."""
+        response = client.put("/api/settings/social_auth_dropbox_enabled", json={"value": "true"})
+        assert response.status_code in [302, 401, 403]
+
+    @patch("app.api.settings.notify_settings_updated")
+    @patch("app.api.settings.get_setting_metadata")
+    @patch("app.api.settings.validate_setting_value")
+    @patch("app.api.settings.save_setting_to_db")
+    def test_put_setting_saves_value(self, mock_save, mock_validate, mock_metadata, mock_notify, client):
+        """Test PUT /settings/{key} saves the value when authenticated as admin."""
+        from app.api.settings import require_admin
+        from app.main import app as fastapi_app
+
+        mock_validate.return_value = (True, None)
+        mock_save.return_value = True
+        mock_metadata.return_value = {"restart_required": True}
+
+        def override_require_admin():
+            return {"id": "admin", "is_admin": True, "preferred_username": "admin"}
+
+        fastapi_app.dependency_overrides[require_admin] = override_require_admin
+        try:
+            response = client.put(
+                "/api/settings/social_auth_dropbox_enabled",
+                json={"value": "true"},
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+            assert data["key"] == "social_auth_dropbox_enabled"
+            assert data["value"] == "true"
+            assert data["restart_required"] is True
+        finally:
+            fastapi_app.dependency_overrides.pop(require_admin, None)
+
+    @patch("app.api.settings.notify_settings_updated")
+    @patch("app.api.settings.get_setting_metadata")
+    @patch("app.api.settings.validate_setting_value")
+    @patch("app.api.settings.save_setting_to_db")
+    def test_put_setting_body_without_key_field_is_accepted(
+        self, mock_save, mock_validate, mock_metadata, mock_notify, client
+    ):
+        """Test PUT /settings/{key} body need not contain a key field."""
+        from app.api.settings import require_admin
+        from app.main import app as fastapi_app
+
+        mock_validate.return_value = (True, None)
+        mock_save.return_value = True
+        mock_metadata.return_value = {"restart_required": False}
+
+        def override_require_admin():
+            return {"id": "admin", "is_admin": True, "preferred_username": "admin"}
+
+        fastapi_app.dependency_overrides[require_admin] = override_require_admin
+        try:
+            # Body only contains "value" — no "key" field (mirrors admin_connections.html behaviour)
+            response = client.put(
+                "/api/settings/social_auth_dropbox_use_global_credentials",
+                json={"value": "false"},
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+        finally:
+            fastapi_app.dependency_overrides.pop(require_admin, None)
+
+    @patch("app.api.settings.validate_setting_value")
+    @patch("app.api.settings.get_setting_metadata")
+    def test_put_setting_returns_400_on_invalid_value(self, mock_metadata, mock_validate, client):
+        """Test PUT /settings/{key} returns 400 for invalid values."""
+        from app.api.settings import require_admin
+        from app.main import app as fastapi_app
+
+        mock_validate.return_value = (False, "Invalid boolean value")
+        mock_metadata.return_value = {"restart_required": False}
+
+        def override_require_admin():
+            return {"id": "admin", "is_admin": True}
+
+        fastapi_app.dependency_overrides[require_admin] = override_require_admin
+        try:
+            response = client.put(
+                "/api/settings/social_auth_dropbox_enabled",
+                json={"value": "not_a_bool"},
+            )
+            assert response.status_code == 400
+        finally:
+            fastapi_app.dependency_overrides.pop(require_admin, None)
+
     """Tests for the list_credentials function (GET /api/settings/credentials)."""
 
     @patch("app.api.settings.get_all_settings_from_db")

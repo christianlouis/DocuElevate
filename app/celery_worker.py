@@ -10,6 +10,7 @@ from app import tasks  # noqa: F401 - Imports app/tasks.py so Celery can registe
 # Import the shared Celery instance
 from app.celery_app import celery
 from app.config import settings
+from app.tasks.automation_tasks import deliver_automation_hook_task  # noqa: F401
 from app.tasks.backup_tasks import cleanup_old_backups, create_backup  # noqa: F401
 from app.tasks.batch_tasks import (  # noqa: F401
     backfill_missing_metadata,
@@ -22,6 +23,7 @@ from app.tasks.batch_tasks import (  # noqa: F401
     sync_search_index,
 )
 from app.tasks.check_credentials import check_credentials
+from app.tasks.classify_document import classify_document_task  # noqa: F401
 from app.tasks.compute_embedding import backfill_missing_embeddings, compute_document_embedding  # noqa: F401
 from app.tasks.convert_to_pdf import convert_to_pdf  # noqa: F401
 from app.tasks.convert_to_pdfa import convert_to_pdfa  # noqa: F401
@@ -39,6 +41,7 @@ from app.tasks.refine_text_with_gpt import refine_text_with_gpt  # noqa: F401
 from app.tasks.rotate_pdf_pages import rotate_pdf_pages  # noqa: F401
 from app.tasks.send_to_all import send_to_all_destinations  # noqa: F401
 from app.tasks.subscription_tasks import apply_pending_subscription_changes_all  # noqa: F401
+from app.tasks.translate_to_default_language import translate_to_default_language  # noqa: F401
 
 # Import new send tasks
 from app.tasks.upload_to_dropbox import upload_to_dropbox  # noqa: F401
@@ -51,6 +54,7 @@ from app.tasks.upload_to_onedrive import upload_to_onedrive  # noqa: F401
 from app.tasks.upload_to_paperless import upload_to_paperless  # noqa: F401
 from app.tasks.upload_to_s3 import upload_to_s3  # noqa: F401
 from app.tasks.upload_to_sftp import upload_to_sftp  # noqa: F401
+from app.tasks.upload_to_sharepoint import upload_to_sharepoint  # noqa: F401
 from app.tasks.upload_to_user_integration import upload_to_user_integration  # noqa: F401
 from app.tasks.upload_to_webdav import upload_to_webdav  # noqa: F401
 from app.tasks.upload_with_rclone import send_to_all_rclone_destinations, upload_with_rclone  # noqa: F401
