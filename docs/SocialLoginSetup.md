@@ -1,10 +1,10 @@
 # Social Login Setup Guide
 
-This guide explains how to configure social login providers (Google, Microsoft, Apple, Dropbox) for DocuElevate. Social login lets your users sign in with their existing accounts, reducing friction and eliminating the need for separate passwords.
+This guide explains how to configure social login providers (Google, Microsoft, Apple, Dropbox, GitHub) for DocuElevate. Social login lets your users sign in with their existing accounts, reducing friction and eliminating the need for separate passwords.
 
 ## Overview
 
-DocuElevate supports four social login providers:
+DocuElevate supports five social login providers, plus additional SSO options:
 
 | Provider | Protocol | Best For |
 |----------|----------|----------|
@@ -12,8 +12,14 @@ DocuElevate supports four social login providers:
 | **Microsoft** | OAuth2 / OpenID Connect | Microsoft 365 / Azure AD organizations and personal Microsoft accounts |
 | **Apple** | OAuth2 / OpenID Connect | iOS/macOS users, privacy-focused users |
 | **Dropbox** | OAuth2 | Teams already using Dropbox as a storage destination |
+| **GitHub** | OAuth2 | Developer teams and open-source organizations |
+| **Keycloak** | OpenID Connect | Self-hosted identity management |
+| **Generic OAuth2** | OAuth2 | Any OAuth2-compatible identity provider |
+| **SAML2** | SAML 2.0 | Enterprise identity providers (Okta, ADFS, etc.) |
 
 Each provider is **independently enabled** — you can use one, several, or all of them at the same time. Social login works alongside any other DocuElevate authentication method (simple auth, OIDC/Authentik, local signup).
+
+> **Tip:** You can also configure providers through the admin **Connections** page at `/admin/connections`, which provides a wizard-like interface for setting up authentication services.
 
 ## Prerequisites
 
@@ -42,6 +48,7 @@ For example, if your DocuElevate instance is at `https://docuelevate.example.com
 | Microsoft | `https://docuelevate.example.com/social-callback/microsoft` |
 | Apple | `https://docuelevate.example.com/social-callback/apple` |
 | Dropbox | `https://docuelevate.example.com/social-callback/dropbox` |
+| GitHub | `https://docuelevate.example.com/social-callback/github` |
 
 ---
 
@@ -257,6 +264,86 @@ docker compose restart api worker
 
 ---
 
+## GitHub Sign-In
+
+### 1. Create an OAuth App in GitHub
+
+1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
+2. Click **OAuth Apps** → **New OAuth App**
+3. Fill in the required fields:
+   - **Application name**: `DocuElevate` (or your preferred name)
+   - **Homepage URL**: `https://docuelevate.example.com`
+   - **Authorization callback URL**: `https://docuelevate.example.com/social-callback/github`
+4. Click **Register application**
+5. Copy the **Client ID**
+6. Click **Generate a new client secret** and copy the secret immediately (it won't be shown again)
+
+### 2. Configure DocuElevate
+
+Add these environment variables to your `.env` file:
+
+```bash
+SOCIAL_AUTH_GITHUB_ENABLED=true
+SOCIAL_AUTH_GITHUB_CLIENT_ID=your-github-client-id
+SOCIAL_AUTH_GITHUB_CLIENT_SECRET=your-github-client-secret
+```
+
+### 3. Restart DocuElevate
+
+```bash
+docker compose restart api worker
+```
+
+### Notes
+
+- **Scopes requested**: `read:user` and `user:email` — DocuElevate only reads the user's public profile and primary email address
+- **Organization restrictions**: If your GitHub organization restricts OAuth app access, an organization owner must approve the DocuElevate OAuth app
+- **Private email**: If a user's email is private on GitHub, DocuElevate will request it via the `user:email` scope
+
+---
+
+## Keycloak SSO
+
+### 1. Create a Client in Keycloak
+
+1. Log in to your Keycloak admin console
+2. Select (or create) a realm
+3. Go to **Clients** → **Create client**
+4. Set **Client type** to `OpenID Connect`
+5. Set **Client ID** (e.g., `docuelevate`)
+6. Enable **Client authentication** (confidential)
+7. Add `https://docuelevate.example.com/social-callback/keycloak` to **Valid redirect URIs**
+8. Save and copy the **Client secret** from the **Credentials** tab
+
+### 2. Configure DocuElevate
+
+```bash
+SOCIAL_AUTH_KEYCLOAK_ENABLED=true
+SOCIAL_AUTH_KEYCLOAK_CLIENT_ID=docuelevate
+SOCIAL_AUTH_KEYCLOAK_CLIENT_SECRET=your-keycloak-client-secret
+SOCIAL_AUTH_KEYCLOAK_SERVER_URL=https://keycloak.example.com
+SOCIAL_AUTH_KEYCLOAK_REALM=your-realm-name
+```
+
+---
+
+## Generic OAuth2 SSO
+
+For any OAuth2-compatible identity provider not listed above:
+
+```bash
+SOCIAL_AUTH_GENERIC_OAUTH2_ENABLED=true
+SOCIAL_AUTH_GENERIC_OAUTH2_CLIENT_ID=your-client-id
+SOCIAL_AUTH_GENERIC_OAUTH2_CLIENT_SECRET=your-client-secret
+SOCIAL_AUTH_GENERIC_OAUTH2_AUTHORIZE_URL=https://idp.example.com/oauth/authorize
+SOCIAL_AUTH_GENERIC_OAUTH2_TOKEN_URL=https://idp.example.com/oauth/token
+SOCIAL_AUTH_GENERIC_OAUTH2_USERINFO_URL=https://idp.example.com/oauth/userinfo
+SOCIAL_AUTH_GENERIC_OAUTH2_SCOPE=openid profile email
+SOCIAL_AUTH_GENERIC_OAUTH2_NAME=My Identity Provider
+```
+
+---
+
 ## Unified Authentication and Storage
 
 One of the key advantages of social login in DocuElevate is the potential for **unified authentication** — using the same identity for both signing in and accessing cloud storage destinations:
@@ -266,6 +353,7 @@ One of the key advantages of social login in DocuElevate is the potential for **
 | Google | Google Drive | User already has a Google identity for Drive integration |
 | Microsoft | OneDrive | User already has a Microsoft identity for OneDrive integration |
 | Dropbox | Dropbox | User already has a Dropbox identity for Dropbox integration |
+| GitHub | *(none)* | Developer-friendly authentication for technical teams |
 | Apple | *(none)* | Provides a familiar, privacy-respecting login option |
 
 When a user signs in with a social provider that matches a configured storage destination, the administrator can leverage the same OAuth credentials or simplify the integration setup. Note that the storage integration credentials are configured separately in the admin settings — social login establishes the user's identity, not their storage permissions.

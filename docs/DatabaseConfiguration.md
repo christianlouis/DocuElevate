@@ -337,18 +337,26 @@ The Helm chart includes a pre-install and pre-upgrade Job hook that runs `alembi
 
 ## Connection Pooling
 
-SQLAlchemy manages a connection pool automatically.  The defaults are suitable for most deployments.  For high-concurrency or Kubernetes deployments you may want to tune:
+SQLAlchemy manages a connection pool automatically.  DocuElevate selects the pool
+strategy based on the database backend:
+
+- **SQLite** — uses `NullPool` (a fresh connection per request, closed immediately).
+  This avoids the `QueuePool limit reached` `TimeoutError` that can occur under
+  concurrent load because SQLite does not benefit from persistent connection pooling.
+- **PostgreSQL / MySQL** — uses a bounded `QueuePool` whose size is configurable
+  via environment variables.
 
 ```bash
-# Optional — these are set via environment variables if you extend app/database.py
-# Typical production values:
-DB_POOL_SIZE=10         # Number of persistent connections per worker
-DB_MAX_OVERFLOW=20      # Additional connections allowed beyond pool_size
-DB_POOL_TIMEOUT=30      # Seconds to wait for a connection from the pool
-DB_POOL_RECYCLE=1800    # Recycle connections after 30 minutes (avoids stale connections)
+# Tune these for PostgreSQL / MySQL (ignored when using SQLite):
+DB_POOL_SIZE=10         # Number of persistent connections per worker (default: 10)
+DB_MAX_OVERFLOW=20      # Additional connections allowed beyond pool_size (default: 20)
+DB_POOL_TIMEOUT=30      # Seconds to wait for a connection from the pool (default: 30)
+DB_POOL_RECYCLE=1800    # Recycle connections after 30 minutes (default: 1800)
 ```
 
-> **Note:** These environment variables are not exposed in the default `app/config.py`.  If you need to tune them, extend the database engine creation in `app/database.py`.
+All backends also enable `pool_pre_ping`, which sends a lightweight health-check
+before each connection is handed out.  This detects stale or dropped connections
+and transparently reconnects.
 
 For **PgBouncer** (external connection pooling), point `DATABASE_URL` at your PgBouncer instance and use transaction-mode pooling:
 
@@ -511,5 +519,14 @@ Then retry `alembic upgrade head`.
 ### "too many connections" error
 
 Either increase `max_connections` in `postgresql.conf` or add PgBouncer in front of PostgreSQL.  The default PostgreSQL `max_connections` is `100`; reduce `DB_POOL_SIZE` per worker to stay within this limit.
+
+### "QueuePool limit reached" TimeoutError (SQLite)
+
+If you see `TimeoutError: QueuePool limit of size 5 overflow 10 reached`, your
+deployment is still running an older version of DocuElevate that used a bounded
+connection pool for SQLite.  Upgrade to the latest release — SQLite now uses
+`NullPool`, which eliminates this error entirely.  If you are already on the
+latest version and are still seeing pool exhaustion, ensure you are not
+overriding the engine creation manually.
 
 For more help, see the [Troubleshooting Guide](Troubleshooting.md).

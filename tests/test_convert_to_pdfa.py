@@ -38,6 +38,11 @@ class TestConvertPdfToPdfa:
         assert "pdfa-2" in cmd
         assert "--quiet" in cmd
         assert "--invalidate-digital-signatures" in cmd
+        # SECURITY: Verify `--` end-of-options separator is present and precedes
+        # the file paths to prevent option/argument injection.
+        assert "--" in cmd
+        assert cmd.index("--") < cmd.index("/input.pdf")
+        assert cmd.index("--") < cmd.index("/output.pdf")
         assert "/input.pdf" in cmd
         assert "/output.pdf" in cmd
 
@@ -72,6 +77,8 @@ class TestConvertPdfToPdfa:
             _convert_pdf_to_pdfa("/input.pdf", "/output.pdf", fmt)
             cmd = mock_run.call_args[0][0]
             assert f"pdfa-{fmt}" in cmd
+            assert "--" in cmd
+            assert cmd.index("--") < cmd.index("/input.pdf")
 
     def test_invalid_pdfa_format_rejected(self):
         """Test that invalid PDF/A format values are rejected."""
