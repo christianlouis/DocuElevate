@@ -202,10 +202,10 @@ class TestSavedSearchesCRUD:
         assert data["filters"]["text_quality"] == "high"
         assert data["filters"]["tags"] == "invoice"
 
-
     def test_create_saved_search_max_limit(self, client: TestClient, db_session, mocker):
         """POST /api/saved-searches returns 409 when max limit is reached."""
         from app.api.saved_searches import MAX_SAVED_SEARCHES_PER_USER
+
         user_id = "test_user"
         mocker.patch("app.api.saved_searches._get_user_id", return_value=user_id)
 
@@ -327,7 +327,7 @@ class TestSavedSearchesCRUD:
         # We need a mock request
         class MockRequest:
             session = {}
-            state = type('obj', (object,), {'user': None})
+            state = type("obj", (object,), {"user": None})
 
         req = MockRequest()
         assert _get_user_id(req) == "anonymous"
