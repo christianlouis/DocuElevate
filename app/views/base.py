@@ -163,9 +163,21 @@ def _inject_global_context(ctx: dict) -> None:
 
 def template_response_with_version(*args, **kwargs):
     """Wrapper for TemplateResponse to include version and CSRF token in all templates"""
+    # Handle the case where args are passed positionally as (name, context)
+    # which was the old FastAPI signature. The new signature requires (request, name, context)
+    # or keyword arguments. We translate the old positional arguments to kwargs if possible.
+    if len(args) == 2 and isinstance(args[0], str) and isinstance(args[1], dict):
+        context = args[1]
+        request = context.get("request")
+        if request is not None:
+            _inject_global_context(context)
+            return original_template_response(request=request, name=args[0], context=context, **kwargs)
+
     # If context dict is provided, add version to it
     if len(args) >= 2 and isinstance(args[1], dict):
         _inject_global_context(args[1])
+    elif len(args) >= 3 and isinstance(args[2], dict):
+        _inject_global_context(args[2])
     elif "context" in kwargs and isinstance(kwargs["context"], dict):
         _inject_global_context(kwargs["context"])
     return original_template_response(*args, **kwargs)
