@@ -425,14 +425,14 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     # Handle 404 errors with a custom template
     if exc.status_code == 404:
         return _error_templates.TemplateResponse(
-            "404.html", {"request": request}, status_code=status.HTTP_404_NOT_FOUND
+            request, "404.html", status_code=status.HTTP_404_NOT_FOUND
         )
 
     # For other HTTP errors, we could create specific templates or use a generic one
     # For now, return a simple error page
     return _error_templates.TemplateResponse(
+        request,
         "404.html",  # Reuse 404 template for other errors, or create a generic error template
-        {"request": request},
         status_code=exc.status_code,
     )
 
@@ -452,8 +452,9 @@ async def custom_500_handler(request: Request, exc: Exception):
 
     # Serve the 500 template for non-API routes
     return _error_templates.TemplateResponse(
+        request,
         "500.html",
-        {"request": request, "exc": exc},
+        context={"exc": exc},
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
     )
 
