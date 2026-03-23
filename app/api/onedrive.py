@@ -3,6 +3,7 @@ OneDrive API endpoints
 """
 
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Annotated, Optional
 
@@ -13,15 +14,25 @@ from sqlalchemy.orm import Session
 from app.auth import require_login
 from app.config import settings
 from app.database import get_db
-from app.utils.env_utils import update_env_file
 from app.utils.oauth_helper import exchange_oauth_token
-from app.utils.settings_service import save_setting_to_db
+from app.utils.settings_service import save_setting_to_db, update_env_file
 from app.utils.settings_sync import notify_settings_updated
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _require_admin(request: Request) -> dict:
+    """Dependency to ensure the current user is an admin."""
+    user = request.session.get("user")
+    if not user or not user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user
+
+
+AdminUser = Annotated[dict, Depends(_require_admin)]
 
 
 @router.post("/onedrive/exchange-token")
@@ -204,9 +215,9 @@ def format_time_remaining(time_delta):
 
 
 @router.post("/onedrive/save-settings")
-@require_login
 async def save_onedrive_settings(
     request: Request,
+    _admin: AdminUser,
     refresh_token: Annotated[str, Form(...)],
     client_id: Annotated[Optional[str], Form()] = None,
     client_secret: Annotated[Optional[str], Form()] = None,
@@ -223,26 +234,44 @@ async def save_onedrive_settings(
             user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "wizard"
         )
 
-        # Build settings dictionary mapped to database/memory keys
-        onedrive_settings = {
-            "onedrive_refresh_token": refresh_token,
-            "onedrive_client_id": client_id,
-            "onedrive_client_secret": client_secret,
-            "onedrive_tenant_id": tenant_id,
-            "onedrive_folder_path": folder_path,
-        }
+        # Best-effort .env file write
+        env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
+        onedrive_settings = {"ONEDRIVE_REFRESH_TOKEN": refresh_token}
+        if client_id:
+            onedrive_settings["ONEDRIVE_CLIENT_ID"] = client_id
+        if client_secret:
+            onedrive_settings["ONEDRIVE_CLIENT_SECRET"] = client_secret
+        if tenant_id:
+            onedrive_settings["ONEDRIVE_TENANT_ID"] = tenant_id
+        if folder_path:
+            onedrive_settings["ONEDRIVE_FOLDER_PATH"] = folder_path
 
-        # Filter out None values
-        onedrive_settings = {k: v for k, v in onedrive_settings.items() if v is not None}
+        if not update_env_file(env_path, onedrive_settings):
+            logger.info("Continuing with in-memory update despite .env file update failure or skip")
 
-        # Best-effort .env file write using the new utility
-        env_settings = {k.upper(): v for k, v in onedrive_settings.items()}
-        update_env_file(env_settings)
+        # Update the settings in memory
+        if refresh_token:
+            settings.onedrive_refresh_token = refresh_token
+        if client_id:
+            settings.onedrive_client_id = client_id
+        if client_secret:
+            settings.onedrive_client_secret = client_secret
+        if tenant_id:
+            settings.onedrive_tenant_id = tenant_id
+        if folder_path:
+            settings.onedrive_folder_path = folder_path
 
-        # Update in-memory settings and persist to database dynamically
-        for key, value in onedrive_settings.items():
-            setattr(settings, key, value)
-            save_setting_to_db(db, key, value, changed_by=changed_by)
+        # Persist to database (primary)
+        if refresh_token:
+            save_setting_to_db(db, "onedrive_refresh_token", refresh_token, changed_by=changed_by)
+        if client_id:
+            save_setting_to_db(db, "onedrive_client_id", client_id, changed_by=changed_by)
+        if client_secret:
+            save_setting_to_db(db, "onedrive_client_secret", client_secret, changed_by=changed_by)
+        if tenant_id:
+            save_setting_to_db(db, "onedrive_tenant_id", tenant_id, changed_by=changed_by)
+        if folder_path:
+            save_setting_to_db(db, "onedrive_folder_path", folder_path, changed_by=changed_by)
 
         notify_settings_updated()
 

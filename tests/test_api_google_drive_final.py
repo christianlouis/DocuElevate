@@ -152,11 +152,16 @@ class TestGetTokenInfoCredentialsBranches:
 
 @pytest.mark.unit
 class TestSaveGoogleDriveSettingsFalsyFields:
-    """Cover branches 395->397, 449->451, 468->470 in save_google_drive_settings.
+    """Cover branches 395->397, 449->451, 468->470 in save_google_drive_settings."""
 
-    Note: the Google Drive save endpoint is named save_google_drive_settings in the
-    source (app/api/google_drive.py).
-    """
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.google_drive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
 
     @patch("app.api.google_drive.settings")
     @patch("os.path.exists", return_value=False)
@@ -177,6 +182,7 @@ class TestSaveGoogleDriveSettingsFalsyFields:
             with patch("app.api.google_drive.notify_settings_updated"):
                 result = await save_google_drive_settings(
                     request=mock_request,
+                    _admin={"is_admin": True},
                     refresh_token="",  # falsy → branches 395->397 and 449->451
                     client_id="cid",
                     client_secret=None,

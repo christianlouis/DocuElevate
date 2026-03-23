@@ -1,11 +1,10 @@
 import logging
 import os
-from typing import Dict
 
 logger = logging.getLogger(__name__)
 
 
-def update_env_file(settings_to_update: Dict[str, str]) -> bool:
+def update_env_file(settings_to_update: dict[str, str]) -> bool:
     """
     Updates the .env file with the given settings (best-effort).
     Creates or modifies existing keys.
