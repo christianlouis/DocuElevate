@@ -403,32 +403,33 @@ class TestDeleteIntegration:
 
 
 @pytest.mark.integration
-class TestGetIntegrationCredentials:
-    """Tests for GET /api/integrations/{id}/credentials."""
+class TestTestSavedIntegrationConnection:
+    """Tests for POST /api/integrations/{id}/test."""
 
-    def test_returns_decrypted_credentials(self, int_client):
-        """Credentials endpoint returns the decrypted dict."""
+    @patch("app.api.integrations._CONNECTION_TESTERS")
+    def test_test_saved_integration_success(self, mock_testers, int_client):
+        """Test a saved integration successfully."""
+        mock_tester = MagicMock(return_value={"success": True, "message": "OK"})
+        mock_testers.get.return_value = mock_tester
+
         created = int_client.post("/api/integrations/", json=_IMAP_SOURCE).json()
-        resp = int_client.get(f"/api/integrations/{created['id']}/credentials")
-        assert resp.status_code == 200
-        creds = resp.json()["credentials"]
-        assert creds["password"] == "s3cr3t"  # noqa: S105
+        resp = int_client.post(f"/api/integrations/{created['id']}/test")
 
-    def test_returns_empty_dict_when_no_credentials(self, int_client):
-        """No credentials stored returns empty dict."""
-        payload = dict(_IMAP_SOURCE, credentials=None)
-        created = int_client.post("/api/integrations/", json=payload).json()
-        resp = int_client.get(f"/api/integrations/{created['id']}/credentials")
         assert resp.status_code == 200
-        assert resp.json()["credentials"] == {}
+        assert resp.json()["success"] is True
+        mock_testers.get.assert_called_with("IMAP")
+        mock_tester.assert_called_once()
+        args = mock_tester.call_args[0]
+        assert args[0]["host"] == "imap.gmail.com"
+        assert args[1]["password"] == "s3cr3t"
 
     def test_not_found(self, int_client):
         """Non-existent integration returns 404."""
-        resp = int_client.get("/api/integrations/9999/credentials")
+        resp = int_client.post("/api/integrations/9999/test")
         assert resp.status_code == 404
 
-    def test_other_users_credentials_returns_404(self, int_client, int_session):
-        """Cannot retrieve another user's credentials."""
+    def test_other_users_integration_returns_404(self, int_client, int_session):
+        """Cannot test another user's integration."""
         other_integration = UserIntegration(
             owner_id=_OTHER_OWNER,
             direction="SOURCE",
@@ -439,7 +440,7 @@ class TestGetIntegrationCredentials:
         )
         int_session.add(other_integration)
         int_session.commit()
-        resp = int_client.get(f"/api/integrations/{other_integration.id}/credentials")
+        resp = int_client.post(f"/api/integrations/{other_integration.id}/test")
         assert resp.status_code == 404
 
 

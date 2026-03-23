@@ -455,31 +455,6 @@ def delete_integration(
     logger.info("User %s deleted integration %d", owner_id, integration_id)
 
 
-@router.get("/{integration_id}/credentials", summary="Retrieve decrypted credentials for an integration")
-def get_integration_credentials(
-    integration_id: int,
-    request: Request,
-    db: DbSession,
-    owner_id: CurrentOwner,
-) -> dict[str, Any]:
-    """Return the decrypted credentials dict for a saved integration.
-
-    This endpoint is intended for internal use by background tasks that need
-    to authenticate with a third-party service.  Treat the response as
-    sensitive — it contains plaintext secrets.
-    """
-    integration = (
-        db.query(UserIntegration)
-        .filter(UserIntegration.id == integration_id, UserIntegration.owner_id == owner_id)
-        .first()
-    )
-    if not integration:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found")
-
-    credentials = _decode_credentials(integration.credentials)
-    return {"credentials": credentials or {}}
-
-
 # ---------------------------------------------------------------------------
 # Connection test helpers
 # ---------------------------------------------------------------------------
@@ -606,6 +581,36 @@ _CONNECTION_TESTERS: dict[str, Any] = {
 # ---------------------------------------------------------------------------
 # Test & quota endpoints
 # ---------------------------------------------------------------------------
+
+
+@router.post("/{integration_id}/test", summary="Test a saved integration connection")
+def test_saved_integration_connection(
+    integration_id: int,
+    request: Request,
+    db: DbSession,
+    owner_id: CurrentOwner,
+) -> dict[str, Any]:
+    """Test connection for an already-saved integration."""
+    integration = (
+        db.query(UserIntegration)
+        .filter(UserIntegration.id == integration_id, UserIntegration.owner_id == owner_id)
+        .first()
+    )
+    if not integration:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found")
+
+    tester = _CONNECTION_TESTERS.get(integration.integration_type)
+    if tester is None:
+        return {
+            "success": False,
+            "message": f"Connection testing is not yet supported for '{integration.integration_type}'. "
+            "The integration can still be saved and will be validated on first use.",
+        }
+
+    config = json.loads(integration.config) if integration.config else {}
+    credentials = _decode_credentials(integration.credentials) or {}
+
+    return tester(config, credentials)
 
 
 @router.post("/test", summary="Test an integration connection without saving")

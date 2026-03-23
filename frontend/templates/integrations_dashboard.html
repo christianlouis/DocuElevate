@@ -1379,27 +1379,15 @@ function integrationsDashboard() {
     async testSavedIntegration(intg) {
       this.testingId = intg.id;
       try {
-        // Retrieve saved credentials to test
-        const credsResp = await fetch(`/api/integrations/${intg.id}/credentials`);
-        if (!credsResp.ok) {
-          this.showAlert('error', 'Test Failed', 'Could not retrieve saved credentials for testing.');
-          return;
-        }
-        const creds = await credsResp.json();
-        const resp = await fetch('/api/integrations/test', {
+        const resp = await fetch(`/api/integrations/${intg.id}/test`, {
           method: 'POST',
           headers: authHeaders(true),
-          body: JSON.stringify({
-            integration_type: intg.integration_type,
-            config: intg.config,
-            credentials: creds,
-          }),
         });
         const data = await resp.json();
-        if (data.success) {
+        if (resp.ok && data.success) {
           this.showAlert('success', `${intg.name}: Connection OK`, data.message);
         } else {
-          this.showAlert('error', `${intg.name}: Connection Failed`, data.message);
+          this.showAlert('error', `${intg.name}: Connection Failed`, data.message || 'Connection test failed.');
         }
       } catch (err) {
         this.showAlert('error', 'Test Failed', `Network error: ${err.message || 'Unknown error'}`);

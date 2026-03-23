@@ -9,6 +9,15 @@ This document tracks security vulnerabilities found in DocuElevate and their rem
 
 ## Recent Security Fixes
 
+### Insecure API Endpoint Exposing Integration Credentials ✅ FIXED
+**Severity:** HIGH
+
+**Issue:** The endpoint `GET /api/integrations/{integration_id}/credentials` exposed integration credentials (e.g. passwords, API keys) in plaintext over the API. Although requiring login, this allowed anyone with an active user session to extract the raw credentials. The frontend used this endpoint for testing integration connections.
+
+**Remediation:**
+- Removed the `/credentials` endpoint entirely.
+- Added a new `POST /api/integrations/{integration_id}/test` endpoint that securely runs connection tests server-side without returning the decrypted credentials to the client.
+
 ### CVE-2023-36464: PyPDF2/pypdf Infinite Loop Vulnerability ✅ FIXED (2026-02-12)
 
 **Severity:** Moderate (CVSS: 5.5)
