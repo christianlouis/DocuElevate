@@ -3388,11 +3388,11 @@ def update_env_file(env_path: str, settings_to_update: dict[str, str]) -> bool:
     Returns:
         True if the file was successfully updated, False otherwise (e.g. file not found or write error)
     """
-    if not os.path.exists(env_path):
-        logger.warning(f".env file not found at {env_path}, skipping file update")
-        return False
-
     try:
+        if not os.path.exists(env_path):
+            logger.warning(f".env file not found at {env_path}, skipping file update")
+            return False
+
         logger.info(f"Updating settings in {env_path}")
 
         # Read the current .env file
