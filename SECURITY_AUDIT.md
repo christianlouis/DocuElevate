@@ -1,6 +1,6 @@
 # Security Audit Report
 
-**Date:** 2026-02-12
+**Date:** 2026-03-23
 **Status:** Bandit Security Scan Completed - All Critical/High/Medium Issues Resolved
 
 ## Executive Summary
@@ -9,7 +9,7 @@ This document tracks security vulnerabilities found in DocuElevate and their rem
 
 ## Recent Security Fixes
 
-### Insecure API Endpoint Exposing Integration Credentials ✅ FIXED
+### Insecure API Endpoint Exposing Integration Credentials ✅ FIXED (2026-03-23)
 **Severity:** HIGH
 
 **Issue:** The endpoint `GET /api/integrations/{integration_id}/credentials` exposed integration credentials (e.g. passwords, API keys) in plaintext over the API. Although requiring login, this allowed anyone with an active user session to extract the raw credentials. The frontend used this endpoint for testing integration connections.

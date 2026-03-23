@@ -1387,7 +1387,7 @@ function integrationsDashboard() {
         if (resp.ok && data.success) {
           this.showAlert('success', `${intg.name}: Connection OK`, data.message);
         } else {
-          this.showAlert('error', `${intg.name}: Connection Failed`, data.message || 'Connection test failed.');
+          this.showAlert('error', `${intg.name}: Connection Failed`, data.message || {{ _("integrations.connection_test_failed_fallback")|tojson }});
         }
       } catch (err) {
         this.showAlert('error', 'Test Failed', `Network error: ${err.message || 'Unknown error'}`);

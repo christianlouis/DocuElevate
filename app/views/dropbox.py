@@ -14,6 +14,19 @@ from app.views.base import APIRouter, Depends, get_db, require_login, settings, 
 router = APIRouter()
 
 
+def _get_dropbox_callback_url(request: Request) -> str:
+    """Return the Dropbox OAuth callback URL.
+
+    Uses ``PUBLIC_BASE_URL`` when configured so that the redirect URI displayed
+    to the user (and registered in the Dropbox developer console) matches the
+    one used in the OAuth authorization request.  Falls back to deriving the URL
+    from the incoming request when ``PUBLIC_BASE_URL`` is not set.
+    """
+    if settings.public_base_url:
+        return settings.public_base_url.rstrip("/") + "/dropbox-callback"
+    return f"{request.url.scheme}://{request.url.netloc}/dropbox-callback"
+
+
 @router.get("/dropbox-setup")
 @require_login
 async def dropbox_setup_page(
@@ -30,6 +43,8 @@ async def dropbox_setup_page(
     path from the integration's existing config is pre-populated; global
     admin credentials are never exposed in this mode.
     """
+    callback_url = _get_dropbox_callback_url(request)
+
     if integration_id is not None:
         owner_id = get_current_owner_id(request)
         integration = (
@@ -46,6 +61,12 @@ async def dropbox_setup_page(
                     cfg = {}
             # Support both "folder" (DROPBOX destination) and "folder_path" (WATCH_FOLDER source)
             folder_path = cfg.get("folder", cfg.get("folder_path", ""))
+            # Determine if global credentials are available for users to reuse
+            global_creds_available = bool(
+                settings.dropbox_allow_global_credentials_for_integrations
+                and settings.dropbox_app_key
+                and settings.dropbox_app_secret
+            )
             return templates.TemplateResponse(
                 "dropbox.html",
                 {
@@ -56,9 +77,12 @@ async def dropbox_setup_page(
                     "integration_name": integration.name,
                     "integration_type": integration.integration_type,
                     "folder_path": folder_path,
-                    "app_key_value": "",
+                    # Only expose the public app key (not the secret) when global creds are allowed
+                    "app_key_value": settings.dropbox_app_key if global_creds_available else "",
                     "app_secret_value": "",
                     "refresh_token_value": "",
+                    "global_creds_available": global_creds_available,
+                    "callback_url": callback_url,
                 },
             )
 
@@ -78,6 +102,7 @@ async def dropbox_setup_page(
             "integration_id": integration_id,
             "integration_name": None,
             "integration_type": None,
+            "callback_url": callback_url,
         },
     )
 
@@ -108,5 +133,6 @@ async def dropbox_callback(request: Request, code: str = None, error: str = None
             "app_key_value": "",  # The callback will prioritize sessionStorage values
             "app_secret_value": "",  # The callback will prioritize sessionStorage values
             "folder_path": "",  # The callback will prioritize sessionStorage values
+            "callback_url": _get_dropbox_callback_url(request),
         },
     )

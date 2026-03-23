@@ -11,6 +11,7 @@ from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+import pypdf
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.celery_app import celery
@@ -22,6 +23,15 @@ logger = logging.getLogger(__name__)
 
 # Constants
 _LOGO_FILENAME = "logo.png"
+
+# Mapping from PDF metadata keys (with leading slash stripped) to application-specific names.
+# This mirrors the inverse of the mapping used in app/tasks/embed_metadata_into_pdf.py.
+_PDF_METADATA_KEY_MAP = {
+    "Title": "filename",
+    "Author": "absender",
+    "Subject": "document_type",
+    "Keywords": "tags",
+}
 
 
 def get_email_template(template_name="default.html"):
@@ -63,9 +73,12 @@ def extract_metadata_from_file(file_path):
     """
     Try to extract metadata from a file using several methods:
     1. Check for a .json metadata file with the same name
-    2. Extract metadata from PDF if it's embedded
+    2. Extract embedded metadata from PDF using pypdf
 
-    Returns a dictionary of metadata or None if not found
+    JSON metadata takes precedence; embedded PDF metadata fills in any missing
+    fields using the application's standard key mapping (e.g., /Title → filename).
+
+    Returns a dictionary of metadata (may be empty if none found).
     """
     metadata = {}
 
@@ -76,12 +89,28 @@ def extract_metadata_from_file(file_path):
             with open(metadata_path, "r", encoding="utf-8") as f:
                 metadata = json.load(f)
                 logger.info(f"Loaded metadata from external JSON file: {metadata_path}")
-                return metadata
         except Exception as e:
             logger.warning(f"Failed to load metadata from JSON file: {str(e)}")
 
-    # TODO: For PDF files, try to extract embedded metadata using PyPDF2
-    # This would require additional dependencies, so for now we'll just check for external JSON
+    # Try to extract embedded metadata from PDF
+    if file_path.lower().endswith(".pdf") and os.path.exists(file_path):
+        try:
+            with open(file_path, "rb") as f:
+                pdf_reader = pypdf.PdfReader(f)
+                pdf_metadata = pdf_reader.metadata
+                if pdf_metadata:
+                    for key, value in pdf_metadata.items():
+                        # Remove the leading slash from PDF metadata keys (e.g., '/Title' -> 'Title')
+                        clean_key = key[1:] if key.startswith("/") else key
+                        # Map to application-specific key names where possible
+                        mapped_key = _PDF_METADATA_KEY_MAP.get(clean_key, clean_key)
+                        # Only set if not already present (JSON metadata takes precedence)
+                        if mapped_key not in metadata:
+                            metadata[mapped_key] = str(value)
+
+                    logger.info(f"Extracted embedded metadata from PDF: {file_path}")
+        except Exception as e:
+            logger.warning(f"Failed to extract metadata from PDF {file_path}: {str(e)}")
 
     return metadata
 

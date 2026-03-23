@@ -1,0 +1,3 @@
+[submodule "vendor/embed-pdf-viewer"]
+	path = vendor/embed-pdf-viewer
+	url = https://github.com/embedpdf/embed-pdf-viewer.git

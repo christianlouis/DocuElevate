@@ -71,6 +71,16 @@ def notify_settings_updated() -> None:
     except Exception as exc:
         logger.warning(f"Could not reload in-process settings: {exc}")
 
+    # Re-register OAuth / social-login providers so that any provider whose
+    # credentials were just saved (or updated) in the database is active
+    # immediately on the login page — no restart required.
+    try:
+        from app.auth import refresh_social_providers
+
+        refresh_social_providers()
+    except Exception as exc:
+        logger.warning(f"Could not refresh social login providers after settings update: {exc}")
+
     # Re-check OCR language availability in the background whenever settings
     # are updated.  This ensures that if a user changes tesseract_language or
     # easyocr_languages via the UI, the new language data is downloaded without

@@ -19,6 +19,43 @@ router = APIRouter()
 _FILE_NOT_FOUND = "File not found"
 
 
+def _resolve_owner_context(request: Request, file_record, db: Session) -> dict:
+    """Return owner display info and the current user's effective role.
+
+    Returns a dict with:
+    - ``current_user_role``: one of "owner" / "editor" / "viewer" / None
+    - ``owner_display``: human-readable owner string (display_name or user_id)
+    - ``multi_user_enabled``: whether multi-user mode is active
+    """
+    from app.config import settings
+    from app.models import UserProfile
+    from app.utils.user_scope import get_current_owner_id, get_file_role
+
+    multi_user_enabled = settings.multi_user_enabled
+
+    current_owner_id = get_current_owner_id(request)
+    user_session = request.session.get("user")
+    is_admin = isinstance(user_session, dict) and bool(user_session.get("is_admin"))
+
+    if is_admin:
+        current_user_role: str | None = "owner"
+    else:
+        current_user_role = get_file_role(file_record, current_owner_id, db)
+
+    # Build a human-readable owner label
+    if file_record.owner_id:
+        profile = db.query(UserProfile).filter(UserProfile.user_id == file_record.owner_id).first()
+        owner_display: str | None = profile.display_name if profile and profile.display_name else file_record.owner_id
+    else:
+        owner_display = None  # No owner (unowned)
+
+    return {
+        "current_user_role": current_user_role,
+        "owner_display": owner_display,
+        "multi_user_enabled": multi_user_enabled,
+    }
+
+
 @router.get("/files")
 @require_login
 def files_page(
@@ -206,10 +243,93 @@ def files_page(
 
 @router.get("/files/{file_id}")
 @require_login
+def file_summary_page(request: Request, file_id: int, db: Session = Depends(get_db)):
+    """
+    Return the file summary page — a concise overview with links to detail, processing, and annotations views.
+    """
+    try:
+        import json
+        import os
+
+        from app.models import FileRecord
+
+        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+
+        if not file_record:
+            return templates.TemplateResponse(
+                "file_summary.html",
+                {"request": request, "file": None, "error": f"File with ID {file_id} not found"},
+            )
+
+        from app.config import settings
+
+        workdir = os.path.realpath(settings.workdir)
+
+        def _safe_exists(path: str | None) -> bool:
+            """Return True only when *path* exists and resides within workdir."""
+            if not path:
+                return False
+            resolved = os.path.realpath(path)
+            try:
+                common = os.path.commonpath([resolved, workdir])
+            except ValueError:
+                return False
+            return common == workdir and os.path.exists(resolved)
+
+        original_file_exists = _safe_exists(file_record.original_file_path)
+        processed_file_exists = _safe_exists(file_record.processed_file_path)
+
+        # Load AI metadata — JSON sidecar file first, then DB column
+        gpt_metadata = None
+        if file_record.processed_file_path:
+            metadata_path = os.path.splitext(os.path.realpath(file_record.processed_file_path))[0] + ".json"
+            if _safe_exists(metadata_path):
+                try:
+                    with open(metadata_path, "r", encoding="utf-8") as f:
+                        gpt_metadata = json.load(f)
+                except Exception as e:
+                    logger.warning(f"Failed to load metadata sidecar for file {file_id}: {e}")
+
+        if gpt_metadata is None and file_record.ai_metadata:
+            try:
+                gpt_metadata = json.loads(file_record.ai_metadata)
+            except Exception as e:
+                logger.warning(f"Failed to parse ai_metadata for file {file_id}: {e}")
+
+        # Quick processing status
+        try:
+            from app.utils.step_manager import get_step_summary as _get_step_summary
+
+            step_summary = _get_step_summary(db, file_id)
+        except Exception:
+            step_summary = None
+
+        pipeline_info = _resolve_pipeline(db, file_record)
+        owner_ctx = _resolve_owner_context(request, file_record, db)
+
+        return templates.TemplateResponse(
+            "file_summary.html",
+            {
+                "request": request,
+                "file": file_record,
+                "gpt_metadata": gpt_metadata,
+                "original_file_exists": original_file_exists,
+                "processed_file_exists": processed_file_exists,
+                "step_summary": step_summary,
+                "pipeline_info": pipeline_info,
+                **owner_ctx,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving file summary {file_id}: {str(e)}")
+        return templates.TemplateResponse("file_summary.html", {"request": request, "file": None, "error": str(e)})
+
+
+@router.get("/files/{file_id}/detail")
+@require_login
 def file_view_page(request: Request, file_id: int, db: Session = Depends(get_db)):
     """
-    Return the document view page — document-centric view with metadata, preview, and extracted text.
-    Process-oriented details are available via /files/{file_id}/detail.
+    Return the document detail page — document-centric view with metadata, preview, and extracted text.
     """
     try:
         import json
@@ -272,6 +392,7 @@ def file_view_page(request: Request, file_id: int, db: Session = Depends(get_db)
 
         # Resolve the pipeline assigned to this file (explicit or system default)
         pipeline_info = _resolve_pipeline(db, file_record)
+        owner_ctx = _resolve_owner_context(request, file_record, db)
 
         return templates.TemplateResponse(
             "file_view.html",
@@ -283,6 +404,7 @@ def file_view_page(request: Request, file_id: int, db: Session = Depends(get_db)
                 "processed_file_exists": processed_file_exists,
                 "step_summary": step_summary,
                 "pipeline_info": pipeline_info,
+                **owner_ctx,
             },
         )
     except Exception as e:
@@ -290,11 +412,11 @@ def file_view_page(request: Request, file_id: int, db: Session = Depends(get_db)
         return templates.TemplateResponse("file_view.html", {"request": request, "file": None, "error": str(e)})
 
 
-@router.get("/files/{file_id}/detail")
+@router.get("/files/{file_id}/process")
 @require_login
 def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_db)):
     """
-    Return the file detail page showing processing history and file information
+    Return the file processing page showing processing history and pipeline information.
     """
     try:
         import json
@@ -375,6 +497,77 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
         return templates.TemplateResponse("file_detail.html", {"request": request, "file": None, "error": str(e)})
 
 
+@router.get("/files/{file_id}/annotations")
+@require_login
+def file_annotations_page(request: Request, file_id: int, db: Session = Depends(get_db)):
+    """
+    Return the comments & annotations page for a file.
+    """
+    try:
+        import os
+
+        from app.models import FileRecord
+
+        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+
+        if not file_record:
+            return templates.TemplateResponse(
+                "file_annotations.html",
+                {"request": request, "file": None, "error": f"File with ID {file_id} not found"},
+            )
+
+        from app.config import settings
+
+        workdir = os.path.realpath(settings.workdir)
+
+        def _safe_exists(path: str | None) -> bool:
+            """Return True only when *path* exists and resides within workdir."""
+            if not path:
+                return False
+            resolved = os.path.realpath(path)
+            try:
+                common = os.path.commonpath([resolved, workdir])
+            except ValueError:
+                return False
+            return common == workdir and os.path.exists(resolved)
+
+        original_file_exists = _safe_exists(file_record.original_file_path)
+        processed_file_exists = _safe_exists(file_record.processed_file_path)
+
+        # Determine whether the file is a PDF (for EmbedPDF viewer)
+        mime = file_record.mime_type or ""
+        is_pdf = mime == "application/pdf" or (file_record.original_filename or "").lower().endswith(".pdf")
+
+        # Determine the current user's role on this file (and owner display info)
+        owner_ctx = _resolve_owner_context(request, file_record, db)
+
+        return templates.TemplateResponse(
+            "file_annotations.html",
+            {
+                "request": request,
+                "file": file_record,
+                "original_file_exists": original_file_exists,
+                "processed_file_exists": processed_file_exists,
+                "is_pdf": is_pdf,
+                **owner_ctx,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving annotations for file {file_id}: {str(e)}")
+        return templates.TemplateResponse("file_annotations.html", {"request": request, "file": None, "error": str(e)})
+
+
+@router.get("/files/{file_id}/comments")
+@require_login
+def file_comments_redirect(request: Request, file_id: int):
+    """
+    Redirect /files/{file_id}/comments to /files/{file_id}/annotations.
+    """
+    from starlette.responses import RedirectResponse
+
+    return RedirectResponse(url=f"/files/{file_id}/annotations", status_code=302)
+
+
 # ---------------------------------------------------------------------------
 # Pipeline ↔ Celery-log stage mapping
 # ---------------------------------------------------------------------------
@@ -396,9 +589,7 @@ _STEP_TYPE_TO_STAGES: dict[str, list[str]] = {
     "embed_metadata": ["embed_metadata_into_pdf"],
     "compute_embedding": ["compute_embedding"],
     "send_to_destinations": ["finalize_document_storage", "send_to_all_destinations"],
-    # "classify" is defined in PIPELINE_STEP_TYPES but has no Celery log stages yet.
-    # When a classify task is implemented, add its stage key(s) here.
-    "classify": [],
+    "classify": ["classify_document"],
 }
 
 # These internal bookkeeping stages are always shown in the flow regardless of
@@ -830,6 +1021,34 @@ def get_processed_text(request: Request, file_id: int, db: Session = Depends(get
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to extract text: {str(e)}"
         )
+
+
+@router.get("/files/{file_id}/text/default-language")
+@require_login
+def get_default_language_text(request: Request, file_id: int, db: Session = Depends(get_db)):
+    """Return the persisted default-language translation for the file view."""
+    from fastapi import status
+    from fastapi.responses import JSONResponse
+
+    from app.models import FileRecord
+
+    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    if not file_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_FILE_NOT_FOUND)
+
+    if not file_record.default_language_text:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No default-language translation available",
+        )
+
+    return JSONResponse(
+        content={
+            "text": file_record.default_language_text,
+            "language_code": file_record.default_language_code,
+            "detected_language": file_record.detected_language,
+        }
+    )
 
 
 @router.get("/duplicates")

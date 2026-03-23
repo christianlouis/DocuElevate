@@ -6,6 +6,7 @@ Target: Bring coverage from 8.77% to 70%+
 """
 
 import json
+import uuid
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
@@ -206,12 +207,12 @@ class TestFileDetailPage:
         db_session.add(file)
         db_session.commit()
 
-        response = client.get(f"/files/{file.id}/detail")
+        response = client.get(f"/files/{file.id}/process")
         assert response.status_code == 200
 
     def test_file_detail_page_not_found(self, client: TestClient, db_session):
         """Test file detail page for non-existent file."""
-        response = client.get("/files/99999/detail")
+        response = client.get("/files/99999/process")
         assert response.status_code == 200  # Still renders template with error
 
     def test_file_detail_page_with_processing_logs(self, client: TestClient, db_session, tmp_path):
@@ -244,7 +245,7 @@ class TestFileDetailPage:
         db_session.add(log2)
         db_session.commit()
 
-        response = client.get(f"/files/{file.id}/detail")
+        response = client.get(f"/files/{file.id}/process")
         assert response.status_code == 200
 
     def test_file_detail_page_with_metadata_json(self, client: TestClient, db_session, tmp_path):
@@ -272,7 +273,7 @@ class TestFileDetailPage:
         db_session.add(file)
         db_session.commit()
 
-        response = client.get(f"/files/{file.id}/detail")
+        response = client.get(f"/files/{file.id}/process")
         assert response.status_code == 200
 
     def test_file_detail_checks_original_file_exists(self, client: TestClient, db_session, tmp_path):
@@ -289,7 +290,7 @@ class TestFileDetailPage:
         db_session.add(file)
         db_session.commit()
 
-        response = client.get(f"/files/{file.id}/detail")
+        response = client.get(f"/files/{file.id}/process")
         assert response.status_code == 200
 
     def test_file_detail_error_handling(self, client: TestClient, db_session):
@@ -1113,7 +1114,7 @@ class TestFileDetailPageAdditional:
         db_session.add(file)
         db_session.commit()
 
-        response = client.get(f"/files/{file.id}/detail")
+        response = client.get(f"/files/{file.id}/process")
         assert response.status_code == 200
 
     def test_file_detail_step_summary_fallback(self, client: TestClient, db_session, tmp_path):
@@ -1144,7 +1145,7 @@ class TestFileDetailPageAdditional:
         db_session.commit()
 
         with patch("app.utils.step_manager.get_step_summary", side_effect=Exception("Table not found")):
-            response = client.get(f"/files/{file.id}/detail")
+            response = client.get(f"/files/{file.id}/process")
             assert response.status_code == 200
 
     def test_file_detail_error_handling(self, client: TestClient, db_session):
@@ -1155,7 +1156,7 @@ class TestFileDetailPageAdditional:
                 Mock(status_code=200),
             ]
             try:
-                response = client.get("/files/1/detail")
+                response = client.get("/files/1/process")
                 assert response.status_code in (200, 500)
             except Exception:
                 pass
@@ -1638,7 +1639,7 @@ class TestFileDetailNoJsonSidecar:
         db_session.add(file)
         db_session.commit()
 
-        response = client.get(f"/files/{file.id}/detail")
+        response = client.get(f"/files/{file.id}/process")
         assert response.status_code == 200
 
 
@@ -1936,7 +1937,7 @@ class TestPipelineInfoInViews:
         pipeline = self._make_system_pipeline(db_session)
         file_rec = self._make_file(db_session, pipeline_id=None)
 
-        response = client.get(f"/files/{file_rec.id}/detail")
+        response = client.get(f"/files/{file_rec.id}/process")
 
         assert response.status_code == 200
         assert b"Standard Processing Pipeline" in response.content
@@ -1946,7 +1947,7 @@ class TestPipelineInfoInViews:
         self._make_system_pipeline(db_session)
         file_rec = self._make_file(db_session, pipeline_id=None)
 
-        response = client.get(f"/files/{file_rec.id}/detail")
+        response = client.get(f"/files/{file_rec.id}/process")
 
         assert response.status_code == 200
         assert b"System Default" in response.content
@@ -1956,28 +1957,153 @@ class TestPipelineInfoInViews:
         pipeline = self._make_custom_pipeline(db_session)
         file_rec = self._make_file(db_session, pipeline_id=pipeline.id)
 
-        response = client.get(f"/files/{file_rec.id}/detail")
+        response = client.get(f"/files/{file_rec.id}/process")
 
         assert response.status_code == 200
         assert b"My Custom Pipeline" in response.content
         assert b"Custom" in response.content
 
     def test_file_view_page_includes_pipeline_name(self, client, db_session):
-        """GET /files/{id} response body contains the pipeline name in the sidebar."""
+        """GET /files/{id}/detail response body contains the pipeline name in the sidebar."""
         pipeline = self._make_system_pipeline(db_session)
         file_rec = self._make_file(db_session, pipeline_id=None)
 
-        response = client.get(f"/files/{file_rec.id}")
+        response = client.get(f"/files/{file_rec.id}/detail")
 
         assert response.status_code == 200
         assert b"Standard Processing Pipeline" in response.content
 
     def test_file_view_page_no_pipeline_shows_standard(self, client, db_session):
-        """When no pipeline exists, file view shows 'Standard' fallback text."""
+        """When no pipeline exists, file detail view shows 'Standard' fallback text."""
         # No pipeline in DB
         file_rec = self._make_file(db_session, pipeline_id=None)
 
-        response = client.get(f"/files/{file_rec.id}")
+        response = client.get(f"/files/{file_rec.id}/detail")
 
         assert response.status_code == 200
         assert b"Standard" in response.content
+
+
+# ---------------------------------------------------------------------------
+# Owner display and claim ownership tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestOwnerDisplayAndClaim:
+    """Tests that owner info and claim button appear correctly on file views."""
+
+    def _make_file(self, db_session, owner_id=None) -> FileRecord:
+        file_rec = FileRecord(
+            filehash=uuid.uuid4().hex,
+            original_filename="doc.pdf",
+            local_filename="/tmp/doc.pdf",
+            file_size=512,
+            mime_type="application/pdf",
+            owner_id=owner_id,
+        )
+        db_session.add(file_rec)
+        db_session.commit()
+        db_session.refresh(file_rec)
+        return file_rec
+
+    # ── /files/{id} (file_summary.html) ──────────────────────────────────
+
+    def test_summary_shows_owner_when_multi_user_enabled(self, client, db_session):
+        """Owner ID is rendered in file summary when multi-user mode is on."""
+        file_rec = self._make_file(db_session, owner_id="alice@example.com")
+        with patch("app.config.settings.multi_user_enabled", True):
+            response = client.get(f"/files/{file_rec.id}")
+        assert response.status_code == 200
+        assert b"alice@example.com" in response.content
+
+    def test_summary_shows_unowned_label_for_unowned_file(self, client, db_session):
+        """'Unowned' label is rendered in file summary for files without an owner."""
+        file_rec = self._make_file(db_session, owner_id=None)
+        with patch("app.config.settings.multi_user_enabled", True):
+            response = client.get(f"/files/{file_rec.id}")
+        assert response.status_code == 200
+        assert b"Unowned" in response.content
+
+    def test_summary_shows_claim_button_for_unowned_file(self, client, db_session):
+        """Claim Ownership button appears on file summary for an unowned file."""
+        file_rec = self._make_file(db_session, owner_id=None)
+        with patch("app.config.settings.multi_user_enabled", True):
+            response = client.get(f"/files/{file_rec.id}")
+        assert response.status_code == 200
+        assert b"Claim Ownership" in response.content
+
+    def test_summary_no_claim_button_when_owned(self, client, db_session):
+        """No Claim Ownership button when the file already has an owner."""
+        file_rec = self._make_file(db_session, owner_id="bob@example.com")
+        with patch("app.config.settings.multi_user_enabled", True):
+            response = client.get(f"/files/{file_rec.id}")
+        assert response.status_code == 200
+        assert b"Claim Ownership" not in response.content
+
+    def test_summary_no_owner_row_in_single_user_mode(self, client, db_session):
+        """Owner row is hidden in single-user mode."""
+        file_rec = self._make_file(db_session, owner_id=None)
+        with patch("app.config.settings.multi_user_enabled", False):
+            response = client.get(f"/files/{file_rec.id}")
+        assert response.status_code == 200
+        # Claim button and Unowned label should not appear in single-user mode
+        assert b"Claim Ownership" not in response.content
+
+    # ── /files/{id}/detail (file_view.html) ──────────────────────────────
+
+    def test_detail_shows_owner_when_multi_user_enabled(self, client, db_session):
+        """Owner ID is rendered in file detail view when multi-user mode is on."""
+        file_rec = self._make_file(db_session, owner_id="charlie@example.com")
+        with patch("app.config.settings.multi_user_enabled", True):
+            response = client.get(f"/files/{file_rec.id}/detail")
+        assert response.status_code == 200
+        assert b"charlie@example.com" in response.content
+
+    def test_detail_shows_claim_button_for_unowned_file(self, client, db_session):
+        """Claim Ownership button appears in file detail view for an unowned file."""
+        file_rec = self._make_file(db_session, owner_id=None)
+        with patch("app.config.settings.multi_user_enabled", True):
+            response = client.get(f"/files/{file_rec.id}/detail")
+        assert response.status_code == 200
+        assert b"Claim Ownership" in response.content
+
+    # ── /files/{id}/annotations (file_annotations.html) ──────────────────
+
+    def test_annotations_shows_owner_info(self, client, db_session):
+        """Owner info is rendered on the annotations page in multi-user mode."""
+        file_rec = self._make_file(db_session, owner_id="dave@example.com")
+        with patch("app.config.settings.multi_user_enabled", True):
+            response = client.get(f"/files/{file_rec.id}/annotations")
+        assert response.status_code == 200
+        assert b"dave@example.com" in response.content
+
+    def test_annotations_shows_claim_button_for_unowned_file(self, client, db_session):
+        """Claim Ownership button appears on annotations page for unowned file."""
+        file_rec = self._make_file(db_session, owner_id=None)
+        with patch("app.config.settings.multi_user_enabled", True):
+            response = client.get(f"/files/{file_rec.id}/annotations")
+        assert response.status_code == 200
+        assert b"Claim Ownership" in response.content
+
+    def test_annotations_no_claim_button_when_owned(self, client, db_session):
+        """No Claim Ownership button on annotations page when file has an owner."""
+        file_rec = self._make_file(db_session, owner_id="eve@example.com")
+        with patch("app.config.settings.multi_user_enabled", True):
+            response = client.get(f"/files/{file_rec.id}/annotations")
+        assert response.status_code == 200
+        assert b"Claim Ownership" not in response.content
+
+    def test_display_name_used_when_profile_exists(self, client, db_session):
+        """UserProfile.display_name overrides raw user_id in the owner display."""
+        from app.models import UserProfile
+
+        file_rec = self._make_file(db_session, owner_id="frank@example.com")
+        profile = UserProfile(user_id="frank@example.com", display_name="Frank Lastname")
+        db_session.add(profile)
+        db_session.commit()
+
+        with patch("app.config.settings.multi_user_enabled", True):
+            response = client.get(f"/files/{file_rec.id}")
+        assert response.status_code == 200
+        assert b"Frank Lastname" in response.content
