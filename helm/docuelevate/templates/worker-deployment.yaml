@@ -42,6 +42,7 @@ spec:
             - -A
             - app.celery_worker
             - worker
+            - -B
             - --loglevel=info
             - -Q
             - document_processor,default,celery

@@ -55,8 +55,8 @@ class TestDarkModeTemplateInjection:
 
         captured = {}
 
-        def fake_original(request_obj, name, context=None, **kw):
-            captured.update(context or {})
+        def fake_original(name, ctx, **kw):
+            captured.update(ctx)
 
         with patch("app.views.base.original_template_response", side_effect=fake_original):
             mock_request = MagicMock()
@@ -73,8 +73,8 @@ class TestDarkModeTemplateInjection:
 
         captured = {}
 
-        def fake_original(request_obj, name, context=None, **kw):
-            captured.update(context or {})
+        def fake_original(name, ctx, **kw):
+            captured.update(ctx)
 
         with patch("app.views.base.original_template_response", side_effect=fake_original):
             mock_request = MagicMock()

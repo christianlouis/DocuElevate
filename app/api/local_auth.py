@@ -101,9 +101,9 @@ async def signup_page(request: Request) -> Any:
     if not settings.allow_local_signup:
         return RedirectResponse(url="/login?error=Registration+is+not+enabled", status_code=302)
     return templates.TemplateResponse(
-        request,
         "signup.html",
-        context={
+        {
+            "request": request,
             "csrf_token": getattr(request.state, "csrf_token", ""),
             "app_version": settings.version,
         },
@@ -113,16 +113,16 @@ async def signup_page(request: Request) -> Any:
 @router.get("/verify-email-sent", include_in_schema=False)
 async def verify_email_sent_page(request: Request) -> Any:
     """Render the verify-email-sent confirmation page."""
-    return templates.TemplateResponse(request, "verify_email_sent.html")
+    return templates.TemplateResponse("verify_email_sent.html", {"request": request})
 
 
 @router.get("/forgot-username", include_in_schema=False)
 async def forgot_username_page(request: Request) -> Any:
     """Render the forgot-username page where users can request a username reminder email."""
     return templates.TemplateResponse(
-        request,
         "forgot_username.html",
-        context={
+        {
+            "request": request,
             "csrf_token": getattr(request.state, "csrf_token", ""),
             "app_version": settings.version,
         },
@@ -133,9 +133,9 @@ async def forgot_username_page(request: Request) -> Any:
 async def forgot_password_page(request: Request) -> Any:
     """Render the forgot-password page where users can request a reset email."""
     return templates.TemplateResponse(
-        request,
         "forgot_password.html",
-        context={
+        {
+            "request": request,
             "csrf_token": getattr(request.state, "csrf_token", ""),
             "app_version": settings.version,
         },
@@ -147,9 +147,9 @@ async def reset_password_page(request: Request) -> Any:
     """Render the password reset form page."""
     token = request.query_params.get("token", "")
     return templates.TemplateResponse(
-        request,
         "password_reset_form.html",
-        context={
+        {
+            "request": request,
             "token": token,
             "csrf_token": getattr(request.state, "csrf_token", ""),
             "app_version": settings.version,

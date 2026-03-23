@@ -260,7 +260,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)) -> dic
 @require_login
 async def billing_success(request: Request) -> Any:
     """Show a success page after a completed Stripe Checkout."""
-    return _templates.TemplateResponse(request, "billing_success.html")
+    return _templates.TemplateResponse("billing_success.html", {"request": request})
 
 
 # ---------------------------------------------------------------------------

@@ -130,37 +130,20 @@
     </h2>
 
     <div class="space-y-4">
-      {% if user_mode and has_system_credentials %}
-      <!-- System credentials toggle (user mode only) -->
-      <div class="bg-green-50 border border-green-200 rounded-md p-4">
-        <label class="flex items-center gap-3 cursor-pointer">
-          <input type="checkbox" id="use-system-creds" checked class="rounded border-gray-300 text-green-600 focus:ring-green-500 h-5 w-5" />
-          <div>
-            <span class="text-sm font-medium text-green-800">Use DocuElevate's app credentials</span>
-            <p class="text-xs text-green-600 mt-0.5">Recommended — authorize with your OneDrive account without needing your own Azure app registration.</p>
-          </div>
-        </label>
+      <div>
+        <label for="client-id" class="block text-sm font-medium text-gray-700">Client ID <span class="text-red-500" aria-hidden="true">*</span></label>
+        <input type="text" id="client-id" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Azure AD application client ID" value="{{ client_id_value }}">
       </div>
-      {% endif %}
 
-      <div id="custom-creds-section" {% if user_mode and has_system_credentials %}class="hidden"{% endif %}>
-        <div class="space-y-4">
-          <div>
-            <label for="client-id" class="block text-sm font-medium text-gray-700">Client ID <span class="text-red-500" aria-hidden="true">*</span></label>
-            <input type="text" id="client-id" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Azure AD application client ID" value="{{ client_id_value if not (user_mode and has_system_credentials) else '' }}">
-          </div>
+      <div>
+        <label for="client-secret" class="block text-sm font-medium text-gray-700">Client Secret <span class="text-red-500" aria-hidden="true">*</span></label>
+        <input type="password" id="client-secret" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Azure AD application client secret" value="{{ client_secret_value }}">
+      </div>
 
-          <div>
-            <label for="client-secret" class="block text-sm font-medium text-gray-700">Client Secret <span class="text-red-500" aria-hidden="true">*</span></label>
-            <input type="password" id="client-secret" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Azure AD application client secret" value="{{ client_secret_value if not (user_mode and has_system_credentials) else '' }}">
-          </div>
-
-          <div>
-            <label for="tenant-id" class="block text-sm font-medium text-gray-700">Tenant ID (Optional)</label>
-            <input type="text" id="tenant-id" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="common" value="{{ tenant_id }}">
-            <p class="text-xs text-gray-500 mt-1">Use "common" for personal accounts or your organization's Tenant ID for corporate accounts</p>
-          </div>
-        </div>
+      <div>
+        <label for="tenant-id" class="block text-sm font-medium text-gray-700">Tenant ID (Optional)</label>
+        <input type="text" id="tenant-id" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="common" value="{{ tenant_id }}">
+        <p class="text-xs text-gray-500 mt-1">Use "common" for personal accounts or your organization's Tenant ID for corporate accounts</p>
       </div>
 
       {% if not user_mode %}
@@ -306,10 +289,6 @@ ONEDRIVE_FOLDER_PATH={{ folder_path|default('Documents/Uploads', true) }}</code>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const userMode = {{ 'true' if user_mode else 'false' }};
-  const hasSystemCredentials = {{ 'true' if (user_mode and has_system_credentials) else 'false' }};
-  const systemClientId = {{ (client_id_value or '') | tojson }};
-  const systemClientSecret = {{ (client_secret_value or '') | tojson }};
-  const systemTenantId = {{ (tenant_id or 'common') | tojson }};
 
   // Store integration_id if provided (for per-user OAuth flow)
   const integrationId = "{{ integration_id or '' }}";
@@ -323,19 +302,6 @@ document.addEventListener('DOMContentLoaded', function() {
   const refreshTokenBtn = document.getElementById('refresh-token-btn');
   const tokenStatus = document.getElementById('token-status');
   const clientSecretInput = document.getElementById('client-secret');
-  const useSystemCredsCheckbox = document.getElementById('use-system-creds');
-  const customCredsSection = document.getElementById('custom-creds-section');
-
-  // Toggle custom credentials section visibility
-  if (useSystemCredsCheckbox && customCredsSection) {
-    useSystemCredsCheckbox.addEventListener('change', function() {
-      if (this.checked) {
-        customCredsSection.classList.add('hidden');
-      } else {
-        customCredsSection.classList.remove('hidden');
-      }
-    });
-  }
 
   // Modal elements
   const resultModal = document.getElementById('resultModal');
@@ -385,12 +351,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Start Authentication Flow button click
   startAuthFlowBtn.addEventListener('click', function() {
-    // Determine which credentials to use
-    const useSystemCreds = hasSystemCredentials && useSystemCredsCheckbox && useSystemCredsCheckbox.checked;
-    const clientId = useSystemCreds ? systemClientId : document.getElementById('client-id').value.trim();
-    const clientSecret = useSystemCreds ? systemClientSecret : clientSecretInput.value.trim();
+    const clientId = document.getElementById('client-id').value.trim();
+    const clientSecret = clientSecretInput.value.trim();
     const redirectUri = window.location.origin + "/onedrive-callback";
-    const tenantId = useSystemCreds ? systemTenantId : (document.getElementById('tenant-id').value.trim() || 'common');
+    const tenantId = document.getElementById('tenant-id').value.trim() || 'common';
 
     if (!clientId) {
       showModal('error', 'Validation Error', 'Please enter your Client ID');
@@ -406,9 +370,6 @@ document.addEventListener('DOMContentLoaded', function() {
     sessionStorage.setItem('onedrive_client_id', clientId);
     sessionStorage.setItem('onedrive_client_secret', clientSecret);
     sessionStorage.setItem('onedrive_tenant_id', tenantId);
-    if (useSystemCreds) {
-      sessionStorage.setItem('onedrive_use_system_creds', 'true');
-    }
 
     // In admin mode also store folder path; in user mode the config is already set
     if (!userMode) {

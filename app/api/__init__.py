@@ -9,12 +9,9 @@ from fastapi import APIRouter
 from app.api.admin_users import router as admin_users_router
 from app.api.api_tokens import router as api_tokens_router
 from app.api.audit_logs import router as audit_logs_router
-from app.api.automation import router as automation_router
 from app.api.azure import router as azure_router
 from app.api.backup import router as backup_router
 from app.api.billing import router as billing_router
-from app.api.classification_rules import router as classification_rules_router
-from app.api.comments import router as comments_router
 from app.api.compliance import router as compliance_router
 from app.api.database import router as database_router
 from app.api.diagnostic import router as diagnostic_router
@@ -46,7 +43,6 @@ from app.api.sessions import router as sessions_router
 from app.api.settings import router as settings_router
 from app.api.shared_links import public_router as shared_links_public_router
 from app.api.shared_links import router as shared_links_router
-from app.api.sharing import router as sharing_router
 from app.api.similarity import router as similarity_router
 from app.api.subscriptions import router as subscriptions_router
 from app.api.system_reset import router as system_reset_router
@@ -108,7 +104,3 @@ router.include_router(qr_auth_router)
 router.include_router(compliance_router)
 router.include_router(system_reset_router)
 router.include_router(translation_router)
-router.include_router(classification_rules_router)
-router.include_router(automation_router)
-router.include_router(comments_router)
-router.include_router(sharing_router)

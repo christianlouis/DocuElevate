@@ -83,8 +83,6 @@ class TestGotenbergCoverageDocuments:
         ".tif",
         ".webp",
         ".svg",
-        ".heic",
-        ".heif",
     }
     _html_extensions = {".html", ".htm"}
     _markdown_extensions = {".md", ".markdown"}

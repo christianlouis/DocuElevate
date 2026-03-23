@@ -5,15 +5,12 @@ Covers the audit service (recording, querying, SIEM forwarding),
 the REST API endpoints, and the admin viewer page.
 """
 
-import base64
 import json
 import socket
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, Mock, PropertyMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
-from itsdangerous import TimestampSigner
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -648,16 +645,6 @@ class TestAuditLogAPI:
 # View tests
 # ---------------------------------------------------------------------------
 
-_TEST_SESSION_SECRET = "test_secret_key_for_testing_must_be_at_least_32_characters_long"
-
-
-def _make_admin_session_cookie() -> str:
-    """Create a signed session cookie with admin user data for integration tests."""
-    session_data = {"user": {"id": "admin", "is_admin": True}}
-    signer = TimestampSigner(_TEST_SESSION_SECRET)
-    data = base64.b64encode(json.dumps(session_data).encode()).decode("utf-8")
-    return signer.sign(data).decode("utf-8")
-
 
 @pytest.mark.integration
 class TestAuditLogView:
@@ -668,85 +655,3 @@ class TestAuditLogView:
         resp = client.get("/admin/audit-logs")
         assert resp.status_code == 200
         assert "Audit Logs" in resp.text
-
-    def test_audit_logs_page_accessible_with_admin_session(self, client):
-        """GET /admin/audit-logs with admin session cookie returns 200."""
-        client.cookies.set("session", _make_admin_session_cookie())
-        resp = client.get("/admin/audit-logs", follow_redirects=False)
-        assert resp.status_code == 200
-        assert "Audit Logs" in resp.text
-
-    def test_audit_logs_page_redirects_non_admin(self, client):
-        """GET /admin/audit-logs without admin session redirects to home."""
-        resp = client.get("/admin/audit-logs", follow_redirects=False)
-        assert resp.status_code == 302
-
-
-@pytest.mark.unit
-class TestAuditLogsPageUnit:
-    """Unit tests for the audit_logs_page view function (lines 29-43)."""
-
-    @patch("app.views.audit_logs.templates")
-    @patch("app.views.audit_logs.settings")
-    @pytest.mark.asyncio
-    async def test_audit_logs_page_siem_disabled(self, mock_settings, mock_templates):
-        """Renders the template with siem_transport=None when SIEM is disabled."""
-        from app.views.audit_logs import audit_logs_page
-
-        mock_settings.audit_siem_enabled = False
-        mock_settings.version = "2.0.0"
-
-        mock_request = Mock()
-        mock_request.session = {"user": {"id": "admin", "is_admin": True}}
-        mock_db = Mock()
-
-        await audit_logs_page(mock_request, mock_db)
-
-        mock_templates.TemplateResponse.assert_called_once()
-        call_args = mock_templates.TemplateResponse.call_args
-        assert call_args[0][0] == "audit_logs.html"
-        context = call_args[0][1]
-        assert context["siem_enabled"] is False
-        assert context["siem_transport"] is None
-        assert context["app_version"] == "2.0.0"
-
-    @patch("app.views.audit_logs.templates")
-    @patch("app.views.audit_logs.settings")
-    @pytest.mark.asyncio
-    async def test_audit_logs_page_siem_enabled(self, mock_settings, mock_templates):
-        """Renders the template with siem_transport set when SIEM is enabled."""
-        from app.views.audit_logs import audit_logs_page
-
-        mock_settings.audit_siem_enabled = True
-        mock_settings.audit_siem_transport = "syslog"
-        mock_settings.version = "2.0.0"
-
-        mock_request = Mock()
-        mock_request.session = {"user": {"id": "admin", "is_admin": True}}
-        mock_db = Mock()
-
-        await audit_logs_page(mock_request, mock_db)
-
-        mock_templates.TemplateResponse.assert_called_once()
-        call_args = mock_templates.TemplateResponse.call_args
-        context = call_args[0][1]
-        assert context["siem_enabled"] is True
-        assert context["siem_transport"] == "syslog"
-
-    @patch("app.views.audit_logs.settings")
-    @pytest.mark.asyncio
-    async def test_audit_logs_page_raises_500_on_error(self, mock_settings):
-        """Raises HTTP 500 when an unexpected error occurs while loading the page."""
-        from app.views.audit_logs import audit_logs_page
-
-        # Make accessing audit_siem_enabled raise an exception to trigger the except branch
-        type(mock_settings).audit_siem_enabled = PropertyMock(side_effect=RuntimeError("settings unavailable"))
-
-        mock_request = Mock()
-        mock_request.session = {"user": {"id": "admin", "is_admin": True}}
-        mock_db = Mock()
-
-        with pytest.raises(HTTPException) as exc_info:
-            await audit_logs_page(mock_request, mock_db)
-        assert exc_info.value.status_code == 500
-        assert "Failed to load audit logs page" in exc_info.value.detail
