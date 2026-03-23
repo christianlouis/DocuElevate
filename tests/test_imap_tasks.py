@@ -8,6 +8,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.tasks.imap_tasks import (
+    _decrypt_imap_password,
+    _pull_user_imap_accounts,
+    _resolve_categories_for_profile,
     acquire_lock,
     check_and_pull_mailbox,
     cleanup_old_entries,
@@ -678,7 +681,6 @@ class TestPullInbox:
         mock_mail.store.assert_called_with(b"1", "-FLAGS", "\\Seen")
         mock_save.assert_called()
 
-    @patch("app.tasks.imap_tasks.is_private_ip", new=lambda _: False)
     @patch("app.tasks.imap_tasks.fetch_attachments_and_enqueue")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
@@ -922,7 +924,6 @@ class TestPullInbox:
         # Should not process the message
         mock_mail.store.assert_not_called()
 
-    @patch("app.tasks.imap_tasks.is_private_ip", new=lambda _: False)
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
     def test_handles_fetch_failure(self, mock_load, mock_imap_class):
@@ -1025,7 +1026,6 @@ class TestPullInbox:
         # Processed emails cache should still be updated
         mock_save.assert_called()
 
-    @patch("app.tasks.imap_tasks.is_private_ip", new=lambda _: False)
     @patch("app.tasks.imap_tasks.fetch_attachments_and_enqueue")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
@@ -1385,7 +1385,6 @@ class TestAcquireReleaseLockEdgeCases:
 class TestPullInboxEdgeCases:
     """Test edge cases for pull_inbox function."""
 
-    @patch("app.tasks.imap_tasks.is_private_ip", new=lambda _: False)
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.settings")
@@ -1436,7 +1435,6 @@ class TestPullInboxEdgeCases:
         # Should skip processing since no Message-ID
         mock_fetch.assert_not_called()
 
-    @patch("app.tasks.imap_tasks.is_private_ip", new=lambda _: False)
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.settings")
@@ -1735,3 +1733,406 @@ class TestPullAllInboxesCallsIntegrations:
         pull_all_inboxes()
         mock_legacy.assert_called_once()
         mock_integ.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Tests for _decrypt_imap_password
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestDecryptImapPassword:
+    """Tests for _decrypt_imap_password function."""
+
+    def test_returns_decrypted_value(self):
+        """_decrypt_imap_password should delegate to decrypt_value."""
+        with patch("app.utils.encryption.decrypt_value", return_value="decrypted") as mock_decrypt:
+            result = _decrypt_imap_password("enc:something")
+        mock_decrypt.assert_called_once_with("enc:something")
+        assert result == "decrypted"
+
+    def test_returns_none_for_none_input(self):
+        """_decrypt_imap_password should return None for None input."""
+        with patch("app.utils.encryption.decrypt_value", return_value=None):
+            result = _decrypt_imap_password(None)
+        assert result is None
+
+    def test_returns_plaintext_unchanged(self):
+        """_decrypt_imap_password returns plaintext passwords unchanged."""
+        with patch("app.utils.encryption.decrypt_value", return_value="plain") as mock_decrypt:
+            result = _decrypt_imap_password("plain")
+        mock_decrypt.assert_called_once_with("plain")
+        assert result == "plain"
+
+
+# ---------------------------------------------------------------------------
+# Tests for _resolve_categories_for_profile
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestResolveCategoriesForProfile:
+    """Tests for _resolve_categories_for_profile function."""
+
+    @patch("app.tasks.imap_tasks._get_db_session")
+    def test_returns_profile_categories_when_profile_found(self, mock_session_factory):
+        """Returns categories from the profile when profile exists in DB."""
+        import json
+
+        mock_profile = MagicMock()
+        mock_profile.allowed_categories = json.dumps(["pdf", "images"])
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
+        mock_session_factory.return_value = mock_db
+
+        result = _resolve_categories_for_profile(1)
+        assert result == ["pdf", "images"]
+        mock_db.close.assert_called_once()
+
+    @patch("app.tasks.imap_tasks._get_db_session")
+    def test_falls_back_to_default_when_profile_not_found(self, mock_session_factory):
+        """Falls back to global default when profile_id exists but profile is not in DB."""
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_session_factory.return_value = mock_db
+
+        with patch("app.tasks.imap_tasks.settings") as mock_settings:
+            mock_settings.imap_attachment_filter = "documents_only"
+            result = _resolve_categories_for_profile(99)
+
+        assert result == DEFAULT_CATEGORIES
+
+    @patch("app.tasks.imap_tasks._get_db_session")
+    def test_falls_back_when_db_raises_exception(self, mock_session_factory):
+        """Falls back to global default when DB query raises an exception."""
+        mock_session_factory.side_effect = Exception("DB error")
+
+        with patch("app.tasks.imap_tasks.settings") as mock_settings:
+            mock_settings.imap_attachment_filter = "documents_only"
+            result = _resolve_categories_for_profile(5)
+
+        assert result == DEFAULT_CATEGORIES
+
+    def test_returns_all_categories_when_filter_is_all(self):
+        """Returns ALL_CATEGORIES when profile_id is None and filter is 'all'."""
+        with patch("app.tasks.imap_tasks.settings") as mock_settings:
+            mock_settings.imap_attachment_filter = "all"
+            result = _resolve_categories_for_profile(None)
+        assert result == ALL_CATEGORIES
+
+    def test_returns_default_categories_when_filter_is_not_all(self):
+        """Returns DEFAULT_CATEGORIES when profile_id is None and filter is not 'all'."""
+        with patch("app.tasks.imap_tasks.settings") as mock_settings:
+            mock_settings.imap_attachment_filter = "documents_only"
+            result = _resolve_categories_for_profile(None)
+        assert result == DEFAULT_CATEGORIES
+
+
+# ---------------------------------------------------------------------------
+# Tests for _pull_user_imap_accounts
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestPullUserImapAccounts:
+    """Tests for _pull_user_imap_accounts function."""
+
+    @patch("app.tasks.imap_tasks._get_db_session")
+    @patch("app.tasks.imap_tasks.pull_inbox")
+    def test_polls_active_accounts(self, mock_pull, mock_session_factory):
+        """Active accounts should be polled and last_checked_at updated."""
+        mock_acct = MagicMock()
+        mock_acct.id = 1
+        mock_acct.owner_id = "user-1"
+        mock_acct.host = "imap.example.com"
+        mock_acct.port = 993
+        mock_acct.username = "user@example.com"
+        mock_acct.password = "enc:pass"
+        mock_acct.use_ssl = True
+        mock_acct.delete_after_process = False
+        mock_acct.profile_id = None
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_acct]
+        mock_session_factory.return_value = mock_db
+
+        with patch("app.utils.encryption.decrypt_value", return_value="plainpass"):
+            _pull_user_imap_accounts()
+
+        mock_pull.assert_called_once()
+        call_kwargs = mock_pull.call_args.kwargs
+        assert call_kwargs["host"] == "imap.example.com"
+        assert call_kwargs["owner_id"] == "user-1"
+        assert mock_acct.last_error is None
+        assert mock_acct.last_checked_at is not None
+        mock_db.commit.assert_called()
+        mock_db.close.assert_called_once()
+
+    @patch("app.tasks.imap_tasks._get_db_session")
+    @patch("app.tasks.imap_tasks.pull_inbox")
+    def test_records_error_on_pull_failure(self, mock_pull, mock_session_factory):
+        """Errors during pull_inbox should be recorded on the account."""
+        mock_acct = MagicMock()
+        mock_acct.id = 2
+        mock_acct.owner_id = "user-2"
+        mock_acct.host = "imap.bad.com"
+        mock_acct.port = 993
+        mock_acct.username = "u@bad.com"
+        mock_acct.password = "enc:bad"
+        mock_acct.use_ssl = True
+        mock_acct.delete_after_process = False
+        mock_acct.profile_id = None
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_acct]
+        mock_session_factory.return_value = mock_db
+
+        mock_pull.side_effect = Exception("Connection refused")
+
+        with patch("app.utils.encryption.decrypt_value", return_value="p"):
+            _pull_user_imap_accounts()
+
+        assert mock_acct.last_error is not None
+        assert "Connection refused" in mock_acct.last_error
+        mock_db.commit.assert_called()
+
+    @patch("app.tasks.imap_tasks._get_db_session")
+    @patch("app.tasks.imap_tasks.pull_inbox")
+    def test_rollback_when_error_commit_fails(self, mock_pull, mock_session_factory):
+        """When both pull_inbox and the error-recording commit fail, db.rollback is called."""
+        mock_acct = MagicMock()
+        mock_acct.id = 3
+        mock_acct.owner_id = "user-3"
+        mock_acct.host = "imap.fail.com"
+        mock_acct.port = 993
+        mock_acct.username = "u@fail.com"
+        mock_acct.password = "enc:bad"
+        mock_acct.use_ssl = True
+        mock_acct.delete_after_process = False
+        mock_acct.profile_id = None
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_acct]
+        # The error-recording commit itself raises
+        mock_db.commit.side_effect = Exception("DB unavailable")
+        mock_session_factory.return_value = mock_db
+
+        mock_pull.side_effect = Exception("IMAP error")
+
+        with patch("app.utils.encryption.decrypt_value", return_value="p"):
+            _pull_user_imap_accounts()
+
+        mock_db.rollback.assert_called()
+
+    @patch("app.tasks.imap_tasks._get_db_session")
+    def test_handles_db_failure_gracefully(self, mock_session_factory):
+        """DB failures when loading accounts should be caught gracefully."""
+        mock_session_factory.side_effect = Exception("DB unavailable")
+        # Should not raise
+        _pull_user_imap_accounts()
+
+    @patch("app.tasks.imap_tasks._get_db_session")
+    @patch("app.tasks.imap_tasks.pull_inbox")
+    def test_no_accounts_does_not_call_pull(self, mock_pull, mock_session_factory):
+        """When no active accounts exist, pull_inbox should not be called."""
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_session_factory.return_value = mock_db
+
+        _pull_user_imap_accounts()
+
+        mock_pull.assert_not_called()
+        mock_db.close.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Tests for _pull_user_integration_imap rollback path
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestPullUserIntegrationImapRollback:
+    """Tests for the db.rollback path in _pull_user_integration_imap."""
+
+    @patch("app.tasks.imap_tasks._get_db_session")
+    @patch("app.tasks.imap_tasks.pull_inbox")
+    def test_rollback_when_error_commit_fails(self, mock_pull, mock_session_factory):
+        """When both pull_inbox and the error-recording commit raise, db.rollback is called."""
+        from app.tasks.imap_tasks import _pull_user_integration_imap
+
+        mock_integ = MagicMock()
+        mock_integ.id = 99
+        mock_integ.owner_id = "owner-fail"
+        mock_integ.config = '{"host": "bad.host", "port": 993, "username": "u@x.com", "use_ssl": true}'
+        mock_integ.credentials = "enc:encrypted"
+        mock_integ.is_active = True
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_integ]
+        # The error-recording commit itself raises
+        mock_db.commit.side_effect = Exception("DB unavailable")
+        mock_session_factory.return_value = mock_db
+
+        mock_pull.side_effect = Exception("Connection refused")
+
+        with patch("app.utils.encryption.decrypt_value", return_value='{"password": "p"}'):
+            _pull_user_integration_imap()
+
+        mock_db.rollback.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# Tests for pull_inbox with allowed_categories=None (resolves via profile)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestPullInboxAllowedCategoriesDefault:
+    """Tests for pull_inbox when allowed_categories is not provided."""
+
+    @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
+    @patch("app.tasks.imap_tasks.load_processed_emails")
+    @patch("app.tasks.imap_tasks._resolve_categories_for_profile")
+    def test_resolves_categories_when_none_passed(self, mock_resolve, mock_load, mock_imap_class):
+        """pull_inbox should call _resolve_categories_for_profile(None) when allowed_categories=None."""
+        mock_resolve.return_value = DEFAULT_CATEGORIES
+        mock_load.return_value = {}
+
+        mock_mail = MagicMock()
+        mock_imap_class.return_value = mock_mail
+        mock_mail.login.return_value = ("OK", [])
+        mock_mail.select.return_value = ("OK", [])
+        mock_mail.search.return_value = ("OK", [b""])
+
+        pull_inbox(
+            mailbox_key="imap1",
+            host="imap.example.com",
+            port=993,
+            username="user",
+            password=_TEST_CREDENTIAL,
+            use_ssl=True,
+            delete_after_process=False,
+            allowed_categories=None,  # explicit None triggers resolve
+        )
+
+        mock_resolve.assert_called_once_with(None)
+
+    @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
+    @patch("app.tasks.imap_tasks.load_processed_emails")
+    @patch("app.tasks.imap_tasks._resolve_categories_for_profile")
+    def test_skips_resolve_when_categories_provided(self, mock_resolve, mock_load, mock_imap_class):
+        """pull_inbox should not call _resolve_categories_for_profile when allowed_categories is given."""
+        mock_load.return_value = {}
+
+        mock_mail = MagicMock()
+        mock_imap_class.return_value = mock_mail
+        mock_mail.login.return_value = ("OK", [])
+        mock_mail.select.return_value = ("OK", [])
+        mock_mail.search.return_value = ("OK", [b""])
+
+        pull_inbox(
+            mailbox_key="imap1",
+            host="imap.example.com",
+            port=993,
+            username="user",
+            password=_TEST_CREDENTIAL,
+            use_ssl=True,
+            delete_after_process=False,
+            allowed_categories=DEFAULT_CATEGORIES,  # non-None skips resolve
+        )
+
+        mock_resolve.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Tests for fetch_attachments_and_enqueue: extension-only match (not PDF, not MIME)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestFetchAttachmentsExtensionOnlyMatch:
+    """Tests for fetch_attachments_and_enqueue when file passes only via extension."""
+
+    @patch("app.tasks.imap_tasks.process_document")
+    @patch("app.tasks.imap_tasks.convert_to_pdf")
+    def test_extension_match_without_mime_type_match(self, mock_convert, mock_process, tmp_path):
+        """A file with an allowed extension but wrong MIME type (not PDF) hits the else branch."""
+        # .docx is in allowed extensions, but application/octet-stream is not in allowed MIME types
+        # and it's not a PDF by extension -> passes the filter but skips both dispatch branches
+        msg = EmailMessage()
+        msg["Subject"] = "Test"
+        msg.add_attachment(
+            b"docx content",
+            maintype="application",
+            subtype="octet-stream",  # wrong MIME type
+            filename="document.docx",  # allowed extension
+        )
+
+        doc_mime, doc_ext = get_allowed_types_for_categories(DEFAULT_CATEGORIES)
+        with patch("app.tasks.imap_tasks.settings") as mock_settings:
+            mock_settings.workdir = str(tmp_path)
+            result = fetch_attachments_and_enqueue(msg, effective_mime_types=doc_mime, effective_extensions=doc_ext)
+
+        # File is "accepted" (has_attachment=True) but no task is dispatched because
+        # neither the PDF nor the mime-type branch matched
+        assert result is True
+        mock_process.delay.assert_not_called()
+        mock_convert.delay.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Tests for find_all_mail_folder: XLIST returns None
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestFindAllMailFolderXlistNone:
+    """Tests for find_all_mail_folder when XLIST is available but returns None."""
+
+    @patch("app.tasks.imap_tasks.find_all_mail_xlist")
+    @patch("app.tasks.imap_tasks.get_capabilities")
+    def test_returns_none_when_xlist_finds_nothing(self, mock_get_caps, mock_xlist):
+        """Should return None when XLIST is supported but finds no All Mail folder."""
+        mock_mail = MagicMock()
+        mock_mail.select.return_value = ("NO", None)  # All common names fail
+        mock_get_caps.return_value = ["XLIST", "IMAP4REV1"]
+        mock_xlist.return_value = None  # XLIST also found nothing
+
+        result = find_all_mail_folder(mock_mail)
+        assert result is None
+        mock_xlist.assert_called_once_with(mock_mail)
+
+
+# ---------------------------------------------------------------------------
+# Tests for find_all_mail_xlist edge cases
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestFindAllMailXlistEdgeCasesExtended:
+    """Additional edge-case tests for find_all_mail_xlist."""
+
+    def test_returns_none_when_readline_returns_empty_bytes(self):
+        """Should break out of loop and return None when readline returns empty bytes."""
+        mock_mail = MagicMock()
+        mock_mail._new_tag.return_value = b"A001"
+        # readline returns empty bytes immediately -> break on first iteration
+        mock_mail.readline.return_value = b""
+
+        result = find_all_mail_xlist(mock_mail)
+        assert result is None
+
+    def test_allmail_line_without_quoted_folder_name(self):
+        """XLIST AllMail line where regex finds no quoted name should not set folder."""
+        mock_mail = MagicMock()
+        mock_mail._new_tag.return_value = b"A001"
+        # XLIST response where AllMail flag is present but no double-quoted folder name at end
+        # -> regex r'"([^"]+)"$' will not match so all_mail_folder stays None
+        mock_mail.readline.side_effect = [
+            b"* XLIST (\\AllMail) / NoQuotesHere\r\n",
+            b"A001 OK XLIST completed\r\n",
+        ]
+
+        result = find_all_mail_xlist(mock_mail)
+        assert result is None

@@ -181,3 +181,343 @@ class TestFilesAdvancedFiltering:
         assert response.status_code == 200
         data = response.json()
         assert len(data["files"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Saved searches CRUD tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestSavedSearchesCRUD:
+    """Tests for saved searches CRUD API endpoints."""
+
+    def test_list_saved_searches_empty(self, client: TestClient):
+        """GET /api/saved-searches returns empty list when no searches exist."""
+        response = client.get("/api/saved-searches")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_create_saved_search(self, client: TestClient):
+        """POST /api/saved-searches creates a new saved search."""
+        payload = {
+            "name": "My Invoices",
+            "filters": {"tags": "invoice", "status": "completed"},
+        }
+        response = client.post("/api/saved-searches", json=payload)
+        assert response.status_code == 201
+        data = response.json()
+        assert data["name"] == "My Invoices"
+        assert data["filters"]["tags"] == "invoice"
+        assert data["filters"]["status"] == "completed"
+        assert "id" in data
+
+    def test_create_and_list_saved_search(self, client: TestClient):
+        """Creating a saved search makes it appear in the list."""
+        payload = {
+            "name": "PDF Files",
+            "filters": {"mime_type": "application/pdf"},
+        }
+        client.post("/api/saved-searches", json=payload)
+
+        response = client.get("/api/saved-searches")
+        assert response.status_code == 200
+        searches = response.json()
+        assert len(searches) == 1
+        assert searches[0]["name"] == "PDF Files"
+
+    def test_create_saved_search_missing_name(self, client: TestClient):
+        """POST /api/saved-searches without name returns 422."""
+        payload = {"filters": {"status": "completed"}}
+        response = client.post("/api/saved-searches", json=payload)
+        assert response.status_code == 422
+
+    def test_create_saved_search_empty_filters(self, client: TestClient):
+        """POST /api/saved-searches with empty filters returns 422."""
+        payload = {"name": "Empty", "filters": {}}
+        response = client.post("/api/saved-searches", json=payload)
+        assert response.status_code == 422
+
+    def test_create_saved_search_invalid_filter_keys(self, client: TestClient):
+        """POST /api/saved-searches ignores unknown filter keys."""
+        payload = {
+            "name": "With unknown keys",
+            "filters": {"invalid_key": "value", "status": "completed"},
+        }
+        response = client.post("/api/saved-searches", json=payload)
+        assert response.status_code == 201
+        data = response.json()
+        # Only valid filter key should remain
+        assert "invalid_key" not in data["filters"]
+        assert data["filters"]["status"] == "completed"
+
+    def test_create_saved_search_only_invalid_keys(self, client: TestClient):
+        """POST with only invalid filter keys returns 422."""
+        payload = {
+            "name": "All invalid",
+            "filters": {"bad_key": "value"},
+        }
+        response = client.post("/api/saved-searches", json=payload)
+        assert response.status_code == 422
+
+    def test_create_duplicate_name(self, client: TestClient):
+        """POST /api/saved-searches with duplicate name returns 409."""
+        payload = {"name": "My Search", "filters": {"status": "completed"}}
+        response1 = client.post("/api/saved-searches", json=payload)
+        assert response1.status_code == 201
+
+        response2 = client.post("/api/saved-searches", json=payload)
+        assert response2.status_code == 409
+
+    def test_create_saved_search_db_error(self, client: TestClient, monkeypatch):
+        """POST /api/saved-searches returns 500 on DB exception."""
+        # Mock db.add or db.commit to raise an exception
+        # We can monkeypatch the route's dependency or the models
+        # It's easier to mock the SavedSearch model's __init__ or db's add
+        # Since we use db: DbSession, it's an instance of sqlalchemy.orm.Session
+        from sqlalchemy.orm import Session
+
+        original_commit = Session.commit
+
+        def mock_commit(*args, **kwargs):
+            raise Exception("Simulated DB error")
+
+        monkeypatch.setattr(Session, "commit", mock_commit)
+
+        payload = {
+            "name": "DB Error Search",
+            "filters": {"status": "completed"},
+        }
+        response = client.post("/api/saved-searches", json=payload)
+        assert response.status_code == 500
+        assert "Failed to save search" in response.json()["detail"]
+
+    def test_create_saved_search_limit_reached(self, client: TestClient, monkeypatch):
+        """POST /api/saved-searches returns 409 if max limit is reached."""
+        monkeypatch.setattr("app.api.saved_searches.MAX_SAVED_SEARCHES_PER_USER", 1)
+
+        # Create first one
+        payload1 = {"name": "Search 1", "filters": {"status": "completed"}}
+        response1 = client.post("/api/saved-searches", json=payload1)
+        assert response1.status_code == 201
+
+        # Creating second one should fail due to limit
+        payload2 = {"name": "Search 2", "filters": {"status": "pending"}}
+        response2 = client.post("/api/saved-searches", json=payload2)
+        assert response2.status_code == 409
+        assert "Maximum of 1 saved searches reached" in response2.json()["detail"]
+
+    def test_create_saved_search_invalid_name_type(self, client: TestClient):
+        """POST /api/saved-searches with non-string name returns 422."""
+        payload = {
+            "name": 12345,
+            "filters": {"status": "completed"},
+        }
+        response = client.post("/api/saved-searches", json=payload)
+        assert response.status_code == 422
+
+    def test_update_saved_search(self, client: TestClient):
+        """PUT /api/saved-searches/{id} updates the saved search."""
+        # Create
+        create_resp = client.post(
+            "/api/saved-searches",
+            json={"name": "Original", "filters": {"status": "pending"}},
+        )
+        search_id = create_resp.json()["id"]
+
+        # Update
+        update_resp = client.put(
+            f"/api/saved-searches/{search_id}",
+            json={"name": "Updated", "filters": {"status": "completed"}},
+        )
+        assert update_resp.status_code == 200
+        data = update_resp.json()
+        assert data["name"] == "Updated"
+        assert data["filters"]["status"] == "completed"
+
+    def test_update_saved_search_not_found(self, client: TestClient):
+        """PUT /api/saved-searches/999 returns 404."""
+        response = client.put(
+            "/api/saved-searches/999",
+            json={"name": "Nope", "filters": {"status": "completed"}},
+        )
+        assert response.status_code == 404
+
+    def test_update_saved_search_duplicate_name(self, client: TestClient):
+        """PUT /api/saved-searches/{id} with duplicate name returns 409."""
+        # Create first search
+        client.post(
+            "/api/saved-searches",
+            json={"name": "First Search", "filters": {"status": "pending"}},
+        )
+        # Create second search
+        create_resp2 = client.post(
+            "/api/saved-searches",
+            json={"name": "Second Search", "filters": {"status": "completed"}},
+        )
+        search_id2 = create_resp2.json()["id"]
+
+        # Try to rename second search to "First Search"
+        update_resp = client.put(
+            f"/api/saved-searches/{search_id2}",
+            json={"name": "First Search", "filters": {"status": "completed"}},
+        )
+        assert update_resp.status_code == 409
+
+    def test_update_saved_search_name_too_long(self, client: TestClient):
+        """PUT /api/saved-searches/{id} with name > 100 chars returns 422."""
+        create_resp = client.post(
+            "/api/saved-searches",
+            json={"name": "Valid Name", "filters": {"status": "pending"}},
+        )
+        search_id = create_resp.json()["id"]
+
+        update_resp = client.put(
+            f"/api/saved-searches/{search_id}",
+            json={"name": "x" * 101, "filters": {"status": "completed"}},
+        )
+        assert update_resp.status_code == 422
+
+    def test_update_saved_search_empty_name(self, client: TestClient):
+        """PUT /api/saved-searches/{id} with empty name returns 422."""
+        create_resp = client.post(
+            "/api/saved-searches",
+            json={"name": "Valid Name", "filters": {"status": "pending"}},
+        )
+        search_id = create_resp.json()["id"]
+
+        update_resp = client.put(
+            f"/api/saved-searches/{search_id}",
+            json={"name": "", "filters": {"status": "completed"}},
+        )
+        assert update_resp.status_code == 422
+
+    def test_update_saved_search_empty_filters(self, client: TestClient):
+        """PUT /api/saved-searches/{id} with empty filters returns 422."""
+        create_resp = client.post(
+            "/api/saved-searches",
+            json={"name": "Valid Name", "filters": {"status": "pending"}},
+        )
+        search_id = create_resp.json()["id"]
+
+        update_resp = client.put(
+            f"/api/saved-searches/{search_id}",
+            json={"name": "Valid Name", "filters": {}},
+        )
+        assert update_resp.status_code == 422
+
+    def test_update_saved_search_invalid_filters(self, client: TestClient):
+        """PUT /api/saved-searches/{id} with only invalid filters returns 422."""
+        create_resp = client.post(
+            "/api/saved-searches",
+            json={"name": "Valid Name", "filters": {"status": "pending"}},
+        )
+        search_id = create_resp.json()["id"]
+
+        update_resp = client.put(
+            f"/api/saved-searches/{search_id}",
+            json={"name": "Valid Name", "filters": {"invalid_key": "value"}},
+        )
+        assert update_resp.status_code == 422
+
+    def test_delete_saved_search(self, client: TestClient):
+        """DELETE /api/saved-searches/{id} removes the saved search."""
+        # Create
+        create_resp = client.post(
+            "/api/saved-searches",
+            json={"name": "To Delete", "filters": {"status": "failed"}},
+        )
+        search_id = create_resp.json()["id"]
+
+        # Delete
+        del_resp = client.delete(f"/api/saved-searches/{search_id}")
+        assert del_resp.status_code == 204
+
+        # Verify it's gone
+        list_resp = client.get("/api/saved-searches")
+        assert len(list_resp.json()) == 0
+
+    def test_delete_saved_search_not_found(self, client: TestClient):
+        """DELETE /api/saved-searches/999 returns 404."""
+        response = client.delete("/api/saved-searches/999")
+        assert response.status_code == 404
+
+    def test_delete_saved_search_db_error(self, client: TestClient):
+        """DELETE /api/saved-searches/{id} handles database errors (500)."""
+        from unittest.mock import patch
+
+        # Create
+        create_resp = client.post(
+            "/api/saved-searches",
+            json={"name": "To Delete DB Error", "filters": {"status": "failed"}},
+        )
+        search_id = create_resp.json()["id"]
+
+        with patch("sqlalchemy.orm.Session.delete", side_effect=Exception("DB Delete Error")):
+            response = client.delete(f"/api/saved-searches/{search_id}")
+            assert response.status_code == 500
+            assert response.json()["detail"] == "Failed to delete saved search"
+
+    def test_create_name_too_long(self, client: TestClient):
+        """POST /api/saved-searches with name > 100 chars returns 422."""
+        payload = {
+            "name": "x" * 101,
+            "filters": {"status": "completed"},
+        }
+        response = client.post("/api/saved-searches", json=payload)
+        assert response.status_code == 422
+
+    def test_saved_search_filters_sanitized(self, client: TestClient):
+        """Saved search filters are sanitized to allowed keys only."""
+        payload = {
+            "name": "Sanitized",
+            "filters": {
+                "search": "invoice",
+                "mime_type": "application/pdf",
+                "date_from": "2026-01-01",
+                "date_to": "2026-12-31",
+                "storage_provider": "dropbox",
+                "tags": "invoice,amazon",
+                "sort_by": "created_at",
+                "sort_order": "desc",
+            },
+        }
+        response = client.post("/api/saved-searches", json=payload)
+        assert response.status_code == 201
+        data = response.json()
+        assert len(data["filters"]) == 8
+        assert data["filters"]["search"] == "invoice"
+        assert data["filters"]["tags"] == "invoice,amazon"
+
+    def test_saved_search_with_fulltext_query(self, client: TestClient):
+        """Saved search can include full-text query (q) for the search view."""
+        payload = {
+            "name": "Invoice Search",
+            "filters": {"q": "invoice total amount", "document_type": "Invoice"},
+        }
+        response = client.post("/api/saved-searches", json=payload)
+        assert response.status_code == 201
+        data = response.json()
+        assert data["filters"]["q"] == "invoice total amount"
+        assert data["filters"]["document_type"] == "Invoice"
+
+    def test_saved_search_content_finding_filters(self, client: TestClient):
+        """Saved search accepts content-finding filter keys (language, sender, text_quality)."""
+        payload = {
+            "name": "German Invoices",
+            "filters": {
+                "q": "rechnung",
+                "language": "de",
+                "sender": "ACME GmbH",
+                "text_quality": "high",
+                "tags": "invoice",
+            },
+        }
+        response = client.post("/api/saved-searches", json=payload)
+        assert response.status_code == 201
+        data = response.json()
+        assert data["filters"]["q"] == "rechnung"
+        assert data["filters"]["language"] == "de"
+        assert data["filters"]["sender"] == "ACME GmbH"
+        assert data["filters"]["text_quality"] == "high"
+        assert data["filters"]["tags"] == "invoice"

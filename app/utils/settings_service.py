@@ -8,7 +8,6 @@ This module provides functionality to:
 """
 
 import logging
-import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -40,6 +39,50 @@ SETTING_METADATA = {
         "required": True,
         "restart_required": True,
     },
+    "db_pool_size": {
+        "category": "Core",
+        "description": (
+            "Number of persistent database connections kept in the pool per worker process. "
+            "Ignored for SQLite (which uses NullPool). Default: 10."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_max_overflow": {
+        "category": "Core",
+        "description": (
+            "Additional database connections allowed beyond db_pool_size under burst load. "
+            "Ignored for SQLite. Default: 20."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_pool_timeout": {
+        "category": "Core",
+        "description": (
+            "Seconds to wait for a database connection from the pool before raising a TimeoutError. "
+            "Ignored for SQLite. Default: 30."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_pool_recycle": {
+        "category": "Core",
+        "description": (
+            "Recycle (close and reopen) database connections after this many seconds "
+            "to avoid stale connections. Ignored for SQLite. Default: 1800."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
     "workdir": {
         "category": "Core",
         "description": "Working directory for file storage and processing",
@@ -54,6 +97,18 @@ SETTING_METADATA = {
         "type": "string",
         "sensitive": False,
         "required": True,  # Required for OAuth redirects and external URLs
+        "restart_required": True,
+    },
+    "public_base_url": {
+        "category": "Core",
+        "description": (
+            "Full public base URL including scheme (e.g., https://docuelevate.example.com). "
+            "When set, overrides auto-detected URLs for OAuth redirect URIs. "
+            "Required when behind a reverse proxy that does not forward X-Forwarded-Proto."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
         "restart_required": True,
     },
     "debug": {
@@ -151,6 +206,14 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "qr_login_enabled": {
+        "category": "Authentication",
+        "description": "Enable QR code-based login for mobile device authentication.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "qr_login_challenge_ttl_seconds": {
         "category": "Authentication",
         "description": "Time-to-live in seconds for QR login challenges (default 120).",
@@ -207,6 +270,17 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "sso_auto_login": {
+        "category": "Authentication",
+        "description": (
+            "Automatically redirect to SSO login when authentication is required. "
+            "Skips the login page and sends users directly to the configured SSO provider."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Social Login Providers
     "social_auth_google_enabled": {
         "category": "Social Login",
@@ -234,6 +308,20 @@ SETTING_METADATA = {
         "description": "Google OAuth2 client secret from the Google Cloud Console.",
         "type": "string",
         "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_google_use_global_credentials": {
+        "category": "Social Login",
+        "description": (
+            "When True, Google social login uses the global GOOGLE_DRIVE_CLIENT_ID / "
+            "GOOGLE_DRIVE_CLIENT_SECRET credentials (the Google Drive OAuth integration) "
+            "instead of requiring separate SOCIAL_AUTH_GOOGLE_CLIENT_ID / "
+            "SOCIAL_AUTH_GOOGLE_CLIENT_SECRET values. "
+            "Requires SOCIAL_AUTH_GOOGLE_ENABLED=True and global Google Drive OAuth credentials to be set."
+        ),
+        "type": "boolean",
+        "sensitive": False,
         "required": False,
         "restart_required": True,
     },
@@ -275,6 +363,20 @@ SETTING_METADATA = {
             "restrict to a single organization."
         ),
         "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_microsoft_use_global_credentials": {
+        "category": "Social Login",
+        "description": (
+            "When True, Microsoft social login uses the global ONEDRIVE_CLIENT_ID / "
+            "ONEDRIVE_CLIENT_SECRET credentials (the OneDrive integration credentials) "
+            "instead of requiring separate SOCIAL_AUTH_MICROSOFT_CLIENT_ID / "
+            "SOCIAL_AUTH_MICROSOFT_CLIENT_SECRET values. "
+            "Requires SOCIAL_AUTH_MICROSOFT_ENABLED=True and global OneDrive credentials to be set."
+        ),
+        "type": "boolean",
         "sensitive": False,
         "required": False,
         "restart_required": True,
@@ -327,6 +429,19 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "social_auth_dropbox_use_global_credentials": {
+        "category": "Social Login",
+        "description": (
+            "When True, Dropbox social login uses the global DROPBOX_APP_KEY / DROPBOX_APP_SECRET "
+            "credentials instead of requiring separate SOCIAL_AUTH_DROPBOX_CLIENT_ID / "
+            "SOCIAL_AUTH_DROPBOX_CLIENT_SECRET values. "
+            "Requires SOCIAL_AUTH_DROPBOX_ENABLED=True and global Dropbox credentials to be set."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
     "social_auth_dropbox_enabled": {
         "category": "Social Login",
         "description": (
@@ -351,6 +466,182 @@ SETTING_METADATA = {
         "description": "Dropbox OAuth2 App Secret from the Dropbox App Console.",
         "type": "string",
         "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_github_enabled": {
+        "category": "Social Login",
+        "description": (
+            "Enable GitHub Sign-In. Requires SOCIAL_AUTH_GITHUB_CLIENT_ID and "
+            "SOCIAL_AUTH_GITHUB_CLIENT_SECRET from GitHub Developer Settings."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+        "help_link": "https://github.com/settings/developers",
+        "help_link_label": "GitHub Developer Settings",
+    },
+    "social_auth_github_client_id": {
+        "category": "Social Login",
+        "description": "GitHub OAuth2 client ID from GitHub Developer Settings.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_github_client_secret": {
+        "category": "Social Login",
+        "description": "GitHub OAuth2 client secret from GitHub Developer Settings.",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    # Keycloak SSO
+    "social_auth_keycloak_enabled": {
+        "category": "Social Login",
+        "description": "Enable Keycloak SSO. Requires server URL, realm, client ID, and client secret.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_keycloak_client_id": {
+        "category": "Social Login",
+        "description": "Keycloak OAuth2 client ID.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_keycloak_client_secret": {
+        "category": "Social Login",
+        "description": "Keycloak OAuth2 client secret.",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_keycloak_server_url": {
+        "category": "Social Login",
+        "description": "Keycloak server base URL (e.g. https://keycloak.example.com).",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_keycloak_realm": {
+        "category": "Social Login",
+        "description": "Keycloak realm name.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    # Generic OAuth2 SSO
+    "social_auth_generic_oauth2_enabled": {
+        "category": "Social Login",
+        "description": "Enable a generic OAuth2 SSO provider.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_generic_oauth2_client_id": {
+        "category": "Social Login",
+        "description": "Generic OAuth2 client ID.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_generic_oauth2_client_secret": {
+        "category": "Social Login",
+        "description": "Generic OAuth2 client secret.",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_generic_oauth2_authorize_url": {
+        "category": "Social Login",
+        "description": "Generic OAuth2 authorization URL.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_generic_oauth2_token_url": {
+        "category": "Social Login",
+        "description": "Generic OAuth2 token endpoint URL.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_generic_oauth2_userinfo_url": {
+        "category": "Social Login",
+        "description": "Generic OAuth2 userinfo endpoint URL.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_generic_oauth2_scope": {
+        "category": "Social Login",
+        "description": "Space-separated list of OAuth2 scopes to request (default: openid profile email).",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_generic_oauth2_name": {
+        "category": "Social Login",
+        "description": "Display name for the generic OAuth2 provider button on the login page.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    # SAML2 SSO
+    "social_auth_saml2_enabled": {
+        "category": "Social Login",
+        "description": "Enable SAML2 SSO authentication.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_saml2_entity_id": {
+        "category": "Social Login",
+        "description": "SAML2 Identity Provider Entity ID.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_saml2_sso_url": {
+        "category": "Social Login",
+        "description": "SAML2 Identity Provider SSO URL.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_saml2_certificate": {
+        "category": "Social Login",
+        "description": "SAML2 Identity Provider X.509 certificate (PEM format).",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_saml2_name": {
+        "category": "Social Login",
+        "description": "Display name for the SAML2 provider.",
+        "type": "string",
+        "sensitive": False,
         "required": False,
         "restart_required": True,
     },
@@ -717,6 +1008,18 @@ SETTING_METADATA = {
         "description": "Dropbox OAuth refresh token",
         "type": "string",
         "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "dropbox_allow_global_credentials_for_integrations": {
+        "category": "Storage Providers",
+        "description": (
+            "When True, users may authorize their personal Dropbox integrations using the global "
+            "DROPBOX_APP_KEY / DROPBOX_APP_SECRET credentials configured by the admin, without "
+            "needing to create their own Dropbox app."
+        ),
+        "type": "boolean",
+        "sensitive": False,
         "required": False,
         "restart_required": False,
     },
@@ -1872,6 +2175,30 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "telegram_enabled": {
+        "category": "Notifications",
+        "description": "Enable Telegram bot notifications.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "telegram_bot_token": {
+        "category": "Notifications",
+        "description": "Telegram Bot API token from @BotFather.",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "telegram_chat_id": {
+        "category": "Notifications",
+        "description": "Telegram chat ID to send notifications to.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Notifications Settings
     "notification_urls": {
         "category": "Notifications",
@@ -1965,6 +2292,18 @@ SETTING_METADATA = {
     "webhook_enabled": {
         "category": "Feature Flags",
         "description": "Enable webhook delivery for document events. Default: True.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "automation_hooks_enabled": {
+        "category": "Feature Flags",
+        "description": (
+            "Enable Zapier / Make.com automation hook subscriptions and delivery. "
+            "When enabled, external automation platforms can subscribe to DocuElevate events "
+            "via the REST hooks protocol. Default: True."
+        ),
         "type": "boolean",
         "sensitive": False,
         "required": False,
@@ -2558,51 +2897,6 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
-    # Database Connection Pool
-    "db_pool_size": {
-        "category": "Core",
-        "description": (
-            "Number of persistent connections kept in the SQLAlchemy QueuePool. "
-            "Has no effect for SQLite databases. Default: 5."
-        ),
-        "type": "integer",
-        "sensitive": False,
-        "required": False,
-        "restart_required": True,
-    },
-    "db_max_overflow": {
-        "category": "Core",
-        "description": (
-            "Maximum extra connections that can be opened beyond db_pool_size. "
-            "Has no effect for SQLite databases. Default: 10."
-        ),
-        "type": "integer",
-        "sensitive": False,
-        "required": False,
-        "restart_required": True,
-    },
-    "db_pool_timeout": {
-        "category": "Core",
-        "description": (
-            "Seconds to wait for a connection from the pool before raising an error. "
-            "Has no effect for SQLite databases. Default: 30."
-        ),
-        "type": "integer",
-        "sensitive": False,
-        "required": False,
-        "restart_required": True,
-    },
-    "db_pool_recycle": {
-        "category": "Core",
-        "description": (
-            "Seconds after which idle connections are recycled to prevent stale connections. "
-            "Has no effect for SQLite databases. Default: 1800 (30 minutes)."
-        ),
-        "type": "integer",
-        "sensitive": False,
-        "required": False,
-        "restart_required": True,
-    },
     # Per-user upload rate limiting
     "upload_rate_limit_per_user": {
         "category": "Security",
@@ -2934,6 +3228,43 @@ SETTING_METADATA = {
             "to Sentry events. Disabled by default for GDPR/CCPA compliance."
         ),
         "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "sentry_js_traces_sample_rate": {
+        "category": "Observability",
+        "description": (
+            "Fraction of browser page-loads captured for client-side Sentry performance tracing (0.0–1.0). "
+            "0.0 (default) disables browser tracing; 1.0 captures every navigation. "
+            "Only active when SENTRY_DSN is set."
+        ),
+        "type": "float",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "sentry_js_replay_session_sample_rate": {
+        "category": "Observability",
+        "description": (
+            "Fraction of sessions recorded by Sentry Session Replay (0.0–1.0). "
+            "0.0 (default) disables session recording; 1.0 records every session. "
+            "Only active when SENTRY_DSN is set."
+        ),
+        "type": "float",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "sentry_js_replay_on_error_sample_rate": {
+        "category": "Observability",
+        "description": (
+            "Fraction of error sessions recorded by Sentry Session Replay (0.0–1.0). "
+            "Defaults to 0.1 (10%) so that errors are captured with replay context "
+            "even when session-level recording is disabled. "
+            "Only active when SENTRY_DSN is set."
+        ),
+        "type": "float",
         "sensitive": False,
         "required": False,
         "restart_required": True,
@@ -3372,60 +3703,3 @@ def get_settings_for_export(db: Session, source: str = "db") -> Dict[str, str]:
         # DB only
         db_settings = get_all_settings_from_db(db)
         return {k.upper(): v for k, v in sorted(db_settings.items()) if v is not None}
-
-
-def update_env_file(env_path: str, settings_to_update: dict[str, str]) -> bool:
-    """
-    Update an .env file with new settings.
-
-    Reads the file, updates matching settings (even if commented),
-    appends any that weren't found, and writes the result back.
-
-    Args:
-        env_path: Path to the .env file
-        settings_to_update: Dictionary mapping setting names (e.g. 'GOOGLE_DRIVE_USE_OAUTH') to string values
-
-    Returns:
-        True if the file was successfully updated, False otherwise (e.g. file not found or write error)
-    """
-    try:
-        if not os.path.exists(env_path):
-            logger.warning(f".env file not found at {env_path}, skipping file update")
-            return False
-
-        logger.info(f"Updating settings in {env_path}")
-
-        # Read the current .env file
-        with open(env_path, "r") as f:
-            env_lines = f.readlines()
-
-        # Process each line and update or add settings
-        updated = set()
-        new_env_lines = []
-        for line in env_lines:
-            stripped_line = line.rstrip()
-            is_updated = False
-            for key, value in settings_to_update.items():
-                if stripped_line.startswith(f"{key}=") or stripped_line.startswith(f"# {key}="):
-                    # Uncomment if commented out - check the original stripped line
-                    new_env_lines.append(f"{key}={value}")
-                    updated.add(key)
-                    is_updated = True
-                    break
-            if not is_updated:
-                new_env_lines.append(stripped_line)
-
-        # Add any settings that weren't updated (they weren't in the file)
-        for key, value in settings_to_update.items():
-            if key not in updated:
-                new_env_lines.append(f"{key}={value}")
-
-        # Write the updated .env file
-        with open(env_path, "w") as f:
-            f.write("\n".join(new_env_lines) + "\n")
-
-        logger.info(f"Successfully updated settings in {env_path}")
-        return True
-    except Exception as e:
-        logger.warning(f"Failed to update {env_path}: {str(e)}")
-        return False

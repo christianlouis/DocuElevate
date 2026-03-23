@@ -21,8 +21,6 @@
     <!-- Alpine.js moved to head for earlier loading -->
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     {% block head_css %}
-    <!-- Tailwind CSS and other CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
           integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA=="
@@ -34,6 +32,34 @@
     {% block head_extra %}{% endblock %}
     <!-- CSRF token for AJAX/fetch requests -->
     <meta name="csrf-token" content="{{ csrf_token | default('', true) }}">
+    {# ── Sentry Browser SDK ─────────────────────────────────────────────────
+         Loaded only when SENTRY_DSN is configured.  The DSN is a *public*
+         Sentry key and is intentionally embedded in client-side code.
+         Update the version pin at browser.sentry-cdn.com/releases when
+         upgrading the SDK.
+    ──────────────────────────────────────────────────────────────────────── #}
+    {% if sentry_dsn %}
+    <script src="https://browser.sentry-cdn.com/10.45.0/bundle.tracing.replay.feedback.logs.metrics.min.js"
+      integrity="sha384-TCY3xw5Ej940LIWfS6PwhCCBl7lvEsxBpHy+BirF+EycSQUvXbfZsgsLi0oU18yZ"
+      crossorigin="anonymous"
+    ></script>
+    <script>
+      if (window.Sentry) {
+        Sentry.init({
+          dsn: {{ sentry_dsn | tojson }},
+          environment: {{ sentry_environment | default("production") | tojson }},
+          release: {{ version | default(None) | tojson }},
+          integrations: [
+            Sentry.browserTracingIntegration(),
+            Sentry.replayIntegration(),
+          ],
+          tracesSampleRate: {{ sentry_js_traces_sample_rate | default(0.0) }},
+          replaysSessionSampleRate: {{ sentry_js_replay_session_sample_rate | default(0.0) }},
+          replaysOnErrorSampleRate: {{ sentry_js_replay_on_error_sample_rate | default(0.1) }},
+        });
+      }
+    </script>
+    {% endif %}
   </head>
 
   <body class="bg-gray-50 min-h-screen flex flex-col"
@@ -154,6 +180,9 @@
                   </a>
                   <a href="/admin/credentials" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                     <i class="fas fa-key w-4 mr-2 text-yellow-500" aria-hidden="true"></i> {{ _("nav.credentials") }}
+                  </a>
+                  <a href="/admin/connections" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    <i class="fas fa-plug w-4 mr-2 text-purple-500" aria-hidden="true"></i> {{ _("nav.connections") }}
                   </a>
                   <a href="/admin/files" role="menuitem" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                     <i class="fas fa-folder-open w-4 mr-2 text-gray-500" aria-hidden="true"></i> {{ _("nav.file_manager") }}
@@ -428,6 +457,9 @@
                   </a>
                   <a href="/admin/credentials" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
                     <i class="fas fa-key mr-2 text-yellow-400" aria-hidden="true"></i> {{ _("nav.credentials") }}
+                  </a>
+                  <a href="/admin/connections" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+                    <i class="fas fa-plug mr-2 text-purple-400" aria-hidden="true"></i> {{ _("nav.connections") }}
                   </a>
                   <a href="/admin/files" class="block px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
                     <i class="fas fa-folder-open mr-2 text-gray-400" aria-hidden="true"></i> {{ _("nav.file_manager") }}

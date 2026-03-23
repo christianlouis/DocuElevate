@@ -32,6 +32,21 @@ from app.utils.encryption import decrypt_value, encrypt_value
 from app.utils.subscription import get_tier, get_user_tier_id
 from app.utils.user_scope import get_current_owner_id
 
+# Optional Dropbox SDK — imported at module level so tests can patch it cleanly.
+try:
+    import dropbox as dbx_lib
+    from dropbox.exceptions import AuthError as _DropboxAuthError
+    from dropbox.exceptions import BadInputError as _DropboxBadInputError
+except ImportError:  # pragma: no cover
+    dbx_lib = None  # type: ignore[assignment]
+
+    class _DropboxAuthError(Exception):  # type: ignore[no-redef]
+        """Stub — only used when the dropbox package is missing."""
+
+    class _DropboxBadInputError(Exception):  # type: ignore[no-redef]
+        """Stub — only used when the dropbox package is missing."""
+
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
@@ -550,9 +565,50 @@ def _test_s3_connection(config: dict[str, Any] | None, credentials: dict[str, An
         return {"success": False, "message": "S3 connection failed"}
 
 
+def _test_dropbox_connection(config: dict[str, Any] | None, credentials: dict[str, Any] | None) -> dict[str, Any]:
+    """Test a Dropbox connection by verifying OAuth credentials via the Dropbox API."""
+    if dbx_lib is None:
+        return {"success": False, "message": "dropbox package is not installed"}  # pragma: no cover
+
+    creds = credentials or {}
+    app_key = creds.get("app_key", "")
+    app_secret = creds.get("app_secret", "")
+    refresh_token = creds.get("refresh_token", "")
+
+    if not refresh_token:
+        return {"success": False, "message": "Missing required credential: refresh_token"}
+    if not app_key or not app_secret:
+        return {"success": False, "message": "Missing required credentials: app_key and app_secret"}
+
+    try:
+        dbx = dbx_lib.Dropbox(
+            app_key=app_key,
+            app_secret=app_secret,
+            oauth2_refresh_token=refresh_token,
+        )
+        account = dbx.users_get_current_account()
+        display_name = getattr(account, "name", None)
+        name_str = ""
+        if display_name:
+            name_str = f" ({getattr(display_name, 'display_name', '') or ''})"
+        return {"success": True, "message": f"Dropbox connection successful{name_str}"}
+    except _DropboxAuthError as exc:
+        logger.warning("Dropbox auth error: %s", exc)
+        return {
+            "success": False,
+            "message": "Dropbox authentication failed — check app_key, app_secret, and refresh_token",
+        }
+    except _DropboxBadInputError as exc:
+        logger.warning("Dropbox bad input error: %s", exc)
+        return {"success": False, "message": "Dropbox connection failed — invalid credentials format"}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Dropbox connection error: %s", exc)
+        return {"success": False, "message": "Dropbox connection failed — check credentials and network connectivity"}
+
+
 def _test_webdav_connection(config: dict[str, Any] | None, credentials: dict[str, Any] | None) -> dict[str, Any]:
     """Test a WebDAV/Nextcloud connection by issuing an HTTP PROPFIND."""
-    import urllib.request
+    import httpx
 
     cfg = config or {}
     creds = credentials or {}
@@ -579,23 +635,21 @@ def _test_webdav_connection(config: dict[str, Any] | None, credentials: dict[str
             return {"success": False, "message": "URLs pointing to internal or private networks are not allowed"}
 
     try:
-        import base64
+        auth = (username, password) if username and password else None
+        headers = {"Depth": "0"}
 
-        req = urllib.request.Request(url, method="PROPFIND")  # noqa: S310
-        if username and password:
-            token = base64.b64encode(f"{username}:{password}".encode()).decode()
-            req.add_header("Authorization", f"Basic {token}")
-        req.add_header("Depth", "0")
-        with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
-            if resp.status < 400:
-                return {"success": True, "message": "WebDAV connection successful"}
-            return {"success": False, "message": f"WebDAV returned HTTP {resp.status}"}
+        # Use httpx for secure connection testing, avoiding urllib vulnerabilities
+        resp = httpx.request("PROPFIND", url, auth=auth, headers=headers, timeout=10.0, follow_redirects=False)
+        if resp.status_code < 400:
+            return {"success": True, "message": "WebDAV connection successful"}
+        return {"success": False, "message": f"WebDAV returned HTTP {resp.status_code}"}
     except Exception as exc:  # noqa: BLE001
         logger.warning("WebDAV connection error for %s: %s", hostname, exc)
         return {"success": False, "message": "WebDAV connection failed — check URL and credentials"}
 
 
 _CONNECTION_TESTERS: dict[str, Any] = {
+    IntegrationType.DROPBOX: _test_dropbox_connection,
     IntegrationType.IMAP: _test_imap_connection,
     IntegrationType.S3: _test_s3_connection,
     IntegrationType.WEBDAV: _test_webdav_connection,

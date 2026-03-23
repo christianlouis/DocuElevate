@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.auth import require_login
+from app.config import settings
 from app.database import get_db
 from app.middleware.audit_log import get_client_ip
 from app.utils.session_manager import (
@@ -151,6 +152,11 @@ async def create_challenge(
     displayed to the user.  The mobile app scans this QR code and
     calls the ``/claim`` endpoint.
     """
+    if not settings.qr_login_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="QR login feature is currently disabled. Please contact your administrator to enable it.",
+        )
     ip = get_client_ip(request)
     challenge = create_qr_challenge(db, owner_id, ip_address=ip)
 
@@ -187,6 +193,11 @@ async def poll_challenge_status(
     The web UI calls this endpoint every few seconds to check if the
     mobile app has scanned the QR code and claimed the challenge.
     """
+    if not settings.qr_login_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="QR login feature is currently disabled. Please contact your administrator to enable it.",
+        )
     result = get_challenge_status(db, challenge_id, owner_id)
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Challenge not found")
@@ -206,6 +217,11 @@ async def claim_challenge(
     serves as proof that the user authorized this login from their web
     session.
     """
+    if not settings.qr_login_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="QR login feature is currently disabled. Please contact your administrator to enable it.",
+        )
     ip = get_client_ip(request)
     result = claim_qr_challenge(db, body.challenge_token, device_name=body.device_name, ip_address=ip)
 

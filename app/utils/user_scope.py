@@ -11,13 +11,20 @@ import logging
 
 from fastapi import Request
 from sqlalchemy import or_
-from sqlalchemy.orm import Query
+from sqlalchemy.orm import Query, Session
 from sqlalchemy.sql import false
 
 from app.config import settings
-from app.models import FileRecord
+from app.models import FILE_SHARE_ROLE_EDITOR, FILE_SHARE_ROLE_VIEWER, FileRecord, FileShare
 
 logger = logging.getLogger(__name__)
+
+# Role hierarchy: higher index = more rights
+_ROLE_RANK: dict[str, int] = {
+    FILE_SHARE_ROLE_VIEWER: 1,
+    FILE_SHARE_ROLE_EDITOR: 2,
+    "owner": 3,
+}
 
 
 def _owner_id_from_user(user: dict) -> str | None:
@@ -93,8 +100,9 @@ def apply_owner_filter(query: Query, request: Request) -> Query:
     """Conditionally filter a ``FileRecord`` query by the current user.
 
     When multi-user mode is enabled, only files whose ``owner_id``
-    matches the authenticated user are returned.  Admin users bypass
-    the filter and see all documents.
+    matches the authenticated user are returned, **plus** any files that
+    have been explicitly shared with the user via ``FileShare``.  Admin
+    users bypass the filter and see all documents.
 
     When ``unowned_docs_visible_to_all`` is ``True`` (default), documents
     with ``owner_id IS NULL`` (unclaimed) are also included for every
@@ -122,11 +130,89 @@ def apply_owner_filter(query: Query, request: Request) -> Query:
         # No authenticated user — return empty result set
         return query.filter(false())
 
-    # Build filter: user's own documents
+    # Build filter: user's own documents + documents shared with them
     conditions = [FileRecord.owner_id == owner_id]
+
+    # Include files explicitly shared with this user
+    from sqlalchemy import select as sa_select
+
+    conditions.append(FileRecord.id.in_(sa_select(FileShare.file_id).where(FileShare.shared_with_user_id == owner_id)))
 
     # Optionally include unclaimed (owner_id IS NULL) documents
     if settings.unowned_docs_visible_to_all:
         conditions.append(FileRecord.owner_id.is_(None))
 
     return query.filter(or_(*conditions))
+
+
+def get_file_role(file_record: FileRecord, user_id: str | None, db: Session) -> str | None:
+    """Return the effective role a user has on a ``FileRecord``.
+
+    Roles (in descending order of privilege):
+
+    ``"owner"``   — the user's ``owner_id`` matches ``file_record.owner_id``,
+                    or multi-user mode is disabled (everyone is effectively an
+                    owner in single-user mode).
+    ``"editor"``  — the user has an explicit ``FileShare`` with role=editor.
+    ``"viewer"``  — the user has an explicit ``FileShare`` with role=viewer,
+                    or the file is unclaimed (``owner_id IS NULL``) and
+                    ``unowned_docs_visible_to_all`` is True.
+    ``None``      — no access.
+
+    Args:
+        file_record: The ``FileRecord`` to check.
+        user_id: The stable identifier of the requesting user.
+        db: An active SQLAlchemy session.
+
+    Returns:
+        One of ``"owner"``, ``"editor"``, ``"viewer"``, or ``None``.
+    """
+    if not settings.multi_user_enabled:
+        # Single-user mode: full access for everyone
+        return "owner"
+
+    if user_id is None:
+        return None
+
+    # Owner always has full access
+    if file_record.owner_id == user_id:
+        return "owner"
+
+    # Unclaimed document — limited access when setting allows it
+    if file_record.owner_id is None and settings.unowned_docs_visible_to_all:
+        return FILE_SHARE_ROLE_VIEWER
+
+    # Check for an explicit share
+    share = (
+        db.query(FileShare)
+        .filter(FileShare.file_id == file_record.id, FileShare.shared_with_user_id == user_id)
+        .first()
+    )
+    if share:
+        return share.role
+
+    return None
+
+
+def has_file_role(
+    file_record: FileRecord,
+    user_id: str | None,
+    db: Session,
+    minimum_role: str = FILE_SHARE_ROLE_VIEWER,
+) -> bool:
+    """Return ``True`` if the user's effective role meets the minimum required.
+
+    Args:
+        file_record: The document to check.
+        user_id: Requesting user's stable identifier.
+        db: Active SQLAlchemy session.
+        minimum_role: The minimum role required (``"viewer"``, ``"editor"``,
+            or ``"owner"``).
+
+    Returns:
+        ``True`` when the user's role rank is >= the minimum rank.
+    """
+    role = get_file_role(file_record, user_id, db)
+    if role is None:
+        return False
+    return _ROLE_RANK.get(role, 0) >= _ROLE_RANK.get(minimum_role, 0)
