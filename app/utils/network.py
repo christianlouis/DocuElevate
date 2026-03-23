@@ -1,6 +1,5 @@
 import ipaddress
 import logging
-import posixpath
 import socket
 from urllib.parse import urlsplit, urlunsplit
 
@@ -41,23 +40,21 @@ def join_url(base: str, *parts: str) -> str:
     Safely join a base URL with one or more path parts.
 
     Uses urllib.parse to correctly handle scheme/netloc/query/fragment so that
-    only the path component is normalised (double slashes removed via
-    posixpath.join).  The scheme separator ``://`` is therefore never at risk
-    of being collapsed.
+    only the path component is modified.  Leading and trailing slashes are
+    stripped from each part before joining, preventing double-slash sequences
+    at segment boundaries without touching the scheme separator or query string.
 
     Examples:
         join_url("https://example.com/dav/", "/remote/", "file.pdf")
         -> "https://example.com/dav/remote/file.pdf"
     """
     parsed = urlsplit(base)
-    # Strip leading/trailing slashes from every part so posixpath.join
-    # produces a clean joined path without accidental double slashes.
-    stripped_parts = [p.strip("/") for p in parts if p.strip("/")]
+    # Strip each part once and filter out empty segments; use walrus operator
+    # to avoid calling strip twice per iteration.
+    stripped_parts = [s for p in parts if (s := p.strip("/"))]
     base_path = parsed.path.rstrip("/")
-    if stripped_parts:
-        new_path = base_path + "/" + "/".join(stripped_parts)
-    else:
-        new_path = base_path
-    # Normalise any remaining double slashes in the path only.
-    new_path = posixpath.normpath(new_path) if new_path else "/"
+    new_path = base_path + "/" + "/".join(stripped_parts) if stripped_parts else base_path
+    # Ensure path is non-empty so the reconstructed URL is valid.
+    if not new_path:
+        new_path = "/"
     return urlunsplit((parsed.scheme, parsed.netloc, new_path, parsed.query, parsed.fragment))
