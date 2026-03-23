@@ -162,12 +162,36 @@ def _inject_global_context(ctx: dict) -> None:
 
 
 def template_response_with_version(*args, **kwargs):
-    """Wrapper for TemplateResponse to include version and CSRF token in all templates"""
-    # If context dict is provided, add version to it
-    if len(args) >= 2 and isinstance(args[1], dict):
-        _inject_global_context(args[1])
-    elif "context" in kwargs and isinstance(kwargs["context"], dict):
+    """Wrapper for TemplateResponse to include version and CSRF token in all templates.
+
+    Handles both old-style and new-style Starlette TemplateResponse calls:
+      - Old-style (Starlette <1.0): TemplateResponse(name, {"request": req, ...}, ...)
+      - New-style (Starlette 1.0+): TemplateResponse(request, name, context={...}, ...)
+    """
+    if len(args) >= 1 and isinstance(args[0], str):
+        # Old-style call: first positional arg is the template name (string).
+        # Convert to new-style: (request, name, context=..., ...)
+        name = args[0]
+        if len(args) >= 2 and isinstance(args[1], dict):
+            context = args[1]
+            # Old-style may have status_code as 3rd positional arg
+            if len(args) >= 3 and "status_code" not in kwargs:
+                kwargs["status_code"] = args[2]
+        else:
+            context = kwargs.pop("context", {})
+        request_obj = context.pop("request", None)
+        if request_obj is not None:
+            context["request"] = request_obj
+        _inject_global_context(context)
+        if request_obj is not None:
+            return original_template_response(request_obj, name, context=context, **kwargs)
+        return original_template_response(name, context=context, **kwargs)
+
+    # New-style call: (request, name, context=..., ...)
+    if "context" in kwargs and isinstance(kwargs["context"], dict):
         _inject_global_context(kwargs["context"])
+    elif len(args) >= 3 and isinstance(args[2], dict):
+        _inject_global_context(args[2])
     return original_template_response(*args, **kwargs)
 
 
