@@ -9,7 +9,6 @@
  */
 
 import React, { createContext, useCallback, useContext, useState } from "react";
-import { normalizeFileUri } from "../utils/normalizeUri";
 
 export interface SharedFile {
   uri: string;
@@ -33,13 +32,7 @@ export function ShareProvider({ children }: { children: React.ReactNode }) {
   const [pendingFiles, setPendingFiles] = useState<SharedFile[]>([]);
 
   const addPendingFile = useCallback((file: SharedFile) => {
-    setPendingFiles((prev) => {
-      // Deduplicate by normalised URI so the same file is not uploaded twice
-      // when both the Linking handler (_layout.tsx) and +not-found.tsx fire.
-      const norm = normalizeFileUri(file.uri);
-      if (prev.some((f) => normalizeFileUri(f.uri) === norm)) return prev;
-      return [...prev, file];
-    });
+    setPendingFiles((prev) => [...prev, file]);
   }, []);
 
   const clearPendingFiles = useCallback(() => {

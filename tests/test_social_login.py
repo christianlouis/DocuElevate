@@ -345,7 +345,7 @@ class TestLoginPageSocialProviders:
 
             mock_templates.TemplateResponse.assert_called_once()
             call_args = mock_templates.TemplateResponse.call_args
-            context = call_args.kwargs.get("context", {})
+            context = call_args[0][1]
             assert context["social_providers"] == mock_providers
 
     @pytest.mark.asyncio
@@ -371,7 +371,7 @@ class TestLoginPageSocialProviders:
 
             mock_templates.TemplateResponse.assert_called_once()
             call_args = mock_templates.TemplateResponse.call_args
-            context = call_args.kwargs.get("context", {})
+            context = call_args[0][1]
             assert context["social_providers"] == {}
 
 

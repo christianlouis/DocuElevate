@@ -24,16 +24,13 @@ import {
   View,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
-import { useLocale, t } from "../i18n";
 
 export default function LoginScreen() {
   const { signIn, signInWithQR } = useAuth();
   const router = useRouter();
-  const [serverUrl, setServerUrl] = useState("https://app.docuelevate.org");
+  const [serverUrl, setServerUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
-  // Subscribe to language changes so translated strings re-render.
-  useLocale();
 
   // Handle incoming deep links for QR login (docuelevate://qr-login?token=...&server=...)
   const handleDeepLink = useCallback(
@@ -49,8 +46,8 @@ export default function LoginScreen() {
           }
         }
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : t("login.qr_login_failed");
-        Alert.alert(t("login.qr_login_failed"), message);
+        const message = err instanceof Error ? err.message : "QR login failed";
+        Alert.alert("QR Login Failed", message);
       } finally {
         setQrLoading(false);
       }
@@ -73,11 +70,11 @@ export default function LoginScreen() {
   async function handleSignIn() {
     const url = serverUrl.trim();
     if (!url) {
-      Alert.alert(t("login.server_url_required"), t("login.server_url_required_msg"));
+      Alert.alert("Server URL required", "Please enter the URL of your DocuElevate server.");
       return;
     }
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      Alert.alert(t("login.invalid_url"), t("login.invalid_url_msg"));
+      Alert.alert("Invalid URL", "The server URL must start with http:// or https://");
       return;
     }
 
@@ -85,8 +82,8 @@ export default function LoginScreen() {
     try {
       await signIn(url);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t("login.sign_in_failed");
-      Alert.alert(t("login.sign_in_failed"), message);
+      const message = err instanceof Error ? err.message : "Sign-in failed";
+      Alert.alert("Sign-in failed", message);
     } finally {
       setLoading(false);
     }
@@ -107,12 +104,12 @@ export default function LoginScreen() {
           />
           <Text style={styles.logoText}>DocuElevate</Text>
         </View>
-        <Text style={styles.tagline}>{t("welcome.tagline")}</Text>
+        <Text style={styles.tagline}>Intelligent Document Processing</Text>
 
-        <Text style={styles.label}>{t("login.server_url")}</Text>
+        <Text style={styles.label}>Server URL</Text>
         <TextInput
           style={styles.input}
-          placeholder={t("login.server_url_placeholder")}
+          placeholder="https://your-docuelevate-server.com"
           placeholderTextColor="#9ca3af"
           value={serverUrl}
           onChangeText={setServerUrl}
@@ -121,7 +118,7 @@ export default function LoginScreen() {
           keyboardType="url"
           returnKeyType="go"
           onSubmitEditing={handleSignIn}
-          accessibilityLabel={t("login.server_url")}
+          accessibilityLabel="Server URL"
         />
 
         <Pressable
@@ -129,18 +126,18 @@ export default function LoginScreen() {
           onPress={handleSignIn}
           disabled={loading || qrLoading}
           accessibilityRole="button"
-          accessibilityLabel={t("login.sign_in_sso")}
+          accessibilityLabel="Sign in with SSO"
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.buttonText}>{t("login.sign_in_sso")}</Text>
+            <Text style={styles.buttonText}>Sign in with SSO</Text>
           )}
         </Pressable>
 
         <View style={styles.dividerRow}>
           <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>{t("login.or")}</Text>
+          <Text style={styles.dividerText}>or</Text>
           <View style={styles.dividerLine} />
         </View>
 
@@ -151,64 +148,27 @@ export default function LoginScreen() {
           }}
           disabled={loading || qrLoading}
           accessibilityRole="button"
-          accessibilityLabel={t("login.scan_qr")}
+          accessibilityLabel="Sign in with QR code"
         >
           {qrLoading ? (
             <ActivityIndicator color="#1e40af" />
           ) : (
-            <Text style={styles.qrButtonText}>{t("login.scan_qr")}</Text>
+            <Text style={styles.qrButtonText}>📱 Scan QR Code to Login</Text>
           )}
         </Pressable>
 
-        <Text style={styles.hint}>{t("login.hint")}</Text>
+        <Text style={styles.hint}>
+          Sign in via SSO or scan a QR code from the web app.
+        </Text>
 
         <Pressable
           onPress={() => router.back()}
           accessibilityRole="button"
-          accessibilityLabel={t("login.back")}
+          accessibilityLabel="Back to welcome screen"
           style={styles.backLink}
         >
-          <Text style={styles.backLinkText}>{t("login.back")}</Text>
+          <Text style={styles.backLinkText}>← Back</Text>
         </Pressable>
-
-        {/* Legal links – accessible pre-login for GDPR / Apple compliance */}
-        <View style={styles.legalLinks}>
-          <Pressable
-            onPress={() => {
-              const base = serverUrl.trim() || "https://app.docuelevate.org";
-              Linking.openURL(`${base.replace(/\/$/, "")}/privacy`);
-            }}
-            accessibilityRole="link"
-            accessibilityLabel={t("legal.privacy_policy")}
-            style={styles.legalLinkButton}
-          >
-            <Text style={styles.legalLinkText}>{t("legal.privacy_policy")}</Text>
-          </Pressable>
-          <Text style={styles.legalSeparator}>·</Text>
-          <Pressable
-            onPress={() => {
-              const base = serverUrl.trim() || "https://app.docuelevate.org";
-              Linking.openURL(`${base.replace(/\/$/, "")}/terms`);
-            }}
-            accessibilityRole="link"
-            accessibilityLabel={t("legal.terms")}
-            style={styles.legalLinkButton}
-          >
-            <Text style={styles.legalLinkText}>{t("legal.terms")}</Text>
-          </Pressable>
-          <Text style={styles.legalSeparator}>·</Text>
-          <Pressable
-            onPress={() => {
-              const base = serverUrl.trim() || "https://app.docuelevate.org";
-              Linking.openURL(`${base.replace(/\/$/, "")}/imprint`);
-            }}
-            accessibilityRole="link"
-            accessibilityLabel={t("legal.imprint")}
-            style={styles.legalLinkButton}
-          >
-            <Text style={styles.legalLinkText}>{t("legal.imprint")}</Text>
-          </Pressable>
-        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -330,27 +290,5 @@ const styles = StyleSheet.create({
   backLinkText: {
     fontSize: 13,
     color: "#6b7280",
-  },
-  legalLinks: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 16,
-    flexWrap: "wrap",
-  },
-  legalLinkButton: {
-    minHeight: 44,
-    justifyContent: "center",
-    paddingHorizontal: 4,
-  },
-  legalLinkText: {
-    fontSize: 12,
-    color: "#9ca3af",
-    textDecorationLine: "underline",
-  },
-  legalSeparator: {
-    fontSize: 12,
-    color: "#d1d5db",
-    marginHorizontal: 4,
   },
 });

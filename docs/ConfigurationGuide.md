@@ -11,15 +11,10 @@ Configuration is primarily done through environment variables specified in a `.e
 | **Variable**           | **Description**                                          | **Example**                    |
 |------------------------|----------------------------------------------------------|--------------------------------|
 | `DATABASE_URL`         | Path/URL to the SQLite database (or other SQL backend). Use the [Database Wizard](/database-wizard) for guided setup. See [Database Configuration](DatabaseConfiguration.md). | `sqlite:///./app/database.db`  |
-| `DB_POOL_SIZE`         | Number of persistent connections in the pool per worker (PostgreSQL/MySQL only; ignored for SQLite). | `10` |
-| `DB_MAX_OVERFLOW`      | Additional connections beyond `DB_POOL_SIZE` under burst load (PostgreSQL/MySQL only). | `20` |
-| `DB_POOL_TIMEOUT`      | Seconds to wait for a pool connection before raising `TimeoutError` (PostgreSQL/MySQL only). | `30` |
-| `DB_POOL_RECYCLE`      | Recycle connections after this many seconds to avoid stale connections (PostgreSQL/MySQL only). | `1800` |
 | `REDIS_URL`            | URL for Redis, used by Celery for broker & result store. | `redis://redis:6379/0`         |
 | `WORKDIR`              | Working directory for the application.                  | `/workdir`                     |
 | `GOTENBERG_URL`        | Gotenberg PDF processing URL.                           | `http://gotenberg:3000`        |
 | `EXTERNAL_HOSTNAME`    | The external hostname for the application.             | `docuelevate.example.com`      |
-| `PUBLIC_BASE_URL`      | Full public base URL including scheme (e.g., `https://docuelevate.example.com`). When set, overrides auto-detected URLs used for OAuth redirect URIs. **Required when your reverse proxy does not forward `X-Forwarded-Proto` headers.** | *(not set)* |
 | `ALLOW_FILE_DELETE`    | Enable file deletion in the web interface (`true`/`false`). | `true`                      |
 | `COMPLIANCE_ENABLED`   | Enable the compliance templates dashboard (GDPR, HIPAA, SOC 2). | `true`                      |
 | `FACTORY_RESET_ON_STARTUP` | Wipe all user data on every startup (demo/testing). | `false` |
@@ -85,28 +80,6 @@ Control how the web UI queues and paces file uploads to avoid overwhelming the b
 **Adaptive back-off**: The browser automatically slows down if the server responds with HTTP 429 (Too Many Requests). It reads the `Retry-After` header, pauses the queue for the indicated time, doubles the inter-slot delay (exponential back-off, capped at 30 s), and reduces concurrency to 1. After 5 consecutive successes it gradually recovers toward the configured values.
 
 **Example**: With `UPLOAD_CONCURRENCY=3` and `UPLOAD_QUEUE_DELAY_MS=500`, a directory of 5,000 files is uploaded ≈ 3 at a time with 500 ms pacing – the backend processes files at its own rate while the queue drains in the background without triggering API rate limits.
-
-### Per-User Upload Rate Limiting
-
-Server-side rate limiting that prevents any single user from overwhelming the system with bulk uploads. The limiter uses a Redis-backed sliding window and dynamically adjusts limits based on system health.
-
-| **Variable**                   | **Description**                                                                                                              | **Default** |
-|--------------------------------|------------------------------------------------------------------------------------------------------------------------------|-------------|
-| `UPLOAD_RATE_LIMIT_PER_USER`   | Maximum uploads allowed per user within the sliding window. Effective limit may be reduced under load.                       | `20`        |
-| `UPLOAD_RATE_LIMIT_WINDOW`     | Sliding window size in seconds.                                                                                              | `60`        |
-
-**Health-aware dynamic limiting**: The effective per-user limit is automatically reduced when the system is under heavy load:
-
-| **System condition**           | **Effective limit** | **Trigger**                    |
-|--------------------------------|---------------------|--------------------------------|
-| Normal                         | 100 % of base       | Queue < 50, CPU load normal    |
-| Moderate load                  | 50 % of base        | Queue 50–100 or CPU > 1.5×    |
-| High load                      | 25 % of base        | Queue 100–200 or CPU > 2×     |
-| Critical load                  | 10 % of base        | Queue > 200 or CPU > 3×       |
-
-When a user exceeds the limit, the server returns **HTTP 429 Too Many Requests** with a `Retry-After` header. The browser client (see *Client-Side Upload Throttling* above) automatically pauses and retries.
-
-> **Note**: The limiter fails open — if Redis is unavailable, all uploads are allowed through so that a monitoring outage never blocks document processing.
 
 ### File Upload Size Limits
 
@@ -406,7 +379,7 @@ Credentials are encrypted at rest using Fernet encryption.
 
 ### Social Login Providers
 
-Social login lets users sign in with their existing Google, Microsoft, Apple, Dropbox, or GitHub accounts. Each provider is independently enabled and configured. For detailed setup instructions see the [Social Login Setup Guide](SocialLoginSetup.md).
+Social login lets users sign in with their existing Google, Microsoft, Apple, or Dropbox accounts. Each provider is independently enabled and configured. For detailed setup instructions see the [Social Login Setup Guide](SocialLoginSetup.md).
 
 | **Variable** | **Description** | **Default** |
 |---|---|---|
@@ -425,33 +398,6 @@ Social login lets users sign in with their existing Google, Microsoft, Apple, Dr
 | `SOCIAL_AUTH_DROPBOX_ENABLED` | Enable Dropbox Sign-In. | `false` |
 | `SOCIAL_AUTH_DROPBOX_CLIENT_ID` | Dropbox OAuth2 App Key. | *(empty)* |
 | `SOCIAL_AUTH_DROPBOX_CLIENT_SECRET` | Dropbox OAuth2 App Secret. | *(empty)* |
-| `SOCIAL_AUTH_GITHUB_ENABLED` | Enable GitHub Sign-In. | `false` |
-| `SOCIAL_AUTH_GITHUB_CLIENT_ID` | GitHub OAuth2 client ID from GitHub Developer Settings. | *(empty)* |
-| `SOCIAL_AUTH_GITHUB_CLIENT_SECRET` | GitHub OAuth2 client secret. | *(empty)* |
-| `SSO_AUTO_LOGIN` | Automatically redirect to SSO login when authentication is required. | `false` |
-
-### SSO Providers
-
-| **Variable** | **Description** | **Default** |
-|---|---|---|
-| `SOCIAL_AUTH_KEYCLOAK_ENABLED` | Enable Keycloak SSO. | `false` |
-| `SOCIAL_AUTH_KEYCLOAK_CLIENT_ID` | Keycloak OAuth2 client ID. | *(empty)* |
-| `SOCIAL_AUTH_KEYCLOAK_CLIENT_SECRET` | Keycloak OAuth2 client secret. | *(empty)* |
-| `SOCIAL_AUTH_KEYCLOAK_SERVER_URL` | Keycloak server base URL (e.g. `https://keycloak.example.com`). | *(empty)* |
-| `SOCIAL_AUTH_KEYCLOAK_REALM` | Keycloak realm name. | *(empty)* |
-| `SOCIAL_AUTH_GENERIC_OAUTH2_ENABLED` | Enable a generic OAuth2 SSO provider. | `false` |
-| `SOCIAL_AUTH_GENERIC_OAUTH2_CLIENT_ID` | Generic OAuth2 client ID. | *(empty)* |
-| `SOCIAL_AUTH_GENERIC_OAUTH2_CLIENT_SECRET` | Generic OAuth2 client secret. | *(empty)* |
-| `SOCIAL_AUTH_GENERIC_OAUTH2_AUTHORIZE_URL` | Generic OAuth2 authorization URL. | *(empty)* |
-| `SOCIAL_AUTH_GENERIC_OAUTH2_TOKEN_URL` | Generic OAuth2 token endpoint URL. | *(empty)* |
-| `SOCIAL_AUTH_GENERIC_OAUTH2_USERINFO_URL` | Generic OAuth2 userinfo endpoint URL. | *(empty)* |
-| `SOCIAL_AUTH_GENERIC_OAUTH2_SCOPE` | Space-separated list of OAuth2 scopes. | `openid profile email` |
-| `SOCIAL_AUTH_GENERIC_OAUTH2_NAME` | Display name for the provider button. | `OAuth2` |
-| `SOCIAL_AUTH_SAML2_ENABLED` | Enable SAML2 SSO authentication. | `false` |
-| `SOCIAL_AUTH_SAML2_ENTITY_ID` | SAML2 Identity Provider Entity ID. | *(empty)* |
-| `SOCIAL_AUTH_SAML2_SSO_URL` | SAML2 Identity Provider SSO URL. | *(empty)* |
-| `SOCIAL_AUTH_SAML2_CERTIFICATE` | SAML2 Identity Provider X.509 certificate (PEM format). | *(empty)* |
-| `SOCIAL_AUTH_SAML2_NAME` | Display name for the SAML2 provider. | `SAML2` |
 
 ### Multi-User Mode
 
@@ -792,7 +738,7 @@ SECURITY_HEADER_CSP_VALUE="default-src 'self'; script-src 'self'; style-src 'sel
 SECURITY_HEADER_CSP_VALUE="default-src 'self'; script-src 'self' https://cdn.example.com; style-src 'self' 'unsafe-inline';"
 ```
 
-**Note:** The default policy includes `'unsafe-inline'` for compatibility with inline JavaScript. Tailwind CSS v3 is compiled at build time into a static file served from `'self'`, so no external style CDN is needed.
+**Note:** The default policy includes `'unsafe-inline'` for compatibility with Tailwind CSS and inline JavaScript. For stricter security, use nonces or hashes.
 
 #### X-Frame-Options
 
@@ -1402,9 +1348,6 @@ For detailed setup instructions, see the [Amazon S3 Setup Guide](AmazonS3Setup.m
 | `NOTIFY_ON_USER_SIGNUP`    | Send admin notification when a new user signs up (`True`/`False`, default `True`) |
 | `NOTIFY_ON_PLAN_CHANGE`    | Send admin notification when a user changes their subscription plan (`True`/`False`, default `True`) |
 | `NOTIFY_ON_PAYMENT_ISSUE`  | Send admin notification when a payment issue is reported for a user (`True`/`False`, default `True`) |
-| `TELEGRAM_ENABLED`         | Enable Telegram bot notifications. | `false` |
-| `TELEGRAM_BOT_TOKEN`       | Telegram Bot API token from @BotFather. | *(empty)* |
-| `TELEGRAM_CHAT_ID`         | Telegram chat ID to send notifications to. | *(empty)* |
 
 #### User-Event Notifications
 
@@ -1483,26 +1426,6 @@ Configurations are stored in the database and managed through the API (see [API 
 | `WEBHOOK_ENABLED`   | Enable or disable webhook delivery globally (`True`/`False`)    | `True`      |
 
 Webhook URLs, secrets, and subscribed events are configured per-webhook via the `/api/webhooks/` endpoints (admin access required). Each delivery includes an optional HMAC-SHA256 signature for verification and is retried with exponential backoff on failure.
-
-### Automation Hooks (Zapier / Make.com)
-
-Automation hooks enable integration with external automation platforms such as
-[Zapier](https://zapier.com) and [Make.com](https://make.com) (formerly Integromat).
-
-| **Variable**               | **Description**                                                                                | **Default** |
-|----------------------------|------------------------------------------------------------------------------------------------|-------------|
-| `AUTOMATION_HOOKS_ENABLED` | Enable or disable Zapier / Make.com automation hook subscriptions and delivery (`True`/`False`) | `True`      |
-
-When enabled, external platforms can:
-
-- **Subscribe** to DocuElevate events via `POST /api/automation/hooks/subscribe` (outgoing triggers)
-- **Send documents** to DocuElevate via `POST /api/automation/actions/upload` (incoming actions)
-- **Discover fields** via `GET /api/automation/triggers/sample/{event}` (Zapier field mapping)
-
-Automation hooks share the same event types as webhooks (`document.uploaded`, `document.processed`,
-`document.failed`, `user.signup`, `user.plan_changed`, `user.payment_issue`) and use a flat
-Zapier-compatible JSON payload format.  See the [API docs](API.md#automation-zapier--makecom) for
-endpoint details and payload examples.
 
 ### Backup & Restore
 
@@ -1605,8 +1528,6 @@ No additional configuration is required — the auto-fill uses the authenticated
 
 DocuElevate integrates with [Sentry](https://sentry.io) for real-time error tracking and performance monitoring.  See [SentrySetup.md](./SentrySetup.md) for a full setup guide.
 
-### Server-side (Python SDK)
-
 | Variable | Description | Default |
 |---|---|---|
 | `SENTRY_DSN` | Sentry DSN URL.  When set, error reporting and performance tracing are enabled automatically.  Leave blank to disable. | *(unset)* |
@@ -1615,33 +1536,18 @@ DocuElevate integrates with [Sentry](https://sentry.io) for real-time error trac
 | `SENTRY_PROFILES_SAMPLE_RATE` | Fraction of profiled transactions sent to Sentry (0.0 – 1.0).  Only active when traces > 0. | `0.0` |
 | `SENTRY_SEND_DEFAULT_PII` | Attach PII (IP addresses, user agents) to Sentry events.  Disabled by default for GDPR/CCPA compliance. | `false` |
 
-### Browser SDK (JavaScript)
-
-The Sentry Browser SDK is loaded automatically on every rendered page when `SENTRY_DSN` is set.  The same DSN is used for both server and browser — the DSN is a *public* key in Sentry's security model and is intentionally embedded in client-side code.
-
-| Variable | Description | Default |
-|---|---|---|
-| `SENTRY_JS_TRACES_SAMPLE_RATE` | Fraction of browser page-loads captured for client-side performance tracing (0.0 – 1.0). | `0.0` |
-| `SENTRY_JS_REPLAY_SESSION_SAMPLE_RATE` | Fraction of sessions recorded by [Sentry Session Replay](https://docs.sentry.io/product/session-replay/) (0.0 – 1.0). | `0.0` |
-| `SENTRY_JS_REPLAY_ON_ERROR_SAMPLE_RATE` | Fraction of error sessions captured with session replay context (0.0 – 1.0). | `0.1` |
-
 ```bash
-# Minimal example (server + browser)
+# Minimal example
 SENTRY_DSN=https://<key>@o<org>.ingest.sentry.io/<project>
 SENTRY_ENVIRONMENT=production
 
-# Optional server-side tuning
+# Optional tuning
 SENTRY_TRACES_SAMPLE_RATE=0.1
 SENTRY_PROFILES_SAMPLE_RATE=0.0
 SENTRY_SEND_DEFAULT_PII=false
-
-# Optional browser-side tuning
-SENTRY_JS_TRACES_SAMPLE_RATE=0.1
-SENTRY_JS_REPLAY_SESSION_SAMPLE_RATE=0.0
-SENTRY_JS_REPLAY_ON_ERROR_SAMPLE_RATE=0.1
 ```
 
-> **Note:** Sentry is completely opt-in — if `SENTRY_DSN` is not set, neither SDK is initialised and no data leaves your infrastructure.
+> **Note:** Sentry is completely opt-in — if `SENTRY_DSN` is not set, the SDK is never initialised and no data leaves your infrastructure.
 
 ## Duplicate Document Detection
 
@@ -1649,30 +1555,14 @@ DocuElevate detects and flags documents that share the same content, even if the
 
 ### Exact Duplicate Detection (SHA-256)
 
-When `ENABLE_DEDUPLICATION=True` (the default), each new document is hashed with SHA-256 before processing begins. If the hash matches an existing file record the upload is rejected immediately — no processing task is created, and the temporary file is removed from disk. The `/api/ui-upload` response returns `"status": "duplicate"` together with a `duplicate_of` object that identifies the original file.
-
-If the same file somehow reaches the Celery worker (e.g. via a watch-folder ingest) it is still caught there and stored as a duplicate (`is_duplicate=True`, `duplicate_of_id=<original_id>`) with no further processing.
+When `ENABLE_DEDUPLICATION=True` (the default), each new document is hashed with SHA-256 before processing begins. If the hash matches an existing file record the new document is stored as a duplicate (`is_duplicate=True`, `duplicate_of_id=<original_id>`) and no further processing is performed.
 
 | Variable | Description | Default |
 |---|---|---|
 | `ENABLE_DEDUPLICATION` | Hash-based exact duplicate detection on ingest. | `True` |
 | `SHOW_DEDUPLICATION_STEP` | Show the "Check for Duplicates" step in the processing timeline UI. | `True` |
 
-When the upload is an exact duplicate the `/api/ui-upload` response looks like:
-
-```json
-{
-  "status": "duplicate",
-  "original_filename": "invoice.pdf",
-  "stored_filename": "abc-123.pdf",
-  "duplicate_of": {
-    "duplicate_type": "exact",
-    "original_file_id": 42,
-    "original_filename": "invoice.pdf",
-    "message": "This file is an exact duplicate of an already-processed document. It has not been queued for processing again."
-  }
-}
-```
+An immediate duplicate warning is also included in the `/api/ui-upload` JSON response so the frontend can alert the user before the pipeline completes.
 
 ### Near-Duplicate Detection (Content Similarity)
 

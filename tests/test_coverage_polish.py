@@ -520,14 +520,14 @@ class TestURLUploadAdditionalCoverage:
         assert exc_info.value.status_code == 400
 
     def test_is_private_ip_unresolvable_hostname(self):
-        """Cover DNS resolution failure branch blocking unresolvable domains."""
+        """Cover DNS resolution failure branch (lines 67-72)."""
         import socket as _socket
 
         from app.utils.network import is_private_ip
 
         with patch("socket.getaddrinfo", side_effect=_socket.gaierror("nope")):
             result = is_private_ip("nonexistent.invalid.hostname.test")
-            assert result is True  # Fail securely by returning True
+            assert result is False
 
     def test_is_private_ip_hostname_resolves_to_private(self):
         """Cover branch where hostname resolves to a private IP (line 64-65)."""

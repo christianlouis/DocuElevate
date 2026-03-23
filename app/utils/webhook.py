@@ -145,8 +145,6 @@ def dispatch_webhook_event(event: str, data: dict[str, Any]) -> None:
     It delegates to :func:`deliver_webhook_task` (Celery) for each matching
     webhook so delivery happens asynchronously with automatic retries.
 
-    Also dispatches to automation hooks (Zapier / Make.com) if enabled.
-
     Args:
         event: Event name (must be in :data:`VALID_EVENTS`).
         data: Event-specific payload data.
@@ -158,23 +156,16 @@ def dispatch_webhook_event(event: str, data: dict[str, Any]) -> None:
     webhooks = get_active_webhooks_for_event(event)
     if not webhooks:
         logger.debug("No active webhooks for event %s", event)
-    else:
-        payload = build_payload(event, data)
+        return
 
-        # Import here to avoid circular dependency with celery_app
-        from app.tasks.webhook_tasks import deliver_webhook_task
+    payload = build_payload(event, data)
 
-        for wh in webhooks:
-            try:
-                deliver_webhook_task.delay(wh["url"], payload, wh["secret"])
-                logger.debug("Queued webhook delivery to %s for event %s", wh["url"], event)
-            except Exception as exc:
-                logger.error("Failed to queue webhook to %s: %s", wh["url"], exc)
+    # Import here to avoid circular dependency with celery_app
+    from app.tasks.webhook_tasks import deliver_webhook_task
 
-    # Also fan-out to Zapier / Make.com automation hooks
-    try:
-        from app.utils.automation_hooks import dispatch_automation_hooks
-
-        dispatch_automation_hooks(event, data)
-    except Exception as exc:
-        logger.error("Failed to dispatch automation hooks for event %s: %s", event, exc)
+    for wh in webhooks:
+        try:
+            deliver_webhook_task.delay(wh["url"], payload, wh["secret"])
+            logger.debug("Queued webhook delivery to %s for event %s", wh["url"], event)
+        except Exception as exc:
+            logger.error("Failed to queue webhook to %s: %s", wh["url"], exc)

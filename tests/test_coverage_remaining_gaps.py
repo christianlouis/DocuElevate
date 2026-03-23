@@ -69,9 +69,8 @@ class TestViewsBase:
             context = {"request": req}
             template_response_with_version("template.html", context)
 
-        args, kwargs = mock_orig.call_args
-        context = kwargs.get("context", {})
-        assert context.get("csrf_token") == "my-csrf"
+        args, _ = mock_orig.call_args
+        assert args[1].get("csrf_token") == "my-csrf"
 
     def test_kwargs_context_no_request(self):
         """Test kwargs context path when request is not in context."""

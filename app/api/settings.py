@@ -55,12 +55,6 @@ class SettingUpdate(BaseModel):
     value: Optional[str] = Field(None, description="Setting value (None to delete)")
 
 
-class SettingValueUpdate(BaseModel):
-    """Model for updating a setting value by key (key is provided in the URL path)."""
-
-    value: Optional[str] = Field(None, description="Setting value (None to delete)")
-
-
 class SettingResponse(BaseModel):
     """Model for setting response"""
 
@@ -318,62 +312,6 @@ async def update_setting(
             "restart_required": restart_required,
             "key": key,
             "value": setting.value,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating setting {key}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update setting: {key}",
-        )
-
-
-@router.put("/{key}")
-async def put_setting(
-    key: str,
-    body: SettingValueUpdate,
-    request: Request,
-    db: DbSession,
-    admin: AdminUser,
-):
-    """
-    Update a specific setting by key (RESTful PUT).
-
-    Accepts a body with only ``value``; the key is taken from the URL path.
-    This is the endpoint used by the admin Connections wizard.
-    Admin only.
-    """
-    validate_setting_key(key)
-    try:
-        if body.value is not None:
-            is_valid, error_message = validate_setting_value(key, body.value)
-            if not is_valid:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_message)
-
-        user = request.session.get("user", {}) if hasattr(request, "session") else {}
-        changed_by = (
-            user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "admin"
-        )
-
-        success = save_setting_to_db(db, key, body.value, changed_by=changed_by)
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to save setting to database",
-            )
-
-        notify_settings_updated()
-
-        metadata = get_setting_metadata(key)
-        restart_required = metadata.get("restart_required", False)
-
-        return {
-            "success": True,
-            "message": f"Setting '{key}' updated successfully",
-            "restart_required": restart_required,
-            "key": key,
-            "value": body.value,
         }
     except HTTPException:
         raise

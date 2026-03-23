@@ -44,9 +44,6 @@ async def onedrive_setup_page(
                     cfg = {}
             # Support both "folder_path" (WATCH_FOLDER / ONEDRIVE destination)
             folder_path = cfg.get("folder_path", cfg.get("folder", ""))
-            # Provide system-wide app credentials when available so users can
-            # authorize without registering their own Azure/OneDrive app.
-            has_system_credentials = bool(settings.onedrive_client_id and settings.onedrive_client_secret)
             return templates.TemplateResponse(
                 "onedrive.html",
                 {
@@ -57,12 +54,11 @@ async def onedrive_setup_page(
                     "integration_name": integration.name,
                     "integration_type": integration.integration_type,
                     "folder_path": folder_path,
-                    "has_system_credentials": has_system_credentials,
-                    "client_id": bool(settings.onedrive_client_id) if has_system_credentials else False,
-                    "client_id_value": settings.onedrive_client_id or "" if has_system_credentials else "",
-                    "client_secret": bool(settings.onedrive_client_secret) if has_system_credentials else False,
-                    "client_secret_value": (settings.onedrive_client_secret or "" if has_system_credentials else ""),
-                    "tenant_id": settings.onedrive_tenant_id or "common",
+                    "client_id": False,
+                    "client_id_value": "",
+                    "client_secret": False,
+                    "client_secret_value": "",
+                    "tenant_id": "common",
                     "refresh_token": False,
                     "refresh_token_value": "",
                 },
@@ -79,7 +75,6 @@ async def onedrive_setup_page(
             "request": request,
             "user_mode": False,
             "is_configured": is_configured,
-            "has_system_credentials": bool(settings.onedrive_client_id and settings.onedrive_client_secret),
             "client_id": bool(settings.onedrive_client_id),
             "client_id_value": settings.onedrive_client_id or "",
             "client_secret": bool(settings.onedrive_client_secret),

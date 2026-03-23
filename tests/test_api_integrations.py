@@ -1,7 +1,5 @@
 """Tests for the per-user integrations API (app/api/integrations.py)."""
 
-import unittest.mock
-
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -889,92 +887,15 @@ class TestConnectionTestEndpoint:
     def test_test_unsupported_type(self, int_client):
         """Unsupported integration types return a helpful non-error message."""
         payload = {
-            "integration_type": "FTP",
+            "integration_type": "DROPBOX",
             "config": {},
-            "credentials": {"username": "user", "password": "pass"},
+            "credentials": {"token": "abc"},
         }
         resp = int_client.post("/api/integrations/test", json=payload)
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is False
         assert "not yet supported" in data["message"]
-
-    def test_test_dropbox_missing_refresh_token(self, int_client):
-        """Dropbox test with missing refresh_token returns failure."""
-        payload = {
-            "integration_type": "DROPBOX",
-            "config": {},
-            "credentials": {"app_key": "key", "app_secret": "secret"},
-        }
-        resp = int_client.post("/api/integrations/test", json=payload)
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is False
-        assert "refresh_token" in data["message"].lower()
-
-    def test_test_dropbox_missing_app_key(self, int_client):
-        """Dropbox test with missing app_key/app_secret returns failure."""
-        payload = {
-            "integration_type": "DROPBOX",
-            "config": {},
-            "credentials": {"refresh_token": "rtoken"},
-        }
-        resp = int_client.post("/api/integrations/test", json=payload)
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is False
-        assert "app_key" in data["message"].lower()
-
-    def test_test_dropbox_invalid_credentials(self, int_client):
-        """Dropbox test with bad credentials returns an auth failure."""
-        from unittest.mock import MagicMock, patch
-
-        import dropbox.exceptions as dbx_exc
-
-        with patch("app.api.integrations.dbx_lib") as mock_dbx:
-            mock_instance = MagicMock()
-            mock_dbx.Dropbox.return_value = mock_instance
-            mock_instance.users_get_current_account.side_effect = dbx_exc.AuthError("req_id", MagicMock())
-            payload = {
-                "integration_type": "DROPBOX",
-                "config": {},
-                "credentials": {
-                    "app_key": "bad_key",
-                    "app_secret": "bad_secret",
-                    "refresh_token": "bad_token",
-                },
-            }
-            resp = int_client.post("/api/integrations/test", json=payload)
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["success"] is False
-            assert "authentication failed" in data["message"].lower()
-
-    def test_test_dropbox_success(self, int_client):
-        """Dropbox test with valid (mocked) credentials returns success."""
-        from unittest.mock import MagicMock, patch
-
-        with patch("app.api.integrations.dbx_lib") as mock_dbx:
-            mock_instance = MagicMock()
-            mock_dbx.Dropbox.return_value = mock_instance
-            mock_account = MagicMock()
-            mock_account.name.display_name = "Test User"
-            mock_instance.users_get_current_account.return_value = mock_account
-
-            payload = {
-                "integration_type": "DROPBOX",
-                "config": {},
-                "credentials": {
-                    "app_key": "valid_key",
-                    "app_secret": "valid_secret",
-                    "refresh_token": "valid_token",
-                },
-            }
-            resp = int_client.post("/api/integrations/test", json=payload)
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["success"] is True
-            assert "dropbox connection successful" in data["message"].lower()
 
     def test_test_invalid_type_returns_400(self, int_client):
         """Invalid integration_type returns 400."""
@@ -1062,69 +983,6 @@ class TestConnectionTestEndpoint:
         data = resp.json()
         assert data["success"] is False
         assert "scheme" in data["message"].lower()
-
-    @unittest.mock.patch("httpx.request")
-    def test_test_webdav_success(self, mock_request, int_client):
-        """WebDAV test succeeds with valid credentials and a valid status code."""
-        mock_response = unittest.mock.MagicMock()
-        mock_response.status_code = 207  # Typical WebDAV success for PROPFIND
-        mock_request.return_value = mock_response
-
-        payload = {
-            "integration_type": "WEBDAV",
-            "config": {"url": "https://example.com/webdav"},
-            "credentials": {"username": "user1", "password": "password123"},
-        }
-        resp = int_client.post("/api/integrations/test", json=payload)
-
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is True
-
-        mock_request.assert_called_once_with(
-            "PROPFIND",
-            "https://example.com/webdav",
-            auth=("user1", "password123"),
-            headers={"Depth": "0"},
-            timeout=10.0,
-            follow_redirects=False,
-        )
-
-    @unittest.mock.patch("httpx.request")
-    def test_test_webdav_failure_status(self, mock_request, int_client):
-        """WebDAV test fails if the server returns a 4xx or 5xx status code."""
-        mock_response = unittest.mock.MagicMock()
-        mock_response.status_code = 401
-        mock_request.return_value = mock_response
-
-        payload = {
-            "integration_type": "WEBDAV",
-            "config": {"url": "https://example.com/webdav"},
-            "credentials": {"username": "user1", "password": "wrong"},
-        }
-        resp = int_client.post("/api/integrations/test", json=payload)
-
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is False
-        assert "401" in data["message"]
-
-    @unittest.mock.patch("httpx.request")
-    def test_test_webdav_exception(self, mock_request, int_client):
-        """WebDAV test fails gracefully if an exception occurs during the request."""
-        mock_request.side_effect = Exception("Connection error")
-
-        payload = {
-            "integration_type": "WEBDAV",
-            "config": {"url": "https://example.com/webdav"},
-            "credentials": {},
-        }
-        resp = int_client.post("/api/integrations/test", json=payload)
-
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["success"] is False
-        assert "failed" in data["message"].lower()
 
 
 # ---------------------------------------------------------------------------

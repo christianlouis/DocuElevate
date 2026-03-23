@@ -34,7 +34,7 @@ Use this checklist to track readiness before going live.
 - [ ] **Redis** — Running and accessible only from internal network
 - [ ] **Meilisearch** — Running and accessible only from internal network
 - [ ] **Worker replicas** — At least 2 workers configured for redundancy
-- [ ] **Monitoring** — `/api/diagnostic/health` polled by uptime checker
+- [ ] **Monitoring** — `/api/health` polled by uptime checker
 - [ ] **Backups** — Automated backup of database, workdir, and Meilisearch data
 - [ ] **Log retention** — Logs shipped to a persistent store or aggregator
 - [ ] **Secrets management** — API keys not committed to source control
@@ -157,7 +157,7 @@ Recommended headers to configure at the proxy level:
 
 #### Content-Security-Policy Notes
 
-DocuElevate's frontend uses Tailwind CSS v3 compiled at Docker build time. No external CDN requests are needed for CSS. In production, your CSP does not need to allow any external style sources beyond your own static file origin.  A starting point:
+DocuElevate's frontend uses Tailwind CSS loaded from CDN in development mode.  In production, ensure your CSP allows loading scripts and styles from your configured static file origin.  A starting point:
 
 ```
 Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;
@@ -285,23 +285,21 @@ For SSO/OIDC (Authentik, Keycloak, Auth0, etc.) see the [Authentication Setup Gu
 
 ### Docker Compose
 
-Scale workers independently:
+Use the `deploy.replicas` setting (requires Docker Swarm mode) or simply run multiple workers:
+
+```yaml
+worker:
+  deploy:
+    replicas: 3
+```
+
+Or scale after deployment:
 
 ```bash
-docker compose up -d --scale worker=3
+docker-compose up -d --scale worker=3
 ```
 
 Each worker processes tasks from the Celery queue independently.  Ensure the shared `workdir` volume is accessible from all worker containers.
-
-> **Important:** The `beat` service (Celery Beat scheduler) must always run as exactly **one** instance.  It is defined as a dedicated service in `docker-compose.yaml` with a fixed `container_name`.  Do not scale it.
-
-### Scaling the API
-
-API pods are fully stateless (sessions use encrypted cookies, not server-side state) and can be scaled behind a load balancer:
-
-```bash
-docker compose up -d --scale api=3
-```
 
 ### Kubernetes (Helm)
 
@@ -341,32 +339,11 @@ celery -A app.celery_worker worker -Q default,celery --concurrency=2
 
 ### Health Check Endpoint
 
-DocuElevate exposes three health-related endpoints:
-
-| Endpoint | Auth | Purpose |
-|----------|------|---------|
-| `GET /api/diagnostic/healthz/live` | None | Lightweight liveness probe — returns 200 if the process is running |
-| `GET /api/diagnostic/healthz/ready` | None | Readiness probe — checks database and Redis (503 when DB is down) |
-| `GET /api/diagnostic/health` | Required | Full status for monitoring dashboards (Grafana, Uptime Kuma) |
-
-For **Kubernetes probes**, use the unauthenticated endpoints:
-
-```yaml
-livenessProbe:
-  httpGet:
-    path: /api/diagnostic/healthz/live
-    port: 8000
-readinessProbe:
-  httpGet:
-    path: /api/diagnostic/healthz/ready
-    port: 8000
-```
-
-For **uptime monitors** (Uptime Kuma, Grafana, etc.), use the authenticated endpoint:
+DocuElevate exposes `/api/health` for readiness probing.  Configure your uptime monitor to poll this endpoint:
 
 ```bash
-curl http://docuelevate.example.com/api/diagnostic/health
-# Expected: {"status": "healthy", ...}
+curl http://docuelevate.example.com/api/health
+# Expected: {"status": "ok", ...}
 ```
 
 Set `UPTIME_KUMA_URL` to your Uptime Kuma push URL for heartbeat monitoring:
@@ -525,4 +502,4 @@ For a dedicated Kubernetes deployment guide, including architecture diagrams, PV
 
 - **Image Pull Policy**: Use `IfNotPresent` in production with pinned image tags (not `latest`) for reproducible deployments.
 
-- **Liveness & Readiness Probes**: Already configured in the Helm chart via unauthenticated endpoints (`/api/diagnostic/healthz/live` and `/api/diagnostic/healthz/ready`).  Verify they are tuned to your startup time.
+- **Liveness & Readiness Probes**: Already configured in the Helm chart via `/api/health`.  Verify they are tuned to your startup time.

@@ -430,8 +430,8 @@ class TestLoginFunction:
             # Verify TemplateResponse was called with correct context
             mock_templates.TemplateResponse.assert_called_once()
             call_args = mock_templates.TemplateResponse.call_args
-            assert call_args[0][1] == "login.html"
-            context = call_args.kwargs["context"]
+            assert call_args[0][0] == "login.html"
+            context = call_args[0][1]
             assert context["error"] == "Test error"
             assert context["message"] == "Test message"
 
@@ -450,7 +450,7 @@ class TestLoginFunction:
 
             mock_templates.TemplateResponse.assert_called_once()
             call_args = mock_templates.TemplateResponse.call_args
-            context = call_args.kwargs["context"]
+            context = call_args[0][1]
             assert context["error"] is None
             assert context["message"] is None
 
