@@ -1,7 +1,10 @@
-import pytest
-from unittest.mock import patch, MagicMock
 import os
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 from app.tasks.upload_to_nextcloud import upload_to_nextcloud
+
 
 @pytest.fixture
 def mock_settings():
@@ -14,6 +17,7 @@ def mock_settings():
         mock.http_request_timeout = 30
         yield mock
 
+
 @pytest.fixture
 def mock_requests():
     with patch("app.tasks.upload_to_nextcloud.requests") as mock:
@@ -25,6 +29,7 @@ def mock_requests():
         put_response.status_code = 201
         mock.put.return_value = put_response
         yield mock
+
 
 def test_upload_to_nextcloud_url_construction(mock_settings, mock_requests):
     file_path = "/tmp/workdir/test_file.txt"
