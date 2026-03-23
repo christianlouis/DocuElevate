@@ -15,6 +15,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - **changelog**: Update changelog [skip ci]
+  ([`0497fbb`](https://github.com/christianlouis/DocuElevate/commit/0497fbbbad71fd728e528498508bbfc7802dab70))
+
+- **changelog**: Update changelog [skip ci]
+  ([`45d3ac8`](https://github.com/christianlouis/DocuElevate/commit/45d3ac8cf07d39d49930dd6866f76e6015067b08))
+
+### Testing
+
+- Add assertions for task enqueuing parameters
+  ([`eeae47d`](https://github.com/christianlouis/DocuElevate/commit/eeae47ddec01339421e503ba484157e798750b8a))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
   ([`45d3ac8`](https://github.com/christianlouis/DocuElevate/commit/45d3ac8cf07d39d49930dd6866f76e6015067b08))
 
 ### Testing
