@@ -28,9 +28,10 @@ End users authorize their own Dropbox integration from the **Integrations** dash
 1. Navigate to `/integrations` and click **+ Add Destination** (or **+ Add Source** for Watch Folder).
 2. Create a Dropbox destination integration (or a Watch Folder with `source_type = dropbox`).
 3. Click the **Authorize** button next to the integration — it links directly to the OAuth wizard pre-loaded with your integration's configuration.
-4. Enter your Dropbox App Key and App Secret in the wizard (or use the global admin credentials if pre-configured).
+4. If the administrator has configured system-wide Dropbox app credentials (`DROPBOX_APP_KEY` / `DROPBOX_APP_SECRET`), the wizard defaults to using them — no need to register your own Dropbox app. Uncheck the toggle to use custom credentials if needed.
 5. Click **Start Authentication Flow**, authorize access in Dropbox, and the refresh token is automatically saved to your personal integration record.
-6. The page redirects back to `/integrations` on success. Re-authorization is available at any time via the **Re-Authorize** button.
+6. After authorization, an interactive **folder browser** lets you select the target folder directly from your Dropbox — no need to manually type folder paths.
+7. The page redirects to `/integrations` on success. Re-authorization is available at any time via the **Re-Authorize** button.
 
 > **Note:** Your credentials are stored encrypted per-integration and are never mixed with other users' data. Each user can have multiple Dropbox integrations with independent tokens.
 
@@ -128,7 +129,31 @@ If you encounter issues with Dropbox integration:
 1. **Authentication Errors**: Make sure your App Key and App Secret are correct
 2. **Token Expired**: Click "Refresh Token" button on the setup page to obtain a new token
 3. **Folder Permissions**: Ensure your app has the correct permissions enabled for file operations
-4. **Invalid Redirect URI**: Verify that the redirect URI in your app settings matches the one used in the authentication flow
+4. **Invalid Redirect URI**: See section below for the most common cause and fix.
 5. **Rate Limiting**: Dropbox API has rate limits; if exceeded, wait and try again
+
+### Fixing "Invalid redirect_uri" Error
+
+This error appears on the Dropbox authorization page when the redirect URI in the OAuth request does not match any URI registered in your Dropbox app console.
+
+**Most common cause**: The application is deployed behind a reverse proxy (Traefik, Nginx, Caddy) that does **not** forward the `X-Forwarded-Proto: https` header to DocuElevate. Without this header, the server cannot determine that it is being accessed over HTTPS and may construct an `http://` redirect URI, while the registered URI in Dropbox is `https://`.
+
+**Fix**:
+
+Option 1 – Configure your proxy to forward `X-Forwarded-Proto`:
+
+```nginx
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
+Option 2 – Set `PUBLIC_BASE_URL` in your environment (recommended for most deployments):
+
+```bash
+PUBLIC_BASE_URL=https://docuelevate.example.com
+```
+
+When `PUBLIC_BASE_URL` is set, DocuElevate uses it directly for all OAuth redirect URIs instead of trying to infer the scheme from request headers. This is the most reliable option.
+
+After setting `PUBLIC_BASE_URL`, ensure the Dropbox app console redirect URI matches exactly (e.g., `https://docuelevate.example.com/dropbox-callback`). The setup wizard at `/dropbox-setup` will show you the exact URI to register.
 
 For more general configuration issues, see the [Configuration Troubleshooting Guide](ConfigurationTroubleshooting.md).

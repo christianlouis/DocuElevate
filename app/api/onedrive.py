@@ -3,10 +3,10 @@ OneDrive API endpoints
 """
 
 import logging
-import os
 from datetime import datetime, timedelta
 from typing import Annotated, Optional
 
+import httpx
 import requests
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.auth import require_login
 from app.config import settings
 from app.database import get_db
+from app.utils.env_utils import update_env_file
 from app.utils.oauth_helper import exchange_oauth_token
 from app.utils.settings_service import save_setting_to_db
 from app.utils.settings_sync import notify_settings_updated
@@ -56,6 +57,7 @@ async def exchange_onedrive_token(
     # Return just what's needed by the frontend
     return {
         "refresh_token": token_data["refresh_token"],
+        "access_token": token_data.get("access_token", ""),
         "expires_in": token_data.get("expires_in", 3600),
     }
 
@@ -92,17 +94,18 @@ async def test_onedrive_token(request: Request):
             "scope": "offline_access Files.ReadWrite",
         }
 
-        response = requests.post(token_url, data=refresh_data, timeout=settings.http_request_timeout)
+        async with httpx.AsyncClient(timeout=settings.http_request_timeout) as client:
+            response = await client.post(token_url, data=refresh_data)
 
-        if response.status_code != 200:
-            logger.error(f"Failed to refresh OneDrive token: {response.text}")
-            return {
-                "status": "error",
-                "message": "Refresh token has expired or is invalid",
-                "needs_reauth": True,
-            }
+            if response.status_code != 200:
+                logger.error(f"Failed to refresh OneDrive token: {response.text}")
+                return {
+                    "status": "error",
+                    "message": "Refresh token has expired or is invalid",
+                    "needs_reauth": True,
+                }
 
-        token_data = response.json()
+            token_data = response.json()
         access_token = token_data.get("access_token")
         expires_in = token_data.get("expires_in", 3600)  # Default to 1 hour if not specified
 
@@ -115,32 +118,7 @@ async def test_onedrive_token(request: Request):
             settings.onedrive_refresh_token = new_refresh_token
 
             # Also try to update .env file if it exists
-            try:
-                env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
-                if os.path.exists(env_path):
-                    with open(env_path, "r") as f:
-                        env_lines = f.readlines()
-
-                    updated_lines = []
-                    updated = False
-
-                    for line in env_lines:
-                        if line.startswith("ONEDRIVE_REFRESH_TOKEN="):
-                            updated_lines.append(f"ONEDRIVE_REFRESH_TOKEN={new_refresh_token}\n")
-                            updated = True
-                        else:
-                            updated_lines.append(line)
-
-                    if not updated:
-                        updated_lines.append(f"ONEDRIVE_REFRESH_TOKEN={new_refresh_token}\n")
-
-                    with open(env_path, "w") as f:
-                        f.writelines(updated_lines)
-
-                    logger.info("Updated refresh token in .env file")
-
-            except Exception as e:
-                logger.warning(f"Failed to update refresh token in .env file: {e}")
+            update_env_file({"ONEDRIVE_REFRESH_TOKEN": new_refresh_token})
 
             # Persist the rotated refresh token to the database
             try:
@@ -164,17 +142,18 @@ async def test_onedrive_token(request: Request):
         user_info_url = "https://graph.microsoft.com/v1.0/me"
         headers = {"Authorization": f"Bearer {access_token}"}
 
-        user_response = requests.get(user_info_url, headers=headers, timeout=settings.http_request_timeout)
+        async with httpx.AsyncClient(timeout=settings.http_request_timeout) as client:
+            user_response = await client.get(user_info_url, headers=headers)
 
-        if user_response.status_code != 200:
-            logger.error(f"OneDrive token test failed: {user_response.status_code} {user_response.text}")
-            return {
-                "status": "error",
-                "message": f"Token validation failed with status {user_response.status_code}: {user_response.text}",
-            }
+            if user_response.status_code != 200:
+                logger.error(f"OneDrive token test failed: {user_response.status_code} {user_response.text}")
+                return {
+                    "status": "error",
+                    "message": f"Token validation failed with status {user_response.status_code}: {user_response.text}",
+                }
 
-        # Get user info
-        user_info = user_response.json()
+            # Get user info
+            user_info = user_response.json()
         display_name = user_info.get("displayName", "Unknown user")
         email = user_info.get("userPrincipalName", "Unknown email")
 
@@ -204,6 +183,102 @@ async def test_onedrive_token(request: Request):
     except Exception as e:
         logger.exception(f"Unexpected error testing OneDrive token: {str(e)}")
         return {"status": "error", "message": f"Connection error: {str(e)}"}
+
+
+@router.post("/onedrive/list-folders")
+@require_login
+async def list_onedrive_folders(
+    request: Request,
+    access_token: Annotated[str, Form(...)],
+    path: Annotated[str, Form()] = "",
+):
+    """
+    List folders in a OneDrive account for the directory selector.
+
+    Accepts an OAuth access token (short-lived) and a path to list.
+    Returns a flat list of folder entries under the given path.
+    """
+    try:
+        folder_path = path.strip().strip("/")
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+        }
+
+        # Build the Graph API URL for listing children
+        if not folder_path or folder_path == "root":
+            url = "https://graph.microsoft.com/v1.0/me/drive/root/children"
+        else:
+            url = f"https://graph.microsoft.com/v1.0/me/drive/root:/{folder_path}:/children"
+
+        # Only request folders and minimal fields
+        params = {
+            "$filter": "folder ne null",
+            "$select": "name,id,parentReference,folder",
+            "$top": "200",
+        }
+
+        response = requests.get(
+            url,
+            headers=headers,
+            params=params,
+            timeout=settings.http_request_timeout,
+        )
+
+        if response.status_code == 401:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Access token is invalid or expired. Please re-authorize.",
+            )
+
+        if response.status_code != 200:
+            logger.error(f"OneDrive list children failed: {response.status_code} {response.text}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to list OneDrive folders: {response.text}",
+            )
+
+        data = response.json()
+        folders = []
+        for item in data.get("value", []):
+            if "folder" in item:
+                parent_path = ""
+                if item.get("parentReference", {}).get("path"):
+                    # parentReference.path looks like /drive/root:/some/path
+                    raw_parent = item["parentReference"]["path"]
+                    prefix = "/drive/root:"
+                    if raw_parent.startswith(prefix):
+                        parent_path = raw_parent[len(prefix) :]
+                    elif raw_parent == "/drive/root":
+                        parent_path = ""
+
+                item_path = f"{parent_path}/{item['name']}" if parent_path else f"/{item['name']}"
+
+                folders.append(
+                    {
+                        "name": item["name"],
+                        "path": item_path,
+                        "id": item.get("id", ""),
+                        "child_count": item.get("folder", {}).get("childCount", 0),
+                    }
+                )
+
+        # Sort folders alphabetically
+        folders.sort(key=lambda f: f["name"].lower())
+
+        return {
+            "folders": folders,
+            "path": f"/{folder_path}" if folder_path else "/",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error listing OneDrive folders: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list folders: {str(e)}",
+        )
 
 
 def format_time_remaining(time_delta):
@@ -246,75 +321,26 @@ async def save_onedrive_settings(
             user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "wizard"
         )
 
-        # Best-effort .env file write
-        try:
-            env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
-            if not os.path.exists(env_path):
-                logger.warning(f".env file not found at {env_path}, skipping file write")
-            else:
-                logger.info(f"Updating OneDrive settings in {env_path}")
+        # Build settings dictionary mapped to database/memory keys
+        onedrive_settings = {
+            "onedrive_refresh_token": refresh_token,
+            "onedrive_client_id": client_id,
+            "onedrive_client_secret": client_secret,
+            "onedrive_tenant_id": tenant_id,
+            "onedrive_folder_path": folder_path,
+        }
 
-                with open(env_path, "r") as f:
-                    env_lines = f.readlines()
+        # Filter out None values
+        onedrive_settings = {k: v for k, v in onedrive_settings.items() if v is not None}
 
-                onedrive_settings = {"ONEDRIVE_REFRESH_TOKEN": refresh_token}
-                if client_id:
-                    onedrive_settings["ONEDRIVE_CLIENT_ID"] = client_id
-                if client_secret:
-                    onedrive_settings["ONEDRIVE_CLIENT_SECRET"] = client_secret
-                if tenant_id:
-                    onedrive_settings["ONEDRIVE_TENANT_ID"] = tenant_id
-                if folder_path:
-                    onedrive_settings["ONEDRIVE_FOLDER_PATH"] = folder_path
+        # Best-effort .env file write using the new utility
+        env_settings = {k.upper(): v for k, v in onedrive_settings.items()}
+        update_env_file(env_settings)
 
-                updated = set()
-                new_env_lines = []
-                for line in env_lines:
-                    stripped_line = line.rstrip()
-                    is_updated = False
-                    for key, value in onedrive_settings.items():
-                        if stripped_line.startswith(f"{key}=") or stripped_line.startswith(f"# {key}="):
-                            new_env_lines.append(f"{key}={value}")
-                            updated.add(key)
-                            is_updated = True
-                            break
-                    if not is_updated:
-                        new_env_lines.append(stripped_line)
-
-                for key, value in onedrive_settings.items():
-                    if key not in updated:
-                        new_env_lines.append(f"{key}={value}")
-
-                with open(env_path, "w") as f:
-                    f.write("\n".join(new_env_lines) + "\n")
-
-                logger.info("Successfully updated OneDrive settings in .env file")
-        except Exception as env_err:
-            logger.warning(f"Failed to write .env file (non-fatal): {env_err}")
-
-        # Update the settings in memory
-        if refresh_token:
-            settings.onedrive_refresh_token = refresh_token
-        if client_id:
-            settings.onedrive_client_id = client_id
-        if client_secret:
-            settings.onedrive_client_secret = client_secret
-        if tenant_id:
-            settings.onedrive_tenant_id = tenant_id
-        if folder_path:
-            settings.onedrive_folder_path = folder_path
-
-        # Persist to database (primary)
-        if refresh_token:
-            save_setting_to_db(db, "onedrive_refresh_token", refresh_token, changed_by=changed_by)
-        if client_id:
-            save_setting_to_db(db, "onedrive_client_id", client_id, changed_by=changed_by)
-        if client_secret:
-            save_setting_to_db(db, "onedrive_client_secret", client_secret, changed_by=changed_by)
-        if tenant_id:
-            save_setting_to_db(db, "onedrive_tenant_id", tenant_id, changed_by=changed_by)
-        if folder_path:
-            save_setting_to_db(db, "onedrive_folder_path", folder_path, changed_by=changed_by)
+        # Update in-memory settings and persist to database dynamically
+        for key, value in onedrive_settings.items():
+            setattr(settings, key, value)
+            save_setting_to_db(db, key, value, changed_by=changed_by)
 
         notify_settings_updated()
 

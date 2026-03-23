@@ -39,6 +39,50 @@ SETTING_METADATA = {
         "required": True,
         "restart_required": True,
     },
+    "db_pool_size": {
+        "category": "Core",
+        "description": (
+            "Number of persistent database connections kept in the pool per worker process. "
+            "Ignored for SQLite (which uses NullPool). Default: 10."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_max_overflow": {
+        "category": "Core",
+        "description": (
+            "Additional database connections allowed beyond db_pool_size under burst load. "
+            "Ignored for SQLite. Default: 20."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_pool_timeout": {
+        "category": "Core",
+        "description": (
+            "Seconds to wait for a database connection from the pool before raising a TimeoutError. "
+            "Ignored for SQLite. Default: 30."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "db_pool_recycle": {
+        "category": "Core",
+        "description": (
+            "Recycle (close and reopen) database connections after this many seconds "
+            "to avoid stale connections. Ignored for SQLite. Default: 1800."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
     "workdir": {
         "category": "Core",
         "description": "Working directory for file storage and processing",
@@ -53,6 +97,18 @@ SETTING_METADATA = {
         "type": "string",
         "sensitive": False,
         "required": True,  # Required for OAuth redirects and external URLs
+        "restart_required": True,
+    },
+    "public_base_url": {
+        "category": "Core",
+        "description": (
+            "Full public base URL including scheme (e.g., https://docuelevate.example.com). "
+            "When set, overrides auto-detected URLs for OAuth redirect URIs. "
+            "Required when behind a reverse proxy that does not forward X-Forwarded-Proto."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
         "restart_required": True,
     },
     "debug": {
@@ -134,6 +190,38 @@ SETTING_METADATA = {
         "required": True,  # Required when auth_enabled=True (validated in config.py)
         "restart_required": True,
     },
+    "session_lifetime_days": {
+        "category": "Authentication",
+        "description": "Session lifetime in days (default 30). Determines how long a user stays logged in.",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "session_lifetime_custom_days": {
+        "category": "Authentication",
+        "description": "Override session_lifetime_days with a custom value. Takes precedence when set.",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "qr_login_enabled": {
+        "category": "Authentication",
+        "description": "Enable QR code-based login for mobile device authentication.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "qr_login_challenge_ttl_seconds": {
+        "category": "Authentication",
+        "description": "Time-to-live in seconds for QR login challenges (default 120).",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "admin_username": {
         "category": "Authentication",
         "description": "Admin username for local authentication",
@@ -182,6 +270,17 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "sso_auto_login": {
+        "category": "Authentication",
+        "description": (
+            "Automatically redirect to SSO login when authentication is required. "
+            "Skips the login page and sends users directly to the configured SSO provider."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Social Login Providers
     "social_auth_google_enabled": {
         "category": "Social Login",
@@ -209,6 +308,20 @@ SETTING_METADATA = {
         "description": "Google OAuth2 client secret from the Google Cloud Console.",
         "type": "string",
         "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_google_use_global_credentials": {
+        "category": "Social Login",
+        "description": (
+            "When True, Google social login uses the global GOOGLE_DRIVE_CLIENT_ID / "
+            "GOOGLE_DRIVE_CLIENT_SECRET credentials (the Google Drive OAuth integration) "
+            "instead of requiring separate SOCIAL_AUTH_GOOGLE_CLIENT_ID / "
+            "SOCIAL_AUTH_GOOGLE_CLIENT_SECRET values. "
+            "Requires SOCIAL_AUTH_GOOGLE_ENABLED=True and global Google Drive OAuth credentials to be set."
+        ),
+        "type": "boolean",
+        "sensitive": False,
         "required": False,
         "restart_required": True,
     },
@@ -250,6 +363,20 @@ SETTING_METADATA = {
             "restrict to a single organization."
         ),
         "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_microsoft_use_global_credentials": {
+        "category": "Social Login",
+        "description": (
+            "When True, Microsoft social login uses the global ONEDRIVE_CLIENT_ID / "
+            "ONEDRIVE_CLIENT_SECRET credentials (the OneDrive integration credentials) "
+            "instead of requiring separate SOCIAL_AUTH_MICROSOFT_CLIENT_ID / "
+            "SOCIAL_AUTH_MICROSOFT_CLIENT_SECRET values. "
+            "Requires SOCIAL_AUTH_MICROSOFT_ENABLED=True and global OneDrive credentials to be set."
+        ),
+        "type": "boolean",
         "sensitive": False,
         "required": False,
         "restart_required": True,
@@ -302,6 +429,19 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "social_auth_dropbox_use_global_credentials": {
+        "category": "Social Login",
+        "description": (
+            "When True, Dropbox social login uses the global DROPBOX_APP_KEY / DROPBOX_APP_SECRET "
+            "credentials instead of requiring separate SOCIAL_AUTH_DROPBOX_CLIENT_ID / "
+            "SOCIAL_AUTH_DROPBOX_CLIENT_SECRET values. "
+            "Requires SOCIAL_AUTH_DROPBOX_ENABLED=True and global Dropbox credentials to be set."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
     "social_auth_dropbox_enabled": {
         "category": "Social Login",
         "description": (
@@ -326,6 +466,182 @@ SETTING_METADATA = {
         "description": "Dropbox OAuth2 App Secret from the Dropbox App Console.",
         "type": "string",
         "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_github_enabled": {
+        "category": "Social Login",
+        "description": (
+            "Enable GitHub Sign-In. Requires SOCIAL_AUTH_GITHUB_CLIENT_ID and "
+            "SOCIAL_AUTH_GITHUB_CLIENT_SECRET from GitHub Developer Settings."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+        "help_link": "https://github.com/settings/developers",
+        "help_link_label": "GitHub Developer Settings",
+    },
+    "social_auth_github_client_id": {
+        "category": "Social Login",
+        "description": "GitHub OAuth2 client ID from GitHub Developer Settings.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_github_client_secret": {
+        "category": "Social Login",
+        "description": "GitHub OAuth2 client secret from GitHub Developer Settings.",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    # Keycloak SSO
+    "social_auth_keycloak_enabled": {
+        "category": "Social Login",
+        "description": "Enable Keycloak SSO. Requires server URL, realm, client ID, and client secret.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_keycloak_client_id": {
+        "category": "Social Login",
+        "description": "Keycloak OAuth2 client ID.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_keycloak_client_secret": {
+        "category": "Social Login",
+        "description": "Keycloak OAuth2 client secret.",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_keycloak_server_url": {
+        "category": "Social Login",
+        "description": "Keycloak server base URL (e.g. https://keycloak.example.com).",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_keycloak_realm": {
+        "category": "Social Login",
+        "description": "Keycloak realm name.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    # Generic OAuth2 SSO
+    "social_auth_generic_oauth2_enabled": {
+        "category": "Social Login",
+        "description": "Enable a generic OAuth2 SSO provider.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_generic_oauth2_client_id": {
+        "category": "Social Login",
+        "description": "Generic OAuth2 client ID.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_generic_oauth2_client_secret": {
+        "category": "Social Login",
+        "description": "Generic OAuth2 client secret.",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_generic_oauth2_authorize_url": {
+        "category": "Social Login",
+        "description": "Generic OAuth2 authorization URL.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_generic_oauth2_token_url": {
+        "category": "Social Login",
+        "description": "Generic OAuth2 token endpoint URL.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_generic_oauth2_userinfo_url": {
+        "category": "Social Login",
+        "description": "Generic OAuth2 userinfo endpoint URL.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_generic_oauth2_scope": {
+        "category": "Social Login",
+        "description": "Space-separated list of OAuth2 scopes to request (default: openid profile email).",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_generic_oauth2_name": {
+        "category": "Social Login",
+        "description": "Display name for the generic OAuth2 provider button on the login page.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    # SAML2 SSO
+    "social_auth_saml2_enabled": {
+        "category": "Social Login",
+        "description": "Enable SAML2 SSO authentication.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_saml2_entity_id": {
+        "category": "Social Login",
+        "description": "SAML2 Identity Provider Entity ID.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_saml2_sso_url": {
+        "category": "Social Login",
+        "description": "SAML2 Identity Provider SSO URL.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_saml2_certificate": {
+        "category": "Social Login",
+        "description": "SAML2 Identity Provider X.509 certificate (PEM format).",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "social_auth_saml2_name": {
+        "category": "Social Login",
+        "description": "Display name for the SAML2 provider.",
+        "type": "string",
+        "sensitive": False,
         "required": False,
         "restart_required": True,
     },
@@ -522,6 +838,19 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Document Translation
+    "default_document_language": {
+        "category": "AI Services",
+        "description": (
+            "ISO 639-1 language code for the default document translation target "
+            "(e.g. 'en', 'de', 'fr'). Documents whose detected language differs "
+            "are automatically translated into this language after processing."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # OCR Engine Configuration
     "ocr_providers": {
         "category": "OCR Engines",
@@ -679,6 +1008,18 @@ SETTING_METADATA = {
         "description": "Dropbox OAuth refresh token",
         "type": "string",
         "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "dropbox_allow_global_credentials_for_integrations": {
+        "category": "Storage Providers",
+        "description": (
+            "When True, users may authorize their personal Dropbox integrations using the global "
+            "DROPBOX_APP_KEY / DROPBOX_APP_SECRET credentials configured by the admin, without "
+            "needing to create their own Dropbox app."
+        ),
+        "type": "boolean",
+        "sensitive": False,
         "required": False,
         "restart_required": False,
     },
@@ -857,6 +1198,63 @@ SETTING_METADATA = {
     "onedrive_folder_path": {
         "category": "Storage Providers",
         "description": "OneDrive folder path for document storage",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    # Storage Providers - SharePoint
+    "sharepoint_client_id": {
+        "category": "Storage Providers",
+        "description": "SharePoint Azure AD application (client) ID",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_client_secret": {
+        "category": "Storage Providers",
+        "description": "SharePoint Azure AD client secret",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_tenant_id": {
+        "category": "Storage Providers",
+        "description": "SharePoint Azure AD tenant ID (use 'common' for multi-tenant apps)",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_refresh_token": {
+        "category": "Storage Providers",
+        "description": "SharePoint OAuth refresh token",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_site_url": {
+        "category": "Storage Providers",
+        "description": "SharePoint site URL (e.g. https://tenant.sharepoint.com/sites/sitename)",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_document_library": {
+        "category": "Storage Providers",
+        "description": "SharePoint document library name (default: 'Documents')",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "sharepoint_folder_path": {
+        "category": "Storage Providers",
+        "description": "Subfolder path inside the SharePoint document library",
         "type": "string",
         "sensitive": False,
         "required": False,
@@ -1777,6 +2175,30 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "telegram_enabled": {
+        "category": "Notifications",
+        "description": "Enable Telegram bot notifications.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "telegram_bot_token": {
+        "category": "Notifications",
+        "description": "Telegram Bot API token from @BotFather.",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "telegram_chat_id": {
+        "category": "Notifications",
+        "description": "Telegram chat ID to send notifications to.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Notifications Settings
     "notification_urls": {
         "category": "Notifications",
@@ -1875,12 +2297,46 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "automation_hooks_enabled": {
+        "category": "Feature Flags",
+        "description": (
+            "Enable Zapier / Make.com automation hook subscriptions and delivery. "
+            "When enabled, external automation platforms can subscribe to DocuElevate events "
+            "via the REST hooks protocol. Default: True."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "compliance_enabled": {
         "category": "Feature Flags",
         "description": (
             "Enable the compliance templates dashboard (GDPR, HIPAA, SOC 2). "
             "When enabled, admins can view compliance status and apply "
             "pre-built regulatory configurations. Default: True."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "factory_reset_on_startup": {
+        "category": "Feature Flags",
+        "description": (
+            "Wipe all user data on every startup so the instance always starts fresh. "
+            "Useful for demo/testing environments. Default: False."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "enable_factory_reset": {
+        "category": "Feature Flags",
+        "description": (
+            "Show the System Reset page in the admin UI.  Allows administrators to "
+            "trigger a full data wipe or a wipe-and-reimport from the web interface. Default: False."
         ),
         "type": "boolean",
         "sensitive": False,
@@ -1910,14 +2366,26 @@ SETTING_METADATA = {
         "category": "Backup",
         "description": (
             "Storage provider for remote backup copies. "
-            "Accepted values: s3, dropbox, google_drive, onedrive, nextcloud, webdav, ftp, sftp, email. "
+            "Accepted values: s3, dropbox, google_drive, onedrive, sharepoint, nextcloud, webdav, ftp, sftp, email. "
             "Leave empty to keep backups local only."
         ),
         "type": "string",
         "sensitive": False,
         "required": False,
         "restart_required": False,
-        "options": ["", "s3", "dropbox", "google_drive", "onedrive", "nextcloud", "webdav", "ftp", "sftp", "email"],
+        "options": [
+            "",
+            "s3",
+            "dropbox",
+            "google_drive",
+            "onedrive",
+            "sharepoint",
+            "nextcloud",
+            "webdav",
+            "ftp",
+            "sftp",
+            "email",
+        ],
     },
     "backup_remote_folder": {
         "category": "Backup",
@@ -2429,6 +2897,27 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Per-user upload rate limiting
+    "upload_rate_limit_per_user": {
+        "category": "Security",
+        "description": (
+            "Maximum number of uploads a single user may submit within upload_rate_limit_window seconds. "
+            "The health-aware limiter may reduce this dynamically under high Redis queue depth or CPU load. "
+            "Default: 20."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "upload_rate_limit_window": {
+        "category": "Security",
+        "description": ("Sliding window in seconds over which upload_rate_limit_per_user is enforced. Default: 60."),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # Rate Limiting
     "rate_limiting_enabled": {
         "category": "Security",
@@ -2628,6 +3117,63 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    # Logging
+    "log_level": {
+        "category": "Observability",
+        "description": (
+            "Python logging level for the application root logger. "
+            "Accepts: DEBUG, INFO, WARNING, ERROR, CRITICAL. "
+            "When DEBUG=True and LOG_LEVEL is not explicitly set, "
+            "the effective level is automatically lowered to DEBUG."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_format": {
+        "category": "Observability",
+        "description": (
+            "Log output format: 'text' (human-readable, default) or "
+            "'json' (structured JSON lines for SIEM / log aggregation)."
+        ),
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_syslog_enabled": {
+        "category": "Observability",
+        "description": "Forward application logs to a syslog receiver in addition to stdout.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_syslog_host": {
+        "category": "Observability",
+        "description": "Hostname or IP of the syslog receiver for application logs.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_syslog_port": {
+        "category": "Observability",
+        "description": "Port of the syslog receiver for application logs.",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "log_syslog_protocol": {
+        "category": "Observability",
+        "description": "Protocol for syslog transport: 'udp' or 'tcp'.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
     # Observability – Sentry
     "sentry_dsn": {
         "category": "Observability",
@@ -2682,6 +3228,43 @@ SETTING_METADATA = {
             "to Sentry events. Disabled by default for GDPR/CCPA compliance."
         ),
         "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "sentry_js_traces_sample_rate": {
+        "category": "Observability",
+        "description": (
+            "Fraction of browser page-loads captured for client-side Sentry performance tracing (0.0–1.0). "
+            "0.0 (default) disables browser tracing; 1.0 captures every navigation. "
+            "Only active when SENTRY_DSN is set."
+        ),
+        "type": "float",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "sentry_js_replay_session_sample_rate": {
+        "category": "Observability",
+        "description": (
+            "Fraction of sessions recorded by Sentry Session Replay (0.0–1.0). "
+            "0.0 (default) disables session recording; 1.0 records every session. "
+            "Only active when SENTRY_DSN is set."
+        ),
+        "type": "float",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "sentry_js_replay_on_error_sample_rate": {
+        "category": "Observability",
+        "description": (
+            "Fraction of error sessions recorded by Sentry Session Replay (0.0–1.0). "
+            "Defaults to 0.1 (10%) so that errors are captured with replay context "
+            "even when session-level recording is disabled. "
+            "Only active when SENTRY_DSN is set."
+        ),
+        "type": "float",
         "sensitive": False,
         "required": False,
         "restart_required": True,

@@ -308,11 +308,6 @@ class TestSavedSearchesCRUD:
         response = client.put(f"/api/saved-searches/{search_id}", json=update_payload)
         assert response.status_code == 422
 
-    def test_get_user_id_branches(self, client: TestClient, mocker):
-        """Test _get_user_id branches with different mock users."""
-        # This will be tested indirectly by mocking get_current_user
-        pass
-
     def test_update_saved_search_same_name(self, client: TestClient):
         """PUT /api/saved-searches/{id} with the same name does not trigger duplicate check error."""
         # Create a search
@@ -328,11 +323,9 @@ class TestSavedSearchesCRUD:
 
     def test_get_user_id_branches_real(self, client: TestClient):
         from app.api.saved_searches import _get_user_id
-        from fastapi import Request
 
         # We need a mock request
         class MockRequest:
-            session = {}
             session = {}
             state = type('obj', (object,), {'user': None})
 

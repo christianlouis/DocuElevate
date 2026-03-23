@@ -2,10 +2,10 @@
 Tests for URL-based file upload functionality
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
+import httpx
 import pytest
-import requests
 
 
 @pytest.mark.unit
@@ -165,17 +165,24 @@ class TestURLUploadValidation:
 class TestURLUploadEndpoint:
     """Integration tests for URL upload endpoint"""
 
-    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
     @patch("app.api.url_upload.process_document")
-    def test_process_url_requires_authentication(self, mock_process_document, mock_requests_get, client, monkeypatch):
+    def test_process_url_requires_authentication(self, mock_process_document, mock_stream, client, monkeypatch):
         """Test that endpoint requires authentication when auth is enabled"""
         # Mock successful download to prevent actual HTTP requests
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "1024"}
-        mock_response.iter_content = Mock(return_value=[b"PDF content"])
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b"PDF content"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         # Mock Celery task
         mock_task = Mock()
@@ -192,17 +199,24 @@ class TestURLUploadEndpoint:
         # (like no mocking). We're just checking the endpoint exists and is reachable.
         assert response.status_code != 404  # Endpoint should exist
 
-    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
     @patch("app.api.url_upload.process_document")
-    def test_process_url_success(self, mock_process_document, mock_requests_get, client, tmp_path):
+    def test_process_url_success(self, mock_process_document, mock_stream, client, tmp_path):
         """Test successful URL processing"""
         # Mock successful download
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "1024"}
-        mock_response.iter_content = Mock(return_value=[b"PDF content here"])
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b"PDF content here"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         # Mock Celery task
         mock_task = Mock()
@@ -219,8 +233,8 @@ class TestURLUploadEndpoint:
         assert "filename" in data
         assert "size" in data
 
-    @patch("app.api.url_upload.requests.get")
-    def test_process_url_blocks_private_ip(self, mock_requests_get, client):
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
+    def test_process_url_blocks_private_ip(self, mock_stream, client):
         """Test that private IPs are blocked"""
         response = client.post("/api/process-url", json={"url": "http://192.168.1.1/file.pdf"})
 
@@ -229,10 +243,10 @@ class TestURLUploadEndpoint:
         assert "private/internal" in data["detail"]
 
         # Should not make HTTP request
-        mock_requests_get.assert_not_called()
+        mock_stream.assert_not_called()
 
-    @patch("app.api.url_upload.requests.get")
-    def test_process_url_blocks_localhost(self, mock_requests_get, client):
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
+    def test_process_url_blocks_localhost(self, mock_stream, client):
         """Test that localhost is blocked"""
         response = client.post("/api/process-url", json={"url": "http://localhost/file.pdf"})
 
@@ -241,10 +255,10 @@ class TestURLUploadEndpoint:
         assert "private/internal" in data["detail"]
 
         # Should not make HTTP request
-        mock_requests_get.assert_not_called()
+        mock_stream.assert_not_called()
 
-    @patch("app.api.url_upload.requests.get")
-    def test_process_url_blocks_metadata_endpoint(self, mock_requests_get, client):
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
+    def test_process_url_blocks_metadata_endpoint(self, mock_stream, client):
         """Test that cloud metadata endpoints are blocked"""
         response = client.post("/api/process-url", json={"url": "http://169.254.169.254/latest/meta-data/"})
 
@@ -254,17 +268,20 @@ class TestURLUploadEndpoint:
         assert "metadata" in data["detail"] or "private" in data["detail"]
 
         # Should not make HTTP request
-        mock_requests_get.assert_not_called()
+        mock_stream.assert_not_called()
 
-    @patch("app.api.url_upload.requests.get")
-    def test_process_url_invalid_file_type(self, mock_requests_get, client):
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
+    def test_process_url_invalid_file_type(self, mock_stream, client):
         """Test that invalid file types are rejected"""
         # Mock response with executable content-type
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/x-executable"}
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         response = client.post("/api/process-url", json={"url": "https://example.com/malware.exe"})
 
@@ -272,21 +289,24 @@ class TestURLUploadEndpoint:
         data = response.json()
         assert "Unsupported file type" in data["detail"]
 
-    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
     @patch("app.api.url_upload.process_document")
-    def test_process_url_file_too_large_by_header(self, mock_process_document, mock_requests_get, client):
+    def test_process_url_file_too_large_by_header(self, mock_process_document, mock_stream, client):
         """Test that files too large are rejected based on Content-Length header"""
         from app.config import settings
 
         # Mock response with large content-length
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {
             "Content-Type": "application/pdf",
             "Content-Length": str(settings.max_upload_size + 1000),
         }
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         response = client.post("/api/process-url", json={"url": "https://example.com/huge.pdf"})
 
@@ -297,10 +317,10 @@ class TestURLUploadEndpoint:
         # Should not process document
         mock_process_document.delay.assert_not_called()
 
-    @patch("app.api.url_upload.requests.get")
-    def test_process_url_timeout_error(self, mock_requests_get, client):
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
+    def test_process_url_timeout_error(self, mock_stream, client):
         """Test handling of timeout errors"""
-        mock_requests_get.side_effect = requests.exceptions.Timeout("Request timed out")
+        mock_stream.side_effect = httpx.TimeoutException("Request timed out")
 
         response = client.post("/api/process-url", json={"url": "https://example.com/slow.pdf"})
 
@@ -308,10 +328,10 @@ class TestURLUploadEndpoint:
         data = response.json()
         assert "timeout" in data["detail"].lower()
 
-    @patch("app.api.url_upload.requests.get")
-    def test_process_url_connection_error(self, mock_requests_get, client):
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
+    def test_process_url_connection_error(self, mock_stream, client):
         """Test handling of connection errors"""
-        mock_requests_get.side_effect = requests.exceptions.ConnectionError("Failed to connect")
+        mock_stream.side_effect = httpx.ConnectError("Failed to connect")
 
         response = client.post("/api/process-url", json={"url": "https://example.com/file.pdf"})
 
@@ -319,15 +339,16 @@ class TestURLUploadEndpoint:
         data = response.json()
         assert "connect" in data["detail"].lower()
 
-    @patch("app.api.url_upload.requests.get")
-    def test_process_url_http_error_404(self, mock_requests_get, client):
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
+    def test_process_url_http_error_404(self, mock_stream, client):
         """Test handling of HTTP 404 errors"""
-        mock_response = Mock()
+        # When raising HTTPStatusError, httpx requires request and response arguments
+        # For our code, we just need it to hit the exception handler and check status code
+        mock_request = MagicMock()
+        mock_response = MagicMock()
         mock_response.status_code = 404
-        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
-            "404 Not Found", response=mock_response
-        )
-        mock_requests_get.return_value = mock_response
+
+        mock_stream.side_effect = httpx.HTTPStatusError("404 Not Found", request=mock_request, response=mock_response)
 
         response = client.post("/api/process-url", json={"url": "https://example.com/notfound.pdf"})
 
@@ -335,17 +356,24 @@ class TestURLUploadEndpoint:
         data = response.json()
         assert "HTTP error" in data["detail"]
 
-    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
     @patch("app.api.url_upload.process_document")
-    def test_process_url_with_custom_filename(self, mock_process_document, mock_requests_get, client, tmp_path):
+    def test_process_url_with_custom_filename(self, mock_process_document, mock_stream, client, tmp_path):
         """Test URL upload with custom filename"""
         # Mock successful download
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "1024"}
-        mock_response.iter_content = Mock(return_value=[b"PDF content"])
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b"PDF content"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         # Mock Celery task
         mock_task = Mock()
@@ -361,17 +389,24 @@ class TestURLUploadEndpoint:
         data = response.json()
         assert data["filename"] == "my-document.pdf"
 
-    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
     @patch("app.api.url_upload.process_document")
-    def test_process_url_extracts_filename_from_url(self, mock_process_document, mock_requests_get, client, tmp_path):
+    def test_process_url_extracts_filename_from_url(self, mock_process_document, mock_stream, client, tmp_path):
         """Test that filename is extracted from URL when not provided"""
         # Mock successful download
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "1024"}
-        mock_response.iter_content = Mock(return_value=[b"PDF content"])
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b"PDF content"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         # Mock Celery task
         mock_task = Mock()
@@ -386,9 +421,9 @@ class TestURLUploadEndpoint:
         # Should extract "annual-report.pdf" from URL
         assert "annual-report" in data["filename"]
 
-    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
     @patch("app.api.url_upload.process_document")
-    def test_process_url_file_size_during_download(self, mock_process_document, mock_requests_get, client):
+    def test_process_url_file_size_during_download(self, mock_process_document, mock_stream, client):
         """Test that file size is checked during download"""
         from app.config import settings
 
@@ -396,12 +431,19 @@ class TestURLUploadEndpoint:
         large_chunk = b"x" * (settings.max_upload_size + 1000)
 
         # Mock response without Content-Length header
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/pdf"}  # No Content-Length
-        mock_response.iter_content = Mock(return_value=[large_chunk])
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield large_chunk
+
+        mock_response.aiter_bytes = mock_aiter_bytes
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         response = client.post("/api/process-url", json={"url": "https://example.com/big.pdf"})
 
@@ -412,10 +454,10 @@ class TestURLUploadEndpoint:
         # Should not process document
         mock_process_document.delay.assert_not_called()
 
-    @patch("app.api.url_upload.requests.get")
-    def test_process_url_request_exception(self, mock_requests_get, client):
-        """Test handling of generic RequestException"""
-        mock_requests_get.side_effect = requests.exceptions.RequestException("Generic request error")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
+    def test_process_url_request_exception(self, mock_stream, client):
+        """Test handling of generic RequestError"""
+        mock_stream.side_effect = httpx.RequestError("Generic request error")
 
         response = client.post("/api/process-url", json={"url": "https://example.com/file.pdf"})
 
@@ -423,16 +465,23 @@ class TestURLUploadEndpoint:
         data = response.json()
         assert "Failed to download file" in data["detail"]
 
-    @patch("app.api.url_upload.requests.get")
-    def test_process_url_oserror_during_save(self, mock_requests_get, client, tmp_path, monkeypatch):
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
+    def test_process_url_oserror_during_save(self, mock_stream, client, tmp_path, monkeypatch):
         """Test handling of OSError when saving file"""
         # Mock successful download
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "100"}
-        mock_response.iter_content = Mock(return_value=[b"PDF"])
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b"PDF"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         # Mock workdir to a non-existent path to trigger OSError
         from app.config import settings
@@ -450,17 +499,24 @@ class TestURLUploadEndpoint:
             # Restore original workdir
             monkeypatch.setattr(settings, "workdir", original_workdir)
 
-    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
     @patch("app.api.url_upload.process_document")
-    def test_process_url_unexpected_exception(self, mock_process_document, mock_requests_get, client):
+    def test_process_url_unexpected_exception(self, mock_process_document, mock_stream, client):
         """Test handling of unexpected exceptions"""
         # Mock successful download but process_document.delay raises unexpected error
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "100"}
-        mock_response.iter_content = Mock(return_value=[b"PDF"])
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b"PDF"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         # Mock process_document.delay to raise an unexpected exception
         mock_process_document.delay.side_effect = RuntimeError("Unexpected processing error")
@@ -471,17 +527,24 @@ class TestURLUploadEndpoint:
         data = response.json()
         assert "Unexpected error" in data["detail"]
 
-    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
     @patch("app.api.url_upload.process_document")
-    def test_process_url_filename_without_extension(self, mock_process_document, mock_requests_get, client):
+    def test_process_url_filename_without_extension(self, mock_process_document, mock_stream, client):
         """Test that files without extensions are handled correctly"""
         # Mock successful download
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "100"}
-        mock_response.iter_content = Mock(return_value=[b"PDF"])
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b"PDF"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         # Mock Celery task
         mock_task = Mock()
@@ -496,17 +559,24 @@ class TestURLUploadEndpoint:
         # Should still work, just without extension
         assert data["task_id"] == "test-task-id"
 
-    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
     @patch("app.api.url_upload.process_document")
-    def test_process_url_empty_path_uses_download(self, mock_process_document, mock_requests_get, client):
+    def test_process_url_empty_path_uses_download(self, mock_process_document, mock_stream, client):
         """Test that empty URL path defaults to 'download' filename"""
         # Mock successful download
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "100"}
-        mock_response.iter_content = Mock(return_value=[b"PDF"])
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b"PDF"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         # Mock Celery task
         mock_task = Mock()
@@ -560,17 +630,24 @@ class TestURLUploadEndpoint:
         # Link-local address
         assert is_private_ip("169.254.1.1") is True
 
-    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
     @patch("app.api.url_upload.process_document")
-    def test_process_url_sanitizes_dangerous_filename(self, mock_process_document, mock_requests_get, client):
+    def test_process_url_sanitizes_dangerous_filename(self, mock_process_document, mock_stream, client):
         """Test that dangerous filenames are sanitized"""
         # Mock successful download
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "100"}
-        mock_response.iter_content = Mock(return_value=[b"PDF"])
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b"PDF"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         # Mock Celery task
         mock_task = Mock()
@@ -620,6 +697,18 @@ class TestURLUploadCoverageGaps:
         result = is_private_ip("example.com")
         assert result is False
         mock_getaddrinfo.assert_called_once()
+
+    @patch("app.utils.network.socket.getaddrinfo")
+    def test_is_private_ip_unresolvable_hostname_fails_securely(self, mock_getaddrinfo):
+        """Test that unresolvable hostnames fail securely by blocking access."""
+        import socket
+
+        from app.utils.network import is_private_ip
+
+        mock_getaddrinfo.side_effect = socket.gaierror("Name or service not known")
+
+        result = is_private_ip("unresolvable.example.internal")
+        assert result is True  # Fails securely
 
     @patch("socket.getaddrinfo")
     def test_is_private_ip_hostname_resolves_multiple_ips_all_public(self, mock_getaddrinfo):
@@ -671,18 +760,25 @@ class TestURLUploadCoverageGaps:
         assert validate_file_type("", "filename_without_extension") is False
 
     @patch("app.api.url_upload.sanitize_filename", return_value="")
-    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
     @patch("app.api.url_upload.process_document")
     def test_process_url_sanitize_filename_returns_empty(
-        self, mock_process_document, mock_requests_get, mock_sanitize, client
+        self, mock_process_document, mock_stream, mock_sanitize, client
     ):
         """Test that when sanitize_filename returns empty string, filename defaults to 'download' (line 177)"""
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "100"}
-        mock_response.iter_content = Mock(return_value=[b"PDF content"])
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b"PDF content"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         mock_task = Mock()
         mock_task.id = "test-task-id-sanitize"
@@ -695,17 +791,26 @@ class TestURLUploadCoverageGaps:
         # When sanitize_filename returns "", safe_filename defaults to "download"
         assert data["filename"] == "download"
 
-    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
     @patch("app.api.url_upload.process_document")
-    def test_process_url_skips_empty_chunks(self, mock_process_document, mock_requests_get, client):
+    def test_process_url_skips_empty_chunks(self, mock_process_document, mock_stream, client):
         """Test that empty bytes chunks are skipped during download (line 234->233 branch)"""
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/pdf"}
         # Mix empty bytes (falsy) with real content - covers the `if chunk:` False branch
-        mock_response.iter_content = Mock(return_value=[b"", b"PDF content", b""])
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b""
+            yield b"PDF content"
+            yield b""
+
+        mock_response.aiter_bytes = mock_aiter_bytes
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         mock_task = Mock()
         mock_task.id = "test-task-id-chunks"
@@ -719,9 +824,9 @@ class TestURLUploadCoverageGaps:
 
     @patch("app.api.url_upload.os.remove")
     @patch("app.api.url_upload.os.path.exists", return_value=True)
-    @patch("app.api.url_upload.requests.get")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
     def test_process_url_oserror_cleanup_removes_existing_file(
-        self, mock_requests_get, mock_exists, mock_remove, client, tmp_path, monkeypatch
+        self, mock_stream, mock_exists, mock_remove, client, tmp_path, monkeypatch
     ):
         """Test OSError handler removes the partial file when it exists (line 285)"""
         import os
@@ -735,12 +840,19 @@ class TestURLUploadCoverageGaps:
 
         monkeypatch.setattr(settings, "workdir", str(non_existent))
 
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "100"}
-        mock_response.iter_content = Mock(return_value=[b"PDF"])
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b"PDF"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         response = client.post("/api/process-url", json={"url": "https://example.com/file.pdf"})
 
@@ -750,14 +862,17 @@ class TestURLUploadCoverageGaps:
         mock_remove.assert_called_once()
 
     @patch("app.api.url_upload.validate_file_type", side_effect=ValueError("unexpected internal error"))
-    @patch("app.api.url_upload.requests.get")
-    def test_process_url_unexpected_exception_with_no_file_created(self, mock_requests_get, mock_validate, client):
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
+    def test_process_url_unexpected_exception_with_no_file_created(self, mock_stream, mock_validate, client):
         """Test unexpected exception before target_path is assigned; no file cleanup attempted (line 291->293)"""
-        mock_response = Mock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/pdf"}
         mock_response.raise_for_status = Mock()
-        mock_requests_get.return_value = mock_response
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
 
         response = client.post("/api/process-url", json={"url": "https://example.com/file.pdf"})
 

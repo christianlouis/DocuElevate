@@ -1,16 +1,22 @@
 /**
- * UploadScreen – document upload via camera or file picker.
+ * UploadScreen – document upload via camera, photo library, or file picker.
  *
  * Users can:
  * 1. Take a photo of a document with the device camera.
- * 2. Pick an existing file (PDF, image, Office document) from the Files app.
- * 3. Receive files shared from other apps via the iOS Share Sheet / Android
- *    Share Intent (handled by the expo-sharing + deep-link integration).
+ * 2. Select an existing photo from the device's photo library.
+ * 3. Pick an existing file (PDF, image, Office document) from the Files app.
+ * 4. Receive files shared from other apps via the iOS Share Sheet / Android
+ *    Share Intent (handled via ShareContext populated by the root layout).
+ *
+ * After a successful upload the screen polls the backend every 5 seconds to
+ * track the real-time processing status of each uploaded file.
  */
 
+import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -21,7 +27,13 @@ import {
   View,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
+import { useShare } from "../context/ShareContext";
+import { normalizeFileUri } from "../utils/normalizeUri";
 import api from "../services/api";
+import { useLocale, t } from "../i18n";
+
+/** Statuses that indicate processing has finished (no further polling needed). */
+const TERMINAL_STATUSES = new Set(["completed", "failed", "duplicate"]);
 
 interface UploadItem {
   id: string;
@@ -29,40 +41,238 @@ interface UploadItem {
   status: "pending" | "uploading" | "done" | "error";
   error?: string;
   taskId?: string;
+  /** Sanitised filename returned by the server – used to search for the record. */
+  originalFilename?: string;
+  /** Database ID of the FileRecord once it has been created by the worker. */
+  fileId?: number;
+  /** Actual server-side processing status (e.g. "pending", "processing", "completed"). */
+  serverStatus?: string;
+  /** Original file URI – retained so the upload can be retried on failure. */
+  uri?: string;
+  /** MIME type of the original file. */
+  mimeType?: string;
 }
 
 export default function UploadScreen() {
   const { isAuthenticated } = useAuth();
+  const { pendingFiles, clearPendingFiles } = useShare();
   const [uploads, setUploads] = useState<UploadItem[]>([]);
+  // Subscribe to language changes so translated strings re-render.
+  useLocale();
 
-  function updateItem(id: string, patch: Partial<UploadItem>) {
-    setUploads((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...patch } : item))
-    );
-  }
+  // Keep a ref in sync so the polling interval can read current state without
+  // capturing a stale closure.
+  const uploadsRef = useRef<UploadItem[]>([]);
+  useEffect(() => {
+    uploadsRef.current = uploads;
+  }, [uploads]);
 
-  async function uploadFile(uri: string, filename: string, mimeType?: string) {
-    const id = `${Date.now()}-${filename}`;
-    setUploads((prev) => [
-      { id, filename, status: "uploading" },
-      ...prev,
-    ]);
+  // Track URIs that have already been uploaded in this session so that
+  // duplicate share-sheet deliveries (iOS can fire both the Linking handler
+  // and +not-found.tsx for the same file) do not trigger repeated uploads.
+  const uploadedUrisRef = useRef<Set<string>>(new Set());
+
+  // ---------------------------------------------------------------------------
+  // Core helpers (declared before the effects that depend on them)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Ensure a file URI is accessible for upload.
+   *
+   * Files received via the iOS Share Sheet / "Open In…" may reference paths
+   * outside the app's sandbox or use security-scoped URLs that React Native's
+   * fetch cannot read directly.  This helper copies such files to the app's
+   * cache directory so the upload can proceed reliably.
+   *
+   * URIs from expo-image-picker and expo-document-picker are already in the
+   * app's cache and are returned unchanged.
+   */
+  const ensureLocalUri = useCallback(async (uri: string, filename: string): Promise<string> => {
+    // Android content:// URIs are handled natively by React Native's fetch.
+    if (!uri.startsWith("file://")) return uri;
+
+    // Files already in the app's cache or documents directory are accessible.
+    const cacheDir = FileSystem.cacheDirectory;
+    const docDir = FileSystem.documentDirectory;
+    if (cacheDir && uri.startsWith(cacheDir)) return uri;
+    if (docDir && uri.startsWith(docDir)) return uri;
+
+    // External file (e.g. from iOS Inbox or security-scoped URL) – copy to
+    // cache so the upload has guaranteed read access.
+    const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const destUri = `${cacheDir}shared_${Date.now()}_${safeName}`;
+    try {
+      await FileSystem.copyAsync({ from: uri, to: destUri });
+      return destUri;
+    } catch (copyErr) {
+      // Copy failed – fall back to the original URI (might work for some paths).
+      console.warn("[ensureLocalUri] copyAsync failed:", { from: uri, to: destUri, error: copyErr });
+      return uri;
+    }
+  }, []);
+
+  const uploadFile = useCallback(async (uri: string, filename: string, mimeType?: string) => {
+    // Deduplicate: skip if this exact URI was already uploaded in this session.
+    // This guards against duplicate share-sheet deliveries from iOS where the
+    // Linking handler and +not-found.tsx fire for the same file.
+    const normUri = normalizeFileUri(uri);
+    if (uploadedUrisRef.current.has(normUri)) {
+      console.debug("[uploadFile] skipping duplicate URI:", uri);
+      return;
+    }
+    uploadedUrisRef.current.add(normUri);
+
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}-${filename}`;
+    setUploads((prev) => [{ id, filename, status: "uploading", uri, mimeType }, ...prev]);
 
     try {
-      const resp = await api.uploadFile(uri, filename, mimeType);
-      updateItem(id, { status: "done", taskId: resp.task_id });
+      const localUri = await ensureLocalUri(uri, filename);
+      const resp = await api.uploadFile(localUri, filename, mimeType);
+      if (resp.status === "duplicate" && resp.duplicate_of) {
+        // Server rejected the file as a known duplicate — mark as done and
+        // set the server-side status to "duplicate" so it appears as a
+        // terminal status and is not polled further.
+        setUploads((prev) =>
+          prev.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  status: "done",
+                  fileId: resp.duplicate_of!.original_file_id,
+                  originalFilename: resp.original_filename,
+                  serverStatus: "duplicate",
+                }
+              : item
+          )
+        );
+      } else {
+        setUploads((prev) =>
+          prev.map((item) =>
+            item.id === id
+              ? { ...item, status: "done", taskId: resp.task_id, originalFilename: resp.original_filename }
+              : item
+          )
+        );
+      }
+    } catch (err: unknown) {
+      // Allow retrying this URI on failure.
+      uploadedUrisRef.current.delete(normUri);
+      const msg = err instanceof Error ? err.message : "Upload failed";
+      setUploads((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, status: "error", error: msg } : item))
+      );
+    }
+  }, [ensureLocalUri]);
+
+  const retryUpload = useCallback(async (item: UploadItem) => {
+    if (!item.uri) return;
+
+    // Reset the item to "uploading" and clear previous error/server state.
+    setUploads((prev) =>
+      prev.map((u) =>
+        u.id === item.id
+          ? { ...u, status: "uploading" as const, error: undefined, serverStatus: undefined, fileId: undefined, taskId: undefined, originalFilename: undefined }
+          : u
+      )
+    );
+
+    try {
+      const localUri = await ensureLocalUri(item.uri, item.filename);
+      const resp = await api.uploadFile(localUri, item.filename, item.mimeType);
+      if (resp.status === "duplicate" && resp.duplicate_of) {
+        setUploads((prev) =>
+          prev.map((u) =>
+            u.id === item.id
+              ? {
+                  ...u,
+                  status: "done",
+                  fileId: resp.duplicate_of!.original_file_id,
+                  originalFilename: resp.original_filename,
+                  serverStatus: "duplicate",
+                }
+              : u
+          )
+        );
+      } else {
+        setUploads((prev) =>
+          prev.map((u) =>
+            u.id === item.id
+              ? { ...u, status: "done", taskId: resp.task_id, originalFilename: resp.original_filename }
+              : u
+          )
+        );
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Upload failed";
-      updateItem(id, { status: "error", error: msg });
+      setUploads((prev) =>
+        prev.map((u) => (u.id === item.id ? { ...u, status: "error", error: msg } : u))
+      );
     }
-  }
+  }, [ensureLocalUri]);
+
+  // ---------------------------------------------------------------------------
+  // Polling – check server-side processing status every 5 seconds
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const poll = async () => {
+      const current = uploadsRef.current;
+      for (const item of current) {
+        // Only poll items that were successfully uploaded and haven't reached a
+        // terminal status yet.
+        if (item.status !== "done") continue;
+        if (item.serverStatus && TERMINAL_STATUSES.has(item.serverStatus)) continue;
+
+        try {
+          if (item.fileId !== undefined) {
+            // We already know the file ID – just refresh its status.
+            const ps = await api.getFileStatus(item.fileId);
+            setUploads((prev) =>
+              prev.map((u) => (u.id === item.id ? { ...u, serverStatus: ps.status } : u))
+            );
+          } else if (item.originalFilename) {
+            // Search for the file by name; it may not exist yet if the worker
+            // hasn't started.
+            const files = await api.listFiles(1, 5, item.originalFilename);
+            const found = files.find((f) => f.original_filename === item.originalFilename);
+            if (found) {
+              setUploads((prev) =>
+                prev.map((u) =>
+                  u.id === item.id
+                    ? { ...u, fileId: found.id, serverStatus: found.processing_status.status }
+                    : u
+                )
+              );
+            }
+          }
+        } catch (err) {
+          // Network errors are transient – silently retry on the next tick.
+          console.debug("[StatusPoll] failed:", err);
+        }
+      }
+    };
+
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+  }, []); // Intentionally empty – poll() reads state via uploadsRef
+
+  // ---------------------------------------------------------------------------
+  // Handle files received from the iOS Share Sheet / Android Share Intent
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (pendingFiles.length === 0 || !isAuthenticated) return;
+    const files = [...pendingFiles];
+    clearPendingFiles();
+    files.forEach((file) => {
+      void uploadFile(file.uri, file.filename, file.mimeType);
+    });
+  }, [pendingFiles, isAuthenticated, clearPendingFiles, uploadFile]);
 
   async function handleCamera() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
       Alert.alert(
-        "Camera access required",
-        "Please grant camera access in Settings to capture documents."
+        t("upload.camera_access_title"),
+        t("upload.camera_access_msg")
       );
       return;
     }
@@ -80,6 +290,34 @@ export default function UploadScreen() {
     }
   }
 
+  async function handlePhotoLibrary() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        t("upload.photo_access_title"),
+        t("upload.photo_access_msg")
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.9,
+      allowsEditing: false,
+      allowsMultipleSelection: true,
+    });
+
+    if (!result.canceled && result.assets.length > 0) {
+      for (let i = 0; i < result.assets.length; i++) {
+        const asset = result.assets[i];
+        // Derive extension from MIME type so the filename matches the actual format
+        const ext = asset.mimeType?.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
+        const filename = asset.fileName ?? `photo_${Date.now()}_${i}.${ext}`;
+        await uploadFile(asset.uri, filename, asset.mimeType ?? "image/jpeg");
+      }
+    }
+  }
+
   async function handleFilePicker() {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -94,14 +332,14 @@ export default function UploadScreen() {
         }
       }
     } catch (err: unknown) {
-      Alert.alert("File picker error", err instanceof Error ? err.message : "Could not open file picker");
+      Alert.alert(t("upload.file_picker_error"), err instanceof Error ? err.message : t("upload.file_picker_error_msg"));
     }
   }
 
   if (!isAuthenticated) {
     return (
       <View style={styles.center}>
-        <Text style={styles.emptyText}>Please sign in to upload documents.</Text>
+        <Text style={styles.emptyText}>{t("upload.sign_in_required")}</Text>
       </View>
     );
   }
@@ -114,20 +352,30 @@ export default function UploadScreen() {
           style={[styles.actionButton, styles.cameraButton]}
           onPress={handleCamera}
           accessibilityRole="button"
-          accessibilityLabel="Capture document with camera"
+          accessibilityLabel={t("upload.capture_label")}
         >
-          <Text style={styles.actionIcon}>📷</Text>
-          <Text style={styles.actionLabel}>Camera</Text>
+          <Ionicons name="camera-outline" size={28} color="#fff" style={styles.actionIcon} />
+          <Text style={styles.actionLabel}>{t("upload.camera")}</Text>
+        </Pressable>
+
+        <Pressable
+          style={[styles.actionButton, styles.photoLibraryButton]}
+          onPress={handlePhotoLibrary}
+          accessibilityRole="button"
+          accessibilityLabel={t("upload.photo_label")}
+        >
+          <Ionicons name="images-outline" size={28} color="#fff" style={styles.actionIcon} />
+          <Text style={styles.actionLabel}>{t("upload.photos")}</Text>
         </Pressable>
 
         <Pressable
           style={[styles.actionButton, styles.fileButton]}
           onPress={handleFilePicker}
           accessibilityRole="button"
-          accessibilityLabel="Pick file from device"
+          accessibilityLabel={t("upload.file_label")}
         >
-          <Text style={styles.actionIcon}>📄</Text>
-          <Text style={styles.actionLabel}>File Picker</Text>
+          <Ionicons name="document-outline" size={28} color="#fff" style={styles.actionIcon} />
+          <Text style={styles.actionLabel}>{t("upload.files")}</Text>
         </Pressable>
       </View>
 
@@ -135,17 +383,13 @@ export default function UploadScreen() {
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
         {uploads.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>☁️</Text>
-            <Text style={styles.emptyText}>
-              Tap Camera or File Picker to upload a document.
-            </Text>
-            <Text style={styles.emptyHint}>
-              You can also share files from other apps directly to DocuElevate.
-            </Text>
+            <Ionicons name="cloud-upload-outline" size={48} color="#9ca3af" style={{ marginBottom: 12 }} />
+            <Text style={styles.emptyText}>{t("upload.empty_title")}</Text>
+            <Text style={styles.emptyHint}>{t("upload.empty_hint")}</Text>
           </View>
         ) : (
           uploads.map((item) => (
-            <UploadRow key={item.id} item={item} />
+            <UploadRow key={item.id} item={item} onRetry={retryUpload} />
           ))
         )}
       </ScrollView>
@@ -153,17 +397,49 @@ export default function UploadScreen() {
   );
 }
 
-function UploadRow({ item }: { item: UploadItem }) {
-  const icons: Record<UploadItem["status"], string> = {
-    pending: "⏳",
-    uploading: "⬆️",
-    done: "✅",
-    error: "❌",
+function UploadRow({ item, onRetry }: { item: UploadItem; onRetry: (item: UploadItem) => void }) {
+  // Subscribe to language changes so status labels re-render.
+  useLocale();
+
+  const uploadIconProps: Record<UploadItem["status"], { name: keyof typeof Ionicons.glyphMap; color: string }> = {
+    pending: { name: "time-outline", color: "#6b7280" },
+    uploading: { name: "arrow-up-circle-outline", color: "#1e40af" },
+    done: { name: "checkmark-circle", color: "#059669" },
+    error: { name: "close-circle", color: "#dc2626" },
   };
 
+  /** Human-readable label for the server-side processing status. */
+  function serverStatusLabel(s: string): string {
+    const labels: Record<string, string> = {
+      pending: t("upload.status_queued"),
+      processing: t("upload.status_processing"),
+      completed: t("upload.status_completed"),
+      failed: t("upload.status_failed"),
+      duplicate: t("upload.status_duplicate"),
+    };
+    return labels[s] ?? s;
+  }
+
+  const canRetry = item.status === "error" && !!item.uri;
+
+  function handleLongPress() {
+    if (!canRetry) return;
+    Alert.alert(t("upload.retry_title"), t("upload.retry_msg", { filename: item.filename }), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("common.retry"), onPress: () => onRetry(item) },
+    ]);
+  }
+
   return (
-    <View style={rowStyles.row}>
-      <Text style={rowStyles.icon}>{icons[item.status]}</Text>
+    <Pressable
+      onLongPress={handleLongPress}
+      onPress={canRetry ? () => onRetry(item) : undefined}
+      style={rowStyles.row}
+      accessibilityRole={canRetry ? "button" : "none"}
+      accessibilityLabel={canRetry ? `${t("common.retry")} ${item.filename}` : undefined}
+      accessibilityHint={canRetry ? "Tap or long-press to retry this upload" : undefined}
+    >
+      <Ionicons name={uploadIconProps[item.status].name} size={22} color={uploadIconProps[item.status].color} style={rowStyles.icon} />
       <View style={rowStyles.info}>
         <Text style={rowStyles.filename} numberOfLines={1}>
           {item.filename}
@@ -171,14 +447,32 @@ function UploadRow({ item }: { item: UploadItem }) {
         {item.status === "uploading" && (
           <ActivityIndicator size="small" color="#1e40af" />
         )}
-        {item.status === "done" && (
-          <Text style={rowStyles.statusDone}>Queued for processing</Text>
+        {item.status === "done" && !item.serverStatus && (
+          <Text style={rowStyles.statusQueued}>{t("upload.status_queued")}</Text>
+        )}
+        {item.status === "done" && item.serverStatus && (
+          <Text
+            style={
+              item.serverStatus === "completed"
+                ? rowStyles.statusDone
+                : item.serverStatus === "failed"
+                ? rowStyles.statusError
+                : rowStyles.statusQueued
+            }
+          >
+            {serverStatusLabel(item.serverStatus)}
+          </Text>
         )}
         {item.status === "error" && (
-          <Text style={rowStyles.statusError}>{item.error}</Text>
+          <View>
+            <Text style={rowStyles.statusError}>{item.error}</Text>
+            {canRetry && (
+              <Text style={rowStyles.retryHint}>{t("upload.tap_retry")}</Text>
+            )}
+          </View>
         )}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -198,8 +492,9 @@ const styles = StyleSheet.create({
     minHeight: 80,
   },
   cameraButton: { backgroundColor: "#1e40af" },
+  photoLibraryButton: { backgroundColor: "#7c3aed" },
   fileButton: { backgroundColor: "#059669" },
-  actionIcon: { fontSize: 28, marginBottom: 6 },
+  actionIcon: { marginBottom: 6 },
   actionLabel: {
     color: "#fff",
     fontSize: 14,
@@ -211,7 +506,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: 60,
   },
-  emptyEmoji: { fontSize: 48, marginBottom: 12 },
   emptyText: {
     fontSize: 16,
     color: "#374151",
@@ -245,7 +539,7 @@ const rowStyles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  icon: { fontSize: 22, marginRight: 12 },
+  icon: { marginRight: 12 },
   info: { flex: 1 },
   filename: {
     fontSize: 14,
@@ -254,5 +548,7 @@ const rowStyles = StyleSheet.create({
     marginBottom: 4,
   },
   statusDone: { fontSize: 12, color: "#059669" },
+  statusQueued: { fontSize: 12, color: "#6b7280" },
   statusError: { fontSize: 12, color: "#dc2626" },
+  retryHint: { fontSize: 12, color: "#1e40af", fontWeight: "600", marginTop: 4 },
 });

@@ -68,6 +68,8 @@ IMAGE_MIME_TYPES: set[str] = {
     "image/tiff",
     "image/webp",
     "image/svg+xml",
+    "image/heic",
+    "image/heif",
 }
 
 # ---------------------------------------------------------------------------
@@ -124,6 +126,8 @@ ALLOWED_EXTENSIONS: set[str] = {
     ".tif",
     ".webp",
     ".svg",
+    ".heic",
+    ".heif",
     # Web
     ".html",
     ".htm",
@@ -234,7 +238,7 @@ FILE_TYPE_CATEGORIES: dict[str, dict] = {
     },
     "images": {
         "label": "Images",
-        "description": "Image files (.jpg, .png, .gif, .bmp, .tiff, .webp, .svg)",
+        "description": "Image files (.jpg, .png, .gif, .bmp, .tiff, .webp, .svg, .heic, .heif)",
         "mime_types": frozenset(
             {
                 "image/jpeg",
@@ -245,6 +249,8 @@ FILE_TYPE_CATEGORIES: dict[str, dict] = {
                 "image/tiff",
                 "image/webp",
                 "image/svg+xml",
+                "image/heic",
+                "image/heif",
             }
         ),
         "extensions": frozenset(
@@ -258,6 +264,8 @@ FILE_TYPE_CATEGORIES: dict[str, dict] = {
                 ".tif",
                 ".webp",
                 ".svg",
+                ".heic",
+                ".heif",
             }
         ),
     },

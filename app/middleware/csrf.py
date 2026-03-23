@@ -20,6 +20,9 @@ How it works:
 
 Exempt paths (CSRF is not checked even for state-changing methods):
 - ``/oauth-callback`` – OAuth 2.0 callback; protected by the ``state`` parameter.
+- ``/api/qr-auth/claim`` – Called by the unauthenticated mobile app; the
+  cryptographically-random, single-use challenge token provides equivalent
+  protection.
 """
 
 import logging
@@ -39,6 +42,10 @@ CSRF_PROTECTED_METHODS = {"POST", "PUT", "DELETE", "PATCH"}
 # their own replay-protection mechanism).
 CSRF_EXEMPT_PATHS = {
     "/oauth-callback",
+    # The mobile app calls this endpoint without a browser session/CSRF token.
+    # The cryptographically-random, single-use challenge token already provides
+    # equivalent protection against cross-site request forgery.
+    "/api/qr-auth/claim",
 }
 
 

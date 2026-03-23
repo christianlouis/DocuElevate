@@ -7,7 +7,6 @@ Covers Dropbox OAuth endpoints, settings management, and token testing.
 from unittest.mock import Mock, patch
 
 import pytest
-import requests
 
 
 @pytest.mark.unit
@@ -137,7 +136,7 @@ class TestTestDropboxToken:
         assert data["status"] == "error"
         assert "not fully configured" in data["message"]
 
-    @patch("app.api.dropbox.requests.post")
+    @patch("app.api.dropbox.httpx.AsyncClient.post")
     @patch("app.api.dropbox.settings")
     def test_valid_token(self, mock_settings, mock_post, client):
         """Test successful token validation."""
@@ -162,7 +161,7 @@ class TestTestDropboxToken:
         assert data["account"] == "user@example.com"
         assert data["account_name"] == "Test User"
 
-    @patch("app.api.dropbox.requests.post")
+    @patch("app.api.dropbox.httpx.AsyncClient.post")
     @patch("app.api.dropbox.settings")
     def test_expired_token_refreshed(self, mock_settings, mock_post, client):
         """Test that expired token triggers refresh and retry."""
@@ -194,7 +193,7 @@ class TestTestDropboxToken:
         data = response.json()
         assert data["status"] == "success"
 
-    @patch("app.api.dropbox.requests.post")
+    @patch("app.api.dropbox.httpx.AsyncClient.post")
     @patch("app.api.dropbox.settings")
     def test_refresh_token_expired(self, mock_settings, mock_post, client):
         """Test handling when refresh token itself is expired."""
@@ -220,7 +219,7 @@ class TestTestDropboxToken:
         assert data["status"] == "error"
         assert data["needs_reauth"] is True
 
-    @patch("app.api.dropbox.requests.post")
+    @patch("app.api.dropbox.httpx.AsyncClient.post")
     @patch("app.api.dropbox.settings")
     def test_token_validation_failure(self, mock_settings, mock_post, client):
         """Test handling non-401, non-200 response."""
@@ -240,16 +239,21 @@ class TestTestDropboxToken:
         data = response.json()
         assert data["status"] == "error"
 
-    @patch("app.api.dropbox.requests.post")
+    @patch("app.api.dropbox.httpx.AsyncClient.post")
     @patch("app.api.dropbox.settings")
     def test_connection_error(self, mock_settings, mock_post, client):
         """Test handling of connection exceptions."""
+        import httpx
+
         mock_settings.dropbox_refresh_token = "token"
         mock_settings.dropbox_app_key = "app-key"
         mock_settings.dropbox_app_secret = "app-secret"
         mock_settings.http_request_timeout = 30
 
-        mock_post.side_effect = requests.exceptions.ConnectionError("Connection refused")
+        mock_post.side_effect = httpx.RequestError(
+            "Connection refused",
+            request=httpx.Request("POST", "https://api.dropboxapi.com/2/users/get_current_account"),
+        )
 
         response = client.get("/api/dropbox/test-token")
 
@@ -412,3 +416,253 @@ class TestSaveDropboxSettings:
         # .env write is best-effort; endpoint should still succeed via DB write
         assert response.status_code == 200
         assert response.json()["status"] == "success"
+
+
+@pytest.mark.unit
+class TestListDropboxFolders:
+    """Tests for list_dropbox_folders endpoint."""
+
+    @patch("app.api.dropbox.requests.post")
+    def test_list_folders_success(self, mock_post, client):
+        """Test successful folder listing at root."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "entries": [
+                {".tag": "folder", "name": "Documents", "path_display": "/Documents", "id": "id:1"},
+                {".tag": "folder", "name": "Photos", "path_display": "/Photos", "id": "id:2"},
+                {".tag": "file", "name": "readme.txt", "path_display": "/readme.txt", "id": "id:3"},
+            ],
+            "has_more": False,
+        }
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/dropbox/list-folders",
+            data={"access_token": "test-token", "path": ""},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["folders"]) == 2
+        assert data["folders"][0]["name"] == "Documents"
+        assert data["folders"][1]["name"] == "Photos"
+        assert data["path"] == "/"
+        assert data["has_more"] is False
+
+    @patch("app.api.dropbox.requests.post")
+    def test_list_folders_subfolder(self, mock_post, client):
+        """Test listing folders in a subfolder."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "entries": [
+                {".tag": "folder", "name": "Invoices", "path_display": "/Documents/Invoices", "id": "id:4"},
+            ],
+            "has_more": False,
+        }
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/dropbox/list-folders",
+            data={"access_token": "test-token", "path": "/Documents"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["folders"]) == 1
+        assert data["folders"][0]["path"] == "/Documents/Invoices"
+
+    @patch("app.api.dropbox.requests.post")
+    def test_list_folders_empty(self, mock_post, client):
+        """Test listing folders in an empty directory."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"entries": [], "has_more": False}
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/dropbox/list-folders",
+            data={"access_token": "test-token", "path": "/EmptyFolder"},
+        )
+
+        assert response.status_code == 200
+        assert len(response.json()["folders"]) == 0
+
+    @patch("app.api.dropbox.requests.post")
+    def test_list_folders_unauthorized(self, mock_post, client):
+        """Test listing folders with invalid token returns 401."""
+        mock_response = Mock()
+        mock_response.status_code = 401
+        mock_response.text = "Invalid access token"
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/dropbox/list-folders",
+            data={"access_token": "bad-token", "path": ""},
+        )
+
+        assert response.status_code == 401
+
+    @patch("app.api.dropbox.requests.post")
+    def test_list_folders_api_error(self, mock_post, client):
+        """Test listing folders when Dropbox API returns an error."""
+        mock_response = Mock()
+        mock_response.status_code = 500
+        mock_response.text = "Internal server error"
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/dropbox/list-folders",
+            data={"access_token": "test-token", "path": ""},
+        )
+
+        assert response.status_code == 502
+
+    @patch("app.api.dropbox.requests.post")
+    def test_list_folders_root_path_normalization(self, mock_post, client):
+        """Test that '/' is normalized to empty string for Dropbox API."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"entries": [], "has_more": False}
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/dropbox/list-folders",
+            data={"access_token": "test-token", "path": "/"},
+        )
+
+        assert response.status_code == 200
+        # Check the actual API call used empty string for root
+        call_args = mock_post.call_args
+        assert call_args[1]["json"]["path"] == ""
+
+    @patch("app.api.dropbox.requests.post")
+    def test_list_folders_sorted_alphabetically(self, mock_post, client):
+        """Test that folders are returned in alphabetical order."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "entries": [
+                {".tag": "folder", "name": "Zebra", "path_display": "/Zebra", "id": "id:1"},
+                {".tag": "folder", "name": "Alpha", "path_display": "/Alpha", "id": "id:2"},
+                {".tag": "folder", "name": "middle", "path_display": "/middle", "id": "id:3"},
+            ],
+            "has_more": False,
+        }
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/dropbox/list-folders",
+            data={"access_token": "test-token", "path": ""},
+        )
+
+        assert response.status_code == 200
+        names = [f["name"] for f in response.json()["folders"]]
+        assert names == ["Alpha", "middle", "Zebra"]
+
+
+class TestBuildDropboxRedirectUri:
+    """Tests for the _build_dropbox_redirect_uri helper."""
+
+    def test_uses_public_base_url_when_set(self):
+        """When PUBLIC_BASE_URL is configured, redirect URI should use it."""
+        from unittest.mock import MagicMock
+
+        with patch("app.api.dropbox.settings") as mock_settings:
+            mock_settings.public_base_url = "https://myapp.example.com"
+            from app.api.dropbox import _build_dropbox_redirect_uri
+
+            mock_request = MagicMock()
+            result = _build_dropbox_redirect_uri(mock_request)
+
+        assert result == "https://myapp.example.com/dropbox-callback"
+
+    def test_uses_public_base_url_strips_trailing_slash(self):
+        """PUBLIC_BASE_URL with trailing slash should be handled correctly."""
+        from unittest.mock import MagicMock
+
+        with patch("app.api.dropbox.settings") as mock_settings:
+            mock_settings.public_base_url = "https://myapp.example.com/"
+            from app.api.dropbox import _build_dropbox_redirect_uri
+
+            mock_request = MagicMock()
+            result = _build_dropbox_redirect_uri(mock_request)
+
+        assert result == "https://myapp.example.com/dropbox-callback"
+
+    def test_falls_back_to_request_when_public_base_url_not_set(self):
+        """When PUBLIC_BASE_URL is not set, use request scheme and netloc."""
+        from unittest.mock import MagicMock
+
+        with patch("app.api.dropbox.settings") as mock_settings:
+            mock_settings.public_base_url = None
+            from app.api.dropbox import _build_dropbox_redirect_uri
+
+            mock_request = MagicMock()
+            mock_request.url.scheme = "https"
+            mock_request.url.netloc = "other.example.com"
+            result = _build_dropbox_redirect_uri(mock_request)
+
+        assert result == "https://other.example.com/dropbox-callback"
+
+
+@pytest.mark.unit
+class TestGlobalAuthorizeUrl:
+    """Tests for GET /api/dropbox/global-authorize-url endpoint."""
+
+    @patch("app.api.dropbox.settings")
+    def test_returns_authorize_url(self, mock_settings, client):
+        """Test that a valid authorize URL is returned when global creds are configured."""
+        mock_settings.dropbox_allow_global_credentials_for_integrations = True
+        mock_settings.dropbox_app_key = "test-app-key"
+        mock_settings.dropbox_app_secret = "test-app-secret"
+        mock_settings.public_base_url = "https://example.com"
+
+        response = client.get("/api/dropbox/global-authorize-url")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "authorize_url" in data
+        assert "https://www.dropbox.com/oauth2/authorize" in data["authorize_url"]
+        assert "client_id=test-app-key" in data["authorize_url"]
+        # redirect_uri should be URL-encoded
+        assert "redirect_uri=" in data["authorize_url"]
+        assert "https%3A%2F%2Fexample.com%2Fdropbox-callback" in data["authorize_url"]
+
+    @patch("app.api.dropbox.settings")
+    def test_returns_403_when_global_creds_disabled(self, mock_settings, client):
+        """Test 403 when global credentials for integrations are disabled."""
+        mock_settings.dropbox_allow_global_credentials_for_integrations = False
+        mock_settings.dropbox_app_key = "test-app-key"
+        mock_settings.dropbox_app_secret = "test-app-secret"
+
+        response = client.get("/api/dropbox/global-authorize-url")
+
+        assert response.status_code == 403
+
+    @patch("app.api.dropbox.settings")
+    def test_returns_503_when_creds_not_configured(self, mock_settings, client):
+        """Test 503 when global Dropbox credentials are not configured."""
+        mock_settings.dropbox_allow_global_credentials_for_integrations = True
+        mock_settings.dropbox_app_key = None
+        mock_settings.dropbox_app_secret = None
+
+        response = client.get("/api/dropbox/global-authorize-url")
+
+        assert response.status_code == 503
+
+    @patch("app.api.dropbox.settings")
+    def test_redirect_uri_uses_public_base_url(self, mock_settings, client):
+        """Redirect URI in authorize URL must use PUBLIC_BASE_URL when configured."""
+        mock_settings.dropbox_allow_global_credentials_for_integrations = True
+        mock_settings.dropbox_app_key = "my-key"
+        mock_settings.dropbox_app_secret = "my-secret"
+        mock_settings.public_base_url = "https://prod.example.com"
+
+        response = client.get("/api/dropbox/global-authorize-url")
+
+        assert response.status_code == 200
+        authorize_url = response.json()["authorize_url"]
+        # The redirect_uri must be URL-encoded and contain the public base URL
+        assert "https%3A%2F%2Fprod.example.com%2Fdropbox-callback" in authorize_url

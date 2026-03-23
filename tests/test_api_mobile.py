@@ -329,7 +329,7 @@ class TestDeactivateDevice:
     """Tests for DELETE /api/mobile/devices/{device_id}."""
 
     def test_deactivate_own_device(self, mob_engine, mob_session):
-        """Deactivating a device sets is_active to False."""
+        """Deactivating an active device sets is_active to False (soft-delete, returns 200)."""
         from app.main import app
 
         device = MobileDevice(
@@ -346,12 +346,40 @@ class TestDeactivateDevice:
         client = _make_client(mob_engine)
         try:
             resp = client.delete(f"/api/mobile/devices/{device_id}")
-            assert resp.status_code == 204
+            assert resp.status_code == 200
+            assert resp.json()["detail"] == "Device deactivated"
 
             mob_session.expire_all()
             updated = mob_session.get(MobileDevice, device_id)
             assert updated is not None
             assert updated.is_active is False
+        finally:
+            _cleanup(app)
+
+    def test_delete_inactive_device(self, mob_engine, mob_session):
+        """Deleting an already-inactive device permanently removes it (hard-delete, returns 200)."""
+        from app.main import app
+
+        device = MobileDevice(
+            owner_id=_OWNER,
+            push_token=_EXPO_TOKEN,
+            platform="ios",
+            is_active=False,
+        )
+        mob_session.add(device)
+        mob_session.commit()
+        mob_session.refresh(device)
+        device_id = device.id
+
+        client = _make_client(mob_engine)
+        try:
+            resp = client.delete(f"/api/mobile/devices/{device_id}")
+            assert resp.status_code == 200
+            assert resp.json()["detail"] == "Device deleted"
+
+            mob_session.expire_all()
+            deleted = mob_session.get(MobileDevice, device_id)
+            assert deleted is None
         finally:
             _cleanup(app)
 
@@ -439,6 +467,42 @@ class TestWhoAmI:
             assert data["email"] == _OWNER
             assert data["avatar_url"] is not None  # Gravatar URL
             assert data["is_admin"] is False
+            assert data["preferred_language"] is None  # not set yet
+        finally:
+            _cleanup(app)
+
+    def test_whoami_returns_preferred_language(self, mob_engine, mob_session):
+        """preferred_language from UserProfile is included in the whoami response."""
+        from app.main import app
+        from app.models import UserProfile
+
+        profile = UserProfile(
+            user_id=_OWNER,
+            display_name="Bob Test",
+            preferred_language="de",
+        )
+        mob_session.add(profile)
+        mob_session.commit()
+
+        client = _make_client(mob_engine)
+        try:
+            resp = client.get("/api/mobile/whoami")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["preferred_language"] == "de"
+        finally:
+            _cleanup(app)
+
+    def test_whoami_no_profile_preferred_language_is_null(self, mob_engine):
+        """preferred_language is null when no UserProfile exists."""
+        from app.main import app
+
+        client = _make_client(mob_engine)
+        try:
+            resp = client.get("/api/mobile/whoami")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["preferred_language"] is None
         finally:
             _cleanup(app)
 

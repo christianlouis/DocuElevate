@@ -998,3 +998,49 @@ class TestAlembicUpgrade:
         # Verify head is reachable
         heads = script.get_heads()
         assert len(heads) == 1  # Should be a single linear chain
+
+
+@pytest.mark.unit
+class TestEnginePoolConfiguration:
+    """Tests for database engine pool configuration (pool class and options)."""
+
+    def test_sqlite_engine_uses_null_pool(self):
+        """SQLite engines must use NullPool to prevent QueuePool exhaustion."""
+        from sqlalchemy.pool import NullPool
+
+        from app.database import engine
+
+        # The test environment uses SQLite, so NullPool should be in effect.
+        assert isinstance(engine.pool, NullPool)
+
+    def test_create_engine_sqlite_null_pool(self):
+        """Explicitly create a SQLite engine to confirm NullPool is applied."""
+        from sqlalchemy import create_engine
+        from sqlalchemy.pool import NullPool
+
+        test_engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=NullPool,
+        )
+        assert isinstance(test_engine.pool, NullPool)
+        test_engine.dispose()
+
+    def test_pool_settings_exist_in_config(self):
+        """Verify that pool tuning settings are exposed through config."""
+        from app.config import settings
+
+        assert hasattr(settings, "db_pool_size")
+        assert hasattr(settings, "db_max_overflow")
+        assert hasattr(settings, "db_pool_timeout")
+        assert hasattr(settings, "db_pool_recycle")
+
+    def test_pool_settings_have_sensible_defaults(self):
+        """Default pool settings should be larger than SQLAlchemy's built-in defaults."""
+        from app.config import settings
+
+        # SQLAlchemy defaults: pool_size=5, max_overflow=10
+        assert settings.db_pool_size >= 10
+        assert settings.db_max_overflow >= 20
+        assert settings.db_pool_timeout >= 30
+        assert settings.db_pool_recycle >= 1800

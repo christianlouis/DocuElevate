@@ -11,6 +11,7 @@ import zipfile
 from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
+import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import asc, desc
@@ -19,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.auth import require_login
 from app.config import settings
 from app.database import get_db
+from app.middleware.upload_rate_limit import require_upload_rate_limit
 from app.models import FileProcessingStep, FileRecord, ProcessingLog
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document
@@ -28,7 +30,7 @@ from app.utils.file_queries import apply_status_filter
 from app.utils.file_status import get_files_processing_status
 from app.utils.filename_utils import sanitize_filename
 from app.utils.input_validation import validate_search_query, validate_sort_field, validate_sort_order
-from app.utils.user_scope import apply_owner_filter, get_current_owner_id
+from app.utils.user_scope import apply_owner_filter, get_current_owner_id, get_file_role
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -298,6 +300,7 @@ def delete_file_record(request: Request, file_id: int, db: DbSession):
     """
     Delete a file record from the database.
     This only removes the database entry, not the actual file.
+    Only the file owner (or an admin) may delete a document.
     """
     # Check if file deletion is allowed
     if not settings.allow_file_delete:
@@ -311,6 +314,18 @@ def delete_file_record(request: Request, file_id: int, db: DbSession):
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File record with ID {file_id} not found")
+
+        # Enforce owner-only deletion in multi-user mode
+        user = request.session.get("user")
+        is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
+        if not is_admin:
+            owner_id = get_current_owner_id(request)
+            role = get_file_role(file_record, owner_id, db)
+            if role != "owner":
+                raise HTTPException(
+                    status_code=403,
+                    detail="Only the file owner can delete this document",
+                )
 
         # Log the deletion
         logger.info(f"Deleting file record: ID={file_id}, Filename={file_record.original_filename}")
@@ -338,6 +353,7 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
     """
     Delete multiple file records from the database.
     This only removes the database entries, not the actual files.
+    Only the file owner (or an admin) may delete each document.
     """
     # Check if file deletion is allowed
     if not settings.allow_file_delete:
@@ -345,10 +361,24 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
 
     try:
         # Find all file records
-        file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+        query = db.query(FileRecord).filter(FileRecord.id.in_(file_ids))
+        query = apply_owner_filter(query, request)
+        file_records = query.all()
 
         if not file_records:
             raise HTTPException(status_code=404, detail="No files found with the provided IDs")
+
+        # Enforce owner-only deletion in multi-user mode
+        user = request.session.get("user")
+        is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
+        if not is_admin:
+            owner_id = get_current_owner_id(request)
+            non_owner_ids = [f.id for f in file_records if get_file_role(f, owner_id, db) != "owner"]
+            if non_owner_ids:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"You can only delete files you own. Not owner of file IDs: {non_owner_ids}",
+                )
 
         deleted_count = len(file_records)
         deleted_ids = [f.id for f in file_records]
@@ -384,7 +414,9 @@ def bulk_reprocess_files(request: Request, file_ids: List[int], db: DbSession):
     """
     try:
         # Find all file records
-        file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+        query = db.query(FileRecord).filter(FileRecord.id.in_(file_ids))
+        query = apply_owner_filter(query, request)
+        file_records = query.all()
 
         if not file_records:
             raise HTTPException(status_code=404, detail="No files found with the provided IDs")
@@ -456,7 +488,9 @@ def bulk_reprocess_files_cloud_ocr(request: Request, file_ids: List[int], db: Db
     Useful for re-running OCR on files with poor text quality or missing OCR text.
     """
     try:
-        file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+        query = db.query(FileRecord).filter(FileRecord.id.in_(file_ids))
+        query = apply_owner_filter(query, request)
+        file_records = query.all()
 
         if not file_records:
             raise HTTPException(status_code=404, detail="No files found with the provided IDs")
@@ -536,7 +570,9 @@ def bulk_download_files(request: Request, file_ids: List[int], db: DbSession):
     Files not found on disk are silently skipped.
     """
     try:
-        file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+        query = db.query(FileRecord).filter(FileRecord.id.in_(file_ids))
+        query = apply_owner_filter(query, request)
+        file_records = query.all()
 
         if not file_records:
             raise HTTPException(status_code=404, detail="No files found with the provided IDs")
@@ -618,7 +654,9 @@ def reprocess_single_file(request: Request, file_id: int, db: DbSession):
     """
     try:
         # Find the file record
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        query = db.query(FileRecord).filter(FileRecord.id == file_id)
+        query = apply_owner_filter(query, request)
+        file_record = query.first()
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
@@ -674,7 +712,9 @@ def reprocess_with_cloud_ocr(request: Request, file_id: int, db: DbSession):
     """
     try:
         # Find the file record
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        query = db.query(FileRecord).filter(FileRecord.id == file_id)
+        query = apply_owner_filter(query, request)
+        file_record = query.first()
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
@@ -937,7 +977,9 @@ def retry_subtask(
     """
     try:
         # Find the file record
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        query = db.query(FileRecord).filter(FileRecord.id == file_id)
+        query = apply_owner_filter(query, request)
+        file_record = query.first()
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
@@ -1079,7 +1121,9 @@ def get_file_preview(
 
     try:
         # Find the file record
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        query = db.query(FileRecord).filter(FileRecord.id == file_id)
+        query = apply_owner_filter(query, request)
+        file_record = query.first()
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
@@ -1159,7 +1203,9 @@ def download_file(
 
     try:
         # Find the file record
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        query = db.query(FileRecord).filter(FileRecord.id == file_id)
+        query = apply_owner_filter(query, request)
+        file_record = query.first()
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
@@ -1217,9 +1263,79 @@ def download_file(
         raise HTTPException(status_code=500, detail=f"Error downloading file: {str(e)}")
 
 
+async def _save_upload_file_chunks(file: UploadFile, target_path: str, max_size: int) -> int:
+    """Save an uploaded file in chunks and enforce the maximum size limit."""
+    try:
+        written_size = 0
+        with open(target_path, "wb") as f:
+            chunk_size = 65536  # 64 KB chunks
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                written_size += len(chunk)
+                if written_size > max_size:
+                    # Exceeded limit mid-stream; clean up and reject
+                    f.close()
+                    os.remove(target_path)
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File too large: exceeded {max_size} bytes during upload. "
+                        f"See SECURITY_AUDIT.md for configuration details.",
+                    )
+                f.write(chunk)
+        return written_size
+    except HTTPException:
+        raise
+    except Exception as e:
+        if os.path.exists(target_path):
+            os.remove(target_path)
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+
+
+def _check_for_exact_duplicate(db: DbSession, target_path: str, safe_filename: str) -> dict | None:
+    """Check for an exact duplicate of the uploaded file.
+
+    Returns a dict with duplicate info when the file's SHA-256 hash matches an
+    already-processed document, or ``None`` when no duplicate is found (or
+    deduplication is disabled).
+    """
+    if not settings.enable_deduplication:
+        return None
+
+    try:
+        filehash = hash_file(target_path)
+        existing = (
+            db.query(FileRecord)
+            .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False))
+            .order_by(FileRecord.id.asc())
+            .first()
+        )
+        if existing:
+            logger.info(f"Exact duplicate detected on upload: '{safe_filename}' matches file ID {existing.id}")
+            return {
+                "duplicate_type": "exact",
+                "original_file_id": existing.id,
+                "original_filename": existing.original_filename,
+                "message": (
+                    "This file is an exact duplicate of an already-processed document. "
+                    "It has not been queued for processing again."
+                ),
+            }
+    except Exception as e:
+        logger.warning(f"Duplicate check failed for uploaded file '{safe_filename}': {e}")
+
+    return None
+
+
 @router.post("/ui-upload")
 @require_login
-async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...)):
+async def ui_upload(
+    request: Request,
+    db: DbSession,
+    file: UploadFile = File(...),
+    _rate_ok: None = Depends(require_upload_rate_limit),
+):
     """Endpoint to accept a user-uploaded file and enqueue it for processing."""
     workdir = settings.workdir
 
@@ -1277,7 +1393,7 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
     # enforcing the size limit during the read so memory usage stays bounded.
     try:
         written_size = 0
-        with open(target_path, "wb") as f:
+        async with aiofiles.open(target_path, "wb") as f:
             chunk_size = 65536  # 64 KB chunks
             while True:
                 chunk = await file.read(chunk_size)
@@ -1286,14 +1402,14 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
                 written_size += len(chunk)
                 if written_size > max_size:
                     # Exceeded limit mid-stream; clean up and reject
-                    f.close()
+                    await f.close()
                     os.remove(target_path)
                     raise HTTPException(
                         status_code=413,
                         detail=f"File too large: exceeded {max_size} bytes during upload. "
                         f"See SECURITY_AUDIT.md for configuration details.",
                     )
-                f.write(chunk)
+                await f.write(chunk)
     except HTTPException:
         raise
     except Exception as e:
@@ -1304,6 +1420,25 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
     # Log the mapping between original and safe filename
     logger.info(f"Saved uploaded file '{safe_filename}' as '{target_filename}'")
     file_size = written_size
+
+    # ── Early duplicate rejection ──────────────────────────────────────────
+    # Check for exact duplicates (same SHA-256 hash) BEFORE enqueuing a
+    # processing task.  When deduplication is enabled and the file already
+    # exists, we skip processing entirely, clean up the temp file, and
+    # return the existing file's information to the caller.
+    exact_duplicate = _check_for_exact_duplicate(db, target_path, safe_filename)
+    if exact_duplicate:
+        # Remove the just-saved temp file — it's a duplicate.
+        try:
+            os.remove(target_path)
+        except OSError:
+            pass
+        return {
+            "status": "duplicate",
+            "original_filename": safe_filename,
+            "stored_filename": target_filename,
+            "duplicate_of": exact_duplicate,
+        }
 
     # Determine if the file is a PDF or needs conversion
     mime_type, _ = mimetypes.guess_type(target_path)
@@ -1368,6 +1503,8 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
         ".tif",
         ".webp",
         ".svg",
+        ".heic",
+        ".heif",
     }:
         # If it's an image, convert to PDF first
         task = convert_to_pdf.delay(target_path, original_filename=safe_filename, owner_id=upload_owner_id)
@@ -1381,42 +1518,12 @@ async def ui_upload(request: Request, db: DbSession, file: UploadFile = File(...
         logger.warning(f"Unsupported MIME type {mime_type} for {target_path}, attempting conversion")
         task = convert_to_pdf.delay(target_path, original_filename=safe_filename, owner_id=upload_owner_id)
 
-    # Check for exact duplicates (same SHA-256 hash) before returning.
-    # This gives the caller an immediate warning without waiting for the pipeline.
-    # Only performed when deduplication is enabled in settings.
-    exact_duplicate_warning = None
-    if settings.enable_deduplication:
-        try:
-            filehash = hash_file(target_path)
-            existing = (
-                db.query(FileRecord)
-                .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False))
-                .order_by(FileRecord.id.asc())
-                .first()
-            )
-            if existing:
-                exact_duplicate_warning = {
-                    "duplicate_type": "exact",
-                    "original_file_id": existing.id,
-                    "original_filename": existing.original_filename,
-                    "message": (
-                        "This file appears to be an exact duplicate of an already-processed document. "
-                        "It will still be queued but will be flagged as a duplicate."
-                    ),
-                }
-                logger.info(f"Exact duplicate detected on upload: '{safe_filename}' matches file ID {existing.id}")
-        except Exception as e:
-            logger.warning(f"Duplicate check failed for uploaded file '{safe_filename}': {e}")
-
-    response: dict = {
+    return {
         "task_id": task.id,
         "status": "queued",
         "original_filename": safe_filename,
         "stored_filename": target_filename,
     }
-    if exact_duplicate_warning:
-        response["duplicate_warning"] = exact_duplicate_warning
-    return response
 
 
 # ---------------------------------------------------------------------------
@@ -1458,7 +1565,7 @@ def claim_file(request: Request, file_id: int, db: DbSession):
         logger.exception(f"Error claiming file {file_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to claim document")
 
-    logger.info(f"File {file_id} claimed by user '{owner_id}'")
+    logger.info("File %d claimed by user", file_id)
     return {"status": "success", "message": "Document claimed successfully", "file_id": file_id, "owner_id": owner_id}
 
 
@@ -1498,7 +1605,7 @@ def bulk_claim_files(request: Request, file_ids: list[int], db: DbSession):
         logger.exception(f"Error during bulk claim: {e}")
         raise HTTPException(status_code=500, detail="Failed to claim documents")
 
-    logger.info(f"Bulk claim by '{owner_id}': claimed={claimed}, skipped={[s['file_id'] for s in skipped]}")
+    logger.info("Bulk claim: claimed=%s, skipped=%s", claimed, [s["file_id"] for s in skipped])
     return {
         "status": "success",
         "claimed_count": len(claimed),
@@ -1551,8 +1658,7 @@ def assign_owner(request: Request, db: DbSession, owner_id: str = Query(...), fi
         logger.exception(f"Error assigning owner: {e}")
         raise HTTPException(status_code=500, detail="Failed to assign owner")
 
-    admin_name = get_current_owner_id(request) or "admin"
-    logger.info(f"Admin '{admin_name}' assigned owner_id='{owner_id}' to {updated} file(s)")
+    logger.info("Admin assigned owner to %d file(s)", updated)
     return {
         "status": "success",
         "message": f"Assigned owner to {updated} document(s)",
