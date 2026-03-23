@@ -47,6 +47,27 @@ class TestProcessEndpoints:
             data = response.json()
             assert data["task_id"] == "test-task-id"
             assert data["status"] == "queued"
+            mock_task.delay.assert_called_once_with(str(test_file))
+
+    def test_send_to_dropbox_endpoint_file_not_found(self, client):
+        """Test POST /api/send_to_dropbox/ directly mapping to endpoint name with non-existent file."""
+        response = client.post("/api/send_to_dropbox/?file_path=nonexistent_endpoint.pdf")
+        assert response.status_code == 400
+
+    def test_send_to_dropbox_endpoint_success(self, client, tmp_path):
+        """Test POST /api/send_to_dropbox/ directly mapping to endpoint name with existing file."""
+        test_file = tmp_path / "processed" / "test_endpoint.pdf"
+        test_file.parent.mkdir(parents=True)
+        test_file.write_text("test content endpoint")
+
+        with patch("app.api.process.upload_to_dropbox") as mock_task:
+            mock_task.delay.return_value = Mock(id="test-task-id-endpoint")
+            response = client.post(f"/api/send_to_dropbox/?file_path={test_file}")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["task_id"] == "test-task-id-endpoint"
+            assert data["status"] == "queued"
+            mock_task.delay.assert_called_once_with(str(test_file))
 
     def test_send_to_paperless_file_not_found(self, client):
         """Test POST /api/send_to_paperless/ with non-existent file."""
