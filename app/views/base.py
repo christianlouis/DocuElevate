@@ -174,17 +174,18 @@ def template_response_with_version(*args, **kwargs):
         name = args[0]
         if len(args) >= 2 and isinstance(args[1], dict):
             context = args[1]
-            remaining_args = args[2:]
+            # Old-style may have status_code as 3rd positional arg
+            if len(args) >= 3 and "status_code" not in kwargs:
+                kwargs["status_code"] = args[2]
         else:
             context = kwargs.pop("context", {})
-            remaining_args = args[1:]
         request_obj = context.pop("request", None)
         if request_obj is not None:
             context["request"] = request_obj
         _inject_global_context(context)
         if request_obj is not None:
-            return original_template_response(request_obj, name, context=context, *remaining_args, **kwargs)
-        return original_template_response(name, context=context, *remaining_args, **kwargs)
+            return original_template_response(request_obj, name, context=context, **kwargs)
+        return original_template_response(name, context=context, **kwargs)
 
     # New-style call: (request, name, context=..., ...)
     if "context" in kwargs and isinstance(kwargs["context"], dict):

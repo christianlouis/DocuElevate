@@ -345,7 +345,7 @@ class TestLoginPageSocialProviders:
 
             mock_templates.TemplateResponse.assert_called_once()
             call_args = mock_templates.TemplateResponse.call_args
-            context = call_args.kwargs.get("context") or call_args[0][2] if len(call_args[0]) > 2 else {}
+            context = call_args.kwargs.get("context", {})
             assert context["social_providers"] == mock_providers
 
     @pytest.mark.asyncio
@@ -371,7 +371,7 @@ class TestLoginPageSocialProviders:
 
             mock_templates.TemplateResponse.assert_called_once()
             call_args = mock_templates.TemplateResponse.call_args
-            context = call_args.kwargs.get("context") or call_args[0][2] if len(call_args[0]) > 2 else {}
+            context = call_args.kwargs.get("context", {})
             assert context["social_providers"] == {}
 
 
