@@ -15,7 +15,7 @@ import logging
 import re
 from typing import Any
 
-from sqlalchemy import MetaData, create_engine, inspect, text
+from sqlalchemy import MetaData, create_engine, func, inspect, select, table
 from sqlalchemy.engine import Engine
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import sessionmaker
@@ -89,8 +89,9 @@ def preview_migration(source_url: str) -> dict[str, Any]:
                     logger.warning(f"Skipping table with invalid name format: {table_name}")
                     continue
                 # table_name is safe — sourced from inspect().get_table_names(), not user input
-                quoted_table = conn.dialect.identifier_preparer.quote(table_name)
-                row = conn.execute(text(f"SELECT COUNT(*) FROM {quoted_table}")).fetchone()  # noqa: S608
+                t = table(table_name)
+                query = select(func.count()).select_from(t)
+                row = conn.execute(query).fetchone()
                 count = row[0] if row else 0
                 result.append({"name": table_name, "row_count": count})
                 total += count

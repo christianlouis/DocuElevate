@@ -10,7 +10,6 @@ from app import tasks  # noqa: F401 - Imports app/tasks.py so Celery can registe
 # Import the shared Celery instance
 from app.celery_app import celery
 from app.config import settings
-from app.tasks.automation_tasks import deliver_automation_hook_task  # noqa: F401
 from app.tasks.backup_tasks import cleanup_old_backups, create_backup  # noqa: F401
 from app.tasks.batch_tasks import (  # noqa: F401
     backfill_missing_metadata,
@@ -23,7 +22,6 @@ from app.tasks.batch_tasks import (  # noqa: F401
     sync_search_index,
 )
 from app.tasks.check_credentials import check_credentials
-from app.tasks.classify_document import classify_document_task  # noqa: F401
 from app.tasks.compute_embedding import backfill_missing_embeddings, compute_document_embedding  # noqa: F401
 from app.tasks.convert_to_pdf import convert_to_pdf  # noqa: F401
 from app.tasks.convert_to_pdfa import convert_to_pdfa  # noqa: F401

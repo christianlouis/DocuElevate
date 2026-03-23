@@ -10,6 +10,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`cc5e879`](https://github.com/christianlouis/DocuElevate/commit/cc5e879ea98507ec5656cce7162a69d385ee00f2))
+
+- **changelog**: Update changelog [skip ci]
+  ([`0497fbb`](https://github.com/christianlouis/DocuElevate/commit/0497fbbbad71fd728e528498508bbfc7802dab70))
+
+- **changelog**: Update changelog [skip ci]
+  ([`45d3ac8`](https://github.com/christianlouis/DocuElevate/commit/45d3ac8cf07d39d49930dd6866f76e6015067b08))
+
+### Testing
+
+- Add assertions for task enqueuing parameters
+  ([`eeae47d`](https://github.com/christianlouis/DocuElevate/commit/eeae47ddec01339421e503ba484157e798750b8a))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`0497fbb`](https://github.com/christianlouis/DocuElevate/commit/0497fbbbad71fd728e528498508bbfc7802dab70))
+
+- **changelog**: Update changelog [skip ci]
+  ([`45d3ac8`](https://github.com/christianlouis/DocuElevate/commit/45d3ac8cf07d39d49930dd6866f76e6015067b08))
+
+### Testing
+
+- Add assertions for task enqueuing parameters
+  ([`eeae47d`](https://github.com/christianlouis/DocuElevate/commit/eeae47ddec01339421e503ba484157e798750b8a))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`45d3ac8`](https://github.com/christianlouis/DocuElevate/commit/45d3ac8cf07d39d49930dd6866f76e6015067b08))
+
+### Testing
+
+- Add assertions for task enqueuing parameters
+  ([`eeae47d`](https://github.com/christianlouis/DocuElevate/commit/eeae47ddec01339421e503ba484157e798750b8a))
+
+
+## Unreleased
+
+
+## v0.172.2 (2026-03-23)
+
+### Bug Fixes
+
+- Adapt TemplateResponse calls to Starlette 1.0 new-style API
+  ([`c4e10be`](https://github.com/christianlouis/DocuElevate/commit/c4e10bee5e096e71a5bc4fac4928f69e5c04f2fb))
+
+- Update test assertions and lint fixes for Starlette 1.0 TemplateResponse API
+  ([`93629ff`](https://github.com/christianlouis/DocuElevate/commit/93629ff44083d43f79fdd49431457023e53d13e4))
+
+- **build**: Remove --omit=dev from npm ci in Dockerfile frontend-builder stage
+  ([`b4e0067`](https://github.com/christianlouis/DocuElevate/commit/b4e0067a27e2fb161349bd38c6d3b3f3bcb86972))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`0841713`](https://github.com/christianlouis/DocuElevate/commit/084171395d1076c716aa500a516118db49468ff5))
+
+
+## Unreleased
+
+
 ## v0.172.1 (2026-03-22)
 
 ### Bug Fixes

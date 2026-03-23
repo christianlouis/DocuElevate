@@ -29,10 +29,9 @@ End users authorize their own OneDrive integration from the **Integrations** das
 1. Navigate to `/integrations` and click **+ Add Destination** (or **+ Add Source** for Watch Folder).
 2. Create a OneDrive destination integration (or a Watch Folder with `source_type = onedrive`).
 3. Click the **Authorize** button next to the integration — it links directly to the OAuth wizard pre-loaded with your integration's configuration.
-4. If the administrator has configured system-wide OneDrive app credentials (`ONEDRIVE_CLIENT_ID` / `ONEDRIVE_CLIENT_SECRET`), the wizard defaults to using them — no need to register your own Azure AD app. Uncheck the toggle to use custom credentials if needed.
+4. Enter your Azure AD Client ID and Client Secret in the wizard.
 5. Click **Start Authentication Flow**, authorize access via Microsoft, and the refresh token is automatically saved to your personal integration record.
-6. After authorization, an interactive **folder browser** lets you select the target folder directly from your OneDrive — no need to manually type folder paths.
-7. The page redirects to `/integrations` on success. Re-authorization is available at any time via the **Re-Authorize** button.
+6. The page redirects back to `/integrations` on success. Re-authorization is available at any time via the **Re-Authorize** button.
 
 > **Note:** Your credentials are stored encrypted per-integration and are never mixed with other users' data. Each user can have multiple OneDrive integrations with independent tokens.
 

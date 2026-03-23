@@ -120,7 +120,6 @@ class WhoAmIResponse(BaseModel):
     email: str | None
     avatar_url: str | None
     is_admin: bool
-    preferred_language: str | None
 
 
 # ---------------------------------------------------------------------------
@@ -274,44 +273,31 @@ async def list_devices(
     return [_device_to_response(d) for d in devices]
 
 
-@router.delete("/devices/{device_id}", status_code=status.HTTP_200_OK)
+@router.delete("/devices/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
 @require_login
 async def deactivate_device(
     request: Request,
     device_id: int,
     owner_id: CurrentOwner,
     db: DbSession,
-) -> dict[str, str]:
-    """Deactivate or permanently delete a push-notification device registration.
+) -> None:
+    """Deactivate a push-notification device registration.
 
-    * **Active device** – soft-deactivated: the record is kept for audit
-      purposes but will no longer receive push notifications.
-    * **Already-inactive device** – hard-deleted: the record is permanently
-      removed from the database.
+    The device record is kept for audit purposes but will no longer receive
+    push notifications.
     """
     device = db.get(MobileDevice, device_id)
     if not device or device.owner_id != owner_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
 
-    if device.is_active:
-        device.is_active = False
-        try:
-            db.commit()
-        except Exception:
-            db.rollback()
-            raise
-        logger.info("Mobile device deactivated: id=%s owner=%s", device_id, owner_id)
-        return {"detail": "Device deactivated"}
-
-    # Hard-delete an already-inactive device.
+    device.is_active = False
     try:
-        db.delete(device)
         db.commit()
     except Exception:
         db.rollback()
         raise
-    logger.info("Mobile device permanently deleted: id=%s owner=%s", device_id, owner_id)
-    return {"detail": "Device deleted"}
+
+    logger.info("Mobile device deactivated: id=%s owner=%s", device_id, owner_id)
 
 
 @router.get("/whoami", response_model=WhoAmIResponse)
@@ -358,5 +344,4 @@ async def whoami(
         "email": email,
         "avatar_url": avatar_url,
         "is_admin": is_admin,
-        "preferred_language": profile.preferred_language if profile else None,
     }

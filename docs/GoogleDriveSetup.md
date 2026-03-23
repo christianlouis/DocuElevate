@@ -30,7 +30,7 @@ End users can authorize their own Google Drive integration directly from the **I
 1. Navigate to `/integrations` and click **+ Add Destination** (or **+ Add Source** for Watch Folder).
 2. Create a Google Drive destination integration (or a Watch Folder with `source_type = google_drive`).
 3. Click the **Authorize** button — it opens the OAuth wizard pre-loaded with your integration's configuration.
-4. If the administrator has configured system-wide Google Drive app credentials (`GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET`), the wizard defaults to using them — no need to register your own Google Cloud app. Uncheck the toggle to use custom credentials if needed.
+4. Enter your Google OAuth Client ID and Client Secret in the wizard.
 5. Click **Start Authentication Flow** and authorize access in Google.
 6. Credentials are saved automatically to your personal integration record; the page redirects back to `/integrations`.
 7. Re-authorization is available at any time via the **Re-Authorize** button.

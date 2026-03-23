@@ -142,7 +142,7 @@ class TestFileDetailPage:
         db_session.commit()
 
         # Test file detail page
-        response = client.get(f"/files/{file_record.id}/process")
+        response = client.get(f"/files/{file_record.id}/detail")
         assert response.status_code == 200
         content = response.text
         assert "test.pdf" in content
@@ -150,7 +150,7 @@ class TestFileDetailPage:
     def test_file_detail_page_with_missing_file(self, client: TestClient, db_session):
         """Test file detail page with non-existent file"""
         # Try to access non-existent file
-        response = client.get("/files/99999/process")
+        response = client.get("/files/99999/detail")
         assert response.status_code == 200
         content = response.text
         assert "not found" in content.lower()
@@ -193,7 +193,7 @@ class TestFileDetailPage:
         db_session.commit()
 
         # Test file detail page
-        response = client.get(f"/files/{file_record.id}/process")
+        response = client.get(f"/files/{file_record.id}/detail")
         assert response.status_code == 200
         content = response.text
         assert "create_file_record" in content
@@ -232,7 +232,7 @@ class TestFileDetailPage:
         db_session.commit()
 
         # Test file detail page
-        response = client.get(f"/files/{file_record.id}/process")
+        response = client.get(f"/files/{file_record.id}/detail")
         assert response.status_code == 200
         content = response.text
         # Should show metadata

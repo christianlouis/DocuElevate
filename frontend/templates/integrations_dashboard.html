@@ -1392,7 +1392,7 @@ function integrationsDashboard() {
           body: JSON.stringify({
             integration_type: intg.integration_type,
             config: intg.config,
-            credentials: creds.credentials,
+            credentials: creds,
           }),
         });
         const data = await resp.json();

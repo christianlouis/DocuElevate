@@ -45,9 +45,6 @@ async def google_drive_setup_page(
                 except (json.JSONDecodeError, TypeError):
                     cfg = {}
             folder_id = cfg.get("folder_id", "")
-            # Provide system-wide OAuth credentials when available so users can
-            # authorize without registering their own Google Cloud app.
-            has_system_credentials = bool(settings.google_drive_client_id and settings.google_drive_client_secret)
             return templates.TemplateResponse(
                 "google_drive.html",
                 {
@@ -61,13 +58,10 @@ async def google_drive_setup_page(
                     "use_oauth": True,
                     "oauth_configured": bool(integration.credentials),
                     "sa_configured": False,
-                    "has_system_credentials": has_system_credentials,
-                    "client_id": bool(settings.google_drive_client_id) if has_system_credentials else False,
-                    "client_id_value": (settings.google_drive_client_id or "" if has_system_credentials else ""),
-                    "client_secret": bool(settings.google_drive_client_secret) if has_system_credentials else False,
-                    "client_secret_value": (
-                        settings.google_drive_client_secret or "" if has_system_credentials else ""
-                    ),
+                    "client_id": False,
+                    "client_id_value": "",
+                    "client_secret": False,
+                    "client_secret_value": "",
                     "refresh_token": False,
                     "refresh_token_value": "",
                     "has_credentials_json": False,
@@ -96,7 +90,6 @@ async def google_drive_setup_page(
             "use_oauth": use_oauth,
             "oauth_configured": oauth_configured,
             "sa_configured": sa_configured,
-            "has_system_credentials": bool(settings.google_drive_client_id and settings.google_drive_client_secret),
             "client_id": bool(settings.google_drive_client_id),
             "client_id_value": settings.google_drive_client_id or "",
             "client_secret": bool(settings.google_drive_client_secret),

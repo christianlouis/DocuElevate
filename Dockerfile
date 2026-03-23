@@ -27,20 +27,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && find /opt/venv -type f -name "*.pyc" -delete \
     && find /opt/venv -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
-# ── Stage 2: Frontend asset builder (Tailwind CSS) ──────────────────────────
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /frontend
-
-# Install dependencies first (layer-cached unless package.json/lockfile changes)
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --omit=dev
-
-# Copy source files and compile Tailwind CSS
-COPY frontend/ ./
-RUN npm run build
-
-# ── Stage 3: Documentation builder ──────────────────────────────────────────
+# ── Stage 2: Documentation builder ──────────────────────────────────────────
 FROM python:3.14.3-slim AS docs-builder
 
 WORKDIR /docs
@@ -56,7 +43,7 @@ COPY mkdocs.yml /docs/mkdocs.yml
 # Build the static documentation site
 RUN mkdocs build --config-file /docs/mkdocs.yml --site-dir /docs/docs_build
 
-# ── Stage 4: Runtime image ───────────────────────────────────────────────────
+# ── Stage 3: Runtime image ───────────────────────────────────────────────────
 FROM python:3.14.3-slim
 
 WORKDIR /app
@@ -81,8 +68,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy application code
 COPY ./app /app/app
 COPY ./frontend /app/frontend
-# Overlay compiled Tailwind CSS from the frontend build stage
-COPY --from=frontend-builder /frontend/static/styles.css /app/frontend/static/styles.css
 COPY ./migrations /app/migrations
 COPY ./alembic.ini /app/alembic.ini
 COPY ./LICENSE /app/LICENSE
