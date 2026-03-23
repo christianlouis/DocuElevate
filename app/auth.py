@@ -332,9 +332,9 @@ async def login(request: Request):
         )
 
     return templates.TemplateResponse(
+        request,
         "login.html",
-        {
-            "request": request,
+        context={
             "error": request.query_params.get("error"),
             "message": request.query_params.get("message"),
             "show_oauth": OAUTH_CONFIGURED,
