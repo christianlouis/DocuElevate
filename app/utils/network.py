@@ -1,6 +1,8 @@
 import ipaddress
 import logging
+import posixpath
 import socket
+from urllib.parse import urlsplit, urlunsplit
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +38,26 @@ def is_private_ip(hostname: str) -> bool:
 
 def join_url(base: str, *parts: str) -> str:
     """
-    Safely join a base URL and multiple path parts.
-    Handles double slashes while preserving the protocol '://'.
+    Safely join a base URL with one or more path parts.
+
+    Uses urllib.parse to correctly handle scheme/netloc/query/fragment so that
+    only the path component is normalised (double slashes removed via
+    posixpath.join).  The scheme separator ``://`` is therefore never at risk
+    of being collapsed.
+
+    Examples:
+        join_url("https://example.com/dav/", "/remote/", "file.pdf")
+        -> "https://example.com/dav/remote/file.pdf"
     """
-    url = "/".join([base, *parts])
-    url = url.replace("://", "$PLACEHOLDER$")
-    while "//" in url:
-        url = url.replace("//", "/")
-    url = url.replace("$PLACEHOLDER$", "://")
-    return url
+    parsed = urlsplit(base)
+    # Strip leading/trailing slashes from every part so posixpath.join
+    # produces a clean joined path without accidental double slashes.
+    stripped_parts = [p.strip("/") for p in parts if p.strip("/")]
+    base_path = parsed.path.rstrip("/")
+    if stripped_parts:
+        new_path = base_path + "/" + "/".join(stripped_parts)
+    else:
+        new_path = base_path
+    # Normalise any remaining double slashes in the path only.
+    new_path = posixpath.normpath(new_path) if new_path else "/"
+    return urlunsplit((parsed.scheme, parsed.netloc, new_path, parsed.query, parsed.fragment))
