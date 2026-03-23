@@ -14,6 +14,7 @@ from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils import log_task_progress
 from app.utils.ai_provider import get_ai_provider
+from app.utils.filename_utils import VALID_FILENAME_RE
 
 logger = logging.getLogger(__name__)
 
@@ -148,12 +149,12 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
         suggested_filename = metadata.get("filename", "")
         if suggested_filename:
             # Check if filename contains only safe characters AND explicitly check for ".."
-            # Defense in depth: While the regex [\w\-\. ]+ already excludes / and \,
+            # Defense in depth: While the regex VALID_FILENAME_PATTERN already excludes / and \,
             # we explicitly reject ".." to guard against:
             # 1. Potential locale-specific \w behavior
             # 2. Files literally named ".." which are valid but problematic
             # 3. Future code changes that might relax the regex
-            if not re.match(r"^[\w\-\. ]+$", suggested_filename) or ".." in suggested_filename:
+            if not VALID_FILENAME_RE.match(suggested_filename) or ".." in suggested_filename:
                 logger.warning(f"[{task_id}] Invalid filename format from GPT: '{suggested_filename}', using fallback")
                 # Reset to empty to trigger fallback to original filename
                 metadata["filename"] = ""
