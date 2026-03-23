@@ -40,7 +40,7 @@ def test_upload_to_nextcloud_url_construction(mock_settings, mock_requests):
         f.write("test content")
 
     # Call the task directly
-    with patch("app.tasks.upload_to_nextcloud.upload_to_nextcloud.request") as mock_req:
+    with patch("celery.app.task.Task.request", new_callable=MagicMock) as mock_req:
         mock_req.id = "test-task-123"
         result = upload_to_nextcloud(file_path)
 

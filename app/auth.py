@@ -536,9 +536,9 @@ async def login(request: Request):
         return RedirectResponse(url="/oauth-login", status_code=status.HTTP_302_FOUND)
 
     return templates.TemplateResponse(
+        request,
         "login.html",
-        {
-            "request": request,
+        context={
             "error": error,
             "message": message,
             "show_oauth": show_oauth,

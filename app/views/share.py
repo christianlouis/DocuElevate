@@ -23,6 +23,7 @@ templates = Jinja2Templates(directory=str(_templates_dir))
 async def shared_link_view(request: Request, token: str):
     """Render the public share landing page for a given token."""
     return templates.TemplateResponse(
+        request,
         "shared_link_view.html",
-        {"request": request, "token": token},
+        context={"token": token},
     )
