@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.172.5 (2026-03-23)
+
+### Bug Fixes
+
+- **main**: Suppress S110 ruff warnings with noqa comments for intentional try-except-pass
+  ([`0b8f967`](https://github.com/christianlouis/DocuElevate/commit/0b8f967eb5e304155752b4492584d4a7509a454c))
+
+- **settings**: Move os.path.exists inside try block in update_env_file so exceptions are non-fatal
+  ([`c9bb2b6`](https://github.com/christianlouis/DocuElevate/commit/c9bb2b6807b371d04edff12d16f838f411b60514))
+
+### Testing
+
+- **google_drive**: Fix exception handling test to expect non-fatal 200 like OneDrive equivalent
+  ([`2f5e2a0`](https://github.com/christianlouis/DocuElevate/commit/2f5e2a0fcdd9f9532fc55c6d7ce1675b8be3d3e8))
+
+- **main,imap**: Fix failing IMAP tests and add coverage for shutdown exception paths
+  ([`c03ce8c`](https://github.com/christianlouis/DocuElevate/commit/c03ce8cdb2e7849361ea50db888b7e3080eaafcd))
+
+
 ## v0.172.4 (2026-03-23)
 
 ### Bug Fixes
