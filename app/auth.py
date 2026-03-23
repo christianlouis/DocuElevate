@@ -280,7 +280,7 @@ def _setup_social_providers() -> None:
                 "icon": "fas fa-sign-in-alt",
                 "color": "indigo",
             }
-            logger.info("Social login provider registered: Generic OAuth2 (%s)", _generic_name)
+            logger.info("Social login provider registered: Generic OAuth2")
         else:
             logger.warning("SOCIAL_AUTH_GENERIC_OAUTH2_ENABLED=true but required settings not configured")
 
