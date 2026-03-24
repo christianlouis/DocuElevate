@@ -27,7 +27,21 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && find /opt/venv -type f -name "*.pyc" -delete \
     && find /opt/venv -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
-# ── Stage 2: Documentation builder ──────────────────────────────────────────
+# ── Stage 2: Frontend asset builder ─────────────────────────────────────────
+# Compiles Tailwind CSS (a devDependency) into the minified styles.css.
+# npm ci installs ALL deps (including devDependencies) so the tailwindcss CLI
+# is available; using --omit=dev would cause 'tailwindcss: not found'.
+FROM node:20-slim AS frontend-builder
+
+WORKDIR /frontend
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ ./
+RUN npm run build
+
+# ── Stage 4: Documentation builder ──────────────────────────────────────────
 FROM python:3.14.3-slim AS docs-builder
 
 WORKDIR /docs
@@ -43,7 +57,7 @@ COPY mkdocs.yml /docs/mkdocs.yml
 # Build the static documentation site
 RUN mkdocs build --config-file /docs/mkdocs.yml --site-dir /docs/docs_build
 
-# ── Stage 3: Runtime image ───────────────────────────────────────────────────
+# ── Stage 5: Runtime image ───────────────────────────────────────────────────
 FROM python:3.14.3-slim
 
 WORKDIR /app
@@ -80,6 +94,9 @@ COPY ./RUNTIME_INFO /app/RUNTIME_INFO
 
 # Copy the pre-built MkDocs documentation site (served at /help)
 COPY --from=docs-builder /docs/docs_build /app/docs_build
+
+# Copy the compiled Tailwind CSS (built in the frontend-builder stage)
+COPY --from=frontend-builder /frontend/static/styles.css /app/frontend/static/styles.css
 
 # Create necessary runtime directories in a single layer
 RUN mkdir -p /app/runtime_info /workdir

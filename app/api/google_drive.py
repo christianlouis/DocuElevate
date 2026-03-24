@@ -376,12 +376,12 @@ def format_time_remaining(time_delta):
 async def save_google_drive_settings(
     request: Request,
     refresh_token: Annotated[str, Form(...)],
+    _admin: AdminUser,
+    db: Session = Depends(get_db),
     client_id: Annotated[Optional[str], Form()] = None,
     client_secret: Annotated[Optional[str], Form()] = None,
     folder_id: Annotated[Optional[str], Form()] = None,
     use_oauth: Annotated[str, Form()] = "true",
-    _admin: AdminUser = Depends(_require_admin),
-    db: Session = Depends(get_db),
 ):
     """
     Save Google Drive settings to the .env file (best-effort) and persist to database.

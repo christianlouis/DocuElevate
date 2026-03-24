@@ -297,13 +297,13 @@ async def lifespan(app: FastAPI):
     try:
         logging.info("Application shutting down")
     except Exception:
-        pass  # noqa: S110
+        _startup_logger.exception("Error during shutdown logging")
 
     # Send shutdown notification
     try:
         notify_shutdown()
     except Exception:
-        pass  # noqa: S110
+        _startup_logger.exception("Error sending shutdown notification")
 
 
 app = FastAPI(
