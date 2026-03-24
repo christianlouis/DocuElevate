@@ -415,10 +415,9 @@ async def save_google_drive_settings(
             drive_settings["GOOGLE_DRIVE_FOLDER_ID"] = folder_id
 
         # Best-effort .env file write — failures here are non-fatal
-        env_file_exists = False
+        env_file_written = False
         try:
-            env_file_exists = os.path.exists(env_path)
-            if env_file_exists:
+            if os.path.exists(env_path):
                 logger.info(f"Updating Google Drive settings in {env_path}")
 
                 # Read the current .env file
@@ -451,6 +450,7 @@ async def save_google_drive_settings(
                     f.write("\n".join(new_env_lines) + "\n")
 
                 logger.info("Successfully updated Google Drive settings in .env file")
+                env_file_written = True
             else:
                 logger.warning(
                     f".env file not found at {env_path}, skipping file update but continuing with in-memory update"
@@ -494,7 +494,7 @@ async def save_google_drive_settings(
         return {
             "status": "success",
             "message": "Google Drive settings have been saved",
-            "in_memory_only": not env_file_exists,
+            "in_memory_only": not env_file_written,
         }
 
     except Exception as e:
