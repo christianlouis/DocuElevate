@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.172.7 (2026-03-24)
+
+### Bug Fixes
+
+- **api**: Remove duplicate Depends from AdminUser parameters in dropbox, onedrive, google_drive
+  ([`7f20c90`](https://github.com/christianlouis/DocuElevate/commit/7f20c903ef23e138518e715c7c7a0297d3e46ff8))
+
+- **dockerfile**: Add frontend-builder stage to compile Tailwind CSS
+  ([`3fd8b32`](https://github.com/christianlouis/DocuElevate/commit/3fd8b32724e3d390ff723e5b090a5603c3b1fc93))
+
+- **main**: Replace silent except-pass with exception logging to fix S110
+  ([`8fcc223`](https://github.com/christianlouis/DocuElevate/commit/8fcc223ef19cf609d8413fb6091eabfa0b34d4a6))
+
+
 ## v0.172.6 (2026-03-24)
 
 ### Bug Fixes
