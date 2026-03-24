@@ -10,6 +10,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.172.6 (2026-03-24)
+
+### Bug Fixes
+
+- Resolve multiple test failures in imap_tasks, main lifespan, and API settings endpoints
+  ([`f041f28`](https://github.com/christianlouis/DocuElevate/commit/f041f28d9f64011df52506ead4bbc87d0797c20e))
+
+- Restore all code deleted/truncated by d2217531 Jules SSRF commit
+  ([`c7d3ec5`](https://github.com/christianlouis/DocuElevate/commit/c7d3ec57c3aca4faeaa0ad2fdbde3a1f770b86a5))
+
+- **migrations**: Restore accidentally deleted migration files 038-042
+  ([`11a49eb`](https://github.com/christianlouis/DocuElevate/commit/11a49eb7fd2218062922a9b8bf01b9a91572bea7))
+
+- **tasks**: Add -- end-of-options separator to ocrmypdf command in convert_to_pdfa
+  ([`7dec570`](https://github.com/christianlouis/DocuElevate/commit/7dec570ce6ae40b934ad075bc06f4cf1dfd9ff2e))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`627a857`](https://github.com/christianlouis/DocuElevate/commit/627a8579def3a6a9d4f78da6469cfde889154402))
+
+
 ## v0.172.5 (2026-03-23)
 
 ### Bug Fixes
