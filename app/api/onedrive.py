@@ -25,6 +25,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _require_admin(request: Request) -> dict:
+    """Ensure the caller is an admin. Raises 403 otherwise."""
+    user = request.session.get("user")
+    if not user or not user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user
+
+
+AdminUser = Annotated[dict, Depends(_require_admin)]
+
+
 @router.post("/onedrive/exchange-token")
 @require_login
 async def exchange_onedrive_token(
@@ -302,7 +313,6 @@ def format_time_remaining(time_delta):
 
 
 @router.post("/onedrive/save-settings")
-@require_login
 async def save_onedrive_settings(
     request: Request,
     refresh_token: Annotated[str, Form(...)],
@@ -310,6 +320,7 @@ async def save_onedrive_settings(
     client_secret: Annotated[Optional[str], Form()] = None,
     tenant_id: Annotated[str, Form()] = "common",
     folder_path: Annotated[Optional[str], Form()] = None,
+    _admin: AdminUser = Depends(_require_admin),
     db: Session = Depends(get_db),
 ):
     """

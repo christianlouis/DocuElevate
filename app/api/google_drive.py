@@ -23,6 +23,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _require_admin(request: Request) -> dict:
+    """Ensure the caller is an admin. Raises 403 otherwise."""
+    user = request.session.get("user")
+    if not user or not user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user
+
+
+AdminUser = Annotated[dict, Depends(_require_admin)]
+
+
 @router.post("/google-drive/exchange-token")
 @require_login
 async def exchange_google_drive_token(
@@ -362,7 +373,6 @@ def format_time_remaining(time_delta):
 
 
 @router.post("/google-drive/save-settings")
-@require_login
 async def save_google_drive_settings(
     request: Request,
     refresh_token: Annotated[str, Form(...)],
@@ -370,6 +380,7 @@ async def save_google_drive_settings(
     client_secret: Annotated[Optional[str], Form()] = None,
     folder_id: Annotated[Optional[str], Form()] = None,
     use_oauth: Annotated[str, Form()] = "true",
+    _admin: AdminUser = Depends(_require_admin),
     db: Session = Depends(get_db),
 ):
     """

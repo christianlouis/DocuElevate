@@ -681,12 +681,13 @@ class TestPullInbox:
         mock_mail.store.assert_called_with(b"1", "-FLAGS", "\\Seen")
         mock_save.assert_called()
 
+    @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
     @patch("app.tasks.imap_tasks.fetch_attachments_and_enqueue")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.save_processed_emails")
     @patch("app.tasks.imap_tasks.settings")
-    def test_delete_after_process(self, mock_settings, mock_save, mock_load, mock_imap_class, mock_fetch):
+    def test_delete_after_process(self, mock_settings, mock_save, mock_load, mock_imap_class, mock_fetch, _mock_private_ip):
         """Test deleting messages after processing."""
         mock_settings.workdir = "/tmp"
         mock_settings.imap_readonly_mode = False
@@ -924,9 +925,10 @@ class TestPullInbox:
         # Should not process the message
         mock_mail.store.assert_not_called()
 
+    @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
-    def test_handles_fetch_failure(self, mock_load, mock_imap_class):
+    def test_handles_fetch_failure(self, mock_load, mock_imap_class, _mock_private_ip):
         """Test handling of message fetch failure."""
         mock_load.return_value = {}
         mock_mail = MagicMock()
@@ -1026,12 +1028,13 @@ class TestPullInbox:
         # Processed emails cache should still be updated
         mock_save.assert_called()
 
+    @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
     @patch("app.tasks.imap_tasks.fetch_attachments_and_enqueue")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.save_processed_emails")
     @patch("app.tasks.imap_tasks.settings")
-    def test_readonly_mode_skips_delete(self, mock_settings, mock_save, mock_load, mock_imap_class, mock_fetch):
+    def test_readonly_mode_skips_delete(self, mock_settings, mock_save, mock_load, mock_imap_class, mock_fetch, _mock_private_ip):
         """Test that readonly mode skips deletion even when delete_after_process is True."""
         mock_settings.workdir = "/tmp"
         mock_settings.imap_readonly_mode = True
@@ -1385,10 +1388,11 @@ class TestAcquireReleaseLockEdgeCases:
 class TestPullInboxEdgeCases:
     """Test edge cases for pull_inbox function."""
 
+    @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.settings")
-    def test_pull_inbox_search_failed_status(self, mock_settings, mock_imap_class, mock_load):
+    def test_pull_inbox_search_failed_status(self, mock_settings, mock_imap_class, mock_load, _mock_private_ip):
         """Test pull_inbox when search returns non-OK status."""
         mock_settings.workdir = "/tmp"
         mock_load.return_value = {}
@@ -1435,10 +1439,11 @@ class TestPullInboxEdgeCases:
         # Should skip processing since no Message-ID
         mock_fetch.assert_not_called()
 
+    @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.settings")
-    def test_pull_inbox_fetch_failed_status(self, mock_settings, mock_imap_class, mock_load):
+    def test_pull_inbox_fetch_failed_status(self, mock_settings, mock_imap_class, mock_load, _mock_private_ip):
         """Test pull_inbox when fetch returns non-OK status."""
         mock_settings.workdir = "/tmp"
         mock_load.return_value = {}

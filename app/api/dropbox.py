@@ -25,6 +25,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _require_admin(request: Request) -> dict:
+    """Ensure the caller is an admin. Raises 403 otherwise."""
+    user = request.session.get("user")
+    if not user or not user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user
+
+
+AdminUser = Annotated[dict, Depends(_require_admin)]
+
+
 def _build_dropbox_redirect_uri(request: Request) -> str:
     """Build the Dropbox OAuth callback redirect URI.
 
@@ -385,13 +396,13 @@ async def list_dropbox_folders(
 
 
 @router.post("/dropbox/save-settings")
-@require_login
 async def save_dropbox_settings(
     request: Request,
     refresh_token: Annotated[str, Form(...)],
     app_key: Annotated[Optional[str], Form()] = None,
     app_secret: Annotated[Optional[str], Form()] = None,
     folder_path: Annotated[Optional[str], Form()] = None,
+    _admin: AdminUser = Depends(_require_admin),
     db: Session = Depends(get_db),
 ):
     """
