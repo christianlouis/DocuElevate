@@ -59,6 +59,40 @@
         </div>
       </div>
 
+      <!-- Folder selector (shown after authorization) -->
+      <div id="folder-selector" class="hidden mt-6 p-4 bg-white border border-gray-200 rounded-lg">
+        <h3 class="font-medium text-lg mb-3">
+          <svg class="inline-block h-5 w-5 mr-1 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1H8a3 3 0 00-3 3v1.5a1.5 1.5 0 01-3 0V6z" clip-rule="evenodd" />
+            <path d="M6 12a2 2 0 012-2h8a2 2 0 012 2v2a2 2 0 01-2 2H2h2a2 2 0 002-2v-2z" />
+          </svg>
+          Select Folder
+        </h3>
+        <p class="text-sm text-gray-600 mb-3">Browse your Dropbox to select a folder for this integration.</p>
+
+        <div class="mb-3">
+          <div id="folder-breadcrumb" class="flex items-center text-sm text-gray-500 mb-2">
+            <button type="button" class="folder-nav-btn text-indigo-600 hover:text-indigo-800 font-medium" data-path="" aria-label="Navigate to root folder">/ Root</button>
+          </div>
+        </div>
+
+        <div id="folder-list" class="border border-gray-200 rounded-md max-h-64 overflow-y-auto">
+          <div class="p-4 text-center text-gray-500">
+            <div class="animate-spin inline-block h-5 w-5 border-2 border-gray-300 border-t-indigo-600 rounded-full mb-2" role="status" aria-label="Loading folders"></div>
+            <p class="text-sm">Loading folders…</p>
+          </div>
+        </div>
+
+        <div class="mt-3 flex items-center gap-3">
+          <label for="selected-folder-path" class="text-sm font-medium text-gray-700 whitespace-nowrap">Selected folder:</label>
+          <input id="selected-folder-path" type="text" class="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm" placeholder="/" />
+          <button id="save-folder-btn" type="button" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+            Save Folder
+          </button>
+        </div>
+        <p id="folder-save-status" class="mt-2 text-sm hidden" aria-live="polite"></p>
+      </div>
+
       <div class="mt-6 p-4 bg-gray-100 rounded-md">
         <h3 class="font-medium text-lg mb-2">Configuration for Worker Nodes</h3>
         <p class="text-sm text-gray-600 mb-3">
@@ -94,6 +128,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const code = "{{ code }}";
 
   // Get credentials from session storage (these take precedence over server-provided values)
+  const useGlobalCreds = sessionStorage.getItem('dropbox_use_global_creds') === 'true';
   const appKey = sessionStorage.getItem('dropbox_app_key') || "{{ app_key_value }}";
   const appSecret = sessionStorage.getItem('dropbox_app_secret') || "{{ app_secret_value }}";
   const folderPath = sessionStorage.getItem('dropbox_folder_path') || "{{ folder_path }}" || '/Documents/Uploads';
@@ -107,18 +142,98 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  const redirectUri = window.location.origin + "/dropbox-callback";
+  // Use server-provided callback URL (respects PUBLIC_BASE_URL) with fallback to window.location.origin
+  const redirectUri = {{ callback_url | tojson }} || (window.location.origin + "/dropbox-callback");
 
   // Automatically exchange the code for a refresh token
   if (code) {
-    if (!appKey || !appSecret) {
-      showError("Missing App Key or App Secret. Please go back to the setup page and try again.");
-      return;
+    if (useGlobalCreds) {
+      // Global credentials: the server handles the exchange using the admin app secret
+      exchangeCodeGlobal(code, redirectUri);
+    } else {
+      if (!appKey || !appSecret) {
+        showError("Missing App Key or App Secret. Please go back to the setup page and try again.");
+        return;
+      }
+      exchangeCode(code, appKey, appSecret, redirectUri);
     }
-
-    exchangeCode(code, appKey, appSecret, redirectUri);
   } else {
     showError("No authorization code was found in the URL");
+  }
+
+  function exchangeCodeGlobal(code, redirectUri) {
+    const formData = new FormData();
+    formData.append('code', code);
+    formData.append('redirect_uri', redirectUri);
+
+    document.getElementById('processing-message').innerHTML =
+      '<p>Exchanging authorization code using shared credentials…</p>';
+
+    fetch('/api/dropbox/exchange-token-global', {
+      method: 'POST',
+      body: formData
+    })
+    .then(response => {
+      if (!response.ok) {
+        return response.json().then(err => {
+          throw new Error(err.detail || 'Failed to exchange token');
+        });
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.refresh_token) {
+        const resolvedAppKey = data.app_key || '';
+        if (integrationId) {
+          const creds = {
+            refresh_token: data.refresh_token,
+            // Store public app_key with the integration (no secret stored browser-side)
+            app_key: resolvedAppKey,
+            // Flag so the backend knows to use global app_secret for future operations
+            use_global_app_secret: true,
+          };
+
+          const body = { credentials: creds };
+
+          document.getElementById('processing-message').innerHTML =
+            '<p>Saving credentials to your integration…</p>';
+
+          return fetch(`/api/integrations/${integrationId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          }).then(response => {
+            if (!response.ok) {
+              return response.json().then(err => {
+                throw new Error('Failed to save credentials: ' + (err.detail || 'Unknown error'));
+              });
+            }
+            return response.json();
+          }).then(() => {
+            // Clean up
+            sessionStorage.removeItem('dropbox_use_global_creds');
+            sessionStorage.removeItem('oauth_integration_id');
+
+            document.getElementById('processing-message').innerHTML =
+              '<p class="text-green-600 font-semibold">✓ Dropbox authorized successfully!</p>' +
+              '<p class="text-sm text-gray-500 mt-2">Redirecting to Integrations…</p>';
+            document.querySelector('.animate-spin').parentNode.classList.add('hidden');
+            setTimeout(() => { window.location.href = '/integrations'; }, 2000);
+          });
+        }
+        // Global admin flow — the exchange-token-global endpoint is intended for
+        // per-user integrations, so reaching here without an integrationId is unexpected.
+        console.warn('dropbox_callback: global creds flow reached without integration_id');
+        sessionStorage.removeItem('dropbox_use_global_creds');
+        showSuccess(data.refresh_token, resolvedAppKey, '', folderPath);
+        setTimeout(() => { window.location.href = '/status'; }, 10000);
+      } else {
+        throw new Error('No refresh token was received from the server');
+      }
+    })
+    .catch(error => {
+      showError(error.message);
+    });
   }
 
   function exchangeCode(code, appKey, appSecret, redirectUri) {
@@ -173,18 +288,21 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             return response.json();
           }).then(() => {
-            // Clean up
+            // Clean up session storage
             sessionStorage.removeItem('dropbox_app_key');
             sessionStorage.removeItem('dropbox_app_secret');
             sessionStorage.removeItem('dropbox_folder_path');
             sessionStorage.removeItem('oauth_integration_id');
+            sessionStorage.removeItem('dropbox_use_system_creds');
 
-            // Show brief success then redirect to integrations
-            document.getElementById('processing-message').innerHTML =
-              '<p class="text-green-600 font-semibold">✓ Dropbox authorized successfully!</p>' +
-              '<p class="text-sm text-gray-500 mt-2">Redirecting to Integrations...</p>';
+            // Hide processing spinner, show success
             document.querySelector('.animate-spin').parentNode.classList.add('hidden');
-            setTimeout(() => { window.location.href = '/integrations'; }, 2000);
+            document.getElementById('processing-message').innerHTML =
+              '<p class="text-green-600 font-semibold">✓ Dropbox authorized successfully!</p>';
+            document.getElementById('success-container').classList.remove('hidden');
+
+            // Show folder browser with the access token
+            initFolderBrowser(data.access_token, integrationId);
           });
         }
 
@@ -278,6 +396,128 @@ DROPBOX_FOLDER=${folderPath || '/Documents/Uploads'}`;
           });
       });
     }
+  }
+
+  // ── Folder browser ────────────────────────────────────────────────
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  }
+
+  function initFolderBrowser(accessToken, integrationId) {
+    const folderSelector = document.getElementById('folder-selector');
+    if (!folderSelector || !integrationId) return;
+
+    folderSelector.classList.remove('hidden');
+    let currentPath = '';
+
+    const folderList = document.getElementById('folder-list');
+    const breadcrumb = document.getElementById('folder-breadcrumb');
+    const selectedInput = document.getElementById('selected-folder-path');
+    const saveBtn = document.getElementById('save-folder-btn');
+    const saveStatus = document.getElementById('folder-save-status');
+
+    function loadFolders(path) {
+      currentPath = path;
+      folderList.innerHTML = '<div class="p-4 text-center text-gray-500"><div class="animate-spin inline-block h-5 w-5 border-2 border-gray-300 border-t-indigo-600 rounded-full mb-2" role="status" aria-label="Loading folders"></div><p class="text-sm">Loading folders…</p></div>';
+
+      const formData = new FormData();
+      formData.append('access_token', accessToken);
+      formData.append('path', path);
+
+      fetch('/api/dropbox/list-folders', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(data => {
+          if (data.folders && data.folders.length > 0) {
+            folderList.innerHTML = data.folders.map(f =>
+              `<button type="button" class="folder-item w-full text-left px-4 py-3 hover:bg-indigo-50 border-b border-gray-100 flex items-center gap-3 text-sm focus:outline-none focus:bg-indigo-50" data-path="${escapeHtml(f.path)}" aria-label="Open folder ${escapeHtml(f.name)}">` +
+              `<svg class="h-5 w-5 text-yellow-400 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1H8a3 3 0 00-3 3v1.5a1.5 1.5 0 01-3 0V6z" clip-rule="evenodd" /><path d="M6 12a2 2 0 012-2h8a2 2 0 012 2v2a2 2 0 01-2 2H2h2a2 2 0 002-2v-2z" /></svg>` +
+              `<span class="font-medium text-gray-700">${escapeHtml(f.name)}</span>` +
+              `</button>`
+            ).join('');
+
+            folderList.querySelectorAll('.folder-item').forEach(btn => {
+              btn.addEventListener('click', () => {
+                const p = btn.getAttribute('data-path');
+                selectedInput.value = p;
+                loadFolders(p);
+              });
+            });
+          } else {
+            folderList.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">No subfolders found</div>';
+          }
+          updateBreadcrumb(path);
+        })
+        .catch(err => {
+          folderList.innerHTML = `<div class="p-4 text-center text-red-500 text-sm">Failed to load folders: ${escapeHtml(err.message)}</div>`;
+        });
+    }
+
+    function updateBreadcrumb(path) {
+      const parts = path.split('/').filter(Boolean);
+      let html = '<button type="button" class="folder-nav-btn text-indigo-600 hover:text-indigo-800 font-medium" data-path="" aria-label="Navigate to root folder">/ Root</button>';
+      let accumulated = '';
+      for (const part of parts) {
+        accumulated += '/' + part;
+        html += `<span class="mx-1 text-gray-400">/</span>`;
+        html += `<button type="button" class="folder-nav-btn text-indigo-600 hover:text-indigo-800 font-medium" data-path="${escapeHtml(accumulated)}" aria-label="Navigate to ${escapeHtml(part)}">${escapeHtml(part)}</button>`;
+      }
+      breadcrumb.innerHTML = html;
+      breadcrumb.querySelectorAll('.folder-nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const p = btn.getAttribute('data-path');
+          selectedInput.value = p || '/';
+          loadFolders(p);
+        });
+      });
+    }
+
+    // Save selected folder to integration config
+    saveBtn.addEventListener('click', () => {
+      const folderPath = selectedInput.value.trim() || '/';
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving…';
+
+      // Get the current integration config, update folder_path, then PUT back
+      fetch(`/api/integrations/${integrationId}`)
+        .then(r => r.json())
+        .then(intg => {
+          const cfg = intg.config || {};
+          // Update the correct folder key based on integration type
+          if (cfg.source_type) {
+            cfg.folder_path = folderPath;
+          } else {
+            cfg.folder = folderPath;
+          }
+          return fetch(`/api/integrations/${integrationId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ config: cfg }),
+          });
+        })
+        .then(r => {
+          if (!r.ok) throw new Error('Failed to save folder');
+          return r.json();
+        })
+        .then(() => {
+          saveStatus.textContent = '✓ Folder saved! Redirecting…';
+          saveStatus.className = 'mt-2 text-sm text-green-600';
+          saveStatus.classList.remove('hidden');
+          saveBtn.textContent = 'Saved ✓';
+          setTimeout(() => { window.location.href = '/integrations'; }, 1500);
+        })
+        .catch(err => {
+          saveStatus.textContent = 'Error: ' + err.message;
+          saveStatus.className = 'mt-2 text-sm text-red-600';
+          saveStatus.classList.remove('hidden');
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save Folder';
+        });
+    });
+
+    // Load root folders initially
+    loadFolders('');
   }
 });
 </script>

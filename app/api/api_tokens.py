@@ -13,7 +13,7 @@ plaintext is returned exactly once at creation time.
 import hashlib
 import logging
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -105,6 +105,7 @@ def _token_to_dict(t: ApiToken) -> dict[str, Any]:
         "last_used_ip": t.last_used_ip,
         "created_at": t.created_at,
         "revoked_at": t.revoked_at,
+        "expires_at": t.expires_at,
     }
 
 
@@ -117,6 +118,12 @@ class TokenCreate(BaseModel):
     """Schema for creating a new API token."""
 
     name: str = Field(..., min_length=1, max_length=255, description="Human-readable label for the token")
+    expires_in_days: int | None = Field(
+        default=None,
+        ge=1,
+        le=3650,  # Maximum 10 years; keeps tokens from being effectively permanent while allowing long-lived CI/CD tokens.
+        description="Optional lifetime in days. If omitted the token never expires.",
+    )
 
 
 class TokenResponse(BaseModel):
@@ -130,6 +137,7 @@ class TokenResponse(BaseModel):
     last_used_ip: str | None
     created_at: datetime | None
     revoked_at: datetime | None
+    expires_at: datetime | None
 
     model_config = {"from_attributes": True}
 
@@ -160,11 +168,16 @@ async def create_token(
     token_hash_value = hash_token(plaintext)
     prefix = plaintext[:12]  # "de_" prefix + 9 random chars = 12 chars total
 
+    expires_at = None
+    if body.expires_in_days is not None:
+        expires_at = datetime.now(timezone.utc) + timedelta(days=body.expires_in_days)
+
     db_token = ApiToken(
         owner_id=owner_id,
         name=body.name,
         token_hash=token_hash_value,
         token_prefix=prefix,
+        expires_at=expires_at,
     )
     try:
         db.add(db_token)
@@ -185,6 +198,7 @@ async def create_token(
         "last_used_ip": db_token.last_used_ip,
         "created_at": db_token.created_at,
         "revoked_at": db_token.revoked_at,
+        "expires_at": db_token.expires_at,
         "token": plaintext,
     }
 
@@ -235,30 +249,73 @@ async def list_mobile_tokens(
 
 
 @router.delete("/{token_id}", status_code=status.HTTP_200_OK)
-async def revoke_token(
+async def revoke_or_delete_token(
     token_id: int,
     owner_id: CurrentOwner,
     db: DbSession,
 ) -> dict[str, str]:
-    """Revoke (soft-delete) an API token.
+    """Revoke or permanently delete an API token.
 
-    The token row is kept for audit purposes but marked inactive with a
-    ``revoked_at`` timestamp.
+    * **Active token** – soft-revoked: the row is kept for audit purposes
+      but marked inactive with a ``revoked_at`` timestamp.
+    * **Already-revoked token** – hard-deleted: the row is permanently
+      removed from the database.
     """
     db_token = db.query(ApiToken).filter(ApiToken.id == token_id, ApiToken.owner_id == owner_id).first()
     if not db_token:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token not found")
 
-    if not db_token.is_active:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token is already revoked")
+    if db_token.is_active:
+        # Soft-revoke the active token.
+        try:
+            db_token.is_active = False
+            db_token.revoked_at = datetime.now(timezone.utc)
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        logger.info("API token revoked: id=%s owner=%s", token_id, owner_id)
+        return {"detail": "Token revoked"}
 
+    # Hard-delete an already-revoked token.
     try:
-        db_token.is_active = False
-        db_token.revoked_at = datetime.now(timezone.utc)
+        db.delete(db_token)
         db.commit()
     except Exception:
         db.rollback()
         raise
+    logger.info("API token permanently deleted: id=%s owner=%s", token_id, owner_id)
+    return {"detail": "Token deleted"}
 
-    logger.info("API token revoked: id=%s owner=%s", token_id, owner_id)
-    return {"detail": "Token revoked"}
+
+@router.post("/{token_id}/reactivate", status_code=status.HTTP_200_OK, response_model=TokenResponse)
+async def reactivate_token(
+    token_id: int,
+    owner_id: CurrentOwner,
+    db: DbSession,
+) -> dict[str, Any]:
+    """Reactivate a previously revoked API token.
+
+    Clears the ``revoked_at`` timestamp and sets ``is_active`` back to
+    ``True``.  The token can be used for authentication again immediately.
+    If the token had an ``expires_at`` in the past the caller should
+    consider re-creating a new token instead.
+    """
+    db_token = db.query(ApiToken).filter(ApiToken.id == token_id, ApiToken.owner_id == owner_id).first()
+    if not db_token:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token not found")
+
+    if db_token.is_active:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token is already active")
+
+    try:
+        db_token.is_active = True
+        db_token.revoked_at = None
+        db.commit()
+        db.refresh(db_token)
+    except Exception:
+        db.rollback()
+        raise
+
+    logger.info("API token reactivated: id=%s owner=%s", token_id, owner_id)
+    return _token_to_dict(db_token)
