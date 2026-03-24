@@ -399,11 +399,11 @@ async def list_dropbox_folders(
 async def save_dropbox_settings(
     request: Request,
     refresh_token: Annotated[str, Form(...)],
+    _admin: AdminUser,
+    db: Session = Depends(get_db),
     app_key: Annotated[Optional[str], Form()] = None,
     app_secret: Annotated[Optional[str], Form()] = None,
     folder_path: Annotated[Optional[str], Form()] = None,
-    _admin: AdminUser = Depends(_require_admin),
-    db: Session = Depends(get_db),
 ):
     """
     Save Dropbox settings to database (primary) and .env file (best-effort).

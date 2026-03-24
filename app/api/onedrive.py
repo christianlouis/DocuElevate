@@ -316,12 +316,12 @@ def format_time_remaining(time_delta):
 async def save_onedrive_settings(
     request: Request,
     refresh_token: Annotated[str, Form(...)],
+    _admin: AdminUser,
+    db: Session = Depends(get_db),
     client_id: Annotated[Optional[str], Form()] = None,
     client_secret: Annotated[Optional[str], Form()] = None,
     tenant_id: Annotated[str, Form()] = "common",
     folder_path: Annotated[Optional[str], Form()] = None,
-    _admin: AdminUser = Depends(_require_admin),
-    db: Session = Depends(get_db),
 ):
     """
     Saves to database (primary) and .env file (best-effort).
