@@ -342,6 +342,15 @@ class TestFormatTimeRemaining:
 class TestSaveOneDriveSettings:
     """Tests for POST /onedrive/save-settings endpoint."""
 
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.onedrive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+
     @patch("builtins.open", new_callable=mock_open, read_data="# Existing config\n")
     @patch("os.path.exists")
     @patch("os.path.dirname")
