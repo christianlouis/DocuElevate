@@ -687,7 +687,9 @@ class TestPullInbox:
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.save_processed_emails")
     @patch("app.tasks.imap_tasks.settings")
-    def test_delete_after_process(self, mock_settings, mock_save, mock_load, mock_imap_class, mock_fetch, _mock_private_ip):
+    def test_delete_after_process(
+        self, mock_settings, mock_save, mock_load, mock_imap_class, mock_fetch, _mock_private_ip
+    ):
         """Test deleting messages after processing."""
         mock_settings.workdir = "/tmp"
         mock_settings.imap_readonly_mode = False
@@ -1034,7 +1036,9 @@ class TestPullInbox:
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.save_processed_emails")
     @patch("app.tasks.imap_tasks.settings")
-    def test_readonly_mode_skips_delete(self, mock_settings, mock_save, mock_load, mock_imap_class, mock_fetch, _mock_private_ip):
+    def test_readonly_mode_skips_delete(
+        self, mock_settings, mock_save, mock_load, mock_imap_class, mock_fetch, _mock_private_ip
+    ):
         """Test that readonly mode skips deletion even when delete_after_process is True."""
         mock_settings.workdir = "/tmp"
         mock_settings.imap_readonly_mode = True
