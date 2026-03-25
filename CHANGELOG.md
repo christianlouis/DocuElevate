@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.172.8 (2026-03-25)
+
+### Bug Fixes
+
+- **api**: Track env_file_written accurately in save_google_drive_settings
+  ([`4136033`](https://github.com/christianlouis/DocuElevate/commit/4136033bf0e580cbabe811084ab47ea0d6af8f9a))
+
+- **tests**: Add admin override fixture to TestSaveDropboxSettings
+  ([`cafc0e4`](https://github.com/christianlouis/DocuElevate/commit/cafc0e45230ffea096664c1947ac20753b63f8e9))
+
+- **tests**: Restore correct route URLs and fix auth/exception handling broken by d221753
+  ([`48331f6`](https://github.com/christianlouis/DocuElevate/commit/48331f6e91e6c0dae31ab3be31f9da1eccd0a549))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`c3124b0`](https://github.com/christianlouis/DocuElevate/commit/c3124b08bd48faa32e76d21d744c9902214048a7))
+
+
 ## Unreleased
 
 
