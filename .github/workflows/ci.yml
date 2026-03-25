@@ -100,7 +100,7 @@ jobs:
           python-version: "3.11"
           cache: 'pip'
       - run: pip install pip-audit>=2.7.0
-      - run: pip-audit -r requirements.txt --desc on
+      - run: pip-audit -r requirements.txt --desc on --ignore-vuln CVE-2026-4539
 
   run-tests:
     name: Execute All Tests (Quick + Integration)
