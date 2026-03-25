@@ -50,7 +50,7 @@ def test_file_detail_page_with_metadata(client: TestClient, db_session, sample_p
     db_session.refresh(file_record)
 
     # Get detail page
-    response = client.get(f"/files/{file_record.id}/detail")
+    response = client.get(f"/files/{file_record.id}/process")
     assert response.status_code == 200
 
     html = response.text
@@ -85,7 +85,7 @@ def test_file_detail_with_gpt_metadata(client: TestClient, db_session, sample_pd
     db_session.refresh(file_record)
 
     # Get detail page
-    response = client.get(f"/files/{file_record.id}/detail")
+    response = client.get(f"/files/{file_record.id}/process")
     assert response.status_code == 200
 
     html = response.text
@@ -190,7 +190,7 @@ def test_file_detail_shows_file_status_indicators(client: TestClient, db_session
     db_session.commit()
     db_session.refresh(file_record)
 
-    response = client.get(f"/files/{file_record.id}/detail")
+    response = client.get(f"/files/{file_record.id}/process")
     assert response.status_code == 200
 
     html = response.text

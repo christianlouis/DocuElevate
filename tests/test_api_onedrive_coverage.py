@@ -294,6 +294,15 @@ class TestTokenRotationEnvAppendLine:
 class TestSaveSettingsException:
     """Cover lines 324-326: save_onedrive_settings outer exception handler."""
 
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.onedrive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+
     def test_save_settings_outer_exception(self, client: TestClient):
         """Trigger the outer exception handler in save_onedrive_settings."""
         with patch("app.api.onedrive.notify_settings_updated", side_effect=Exception("Unexpected boom")):

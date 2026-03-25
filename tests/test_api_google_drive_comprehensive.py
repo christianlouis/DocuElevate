@@ -490,12 +490,11 @@ class TestSaveGoogleDriveSettings:
 
         assert response.status_code == 200
 
-    @patch("os.path.exists")
-    @patch("os.path.dirname")
+    @patch("app.api.google_drive.os")
     @patch("app.config.settings")
-    def test_save_settings_exception_handling(self, mock_settings, mock_dirname, mock_exists, client: TestClient):
+    def test_save_settings_exception_handling(self, mock_settings, mock_os, client: TestClient):
         """Test that exceptions in .env write are non-fatal — DB write still succeeds."""
-        mock_exists.side_effect = Exception("Unexpected error")
+        mock_os.path.exists.side_effect = Exception("Unexpected error")
 
         response = client.post("/api/google-drive/save-settings", data={"refresh_token": "token", "use_oauth": "true"})
 

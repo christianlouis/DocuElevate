@@ -414,9 +414,10 @@ async def save_google_drive_settings(
         if folder_id:
             drive_settings["GOOGLE_DRIVE_FOLDER_ID"] = folder_id
 
-        # Try to update the .env file, but don't fail if it doesn't exist (for Docker containers)
-        if os.path.exists(env_path):
-            try:
+        # Best-effort .env file write — failures here are non-fatal
+        env_file_written = False
+        try:
+            if os.path.exists(env_path):
                 logger.info(f"Updating Google Drive settings in {env_path}")
 
                 # Read the current .env file
@@ -449,12 +450,13 @@ async def save_google_drive_settings(
                     f.write("\n".join(new_env_lines) + "\n")
 
                 logger.info("Successfully updated Google Drive settings in .env file")
-            except Exception as e:
-                logger.warning(f"Failed to update .env file: {str(e)}, but will continue with in-memory update")
-        else:
-            logger.warning(
-                f".env file not found at {env_path}, skipping file update but continuing with in-memory update"
-            )
+                env_file_written = True
+            else:
+                logger.warning(
+                    f".env file not found at {env_path}, skipping file update but continuing with in-memory update"
+                )
+        except Exception as env_err:
+            logger.warning(f"Failed to write .env file (non-fatal): {env_err}")
 
         # Update the settings in memory (this always happens)
         if refresh_token:
@@ -492,7 +494,7 @@ async def save_google_drive_settings(
         return {
             "status": "success",
             "message": "Google Drive settings have been saved",
-            "in_memory_only": not os.path.exists(env_path),
+            "in_memory_only": not env_file_written,
         }
 
     except Exception as e:

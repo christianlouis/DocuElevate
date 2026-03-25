@@ -447,7 +447,7 @@ class TestFileDetailView:
         db_session.commit()
 
         # Test detail view
-        response = client.get(f"/files/{file_record.id}/detail")
+        response = client.get(f"/files/{file_record.id}/process")
         assert response.status_code == 200
         # Check that response contains HTML with file information
         assert b"File Information" in response.content
@@ -504,7 +504,7 @@ class TestFileDetailView:
         db_session.commit()
 
         # Test detail view
-        response = client.get(f"/files/{file_record.id}/detail")
+        response = client.get(f"/files/{file_record.id}/process")
         assert response.status_code == 200
         # Check that response contains branching visualization elements
         assert b"Process Flow Visualization" in response.content

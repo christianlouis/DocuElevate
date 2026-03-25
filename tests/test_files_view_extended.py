@@ -193,7 +193,7 @@ class TestFileDetailPage:
         db_session.commit()
 
         # Test file detail page
-        response = client.get(f"/files/{file_record.id}/detail")
+        response = client.get(f"/files/{file_record.id}/process")
         assert response.status_code == 200
         content = response.text
         assert "create_file_record" in content

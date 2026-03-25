@@ -267,6 +267,15 @@ class TestTestDropboxToken:
 class TestSaveDropboxSettings:
     """Tests for save_dropbox_settings endpoint."""
 
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.dropbox import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+
     @patch("app.api.dropbox.settings")
     def test_save_settings_env_not_found(self, mock_settings, client):
         """Test that missing .env file is non-fatal — DB write still succeeds."""
