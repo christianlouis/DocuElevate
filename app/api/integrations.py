@@ -547,13 +547,28 @@ def _test_s3_connection(config: dict[str, Any] | None, credentials: dict[str, An
     if not bucket:
         return {"success": False, "message": "Missing required field: bucket"}
 
+    endpoint_url = cfg.get("endpoint_url")
+    if endpoint_url:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(endpoint_url)
+        if parsed.scheme not in ("http", "https"):
+            return {"success": False, "message": "URL must use http or https scheme"}
+
+        hostname = parsed.hostname or ""
+        if hostname:
+            from app.utils.network import is_private_ip
+
+            if is_private_ip(hostname):
+                return {"success": False, "message": "URLs pointing to internal or private networks are not allowed"}
+
     try:
         client = boto3.client(
             "s3",
             region_name=region,
             aws_access_key_id=creds.get("access_key_id", ""),
             aws_secret_access_key=creds.get("secret_access_key", ""),
-            endpoint_url=cfg.get("endpoint_url"),
+            endpoint_url=endpoint_url,
         )
         client.head_bucket(Bucket=bucket)
         return {"success": True, "message": f"S3 bucket '{bucket}' is accessible"}
