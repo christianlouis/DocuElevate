@@ -31,6 +31,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([`470f08d`](https://github.com/christianlouis/DocuElevate/commit/470f08d89322f2904b78a8b0f820973611486c26))
 
 
+## Unreleased
+
+### Chores
+
+- **ci**: Ignore CVE-2026-4539 in pip-audit until pygments releases a fix
+  ([`6927e76`](https://github.com/christianlouis/DocuElevate/commit/6927e7643f9cbe1664f4a1a093511df5b079ed0a))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`76f202f`](https://github.com/christianlouis/DocuElevate/commit/76f202f7f1b94e39a4e79cd984770310599405bf))
+
+
+## Unreleased
+
+### Chores
+
+- **ci**: Ignore CVE-2026-4539 in pip-audit until pygments releases a fix
+  ([`6927e76`](https://github.com/christianlouis/DocuElevate/commit/6927e7643f9cbe1664f4a1a093511df5b079ed0a))
+
+
 ## v0.172.8 (2026-03-25)
 
 ### Bug Fixes

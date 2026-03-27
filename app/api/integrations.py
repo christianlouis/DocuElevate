@@ -554,25 +554,15 @@ def _test_s3_connection(config: dict[str, Any] | None, credentials: dict[str, An
     if not bucket:
         return {"success": False, "message": "Missing required field: bucket"}
 
-    if endpoint_url is not None:
-        if not isinstance(endpoint_url, str):
-            return {"success": False, "message": "endpoint_url must be a string"}
-
+    if endpoint_url:
         from urllib.parse import urlparse
 
         from app.utils.network import is_private_ip
 
-        parsed = urlparse(endpoint_url)
-        if parsed.scheme not in ("http", "https"):
-            return {"success": False, "message": "URL must use http or https scheme"}
-
-        hostname = parsed.hostname or ""
-        if not hostname:
-            return {"success": False, "message": "endpoint_url must include a valid hostname"}
-
-        if is_private_ip(hostname):
+        parsed_url = urlparse(endpoint_url)
+        if parsed_url.hostname and is_private_ip(parsed_url.hostname):
             logger.warning("SSRF blocked: Attempt to connect to private IP via S3 endpoint %s", endpoint_url)
-            return {"success": False, "message": "URLs pointing to internal or private networks are not allowed"}
+            return {"success": False, "message": "Connection error: Invalid endpoint URL or private IP"}
 
     try:
         client = boto3.client(
