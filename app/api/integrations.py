@@ -515,6 +515,12 @@ def _test_imap_connection(config: dict[str, Any] | None, credentials: dict[str, 
     if not host or not username or not password:
         return {"success": False, "message": "Missing required fields: host, username, and password"}
 
+    from app.utils.network import is_private_ip
+
+    if is_private_ip(host):
+        logger.warning("SSRF blocked: Attempt to connect to private IP %s", host)
+        return {"success": False, "message": "Connection error: Invalid hostname or IP address"}
+
     try:
         if use_ssl:
             mail = imaplib.IMAP4_SSL(host, port)
@@ -543,9 +549,20 @@ def _test_s3_connection(config: dict[str, Any] | None, credentials: dict[str, An
     creds = credentials or {}
     bucket = cfg.get("bucket", "")
     region = cfg.get("region", "us-east-1")
+    endpoint_url = cfg.get("endpoint_url")
 
     if not bucket:
         return {"success": False, "message": "Missing required field: bucket"}
+
+    if endpoint_url:
+        from urllib.parse import urlparse
+
+        from app.utils.network import is_private_ip
+
+        parsed_url = urlparse(endpoint_url)
+        if parsed_url.hostname and is_private_ip(parsed_url.hostname):
+            logger.warning("SSRF blocked: Attempt to connect to private IP via S3 endpoint %s", endpoint_url)
+            return {"success": False, "message": "Connection error: Invalid endpoint URL or private IP"}
 
     try:
         client = boto3.client(
@@ -553,7 +570,7 @@ def _test_s3_connection(config: dict[str, Any] | None, credentials: dict[str, An
             region_name=region,
             aws_access_key_id=creds.get("access_key_id", ""),
             aws_secret_access_key=creds.get("secret_access_key", ""),
-            endpoint_url=cfg.get("endpoint_url"),
+            endpoint_url=endpoint_url,
         )
         client.head_bucket(Bucket=bucket)
         return {"success": True, "message": f"S3 bucket '{bucket}' is accessible"}
