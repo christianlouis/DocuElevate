@@ -998,6 +998,23 @@ class TestConnectionTestEndpoint:
         assert data["success"] is False
         assert "Missing" in data["message"]
 
+    def test_test_imap_blocks_private_ip(self, int_client):
+        """IMAP test with private IP returns failure (SSRF protection)."""
+        payload = {
+            "integration_type": "IMAP",
+            "config": {
+                "host": "127.0.0.1",
+                "port": 993,
+                "username": "user",
+            },
+            "credentials": {"password": "pass"},
+        }
+        resp = int_client.post("/api/integrations/test", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert "Invalid hostname or IP address" in data["message"]
+
     def test_test_s3_missing_bucket(self, int_client):
         """S3 test with missing bucket returns failure."""
         payload = {
@@ -1015,7 +1032,7 @@ class TestConnectionTestEndpoint:
         """S3 test blocks requests to private/internal IPs via endpoint_url (SSRF protection)."""
         payload = {
             "integration_type": "S3",
-            "config": {"bucket": "my-bucket", "endpoint_url": "http://127.0.0.1/s3"},
+            "config": {"bucket": "my-bucket", "endpoint_url": "http://127.0.0.1:9000"},
             "credentials": {"access_key_id": "AKIA", "secret_access_key": "secret"},
         }
         resp = int_client.post("/api/integrations/test", json=payload)
@@ -1049,6 +1066,32 @@ class TestConnectionTestEndpoint:
         data = resp.json()
         assert data["success"] is False
         assert "scheme" in data["message"].lower()
+
+    def test_test_s3_blocks_non_string_endpoint_url(self, int_client):
+        """S3 test rejects non-string endpoint_url values gracefully (no 500)."""
+        payload = {
+            "integration_type": "S3",
+            "config": {"bucket": "my-bucket", "endpoint_url": 12345},
+            "credentials": {"access_key_id": "AKIA", "secret_access_key": "secret"},
+        }
+        resp = int_client.post("/api/integrations/test", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert "string" in data["message"].lower()
+
+    def test_test_s3_blocks_empty_hostname_endpoint_url(self, int_client):
+        """S3 test rejects endpoint_url with no hostname (e.g. malformed URL)."""
+        payload = {
+            "integration_type": "S3",
+            "config": {"bucket": "my-bucket", "endpoint_url": "https://"},
+            "credentials": {"access_key_id": "AKIA", "secret_access_key": "secret"},
+        }
+        resp = int_client.post("/api/integrations/test", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+        assert "hostname" in data["message"].lower()
 
     def test_test_webdav_missing_url(self, int_client):
         """WebDAV test with missing URL returns failure."""

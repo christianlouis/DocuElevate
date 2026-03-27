@@ -515,6 +515,12 @@ def _test_imap_connection(config: dict[str, Any] | None, credentials: dict[str, 
     if not host or not username or not password:
         return {"success": False, "message": "Missing required fields: host, username, and password"}
 
+    from app.utils.network import is_private_ip
+
+    if is_private_ip(host):
+        logger.warning("SSRF blocked: Attempt to connect to private IP %s", host)
+        return {"success": False, "message": "Connection error: Invalid hostname or IP address"}
+
     try:
         if use_ssl:
             mail = imaplib.IMAP4_SSL(host, port)
@@ -543,24 +549,30 @@ def _test_s3_connection(config: dict[str, Any] | None, credentials: dict[str, An
     creds = credentials or {}
     bucket = cfg.get("bucket", "")
     region = cfg.get("region", "us-east-1")
+    endpoint_url = cfg.get("endpoint_url")
 
     if not bucket:
         return {"success": False, "message": "Missing required field: bucket"}
 
-    endpoint_url = cfg.get("endpoint_url")
-    if endpoint_url:
+    if endpoint_url is not None:
+        if not isinstance(endpoint_url, str):
+            return {"success": False, "message": "endpoint_url must be a string"}
+
         from urllib.parse import urlparse
+
+        from app.utils.network import is_private_ip
 
         parsed = urlparse(endpoint_url)
         if parsed.scheme not in ("http", "https"):
             return {"success": False, "message": "URL must use http or https scheme"}
 
         hostname = parsed.hostname or ""
-        if hostname:
-            from app.utils.network import is_private_ip
+        if not hostname:
+            return {"success": False, "message": "endpoint_url must include a valid hostname"}
 
-            if is_private_ip(hostname):
-                return {"success": False, "message": "URLs pointing to internal or private networks are not allowed"}
+        if is_private_ip(hostname):
+            logger.warning("SSRF blocked: Attempt to connect to private IP via S3 endpoint %s", endpoint_url)
+            return {"success": False, "message": "URLs pointing to internal or private networks are not allowed"}
 
     try:
         client = boto3.client(
