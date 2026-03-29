@@ -1,9 +1,10 @@
-import pytest
-import httpx
-from unittest.mock import MagicMock, patch
-
 # Mock settings before importing
 import os
+from unittest.mock import MagicMock, patch
+
+import httpx
+import pytest
+
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["REDIS_URL"] = "redis://localhost"
 os.environ["OPENAI_API_KEY"] = "mock"
@@ -14,8 +15,10 @@ os.environ["AZURE_ENDPOINT"] = "mock"
 os.environ["GOTENBERG_URL"] = "mock"
 os.environ["AUTH_ENABLED"] = "False"
 
-from app.api.url_upload import check_redirect
 from fastapi import HTTPException
+
+from app.api.url_upload import check_redirect
+
 
 @pytest.mark.asyncio
 async def test_check_redirect_no_redirect():
@@ -23,6 +26,7 @@ async def test_check_redirect_no_redirect():
     response.is_redirect = False
     # Should do nothing
     await check_redirect(response)
+
 
 @pytest.mark.asyncio
 async def test_check_redirect_safe_url():
@@ -34,6 +38,7 @@ async def test_check_redirect_safe_url():
     with patch("app.api.url_upload.validate_url_safety") as mock_validate:
         await check_redirect(response)
         mock_validate.assert_called_once_with("https://example.com/file.pdf")
+
 
 @pytest.mark.asyncio
 async def test_check_redirect_unsafe_url():
