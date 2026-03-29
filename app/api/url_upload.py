@@ -79,14 +79,10 @@ def validate_url_safety(url: str) -> None:
 
 
 async def check_redirect(response: httpx.Response) -> None:
-    """
-    Hook to validate redirect URLs before they are followed.
-    Prevents SSRF bypasses where a safe URL redirects to an unsafe internal URL.
-    """
+    # Hook to validate redirect URLs before they are followed to prevent SSRF
     if response.is_redirect:
         next_url = response.headers.get("Location")
         if next_url:
-            # Resolve relative redirects to absolute URLs
             full_url = str(response.url.join(next_url))
             validate_url_safety(full_url)
 
