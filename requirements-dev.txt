@@ -34,7 +34,7 @@ pip-audit>=2.7.0  # Dependency vulnerability scanning against OSV/PyPA advisory 
 pre-commit>=3.6.0
 
 # License compliance
-pip-licenses==5.5.1  # For license compliance checking
+pip-licenses==5.5.5  # For license compliance checking
 
 # Release automation
 python-semantic-release>=9.0.0
