@@ -78,6 +78,19 @@ def validate_url_safety(url: str) -> None:
         raise HTTPException(status_code=400, detail="Access to cloud metadata endpoints is not allowed")
 
 
+async def check_redirect(response: httpx.Response) -> None:
+    """
+    Hook to validate redirect URLs before they are followed.
+    Prevents SSRF bypasses where a safe URL redirects to an unsafe internal URL.
+    """
+    if response.is_redirect:
+        next_url = response.headers.get("Location")
+        if next_url:
+            # Resolve relative redirects to absolute URLs
+            full_url = str(response.url.join(next_url))
+            validate_url_safety(full_url)
+
+
 def validate_file_type(content_type: str, filename: str) -> bool:
     """
     Validate that the file type is supported (i.e. processable by Gotenberg).
@@ -162,6 +175,7 @@ async def process_url(
         async with httpx.AsyncClient(
             timeout=settings.http_request_timeout,
             follow_redirects=True,
+            event_hooks={"response": [check_redirect]},
             headers={
                 "User-Agent": "DocuElevate/1.0",  # Identify ourselves
             },
