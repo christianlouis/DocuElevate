@@ -19,3 +19,8 @@
 **Vulnerability:** The `_test_imap_connection` and `_test_s3_connection` functions in `app/api/integrations.py` did not validate user-provided `host` and `endpoint_url` variables against `is_private_ip()`. This allowed an attacker to test the presence of internal IMAP servers or direct S3 SDK API calls to internal infrastructure via SSRF.
 **Learning:** Any time a new generic connection or integration test is added, SSRF validation may be forgotten if the core network utility (`is_private_ip`) is not systematically applied to all outbound network operations, regardless of the protocol (e.g., IMAP, S3).
 **Prevention:** Establish a pattern where any user-configurable host or endpoint URL is immediately passed through the centralized `is_private_ip` validation function before any network call or third-party client initialization.
+
+## 2026-03-29 - SSRF Bypass via HTTP Redirects
+**Vulnerability:** The `process_url` endpoint in `app/api/url_upload.py` validated the initial URL using `is_private_ip()` but used `httpx.AsyncClient(follow_redirects=True)` to download the file. This allowed an attacker to bypass SSRF protections by providing a safe external URL that redirects to an internal cloud metadata endpoint (e.g., `169.254.169.254`).
+**Learning:** Checking the initial URL is insufficient if the HTTP client automatically follows redirects to new, unvalidated locations.
+**Prevention:** When following redirects is required for functionality, use the HTTP client's event hooks (e.g., `event_hooks={"response": [check_redirect]}` in `httpx`) to intercept redirects and validate the new `Location` URL before the client follows it.
