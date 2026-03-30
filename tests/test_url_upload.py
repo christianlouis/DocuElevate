@@ -879,3 +879,45 @@ class TestURLUploadCoverageGaps:
         # Generic exception (not HTTPException/OSError/RequestException) is caught and returns 500
         assert response.status_code == 500
         assert "Unexpected error" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_verify_redirect_allows_safe_url(self):
+        """Test verify_redirect allows safe redirects (lines 115, 118, 120-121)"""
+        from app.api.url_upload import verify_redirect
+        import httpx
+
+        req = httpx.Request("GET", "http://example.com")
+        resp = httpx.Response(301, headers={"Location": "https://google.com"}, request=req)
+
+        # Should not raise any exception
+        await verify_redirect(resp)
+
+    @pytest.mark.asyncio
+    @patch("app.api.url_upload.validate_url_safety")
+    async def test_verify_redirect_blocks_unsafe_url(self, mock_validate):
+        """Test verify_redirect blocks unsafe redirects (lines 122-125)"""
+        from app.api.url_upload import verify_redirect
+        from fastapi import HTTPException
+        import httpx
+
+        mock_validate.side_effect = HTTPException(status_code=400, detail="Unsafe URL")
+
+        req = httpx.Request("GET", "http://example.com")
+        resp = httpx.Response(301, headers={"Location": "http://127.0.0.1"}, request=req)
+
+        with pytest.raises(httpx.RequestError) as exc_info:
+            await verify_redirect(resp)
+
+        assert "Redirect to unsafe URL blocked" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_verify_redirect_ignores_non_redirects(self):
+        """Test verify_redirect ignores 200 OK responses"""
+        from app.api.url_upload import verify_redirect
+        import httpx
+
+        req = httpx.Request("GET", "http://example.com")
+        resp = httpx.Response(200, request=req)
+
+        # Should not raise any exception and should ignore missing Location header
+        await verify_redirect(resp)
