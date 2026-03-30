@@ -883,8 +883,9 @@ class TestURLUploadCoverageGaps:
     @pytest.mark.asyncio
     async def test_verify_redirect_allows_safe_url(self):
         """Test verify_redirect allows safe redirects (lines 115, 118, 120-121)"""
-        from app.api.url_upload import verify_redirect
         import httpx
+
+        from app.api.url_upload import verify_redirect
 
         req = httpx.Request("GET", "http://example.com")
         resp = httpx.Response(301, headers={"Location": "https://google.com"}, request=req)
@@ -896,9 +897,10 @@ class TestURLUploadCoverageGaps:
     @patch("app.api.url_upload.validate_url_safety")
     async def test_verify_redirect_blocks_unsafe_url(self, mock_validate):
         """Test verify_redirect blocks unsafe redirects (lines 122-125)"""
-        from app.api.url_upload import verify_redirect
-        from fastapi import HTTPException
         import httpx
+        from fastapi import HTTPException
+
+        from app.api.url_upload import verify_redirect
 
         mock_validate.side_effect = HTTPException(status_code=400, detail="Unsafe URL")
 
@@ -913,8 +915,9 @@ class TestURLUploadCoverageGaps:
     @pytest.mark.asyncio
     async def test_verify_redirect_ignores_non_redirects(self):
         """Test verify_redirect ignores 200 OK responses"""
-        from app.api.url_upload import verify_redirect
         import httpx
+
+        from app.api.url_upload import verify_redirect
 
         req = httpx.Request("GET", "http://example.com")
         resp = httpx.Response(200, request=req)
