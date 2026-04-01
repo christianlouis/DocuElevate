@@ -879,3 +879,81 @@ class TestURLUploadCoverageGaps:
         # Generic exception (not HTTPException/OSError/RequestException) is caught and returns 500
         assert response.status_code == 500
         assert "Unexpected error" in response.json()["detail"]
+
+    def test_validate_redirect_blocks_private_ip(self):
+        """Test that validate_redirect hook raises HTTPException when redirected to private IP"""
+        from fastapi import HTTPException
+
+        from app.api.url_upload import validate_redirect
+
+        mock_response = MagicMock(spec=httpx.Response)
+        mock_response.status_code = 302
+        mock_response.headers = httpx.Headers({"Location": "http://192.168.1.1/file.pdf"})
+
+        import asyncio
+
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(validate_redirect(mock_response))
+
+        assert exc_info.value.status_code == 400
+        assert "private/internal" in exc_info.value.detail
+
+    def test_validate_redirect_allows_public_ip(self):
+        """Test that validate_redirect hook allows redirect to public IP"""
+        from app.api.url_upload import validate_redirect
+
+        mock_response = MagicMock(spec=httpx.Response)
+        mock_response.status_code = 302
+        mock_response.headers = httpx.Headers({"Location": "https://example.com/file.pdf"})
+
+        import asyncio
+
+        # Should not raise exception
+        asyncio.run(validate_redirect(mock_response))
+
+    def test_validate_redirect_relative_url(self):
+        """Test that validate_redirect hook correctly handles relative URLs"""
+        from httpx import URL
+
+        from app.api.url_upload import validate_redirect
+
+        mock_response = MagicMock(spec=httpx.Response)
+        mock_response.status_code = 302
+        mock_response.headers = httpx.Headers({"Location": "/internal/metadata"})
+        mock_request = MagicMock()
+        mock_request.url = URL("https://example.com/base")
+        mock_response.request = mock_request
+
+        import asyncio
+
+        # Should not raise an exception, as example.com is public
+        # (The test ensures the hook doesn't crash on relative paths)
+        asyncio.run(validate_redirect(mock_response))
+
+    def test_validate_redirect_ignored_status_code(self):
+        """Test that validate_redirect ignores non-redirect status codes"""
+        from app.api.url_upload import validate_redirect
+
+        mock_response = MagicMock(spec=httpx.Response)
+        mock_response.status_code = 200
+        # The hook should return early for 200, so we don't even set headers
+        mock_response.headers = httpx.Headers()
+
+        import asyncio
+
+        # Should not raise exception
+        asyncio.run(validate_redirect(mock_response))
+
+    def test_validate_redirect_missing_location(self):
+        """Test that validate_redirect handles missing Location header"""
+        from app.api.url_upload import validate_redirect
+
+        mock_response = MagicMock(spec=httpx.Response)
+        mock_response.status_code = 302
+        # Location header is missing
+        mock_response.headers = httpx.Headers()
+
+        import asyncio
+
+        # Should not raise exception
+        asyncio.run(validate_redirect(mock_response))
