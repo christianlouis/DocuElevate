@@ -913,8 +913,9 @@ class TestURLUploadCoverageGaps:
 
     def test_validate_redirect_relative_url(self):
         """Test that validate_redirect hook correctly handles relative URLs"""
-        from app.api.url_upload import validate_redirect
         from httpx import URL
+
+        from app.api.url_upload import validate_redirect
 
         mock_response = MagicMock(spec=httpx.Response)
         mock_response.status_code = 302
