@@ -879,3 +879,34 @@ class TestURLUploadCoverageGaps:
         # Generic exception (not HTTPException/OSError/RequestException) is caught and returns 500
         assert response.status_code == 500
         assert "Unexpected error" in response.json()["detail"]
+
+    def test_validate_redirect_blocks_private_ip(self):
+        """Test that validate_redirect hook raises HTTPException when redirected to private IP"""
+        from fastapi import HTTPException
+
+        from app.api.url_upload import validate_redirect
+
+        mock_response = MagicMock(spec=httpx.Response)
+        mock_response.status_code = 302
+        mock_response.headers = httpx.Headers({"Location": "http://192.168.1.1/file.pdf"})
+
+        import asyncio
+
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(validate_redirect(mock_response))
+
+        assert exc_info.value.status_code == 400
+        assert "private/internal" in exc_info.value.detail
+
+    def test_validate_redirect_allows_public_ip(self):
+        """Test that validate_redirect hook allows redirect to public IP"""
+        from app.api.url_upload import validate_redirect
+
+        mock_response = MagicMock(spec=httpx.Response)
+        mock_response.status_code = 302
+        mock_response.headers = httpx.Headers({"Location": "https://example.com/file.pdf"})
+
+        import asyncio
+
+        # Should not raise exception
+        asyncio.run(validate_redirect(mock_response))
