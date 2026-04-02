@@ -9,6 +9,52 @@ import pytest
 
 
 @pytest.mark.unit
+@pytest.mark.asyncio
+async def test_verify_redirect():
+    """Test the verify_redirect hook to prevent SSRF bypasses via redirects."""
+    from app.api.url_upload import verify_redirect
+    from fastapi import HTTPException
+    import httpx
+
+    class FakeResponse:
+        def __init__(self, status_code, location):
+            self.status_code = status_code
+            self.headers = httpx.Headers({"Location": location})
+            self.url = httpx.URL("http://example.com")
+
+    # Test private IP redirect
+    resp1 = FakeResponse(302, "http://127.0.0.1/sensitive")
+    with pytest.raises(HTTPException) as exc1:
+        await verify_redirect(resp1)
+    assert "Access to private/internal IP" in exc1.value.detail
+
+    # Test AWS metadata redirect
+    # Since 169.254.169.254 is also a private IP, it gets blocked by the private IP check
+    # so we should assert that it is blocked for security reasons
+    resp2 = FakeResponse(302, "http://169.254.169.254/latest/meta-data/")
+    with pytest.raises(HTTPException) as exc2:
+        await verify_redirect(resp2)
+    assert "Access to private/internal IP addresses is not allowed for security reasons" in exc2.value.detail
+
+    # Test regular redirect (should not raise)
+    resp3 = FakeResponse(302, "https://google.com")
+    await verify_redirect(resp3)
+
+    # Test non-redirect response (should not raise)
+    resp4 = FakeResponse(200, "https://google.com")
+    await verify_redirect(resp4)
+
+    # Test redirect without Location header (should not raise)
+    class FakeResponseNoLocation:
+        def __init__(self, status_code):
+            self.status_code = status_code
+            self.headers = httpx.Headers({})
+            self.url = httpx.URL("http://example.com")
+    resp5 = FakeResponseNoLocation(302)
+    await verify_redirect(resp5)
+
+
+@pytest.mark.unit
 class TestURLUploadValidation:
     """Test URL validation and SSRF protection"""
 
