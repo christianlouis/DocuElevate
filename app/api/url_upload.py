@@ -106,6 +106,15 @@ def validate_file_type(content_type: str, filename: str) -> bool:
     return False
 
 
+async def verify_redirect(response: httpx.Response):
+    """
+    Event hook to validate redirect URLs (SSRF protection during redirects).
+    """
+    if response.status_code in (301, 302, 303, 307, 308) and "Location" in response.headers:
+        next_url = urllib.parse.urljoin(str(response.url), response.headers["Location"])
+        validate_url_safety(next_url)
+
+
 @router.post("/process-url")
 @require_login
 async def process_url(
@@ -165,6 +174,7 @@ async def process_url(
             headers={
                 "User-Agent": "DocuElevate/1.0",  # Identify ourselves
             },
+            event_hooks={"response": [verify_redirect]},
         ) as client:
             async with client.stream("GET", url) as response:
                 response.raise_for_status()
