@@ -12,9 +12,10 @@ import pytest
 @pytest.mark.asyncio
 async def test_verify_redirect():
     """Test the verify_redirect hook to prevent SSRF bypasses via redirects."""
-    from app.api.url_upload import verify_redirect
-    from fastapi import HTTPException
     import httpx
+    from fastapi import HTTPException
+
+    from app.api.url_upload import verify_redirect
 
     class FakeResponse:
         def __init__(self, status_code, location):
@@ -50,6 +51,7 @@ async def test_verify_redirect():
             self.status_code = status_code
             self.headers = httpx.Headers({})
             self.url = httpx.URL("http://example.com")
+
     resp5 = FakeResponseNoLocation(302)
     await verify_redirect(resp5)
 
