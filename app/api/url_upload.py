@@ -106,6 +106,17 @@ def validate_file_type(content_type: str, filename: str) -> bool:
     return False
 
 
+async def check_redirect(response: httpx.Response) -> None:
+    """
+    Validate redirect URLs to prevent SSRF bypass.
+    """
+    if response.is_redirect:
+        location = response.headers.get("Location")
+        if location:
+            next_url = urllib.parse.urljoin(str(response.url), location)
+            validate_url_safety(next_url)
+
+
 @router.post("/process-url")
 @require_login
 async def process_url(
@@ -162,6 +173,7 @@ async def process_url(
         async with httpx.AsyncClient(
             timeout=settings.http_request_timeout,
             follow_redirects=True,
+            event_hooks={"response": [check_redirect]},
             headers={
                 "User-Agent": "DocuElevate/1.0",  # Identify ourselves
             },
