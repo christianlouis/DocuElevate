@@ -116,7 +116,6 @@ async def check_redirect(response: httpx.Response) -> None:
             next_url = urllib.parse.urljoin(str(response.url), location)
             validate_url_safety(next_url)
 
-
 @router.post("/process-url")
 @require_login
 async def process_url(

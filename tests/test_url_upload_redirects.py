@@ -17,7 +17,6 @@ async def test_check_redirect_allows_safe_url():
     # Should not raise any exception
     await check_redirect(response)
 
-
 @pytest.mark.asyncio
 async def test_check_redirect_blocks_unsafe_url():
     response = MagicMock(spec=httpx.Response)
