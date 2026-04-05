@@ -1,9 +1,11 @@
-import pytest
-from app.api.url_upload import check_redirect
+from unittest.mock import MagicMock
+
 import httpx
+import pytest
 from fastapi import HTTPException
-import urllib.parse
-from unittest.mock import patch, MagicMock
+
+from app.api.url_upload import check_redirect
+
 
 @pytest.mark.asyncio
 async def test_check_redirect_allows_safe_url():
@@ -14,6 +16,7 @@ async def test_check_redirect_allows_safe_url():
 
     # Should not raise any exception
     await check_redirect(response)
+
 
 @pytest.mark.asyncio
 async def test_check_redirect_blocks_unsafe_url():
