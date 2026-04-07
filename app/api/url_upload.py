@@ -170,6 +170,19 @@ async def process_url(
     if not safe_filename:
         safe_filename = "download"
 
+    # Hook to validate redirects and prevent SSRF
+    async def validate_redirect(response: httpx.Response):
+        if response.is_redirect:
+            location = response.headers.get("Location")
+            if location:
+                # Resolve relative URLs
+                next_url = urllib.parse.urljoin(str(response.url), location)
+                try:
+                    validate_url_safety(next_url)
+                except HTTPException as e:
+                    # Reraise as a RequestError so httpx aborts the request
+                    raise httpx.RequestError(f"Unsafe redirect target: {e.detail}", request=response.request)
+
     # Download file with security measures
     # Initialize target_path to None to prevent UnboundLocalError in exception handlers
     # that may execute before target_path is assigned during error cases
@@ -181,6 +194,7 @@ async def process_url(
         async with httpx.AsyncClient(
             timeout=settings.http_request_timeout,
             follow_redirects=True,
+            event_hooks={"response": [validate_redirect]},
             headers={
                 "User-Agent": "DocuElevate/1.0",  # Identify ourselves
             },
