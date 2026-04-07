@@ -12,6 +12,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+
+## v0.172.9 (2026-04-07)
+
+### Bug Fixes
+
+- **api**: Resolve merge conflicts, add type safety for endpoint_url in S3 connection test
+  ([`57db4c7`](https://github.com/christianlouis/DocuElevate/commit/57db4c7c82f4a8df2e7e5e5505e1d5c01768fc16))
+
+### Chores
+
+- **ci**: Ignore CVE-2026-4539 in pip-audit until pygments releases a fix
+  ([`6927e76`](https://github.com/christianlouis/DocuElevate/commit/6927e7643f9cbe1664f4a1a093511df5b079ed0a))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`8295279`](https://github.com/christianlouis/DocuElevate/commit/8295279ec93570da4eb0445ede8084d1eb2aba99))
+
+- Sort imports in test_url_upload.py
+  ([`bdfa3ba`](https://github.com/christianlouis/DocuElevate/commit/bdfa3ba1e0a5702414e3b449fbde6a6d3149557a))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`c6e0b80`](https://github.com/christianlouis/DocuElevate/commit/c6e0b80becab81a75aea4ee78f5aaf8b6ac54854))
+
+- **changelog**: Update changelog [skip ci]
+  ([`9b9882c`](https://github.com/christianlouis/DocuElevate/commit/9b9882c4d62691d0ddd20444e3b77bfe6eecc8c3))
+
+- **changelog**: Update changelog [skip ci]
+  ([`69053bf`](https://github.com/christianlouis/DocuElevate/commit/69053bfb08d3e2f12a86878044667ac500888837))
+
+- **changelog**: Update changelog [skip ci]
+  ([`76f202f`](https://github.com/christianlouis/DocuElevate/commit/76f202f7f1b94e39a4e79cd984770310599405bf))
+
+### Testing
+
+- Add coverage for url_upload redirect SSRF bypass prevention hook
+  ([`152ee15`](https://github.com/christianlouis/DocuElevate/commit/152ee15b06ebf7beb6216423b4c8d93ec2243165))
+
+- Add tests for SSRF validation in integrations
+  ([`470f08d`](https://github.com/christianlouis/DocuElevate/commit/470f08d89322f2904b78a8b0f820973611486c26))
+
+
+## Unreleased
+
+### Chores
+
+- **ci**: Ignore CVE-2026-4539 in pip-audit until pygments releases a fix
+  ([`6927e76`](https://github.com/christianlouis/DocuElevate/commit/6927e7643f9cbe1664f4a1a093511df5b079ed0a))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`9b9882c`](https://github.com/christianlouis/DocuElevate/commit/9b9882c4d62691d0ddd20444e3b77bfe6eecc8c3))
+
+- **changelog**: Update changelog [skip ci]
+  ([`69053bf`](https://github.com/christianlouis/DocuElevate/commit/69053bfb08d3e2f12a86878044667ac500888837))
+
+- **changelog**: Update changelog [skip ci]
+  ([`76f202f`](https://github.com/christianlouis/DocuElevate/commit/76f202f7f1b94e39a4e79cd984770310599405bf))
+
+### Testing
+
+- Add tests for SSRF validation in integrations
+  ([`470f08d`](https://github.com/christianlouis/DocuElevate/commit/470f08d89322f2904b78a8b0f820973611486c26))
+
+
+## Unreleased
+
 ### Chores
 
 - **ci**: Ignore CVE-2026-4539 in pip-audit until pygments releases a fix

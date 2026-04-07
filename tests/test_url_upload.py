@@ -879,3 +879,90 @@ class TestURLUploadCoverageGaps:
         # Generic exception (not HTTPException/OSError/RequestException) is caught and returns 500
         assert response.status_code == 500
         assert "Unexpected error" in response.json()["detail"]
+
+
+@pytest.mark.unit
+class TestVerifyRedirectHook:
+    """Unit tests for the verify_redirect SSRF protection hook"""
+
+    @pytest.mark.asyncio
+    async def test_verify_redirect_blocks_localhost(self):
+        """verify_redirect should block 302 redirects to localhost (SSRF bypass)"""
+        from app.api.url_upload import verify_redirect
+
+        req = httpx.Request("GET", "https://attacker.com/")
+        resp = httpx.Response(302, headers={"Location": "http://127.0.0.1/secret"}, request=req)
+
+        with pytest.raises(httpx.RequestError, match="Redirect to unsafe URL blocked"):
+            await verify_redirect(resp)
+
+    @pytest.mark.asyncio
+    async def test_verify_redirect_blocks_aws_metadata(self):
+        """verify_redirect should block 301 redirects to the AWS metadata endpoint"""
+        from app.api.url_upload import verify_redirect
+
+        req = httpx.Request("GET", "https://attacker.com/")
+        resp = httpx.Response(
+            301,
+            headers={"Location": "http://169.254.169.254/latest/meta-data/"},
+            request=req,
+        )
+
+        with pytest.raises(httpx.RequestError, match="Redirect to unsafe URL blocked"):
+            await verify_redirect(resp)
+
+    @pytest.mark.asyncio
+    async def test_verify_redirect_blocks_private_network(self):
+        """verify_redirect should block 307 redirects to RFC-1918 private addresses"""
+        from app.api.url_upload import verify_redirect
+
+        req = httpx.Request("GET", "https://attacker.com/")
+        resp = httpx.Response(307, headers={"Location": "http://192.168.1.1/admin"}, request=req)
+
+        with pytest.raises(httpx.RequestError, match="Redirect to unsafe URL blocked"):
+            await verify_redirect(resp)
+
+    @pytest.mark.asyncio
+    async def test_verify_redirect_allows_safe_url(self):
+        """Test verify_redirect allows safe redirects (lines 115, 118, 120-121)"""
+        import httpx
+
+        from app.api.url_upload import verify_redirect
+
+        req = httpx.Request("GET", "http://example.com")
+        resp = httpx.Response(301, headers={"Location": "https://google.com"}, request=req)
+
+        # Should not raise any exception
+        await verify_redirect(resp)
+
+    @pytest.mark.asyncio
+    @patch("app.api.url_upload.validate_url_safety")
+    async def test_verify_redirect_blocks_unsafe_url(self, mock_validate):
+        """Test verify_redirect blocks unsafe redirects (lines 122-125)"""
+        import httpx
+        from fastapi import HTTPException
+
+        from app.api.url_upload import verify_redirect
+
+        mock_validate.side_effect = HTTPException(status_code=400, detail="Unsafe URL")
+
+        req = httpx.Request("GET", "http://example.com")
+        resp = httpx.Response(301, headers={"Location": "http://127.0.0.1"}, request=req)
+
+        with pytest.raises(httpx.RequestError) as exc_info:
+            await verify_redirect(resp)
+
+        assert "Redirect to unsafe URL blocked" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_verify_redirect_ignores_non_redirects(self):
+        """Test verify_redirect ignores 200 OK responses"""
+        import httpx
+
+        from app.api.url_upload import verify_redirect
+
+        req = httpx.Request("GET", "http://example.com")
+        resp = httpx.Response(200, request=req)
+
+        # Should not raise any exception and should ignore missing Location header
+        await verify_redirect(resp)

@@ -106,6 +106,25 @@ def validate_file_type(content_type: str, filename: str) -> bool:
     return False
 
 
+async def verify_redirect(response: httpx.Response) -> None:
+    """
+    Event hook to intercept redirects and validate the new destination URL.
+    Prevents SSRF bypasses via redirects to internal networks or metadata endpoints.
+    """
+    if response.status_code in (301, 302, 303, 307, 308):
+        location = response.headers.get("Location")
+        if location:
+            # Resolve relative redirects
+            new_url = str(response.url.join(location))
+            # Validate the new URL
+            try:
+                validate_url_safety(new_url)
+            except HTTPException as e:
+                # Map the validation error to an httpx exception so it can be handled
+                # properly by the caller, avoiding raw HTTPExceptions escaping the client scope
+                raise httpx.RequestError(f"Redirect to unsafe URL blocked: {e.detail}", request=response.request) from e
+
+
 @router.post("/process-url")
 @require_login
 async def process_url(
@@ -137,15 +156,6 @@ async def process_url(
     # Validate URL safety (SSRF protection)
     validate_url_safety(url)
 
-    # Event hook to intercept and validate redirects
-    async def check_redirect(response: httpx.Response):
-        if response.is_redirect:
-            location = response.headers.get("Location")
-            if location:
-                redirect_url = str(response.url.join(location))
-                # Validate the redirect target
-                validate_url_safety(redirect_url)
-
     # Parse URL to extract filename if not provided
     if url_request.filename:
         original_filename = url_request.filename
@@ -171,10 +181,10 @@ async def process_url(
         async with httpx.AsyncClient(
             timeout=settings.http_request_timeout,
             follow_redirects=True,
+            event_hooks={"response": [verify_redirect]},
             headers={
                 "User-Agent": "DocuElevate/1.0",  # Identify ourselves
             },
-            event_hooks={"response": [check_redirect]},
         ) as client:
             async with client.stream("GET", url) as response:
                 response.raise_for_status()
