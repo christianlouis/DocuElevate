@@ -12,9 +12,9 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
-from urllib.parse import urlparse
 
 from app.database import SessionLocal
 from app.models import InAppNotification, UserNotificationPreference, UserNotificationTarget
