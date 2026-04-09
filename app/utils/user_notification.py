@@ -12,6 +12,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -126,6 +127,31 @@ def _send_webhook_notification(target_config: dict[str, Any], event_type: str, t
 
         if not url:
             logger.warning("Webhook notification target missing url")
+            return False
+
+        from app.utils.network import is_private_ip
+
+        parsed_url = urlparse(url)
+        if parsed_url.scheme not in ("http", "https"):
+            logger.warning("Webhook notification to %s blocked: Invalid scheme %s", url, parsed_url.scheme)
+            return False
+
+        hostname = parsed_url.hostname
+        if not hostname:
+            logger.warning("Webhook notification to %s blocked: No hostname", url)
+            return False
+
+        if is_private_ip(hostname):
+            logger.warning("Webhook notification to %s blocked: Private IP", url)
+            return False
+
+        metadata_endpoints = [
+            "169.254.169.254",  # AWS, Azure, GCP metadata
+            "metadata.google.internal",  # GCP
+            "169.254.169.253",  # AWS link-local
+        ]
+        if hostname in metadata_endpoints:
+            logger.warning("Webhook notification to %s blocked: Metadata endpoint", url)
             return False
 
         payload = {
