@@ -14,7 +14,7 @@ filetype>=1.2.0,<2.0  # File type detection fallback (pure Python)
 dropbox>=11.36.0  # Dropbox integration
 azure-ai-documentintelligence  # Azure OCR service
 authlib>=1.6.5  # Authentication - fixed security vulnerabilities (GHSA-xxx)
-python-dotenv  # Environment variables
+python-dotenv>=1.2.2  # Environment variables
 starlette>=0.49.1  # ASGI toolkit (used by FastAPI) - fixed DoS vulnerability
 alembic  # Database migrations
 slowapi>=0.1.9  # Rate limiting middleware for FastAPI
@@ -61,3 +61,4 @@ strawberry-graphql[fastapi]>=0.243.0,<1.0.0
 
 aiofiles>=24.1.0  # Asynchronous file I/O support
 segno>=1.6.0  # Pure-Python QR code generator (server-side rendering, no Pillow dependency)
+aiohttp==3.13.4  # Fix CVE-2026-34515 and other vulnerabilities
