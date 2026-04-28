@@ -28,3 +28,8 @@
 **Vulnerability:** The `/process-url` endpoint used `httpx.AsyncClient(follow_redirects=True)` after validating the initial user-provided URL against SSRF protections. However, it did not validate the target URLs of any subsequent HTTP redirects, allowing an attacker to provide a safe URL that redirects to an internal/private IP, bypassing the security check.
 **Learning:** Initial URL validation is insufficient when the HTTP client is configured to follow redirects automatically. The client must be explicitly configured to validate every redirect target.
 **Prevention:** When using `httpx.AsyncClient(follow_redirects=True)` for user-provided URLs, always implement a redirect validator hook function (e.g., using `event_hooks={'response': [validate_redirect]}`) that resolves the `Location` header and passes it through the same SSRF validation logic before the redirect is followed.
+## 2026-04-28 - Multiple Event Hooks Definition
+
+**Vulnerability:** SyntaxError crashing the application when passing multiple event hooks to `httpx.AsyncClient` sequentially.
+**Learning:** In Python, passing the same keyword argument (e.g., `event_hooks`) multiple times to a function call raises a `SyntaxError: keyword argument repeated`. The codebase attempted to assign two different `event_hooks` blocks back-to-back, breaking functionality that was responsible for SSRF prevention (`verify_redirect` and `validate_redirect`).
+**Prevention:** When combining multiple event hooks (such as global and local SSRF redirect validators) in `httpx.AsyncClient`, always combine them into a single list for the event key (e.g., `event_hooks={'response': [hook1, hook2]}`) rather than passing multiple kwargs.

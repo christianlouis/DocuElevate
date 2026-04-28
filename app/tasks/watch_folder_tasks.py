@@ -666,9 +666,11 @@ def _scan_onedrive_folder(folder_path: str, cache: dict[str, str], delete_after:
     list_url = f"https://graph.microsoft.com/v1.0/me/drive/root:/{encoded_path}:/children"
 
     count = 0
+    timeout = getattr(settings, "http_request_timeout", 120)
+
     while list_url:
         try:
-            resp = req_lib.get(list_url, headers=headers, timeout=getattr(settings, "http_request_timeout", 120))
+            resp = req_lib.get(list_url, headers=headers, timeout=timeout)
             resp.raise_for_status()
             data = resp.json()
         except Exception as exc:
@@ -704,9 +706,7 @@ def _scan_onedrive_folder(folder_path: str, cache: dict[str, str], delete_after:
                 dest_path = os.path.join(settings.workdir, f"{base}_{int(datetime.now().timestamp())}{ext2}")
 
             try:
-                dl_resp = req_lib.get(
-                    download_url, headers=headers, timeout=getattr(settings, "http_request_timeout", 120)
-                )
+                dl_resp = req_lib.get(download_url, headers=headers, timeout=timeout)
                 dl_resp.raise_for_status()
                 with open(dest_path, "wb") as f:
                     f.write(dl_resp.content)
@@ -726,7 +726,7 @@ def _scan_onedrive_folder(folder_path: str, cache: dict[str, str], delete_after:
                     del_resp = req_lib.delete(
                         f"https://graph.microsoft.com/v1.0/me/drive/items/{item_id}",
                         headers=headers,
-                        timeout=getattr(settings, "http_request_timeout", 120),
+                        timeout=timeout,
                     )
                     del_resp.raise_for_status()
                     logger.info("OneDrive ingest: deleted %s after ingestion", filename)
@@ -1789,6 +1789,8 @@ def _scan_user_onedrive_folder(
         logger.warning("User OneDrive watch folder: folder_path not configured.")
         return 0
 
+    timeout = getattr(settings, "http_request_timeout", 120)
+
     # Exchange refresh token for an access token
     try:
         token_resp = req_lib.post(
@@ -1800,7 +1802,7 @@ def _scan_user_onedrive_folder(
                 "client_secret": client_secret,
                 "scope": "https://graph.microsoft.com/.default",
             },
-            timeout=getattr(settings, "http_request_timeout", 120),
+            timeout=timeout,
         )
         token_resp.raise_for_status()
         access_token = token_resp.json()["access_token"]
@@ -1815,7 +1817,6 @@ def _scan_user_onedrive_folder(
     list_url: str | None = f"https://graph.microsoft.com/v1.0/me/drive/root:/{encoded_path}:/children"
 
     count = 0
-    timeout = getattr(settings, "http_request_timeout", 120)
 
     while list_url:
         try:
