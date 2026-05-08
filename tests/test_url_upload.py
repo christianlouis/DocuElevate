@@ -924,3 +924,24 @@ class TestURLUploadCoverageGaps:
 
         # Should not raise any exception and should ignore missing Location header
         await verify_redirect(resp)
+
+@patch("app.api.url_upload.httpx.AsyncClient")
+def test_process_url_combines_event_hooks(mock_async_client, client):
+    """Test that process_url combines event_hooks properly."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    mock_client_instance = MagicMock()
+    mock_stream = AsyncMock()
+    mock_stream.__aenter__.return_value = MagicMock()
+    mock_client_instance.stream = mock_stream
+
+    mock_async_client.return_value.__aenter__.return_value = mock_client_instance
+
+    client.post("/api/process-url", json={"url": "https://example.com/file.pdf"})
+
+    # Check that AsyncClient was called and we verify its kwargs
+    assert mock_async_client.called
+    kwargs = mock_async_client.call_args.kwargs
+    assert "event_hooks" in kwargs
+    assert "response" in kwargs["event_hooks"]
+    assert len(kwargs["event_hooks"]["response"]) == 2
