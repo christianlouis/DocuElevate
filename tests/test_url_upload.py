@@ -925,6 +925,7 @@ class TestURLUploadCoverageGaps:
         # Should not raise any exception and should ignore missing Location header
         await verify_redirect(resp)
 
+
 @patch("app.api.url_upload.httpx.AsyncClient")
 def test_process_url_combines_event_hooks(mock_async_client, client):
     """Test that process_url combines event_hooks properly."""
