@@ -194,11 +194,10 @@ async def process_url(
         async with httpx.AsyncClient(
             timeout=settings.http_request_timeout,
             follow_redirects=True,
-            event_hooks={"response": [validate_redirect]},
             headers={
                 "User-Agent": "DocuElevate/1.0",  # Identify ourselves
             },
-            event_hooks={"response": [verify_redirect]},
+            event_hooks={"response": [validate_redirect, verify_redirect]},
         ) as client:
             async with client.stream("GET", url) as response:
                 response.raise_for_status()
