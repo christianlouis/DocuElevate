@@ -928,7 +928,6 @@ class TestURLUploadCoverageGaps:
     @patch("app.api.url_upload.httpx.AsyncClient.stream")
     def test_process_url_validate_redirect_hook_blocks_unsafe_url(self, mock_stream, client):
         """Test the local validate_redirect hook blocks unsafe redirects."""
-        from fastapi import HTTPException
         import httpx
 
         # Simulate the AsyncClient behavior by directly triggering the event hook
