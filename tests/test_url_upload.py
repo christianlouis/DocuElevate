@@ -974,3 +974,24 @@ class TestURLUploadCoverageGaps:
                 assert "event_hooks" in kwargs
                 assert "response" in kwargs["event_hooks"]
                 assert len(kwargs["event_hooks"]["response"]) == 2
+
+                # To cover the validate_redirect function block (lines 174-184), we can call it manually.
+                # It's an inner function, but we can access it through the mock's arguments.
+                validate_redirect_fn = kwargs["event_hooks"]["response"][0]
+
+                # Test safe redirect
+                safe_req = httpx.Request("GET", "https://example.com")
+                safe_resp = httpx.Response(301, headers={"Location": "https://google.com"}, request=safe_req)
+                # It shouldn't raise
+                import asyncio
+
+                asyncio.run(validate_redirect_fn(safe_resp))
+
+                # Test unsafe redirect
+                unsafe_req = httpx.Request("GET", "https://example.com")
+                unsafe_resp = httpx.Response(301, headers={"Location": "http://127.0.0.1"}, request=unsafe_req)
+
+                # It should raise httpx.RequestError
+                with pytest.raises(httpx.RequestError) as exc_info:
+                    asyncio.run(validate_redirect_fn(unsafe_resp))
+                assert "Unsafe redirect target" in str(exc_info.value)
