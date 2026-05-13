@@ -924,3 +924,105 @@ class TestURLUploadCoverageGaps:
 
         # Should not raise any exception and should ignore missing Location header
         await verify_redirect(resp)
+
+    @patch("app.api.url_upload.httpx.AsyncClient")
+    @patch("app.api.url_upload.process_document")
+    def test_process_url_async_client_initialization(self, mock_process_document, mock_async_client_class, client):
+        """Test that AsyncClient is initialized with the correct event_hooks list"""
+        # We need to mock the context manager properly
+        mock_client_instance = AsyncMock()
+        mock_async_client_class.return_value.__aenter__.return_value = mock_client_instance
+
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/pdf"}
+        mock_response.raise_for_status = Mock()
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b"PDF content"
+        mock_response.aiter_bytes = mock_aiter_bytes
+
+        mock_stream_ctx = AsyncMock()
+        mock_stream_ctx.__aenter__.return_value = mock_response
+        mock_client_instance.stream.return_value = mock_stream_ctx
+
+        # Make request
+        client.post("/api/process-url", json={"url": "https://example.com/test.pdf"})
+
+        # Verify the initialization had the combined event_hooks
+        mock_async_client_class.assert_called_once()
+        kwargs = mock_async_client_class.call_args.kwargs
+        assert "event_hooks" in kwargs
+        assert "response" in kwargs["event_hooks"]
+        hooks = kwargs["event_hooks"]["response"]
+        assert len(hooks) == 2
+        assert hooks[0].__name__ == "validate_redirect"
+        assert hooks[1].__name__ == "verify_redirect"
+
+    @patch("app.api.url_upload.httpx.AsyncClient")
+    @patch("app.api.url_upload.process_document")
+    def test_process_url_verify_redirect_unreachable(self, mock_process_document, mock_async_client_class, client):
+        """Test the verify_redirect hook error specifically"""
+        import httpx
+        from app.api.url_upload import verify_redirect
+        import asyncio
+        loop = asyncio.get_event_loop()
+
+        mock_response = MagicMock(spec=httpx.Response)
+        mock_response.status_code = 302
+        mock_response.headers = {"Location": "http://127.0.0.1/internal"}
+
+        mock_url = MagicMock()
+        mock_url.join.return_value = "http://127.0.0.1/internal"
+        mock_response.url = mock_url
+        mock_response.request = MagicMock()
+
+        with pytest.raises(httpx.RequestError) as exc_info:
+            loop.run_until_complete(verify_redirect(mock_response))
+
+        assert "Redirect to unsafe URL blocked" in str(exc_info.value)
+
+
+    @patch("app.api.url_upload.httpx.AsyncClient")
+    @patch("app.api.url_upload.process_document")
+    def test_process_url_validate_redirect_hook(self, mock_process_document, mock_async_client_class, client):
+        """Test the inner validate_redirect hook inside process_url"""
+        import httpx
+        from fastapi import HTTPException
+        import asyncio
+        loop = asyncio.get_event_loop()
+
+        # We need to capture the hook when it's passed to AsyncClient
+        mock_client_instance = AsyncMock()
+        mock_async_client_class.return_value.__aenter__.return_value = mock_client_instance
+
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/pdf"}
+        mock_response.raise_for_status = Mock()
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b"PDF content"
+        mock_response.aiter_bytes = mock_aiter_bytes
+
+        mock_stream_ctx = AsyncMock()
+        mock_stream_ctx.__aenter__.return_value = mock_response
+        mock_client_instance.stream.return_value = mock_stream_ctx
+
+        # Make request to capture the hooks
+        client.post("/api/process-url", json={"url": "https://example.com/test.pdf"})
+
+        hooks = mock_async_client_class.call_args.kwargs["event_hooks"]["response"]
+        validate_redirect_hook = next(h for h in hooks if h.__name__ == "validate_redirect")
+
+        # Test the hook logic
+        mock_hook_response = MagicMock(spec=httpx.Response)
+        mock_hook_response.is_redirect = True
+        mock_hook_response.headers = {"Location": "http://127.0.0.1/internal"}
+        mock_hook_response.url = "http://example.com"
+        mock_hook_response.request = MagicMock()
+
+        with pytest.raises(httpx.RequestError) as exc_info:
+            loop.run_until_complete(validate_redirect_hook(mock_hook_response))
+
+        assert "Unsafe redirect target" in str(exc_info.value)
