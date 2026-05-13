@@ -940,6 +940,7 @@ class TestURLUploadCoverageGaps:
 
         async def mock_aiter_bytes(chunk_size=None):
             yield b"PDF content"
+
         mock_response.aiter_bytes = mock_aiter_bytes
 
         mock_stream_ctx = AsyncMock()
@@ -963,9 +964,12 @@ class TestURLUploadCoverageGaps:
     @patch("app.api.url_upload.process_document")
     def test_process_url_verify_redirect_unreachable(self, mock_process_document, mock_async_client_class, client):
         """Test the verify_redirect hook error specifically"""
-        import httpx
-        from app.api.url_upload import verify_redirect
         import asyncio
+
+        import httpx
+
+        from app.api.url_upload import verify_redirect
+
         loop = asyncio.get_event_loop()
 
         mock_response = MagicMock(spec=httpx.Response)
@@ -982,14 +986,14 @@ class TestURLUploadCoverageGaps:
 
         assert "Redirect to unsafe URL blocked" in str(exc_info.value)
 
-
     @patch("app.api.url_upload.httpx.AsyncClient")
     @patch("app.api.url_upload.process_document")
     def test_process_url_validate_redirect_hook(self, mock_process_document, mock_async_client_class, client):
         """Test the inner validate_redirect hook inside process_url"""
-        import httpx
-        from fastapi import HTTPException
         import asyncio
+
+        import httpx
+
         loop = asyncio.get_event_loop()
 
         # We need to capture the hook when it's passed to AsyncClient
@@ -1003,6 +1007,7 @@ class TestURLUploadCoverageGaps:
 
         async def mock_aiter_bytes(chunk_size=None):
             yield b"PDF content"
+
         mock_response.aiter_bytes = mock_aiter_bytes
 
         mock_stream_ctx = AsyncMock()
