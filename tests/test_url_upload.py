@@ -1034,11 +1034,14 @@ class TestURLUploadCoverageGaps:
 
     @patch("app.api.url_upload.httpx.AsyncClient")
     @patch("app.api.url_upload.process_document")
-    def test_process_url_validate_redirect_hook_missing_location(self, mock_process_document, mock_async_client_class, client):
+    def test_process_url_validate_redirect_hook_missing_location(
+        self, mock_process_document, mock_async_client_class, client
+    ):
         """Test the inner validate_redirect hook inside process_url when Location header is missing"""
         import asyncio
 
         import httpx
+
         loop = asyncio.get_event_loop()
 
         # We need to capture the hook when it's passed to AsyncClient
@@ -1052,6 +1055,7 @@ class TestURLUploadCoverageGaps:
 
         async def mock_aiter_bytes(chunk_size=None):
             yield b"PDF content"
+
         mock_response.aiter_bytes = mock_aiter_bytes
 
         mock_stream_ctx = AsyncMock()
@@ -1066,18 +1070,21 @@ class TestURLUploadCoverageGaps:
         # Test the hook logic
         mock_hook_response = MagicMock(spec=httpx.Response)
         mock_hook_response.is_redirect = True
-        mock_hook_response.headers = {} # Missing Location
+        mock_hook_response.headers = {}  # Missing Location
 
         # Should complete without error
         loop.run_until_complete(validate_redirect_hook(mock_hook_response))
 
     @patch("app.api.url_upload.httpx.AsyncClient")
     @patch("app.api.url_upload.process_document")
-    def test_process_url_validate_redirect_hook_not_redirect(self, mock_process_document, mock_async_client_class, client):
+    def test_process_url_validate_redirect_hook_not_redirect(
+        self, mock_process_document, mock_async_client_class, client
+    ):
         """Test the inner validate_redirect hook inside process_url when response is not a redirect"""
         import asyncio
 
         import httpx
+
         loop = asyncio.get_event_loop()
 
         # We need to capture the hook when it's passed to AsyncClient
@@ -1091,6 +1098,7 @@ class TestURLUploadCoverageGaps:
 
         async def mock_aiter_bytes(chunk_size=None):
             yield b"PDF content"
+
         mock_response.aiter_bytes = mock_aiter_bytes
 
         mock_stream_ctx = AsyncMock()
@@ -1116,12 +1124,14 @@ class TestURLUploadCoverageGaps:
         import asyncio
 
         import httpx
+
         from app.api.url_upload import verify_redirect
+
         loop = asyncio.get_event_loop()
 
         mock_response = MagicMock(spec=httpx.Response)
         mock_response.status_code = 302
-        mock_response.headers = {} # Missing Location
+        mock_response.headers = {}  # Missing Location
 
         # Should complete without error
         loop.run_until_complete(verify_redirect(mock_response))
