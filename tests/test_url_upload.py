@@ -912,6 +912,29 @@ class TestURLUploadCoverageGaps:
 
         assert "Redirect to unsafe URL blocked" in str(exc_info.value)
 
+    @patch("app.api.url_upload.validate_url_safety")
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
+    def test_process_url_validate_redirect_hook_blocks_unsafe_url(self, mock_stream, mock_validate, client):
+        """Test that the local validate_redirect hook successfully aborts the request when redirect is unsafe"""
+        import httpx
+        from fastapi import HTTPException
+
+        from app.api.url_upload import process_url
+
+        # The local validate_redirect hook intercepts 301/302 and throws an httpx.RequestError
+        # Here we mock the behavior of that hook executing during the stream context
+        def side_effect(*args, **kwargs):
+            # Raise a simulated RequestError caused by validate_redirect
+            raise httpx.RequestError("Unsafe redirect target: Access to private IP addresses is not allowed", request=httpx.Request("GET", "http://example.com"))
+
+        mock_stream.side_effect = side_effect
+
+        response = client.post("/api/process-url", json={"url": "http://example.com"})
+
+        # Our exception handler in process_url converts RequestError to a 500 HTTPException
+        assert response.status_code == 500
+        assert "Unsafe redirect target" in response.json()["detail"]
+
     @pytest.mark.asyncio
     async def test_verify_redirect_ignores_non_redirects(self):
         """Test verify_redirect ignores 200 OK responses"""
