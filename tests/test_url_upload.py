@@ -466,6 +466,19 @@ class TestURLUploadEndpoint:
         assert "Failed to download file" in data["detail"]
 
     @patch("app.api.url_upload.httpx.AsyncClient.stream")
+    def test_process_url_unsafe_redirect_returns_400(self, mock_stream, client):
+        """Test unsafe redirects are reported as a client error instead of HTTP 500."""
+        from app.api.url_upload import UnsafeRedirectError
+
+        mock_stream.side_effect = UnsafeRedirectError("Redirect to unsafe URL blocked: Unsafe URL")
+
+        response = client.post("/api/process-url", json={"url": "https://example.com/file.pdf"})
+
+        assert response.status_code == 400
+        data = response.json()
+        assert "Redirect to unsafe URL blocked" in data["detail"]
+
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
     def test_process_url_oserror_during_save(self, mock_stream, client, tmp_path, monkeypatch):
         """Test handling of OSError when saving file"""
         # Mock successful download
