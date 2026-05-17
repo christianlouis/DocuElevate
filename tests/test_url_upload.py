@@ -924,3 +924,29 @@ class TestURLUploadCoverageGaps:
 
         # Should not raise any exception and should ignore missing Location header
         await verify_redirect(resp)
+
+@pytest.mark.asyncio
+async def test_verify_redirect_coverage():
+    from app.api.url_upload import verify_redirect
+
+    response = MagicMock(spec=httpx.Response)
+    response.status_code = 301
+    response.headers = httpx.Headers({"Location": "ftp://example.com"})
+    response.url = httpx.URL("http://test.com")
+    response.request = MagicMock(spec=httpx.Request)
+
+    with pytest.raises(httpx.RequestError):
+        await verify_redirect(response)
+
+@pytest.mark.asyncio
+async def test_verify_redirect_coverage2():
+    from app.api.url_upload import verify_redirect
+
+    response = MagicMock(spec=httpx.Response)
+    response.status_code = 301
+    response.headers = httpx.Headers({"Location": "http://example.com"})
+    response.url = httpx.URL("http://test.com")
+    response.request = MagicMock(spec=httpx.Request)
+
+    # Should be fine
+    await verify_redirect(response)

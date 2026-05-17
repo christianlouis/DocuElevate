@@ -438,6 +438,7 @@ class TestDeliverWebhookTask:
     """Tests for the Celery webhook delivery task."""
 
     def test_success_returns_status_dict(self, mocker):
+        mocker.patch("app.utils.network.is_private_ip", return_value=False)
         """Task returns a dict on successful delivery."""
         mocker.patch("app.tasks.webhook_tasks.deliver_webhook", return_value=True)
 
@@ -460,3 +461,32 @@ class TestDeliverWebhookTask:
 
         with pytest.raises(RuntimeError, match="Webhook delivery.*failed"):
             deliver_webhook_task.__wrapped__("https://example.com/hook", {"event": "test"}, None)
+
+def test_webhook_ssrf_coverage():
+    from app.utils.webhook import deliver_webhook
+    assert deliver_webhook("ftp://example.com", {"data": 1}) == False
+    assert deliver_webhook("http://", {"data": 1}) == False
+    assert deliver_webhook("http://localhost", {"data": 1}) == False
+    assert deliver_webhook("http://169.254.169.254", {"data": 1}) == False
+    assert deliver_webhook("", {"data": 1}) == False
+
+def test_webhook_ssrf_coverage2(mocker):
+    from app.utils.webhook import deliver_webhook
+    mocker.patch("app.utils.network.is_private_ip", return_value=False)
+    assert deliver_webhook("http://127.0.0.1", {"data": 1}) == False
+
+def test_webhook_ssrf_coverage3(mocker):
+    mocker.patch("app.utils.network.is_private_ip", return_value=False)
+    from app.utils.webhook import deliver_webhook
+    assert deliver_webhook("http://127.0.0.1", {"data": 1}) == False
+    assert deliver_webhook("http://169.254.169.253", {"data": 1}) == False
+    assert deliver_webhook("http://metadata.google.internal", {"data": 1}) == False
+
+def test_webhook_ssrf_coverage5():
+    from app.utils.webhook import deliver_webhook
+    assert deliver_webhook("http://example.com/test", {"data": 1}) == False
+
+def test_webhook_ssrf_coverage4(mocker):
+    from app.utils.webhook import deliver_webhook
+    mocker.patch("app.utils.network.is_private_ip", return_value=True)
+    assert deliver_webhook("http://127.0.0.1", {"data": 1}) == False

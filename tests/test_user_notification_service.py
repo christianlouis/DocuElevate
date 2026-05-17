@@ -227,7 +227,8 @@ class TestSendEmailNotification:
 class TestSendWebhookNotification:
     """Tests for _send_webhook_notification()."""
 
-    def test_success_with_secret_header(self):
+    def test_success_with_secret_header(self, mocker):
+        mocker.patch("app.utils.network.is_private_ip", return_value=False)
         """Webhook sent and X-DocuElevate-Secret header set when secret provided."""
         from app.utils.user_notification import _send_webhook_notification
 
@@ -248,7 +249,8 @@ class TestSendWebhookNotification:
         assert kwargs["headers"]["X-DocuElevate-Secret"] == "mysecret"
         assert kwargs["json"]["event"] == "document.processed"
 
-    def test_success_without_secret(self):
+    def test_success_without_secret(self, mocker):
+        mocker.patch("app.utils.network.is_private_ip", return_value=False)
         """Webhook sent without X-DocuElevate-Secret header when no secret."""
         from app.utils.user_notification import _send_webhook_notification
 
@@ -633,3 +635,33 @@ class TestNotifyUserDocumentHelpers:
         assert "broken.pdf" in notifs[0].title
         assert "Timeout" in notifs[0].message
         assert notifs[0].event_type == "document.failed"
+
+def test_webhook_coverage():
+    from app.utils.user_notification import _send_webhook_notification
+    assert _send_webhook_notification({"url": "http://169.254.169.254"}, "test", "test", "test") == False
+    assert _send_webhook_notification({"url": "http://localhost"}, "test", "test", "test") == False
+    assert _send_webhook_notification({"url": "ftp://example.com"}, "test", "test", "test") == False
+    assert _send_webhook_notification({"url": "http://"}, "test", "test", "test") == False
+    assert _send_webhook_notification({"url": "http://foo.bar.baz"}, "test", "test", "test") == False
+    assert _send_webhook_notification({"url": ""}, "test", "test", "test") == False
+
+def test_webhook_coverage2(mocker):
+    from app.utils.user_notification import _send_webhook_notification
+    mocker.patch("app.utils.network.is_private_ip", return_value=False)
+    assert _send_webhook_notification({"url": "http://127.0.0.1"}, "test", "test", "test") == False
+
+def test_webhook_coverage3(mocker):
+    mocker.patch("app.utils.network.is_private_ip", return_value=False)
+    from app.utils.user_notification import _send_webhook_notification
+    assert _send_webhook_notification({"url": "http://127.0.0.1"}, "test", "test", "test") == False
+    assert _send_webhook_notification({"url": "http://169.254.169.253"}, "test", "test", "test") == False
+    assert _send_webhook_notification({"url": "http://metadata.google.internal"}, "test", "test", "test") == False
+
+def test_webhook_coverage5():
+    from app.utils.user_notification import _send_webhook_notification
+    assert _send_webhook_notification({}, "test", "test", "test") == False
+
+def test_webhook_coverage4(mocker):
+    from app.utils.user_notification import _send_webhook_notification
+    mocker.patch("app.utils.network.is_private_ip", return_value=True)
+    assert _send_webhook_notification({"url": "http://127.0.0.1"}, "test", "test", "test") == False

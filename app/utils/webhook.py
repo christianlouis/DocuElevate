@@ -18,6 +18,7 @@ import json
 import logging
 import time
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 
@@ -67,6 +68,31 @@ def deliver_webhook(url: str, payload: dict[str, Any], secret: str | None = None
     Returns:
         ``True`` when the remote server responds with a 2xx status.
     """
+    from app.utils.network import is_private_ip
+
+    parsed_url = urlparse(url)
+    if parsed_url.scheme not in ("http", "https"):
+        logger.warning("Webhook to %s blocked: Invalid scheme %s", url, parsed_url.scheme)
+        return False
+
+    hostname = parsed_url.hostname
+    if not hostname:
+        logger.warning("Webhook to %s blocked: No hostname", url)
+        return False
+
+    if is_private_ip(hostname):
+        logger.warning("Webhook to %s blocked: Private IP", url)
+        return False
+
+    metadata_endpoints = [
+        "169.254.169.254",  # AWS, Azure, GCP metadata
+        "metadata.google.internal",  # GCP
+        "169.254.169.253",  # AWS link-local
+    ]
+    if hostname in metadata_endpoints:
+        logger.warning("Webhook to %s blocked: Metadata endpoint", url)
+        return False
+
     body = json.dumps(payload, default=str, sort_keys=True)
     body_bytes = body.encode("utf-8")
 
