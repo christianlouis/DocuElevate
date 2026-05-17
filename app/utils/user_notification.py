@@ -12,11 +12,13 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
 from app.database import SessionLocal
 from app.models import InAppNotification, UserNotificationPreference, UserNotificationTarget
+from app.utils.network import is_private_ip
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +29,11 @@ EVENT_DOCUMENT_FAILED = "document.failed"
 USER_EVENT_LABELS: dict[str, str] = {
     EVENT_DOCUMENT_PROCESSED: "Document Processed",
     EVENT_DOCUMENT_FAILED: "Document Processing Failed",
+}
+METADATA_ENDPOINTS = {
+    "169.254.169.254",
+    "169.254.169.253",
+    "metadata.google.internal",
 }
 
 
@@ -126,6 +133,20 @@ def _send_webhook_notification(target_config: dict[str, Any], event_type: str, t
 
         if not url:
             logger.warning("Webhook notification target missing url")
+            return False
+
+        parsed_url = urlparse(url)
+        if parsed_url.scheme not in {"http", "https"}:
+            logger.warning("Webhook notification to %s blocked: invalid scheme %s", url, parsed_url.scheme)
+            return False
+
+        hostname = parsed_url.hostname
+        if not hostname:
+            logger.warning("Webhook notification to %s blocked: missing hostname", url)
+            return False
+
+        if hostname in METADATA_ENDPOINTS or is_private_ip(hostname):
+            logger.warning("Webhook notification to %s blocked: private or metadata endpoint", url)
             return False
 
         payload = {
