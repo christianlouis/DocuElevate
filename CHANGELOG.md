@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.172.11 (2026-05-17)
+
+### Bug Fixes
+
+- Escape search result template values
+  ([#853](https://github.com/christianlouis/DocuElevate/pull/853),
+  [`1a02187`](https://github.com/christianlouis/DocuElevate/commit/1a0218799b9a1eb4154e2f4fbb2572cb3922106a))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`048f28a`](https://github.com/christianlouis/DocuElevate/commit/048f28a6717fa7f5cf4b235f9142e625e80e5d59))
+
+
 ## Unreleased
 
 
