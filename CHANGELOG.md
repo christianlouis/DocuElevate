@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.172.12 (2026-05-17)
+
+### Bug Fixes
+
+- Validate webhook targets before delivery
+  ([#846](https://github.com/christianlouis/DocuElevate/pull/846),
+  [`e2fa963`](https://github.com/christianlouis/DocuElevate/commit/e2fa96318f5bd45607baa0fe08a0bf14e1ca83d4))
+
+### Testing
+
+- Cover webhook SSRF validation ([#846](https://github.com/christianlouis/DocuElevate/pull/846),
+  [`e2fa963`](https://github.com/christianlouis/DocuElevate/commit/e2fa96318f5bd45607baa0fe08a0bf14e1ca83d4))
+
+
 ## v0.172.11 (2026-05-17)
 
 ### Bug Fixes
