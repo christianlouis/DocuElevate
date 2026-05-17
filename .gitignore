@@ -200,3 +200,5 @@ cython_debug/
 # Build metadata files - generated at build time
 GIT_SHA
 RUNTIME_INFO
+node_modules
+frontend/node_modules
