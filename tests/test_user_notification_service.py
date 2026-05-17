@@ -235,7 +235,10 @@ class TestSendWebhookNotification:
         mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
 
-        with patch("app.utils.user_notification.httpx.post", return_value=mock_response) as mock_post:
+        with (
+            patch("app.utils.user_notification.is_private_ip", return_value=False),
+            patch("app.utils.user_notification.httpx.post", return_value=mock_response) as mock_post,
+        ):
             result = _send_webhook_notification(
                 {"url": "https://hook.example.com/test", "secret": "mysecret"},
                 "document.processed",
@@ -256,7 +259,10 @@ class TestSendWebhookNotification:
         mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
 
-        with patch("app.utils.user_notification.httpx.post", return_value=mock_response) as mock_post:
+        with (
+            patch("app.utils.user_notification.is_private_ip", return_value=False),
+            patch("app.utils.user_notification.httpx.post", return_value=mock_response) as mock_post,
+        ):
             result = _send_webhook_notification(
                 {"url": "https://hook.example.com/test"},
                 "document.failed",
@@ -272,9 +278,12 @@ class TestSendWebhookNotification:
         """_send_webhook_notification returns False when httpx raises."""
         from app.utils.user_notification import _send_webhook_notification
 
-        with patch(
-            "app.utils.user_notification.httpx.post",
-            side_effect=Exception("connection error"),
+        with (
+            patch("app.utils.user_notification.is_private_ip", return_value=False),
+            patch(
+                "app.utils.user_notification.httpx.post",
+                side_effect=Exception("connection error"),
+            ),
         ):
             result = _send_webhook_notification(
                 {"url": "https://hook.example.com/test"},
@@ -300,7 +309,10 @@ class TestSendWebhookNotification:
             )
         )
 
-        with patch("app.utils.user_notification.httpx.post", return_value=mock_response):
+        with (
+            patch("app.utils.user_notification.is_private_ip", return_value=False),
+            patch("app.utils.user_notification.httpx.post", return_value=mock_response),
+        ):
             result = _send_webhook_notification(
                 {"url": "https://hook.example.com/test"},
                 "document.processed",
@@ -309,6 +321,69 @@ class TestSendWebhookNotification:
             )
 
         assert result is False
+
+    def test_blocks_private_webhook_target(self):
+        """Webhook delivery is skipped for private network targets."""
+        from app.utils.user_notification import _send_webhook_notification
+
+        with (
+            patch("app.utils.user_notification.is_private_ip", return_value=True),
+            patch("app.utils.user_notification.httpx.post") as mock_post,
+        ):
+            result = _send_webhook_notification(
+                {"url": "https://10.0.0.5/test"},
+                "document.processed",
+                "T",
+                "M",
+            )
+
+        assert result is False
+        mock_post.assert_not_called()
+
+    def test_blocks_metadata_webhook_target(self):
+        """Webhook delivery is skipped for cloud metadata endpoints."""
+        from app.utils.user_notification import _send_webhook_notification
+
+        with patch("app.utils.user_notification.httpx.post") as mock_post:
+            result = _send_webhook_notification(
+                {"url": "http://169.254.169.254/latest/meta-data"},
+                "document.processed",
+                "T",
+                "M",
+            )
+
+        assert result is False
+        mock_post.assert_not_called()
+
+    def test_blocks_invalid_webhook_scheme(self):
+        """Webhook delivery is skipped for unsupported URL schemes."""
+        from app.utils.user_notification import _send_webhook_notification
+
+        with patch("app.utils.user_notification.httpx.post") as mock_post:
+            result = _send_webhook_notification(
+                {"url": "file:///etc/passwd"},
+                "document.processed",
+                "T",
+                "M",
+            )
+
+        assert result is False
+        mock_post.assert_not_called()
+
+    def test_blocks_webhook_without_hostname(self):
+        """Webhook delivery is skipped when the URL has no hostname."""
+        from app.utils.user_notification import _send_webhook_notification
+
+        with patch("app.utils.user_notification.httpx.post") as mock_post:
+            result = _send_webhook_notification(
+                {"url": "https:///missing-host"},
+                "document.processed",
+                "T",
+                "M",
+            )
+
+        assert result is False
+        mock_post.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
