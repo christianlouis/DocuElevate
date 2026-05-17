@@ -918,12 +918,14 @@ class TestURLUploadCoverageGaps:
         """Test that the local validate_redirect hook successfully aborts the request when redirect is unsafe"""
         import httpx
 
-
         # The local validate_redirect hook intercepts 301/302 and throws an httpx.RequestError
         # Here we mock the behavior of that hook executing during the stream context
         def side_effect(*args, **kwargs):
             # Raise a simulated RequestError caused by validate_redirect
-            raise httpx.RequestError("Unsafe redirect target: Access to private IP addresses is not allowed", request=httpx.Request("GET", "http://example.com"))
+            raise httpx.RequestError(
+                "Unsafe redirect target: Access to private IP addresses is not allowed",
+                request=httpx.Request("GET", "http://example.com"),
+            )
 
         mock_stream.side_effect = side_effect
 
