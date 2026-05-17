@@ -1538,6 +1538,28 @@
         });
     }
 
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function sanitizeHighlight(html) {
+      if (!html) return '';
+      let safe = String(html)
+        .replace(/<mark>/gi,  '\x00MARK_OPEN\x00')
+        .replace(/<\/mark>/gi, '\x00MARK_CLOSE\x00');
+      safe = escapeHtml(safe);
+      safe = safe
+        .replace(/\x00MARK_OPEN\x00/g,  '<mark>')
+        .replace(/\x00MARK_CLOSE\x00/g, '</mark>');
+      return safe;
+    }
+
     function renderSearchResults(data, q) {
       const panel = document.getElementById('search-results-panel');
       const list = document.getElementById('search-results-list');
@@ -1555,25 +1577,31 @@
 
       list.innerHTML = results.map(hit => {
         const fmt = hit._formatted || {};
-        const title = fmt.document_title || hit.document_title || hit.original_filename || __i18n.untitled;
-        const filename = fmt.original_filename || hit.original_filename || '';
-        const snippet = fmt.ocr_text || '';
-        const tags = Array.isArray(hit.tags) ? hit.tags.join(', ') : (hit.tags || '');
-        const docType = hit.document_type || '';
+        const titleRaw = fmt.document_title || hit.document_title || hit.original_filename || __i18n.untitled;
+        const filenameRaw = fmt.original_filename || hit.original_filename || '';
+        const snippetRaw = fmt.ocr_text || '';
+        const tagsRaw = Array.isArray(hit.tags) ? hit.tags.join(', ') : (hit.tags || '');
+        const docTypeRaw = hit.document_type || '';
+
+        const safeTitle = (fmt.document_title) ? sanitizeHighlight(titleRaw) : escapeHtml(titleRaw);
+        const safeFilename = escapeHtml(filenameRaw);
+        const safeSnippet = sanitizeHighlight(snippetRaw);
+        const safeTags = escapeHtml(tagsRaw);
+        const safeDocType = escapeHtml(docTypeRaw);
 
         return `<div style="padding: 0.75rem 1rem; border-bottom: 1px solid #f3f4f6; display: flex; gap: 0.75rem; align-items: flex-start;">
           <div style="flex-shrink: 0; color: #3b82f6; font-size: 1.25rem; padding-top: 0.1rem;">
             <i class="fas fa-file-pdf"></i>
           </div>
           <div style="flex: 1; min-width: 0;">
-            <div style="font-weight: 600; font-size: 0.9rem; color: #111827;">${title}</div>
-            ${filename ? `<div style="font-size: 0.8rem; color: #6b7280; margin-top: 0.15rem;">${filename}</div>` : ''}
-            ${docType ? `<span style="display: inline-block; margin-top: 0.25rem; padding: 0.1rem 0.5rem; background: #eff6ff; color: #1d4ed8; border-radius: 9999px; font-size: 0.75rem;">${docType}</span>` : ''}
-            ${tags ? `<span style="display: inline-block; margin-top: 0.25rem; margin-left: 0.25rem; padding: 0.1rem 0.5rem; background: #f0fdf4; color: #15803d; border-radius: 9999px; font-size: 0.75rem;">${tags}</span>` : ''}
-            ${snippet ? `<div style="margin-top: 0.4rem; font-size: 0.8rem; color: #374151; white-space: pre-wrap; word-break: break-word;">…${snippet}…</div>` : ''}
+            <div style="font-weight: 600; font-size: 0.9rem; color: #111827;">${safeTitle}</div>
+            ${safeFilename ? `<div style="font-size: 0.8rem; color: #6b7280; margin-top: 0.15rem;">${safeFilename}</div>` : ''}
+            ${safeDocType ? `<span style="display: inline-block; margin-top: 0.25rem; padding: 0.1rem 0.5rem; background: #eff6ff; color: #1d4ed8; border-radius: 9999px; font-size: 0.75rem;">${safeDocType}</span>` : ''}
+            ${safeTags ? `<span style="display: inline-block; margin-top: 0.25rem; margin-left: 0.25rem; padding: 0.1rem 0.5rem; background: #f0fdf4; color: #15803d; border-radius: 9999px; font-size: 0.75rem;">${safeTags}</span>` : ''}
+            ${safeSnippet ? `<div style="margin-top: 0.4rem; font-size: 0.8rem; color: #374151; white-space: pre-wrap; word-break: break-word;">…${safeSnippet}…</div>` : ''}
           </div>
           <div style="flex-shrink: 0;">
-            <a href="/files/${hit.file_id}" style="padding: 0.25rem 0.6rem; background: #f3f4f6; color: #374151; border-radius: 0.25rem; font-size: 0.8rem; text-decoration: none; white-space: nowrap;" title="${__i18n.viewFile}">
+            <a href="/files/${escapeHtml(hit.file_id)}" style="padding: 0.25rem 0.6rem; background: #f3f4f6; color: #374151; border-radius: 0.25rem; font-size: 0.8rem; text-decoration: none; white-space: nowrap;" title="${__i18n.viewFile}">
               <i class="fas fa-external-link-alt"></i>
             </a>
           </div>
