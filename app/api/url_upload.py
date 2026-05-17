@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+class UnsafeRedirectError(httpx.RequestError):
+    """Raised when a redirect target fails URL safety checks."""
+
+
 class URLUploadRequest(BaseModel):
     """Request model for URL-based file upload"""
 
@@ -120,9 +124,10 @@ async def verify_redirect(response: httpx.Response) -> None:
             try:
                 validate_url_safety(new_url)
             except HTTPException as e:
-                # Map the validation error to an httpx exception so it can be handled
-                # properly by the caller, avoiding raw HTTPExceptions escaping the client scope
-                raise httpx.RequestError(f"Redirect to unsafe URL blocked: {e.detail}", request=response.request) from e
+                raise UnsafeRedirectError(
+                    f"Redirect to unsafe URL blocked: {e.detail}",
+                    request=response.request,
+                ) from e
 
 
 @router.post("/process-url")
@@ -170,19 +175,6 @@ async def process_url(
     if not safe_filename:
         safe_filename = "download"
 
-    # Hook to validate redirects and prevent SSRF
-    async def validate_redirect(response: httpx.Response):
-        if response.is_redirect:
-            location = response.headers.get("Location")
-            if location:
-                # Resolve relative URLs
-                next_url = urllib.parse.urljoin(str(response.url), location)
-                try:
-                    validate_url_safety(next_url)
-                except HTTPException as e:
-                    # Reraise as a RequestError so httpx aborts the request
-                    raise httpx.RequestError(f"Unsafe redirect target: {e.detail}", request=response.request)
-
     # Download file with security measures
     # Initialize target_path to None to prevent UnboundLocalError in exception handlers
     # that may execute before target_path is assigned during error cases
@@ -194,7 +186,7 @@ async def process_url(
         async with httpx.AsyncClient(
             timeout=settings.http_request_timeout,
             follow_redirects=True,
-            event_hooks={"response": [validate_redirect, verify_redirect]},
+            event_hooks={"response": [verify_redirect]},
             headers={
                 "User-Agent": "DocuElevate/1.0",  # Identify ourselves
             },
@@ -283,6 +275,10 @@ async def process_url(
     except httpx.HTTPStatusError as e:
         logger.error(f"HTTP error while downloading file from URL: {url} - {str(e)}")
         raise HTTPException(status_code=e.response.status_code, detail=f"HTTP error: {str(e)}")
+
+    except UnsafeRedirectError as e:
+        logger.warning(f"Unsafe redirect blocked while downloading file from URL: {url} - {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
     except httpx.RequestError as e:
         logger.error(f"Error downloading file from URL: {url} - {str(e)}")
