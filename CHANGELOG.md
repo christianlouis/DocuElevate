@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.172.10 (2026-05-17)
+
+### Bug Fixes
+
+- **url-upload**: Handle unsafe redirects as client errors
+  ([`871f788`](https://github.com/christianlouis/DocuElevate/commit/871f788f0bd782ba8ad3a7d70e5cd4ccd24f749b))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`58b14ae`](https://github.com/christianlouis/DocuElevate/commit/58b14ae769b85e25290126256de936743609af06))
+
+
 ## Unreleased
 
 
