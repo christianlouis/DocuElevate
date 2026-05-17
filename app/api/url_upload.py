@@ -137,6 +137,15 @@ async def process_url(
     # Validate URL safety (SSRF protection)
     validate_url_safety(url)
 
+    # Event hook to intercept and validate redirects
+    async def check_redirect(response: httpx.Response):
+        if response.is_redirect:
+            location = response.headers.get("Location")
+            if location:
+                redirect_url = str(response.url.join(location))
+                # Validate the redirect target
+                validate_url_safety(redirect_url)
+
     # Parse URL to extract filename if not provided
     if url_request.filename:
         original_filename = url_request.filename
@@ -165,6 +174,7 @@ async def process_url(
             headers={
                 "User-Agent": "DocuElevate/1.0",  # Identify ourselves
             },
+            event_hooks={"response": [check_redirect]},
         ) as client:
             async with client.stream("GET", url) as response:
                 response.raise_for_status()
