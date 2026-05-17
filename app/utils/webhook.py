@@ -18,11 +18,13 @@ import json
 import logging
 import time
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 
 from app.database import SessionLocal
 from app.models import WebhookConfig
+from app.utils.network import is_private_ip
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +42,11 @@ VALID_EVENTS: frozenset[str] = frozenset(
 
 #: Timeout (seconds) for outgoing webhook HTTP requests.
 WEBHOOK_TIMEOUT = 10
+METADATA_ENDPOINTS = {
+    "169.254.169.254",
+    "169.254.169.253",
+    "metadata.google.internal",
+}
 
 
 def compute_signature(payload_bytes: bytes, secret: str) -> str:
@@ -67,6 +74,20 @@ def deliver_webhook(url: str, payload: dict[str, Any], secret: str | None = None
     Returns:
         ``True`` when the remote server responds with a 2xx status.
     """
+    parsed_url = urlparse(url)
+    if parsed_url.scheme not in {"http", "https"}:
+        logger.warning("Webhook to %s blocked: invalid scheme %s", url, parsed_url.scheme)
+        return False
+
+    hostname = parsed_url.hostname
+    if not hostname:
+        logger.warning("Webhook to %s blocked: missing hostname", url)
+        return False
+
+    if hostname in METADATA_ENDPOINTS or is_private_ip(hostname):
+        logger.warning("Webhook to %s blocked: private or metadata endpoint", url)
+        return False
+
     body = json.dumps(payload, default=str, sort_keys=True)
     body_bytes = body.encode("utf-8")
 
