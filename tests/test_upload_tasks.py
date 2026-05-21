@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from app.tasks.upload_to_email import upload_to_email
+from app.tasks.upload_to_evernote import upload_to_evernote
 from app.tasks.upload_to_ftp import upload_to_ftp
 from app.tasks.upload_to_google_drive import upload_to_google_drive
 from app.tasks.upload_to_onedrive import upload_to_onedrive
@@ -447,6 +448,7 @@ def test_all_upload_tasks_have_consistent_signature(sample_text_file):
         (upload_to_webdav, "app.tasks.upload_to_webdav"),
         (upload_to_google_drive, "app.tasks.upload_to_google_drive"),
         (upload_to_email, "app.tasks.upload_to_email"),
+        (upload_to_evernote, "app.tasks.upload_to_evernote"),
     ]
 
     import inspect

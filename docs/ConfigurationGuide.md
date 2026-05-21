@@ -1330,6 +1330,19 @@ For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveS
 | `DEST_EMAIL_SENDER`             | From address for delivered documents (e.g., `"DocuElevate Delivery <docuelevate@example.com>"`). |
 | `DEST_EMAIL_DEFAULT_RECIPIENT`  | Fallback recipient email when none is specified for a delivery task.  |
 
+### Evernote
+
+| **Variable**                  | **Description**                                                     |
+|-------------------------------|---------------------------------------------------------------------|
+| `EVERNOTE_ENABLED`            | Set to `false` to disable Evernote uploads without removing credentials. Default: `true` |
+| `EVERNOTE_AUTH_TOKEN`         | Evernote developer token or OAuth access token used to create notes. |
+| `EVERNOTE_SANDBOX`            | Use Evernote sandbox API endpoints. Default: `false`                 |
+| `EVERNOTE_NOTEBOOK_GUID`      | Optional target notebook GUID. If omitted, Evernote uses the default notebook. |
+| `EVERNOTE_DEFAULT_TAGS`       | Optional comma-separated tags applied to every created note.         |
+| `EVERNOTE_INCLUDE_METADATA`   | Include extracted metadata in the Evernote note body. Default: `true` |
+
+For detailed setup instructions, see the [Evernote Setup Guide](EvernoteSetup.md).
+
 ### OneDrive / Microsoft Graph
 
 | **Variable**                    | **Description**                                       |

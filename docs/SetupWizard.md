@@ -125,6 +125,7 @@ Several cloud storage integrations include their own guided configuration pages 
 | Google Drive | `/google-drive-setup` | [GoogleDriveSetup.md](GoogleDriveSetup.md) |
 | OneDrive / SharePoint | `/onedrive-setup` | [OneDriveSetup.md](OneDriveSetup.md) |
 | Amazon S3 | Configured via settings | [AmazonS3Setup.md](AmazonS3Setup.md) |
+| Evernote | Configured via settings | [EvernoteSetup.md](EvernoteSetup.md) |
 
 These pages are accessed **after** the main Setup Wizard is complete and are independent wizard flows specific to each integration.
 

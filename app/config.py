@@ -154,6 +154,17 @@ class Settings(BaseSettings):
     #           "language": "Language", "correspondent": "Correspondent"}
     paperless_custom_fields_mapping: Optional[str] = None
 
+    # Evernote destination settings
+    evernote_enabled: bool = Field(
+        default=True,
+        description="Enable Evernote as an upload destination. Set to False to disable uploads even when credentials are configured.",
+    )
+    evernote_auth_token: Optional[str] = None
+    evernote_sandbox: bool = False
+    evernote_notebook_guid: Optional[str] = None
+    evernote_default_tags: Optional[str] = None
+    evernote_include_metadata: bool = True
+
     azure_ai_key: str
     azure_region: str
     azure_endpoint: str

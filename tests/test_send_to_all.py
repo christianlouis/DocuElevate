@@ -7,6 +7,7 @@ import pytest
 from app.tasks.send_to_all import (
     _should_upload_to_dropbox,
     _should_upload_to_email,
+    _should_upload_to_evernote,
     _should_upload_to_ftp,
     _should_upload_to_google_drive,
     _should_upload_to_icloud,
@@ -129,6 +130,14 @@ class TestShouldUploadFunctions:
         assert _should_upload_to_email() is True
 
     @patch("app.tasks.send_to_all.settings")
+    def test_should_upload_to_evernote_configured(self, mock_settings):
+        """Test Evernote upload check."""
+        mock_settings.evernote_enabled = True
+        mock_settings.evernote_auth_token = "token"
+
+        assert _should_upload_to_evernote() is True
+
+    @patch("app.tasks.send_to_all.settings")
     def test_should_upload_to_onedrive_configured(self, mock_settings):
         """Test OneDrive upload check."""
         mock_settings.onedrive_client_id = "client_id"
@@ -249,6 +258,14 @@ class TestShouldUploadEnabledFlag:
         assert _should_upload_to_email() is False
 
     @patch("app.tasks.send_to_all.settings")
+    def test_evernote_disabled_with_credentials(self, mock_settings):
+        """Test Evernote upload is blocked when disabled even with valid credentials."""
+        mock_settings.evernote_enabled = False
+        mock_settings.evernote_auth_token = "token"
+
+        assert _should_upload_to_evernote() is False
+
+    @patch("app.tasks.send_to_all.settings")
     def test_onedrive_disabled_with_credentials(self, mock_settings):
         """Test OneDrive upload is blocked when disabled even with valid credentials."""
         mock_settings.onedrive_enabled = False
@@ -289,6 +306,7 @@ class TestGetConfiguredServicesFromValidator:
             "Dropbox": {"configured": True, "enabled": True},
             "NextCloud": {"configured": False, "enabled": True},
             "S3 Storage": {"configured": True, "enabled": True},
+            "Evernote": {"configured": True, "enabled": True},
         }
 
         result = get_configured_services_from_validator()
@@ -296,6 +314,7 @@ class TestGetConfiguredServicesFromValidator:
         assert result["dropbox"] is True
         assert result["nextcloud"] is False
         assert result["s3"] is True
+        assert result["evernote"] is True
 
     @patch("app.tasks.send_to_all.get_provider_status")
     def test_handles_missing_providers(self, mock_get_status):

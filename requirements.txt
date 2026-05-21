@@ -37,6 +37,9 @@ paramiko>=3.4.0  # SSH/SFTP implementation for Python (LGPL license)
 # iCloud Drive
 pyicloud>=2.4.0  # Unofficial Apple iCloud API client (MIT license)
 
+# Evernote
+evernote3>=1.25.14  # Evernote Cloud API SDK for Python 3 (BSD license)
+
 # Safe XML parsing (protection against XML bomb / XXE attacks)
 defusedxml>=0.7.1
 
