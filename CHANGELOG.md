@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.173.0 (2026-05-22)
+
+### Code Style
+
+- Apply ruff auto-fix ([#862](https://github.com/christianlouis/DocuElevate/pull/862),
+  [`4b46c4b`](https://github.com/christianlouis/DocuElevate/commit/4b46c4baf890f3179ac060569ce2e076cf0551b0))
+
+### Features
+
+- **storage**: Add Evernote destination
+  ([#862](https://github.com/christianlouis/DocuElevate/pull/862),
+  [`4b46c4b`](https://github.com/christianlouis/DocuElevate/commit/4b46c4baf890f3179ac060569ce2e076cf0551b0))
+
+
 ## v0.172.12 (2026-05-17)
 
 ### Bug Fixes
