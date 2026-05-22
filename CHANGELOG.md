@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.173.1 (2026-05-22)
+
+### Bug Fixes
+
+- Register Evernote task settings
+  ([`1ca7f56`](https://github.com/christianlouis/DocuElevate/commit/1ca7f562ef284d2fcceca84b38661abe9038912a))
+
+
 ## v0.173.0 (2026-05-22)
 
 ### Code Style
