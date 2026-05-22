@@ -663,6 +663,7 @@ def _all_should_upload_false():
         "ftp",
         "sftp",
         "email",
+        "evernote",
         "onedrive",
         "s3",
         "sharepoint",

@@ -24,6 +24,7 @@ Welcome to the DocuElevate documentation. This directory contains comprehensive 
   - [OneDrive Setup](OneDriveSetup.md) - How to set up Microsoft OneDrive/Graph integration
   - [SharePoint Setup](SharePointSetup.md) - How to set up Microsoft SharePoint Online integration
   - [Amazon S3 Setup](AmazonS3Setup.md) - How to set up Amazon S3 integration
+  - [Evernote Setup](EvernoteSetup.md) - How to set up Evernote note creation
   - [Authentication Setup](AuthenticationSetup.md) - How to set up user authentication
   - [Notifications Setup](NotificationsSetup.md) - How to set up system notifications
 

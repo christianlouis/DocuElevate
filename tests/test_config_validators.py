@@ -35,6 +35,7 @@ class TestValidateStorageConfigs:
             "google_drive",
             "onedrive",
             "email",
+            "evernote",
             "paperless",
             "uptime_kuma",
         ]
@@ -82,6 +83,13 @@ class TestValidateStorageConfigs:
             result = validate_storage_configs()
             assert "DEST_EMAIL_HOST is not configured" in result["email"]
             assert "DEST_EMAIL_DEFAULT_RECIPIENT is not configured" in result["email"]
+
+    def test_evernote_missing_token(self):
+        """Test validation when Evernote destination auth token is missing."""
+        with patch("app.utils.config_validator.validators.settings") as mock_settings:
+            mock_settings.evernote_auth_token = None
+            result = validate_storage_configs()
+            assert "EVERNOTE_AUTH_TOKEN is not configured" in result["evernote"]
 
 
 @pytest.mark.unit

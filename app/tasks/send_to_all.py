@@ -10,6 +10,7 @@ from app.models import FileRecord, IntegrationDirection, UserIntegration
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.tasks.upload_to_dropbox import upload_to_dropbox
 from app.tasks.upload_to_email import upload_to_email
+from app.tasks.upload_to_evernote import upload_to_evernote
 from app.tasks.upload_to_ftp import upload_to_ftp
 from app.tasks.upload_to_google_drive import upload_to_google_drive
 from app.tasks.upload_to_icloud import upload_to_icloud
@@ -100,6 +101,11 @@ def _should_upload_to_email():
     )
 
 
+def _should_upload_to_evernote():
+    token = getattr(settings, "evernote_auth_token", None)
+    return bool(getattr(settings, "evernote_enabled", True) and isinstance(token, str) and token.strip())
+
+
 def _should_upload_to_onedrive():
     return bool(
         getattr(settings, "onedrive_enabled", True)
@@ -151,6 +157,7 @@ def get_configured_services_from_validator():
         "FTP Storage": "ftp",
         "SFTP Storage": "sftp",
         "Email": "email",
+        "Evernote": "evernote",
         "OneDrive": "onedrive",
         "S3 Storage": "s3",
         "SharePoint": "sharepoint",
@@ -253,6 +260,11 @@ def send_to_all_destinations(self, file_path: str, use_validator=True, file_id: 
             "name": "email",
             "should_upload": _should_upload_to_email,
             "upload_func": upload_to_email,
+        },
+        {
+            "name": "evernote",
+            "should_upload": _should_upload_to_evernote,
+            "upload_func": upload_to_evernote,
         },
         {
             "name": "onedrive",

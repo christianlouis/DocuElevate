@@ -35,7 +35,7 @@ DocuElevate is an intelligent document processing system that automates the inge
 
 - **AI-Powered Metadata Extraction** — pluggable AI providers including OpenAI, Anthropic Claude, Google Gemini, Ollama (local), OpenRouter, Portkey, and Azure OpenAI via LiteLLM
 - **Multi-Engine OCR** — Azure Document Intelligence, Tesseract, EasyOCR, Mistral OCR, Google Cloud Document AI, and AWS Textract with configurable merge strategies
-- **12 Storage Destinations** — Dropbox, Google Drive, OneDrive, Amazon S3, Nextcloud, WebDAV, FTP, SFTP, iCloud Drive, Email (SMTP), Paperless-ngx, and Rclone
+- **13 Storage Destinations** — Dropbox, Google Drive, OneDrive, Amazon S3, Nextcloud, WebDAV, FTP, SFTP, iCloud Drive, Email (SMTP), Paperless-ngx, Evernote, and Rclone
 - **Multi-Channel Ingestion** — web upload, browser extension, mobile app, CLI, REST API, IMAP email, and watched folders (local, cloud, FTP/SFTP)
 - **Processing Pipelines** — customizable multi-step workflows with conditional routing rules
 - **Full-Text Search** — powered by Meilisearch for instant document discovery
@@ -106,6 +106,7 @@ Processed documents are distributed to any combination of configured destination
 | **iCloud Drive** | Apple cloud |
 | **Email (SMTP)** | Send as attachment |
 | **Paperless-ngx** | Document management system |
+| **Evernote** | Notes with PDF attachments |
 | **Rclone** | 70+ cloud providers via Rclone |
 
 ## Features
@@ -245,6 +246,7 @@ See the [Kubernetes Deployment Guide](docs/KubernetesDeployment.md) for full det
 | [Google Drive](docs/GoogleDriveSetup.md) | Google Drive service account / OAuth |
 | [OneDrive](docs/OneDriveSetup.md) | Microsoft OneDrive setup |
 | [Amazon S3](docs/AmazonS3Setup.md) | S3 bucket configuration |
+| [Evernote](docs/EvernoteSetup.md) | Evernote note creation |
 | [Authentication](docs/AuthenticationSetup.md) | OAuth2, OIDC, and social login |
 | [Notifications](docs/NotificationsSetup.md) | Notification backend setup |
 
@@ -327,6 +329,7 @@ The following is a summary of the licenses used by our direct dependencies:
 | pypdf      | BSD     |
 | Requests   | Apache 2.0 |
 | Dropbox SDK | MIT    |
+| Evernote SDK | BSD    |
 | Azure AI Document Intelligence | MIT |
 | Authlib    | BSD     |
 | Starlette  | BSD     |

@@ -174,6 +174,21 @@ def get_provider_status() -> dict[str, dict[str, object]]:
         },
     }
 
+    providers["Evernote"] = {
+        "name": "Evernote",
+        "icon": "fa-brands fa-evernote",
+        "configured": bool(getattr(settings, "evernote_auth_token", None)),
+        "enabled": getattr(settings, "evernote_enabled", True),
+        "description": "Create Evernote notes with document metadata and PDF attachments",
+        "details": {
+            "auth_token": mask_sensitive_value(getattr(settings, "evernote_auth_token", None)),
+            "sandbox": getattr(settings, "evernote_sandbox", False),
+            "notebook_guid": getattr(settings, "evernote_notebook_guid", "Not set"),
+            "default_tags": getattr(settings, "evernote_default_tags", "Not set"),
+            "include_metadata": getattr(settings, "evernote_include_metadata", True),
+        },
+    }
+
     # Add FTP configuration to providers
     providers["FTP Storage"] = {
         "name": "FTP Storage",

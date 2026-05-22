@@ -55,6 +55,7 @@ nav:
       - Google Drive: GoogleDriveSetup
       - OneDrive: OneDriveSetup
       - Amazon S3: AmazonS3Setup
+      - Evernote: EvernoteSetup
       - Authentication: AuthenticationSetup
       - Notifications: NotificationsSetup
   - Security:

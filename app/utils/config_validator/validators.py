@@ -145,6 +145,12 @@ def validate_storage_configs() -> dict[str, list[str]]:
         email_issues.append("DEST_EMAIL_DEFAULT_RECIPIENT is not configured")
     issues["email"] = email_issues
 
+    # Validate Evernote
+    evernote_issues = []
+    if not getattr(settings, "evernote_auth_token", None):
+        evernote_issues.append("EVERNOTE_AUTH_TOKEN is not configured")
+    issues["evernote"] = evernote_issues
+
     # Validate S3
     s3_issues = []
     if not getattr(settings, "s3_bucket_name", None):
