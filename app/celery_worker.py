@@ -46,6 +46,7 @@ from app.tasks.translate_to_default_language import translate_to_default_languag
 # Import new send tasks
 from app.tasks.upload_to_dropbox import upload_to_dropbox  # noqa: F401
 from app.tasks.upload_to_email import upload_to_email  # noqa: F401
+from app.tasks.upload_to_evernote import upload_to_evernote  # noqa: F401
 from app.tasks.upload_to_ftp import upload_to_ftp  # noqa: F401
 from app.tasks.upload_to_google_drive import upload_to_google_drive  # noqa: F401
 from app.tasks.upload_to_icloud import upload_to_icloud  # noqa: F401
