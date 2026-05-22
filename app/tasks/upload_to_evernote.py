@@ -41,7 +41,9 @@ def _build_thrift_client(client_cls, url: str, binary_protocol, http_transport):
 def _get_note_store(auth_token: str):
     NoteStore, Types, UserStore, TBinaryProtocol, THttpClient = _get_evernote_sdk()
 
-    base_url = "https://sandbox.evernote.com" if getattr(settings, "evernote_sandbox", False) else "https://www.evernote.com"
+    base_url = (
+        "https://sandbox.evernote.com" if getattr(settings, "evernote_sandbox", False) else "https://www.evernote.com"
+    )
     user_store = _build_thrift_client(UserStore.Client, f"{base_url}/edam/user", TBinaryProtocol, THttpClient)
     user = user_store.getUser(auth_token)
     shard_id = getattr(user, "shardId", None)
@@ -204,7 +206,9 @@ def upload_to_evernote(self, file_path: str, file_id: int = None):
     task_id = self.request.id
     filename = os.path.basename(file_path)
     logger.info("[%s] Starting Evernote upload: %s", task_id, file_path)
-    log_task_progress(task_id, "upload_to_evernote", "in_progress", f"Uploading to Evernote: {filename}", file_id=file_id)
+    log_task_progress(
+        task_id, "upload_to_evernote", "in_progress", f"Uploading to Evernote: {filename}", file_id=file_id
+    )
 
     if not os.path.exists(file_path):
         error_msg = f"File not found: {file_path}"
