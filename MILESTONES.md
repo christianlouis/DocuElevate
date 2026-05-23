@@ -1,6 +1,6 @@
 # DocuElevate Milestones
 
-**Last Updated:** 2026-02-08
+**Last Updated:** 2026-05-23
 
 This document outlines the release milestones, versioning strategy, and detailed feature breakdown for DocuElevate.
 
@@ -19,17 +19,15 @@ DocuElevate follows [Semantic Versioning 2.0.0](https://semver.org/):
 
 ---
 
-## Current Release: v0.5.0 (February 2026)
+## Current State (Continuous Releases)
 
-### Status: Stable
-- Production-ready document processing
-- Multi-provider storage support
-- **Database-backed settings management with encryption**
-- **Setup wizard for first-time configuration**
-- **Admin UI for runtime configuration**
-- **Automated semantic versioning and releases**
-- OAuth2 authentication with admin group support
-- Basic web UI and REST API
+DocuElevate ships continuously via automated semantic versioning. Use **GitHub Releases** for the latest build artifacts and **GitHub Milestones** (below) for roadmap tracking.
+
+### Last Shipped Milestone: v0.5.0 (Released February 8, 2026)
+- Database-backed settings management with encryption
+- Setup wizard for first-time configuration
+- Admin UI for runtime configuration
+- Release automation via semantic-release
 
 ### Important Note on Versioning
 As of February 2026, DocuElevate uses **automated semantic versioning**:
@@ -130,87 +128,78 @@ As of February 2026, DocuElevate uses **automated semantic versioning**:
 
 ## Upcoming Milestones
 
-### v0.6.0 - Enhanced Search & UI Improvements (April 2026)
-**Target Date:** April 1, 2026
+### v0.6.0 - Clarity: Enhanced Search & UI (Target: July 31, 2026)
+**Target Date:** July 31, 2026
 **Status:** 📋 Planned
-**Theme:** User Experience, Search, Performance
+**Theme:** Search, Discovery, Modern UX
+**Epic:** #863
 
 #### Goals
-- Implement full-text search across documents
-- Responsive mobile interface
-- Dark mode support
-- Document preview in browser
-- Performance optimizations
-- Improved error handling and user feedback
+- Hybrid discovery: keyword + semantic search, fast filtering, saved searches
+- Preview-first UX (open, skim, and act quickly)
+- Modern UX polish (accessibility, responsiveness, performance)
 
 #### Deliverables
-- Full-text search API and UI
-- Advanced filtering capabilities
-- Responsive CSS framework integration
-- Dark mode toggle
-- In-browser document viewer
-- Loading states and progress indicators
-- Performance benchmarks
-- Mobile-optimized interface
+- Semantic search foundation (vectorization + ranking signals)
+- Saved searches / smart views
+- In-browser preview + “quick actions” (tag, route, export)
+- Bulk operations and pagination improvements
+- UX polish (dark mode/accessibility where applicable)
 
 #### Breaking Changes
-- API response format changes for search endpoints (documented)
+- Potential pagination/search response changes (must be versioned and documented)
 
 #### Migration Path
-- Search endpoint changes will be versioned (/api/v1/search → /api/v2/search)
-- Old endpoints deprecated but functional for 2 releases
+- Version endpoints where needed and keep previous versions working for at least 2 minor milestones
 
 ---
 
-### v0.4.5 - Workflow Automation (June 2026)
-**Target Date:** June 1, 2026
+### v0.7.0 - Conductor: Workflow Automation & Integrations (Target: September 30, 2026)
+**Target Date:** September 30, 2026
 **Status:** 📋 Planned
 **Theme:** Automation, Integration, Webhooks
+**Epic:** #864
 
 #### Goals
-- Custom processing pipelines
-- Conditional routing based on document type
-- Webhook support for external integrations
-- Rule-based classification
-- Scheduled batch processing
+- First-class workflow model (steps, state, retries) that matches what the system actually executes
+- Workflow-aware UI status, retries, and observability
+- Webhooks + event-driven automation foundations
 
 #### Deliverables
-- Pipeline configuration UI
-- Webhook management interface
-- Rule engine for document routing
-- Batch processing scheduler
-- Integration examples and templates
-- Webhook payload documentation
+- Workflow object model and storage
+- Workflow-aware file detail view + status dashboard
+- Scheduling primitives (recurring jobs / delayed runs)
+- Webhook system (outbound events + inbound triggers)
+- Integration templates and documentation
 
 ---
 
-### v0.7.0 - Advanced AI & Multi-language (August 2026)
-**Target Date:** August 1, 2026
+### v0.8.0 - Signal: AI Quality, RAG, and Multi-language (Target: November 30, 2026)
+**Target Date:** November 30, 2026
 **Status:** 📋 Planned
-**Theme:** AI Enhancement, Internationalization
+**Theme:** AI Quality, Retrieval, Internationalization
+**Epic:** #865
 
 #### Goals
-- Custom AI model support
-- Multi-language OCR
-- Document similarity detection
-- Duplicate detection
-- UI internationalization (i18n)
-- API localization
+- “Chat with Library” foundations (retrieval + UI)
+- Local AI options for privacy-sensitive setups
+- Measurable AI quality (confidence + human review loop)
+- Expand multilingual capability across OCR + UI
 
 #### Deliverables
-- Custom model integration API
-- Multi-language OCR configuration
-- Similarity algorithm implementation
-- Duplicate detection service
-- Translation framework (10+ languages)
-- Localized documentation
+- Vector DB integration and embeddings pipeline
+- Chat UI foundations and retrieval API
+- Confidence scoring + human review/edit loop for extracted fields
+- Multi-language OCR configuration improvements
+- Expanded i18n coverage + localized docs
 
 ---
 
-### v1.0.0 - Enterprise Edition (November 2026)
-**Target Date:** November 1, 2026
+### v1.0.0 - Summit: Enterprise Edition (Target: March 31, 2027)
+**Target Date:** March 31, 2027
 **Status:** 📋 Planned
 **Theme:** Enterprise Features, Scalability, Multi-tenancy
+**Epic:** #866
 
 This is our first major release, marking production-ready enterprise capabilities.
 
@@ -244,6 +233,60 @@ This is our first major release, marking production-ready enterprise capabilitie
 
 ---
 
+### v2.0.0 - Horizon: Platform Expansion (Target: September 30, 2027)
+**Target Date:** September 30, 2027
+**Status:** 📋 Planned
+**Theme:** Ecosystem, Platform, Distribution
+**Epic:** #867
+
+#### Goals
+- Make DocuElevate extensible by design (plugins + templates)
+- Expand integrations and developer experience
+- Harden multi-surface experiences (web, mobile, extension, CLI) as a cohesive product
+
+#### Deliverables
+- Plugin system foundations and public extension points
+- Template library for pipelines/workflows + “starter kits”
+- Integration hub patterns (webhooks, events, connectors)
+- SDK + documentation for extensions
+
+---
+
+### v2.1.0 - Sentinel: Governance & Policy (Target: March 31, 2028)
+**Target Date:** March 31, 2028
+**Status:** 📋 Planned
+**Theme:** Governance, Compliance, Policy-driven Automation
+**Epic:** #868
+
+#### Goals
+- Make governance first-class (retention, legal hold, PII workflows)
+- Provide tamper-evident auditing and admin controls
+- Introduce policy-driven approvals for sensitive automation
+
+#### Deliverables
+- Retention policies + legal hold primitives
+- PII detection + redaction workflows
+- Tamper-evident audit trails + admin activity feed
+- Policy-as-code concepts for workflows (with approval gates)
+
+---
+
+### v3.0.0 - Constellation: Integration Hub & Agent Platform (Target: September 30, 2028)
+**Target Date:** September 30, 2028
+**Status:** 📋 Planned
+**Theme:** Ecosystem, Agents, Interoperability
+**Epic:** #869
+
+#### Goals
+- Make DocuElevate the “system of record” for document intelligence in an organization
+- Support external automation ecosystems (Zapier/Make/n8n) and agent runtimes
+- Provide a clean interoperability layer for modern AI tools
+
+#### Deliverables
+- DocuElevate MCP server (search, retrieve, summarize, route) and documentation
+- Connector marketplace concepts (curated + community)
+- Event stream + webhooks at scale (delivery guarantees, retries, signing)
+
 ## Release Process
 
 ### Automated Semantic Versioning (v0.6.0+)
@@ -255,15 +298,15 @@ Starting with v0.6.0, releases are fully automated using `python-semantic-releas
 4. **Automatic Updates**:
    - Updates `VERSION` file
    - Generates/updates `CHANGELOG.md`
-   - Creates Git tag (e.g., `v0.6.0`)
+   - Creates Git tag (e.g., `v0.173.1`)
    - Creates GitHub Release with notes
    - Triggers Docker image builds
 5. **No Manual Steps**: VERSION and CHANGELOG are never edited manually
 
 ### Version Bump Rules
-- `feat:` commits → Minor version (0.5.0 → 0.6.0)
-- `fix:`, `perf:` → Patch version (0.5.0 → 0.5.1)
-- `feat!:`, `BREAKING CHANGE:` → Major version (0.5.0 → 1.0.0)
+- `feat:` commits → Minor version (e.g., 0.173.1 → 0.174.0)
+- `fix:`, `perf:` → Patch version (e.g., 0.173.1 → 0.173.2)
+- `feat!:`, `BREAKING CHANGE:` → Major version (e.g., 0.173.1 → 1.0.0)
 - Other types (docs, chore, etc.) → No version bump
 
 ### Pre-release Checklist (Automated)
@@ -297,10 +340,13 @@ Starting with v0.6.0, releases are fully automated using `python-semantic-releas
 | v0.3.2 | 2026-02-06 | Security Updates | Released |
 | v0.3.3 | 2026-02-08 | Drag-and-Drop Upload | Released |
 | v0.5.0 | 2026-02-08 | **Settings & Encryption** | **Released** |
-| v0.6.0 | 2026-04 | Search & UX | Planned |
-| v0.7.0 | 2026-08 | Advanced AI | Planned |
-| v1.0.0 | 2026-11 | Enterprise | Planned |
-| v2.0.0 | 2027-Q3 | Platform Expansion | Future |
+| v0.6.0 | 2026-07-31 | **Clarity:** Search & UX | Planned |
+| v0.7.0 | 2026-09-30 | **Conductor:** Workflows & Integrations | Planned |
+| v0.8.0 | 2026-11-30 | **Signal:** AI Quality, RAG, Multi-language | Planned |
+| v1.0.0 | 2027-03-31 | **Summit:** Enterprise | Planned |
+| v2.0.0 | 2027-09-30 | **Horizon:** Platform Expansion | Future |
+| v2.1.0 | 2028-03-31 | **Sentinel:** Governance & Policy | Future |
+| v3.0.0 | 2028-09-30 | **Constellation:** Integration Hub & Agents | Future |
 
 ---
 
