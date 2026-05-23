@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Documentation
+
+- Extend product roadmap and milestones
+  ([`e46f9b9`](https://github.com/christianlouis/DocuElevate/commit/e46f9b9a21e5838f883eca4370445e0f1b57e6c9))
+
+
 ## v0.173.1 (2026-05-22)
 
 ### Bug Fixes
