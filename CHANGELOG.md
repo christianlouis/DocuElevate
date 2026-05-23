@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.173.2 (2026-05-23)
+
+### Bug Fixes
+
+- Resolve dependabot npm alerts
+  ([`6fc00b8`](https://github.com/christianlouis/DocuElevate/commit/6fc00b8de10b50b4b2f92f6fadbcf7ebbee7136f))
+
+### Documentation
+
+- Extend product roadmap and milestones
+  ([`e46f9b9`](https://github.com/christianlouis/DocuElevate/commit/e46f9b9a21e5838f883eca4370445e0f1b57e6c9))
+
+- **changelog**: Update changelog [skip ci]
+  ([`427db10`](https://github.com/christianlouis/DocuElevate/commit/427db102d85fa676dcf01118fd3757fb300b979d))
+
+
 ## Unreleased
 
 ### Documentation
