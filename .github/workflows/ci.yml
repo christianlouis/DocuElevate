@@ -27,9 +27,9 @@ jobs:
     name: Ruff Lint & Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.2.2.2.2
+      - uses: actions/checkout@v4.2.2
       - name: Set up Python
-        uses: actions/setup-python@v5.4.0.4.0
+        uses: actions/setup-python@v5.4.0
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -48,9 +48,9 @@ jobs:
     name: Alembic Migration Chain Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.2.2.2.2
+      - uses: actions/checkout@v4.2.2
       - name: Set up Python
-        uses: actions/setup-python@v5.4.0.4.0
+        uses: actions/setup-python@v5.4.0
         with:
           python-version: "3.11"
       - name: Validate migration chain
@@ -60,9 +60,9 @@ jobs:
     name: HTML Accessibility Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.2.2.2.2
+      - uses: actions/checkout@v4.2.2
       - name: Set up Python
-        uses: actions/setup-python@v5.4.0.4.0
+        uses: actions/setup-python@v5.4.0
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -78,9 +78,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint]
     steps:
-      - uses: actions/checkout@v4.2.2.2.2
+      - uses: actions/checkout@v4.2.2
       - name: Set up Python
-        uses: actions/setup-python@v5.4.0.4.0
+        uses: actions/setup-python@v5.4.0
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -93,9 +93,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint]
     steps:
-      - uses: actions/checkout@v4.2.2.2.2
+      - uses: actions/checkout@v4.2.2
       - name: Set up Python
-        uses: actions/setup-python@v5.4.0.4.0
+        uses: actions/setup-python@v5.4.0
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -116,10 +116,10 @@ jobs:
         ports: ["5672:5672", "15672:15672"]
         options: --health-cmd "rabbitmq-diagnostics -q ping" --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
-      - uses: actions/checkout@v4.2.2.2.2
+      - uses: actions/checkout@v4.2.2
 
       - name: Set up Python
-        uses: actions/setup-python@v5.4.0.4.0
+        uses: actions/setup-python@v5.4.0
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -154,7 +154,7 @@ jobs:
     if: github.event_name == 'push'
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4.2.2.2.2
+        uses: actions/checkout@v4.2.2
       - name: Generate Build Metadata
         run: |
           chmod +x scripts/generate_build_metadata.sh
@@ -212,7 +212,7 @@ jobs:
           echo "tag=main-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           echo "image=ghcr.io/${{ github.repository_owner }}/docuelevate:main-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
       - name: Checkout k8s-cluster-state
-        uses: actions/checkout@v4.2.2.2.2
+        uses: actions/checkout@v4.2.2
         with:
           repository: christianlouis/k8s-cluster-state
           token: ${{ secrets.GH_PAT }}
