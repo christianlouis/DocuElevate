@@ -1,4 +1,4 @@
-fastapi[all]  # Web framework with all extras
+fastapi[all]!=0.136.3  # Web framework with all extras
 uvicorn  # ASGI server
 celery  # Task queue
 redis  # Message broker for Celery
