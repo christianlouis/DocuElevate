@@ -169,6 +169,21 @@ function _onUploadSuccess() {
   }
 }
 
+/**
+ * Helper to sanitize strings before injecting into HTML.
+ * @param {string} str
+ * @returns {string}
+ */
+function _escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // ── Directory traversal helpers ───────────────────────────────────────────────
 
 /**
@@ -297,9 +312,10 @@ function processFiles(files, progressContainer, statusMessage) {
   const queueItems = fileArray.map((file) => {
     const row = document.createElement('div');
     row.className = 'flex flex-col mb-2';
+    const safeName = _escapeHtml(file.name);
     row.innerHTML = `
       <div class="flex justify-between">
-        <span class="text-sm truncate" title="${file.name}">${file.name}</span>
+        <span class="text-sm truncate" title="${safeName}">${safeName}</span>
         <span class="text-xs text-gray-500">${formatFileSize(file.size)}</span>
       </div>
       <div class="w-full bg-gray-200 h-2 rounded-full mt-1">
