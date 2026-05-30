@@ -3,6 +3,7 @@ uvicorn  # ASGI server
 celery  # Task queue
 redis  # Message broker for Celery
 sqlalchemy  # Database ORM
+psycopg[binary]>=3.2,<4.0  # PostgreSQL driver for external HA database deployments
 pydantic  # Data validation
 cryptography>=41.0.0  # Encryption for sensitive settings in database
 openai  # GPT integration for metadata extraction

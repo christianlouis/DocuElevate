@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import create_engine, exc
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
+from sqlalchemy.pool import NullPool, QueuePool
 
 from app.config import settings
 
@@ -15,9 +16,27 @@ logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
-# Parse the DATABASE_URL
 DB_URL = settings.database_url
-engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
+_parsed_url = make_url(DB_URL)
+
+_connect_args: dict[str, Any] = {}
+_engine_kwargs: dict[str, Any] = {"pool_pre_ping": True}
+
+if _parsed_url.get_backend_name() == "sqlite":
+    _connect_args["check_same_thread"] = False
+    _engine_kwargs["poolclass"] = NullPool
+else:
+    _engine_kwargs.update(
+        {
+            "poolclass": QueuePool,
+            "pool_size": int(os.getenv("DB_POOL_SIZE", "10")),
+            "max_overflow": int(os.getenv("DB_MAX_OVERFLOW", "20")),
+            "pool_timeout": int(os.getenv("DB_POOL_TIMEOUT", "30")),
+            "pool_recycle": int(os.getenv("DB_POOL_RECYCLE", "1800")),
+        }
+    )
+
+engine = create_engine(DB_URL, connect_args=_connect_args, **_engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -47,6 +66,8 @@ def init_db() -> None:
 
     # 5. Now create tables if they don't exist yet
     try:
+        import app.models  # noqa: F401
+
         Base.metadata.create_all(bind=engine)
         logger.info("Database initialization complete (tables created if not exist).")
 
