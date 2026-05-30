@@ -27,9 +27,16 @@ original_template_response = templates.TemplateResponse
 
 def template_response_with_version(*args, **kwargs):
     """Wrapper for TemplateResponse to include version in all templates"""
-    # If context dict is provided, add version to it
-    if len(args) >= 2 and isinstance(args[1], dict):
-        args[1].setdefault("version", settings.version)
+    if args and isinstance(args[0], str):
+        name = args[0]
+        context = args[1] if len(args) >= 2 and isinstance(args[1], dict) else kwargs.pop("context", {})
+        if isinstance(context, dict):
+            context.setdefault("version", settings.version)
+            request = context.get("request") or kwargs.pop("request", None)
+            if request is not None:
+                return original_template_response(request, name, context, *args[2:], **kwargs)
+    elif len(args) >= 3 and isinstance(args[2], dict):
+        args[2].setdefault("version", settings.version)
     elif "context" in kwargs and isinstance(kwargs["context"], dict):
         kwargs["context"].setdefault("version", settings.version)
     return original_template_response(*args, **kwargs)

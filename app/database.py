@@ -7,14 +7,17 @@ from typing import Any
 
 from sqlalchemy import create_engine, exc
 from sqlalchemy.engine.url import make_url
-from sqlalchemy.orm import Session, declarative_base, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.pool import NullPool, QueuePool
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    pass
+
 
 DB_URL = settings.database_url
 _parsed_url = make_url(DB_URL)
