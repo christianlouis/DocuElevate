@@ -293,13 +293,24 @@ function processFiles(files, progressContainer, statusMessage) {
     updateStatus();
   }
 
+  function _escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   // Pre-create one progress row per file.
   const queueItems = fileArray.map((file) => {
     const row = document.createElement('div');
     row.className = 'flex flex-col mb-2';
+    const safeFileName = _escapeHtml(file.name);
     row.innerHTML = `
       <div class="flex justify-between">
-        <span class="text-sm truncate" title="${file.name}">${file.name}</span>
+        <span class="text-sm truncate" title="${safeFileName}">${safeFileName}</span>
         <span class="text-xs text-gray-500">${formatFileSize(file.size)}</span>
       </div>
       <div class="w-full bg-gray-200 h-2 rounded-full mt-1">
@@ -545,5 +556,4 @@ function initDragAndDrop(element, progressContainer, statusMessage, options = {}
     if (files.length > 0) processFiles(files, progressContainer, statusMessage);
   });
 }
-
 
