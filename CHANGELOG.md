@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.173.3 (2026-05-31)
+
+### Bug Fixes
+
+- Preserve falsy values in escapeHtml
+  ([`37c27c0`](https://github.com/christianlouis/DocuElevate/commit/37c27c02139ae4a462e1705bda9360b23eb835b3))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`cc56127`](https://github.com/christianlouis/DocuElevate/commit/cc561277c9d7d0177b4ac63921637659abb66fba))
+
+- **changelog**: Update changelog [skip ci]
+  ([`948d118`](https://github.com/christianlouis/DocuElevate/commit/948d118926be042cc3c2a68f58241cc2fcfa23ef))
+
+- **changelog**: Update changelog [skip ci]
+  ([`65bd6d7`](https://github.com/christianlouis/DocuElevate/commit/65bd6d71d00ff7078a05ce12b00f228405e2ec1e))
+
+
 ## Unreleased
 
 ### Documentation
