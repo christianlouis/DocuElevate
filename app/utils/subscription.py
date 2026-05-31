@@ -29,7 +29,7 @@ At average usage (~40 % of quota) margins improve to 55-65 % after tax.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import func
@@ -317,6 +317,20 @@ def _today_utc() -> date:
     return datetime.now(timezone.utc).date()
 
 
+def _day_bounds_utc(day: date) -> tuple[datetime, datetime]:
+    start = datetime.combine(day, time.min, tzinfo=timezone.utc)
+    return start, start + timedelta(days=1)
+
+
+def _month_bounds_utc(day: date) -> tuple[datetime, datetime]:
+    start = datetime.combine(day.replace(day=1), time.min, tzinfo=timezone.utc)
+    if start.month == 12:
+        end = start.replace(year=start.year + 1, month=1)
+    else:
+        end = start.replace(month=start.month + 1)
+    return start, end
+
+
 def _scalar_count(query: Any) -> int:
     """Execute a count query and return an int, defaulting to 0 for NULL."""
     return query.scalar() or 0
@@ -335,12 +349,13 @@ def get_today_file_count(db: Session, owner_id: str) -> int:
     """Files processed by this user today (UTC, not counting duplicates)."""
     from app.models import FileRecord
 
-    today = _today_utc()
+    day_start, day_end = _day_bounds_utc(_today_utc())
     return _scalar_count(
         db.query(func.count(FileRecord.id)).filter(
             FileRecord.owner_id == owner_id,
             FileRecord.is_duplicate.is_(False),
-            func.date(FileRecord.created_at) == today,
+            FileRecord.created_at >= day_start,
+            FileRecord.created_at < day_end,
         )
     )
 
@@ -349,12 +364,13 @@ def get_month_file_count(db: Session, owner_id: str) -> int:
     """Files processed by this user this calendar month (UTC, not counting duplicates)."""
     from app.models import FileRecord
 
-    today = _today_utc()
+    month_start, month_end = _month_bounds_utc(_today_utc())
     return _scalar_count(
         db.query(func.count(FileRecord.id)).filter(
             FileRecord.owner_id == owner_id,
             FileRecord.is_duplicate.is_(False),
-            func.strftime("%Y-%m", FileRecord.created_at) == today.strftime("%Y-%m"),
+            FileRecord.created_at >= month_start,
+            FileRecord.created_at < month_end,
         )
     )
 

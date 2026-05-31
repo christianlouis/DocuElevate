@@ -9,7 +9,7 @@ Public endpoints:
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -207,19 +207,29 @@ def platform_stats(request: Request, db: DbSession, _admin: AdminUser) -> dict[s
     from app.models import FileRecord, UserProfile
 
     today = datetime.now(timezone.utc).date()
+    day_start = datetime.combine(today, time.min, tzinfo=timezone.utc)
+    day_end = day_start + timedelta(days=1)
+    month_start = day_start.replace(day=1)
+    if month_start.month == 12:
+        month_end = month_start.replace(year=month_start.year + 1, month=1)
+    else:
+        month_end = month_start.replace(month=month_start.month + 1)
 
     # Total files
     total_files: int = db.query(func.count(FileRecord.id)).scalar() or 0
 
     # Files today
     files_today: int = (
-        db.query(func.count(FileRecord.id)).filter(func.date(FileRecord.created_at) == today).scalar() or 0
+        db.query(func.count(FileRecord.id))
+        .filter(FileRecord.created_at >= day_start, FileRecord.created_at < day_end)
+        .scalar()
+        or 0
     )
 
     # Files this month
     files_this_month: int = (
         db.query(func.count(FileRecord.id))
-        .filter(func.strftime("%Y-%m", FileRecord.created_at) == today.strftime("%Y-%m"))
+        .filter(FileRecord.created_at >= month_start, FileRecord.created_at < month_end)
         .scalar()
         or 0
     )

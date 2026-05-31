@@ -2,7 +2,7 @@
 General routes for the application homepage and basic pages.
 """
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
 from fastapi import Depends, HTTPException, Request
@@ -64,17 +64,27 @@ async def serve_index(request: Request, db: Session = Depends(get_db)):
 
     user = request.session.get("user") or {}
     is_admin = user.get("is_admin", False)
+    day_start = datetime.combine(today, time.min, tzinfo=timezone.utc)
+    day_end = day_start + timedelta(days=1)
+    month_start = day_start.replace(day=1)
+    if month_start.month == 12:
+        month_end = month_start.replace(year=month_start.year + 1, month=1)
+    else:
+        month_end = month_start.replace(month=month_start.month + 1)
 
     try:
         total_files: int = db.query(func.count(FileRecord.id)).scalar() or 0
 
         files_today: int = (
-            db.query(func.count(FileRecord.id)).filter(func.date(FileRecord.created_at) == today).scalar() or 0
+            db.query(func.count(FileRecord.id))
+            .filter(FileRecord.created_at >= day_start, FileRecord.created_at < day_end)
+            .scalar()
+            or 0
         )
 
         files_month: int = (
             db.query(func.count(FileRecord.id))
-            .filter(func.strftime("%Y-%m", FileRecord.created_at) == today.strftime("%Y-%m"))
+            .filter(FileRecord.created_at >= month_start, FileRecord.created_at < month_end)
             .scalar()
             or 0
         )
