@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Build System
+
+- **deps-dev**: Update pytest-asyncio requirement
+  ([#903](https://github.com/christianlouis/DocuElevate/pull/903),
+  [`4a12559`](https://github.com/christianlouis/DocuElevate/commit/4a125590b9b6cb2f07bae187a9bff708dd92a5c3))
+
+
 ## v0.173.3 (2026-05-31)
 
 ### Bug Fixes
