@@ -393,6 +393,16 @@ const i18nStrings = {
   configureNow: {{ _("status.configure_now") | tojson }},
 };
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 document.addEventListener('DOMContentLoaded', function() {
   // Modal elements
   const resultModal = document.getElementById('resultModal');
@@ -471,7 +481,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (isSensitive && value !== 'Not set' && value !== '') {
           valueCell.textContent = value.slice(4) + '********' + value.slice(-4);
           // For better readability, we can also use HTML to mask the middle part of the string
-          valueCell.innerHTML = value.slice(0, 4) + '<span class="text-gray-400">********</span>' + value.slice(-4);
+          valueCell.innerHTML = escapeHtml(value.slice(0, 4)) + '<span class="text-gray-400">********</span>' + escapeHtml(value.slice(-4));
         } else {
           valueCell.textContent = value;
         }
@@ -586,9 +596,9 @@ document.addEventListener('DOMContentLoaded', function() {
           if (data.status === 'success') {
             // If there's token info, we need to handle it specially
             if (data.token_info && data.token_info.expires_in_human) {
-              let message = data.message || 'Connection successful';
+              let message = escapeHtml(data.message || 'Connection successful');
               message += `<br><br><div class="bg-blue-50 p-3 rounded mt-2">
-                <span class="font-medium">${i18nStrings.tokenValidFor}</span> ${data.token_info.expires_in_human}
+                <span class="font-medium">${i18nStrings.tokenValidFor}</span> ${escapeHtml(data.token_info.expires_in_human)}
                 </div>`;
 
               modalTitle.textContent = i18nStrings.testSuccessful;
@@ -647,12 +657,12 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
           if (data.status === 'success') {
             // Create successful message
-            let message = data.message || 'Connection successful';
+            let message = escapeHtml(data.message || 'Connection successful');
 
             // Add token expiration info if available (especially for Google Drive)
             if (data.token_info && data.token_info.expires_in_human) {
               message += `<br><br><div class="bg-blue-50 p-3 rounded mt-2">
-                <span class="font-medium">${i18nStrings.tokenValidFor}</span> ${data.token_info.expires_in_human}
+                <span class="font-medium">${i18nStrings.tokenValidFor}</span> ${escapeHtml(data.token_info.expires_in_human)}
                 </div>`;
 
               // Show the message with HTML
