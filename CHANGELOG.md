@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.173.5 (2026-06-01)
+
+### Bug Fixes
+
+- Enforce embedding token limits
+  ([`c781ee6`](https://github.com/christianlouis/DocuElevate/commit/c781ee657fed207da706b3318b70504b8beaf8be))
+
+
 ## v0.173.4 (2026-06-01)
 
 ### Bug Fixes
