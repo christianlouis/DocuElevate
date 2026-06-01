@@ -10,6 +10,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.173.4 (2026-06-01)
+
+### Bug Fixes
+
+- Address status dashboard xss review nits
+  ([`425805a`](https://github.com/christianlouis/DocuElevate/commit/425805ab23882944aee0cb02b5e497bc536549c0))
+
+### Build System
+
+- **deps**: Update redis requirement from >=4.5.0 to >=8.0.0
+  ([#904](https://github.com/christianlouis/DocuElevate/pull/904),
+  [`20bde93`](https://github.com/christianlouis/DocuElevate/commit/20bde939eb96ec8e6700b206e046388b6b891e38))
+
+- **deps-dev**: Update pytest-asyncio requirement
+  ([#903](https://github.com/christianlouis/DocuElevate/pull/903),
+  [`4a12559`](https://github.com/christianlouis/DocuElevate/commit/4a125590b9b6cb2f07bae187a9bff708dd92a5c3))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`98252e0`](https://github.com/christianlouis/DocuElevate/commit/98252e06c30bba78520a8460d55f508dbf2bdd47))
+
+- **changelog**: Update changelog [skip ci]
+  ([`8be7965`](https://github.com/christianlouis/DocuElevate/commit/8be7965ed1892978092c3f5e02e6252918c237fd))
+
+
 ## Unreleased
 
 ### Build System
