@@ -479,7 +479,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const isSensitive = sensitiveKeys.some(sKey => key.toLowerCase().includes(sKey));
 
         if (isSensitive && value !== 'Not set' && value !== '') {
-          valueCell.textContent = value.slice(4) + '********' + value.slice(-4);
           // For better readability, we can also use HTML to mask the middle part of the string
           valueCell.innerHTML = escapeHtml(value.slice(0, 4)) + '<span class="text-gray-400">********</span>' + escapeHtml(value.slice(-4));
         } else {
