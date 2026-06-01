@@ -17,6 +17,13 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+EMBEDDING_MODEL_TOKEN_LIMITS = {
+    "text-embedding-3-small": 8192,
+    "text-embedding-3-large": 8192,
+    "text-embedding-ada-002": 8192,
+}
+EMBEDDING_TOKEN_SAFETY_MARGIN = 64
+
 
 def _get_embedding_client() -> Any:
     """Create an OpenAI client for embedding generation.
@@ -38,13 +45,68 @@ def _get_embedding_client() -> Any:
     )
 
 
+def _effective_embedding_token_limit(model: str, configured_limit: int) -> int:
+    """Return a token limit that stays below known model context windows."""
+    limit = max(1, int(configured_limit))
+    normalized_model = model.lower()
+
+    for model_name, model_limit in EMBEDDING_MODEL_TOKEN_LIMITS.items():
+        if normalized_model.endswith(model_name):
+            return min(limit, max(1, model_limit - EMBEDDING_TOKEN_SAFETY_MARGIN))
+
+    return limit
+
+
+def _truncate_utf8_bytes(text: str, max_bytes: int) -> str:
+    """Safely truncate text by UTF-8 bytes without splitting a codepoint."""
+    encoded = text.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return text
+    return encoded[:max_bytes].decode("utf-8", errors="ignore")
+
+
+def _truncate_text_for_embedding(text: str, model: str, configured_limit: int) -> str:
+    """Truncate embedding input by tokens, with a safe fallback when unavailable."""
+    token_limit = _effective_embedding_token_limit(model, configured_limit)
+
+    try:
+        import tiktoken
+
+        try:
+            encoding = tiktoken.encoding_for_model(model)
+        except KeyError:
+            encoding = tiktoken.get_encoding("cl100k_base")
+
+        if hasattr(encoding, "encode_ordinary"):
+            tokens = encoding.encode_ordinary(text)
+        else:
+            tokens = encoding.encode(text, disallowed_special=())
+
+        if len(tokens) <= token_limit:
+            return text
+
+        logger.debug(
+            "Truncating embedding input from %d to %d tokens for model %s",
+            len(tokens),
+            token_limit,
+            model,
+        )
+        return encoding.decode(tokens[:token_limit])
+    except Exception as exc:
+        logger.warning(
+            "Falling back to UTF-8 byte truncation for embedding input because tokenization failed: %s",
+            exc,
+        )
+        return _truncate_utf8_bytes(text, token_limit)
+
+
 def generate_embedding(text: str, model: str | None = None) -> list[float]:
     """Generate a text embedding vector using the OpenAI-compatible API.
 
     Args:
         text: The input text to embed.  Truncated to stay within the
             model's context window based on ``settings.embedding_max_tokens``
-            (default 8 000 tokens ≈ 24 000 characters).
+            and the model tokenizer.
         model: The embedding model to use.  When ``None`` (the default), the
             value of ``settings.embedding_model`` is used.
 
@@ -58,19 +120,7 @@ def generate_embedding(text: str, model: str | None = None) -> list[float]:
     if model is None:
         model = settings.embedding_model
 
-    # Truncate to stay within the model's context window.
-    # Conservative 3 chars/token estimate (actual ratio varies by language;
-    # English averages ~4 chars/token but 3 gives a safety margin).
-    max_chars = settings.embedding_max_tokens * 3
-    if len(text) > max_chars:
-        logger.debug(
-            "Truncating text from %d to %d chars (~%d tokens) for model %s",
-            len(text),
-            max_chars,
-            settings.embedding_max_tokens,
-            model,
-        )
-        text = text[:max_chars]
+    text = _truncate_text_for_embedding(text, model, settings.embedding_max_tokens)
 
     client = _get_embedding_client()
     logger.debug("Generating embedding for %d chars using model=%s", len(text), model)

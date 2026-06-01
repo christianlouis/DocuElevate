@@ -6,6 +6,7 @@ Tests the similarity utility functions and the API endpoint
 
 import json
 import sys
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,7 +14,9 @@ from fastapi.testclient import TestClient
 
 from app.models import FileRecord
 from app.utils.similarity import (
+    _effective_embedding_token_limit,
     _get_cached_embedding,
+    _truncate_text_for_embedding,
     compute_and_store_embedding,
     cosine_similarity,
     find_similar_documents,
@@ -1098,10 +1101,23 @@ class TestGenerateEmbedding:
     @pytest.mark.unit
     @patch("app.utils.similarity._get_embedding_client")
     @patch("app.utils.similarity.settings")
-    def test_truncates_long_text(self, mock_settings, mock_get_client):
-        """Should truncate text that exceeds embedding_max_tokens * 3 characters."""
+    def test_truncates_long_text(self, mock_settings, mock_get_client, monkeypatch):
+        """Should truncate text that exceeds embedding_max_tokens tokens."""
         mock_settings.embedding_model = "text-embedding-3-small"
-        mock_settings.embedding_max_tokens = 10  # max_chars = 30
+        mock_settings.embedding_max_tokens = 10
+
+        class FakeEncoding:
+            def encode_ordinary(self, text):
+                return list(text)
+
+            def decode(self, tokens):
+                return "".join(tokens)
+
+        monkeypatch.setitem(
+            sys.modules,
+            "tiktoken",
+            SimpleNamespace(encoding_for_model=lambda model: FakeEncoding()),
+        )
 
         mock_response = MagicMock()
         mock_response.data = [MagicMock(embedding=[0.5])]
@@ -1109,14 +1125,13 @@ class TestGenerateEmbedding:
         mock_client.embeddings.create.return_value = mock_response
         mock_get_client.return_value = mock_client
 
-        long_text = "a" * 100  # 100 chars, well beyond the 30-char limit
+        long_text = "a" * 100  # 100 fake tokens, well beyond the 10-token limit
         result = generate_embedding(long_text)
 
         assert result == [0.5]
-        # Verify the text was truncated to 30 chars (max_tokens=10, 10*3=30)
         call_args = mock_client.embeddings.create.call_args
         actual_input = call_args.kwargs.get("input") or call_args[1].get("input") or call_args[0][0]
-        assert len(actual_input) == 30
+        assert len(actual_input) == 10
 
     @pytest.mark.unit
     @patch("app.utils.similarity._get_embedding_client")
@@ -1135,6 +1150,43 @@ class TestGenerateEmbedding:
         generate_embedding("some text", model="custom-model")
 
         mock_client.embeddings.create.assert_called_once_with(input="some text", model="custom-model")
+
+    @pytest.mark.unit
+    def test_caps_known_openai_embedding_model_below_context_window(self):
+        """Known OpenAI embedding models should stay below their hard token limit."""
+        assert _effective_embedding_token_limit("text-embedding-3-small", 9000) == 8128
+        assert _effective_embedding_token_limit("openai/text-embedding-3-small", 9000) == 8128
+
+    @pytest.mark.unit
+    def test_tokenizer_truncation_respects_known_model_context_window(self, monkeypatch):
+        """Tokenizer truncation should apply the known model limit even if configured too high."""
+
+        class FakeEncoding:
+            def encode_ordinary(self, text):
+                return list(text)
+
+            def decode(self, tokens):
+                return "".join(tokens)
+
+        monkeypatch.setitem(
+            sys.modules,
+            "tiktoken",
+            SimpleNamespace(encoding_for_model=lambda model: FakeEncoding()),
+        )
+
+        truncated = _truncate_text_for_embedding("x" * 9000, "text-embedding-3-small", 9000)
+
+        assert len(truncated) == 8128
+
+    @pytest.mark.unit
+    def test_tokenizer_fallback_truncates_by_utf8_bytes(self, monkeypatch):
+        """Fallback truncation should remain safely below the requested token budget."""
+        monkeypatch.setitem(sys.modules, "tiktoken", None)
+
+        truncated = _truncate_text_for_embedding("ä" * 20, "custom-embedding-model", 7)
+
+        assert len(truncated.encode("utf-8")) <= 7
+        truncated.encode("utf-8")
 
 
 # ---------------------------------------------------------------------------

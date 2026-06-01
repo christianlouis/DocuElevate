@@ -2684,7 +2684,7 @@ SETTING_METADATA = {
         "category": "AI Services",
         "description": (
             "Maximum number of tokens to send to the embedding model. "
-            "Text is truncated to approximately this many tokens before calling the API. Default: 8000."
+            "Text is truncated with the model tokenizer before calling the API. Default: 8000."
         ),
         "type": "integer",
         "sensitive": False,

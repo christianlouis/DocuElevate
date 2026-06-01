@@ -1059,9 +1059,8 @@ class Settings(BaseSettings):
         default=8000,
         description=(
             "Maximum number of tokens to send to the embedding model.  "
-            "Text is truncated to approximately this many tokens (using a "
-            "conservative 3-chars-per-token estimate) before calling the API.  "
-            "Set this below the model's context window (e.g. 8000 for an 8192-token model)."
+            "Text is truncated with the model tokenizer before calling the API."
+            " Set this below the model's context window (e.g. 8000 for an 8192-token model)."
         ),
     )
     embedding_backfill_batch_size: int = Field(
