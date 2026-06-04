@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - develop
+      - prod-0.30.2-postgres-backport
     tags:
       - 'v*'
       - '[0-9]+.*'

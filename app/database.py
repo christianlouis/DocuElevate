@@ -17,7 +17,11 @@ Base = declarative_base()
 
 # Parse the DATABASE_URL
 DB_URL = settings.database_url
-engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
+_connect_args: dict[str, Any] = {}
+_parsed_url = make_url(DB_URL)
+if _parsed_url.get_backend_name() == "sqlite":
+    _connect_args["check_same_thread"] = False
+engine = create_engine(DB_URL, connect_args=_connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
