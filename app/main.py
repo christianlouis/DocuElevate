@@ -122,7 +122,11 @@ app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 # 4) Restrict valid hosts to prevent Host header attacks
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=[settings.external_hostname, "localhost", "127.0.0.1"])
+allowed_hosts = [settings.external_hostname, "localhost", "127.0.0.1"]
+if settings.trusted_hosts:
+    allowed_hosts = [host.strip() for host in settings.trusted_hosts.split(",") if host.strip()]
+    allowed_hosts.extend(["localhost", "127.0.0.1"])
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
 # Mount the static files directory
 static_dir = pathlib.Path(__file__).parents[1] / "frontend" / "static"

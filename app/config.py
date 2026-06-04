@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     azure_endpoint: str
     gotenberg_url: str
     external_hostname: str = "localhost"  # Default to localhost
+    trusted_hosts: Optional[str] = None
 
     # Authentication settings
     auth_enabled: bool = True  # Default to enabled
