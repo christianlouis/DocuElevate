@@ -1,10 +1,12 @@
-fastapi[all]  # Web framework with all extras
-uvicorn  # ASGI server
-celery  # Task queue
-redis  # Message broker for Celery
-sqlalchemy  # Database ORM
+fastapi[all]==0.129.0  # Web framework with all extras
+starlette==0.52.1  # ASGI toolkit (used by FastAPI) - matches the previous production image
+uvicorn==0.40.0  # ASGI server
+celery==5.6.2  # Task queue
+redis==7.1.1  # Message broker for Celery
+sqlalchemy==2.0.46  # Database ORM
 psycopg[binary]>=3.2,<4.0  # PostgreSQL driver for HA database deployments
-pydantic  # Data validation
+pydantic==2.12.5  # Data validation
+pydantic-settings==2.12.0  # Settings management
 cryptography>=41.0.0  # Encryption for sensitive settings in database
 openai  # GPT integration for metadata extraction
 pypdf>=3.9.0  # PDF processing for text extraction, metadata editing and rotation (upgraded from PyPDF2 to fix CVE-2023-36464)
@@ -15,7 +17,6 @@ dropbox>=11.36.0  # Dropbox integration
 azure-ai-documentintelligence  # Azure OCR service
 authlib>=1.6.5  # Authentication - fixed security vulnerabilities (GHSA-xxx)
 python-dotenv  # Environment variables
-starlette>=0.49.1  # ASGI toolkit (used by FastAPI) - fixed DoS vulnerability
 alembic  # Database migrations
 slowapi>=0.1.9  # Rate limiting middleware for FastAPI
 
