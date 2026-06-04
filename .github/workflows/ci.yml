@@ -6,6 +6,7 @@ on:
       - main
       - develop
       - prod-0.30.2-postgres-backport
+      - release-evergreen-0.30
     tags:
       - 'v*'
       - '[0-9]+.*'
