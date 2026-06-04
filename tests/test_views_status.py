@@ -52,6 +52,7 @@ class TestStatusDashboard:
         mock_templates.TemplateResponse.assert_called_once()
         call_args = mock_templates.TemplateResponse.call_args
         assert call_args[0][0] == "status_dashboard.html"
+        assert "database_status" in call_args[0][1]
 
     @patch("app.views.status.get_provider_status")
     @patch("app.views.status.templates")
@@ -147,6 +148,52 @@ class TestStatusDashboard:
         call_args = mock_templates.TemplateResponse.call_args
         context = call_args[0][1]
         assert context["settings"]["notification_urls"] == ["https://webhook.example.com/notify"]
+
+
+@pytest.mark.unit
+class TestDatabaseStatus:
+    """Tests for database status checks."""
+
+    @patch("app.views.status.engine")
+    @patch("app.views.status.SessionLocal")
+    def test_database_status_healthy(self, mock_session_local, mock_engine):
+        """Test database status reports healthy when SELECT 1 succeeds."""
+        from app.views.status import _get_database_status
+
+        mock_engine.url.get_backend_name.return_value = "postgresql"
+        mock_engine.url.database = "docuelevate"
+        mock_db = Mock()
+        mock_session = Mock()
+        mock_session.__enter__ = Mock(return_value=mock_db)
+        mock_session.__exit__ = Mock(return_value=False)
+        mock_session_local.return_value = mock_session
+
+        result = _get_database_status()
+
+        assert result["status"] == "healthy"
+        assert result["label"] == "Healthy"
+        assert result["backend"] == "postgresql"
+        assert result["database"] == "docuelevate"
+        assert result["error"] is None
+        mock_db.execute.assert_called_once()
+
+    @patch("app.views.status.engine")
+    @patch("app.views.status.SessionLocal")
+    def test_database_status_unhealthy(self, mock_session_local, mock_engine):
+        """Test database status reports unhealthy when the query fails."""
+        from app.views.status import _get_database_status
+
+        mock_engine.url.get_backend_name.return_value = "postgresql"
+        mock_engine.url.database = "docuelevate"
+        mock_session_local.side_effect = RuntimeError("database unavailable")
+
+        result = _get_database_status()
+
+        assert result["status"] == "unhealthy"
+        assert result["label"] == "Unhealthy"
+        assert result["backend"] == "postgresql"
+        assert result["database"] == "docuelevate"
+        assert result["error"] == "RuntimeError"
 
 
 @pytest.mark.unit

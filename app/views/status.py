@@ -4,15 +4,51 @@ Status and configuration views for the application.
 
 import logging
 import os
+import time
 from datetime import datetime
 
 from fastapi import Request
+from sqlalchemy import text
 
+from app.database import SessionLocal, engine
 from app.utils.config_validator import get_provider_status, get_settings_for_display
 from app.views.base import APIRouter, require_login, settings, templates
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _get_database_status() -> dict:
+    """Return a non-secret database health summary for the status dashboard."""
+    backend = engine.url.get_backend_name()
+    database_name = engine.url.database or "Unknown"
+    started_at = time.perf_counter()
+
+    try:
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+        latency_ms = round((time.perf_counter() - started_at) * 1000, 1)
+        return {
+            "configured": True,
+            "status": "healthy",
+            "label": "Healthy",
+            "backend": backend,
+            "database": database_name,
+            "latency_ms": latency_ms,
+            "error": None,
+        }
+    except Exception as exc:
+        latency_ms = round((time.perf_counter() - started_at) * 1000, 1)
+        logger.warning("Database status check failed: %s", exc)
+        return {
+            "configured": True,
+            "status": "unhealthy",
+            "label": "Unhealthy",
+            "backend": backend,
+            "database": database_name,
+            "latency_ms": latency_ms,
+            "error": exc.__class__.__name__,
+        }
 
 
 @router.get("/status")
@@ -23,6 +59,7 @@ async def status_dashboard(request: Request):
     """
     # Get provider status
     providers = get_provider_status()
+    database_status = _get_database_status()
 
     # Get build date from settings
     build_date = getattr(settings, "build_date", "Unknown")
@@ -78,6 +115,7 @@ async def status_dashboard(request: Request):
         {
             "request": request,
             "providers": providers,
+            "database_status": database_status,
             "app_version": settings.version,
             "build_date": build_date,
             "debug_enabled": getattr(settings, "debug", False),

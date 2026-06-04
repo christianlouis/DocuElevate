@@ -31,6 +31,49 @@
     </div>
   </div>
 
+  <div class="mb-8">
+    <h2 class="text-xl font-semibold text-gray-900 mb-4">Core Services</h2>
+    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="px-4 py-5 sm:px-6 flex justify-between items-center">
+          <div class="flex items-center">
+            <span class="inline-flex items-center justify-center h-10 w-10 rounded-md {{ 'bg-green-500' if database_status.status == 'healthy' else 'bg-red-500' }} text-white mr-3">
+              <i class="fa-solid fa-database fa-lg"></i>
+            </span>
+            <h3 class="text-lg leading-6 font-medium text-gray-900">SQL Database</h3>
+          </div>
+          <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ 'bg-green-100 text-green-800' if database_status.status == 'healthy' else 'bg-red-100 text-red-800' }}">
+            {{ database_status.label }}
+          </span>
+        </div>
+        <div class="border-t border-gray-200">
+          <div class="px-4 py-5 sm:p-6">
+            <p class="text-sm text-gray-500">
+              Application database connectivity and backend type.
+            </p>
+            <dl class="mt-4 space-y-2 text-sm">
+              <div class="flex justify-between">
+                <dt class="text-gray-500">Backend</dt>
+                <dd class="font-medium text-gray-900">{{ database_status.backend }}</dd>
+              </div>
+              <div class="flex justify-between">
+                <dt class="text-gray-500">Database</dt>
+                <dd class="font-medium text-gray-900">{{ database_status.database }}</dd>
+              </div>
+              <div class="flex justify-between">
+                <dt class="text-gray-500">Latency</dt>
+                <dd class="font-medium text-gray-900">{{ database_status.latency_ms }} ms</dd>
+              </div>
+            </dl>
+            {% if database_status.error %}
+              <p class="mt-4 text-sm text-red-600">{{ database_status.error }}</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
     {% for name, provider in providers.items() %}
       <div class="bg-white overflow-hidden shadow rounded-lg">
