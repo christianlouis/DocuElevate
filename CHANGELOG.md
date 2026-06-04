@@ -12,6 +12,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Chores
+
+- Rebuild image for postgres deployment
+  ([`4d9aed8`](https://github.com/christianlouis/DocuElevate/commit/4d9aed8782c54596c225a1ed986d3174343e175f))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`a445cfa`](https://github.com/christianlouis/DocuElevate/commit/a445cfa72c7807bb6f37ab7885034d1021557c97))
+
+
+## Unreleased
+
 
 ## v0.173.5 (2026-06-01)
 
