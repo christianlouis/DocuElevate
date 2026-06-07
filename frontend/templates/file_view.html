@@ -585,6 +585,18 @@
       .replace(/'/g, '&#039;');
   }
 
+  var fileViewMessages = {
+    extractingText: {{ _("Extracting text…") | tojson }},
+    extractFailed: {{ _("Failed to extract text") | tojson }},
+    failedToLoadPdf: {{ _("Failed to load PDF") | tojson }},
+    failedToLoadFileContent: {{ _("Failed to load file content") | tojson }},
+    loadingTranslation: {{ _("Loading translation…") | tojson }},
+    translatedTo: {{ _("Translated to") | tojson }},
+    fromLanguage: {{ _("from") | tojson }},
+    selectTargetLanguage: {{ _("Please select a target language.") | tojson }},
+    translationFailed: {{ _("Translation failed") | tojson }}
+  };
+
   // ── Toggle inline OCR text visibility ──
   function toggleOcrText() {
     var block = document.getElementById('ocr-text-block');
@@ -638,7 +650,7 @@
       renderText(area, _textCache);
       return;
     }
-    area.innerHTML = '<div style="text-align:center;padding:1.5rem;color:#6b7280;"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top:0.5rem;">Extracting text…</p></div>';
+    area.innerHTML = '<div style="text-align:center;padding:1.5rem;color:#6b7280;"><i class="fas fa-spinner fa-spin fa-2x" aria-hidden="true"></i><p style="margin-top:0.5rem;">' + fileViewMessages.extractingText + '</p></div>';
 
     var url = {% if processed_file_exists %}'/files/' + fileId + '/text/processed'{% else %}'/files/' + fileId + '/text/original'{% endif %};
     fetch(url)
@@ -648,7 +660,7 @@
         renderText(area, data.text);
       })
       .catch(function(err) {
-        area.innerHTML = '<div style="color:#dc2626;padding:0.75rem;background:#fee2e2;border-radius:0.375rem;font-size:0.875rem;"><i class="fas fa-exclamation-triangle"></i> Failed to extract text: ' + escapeHtml(err.message) + '</div>';
+        area.innerHTML = '<div style="color:#dc2626;padding:0.75rem;background:#fee2e2;border-radius:0.375rem;font-size:0.875rem;"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> ' + fileViewMessages.extractFailed + ': ' + escapeHtml(err.message) + '</div>';
       });
   }
 
@@ -672,7 +684,7 @@
       _pdfState.page = 1;
       pdfRenderPage();
     }).catch(function() {
-      wrap.innerHTML = '<div style="text-align:center;padding:2rem;color:#f87171;"><i class="fas fa-exclamation-triangle" style="font-size:2rem;margin-bottom:0.5rem;"></i><p>Failed to load PDF</p></div>';
+      wrap.innerHTML = '<div style="text-align:center;padding:2rem;color:#f87171;"><i class="fas fa-exclamation-triangle" aria-hidden="true" style="font-size:2rem;margin-bottom:0.5rem;"></i><p>' + fileViewMessages.failedToLoadPdf + '</p></div>';
     });
   }
 
@@ -775,7 +787,7 @@
         }
       })
       .catch(function() {
-        container.innerHTML = '<div style="color:#f87171;padding:1rem;">Failed to load file content</div>';
+        container.innerHTML = '<div style="color:#f87171;padding:1rem;">' + fileViewMessages.failedToLoadFileContent + '</div>';
       });
   }
 
@@ -860,7 +872,7 @@
   function loadDefaultLangText(fileId) {
     var area = document.getElementById('default-lang-load-area');
     if (!area) return;
-    area.innerHTML = '<div style="text-align:center;padding:1.5rem;color:#6b7280;"><i class="fas fa-spinner fa-spin fa-2x" aria-hidden="true"></i><p style="margin-top:0.5rem;">Loading translation…</p></div>';
+    area.innerHTML = '<div style="text-align:center;padding:1.5rem;color:#6b7280;"><i class="fas fa-spinner fa-spin fa-2x" aria-hidden="true"></i><p style="margin-top:0.5rem;">' + fileViewMessages.loadingTranslation + '</p></div>';
     fetch('/files/' + fileId + '/text/default-language')
       .then(function(r) {
         if (r.status === 404) throw new Error('No translation available yet — it may still be processing');
@@ -871,7 +883,7 @@
         area.innerHTML = '';
         var info = document.createElement('div');
         info.style.cssText = 'font-size:0.75rem;color:#6b7280;margin-bottom:0.5rem;';
-        info.textContent = 'Translated to: ' + data.language_code + (data.detected_language ? ' (from ' + data.detected_language + ')' : '');
+        info.textContent = fileViewMessages.translatedTo + ': ' + data.language_code + (data.detected_language ? ' (' + fileViewMessages.fromLanguage + ' ' + data.detected_language + ')' : '');
         area.appendChild(info);
         var pre = document.createElement('pre');
         pre.className = 'ocr-text';
@@ -891,7 +903,7 @@
     var copyBtn = document.getElementById('translate-copy-btn');
     if (!select || !area) return;
     var lang = select.value;
-    if (!lang) { area.innerHTML = '<div style="color:#92400e;padding:0.75rem;background:#fef3c7;border-radius:0.375rem;font-size:0.875rem;">Please select a target language.</div>'; return; }
+    if (!lang) { area.innerHTML = '<div style="color:#92400e;padding:0.75rem;background:#fef3c7;border-radius:0.375rem;font-size:0.875rem;">' + fileViewMessages.selectTargetLanguage + '</div>'; return; }
 
     // Check cache
     if (_translateCache[lang]) {
@@ -911,7 +923,7 @@
         if (copyBtn) copyBtn.style.display = '';
       })
       .catch(function(err) {
-        area.innerHTML = '<div style="color:#dc2626;padding:0.75rem;background:#fee2e2;border-radius:0.375rem;font-size:0.875rem;"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> Translation failed: ' + escapeHtml(err.message) + '</div>';
+        area.innerHTML = '<div style="color:#dc2626;padding:0.75rem;background:#fee2e2;border-radius:0.375rem;font-size:0.875rem;"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> ' + fileViewMessages.translationFailed + ': ' + escapeHtml(err.message) + '</div>';
       });
   }
 
@@ -919,7 +931,7 @@
     container.innerHTML = '';
     var info = document.createElement('div');
     info.style.cssText = 'font-size:0.75rem;color:#6b7280;margin-bottom:0.5rem;';
-    info.textContent = 'Translated to: ' + lang;
+    info.textContent = fileViewMessages.translatedTo + ': ' + lang;
     container.appendChild(info);
     var pre = document.createElement('pre');
     pre.className = 'ocr-text';
