@@ -17,7 +17,7 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from app.api import router as api_router
 from app.auth import router as auth_router
 from app.config import settings
-from app.database import init_db
+from app.database import DB_URL_SOURCE, init_db
 from app.middleware.rate_limit import create_limiter, get_rate_limit_exceeded_handler
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.utils.config_validator import check_all_configs
@@ -51,6 +51,10 @@ async def lifespan(app: FastAPI):
     """
     # Startup: Initialize database
     init_db()  # Create tables if they don't exist
+    logging.info(
+        "Database URL source at startup: %s (database_url changes require app restart to take effect)",
+        DB_URL_SOURCE,
+    )
 
     # Load settings from database after DB initialization
     from app.database import SessionLocal

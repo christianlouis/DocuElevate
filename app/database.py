@@ -24,7 +24,7 @@ def _build_connect_args(db_url: str) -> dict[str, Any]:
     return connect_args
 
 
-def _resolve_database_url(configured_url: str) -> str:
+def _resolve_database_url_with_source(configured_url: str) -> tuple[str, str]:
     """
     Resolve the runtime database URL.
 
@@ -33,15 +33,14 @@ def _resolve_database_url(configured_url: str) -> str:
     converge on the configured external database after restart.
 
     Returns:
-        Runtime database URL to use. Falls back to `configured_url` when no
-        valid non-SQLite override can be read.
+        Tuple of runtime database URL and source identifier.
     """
     try:
         if make_url(configured_url).get_backend_name() != "sqlite":
-            return configured_url
+            return configured_url, "environment"
     except Exception as err:
         logger.warning(f"Invalid configured database URL; using as-is: {err}")
-        return configured_url
+        return configured_url, "environment"
 
     settings_query_engine = create_engine(configured_url, connect_args=_build_connect_args(configured_url))
     try:
@@ -50,34 +49,62 @@ def _resolve_database_url(configured_url: str) -> str:
                 text("SELECT value FROM application_settings WHERE key = 'database_url' LIMIT 1")
             ).scalar_one_or_none()
         if not override_url:
-            return configured_url
+            return configured_url, "environment"
 
         override_url = override_url.strip()
         if not override_url:
-            return configured_url
+            return configured_url, "environment"
 
         try:
             override_backend = make_url(override_url).get_backend_name()
         except Exception as err:
             logger.warning(f"Ignoring invalid database_url override from application_settings: {err}")
-            return configured_url
+            return configured_url, "environment"
 
         if override_backend == "sqlite":
-            return configured_url
+            return configured_url, "environment"
 
         logger.info(f"Using database_url override from application_settings (backend={override_backend})")
-        return override_url
+        return override_url, "database"
     except exc.SQLAlchemyError as err:
         logger.debug(f"Could not read database_url override from application_settings: {err}")
-        return configured_url
+        return configured_url, "environment"
     finally:
         settings_query_engine.dispose()
 
 
+def _resolve_database_url(configured_url: str) -> str:
+    """Resolve only the runtime database URL value."""
+    resolved_url, _ = _resolve_database_url_with_source(configured_url)
+    return resolved_url
+
+
+def _sanitize_database_url_for_log(db_url: str) -> str:
+    """Render DB URL for logs with credentials masked."""
+    try:
+        return make_url(db_url).render_as_string(hide_password=True)
+    except Exception:
+        return "<unparseable-database-url>"
+
+
+def _get_database_backend_for_log(db_url: str) -> str:
+    """Extract DB backend for logs without raising."""
+    try:
+        return make_url(db_url).get_backend_name()
+    except Exception:
+        return "unknown"
+
+
 # Parse the DATABASE_URL
-DB_URL = _resolve_database_url(settings.database_url)
+DB_URL, DB_URL_SOURCE = _resolve_database_url_with_source(settings.database_url)
 engine = create_engine(DB_URL, connect_args=_build_connect_args(DB_URL))
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+logger.info(
+    "Database connection configured at startup: source=%s, backend=%s, url=%s",
+    DB_URL_SOURCE,
+    _get_database_backend_for_log(DB_URL),
+    _sanitize_database_url_for_log(DB_URL),
+)
 
 
 def init_db() -> None:

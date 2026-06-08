@@ -122,6 +122,44 @@ class TestDatabaseUrlResolution:
         postgres_url = "postgresql://db:5432/docuelevate"
         assert _resolve_database_url(postgres_url) == postgres_url
 
+    def test_resolve_database_url_with_source_uses_database_override(self, tmp_path):
+        """If override is non-sqlite, source should be 'database'."""
+        from sqlalchemy import create_engine, text
+
+        from app.database import _resolve_database_url_with_source
+
+        db_path = str(tmp_path / "settings_bootstrap.db")
+        sqlite_url = f"sqlite:///{db_path}"
+        engine = create_engine(sqlite_url)
+        with engine.begin() as conn:
+            conn.execute(text("CREATE TABLE application_settings (key VARCHAR PRIMARY KEY, value VARCHAR)"))
+            conn.execute(
+                text("INSERT INTO application_settings (key, value) VALUES ('database_url', :value)"),
+                {"value": "postgresql://db:5432/docuelevate"},
+            )
+        engine.dispose()
+
+        resolved_url, source = _resolve_database_url_with_source(sqlite_url)
+        assert resolved_url == "postgresql://db:5432/docuelevate"
+        assert source == "database"
+
+    def test_resolve_database_url_with_source_uses_environment_without_override(self, tmp_path):
+        """Without non-sqlite override, source should remain 'environment'."""
+        from sqlalchemy import create_engine, text
+
+        from app.database import _resolve_database_url_with_source
+
+        db_path = str(tmp_path / "settings_bootstrap.db")
+        sqlite_url = f"sqlite:///{db_path}"
+        engine = create_engine(sqlite_url)
+        with engine.begin() as conn:
+            conn.execute(text("CREATE TABLE application_settings (key VARCHAR PRIMARY KEY, value VARCHAR)"))
+        engine.dispose()
+
+        resolved_url, source = _resolve_database_url_with_source(sqlite_url)
+        assert resolved_url == sqlite_url
+        assert source == "environment"
+
 
 @pytest.mark.unit
 class TestSchemaMigrations:
