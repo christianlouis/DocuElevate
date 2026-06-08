@@ -2,6 +2,7 @@ fastapi[all]==0.129.0  # Web framework with all extras
 starlette==0.52.1  # ASGI toolkit (used by FastAPI) - matches the previous production image
 uvicorn==0.40.0  # ASGI server
 celery==5.6.2  # Task queue
+celery-redbeat
 redis==7.1.1  # Message broker for Celery
 sqlalchemy==2.0.46  # Database ORM
 psycopg[binary]>=3.2,<4.0  # PostgreSQL driver for HA database deployments
