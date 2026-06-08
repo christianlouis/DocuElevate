@@ -38,8 +38,8 @@ def _resolve_database_url_with_source(configured_url: str) -> tuple[str, str]:
     try:
         if make_url(configured_url).get_backend_name() != "sqlite":
             return configured_url, "environment"
-    except Exception as err:
-        logger.warning(f"Invalid configured database URL; using as-is: {err}")
+    except Exception:
+        logger.warning("Invalid configured database URL format; using configured value as-is")
         return configured_url, "environment"
 
     settings_query_engine = create_engine(configured_url, connect_args=_build_connect_args(configured_url))
@@ -57,8 +57,8 @@ def _resolve_database_url_with_source(configured_url: str) -> tuple[str, str]:
 
         try:
             override_backend = make_url(override_url).get_backend_name()
-        except Exception as err:
-            logger.warning(f"Ignoring invalid database_url override from application_settings: {err}")
+        except Exception:
+            logger.warning("Ignoring invalid database_url override from application_settings")
             return configured_url, "environment"
 
         if override_backend == "sqlite":

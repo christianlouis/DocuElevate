@@ -137,7 +137,10 @@ class TestLifespanEvents:
                 pass
 
             assert any(
-                "Database URL source at startup" in str(call.args[0]) for call in mock_info.call_args_list if call.args
+                len(call.args) > 1
+                and "Database URL source at startup" in str(call.args[0])
+                and call.args[1] == "environment"
+                for call in mock_info.call_args_list
             )
 
 
