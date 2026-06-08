@@ -74,6 +74,56 @@ class TestGetDb:
 
 
 @pytest.mark.unit
+class TestDatabaseUrlResolution:
+    """Tests for database URL resolution behavior."""
+
+    def test_resolve_database_url_prefers_non_sqlite_override(self, tmp_path):
+        """If bootstrap DB is sqlite, prefer a non-sqlite DB URL override from settings table."""
+        from sqlalchemy import create_engine, text
+
+        from app.database import _resolve_database_url
+
+        db_path = str(tmp_path / "settings_bootstrap.db")
+        sqlite_url = f"sqlite:///{db_path}"
+        engine = create_engine(sqlite_url)
+        with engine.begin() as conn:
+            conn.execute(text("CREATE TABLE application_settings (key VARCHAR PRIMARY KEY, value VARCHAR)"))
+            conn.execute(
+                text("INSERT INTO application_settings (key, value) VALUES ('database_url', :value)"),
+                {"value": "postgresql://db:5432/docuelevate"},
+            )
+        engine.dispose()
+
+        assert _resolve_database_url(sqlite_url) == "postgresql://db:5432/docuelevate"
+
+    def test_resolve_database_url_ignores_sqlite_override(self, tmp_path):
+        """Keep configured sqlite URL when override is also sqlite."""
+        from sqlalchemy import create_engine, text
+
+        from app.database import _resolve_database_url
+
+        db_path = str(tmp_path / "settings_bootstrap.db")
+        sqlite_url = f"sqlite:///{db_path}"
+        engine = create_engine(sqlite_url)
+        with engine.begin() as conn:
+            conn.execute(text("CREATE TABLE application_settings (key VARCHAR PRIMARY KEY, value VARCHAR)"))
+            conn.execute(
+                text("INSERT INTO application_settings (key, value) VALUES ('database_url', :value)"),
+                {"value": "sqlite:///./app/database.db"},
+            )
+        engine.dispose()
+
+        assert _resolve_database_url(sqlite_url) == sqlite_url
+
+    def test_resolve_database_url_keeps_non_sqlite_config(self):
+        """Keep configured non-sqlite URL unchanged."""
+        from app.database import _resolve_database_url
+
+        postgres_url = "postgresql://db:5432/docuelevate"
+        assert _resolve_database_url(postgres_url) == postgres_url
+
+
+@pytest.mark.unit
 class TestSchemaMigrations:
     """Tests for schema migration logic."""
 

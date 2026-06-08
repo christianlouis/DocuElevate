@@ -6,6 +6,7 @@ from collections.abc import Generator
 from typing import Any
 
 from sqlalchemy import create_engine, exc
+from sqlalchemy import text
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
@@ -15,13 +16,64 @@ logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
+
+def _build_connect_args(db_url: str) -> dict[str, Any]:
+    """Build SQLAlchemy connect args for a given URL."""
+    connect_args: dict[str, Any] = {}
+    if make_url(db_url).get_backend_name() == "sqlite":
+        connect_args["check_same_thread"] = False
+    return connect_args
+
+
+def _resolve_database_url(configured_url: str) -> str:
+    """
+    Resolve the runtime database URL.
+
+    If startup is still pointed to SQLite but a non-SQLite `database_url`
+    exists in `application_settings`, prefer that value so worker and API can
+    converge on the configured external database after restart.
+    """
+    try:
+        if make_url(configured_url).get_backend_name() != "sqlite":
+            return configured_url
+    except Exception as err:
+        logger.warning(f"Invalid configured database URL; using as-is: {err}")
+        return configured_url
+
+    bootstrap_engine = create_engine(configured_url, connect_args=_build_connect_args(configured_url))
+    try:
+        with bootstrap_engine.connect() as conn:
+            override_url = conn.execute(
+                text("SELECT value FROM application_settings WHERE key = 'database_url' LIMIT 1")
+            ).scalar_one_or_none()
+        if not override_url:
+            return configured_url
+
+        override_url = override_url.strip()
+        if not override_url:
+            return configured_url
+
+        try:
+            override_backend = make_url(override_url).get_backend_name()
+        except Exception as err:
+            logger.warning(f"Ignoring invalid database_url override from application_settings: {err}")
+            return configured_url
+
+        if override_backend == "sqlite":
+            return configured_url
+
+        logger.info(f"Using database_url override from application_settings (backend={override_backend})")
+        return override_url
+    except exc.SQLAlchemyError as err:
+        logger.debug(f"Could not read database_url override from application_settings: {err}")
+        return configured_url
+    finally:
+        bootstrap_engine.dispose()
+
+
 # Parse the DATABASE_URL
-DB_URL = settings.database_url
-_connect_args: dict[str, Any] = {}
-_parsed_url = make_url(DB_URL)
-if _parsed_url.get_backend_name() == "sqlite":
-    _connect_args["check_same_thread"] = False
-engine = create_engine(DB_URL, connect_args=_connect_args)
+DB_URL = _resolve_database_url(settings.database_url)
+engine = create_engine(DB_URL, connect_args=_build_connect_args(DB_URL))
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
