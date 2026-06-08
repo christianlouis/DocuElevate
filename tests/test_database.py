@@ -78,7 +78,7 @@ class TestDatabaseUrlResolution:
     """Tests for database URL resolution behavior."""
 
     def test_resolve_database_url_prefers_non_sqlite_override(self, tmp_path):
-        """If bootstrap DB is sqlite, prefer a non-sqlite DB URL override from settings table."""
+        """If configured URL is sqlite, prefer a non-sqlite DB URL override from settings table."""
         from sqlalchemy import create_engine, text
 
         from app.database import _resolve_database_url
@@ -97,7 +97,7 @@ class TestDatabaseUrlResolution:
         assert _resolve_database_url(sqlite_url) == "postgresql://db:5432/docuelevate"
 
     def test_resolve_database_url_ignores_sqlite_override(self, tmp_path):
-        """Keep configured sqlite URL when override is also sqlite."""
+        """If both configured and override URLs are sqlite, keep configured URL unchanged."""
         from sqlalchemy import create_engine, text
 
         from app.database import _resolve_database_url

@@ -31,6 +31,10 @@ def _resolve_database_url(configured_url: str) -> str:
     If startup is still pointed to SQLite but a non-SQLite `database_url`
     exists in `application_settings`, prefer that value so worker and API can
     converge on the configured external database after restart.
+
+    Returns:
+        Runtime database URL to use. Falls back to `configured_url` when no
+        valid non-SQLite override can be read.
     """
     try:
         if make_url(configured_url).get_backend_name() != "sqlite":
@@ -39,9 +43,9 @@ def _resolve_database_url(configured_url: str) -> str:
         logger.warning(f"Invalid configured database URL; using as-is: {err}")
         return configured_url
 
-    bootstrap_engine = create_engine(configured_url, connect_args=_build_connect_args(configured_url))
+    settings_query_engine = create_engine(configured_url, connect_args=_build_connect_args(configured_url))
     try:
-        with bootstrap_engine.connect() as conn:
+        with settings_query_engine.connect() as conn:
             override_url = conn.execute(
                 text("SELECT value FROM application_settings WHERE key = 'database_url' LIMIT 1")
             ).scalar_one_or_none()
@@ -67,7 +71,7 @@ def _resolve_database_url(configured_url: str) -> str:
         logger.debug(f"Could not read database_url override from application_settings: {err}")
         return configured_url
     finally:
-        bootstrap_engine.dispose()
+        settings_query_engine.dispose()
 
 
 # Parse the DATABASE_URL
