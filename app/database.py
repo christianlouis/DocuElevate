@@ -5,7 +5,7 @@ import os
 from collections.abc import Generator
 from typing import Any
 
-from sqlalchemy import create_engine, exc
+from sqlalchemy import create_engine, exc, text
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
@@ -15,14 +15,96 @@ logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
+
+def _build_connect_args(db_url: str) -> dict[str, Any]:
+    """Build SQLAlchemy connect args for a given URL."""
+    connect_args: dict[str, Any] = {}
+    if make_url(db_url).get_backend_name() == "sqlite":
+        connect_args["check_same_thread"] = False
+    return connect_args
+
+
+def _resolve_database_url_with_source(configured_url: str) -> tuple[str, str]:
+    """
+    Resolve the runtime database URL.
+
+    If startup is still pointed to SQLite but a non-SQLite `database_url`
+    exists in `application_settings`, prefer that value so worker and API can
+    converge on the configured external database after restart.
+
+    Returns:
+        Tuple of runtime database URL and source identifier.
+    """
+    try:
+        if make_url(configured_url).get_backend_name() != "sqlite":
+            return configured_url, "environment"
+    except Exception:
+        logger.warning("Invalid configured database URL format; using configured value as-is")
+        return configured_url, "environment"
+
+    settings_query_engine = create_engine(configured_url, connect_args=_build_connect_args(configured_url))
+    try:
+        with settings_query_engine.connect() as conn:
+            override_url = conn.execute(
+                text("SELECT value FROM application_settings WHERE key = 'database_url' LIMIT 1")
+            ).scalar_one_or_none()
+        if not override_url:
+            return configured_url, "environment"
+
+        override_url = override_url.strip()
+        if not override_url:
+            return configured_url, "environment"
+
+        try:
+            override_backend = make_url(override_url).get_backend_name()
+        except Exception:
+            logger.warning("Ignoring invalid database_url override from application_settings")
+            return configured_url, "environment"
+
+        if override_backend == "sqlite":
+            return configured_url, "environment"
+
+        logger.info(f"Using database_url override from application_settings (backend={override_backend})")
+        return override_url, "database"
+    except exc.SQLAlchemyError as err:
+        logger.debug(f"Could not read database_url override from application_settings: {err}")
+        return configured_url, "environment"
+    finally:
+        settings_query_engine.dispose()
+
+
+def _resolve_database_url(configured_url: str) -> str:
+    """Resolve only the runtime database URL value."""
+    resolved_url, _ = _resolve_database_url_with_source(configured_url)
+    return resolved_url
+
+
+def _sanitize_database_url_for_log(db_url: str) -> str:
+    """Render DB URL for logs with credentials masked."""
+    try:
+        return make_url(db_url).render_as_string(hide_password=True)
+    except Exception:
+        return "<unparseable-database-url>"
+
+
+def _get_database_backend_for_log(db_url: str) -> str:
+    """Extract DB backend for logs without raising."""
+    try:
+        return make_url(db_url).get_backend_name()
+    except Exception:
+        return "unknown"
+
+
 # Parse the DATABASE_URL
-DB_URL = settings.database_url
-_connect_args: dict[str, Any] = {}
-_parsed_url = make_url(DB_URL)
-if _parsed_url.get_backend_name() == "sqlite":
-    _connect_args["check_same_thread"] = False
-engine = create_engine(DB_URL, connect_args=_connect_args)
+DB_URL, DB_URL_SOURCE = _resolve_database_url_with_source(settings.database_url)
+engine = create_engine(DB_URL, connect_args=_build_connect_args(DB_URL))
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+logger.info(
+    "Database connection configured at startup: source=%s, backend=%s, url=%s",
+    DB_URL_SOURCE,
+    _get_database_backend_for_log(DB_URL),
+    _sanitize_database_url_for_log(DB_URL),
+)
 
 
 def init_db() -> None:

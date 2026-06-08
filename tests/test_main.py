@@ -114,6 +114,35 @@ class TestLifespanEvents:
 
             mock_error.assert_called()
 
+    @pytest.mark.asyncio
+    async def test_lifespan_logs_database_url_source_on_startup(self):
+        """Test that lifespan logs DB URL source info on startup."""
+        with (
+            patch("app.database.init_db"),
+            patch("app.database.SessionLocal") as mock_session_cls,
+            patch("app.utils.config_loader.load_settings_from_db"),
+            patch("app.utils.config_validator.dump_all_settings"),
+            patch("app.utils.config_validator.check_all_configs", return_value={"email": [], "storage": {}}),
+            patch("app.utils.notification.init_apprise"),
+            patch("app.utils.notification.notify_startup"),
+            patch("app.utils.notification.notify_shutdown"),
+            patch("logging.info") as mock_info,
+        ):
+            mock_db = MagicMock()
+            mock_session_cls.return_value = mock_db
+
+            from app.main import app, lifespan
+
+            async with lifespan(app):
+                pass
+
+            assert any(
+                len(call.args) > 1
+                and "Database URL source at startup" in str(call.args[0])
+                and call.args[1] == "environment"
+                for call in mock_info.call_args_list
+            )
+
 
 @pytest.mark.unit
 class TestExceptionHandlers:
