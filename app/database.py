@@ -5,8 +5,7 @@ import os
 from collections.abc import Generator
 from typing import Any
 
-from sqlalchemy import create_engine, exc
-from sqlalchemy import text
+from sqlalchemy import create_engine, exc, text
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
