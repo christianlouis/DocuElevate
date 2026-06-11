@@ -12,8 +12,20 @@ celery = Celery(
 )
 
 
-# Optionally add this line to retain connection retry behavior at startup:
+# Keep Redis broker reconnects from turning transient HA/proxy disconnects into
+# worker exits.
+celery.conf.broker_connection_retry = True
 celery.conf.broker_connection_retry_on_startup = True
+celery.conf.worker_cancel_long_running_tasks_on_connection_loss = True
+celery.conf.worker_enable_remote_control = False
+celery.conf.broker_transport_options = {
+    "health_check_interval": 30,
+    "socket_keepalive": True,
+}
+celery.conf.result_backend_transport_options = {
+    "health_check_interval": 30,
+    "socket_keepalive": True,
+}
 
 # Set the default queue and routing so that tasks are enqueued on "document_processor"
 celery.conf.task_default_queue = "document_processor"

@@ -48,6 +48,18 @@ class TestCeleryAppConfig:
 
         assert celery.conf.broker_connection_retry_on_startup is True
 
+    def test_celery_redis_reconnect_hardening(self):
+        """Test that Redis broker reconnect settings are production-safe."""
+        from app.celery_app import celery
+
+        assert celery.conf.broker_connection_retry is True
+        assert celery.conf.worker_cancel_long_running_tasks_on_connection_loss is True
+        assert celery.conf.worker_enable_remote_control is False
+        assert celery.conf.broker_transport_options["health_check_interval"] == 30
+        assert celery.conf.broker_transport_options["socket_keepalive"] is True
+        assert celery.conf.result_backend_transport_options["health_check_interval"] == 30
+        assert celery.conf.result_backend_transport_options["socket_keepalive"] is True
+
 
 @pytest.mark.unit
 class TestTaskFailureHandler:
