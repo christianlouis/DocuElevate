@@ -1763,6 +1763,7 @@
   "file.claim_ownership_confirm": "Claim this document as yours? You will become the owner and can manage sharing.",
   "file.claim_ownership_success": "You are now the owner of this document.",
   "file.claim_ownership_failed": "Could not claim ownership. The document may already have an owner.",
+  "file.extract_text_failed": "Failed to extract text",
   "similarity.backfill_auto": "The background task will compute them automatically every 5 minutes, or you can",
   "similarity.files_missing_text": "file(s) have OCR text but no embedding yet.",
   "similarity.find_pairs_btn": "Find Pairs",
