@@ -52,7 +52,7 @@
     "react-native-screens": "4.16.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.24.0",
+    "@babel/core": "^7.29.7",
     "@types/react": "~19.1.0",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~10.0.0",
@@ -60,8 +60,22 @@
   },
   "overrides": {
     "postcss": "8.5.15",
+    "shell-quote": "1.8.4",
+    "tar": "7.5.16",
     "uuid": "11.1.1",
     "undici": "6.27.0",
+    "@react-native/dev-middleware": {
+      "ws": "6.2.4"
+    },
+    "metro": {
+      "ws": "7.5.11"
+    },
+    "react-devtools-core": {
+      "ws": "7.5.11"
+    },
+    "react-native": {
+      "ws": "6.2.4"
+    },
     "brace-expansion@^1.1.7": "1.1.13",
     "brace-expansion@^2.0.2": "2.1.0",
     "brace-expansion@^5.0.2": "5.0.6"
