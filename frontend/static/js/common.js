@@ -430,7 +430,7 @@ function _renderLoggedOutAuth(authSection, mobileAuthSection) {
 // Security utility
 // ---------------------------------------------------------------------------
 function escapeHtml(str) {
-  if (!str) return '';
+  if (str == null) return '';
   return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
