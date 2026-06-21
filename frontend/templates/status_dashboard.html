@@ -393,16 +393,6 @@ const i18nStrings = {
   configureNow: {{ _("status.configure_now") | tojson }},
 };
 
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
 document.addEventListener('DOMContentLoaded', function() {
   // Modal elements
   const resultModal = document.getElementById('resultModal');

@@ -1533,19 +1533,9 @@
         })
         .then(data => renderSearchResults(data, q))
         .catch(err => {
-          list.innerHTML = '<div style="padding: 1rem; color: #dc2626; font-size: 0.875rem;"><i class="fas fa-exclamation-triangle"></i> ' + __i18n.searchUnavailable.replace('{error}', err.message) + '</div>';
+          list.innerHTML = '<div style="padding: 1rem; color: #dc2626; font-size: 0.875rem;"><i class="fas fa-exclamation-triangle"></i> ' + escapeHtml(__i18n.searchUnavailable.replace('{error}', err.message)) + '</div>';
           summary.textContent = '';
         });
-    }
-
-    function escapeHtml(str) {
-      if (!str) return '';
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
     }
 
     function sanitizeHighlight(html) {

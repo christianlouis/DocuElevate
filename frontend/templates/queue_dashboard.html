@@ -192,12 +192,6 @@
   document.getElementById('refreshInterval').textContent = REFRESH_SECONDS;
   let timer = null;
 
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
-
   function shortName(taskName) {
     // Show only the last part of the dotted task name
     const parts = (taskName || 'unknown').split('.');
