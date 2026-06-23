@@ -2,3 +2,8 @@
 **Vulnerability:** A Cross-Site Scripting (XSS) vulnerability existed in `frontend/templates/status_dashboard.html` where untrusted configuration settings (`value`), external service messages (`data.message`), and token expirations (`data.token_info.expires_in_human`) were injected directly into the DOM via `.innerHTML` without sanitization.
 **Learning:** Even internal or admin-focused dashboards can be vulnerable if they display external or user-configurable data without escaping. Constructing HTML strings dynamically from unvalidated sources is a common vector for DOM-based XSS.
 **Prevention:** Always use a sanitization function like `escapeHtml` to escape dangerous characters (`<`, `>`, `&`, `"`, `'`) before assigning dynamic content to `.innerHTML`, or prefer `.textContent` when only plaintext is intended.
+
+## 2026-06-23 - [Fix XSS in file_view.html]
+**Vulnerability:** A DOM-based Cross-Site Scripting (XSS) vulnerability existed in `frontend/templates/file_view.html` where an error message (`err.message`) was directly concatenated into an HTML string and assigned to `.innerHTML`. An attacker could potentially inject malicious scripts if they could control the error message returned by the server.
+**Learning:** Error messages returned from fetch calls or API endpoints should be treated as untrusted data, especially when constructing DOM elements dynamically. Relying on local `escapeHtml` functions per-template causes inconsistencies and omissions.
+**Prevention:** Establish a global sanitization utility (`escapeHtml`) in a shared file like `common.js` and ensure all dynamic content assigned to `.innerHTML` is wrapped with it. Better yet, prefer `.textContent` when inserting plain text to completely avoid HTML parsing contexts.
