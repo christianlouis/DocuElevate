@@ -10,6 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.173.7 (2026-06-24)
+
+### Bug Fixes
+
+- Bound patched Python dependencies ([#925](https://github.com/christianlouis/DocuElevate/pull/925),
+  [`c70212d`](https://github.com/christianlouis/DocuElevate/commit/c70212d5048e2790abc74e2cedada2d416f65782))
+
+- Patch DocuElevate Snyk Python dependencies
+  ([#925](https://github.com/christianlouis/DocuElevate/pull/925),
+  [`c70212d`](https://github.com/christianlouis/DocuElevate/commit/c70212d5048e2790abc74e2cedada2d416f65782))
+
+
 ## v0.173.6 (2026-06-24)
 
 ### Bug Fixes
