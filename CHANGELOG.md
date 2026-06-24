@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.173.8 (2026-06-24)
+
+### Bug Fixes
+
+- **mobile**: Resolve vulnerable npm dependencies
+  ([#933](https://github.com/christianlouis/DocuElevate/pull/933),
+  [`b51510b`](https://github.com/christianlouis/DocuElevate/commit/b51510bc8153b16dec3ea020077ca186ef12ea97))
+
+- **mobile**: Scope security overrides
+  ([#933](https://github.com/christianlouis/DocuElevate/pull/933),
+  [`b51510b`](https://github.com/christianlouis/DocuElevate/commit/b51510bc8153b16dec3ea020077ca186ef12ea97))
+
+### Chores
+
+- Rerun mobile security checks ([#933](https://github.com/christianlouis/DocuElevate/pull/933),
+  [`b51510b`](https://github.com/christianlouis/DocuElevate/commit/b51510bc8153b16dec3ea020077ca186ef12ea97))
+
+
 ## v0.173.7 (2026-06-24)
 
 ### Bug Fixes
