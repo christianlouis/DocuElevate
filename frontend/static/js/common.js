@@ -1,6 +1,21 @@
 // frontend/static/js/common.js
 
 // ---------------------------------------------------------------------------
+// HTML Sanitization
+// ---------------------------------------------------------------------------
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+window.escapeHtml = escapeHtml;
+
+// ---------------------------------------------------------------------------
 // CSRF token helper
 // ---------------------------------------------------------------------------
 // Read the CSRF token from the <meta name="csrf-token"> tag injected by the
