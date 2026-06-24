@@ -64,12 +64,12 @@
     "shell-quote": "1.8.4",
     "undici": "6.27.0",
     "tar": "7.5.16",
-    "js-yaml": "4.2.0",
+    "js-yaml@^4.1.0": "4.2.0",
     "@react-native/dev-middleware": {
-      "ws": "6.2.4"
+      "ws@^6.0.0": "6.2.4"
     },
     "react-native": {
-      "ws": "6.2.4"
+      "ws@^6.0.0": "6.2.4"
     },
     "brace-expansion@^1.1.7": "1.1.13",
     "brace-expansion@^2.0.2": "2.1.0",
