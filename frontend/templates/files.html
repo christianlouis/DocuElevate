@@ -1533,7 +1533,8 @@
         })
         .then(data => renderSearchResults(data, q))
         .catch(err => {
-          list.innerHTML = '<div style="padding: 1rem; color: #dc2626; font-size: 0.875rem;"><i class="fas fa-exclamation-triangle"></i> ' + __i18n.searchUnavailable.replace('{error}', err.message) + '</div>';
+          const errorMessage = err && err.message ? err.message : '';
+          list.innerHTML = '<div role="alert" aria-live="assertive" style="padding: 1rem; color: #dc2626; font-size: 0.875rem;"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> ' + escapeHtml(__i18n.searchUnavailable.replace('{error}', errorMessage)) + '</div>';
           summary.textContent = '';
         });
     }
