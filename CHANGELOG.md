@@ -10,6 +10,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.173.6 (2026-06-24)
+
+### Bug Fixes
+
+- **frontend**: Hide decorative error icon
+  ([`f5bcb2f`](https://github.com/christianlouis/DocuElevate/commit/f5bcb2fc1644000bf6068d91050ea044a40c5c95))
+
+### Chores
+
+- Rebuild image for postgres deployment
+  ([`4d9aed8`](https://github.com/christianlouis/DocuElevate/commit/4d9aed8782c54596c225a1ed986d3174343e175f))
+
+- Rerun security checks for xss fix
+  ([`f5bcb2f`](https://github.com/christianlouis/DocuElevate/commit/f5bcb2fc1644000bf6068d91050ea044a40c5c95))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`936cf08`](https://github.com/christianlouis/DocuElevate/commit/936cf08885031d1b952f89c666ff9d9810d202a4))
+
+- **changelog**: Update changelog [skip ci]
+  ([`a445cfa`](https://github.com/christianlouis/DocuElevate/commit/a445cfa72c7807bb6f37ab7885034d1021557c97))
+
+
 ## Unreleased
 
 ### Chores
