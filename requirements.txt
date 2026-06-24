@@ -16,7 +16,7 @@ filetype>=1.2.0,<2.0  # File type detection fallback (pure Python)
 dropbox>=11.36.0  # Dropbox integration
 azure-ai-documentintelligence  # Azure OCR service
 authlib>=1.6.5  # Authentication - fixed security vulnerabilities (GHSA-xxx)
-python-dotenv  # Environment variables
+python-dotenv>=1.2.2,<2.0.0  # Environment variables; fixes symlink rewrite vulnerability
 starlette>=0.49.1  # ASGI toolkit (used by FastAPI) - fixed DoS vulnerability
 alembic  # Database migrations
 slowapi>=0.1.9  # Rate limiting middleware for FastAPI
@@ -49,7 +49,10 @@ defusedxml>=0.7.1
 apprise>=1.4.0
 
 # AI provider aggregator - enables Anthropic, Gemini, Ollama, and 100+ LLM providers
-litellm>=1.0.0,<2.0.0
+litellm>=1.83.11,<2.0.0
+
+# Transitive async HTTP client used by several integrations; pin minimum to patched line
+aiohttp>=3.14.0,<4.0.0
 
 # Self-hosted OCR engines (optional – only required when the provider is enabled)
 pytesseract>=0.3.10  # Python wrapper for Tesseract OCR
