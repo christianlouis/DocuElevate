@@ -494,17 +494,6 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId || 'YOUR_FOLDER_ID'}`;
     });
   }
 
-  // Callback function for picker
-  function escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  }
-
   function pickerCallback(data) {
     if (data[google.picker.Response.ACTION] == google.picker.Action.PICKED) {
       const folder = data[google.picker.Response.DOCUMENTS][0];
@@ -520,7 +509,7 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId || 'YOUR_FOLDER_ID'}`;
         confirmationMsg.className = 'mt-2 text-sm text-green-600';
         confirmationMsg.innerHTML = `<svg class="inline-block h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-        </svg> Selected folder: "${escapeHtml(folderName)}"`;
+        </svg> {{ _("Selected folder:") }} "${window.escapeHtml(folderName)}"`;
 
         // Remove previous confirmation if it exists
         const existingConfirmation = folderIdInput.parentNode.querySelector('.text-green-600');
