@@ -7,3 +7,8 @@
 **Vulnerability:** A Cross-Site Scripting (XSS) vulnerability existed in `frontend/templates/file_view.html` where unescaped error messages (`err.message`) from failed fetch requests were directly appended to `.innerHTML`.
 **Learning:** Error messages from external or API sources should not be trusted, as they can reflect user-controlled input (like filename or target language). Concatenating `err.message` into raw HTML is a common vector for DOM-based XSS when requests fail.
 **Prevention:** Always use a global sanitization function like `escapeHtml` to sanitize error messages before assigning them to `.innerHTML`, or use `.textContent` instead if no HTML formatting is needed.
+
+## 2026-06-25 - [Fix DOM-based XSS in google_drive_callback.html]
+**Vulnerability:** A DOM-based Cross-Site Scripting (XSS) vulnerability existed in `frontend/templates/google_drive_callback.html` where `folderName` received from the `google.picker.Document.NAME` API was directly inserted into `innerHTML` without sanitization.
+**Learning:** Third-party APIs that return user-controlled data, such as folder or file names from Google Drive Picker, are untrusted and must be sanitized before DOM insertion. Do not trust external data blindly even if it comes from reputable providers.
+**Prevention:** Use a sanitization function like `escapeHtml` to escape dangerous characters (`<`, `>`, `&`, `"`, `'`) before assigning dynamic content to `.innerHTML`, or assign text specifically via `.textContent`.
