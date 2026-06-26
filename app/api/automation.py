@@ -32,6 +32,7 @@ from app.config import settings
 from app.database import get_db
 from app.models import AutomationHook
 from app.utils.automation_hooks import SAMPLE_PAYLOADS
+from app.utils.filename_utils import sanitize_filename
 from app.utils.webhook import VALID_EVENTS
 
 logger = logging.getLogger(__name__)
@@ -275,7 +276,7 @@ def action_upload(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Filename is required")
 
     # Sanitise filename to prevent path traversal attacks
-    safe_filename = os.path.basename(file.filename)
+    safe_filename = sanitize_filename(os.path.basename(file.filename))
     if not safe_filename:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Filename is required")
 
