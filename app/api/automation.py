@@ -21,6 +21,7 @@ Authentication:
 import json
 import logging
 import os
+import re
 import tempfile
 from typing import Annotated, Any
 
@@ -75,6 +76,17 @@ def _require_api_user(request: Request) -> dict:
 
 
 AuthUser = Annotated[dict, Depends(_require_api_user)]
+
+
+def _has_upload_filename_content(filename: str) -> bool:
+    """Return whether a filename still has meaningful content after sanitization."""
+    candidate = filename.replace("/", "_").replace("\\", "_")
+    candidate = re.sub(r"[^\w\-\. ]", "_", candidate)
+    candidate = candidate.replace("..", "_")
+    candidate = re.sub(r"__+", "_", candidate)
+    candidate = re.sub(r"  +", " ", candidate)
+    candidate = candidate.strip(". _")
+    return bool(candidate and candidate != ".")
 
 
 # ---------------------------------------------------------------------------
@@ -272,13 +284,16 @@ def action_upload(
     DocuElevate for processing.  The file is saved to the work directory
     and a background processing task is queued.
     """
-    if not file.filename:
+    original_filename = (file.filename or "").strip()
+    if not original_filename:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Filename is required")
 
-    # Sanitise filename to prevent path traversal attacks
-    safe_filename = sanitize_filename(os.path.basename(file.filename))
-    if not safe_filename:
+    # Sanitise filename to prevent path traversal attacks. Validate before
+    # sanitizing so punctuation-only names cannot become generated fallbacks.
+    basename = os.path.basename(original_filename)
+    if not basename or not _has_upload_filename_content(basename):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Filename is required")
+    safe_filename = sanitize_filename(basename)
 
     owner_id = user.get("preferred_username") or user.get("email") or user.get("id", "automation")
     workdir = settings.workdir or tempfile.gettempdir()
