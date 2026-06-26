@@ -420,6 +420,34 @@ class TestAutomationAPI:
         # parsed by the underlying multipart parser version.
         assert resp.status_code in (400, 422)
 
+    def test_action_upload_sanitizes_path_traversal_filename(self, client, mocker):
+        """POST /api/automation/actions/upload strips traversal sequences from filenames."""
+        self._with_auth(client)
+        mock_task = MagicMock()
+        mock_task.id = "task-123"
+        mocker.patch("app.tasks.process_document.process_document.delay", return_value=mock_task)
+
+        resp = client.post(
+            "/api/automation/actions/upload",
+            files={"file": ("..\\..\\evil.pdf", b"fake-pdf-content", "application/pdf")},
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["filename"] == "evil.pdf"
+        assert "/" not in data["filename"]
+        assert "\\" not in data["filename"]
+        assert ".." not in data["filename"]
+
+    def test_action_upload_rejects_punctuation_only_filename(self, client):
+        """POST /api/automation/actions/upload rejects names that sanitize to generated fallbacks."""
+        self._with_auth(client)
+        resp = client.post(
+            "/api/automation/actions/upload",
+            files={"file": ("***", b"content", "application/pdf")},
+        )
+        assert resp.status_code == 400
+
     # ── Auth required ────────────────────────────────────────────────
 
     def test_requires_auth(self, client):
