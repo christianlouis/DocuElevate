@@ -46,7 +46,7 @@ evernote3>=1.25.14  # Evernote Cloud API SDK for Python 3 (BSD license)
 defusedxml>=0.7.1
 
 # Notification service
-apprise>=1.4.0
+apprise>=1.11.0
 
 # AI provider aggregator - enables Anthropic, Gemini, Ollama, and 100+ LLM providers
 litellm>=1.90.0,<2.0.0
