@@ -19,7 +19,7 @@ authlib>=1.7.2  # Authentication - fixed security vulnerabilities (GHSA-xxx)
 python-dotenv>=1.2.2,<2.0.0  # Environment variables; fixes symlink rewrite vulnerability
 starlette>=0.49.1  # ASGI toolkit (used by FastAPI) - fixed DoS vulnerability
 alembic  # Database migrations
-slowapi>=0.1.9  # Rate limiting middleware for FastAPI
+slowapi>=0.1.10  # Rate limiting middleware for FastAPI
 
 # Google Drive API
 google-api-python-client>=2.197.0
