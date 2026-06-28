@@ -194,14 +194,52 @@ class TestPendingCountEndpoint:
         assert data["total_pending"] >= 0
 
     @patch("app.api.queue.redis.Redis")
-    def test_pending_count_redis_failure_still_works(self, mock_redis_cls, client):
+    def test_pending_count_combines_redis_and_processing_db_rows(self, mock_redis_cls, client, db_session):
+        """Pending count includes all queue depths plus distinct in-progress files."""
+        from app.models import FileProcessingStep, FileRecord
+
+        file1 = FileRecord(filehash="pending-1", local_filename="pending-1.pdf", file_size=100, is_duplicate=False)
+        file2 = FileRecord(filehash="pending-2", local_filename="pending-2.pdf", file_size=100, is_duplicate=False)
+        db_session.add_all([file1, file2])
+        db_session.commit()
+        db_session.add_all(
+            [
+                FileProcessingStep(file_id=file1.id, step_name="extract_text", status="in_progress"),
+                FileProcessingStep(file_id=file1.id, step_name="classify", status="in_progress"),
+                FileProcessingStep(file_id=file2.id, step_name="extract_text", status="success"),
+            ]
+        )
+        db_session.commit()
+
+        mock_redis_instance = MagicMock()
+        mock_redis_instance.llen.side_effect = [2, 3, 5]
+        mock_redis_cls.from_url.return_value = mock_redis_instance
+
+        response = client.get("/api/queue/pending-count")
+        assert response.status_code == 200
+        assert response.json() == {"total_pending": 11}
+        assert mock_redis_instance.llen.call_args_list == [
+            (("document_processor",),),
+            (("default",),),
+            (("celery",),),
+        ]
+        mock_redis_instance.close.assert_called_once()
+
+    @patch("app.api.queue.redis.Redis")
+    def test_pending_count_redis_failure_still_counts_processing_db_rows(self, mock_redis_cls, client, db_session):
         """Test pending count still works when Redis is down."""
+        from app.models import FileProcessingStep, FileRecord
+
+        file_record = FileRecord(filehash="pending-redis-down", local_filename="pending.pdf", file_size=100)
+        db_session.add(file_record)
+        db_session.commit()
+        db_session.add(FileProcessingStep(file_id=file_record.id, step_name="extract_text", status="in_progress"))
+        db_session.commit()
         mock_redis_cls.from_url.side_effect = Exception("Connection refused")
 
         response = client.get("/api/queue/pending-count")
         assert response.status_code == 200
-        data = response.json()
-        assert "total_pending" in data
+        assert response.json() == {"total_pending": 1}
 
 
 @pytest.mark.integration
