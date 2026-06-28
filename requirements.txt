@@ -49,7 +49,7 @@ defusedxml>=0.7.1
 apprise>=1.4.0
 
 # AI provider aggregator - enables Anthropic, Gemini, Ollama, and 100+ LLM providers
-litellm>=1.83.11,<2.0.0
+litellm>=1.90.0,<2.0.0
 
 # Transitive async HTTP client used by several integrations; pin minimum to patched line
 aiohttp>=3.14.0,<4.0.0
