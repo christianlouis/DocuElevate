@@ -370,12 +370,22 @@ class TestAutomationAPI:
         assert len(data) == 1
         assert data[0]["event"] == "document.uploaded"
         assert "id" in data[0]
+        assert data[0] == SAMPLE_PAYLOADS["document.uploaded"]
+
+    @pytest.mark.parametrize("event", sorted(VALID_EVENTS))
+    def test_trigger_sample_matches_configured_payloads(self, client, event):
+        """Each valid trigger sample returns the configured Zapier payload."""
+        self._with_auth(client)
+        resp = client.get(f"/api/automation/triggers/sample/{event}")
+        assert resp.status_code == 200
+        assert resp.json() == [SAMPLE_PAYLOADS[event]]
 
     def test_trigger_sample_unknown_event(self, client):
         """GET /api/automation/triggers/sample/bad returns 404."""
         self._with_auth(client)
         resp = client.get("/api/automation/triggers/sample/bad.event")
         assert resp.status_code == 404
+        assert "Unknown event: bad.event" in resp.json()["detail"]
 
     # ── Events listing ───────────────────────────────────────────────
 
