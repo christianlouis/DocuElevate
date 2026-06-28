@@ -62,7 +62,7 @@ meilisearch>=0.41.0  # Full-text search engine client
 stripe>=7.0.0,<16.0.0  # Stripe billing SDK (MIT license)
 
 # Error and performance monitoring
-sentry-sdk[fastapi,celery,sqlalchemy]>=2.20.0,<3.0.0
+sentry-sdk[fastapi,celery,sqlalchemy]>=2.63.0,<3.0.0
 
 # GraphQL API
 strawberry-graphql[fastapi]>=0.243.0,<1.0.0
