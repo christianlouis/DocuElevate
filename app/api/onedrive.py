@@ -2,6 +2,7 @@
 OneDrive API endpoints
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Annotated, Optional
@@ -229,12 +230,8 @@ async def list_onedrive_folders(
             "$top": "200",
         }
 
-        response = requests.get(
-            url,
-            headers=headers,
-            params=params,
-            timeout=settings.http_request_timeout,
-        )
+        request_kwargs = {"headers": headers, "params": params, "timeout": settings.http_request_timeout}
+        response = await asyncio.to_thread(requests.get, url, **request_kwargs)
 
         if response.status_code == 401:
             raise HTTPException(
