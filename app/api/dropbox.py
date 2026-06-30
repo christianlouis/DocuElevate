@@ -2,6 +2,7 @@
 Dropbox API endpoints
 """
 
+import asyncio
 import logging
 import os
 from typing import Annotated, Optional
@@ -344,7 +345,8 @@ async def list_dropbox_folders(
             "include_mounted_folders": True,
         }
 
-        response = requests.post(
+        response = await asyncio.to_thread(
+            requests.post,
             "https://api.dropboxapi.com/2/files/list_folder",
             headers=headers,
             json=payload,

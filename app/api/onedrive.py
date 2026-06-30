@@ -2,6 +2,7 @@
 OneDrive API endpoints
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Annotated, Optional
@@ -229,7 +230,8 @@ async def list_onedrive_folders(
             "$top": "200",
         }
 
-        response = requests.get(
+        response = await asyncio.to_thread(
+            requests.get,
             url,
             headers=headers,
             params=params,
