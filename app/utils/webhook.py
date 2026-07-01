@@ -100,28 +100,36 @@ def _send_pinned_post(
 
     port = parsed_url.port or (443 if parsed_url.scheme == "https" else 80)
     raw_socket = socket.create_connection((address, port), timeout=WEBHOOK_TIMEOUT)
+    connection = None
     if parsed_url.scheme == "https":
         context = ssl.create_default_context()
-        raw_socket = context.wrap_socket(raw_socket, server_hostname=hostname)
+        try:
+            raw_socket = context.wrap_socket(raw_socket, server_hostname=hostname)
+        except Exception:
+            raw_socket.close()
+            raise
 
-    path = parsed_url.path or "/"
-    if parsed_url.query:
-        path = f"{path}?{parsed_url.query}"
-
-    host_header = hostname
-    default_port = 443 if parsed_url.scheme == "https" else 80
-    if port != default_port:
-        host_header = f"{hostname}:{port}"
-
-    connection_cls = http.client.HTTPSConnection if parsed_url.scheme == "https" else http.client.HTTPConnection
-    connection = connection_cls(hostname, port, timeout=WEBHOOK_TIMEOUT)
-    connection.sock = raw_socket
     try:
+        path = parsed_url.path or "/"
+        if parsed_url.query:
+            path = f"{path}?{parsed_url.query}"
+
+        host_header = hostname
+        default_port = 443 if parsed_url.scheme == "https" else 80
+        if port != default_port:
+            host_header = f"{hostname}:{port}"
+
+        connection_cls = http.client.HTTPSConnection if parsed_url.scheme == "https" else http.client.HTTPConnection
+        connection = connection_cls(hostname, port, timeout=WEBHOOK_TIMEOUT)
+        connection.sock = raw_socket
         connection.request("POST", path, body=body_bytes, headers={"Host": host_header, **headers})
         response = connection.getresponse()
         return 200 <= response.status < 300, response.status
     finally:
-        connection.close()
+        if connection is not None:
+            connection.close()
+        else:
+            raw_socket.close()
 
 
 def compute_signature(payload_bytes: bytes, secret: str) -> str:

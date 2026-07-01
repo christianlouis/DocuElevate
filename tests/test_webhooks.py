@@ -6,11 +6,13 @@ import json
 import socket
 import time
 from unittest.mock import patch
+from urllib.parse import urlparse
 
 import pytest
 
 from app.models import WebhookConfig
 from app.utils.webhook import (
+    _send_pinned_post,
     build_payload,
     compute_signature,
     deliver_webhook,
@@ -175,6 +177,24 @@ class TestDeliverWebhook:
 
         assert result is False
         mock_post.assert_not_called()
+
+    def test_tls_wrap_failure_closes_raw_socket(self, mocker):
+        """The pinned socket is closed when TLS setup fails."""
+        raw_socket = mocker.Mock()
+        mocker.patch("app.utils.webhook.socket.create_connection", return_value=raw_socket)
+        context = mocker.Mock()
+        context.wrap_socket.side_effect = OSError("tls failure")
+        mocker.patch("app.utils.webhook.ssl.create_default_context", return_value=context)
+
+        with pytest.raises(OSError, match="tls failure"):
+            _send_pinned_post(
+                urlparse("https://example.com/hook"),
+                "93.184.216.34",
+                b"{}",
+                {"Content-Type": "application/json"},
+            )
+
+        raw_socket.close.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

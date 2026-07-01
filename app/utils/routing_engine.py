@@ -71,6 +71,8 @@ NUMERIC_OPERATORS = {
     "lte": lambda actual, expected: actual <= expected,
 }
 
+MAX_REGEX_PATTERN_LENGTH = 256
+
 
 def _resolve_field(field: str, doc_props: dict[str, Any]) -> Any:
     """Resolve a *field* name to its actual value from *doc_props*.
@@ -112,6 +114,9 @@ def _evaluate_text_condition(actual: Any, operator: str, expected: str) -> bool 
 
 
 def _evaluate_regex_condition(actual: Any, expected: str) -> bool:
+    if len(expected) > MAX_REGEX_PATTERN_LENGTH:
+        logger.warning("Regex in routing rule exceeds maximum length: %s", len(expected))
+        return False
     try:
         return bool(re.fullmatch(expected, str(actual), flags=re.IGNORECASE))
     except re.error:
