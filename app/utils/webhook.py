@@ -116,14 +116,18 @@ def _send_pinned_post(
             path = f"{path}?{parsed_url.query}"
 
         host_header = hostname
+        if ":" in hostname and not hostname.startswith("["):
+            host_header = f"[{hostname}]"
         default_port = 443 if parsed_url.scheme == "https" else 80
         if port != default_port:
-            host_header = f"{hostname}:{port}"
+            host_header = f"{host_header}:{port}"
+        request_headers = {key: value for key, value in headers.items() if key.lower() != "host"}
+        request_headers["Host"] = host_header
 
         connection_cls = http.client.HTTPSConnection if parsed_url.scheme == "https" else http.client.HTTPConnection
         connection = connection_cls(hostname, port, timeout=WEBHOOK_TIMEOUT)
         connection.sock = raw_socket
-        connection.request("POST", path, body=body_bytes, headers={"Host": host_header, **headers})
+        connection.request("POST", path, body=body_bytes, headers=request_headers)
         response = connection.getresponse()
         return 200 <= response.status < 300, response.status
     finally:
