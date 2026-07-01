@@ -35,8 +35,38 @@ class TestDropboxClientGenericException:
 
 
 @pytest.mark.unit
-class TestDropboxCheckExistsInDropbox:
-    """Cover check_exists_in_dropbox inner function (lines 155-161)."""
+class TestDropboxPathExists:
+    """Cover Dropbox path existence checks."""
+
+    def test_path_exists_returns_true(self):
+        from app.utils.dropbox_utils import dropbox_path_exists
+
+        mock_dbx = Mock()
+
+        assert dropbox_path_exists(mock_dbx, "/uploads/test.pdf") is True
+        mock_dbx.files_get_metadata.assert_called_once_with("/uploads/test.pdf")
+
+    def test_not_found_returns_false(self):
+        from app.utils.dropbox_utils import dropbox_path_exists
+
+        not_found_error = Mock()
+        not_found_error.is_path.return_value = True
+        not_found_error.get_path.return_value.is_not_found.return_value = True
+        mock_dbx = Mock()
+        mock_dbx.files_get_metadata.side_effect = ApiError("req-id", not_found_error, "not found", "header")
+
+        assert dropbox_path_exists(mock_dbx, "/uploads/test.pdf") is False
+
+    def test_other_api_error_reraises(self):
+        from app.utils.dropbox_utils import dropbox_path_exists
+
+        other_error = Mock()
+        other_error.is_path.return_value = False
+        mock_dbx = Mock()
+        mock_dbx.files_get_metadata.side_effect = ApiError("req-id", other_error, "other", "header")
+
+        with pytest.raises(ApiError):
+            dropbox_path_exists(mock_dbx, "/uploads/test.pdf")
 
     @patch("app.tasks.upload_to_dropbox.get_unique_filename")
     @patch("app.tasks.upload_to_dropbox.extract_remote_path")
@@ -46,7 +76,7 @@ class TestDropboxCheckExistsInDropbox:
     def test_check_exists_returns_true(
         self, mock_settings, mock_log, mock_client_fn, mock_extract, mock_unique, tmp_path
     ):
-        """When files_get_metadata succeeds, check_exists returns True."""
+        """The upload task passes Dropbox existence checks into name collision handling."""
         from app.tasks.upload_to_dropbox import upload_to_dropbox
 
         mock_settings.dropbox_app_key = "key"
@@ -64,22 +94,7 @@ class TestDropboxCheckExistsInDropbox:
 
         # Capture the check_exists callback passed to get_unique_filename
         def capture_callback(path, check_fn):
-            # Exercise check_exists path where file exists (returns True)
             assert check_fn(path) is True
-            # Exercise check_exists path where file doesn't exist (returns False)
-            not_found_error = Mock()
-            not_found_error.is_path.return_value = True
-            not_found_error.get_path.return_value.is_not_found.return_value = True
-            mock_dbx.files_get_metadata.side_effect = ApiError("req-id", not_found_error, "not found", "header")
-            assert check_fn(path) is False
-            # Exercise check_exists path where ApiError is NOT not_found (re-raises)
-            other_error = Mock()
-            other_error.is_path.return_value = False
-            mock_dbx.files_get_metadata.side_effect = ApiError("req-id", other_error, "other", "header")
-            with pytest.raises(ApiError):
-                check_fn(path)
-            # Reset side effect for the actual upload
-            mock_dbx.files_get_metadata.side_effect = None
             return path
 
         mock_unique.side_effect = capture_callback

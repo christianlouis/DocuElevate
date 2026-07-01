@@ -11,6 +11,7 @@ from app.celery_app import celery
 from app.config import settings
 from app.tasks.retry_config import UploadTaskWithRetry
 from app.utils import log_task_progress
+from app.utils.dropbox_utils import dropbox_path_exists
 from app.utils.filename_utils import extract_remote_path, get_unique_filename
 
 logger = logging.getLogger(__name__)
@@ -150,22 +151,12 @@ def upload_to_dropbox(self, file_path: str, file_id: int = None, folder_override
         remote_base = folder_override if folder_override is not None else (settings.dropbox_folder or "")
         remote_path = extract_remote_path(file_path, settings.workdir, remote_base)
 
-        # Function to check if file exists in Dropbox
-        def check_exists_in_dropbox(path):
-            try:
-                dbx.files_get_metadata(path)
-                return True
-            except ApiError as e:
-                if e.error.is_path() and e.error.get_path().is_not_found():
-                    return False
-                raise
-
         # Get a unique path in case of collision
         remote_full_path = f"/{remote_path}"  # Dropbox paths should start with /
         remote_full_path = remote_full_path.replace("//", "/")  # Clean double slashes
 
         # Check for potential file collision and get a unique name if needed
-        dropbox_path = get_unique_filename(remote_full_path, check_exists_in_dropbox)
+        dropbox_path = get_unique_filename(remote_full_path, lambda path: dropbox_path_exists(dbx, path))
 
         # Upload the file
         logger.info(f"[{task_id}] Uploading {filename} to Dropbox at {dropbox_path}")

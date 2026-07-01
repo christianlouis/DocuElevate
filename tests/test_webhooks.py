@@ -3,8 +3,9 @@
 import hashlib
 import hmac
 import json
+import socket
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -81,9 +82,8 @@ class TestDeliverWebhook:
 
     def test_success_returns_true(self, mocker):
         """A 200 response returns True."""
-        mocker.patch("app.utils.webhook.is_private_ip", return_value=False)
-        mock_post = mocker.patch("app.utils.webhook.requests.post")
-        mock_post.return_value = MagicMock(ok=True, status_code=200)
+        mocker.patch("app.utils.webhook._resolve_public_address", return_value="93.184.216.34")
+        mock_post = mocker.patch("app.utils.webhook._send_pinned_post", return_value=(True, 200))
 
         result = deliver_webhook("https://example.com/hook", {"event": "test"})
         assert result is True
@@ -91,50 +91,42 @@ class TestDeliverWebhook:
 
     def test_non_2xx_returns_false(self, mocker):
         """A non-2xx response returns False."""
-        mocker.patch("app.utils.webhook.is_private_ip", return_value=False)
-        mock_post = mocker.patch("app.utils.webhook.requests.post")
-        mock_post.return_value = MagicMock(ok=False, status_code=500)
+        mocker.patch("app.utils.webhook._resolve_public_address", return_value="93.184.216.34")
+        mocker.patch("app.utils.webhook._send_pinned_post", return_value=(False, 500))
 
         result = deliver_webhook("https://example.com/hook", {"event": "test"})
         assert result is False
 
     def test_request_exception_returns_false(self, mocker):
         """A network error returns False."""
-        import requests
-
-        mocker.patch("app.utils.webhook.is_private_ip", return_value=False)
-        mocker.patch("app.utils.webhook.requests.post", side_effect=requests.ConnectionError("fail"))
+        mocker.patch("app.utils.webhook._resolve_public_address", return_value="93.184.216.34")
+        mocker.patch("app.utils.webhook._send_pinned_post", side_effect=OSError("fail"))
 
         result = deliver_webhook("https://example.com/hook", {"event": "test"})
         assert result is False
 
     def test_signature_header_included_when_secret(self, mocker):
         """X-Webhook-Signature header is present when a secret is supplied."""
-        mocker.patch("app.utils.webhook.is_private_ip", return_value=False)
-        mock_post = mocker.patch("app.utils.webhook.requests.post")
-        mock_post.return_value = MagicMock(ok=True, status_code=200)
+        mocker.patch("app.utils.webhook._resolve_public_address", return_value="93.184.216.34")
+        mock_post = mocker.patch("app.utils.webhook._send_pinned_post", return_value=(True, 200))
 
         deliver_webhook("https://example.com/hook", {"event": "test"}, secret="abc")
-        call_kwargs = mock_post.call_args
-        headers = call_kwargs.kwargs.get("headers") or call_kwargs[1].get("headers")
+        headers = mock_post.call_args.args[3]
         assert "X-Webhook-Signature" in headers
         assert headers["X-Webhook-Signature"].startswith("sha256=")
 
     def test_no_signature_header_without_secret(self, mocker):
         """X-Webhook-Signature header is absent when no secret is supplied."""
-        mocker.patch("app.utils.webhook.is_private_ip", return_value=False)
-        mock_post = mocker.patch("app.utils.webhook.requests.post")
-        mock_post.return_value = MagicMock(ok=True, status_code=200)
+        mocker.patch("app.utils.webhook._resolve_public_address", return_value="93.184.216.34")
+        mock_post = mocker.patch("app.utils.webhook._send_pinned_post", return_value=(True, 200))
 
         deliver_webhook("https://example.com/hook", {"event": "test"})
-        call_kwargs = mock_post.call_args
-        headers = call_kwargs.kwargs.get("headers") or call_kwargs[1].get("headers")
+        headers = mock_post.call_args.args[3]
         assert "X-Webhook-Signature" not in headers
 
     def test_private_target_is_blocked(self, mocker):
         """Private network webhook targets are not called."""
-        mocker.patch("app.utils.webhook.is_private_ip", return_value=True)
-        mock_post = mocker.patch("app.utils.webhook.requests.post")
+        mock_post = mocker.patch("app.utils.webhook._send_pinned_post")
 
         result = deliver_webhook("https://10.0.0.5/hook", {"event": "test"})
 
@@ -143,7 +135,7 @@ class TestDeliverWebhook:
 
     def test_metadata_target_is_blocked(self, mocker):
         """Cloud metadata webhook targets are not called."""
-        mock_post = mocker.patch("app.utils.webhook.requests.post")
+        mock_post = mocker.patch("app.utils.webhook._send_pinned_post")
 
         result = deliver_webhook("http://169.254.169.254/latest/meta-data", {"event": "test"})
 
@@ -152,7 +144,7 @@ class TestDeliverWebhook:
 
     def test_invalid_scheme_is_blocked(self, mocker):
         """Unsupported webhook URL schemes are not called."""
-        mock_post = mocker.patch("app.utils.webhook.requests.post")
+        mock_post = mocker.patch("app.utils.webhook._send_pinned_post")
 
         result = deliver_webhook("file:///etc/passwd", {"event": "test"})
 
@@ -161,9 +153,25 @@ class TestDeliverWebhook:
 
     def test_missing_hostname_is_blocked(self, mocker):
         """Webhook URLs without a hostname are not called."""
-        mock_post = mocker.patch("app.utils.webhook.requests.post")
+        mock_post = mocker.patch("app.utils.webhook._send_pinned_post")
 
         result = deliver_webhook("https:///missing-host", {"event": "test"})
+
+        assert result is False
+        mock_post.assert_not_called()
+
+    def test_rebound_private_dns_answer_is_blocked(self, mocker):
+        """A hostname is blocked when DNS returns any private address."""
+        mocker.patch(
+            "app.utils.webhook.socket.getaddrinfo",
+            return_value=[
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443)),
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.5", 443)),
+            ],
+        )
+        mock_post = mocker.patch("app.utils.webhook._send_pinned_post")
+
+        result = deliver_webhook("https://example.com/hook", {"event": "test"})
 
         assert result is False
         mock_post.assert_not_called()

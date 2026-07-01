@@ -13,18 +13,19 @@ Supported events:
 """
 
 import hashlib
+import http.client
 import hmac
+import ipaddress
 import json
 import logging
+import socket
+import ssl
 import time
 from typing import Any
 from urllib.parse import urlparse
 
-import requests
-
 from app.database import SessionLocal
 from app.models import WebhookConfig
-from app.utils.network import is_private_ip
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,87 @@ METADATA_ENDPOINTS = {
     "169.254.169.253",
     "metadata.google.internal",
 }
+
+
+def _normalise_hostname(hostname: str) -> str:
+    return hostname.rstrip(".").lower()
+
+
+def _is_blocked_ip(address: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return True
+
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
+
+
+def _resolve_public_address(hostname: str, port: int) -> str | None:
+    """Resolve *hostname* and return one validated public address.
+
+    Every returned DNS address must be publicly routable. Blocking the whole
+    hostname when any answer is private prevents DNS rebinding from picking a
+    different address than the one validated here.
+    """
+    try:
+        addresses = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        logger.warning("Webhook host %s could not be resolved: %s", hostname, exc)
+        return None
+
+    candidates: list[str] = []
+    for *_, sockaddr in addresses:
+        address = sockaddr[0]
+        if _is_blocked_ip(address):
+            logger.warning("Webhook host %s resolved to blocked address %s", hostname, address)
+            return None
+        candidates.append(address)
+
+    return candidates[0] if candidates else None
+
+
+def _send_pinned_post(
+    parsed_url,
+    address: str,
+    body_bytes: bytes,
+    headers: dict[str, str],
+) -> tuple[bool, int]:
+    """Send the webhook over a socket pinned to a pre-validated address."""
+    hostname = parsed_url.hostname
+    if not hostname:
+        return False, 0
+
+    port = parsed_url.port or (443 if parsed_url.scheme == "https" else 80)
+    raw_socket = socket.create_connection((address, port), timeout=WEBHOOK_TIMEOUT)
+    if parsed_url.scheme == "https":
+        context = ssl.create_default_context()
+        raw_socket = context.wrap_socket(raw_socket, server_hostname=hostname)
+
+    path = parsed_url.path or "/"
+    if parsed_url.query:
+        path = f"{path}?{parsed_url.query}"
+
+    host_header = hostname
+    default_port = 443 if parsed_url.scheme == "https" else 80
+    if port != default_port:
+        host_header = f"{hostname}:{port}"
+
+    connection_cls = http.client.HTTPSConnection if parsed_url.scheme == "https" else http.client.HTTPConnection
+    connection = connection_cls(hostname, port, timeout=WEBHOOK_TIMEOUT)
+    connection.sock = raw_socket
+    try:
+        connection.request("POST", path, body=body_bytes, headers={"Host": host_header, **headers})
+        response = connection.getresponse()
+        return 200 <= response.status < 300, response.status
+    finally:
+        connection.close()
 
 
 def compute_signature(payload_bytes: bytes, secret: str) -> str:
@@ -84,8 +166,15 @@ def deliver_webhook(url: str, payload: dict[str, Any], secret: str | None = None
         logger.warning("Webhook to %s blocked: missing hostname", url)
         return False
 
-    if hostname in METADATA_ENDPOINTS or is_private_ip(hostname):
+    normalised_hostname = _normalise_hostname(hostname)
+    if normalised_hostname in METADATA_ENDPOINTS:
         logger.warning("Webhook to %s blocked: private or metadata endpoint", url)
+        return False
+
+    port = parsed_url.port or (443 if parsed_url.scheme == "https" else 80)
+    address = _resolve_public_address(normalised_hostname, port)
+    if address is None:
+        logger.warning("Webhook to %s blocked: private, metadata, or unresolved endpoint", url)
         return False
 
     body = json.dumps(payload, default=str, sort_keys=True)
@@ -96,13 +185,13 @@ def deliver_webhook(url: str, payload: dict[str, Any], secret: str | None = None
         headers["X-Webhook-Signature"] = compute_signature(body_bytes, secret)
 
     try:
-        resp = requests.post(url, data=body_bytes, headers=headers, timeout=WEBHOOK_TIMEOUT)
-        if resp.ok:
-            logger.info("Webhook delivered to %s (status %d)", url, resp.status_code)
+        ok, status_code = _send_pinned_post(parsed_url, address, body_bytes, headers)
+        if ok:
+            logger.info("Webhook delivered to %s (status %d)", url, status_code)
             return True
-        logger.warning("Webhook to %s returned status %d", url, resp.status_code)
+        logger.warning("Webhook to %s returned status %d", url, status_code)
         return False
-    except requests.RequestException as exc:
+    except (OSError, http.client.HTTPException) as exc:
         logger.error("Webhook delivery to %s failed: %s", url, exc)
         return False
 
