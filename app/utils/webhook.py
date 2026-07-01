@@ -13,8 +13,8 @@ Supported events:
 """
 
 import hashlib
-import http.client
 import hmac
+import http.client
 import ipaddress
 import json
 import logging
@@ -60,14 +60,7 @@ def _is_blocked_ip(address: str) -> bool:
     except ValueError:
         return True
 
-    return (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_reserved
-        or ip.is_multicast
-        or ip.is_unspecified
-    )
+    return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified
 
 
 def _resolve_public_address(hostname: str, port: int) -> str | None:
