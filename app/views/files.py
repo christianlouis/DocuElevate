@@ -967,7 +967,7 @@ def get_original_text(request: Request, file_id: int, db: Session = Depends(get_
 
     try:
         # Extract text from PDF using pypdf
-        from pypdf import PdfReader  # Upgraded from PyPDF2 to fix CVE-2023-36464
+        from pypdf import PdfReader
 
         reader = PdfReader(file_record.original_file_path)
         text = ""

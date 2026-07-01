@@ -180,6 +180,10 @@ class TestEvaluateCondition:
         """Invalid regex should return False, not raise."""
         assert _evaluate_condition("test", "regex", r"[invalid") is False
 
+    def test_regex_too_long_returns_false(self):
+        """Overlong regex patterns are rejected before evaluation."""
+        assert _evaluate_condition("test", "regex", "a" * 257) is False
+
     def test_gt(self):
         assert _evaluate_condition(2048, "gt", "1024") is True
         assert _evaluate_condition(1024, "gt", "1024") is False

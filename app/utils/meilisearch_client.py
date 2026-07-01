@@ -70,6 +70,11 @@ _INDEX_SETTINGS = {
 }
 
 
+def _escape_filter_value(value: str) -> str:
+    """Escape a string for Meilisearch quoted filter expressions."""
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def get_meilisearch_client() -> Any | None:
     """Return a configured Meilisearch client, or None if unavailable/disabled."""
     try:
@@ -245,15 +250,15 @@ def search_documents(
         # Build filter expressions
         filters: list[str] = []
         if mime_type:
-            filters.append(f'mime_type = "{mime_type}"')
+            filters.append(f'mime_type = "{_escape_filter_value(mime_type)}"')
         if document_type:
-            filters.append(f'document_type = "{document_type}"')
+            filters.append(f'document_type = "{_escape_filter_value(document_type)}"')
         if language:
-            filters.append(f'language = "{language}"')
+            filters.append(f'language = "{_escape_filter_value(language)}"')
         if tags:
-            filters.append(f'tags = "{tags}"')
+            filters.append(f'tags = "{_escape_filter_value(tags)}"')
         if sender:
-            filters.append(f'sender = "{sender}"')
+            filters.append(f'sender = "{_escape_filter_value(sender)}"')
         if text_quality:
             # Translate text_quality labels into ocr_text_length ranges
             _tq_filters = {

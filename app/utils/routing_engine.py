@@ -57,6 +57,22 @@ BUILTIN_FIELDS: frozenset[str] = frozenset(
     }
 )
 
+TEXT_OPERATORS = {
+    "equals": lambda actual, expected: actual == expected,
+    "not_equals": lambda actual, expected: actual != expected,
+    "contains": lambda actual, expected: expected in actual,
+    "not_contains": lambda actual, expected: expected not in actual,
+}
+
+NUMERIC_OPERATORS = {
+    "gt": lambda actual, expected: actual > expected,
+    "lt": lambda actual, expected: actual < expected,
+    "gte": lambda actual, expected: actual >= expected,
+    "lte": lambda actual, expected: actual <= expected,
+}
+
+MAX_REGEX_PATTERN_LENGTH = 256
+
 
 def _resolve_field(field: str, doc_props: dict[str, Any]) -> Any:
     """Resolve a *field* name to its actual value from *doc_props*.
@@ -87,6 +103,40 @@ def _to_float(value: Any) -> float | None:
         return None
 
 
+def _evaluate_text_condition(actual: Any, operator: str, expected: str) -> bool | None:
+    evaluator = TEXT_OPERATORS.get(operator)
+    if evaluator is None:
+        return None
+
+    actual_str = str(actual).lower()
+    expected_lower = expected.lower()
+    return evaluator(actual_str, expected_lower)
+
+
+def _evaluate_regex_condition(actual: Any, expected: str) -> bool:
+    if len(expected) > MAX_REGEX_PATTERN_LENGTH:
+        logger.warning("Regex in routing rule exceeds maximum length: %s", len(expected))
+        return False
+    try:
+        return bool(re.fullmatch(expected, str(actual), flags=re.IGNORECASE))
+    except re.error:
+        logger.warning("Invalid regex in routing rule: %s", expected)
+        return False
+
+
+def _evaluate_numeric_condition(actual: Any, operator: str, expected: str) -> bool | None:
+    evaluator = NUMERIC_OPERATORS.get(operator)
+    if evaluator is None:
+        return None
+
+    actual_num = _to_float(actual)
+    expected_num = _to_float(expected)
+    if actual_num is None or expected_num is None:
+        return False
+
+    return evaluator(actual_num, expected_num)
+
+
 def _evaluate_condition(actual: Any, operator: str, expected: str) -> bool:
     """Return ``True`` when *actual* satisfies *operator* against *expected*.
 
@@ -96,46 +146,17 @@ def _evaluate_condition(actual: Any, operator: str, expected: str) -> bool:
     if actual is None:
         # If the document property is missing, the rule cannot match
         # (except for ``not_equals`` / ``not_contains`` which should match).
-        if operator == "not_equals":
-            return True
-        if operator == "not_contains":
-            return True
-        return False
+        return operator in {"not_equals", "not_contains"}
 
-    actual_str = str(actual).lower()
-    expected_lower = expected.lower()
+    text_result = _evaluate_text_condition(actual, operator, expected)
+    if text_result is not None:
+        return text_result
 
-    if operator == "equals":
-        return actual_str == expected_lower
-    if operator == "not_equals":
-        return actual_str != expected_lower
-    if operator == "contains":
-        return expected_lower in actual_str
-    if operator == "not_contains":
-        return expected_lower not in actual_str
     if operator == "regex":
-        try:
-            return bool(re.fullmatch(expected, str(actual), flags=re.IGNORECASE))
-        except re.error:
-            logger.warning("Invalid regex in routing rule: %s", expected)
-            return False
+        return _evaluate_regex_condition(actual, expected)
 
-    # Numeric operators
-    actual_num = _to_float(actual)
-    expected_num = _to_float(expected)
-    if actual_num is None or expected_num is None:
-        return False
-
-    if operator == "gt":
-        return actual_num > expected_num
-    if operator == "lt":
-        return actual_num < expected_num
-    if operator == "gte":
-        return actual_num >= expected_num
-    if operator == "lte":
-        return actual_num <= expected_num
-
-    return False
+    numeric_result = _evaluate_numeric_condition(actual, operator, expected)
+    return bool(numeric_result) if numeric_result is not None else False
 
 
 def build_document_properties(file_record: Any) -> dict[str, Any]:
