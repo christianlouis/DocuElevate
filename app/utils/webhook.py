@@ -22,7 +22,7 @@ import socket
 import ssl
 import time
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
 
 from app.database import SessionLocal
 from app.models import WebhookConfig
@@ -88,7 +88,7 @@ def _resolve_public_address(hostname: str, port: int) -> str | None:
 
 
 def _send_pinned_post(
-    parsed_url,
+    parsed_url: ParseResult,
     address: str,
     body_bytes: bytes,
     headers: dict[str, str],
@@ -103,6 +103,7 @@ def _send_pinned_post(
     connection = None
     if parsed_url.scheme == "https":
         context = ssl.create_default_context()
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         try:
             raw_socket = context.wrap_socket(raw_socket, server_hostname=hostname)
         except Exception:
