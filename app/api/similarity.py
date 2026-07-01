@@ -153,8 +153,8 @@ def get_embedding_status(
             parsed = json.loads(file_record.embedding)
             has_embedding = True
             embedding_dimensions = len(parsed)
-        except (json.JSONDecodeError, TypeError):
-            pass
+        except (json.JSONDecodeError, TypeError) as exc:
+            logger.warning("Failed to parse embedding for file %s: %s", file_id, exc)
 
     has_ocr_text = bool(file_record.ocr_text and file_record.ocr_text.strip())
 

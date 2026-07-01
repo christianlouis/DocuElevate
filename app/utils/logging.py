@@ -33,8 +33,8 @@ class TaskLogCollector(logging.Handler):
                 if task_id and len(task_id) >= 8:
                     with self._lock:
                         self._buffers[task_id].append(msg)
-        except (ValueError, IndexError):
-            pass
+        except (ValueError, IndexError) as exc:
+            logging.getLogger(__name__).debug("Could not parse task id from log record: %s", exc)
 
     def drain(self, task_id: str) -> str:
         """Return and clear all buffered messages for a task ID."""

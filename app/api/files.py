@@ -386,9 +386,8 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
         # Log the deletion
         logger.info(f"Bulk deleting {deleted_count} file records: IDs={deleted_ids}")
 
-        # Delete all records
-        for file_record in file_records:
-            db.delete(file_record)
+        # Delete the selected records in one statement after access checks.
+        query.delete(synchronize_session=False)
 
         db.commit()
 
@@ -772,7 +771,7 @@ def _extract_text_from_pdf(file_path: str) -> str:
     Returns:
         Extracted text from all pages
     """
-    import pypdf  # Upgraded from PyPDF2 to fix CVE-2023-36464
+    import pypdf
 
     extracted_text = ""
     with open(file_path, "rb") as f:
