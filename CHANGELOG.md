@@ -10,6 +10,139 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.173.9 (2026-07-01)
+
+### Bug Fixes
+
+- Address additional Jules findings ([#950](https://github.com/christianlouis/DocuElevate/pull/950),
+  [`92d640f`](https://github.com/christianlouis/DocuElevate/commit/92d640ff67d6e2837b242457fa9ea655b2008025))
+
+- Address Jules code quality findings
+  ([#950](https://github.com/christianlouis/DocuElevate/pull/950),
+  [`92d640f`](https://github.com/christianlouis/DocuElevate/commit/92d640ff67d6e2837b242457fa9ea655b2008025))
+
+- Address webhook and routing review
+  ([#950](https://github.com/christianlouis/DocuElevate/pull/950),
+  [`92d640f`](https://github.com/christianlouis/DocuElevate/commit/92d640ff67d6e2837b242457fa9ea655b2008025))
+
+- Harden webhook host headers ([#950](https://github.com/christianlouis/DocuElevate/pull/950),
+  [`92d640f`](https://github.com/christianlouis/DocuElevate/commit/92d640ff67d6e2837b242457fa9ea655b2008025))
+
+- Satisfy webhook ci checks ([#950](https://github.com/christianlouis/DocuElevate/pull/950),
+  [`92d640f`](https://github.com/christianlouis/DocuElevate/commit/92d640ff67d6e2837b242457fa9ea655b2008025))
+
+### Build System
+
+- **deps**: Bump js-yaml and react-native in /mobile
+  ([#928](https://github.com/christianlouis/DocuElevate/pull/928),
+  [`8ad0566`](https://github.com/christianlouis/DocuElevate/commit/8ad05660729bd83259c479a38714c41fe34a332c))
+
+- **deps**: Update aiofiles requirement from >=24.1.0 to >=25.1.0
+  ([#908](https://github.com/christianlouis/DocuElevate/pull/908),
+  [`32f3d9b`](https://github.com/christianlouis/DocuElevate/commit/32f3d9b29c29bae7929dcc91cc450ed3eee00e9c))
+
+- **deps**: Update apprise requirement from >=1.4.0 to >=1.11.0
+  ([#946](https://github.com/christianlouis/DocuElevate/pull/946),
+  [`323e854`](https://github.com/christianlouis/DocuElevate/commit/323e854474e381623cc52a61ea575a52b300cf16))
+
+- **deps**: Update authlib requirement from >=1.6.5 to >=1.7.2
+  ([#917](https://github.com/christianlouis/DocuElevate/pull/917),
+  [`3080a4f`](https://github.com/christianlouis/DocuElevate/commit/3080a4f0c60ff525aef9e594f3c0fb24e2bc5ee2))
+
+- **deps**: Update boto3 requirement from >=1.28.0 to >=1.43.36
+  ([#939](https://github.com/christianlouis/DocuElevate/pull/939),
+  [`c7a6342`](https://github.com/christianlouis/DocuElevate/commit/c7a6342847085c59f2cb73386a41b27553548ee2))
+
+- **deps**: Update google-api-python-client requirement
+  ([#910](https://github.com/christianlouis/DocuElevate/pull/910),
+  [`ce6db2a`](https://github.com/christianlouis/DocuElevate/commit/ce6db2aac628da16a4533a252b5c98116e0d1337))
+
+- **deps**: Update google-auth-oauthlib requirement
+  ([#948](https://github.com/christianlouis/DocuElevate/pull/948),
+  [`719096e`](https://github.com/christianlouis/DocuElevate/commit/719096e5d92d24b036fdcb0b983cb145696acbe8))
+
+- **deps**: Update litellm requirement
+  ([#941](https://github.com/christianlouis/DocuElevate/pull/941),
+  [`37ceeb8`](https://github.com/christianlouis/DocuElevate/commit/37ceeb878093bb0e48ab8ce6c2184f3c6c9d25e2))
+
+- **deps**: Update meilisearch requirement from >=0.31.0 to >=0.41.0
+  ([#911](https://github.com/christianlouis/DocuElevate/pull/911),
+  [`61f929c`](https://github.com/christianlouis/DocuElevate/commit/61f929cdd77c4b19970f3e6b2cc9d241ffb0b96e))
+
+- **deps**: Update mkdocs-material requirement from >=9.5.0 to >=9.7.6
+  ([#905](https://github.com/christianlouis/DocuElevate/pull/905),
+  [`ddfe355`](https://github.com/christianlouis/DocuElevate/commit/ddfe355f93c818e3a1e42ef80a90d324701c0e13))
+
+- **deps**: Update pyicloud requirement from >=2.4.0 to >=2.6.4
+  ([#909](https://github.com/christianlouis/DocuElevate/pull/909),
+  [`6a35ef1`](https://github.com/christianlouis/DocuElevate/commit/6a35ef188bba35738138c82b6230dab7c76caf0c))
+
+- **deps**: Update pytesseract requirement from >=0.3.10 to >=0.3.13
+  ([#907](https://github.com/christianlouis/DocuElevate/pull/907),
+  [`c6c1c03`](https://github.com/christianlouis/DocuElevate/commit/c6c1c034ccc656a7ed68768fd0d00907880798c3))
+
+- **deps**: Update sentry-sdk requirement
+  ([#947](https://github.com/christianlouis/DocuElevate/pull/947),
+  [`f40499c`](https://github.com/christianlouis/DocuElevate/commit/f40499cf42abf56ad12a53f3aab9f8d0e3ce5270))
+
+- **deps**: Update slowapi requirement from >=0.1.9 to >=0.1.10
+  ([#944](https://github.com/christianlouis/DocuElevate/pull/944),
+  [`de15c4e`](https://github.com/christianlouis/DocuElevate/commit/de15c4e4e259e331ed5ee114997cfd85ebc4bbfb))
+
+- **deps-dev**: Update minio requirement from >=7.1.0 to >=7.2.20
+  ([#942](https://github.com/christianlouis/DocuElevate/pull/942),
+  [`6b46746`](https://github.com/christianlouis/DocuElevate/commit/6b467466de74473aedff4dfe02810caad26b40f2))
+
+- **deps-dev**: Update mypy requirement from >=1.8.0 to >=2.1.0
+  ([#906](https://github.com/christianlouis/DocuElevate/pull/906),
+  [`e07fb29`](https://github.com/christianlouis/DocuElevate/commit/e07fb2978b97a36ad24089c347f06a067593217b))
+
+- **deps-dev**: Update pip-audit requirement from >=2.7.0 to >=2.10.0
+  ([#912](https://github.com/christianlouis/DocuElevate/pull/912),
+  [`619dc82`](https://github.com/christianlouis/DocuElevate/commit/619dc82ca7902ee2135a0bd836d337ee3c3901f0))
+
+- **deps-dev**: Update pytest-timeout requirement
+  ([#940](https://github.com/christianlouis/DocuElevate/pull/940),
+  [`3ac7e85`](https://github.com/christianlouis/DocuElevate/commit/3ac7e85457f9cab31693f4e8acaaa2d2af6db9b7))
+
+- **deps-dev**: Update types-aiofiles requirement
+  ([#945](https://github.com/christianlouis/DocuElevate/pull/945),
+  [`9370222`](https://github.com/christianlouis/DocuElevate/commit/9370222e79a9eb2267c9ed0526fe57b2160d0154))
+
+### Code Style
+
+- Apply ruff auto-fix ([#950](https://github.com/christianlouis/DocuElevate/pull/950),
+  [`92d640f`](https://github.com/christianlouis/DocuElevate/commit/92d640ff67d6e2837b242457fa9ea655b2008025))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`e9b6bbb`](https://github.com/christianlouis/DocuElevate/commit/e9b6bbbdbd926c4e4e3cf00e6cc7e3c516027372))
+
+- **changelog**: Update changelog [skip ci]
+  ([`28b5c87`](https://github.com/christianlouis/DocuElevate/commit/28b5c87f0c4cb1a6e23d76f2e73e7e4feb87c9fb))
+
+- **changelog**: Update changelog [skip ci]
+  ([`285e713`](https://github.com/christianlouis/DocuElevate/commit/285e7137c922a171fa5e2e89d4076e5caeb92ce5))
+
+- **changelog**: Update changelog [skip ci]
+  ([`3ec7fc2`](https://github.com/christianlouis/DocuElevate/commit/3ec7fc22329dad8593f3a022c63299322cb5e83d))
+
+- **changelog**: Update changelog [skip ci]
+  ([`4ffc24e`](https://github.com/christianlouis/DocuElevate/commit/4ffc24ecbb00ec11ba6b9ec98ecd836b473d5d77))
+
+- **changelog**: Update changelog [skip ci]
+  ([`e4e1501`](https://github.com/christianlouis/DocuElevate/commit/e4e1501f68fa238150db380df80f7ca72ac657eb))
+
+- **changelog**: Update changelog [skip ci]
+  ([`1241866`](https://github.com/christianlouis/DocuElevate/commit/12418662898e8e76846bb5dd1a551501c09564fd))
+
+### Testing
+
+- Cover automation samples and pending counts
+  ([`a229514`](https://github.com/christianlouis/DocuElevate/commit/a2295146250cfa27bf80142b269d9fb18332b42b))
+
+
 ## Unreleased
 
 ### Build System
