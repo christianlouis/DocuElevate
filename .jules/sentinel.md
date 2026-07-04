@@ -19,7 +19,11 @@
 **Learning:** Relying solely on `os.path.basename` is an incomplete protection mechanism against path traversal in file uploads.
 
 **Prevention:** Always use a dedicated filename sanitization utility (such as `sanitize_filename` from `app.utils.filename_utils`) to rigorously strip directory components, path separators, and `..` patterns from untrusted input before using it to write files to disk.
+## 2026-06-27 - [Fix DOM-based XSS in upload.js]
+**Vulnerability:** A DOM-based Cross-Site Scripting (XSS) vulnerability existed in `frontend/static/js/upload.js` because a locally defined `_escapeHtml` function was used to sanitize file names. This local function failed to escape double (`"`) and single (`'`) quotes, which allowed attackers to break out of HTML attributes (e.g., `title="${safeFileName}"`) and execute arbitrary JavaScript during file uploads.
+**Learning:** Locally redefining security-critical functions like HTML sanitizers is risky and often leads to incomplete implementations. Even if `<`, `>`, and `&` are escaped, unescaped quotes remain highly dangerous when injected into HTML attributes.
+**Prevention:** Always use a single, centrally defined and well-tested global sanitization function (`window.escapeHtml` in this codebase) that properly handles all dangerous characters (`<`, `>`, `&`, `"`, `'`) for any DOM insertion, especially when dealing with attributes.
 ## 2026-06-27 - [Fix DOM-based XSS by unifying escapeHtml]
-**Vulnerability:** DOM-rendering code in `frontend/static/js/upload.js`, `comments.js`, and `sharing.js` relied on local HTML escaping helpers instead of the shared `window.escapeHtml`, increasing sanitizer drift risk across future DOM insertions.
-**Learning:** Duplicating security-critical escaping logic makes it easy for future fixes to land in one helper while other call sites keep stale behavior.
-**Prevention:** Use the centralized `window.escapeHtml` helper consistently across vanilla JS files for HTML string construction, especially when interpolating untrusted names into element text or attributes.
+**Vulnerability:** A minor functional issue existed in `frontend/static/js/upload.js` because a locally defined `_escapeHtml` function was used to sanitize file names instead of the global `window.escapeHtml`. Although it successfully escaped quotes, `window.escapeHtml` offers unified robust handling across all elements. Also, null inputs may have thrown exceptions in some functions.
+**Learning:** Having local duplicates of HTML escaping functions risks maintenance headaches and missing improvements applied to the centralized implementation.
+**Prevention:** Use a central `escapeHtml` definition, specifically `window.escapeHtml`, across all vanilla JS files to ensure consistent sanitization.
