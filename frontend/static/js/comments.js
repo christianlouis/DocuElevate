@@ -404,8 +404,8 @@
         item.type = 'button';
         item.className = 'mention-item';
         item.setAttribute('role', 'option');
-        item.innerHTML = '<span class="mention-user-id">' + _escapeHtml(user.user_id) + '</span>' +
-          (user.display_name ? '<span class="mention-display-name">' + _escapeHtml(user.display_name) + '</span>' : '');
+        item.innerHTML = '<span class="mention-user-id">' + window.escapeHtml(user.user_id) + '</span>' +
+          (user.display_name ? '<span class="mention-display-name">' + window.escapeHtml(user.display_name) + '</span>' : '');
         item.addEventListener('click', function () {
           _insertMention(input, match.index, cursorPos, user.user_id);
           dropdown.classList.add('hidden');
@@ -450,11 +450,6 @@
     var newPos = matchStart + userId.length + 2;
     input.setSelectionRange(newPos, newPos);
     input.focus();
-  }
-
-  function _escapeHtml(str) {
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
   }
 
   // Expose

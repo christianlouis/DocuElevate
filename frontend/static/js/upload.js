@@ -293,21 +293,11 @@ function processFiles(files, progressContainer, statusMessage) {
     updateStatus();
   }
 
-  function _escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  }
-
   // Pre-create one progress row per file.
   const queueItems = fileArray.map((file) => {
     const row = document.createElement('div');
     row.className = 'flex flex-col mb-2';
-    const safeFileName = _escapeHtml(file.name);
+    const safeFileName = window.escapeHtml(file.name);
     row.innerHTML = `
       <div class="flex justify-between">
         <span class="text-sm truncate" title="${safeFileName}">${safeFileName}</span>
