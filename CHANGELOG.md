@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.173.10 (2026-07-04)
+
+### Bug Fixes
+
+- Standardize frontend HTML escaping
+  ([`fc3754f`](https://github.com/christianlouis/DocuElevate/commit/fc3754f3044eee6af9a3e118d8fde88ba2e91adc))
+
+
 ## v0.173.9 (2026-07-01)
 
 ### Bug Fixes
