@@ -15,7 +15,7 @@ redis>=8.0.0  # For Redis integration tests
 boto3>=1.43.36  # For S3 integration tests
 
 # Code quality
-ruff>=0.3.0
+ruff>=0.15.20
 mypy>=2.1.0
 djlint>=1.36.0  # HTML template linter for accessibility and best practices
 
