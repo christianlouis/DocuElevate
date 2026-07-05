@@ -12,7 +12,7 @@ testcontainers>=3.7.1  # For integration tests with real containers
 fpdf2>=2.8.0  # For generating test PDF documents in integration tests
 minio>=7.2.20  # For MinIO/S3 integration tests
 redis>=8.0.0  # For Redis integration tests
-boto3>=1.43.36  # For S3 integration tests
+boto3>=1.43.40  # For S3 integration tests
 
 # Code quality
 ruff>=0.3.0
