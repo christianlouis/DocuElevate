@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.173.15 (2026-07-06)
+
+### Bug Fixes
+
+- Restore Crowdin source copy
+  ([`dda7b4d`](https://github.com/christianlouis/DocuElevate/commit/dda7b4deb993551853d1940bc95bc75654040f10))
+
+
 ## v0.173.14 (2026-07-06)
 
 ### Bug Fixes
