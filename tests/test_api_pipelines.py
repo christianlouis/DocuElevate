@@ -347,6 +347,35 @@ class TestPipelineCRUD:
         assert first.status_code == 201
         assert second.status_code == 409
 
+    def test_create_pipeline_from_preset_logs_without_owner_identifier(self, client):
+        """Preset creation logs operational context without owner/user identifiers."""
+        with patch("app.api.pipelines.logger") as mock_logger:
+            r = client.post("/api/pipelines/presets/no_external_delivery", json={})
+
+        assert r.status_code == 201
+        mock_logger.info.assert_called_once_with(
+            "Pipeline created from preset: id=%s, preset=%s",
+            r.json()["id"],
+            "no_external_delivery",
+        )
+
+    def test_create_pipeline_from_preset_rolls_back_without_logging_owner_identifier(self, client, db_session):
+        """Preset creation rollback logs the preset key but not the session owner."""
+        with (
+            patch.object(db_session, "commit", side_effect=RuntimeError("database unavailable")),
+            patch.object(db_session, "rollback", wraps=db_session.rollback) as mock_rollback,
+            patch("app.api.pipelines.logger") as mock_logger,
+        ):
+            r = client.post("/api/pipelines/presets/no_external_delivery", json={})
+
+        assert r.status_code == 500
+        assert r.json()["detail"] == "Failed to create pipeline from preset"
+        mock_rollback.assert_called_once()
+        mock_logger.exception.assert_called_once_with(
+            "Failed to create pipeline from preset=%s",
+            "no_external_delivery",
+        )
+
 
 # ---------------------------------------------------------------------------
 # Integration tests – Step management
