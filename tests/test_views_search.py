@@ -88,6 +88,8 @@ class TestSearchPage:
         assert "searchByDocumentType" in text
         assert "ranking_score" in text
         assert "badge-score" in text
+        assert "confidence_score" in text
+        assert "badge-confidence" in text
         assert "/pipelines?file_id=" in text
         assert "exportSearchResult" in text
 

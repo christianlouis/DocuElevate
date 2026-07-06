@@ -87,6 +87,7 @@ class TestMeilisearchIndexDocument:
                     "tags": ["invoice", "services"],
                     "absender": "ACME Corp",
                     "language": "en",
+                    "confidence_score": "91",
                 },
             )
             assert result is True
@@ -97,6 +98,7 @@ class TestMeilisearchIndexDocument:
             assert doc["file_id"] == 1
             assert doc["document_title"] == "Invoice January 2026"
             assert "invoice" in doc["tags"]
+            assert doc["confidence_score"] == 91
             assert doc["ocr_text_length"] == len("This is an invoice for services rendered")
 
     def test_index_document_meilisearch_error(self):
@@ -143,6 +145,7 @@ class TestMeilisearchSearchDocuments:
                 "document_title": "Amazon Invoice",
                 "document_type": "Invoice",
                 "tags": ["amazon", "invoice"],
+                "confidence_score": 87,
                 "ocr_text": "Amazon invoice content here",
                 "_rankingScore": 0.92,
                 "_rankingScoreDetails": {"words": {"score": 0.95}},
@@ -168,6 +171,7 @@ class TestMeilisearchSearchDocuments:
         assert "_rankingScore" not in result["results"][0]
         assert "_rankingScoreDetails" not in result["results"][0]
         assert result["results"][0]["file_id"] == 42
+        assert result["results"][0]["confidence_score"] == 87
         assert result["results"][0]["ranking_score"] == 0.92
         assert result["results"][0]["ranking_details"] == {"words": {"score": 0.95}}
         assert result["results"][0]["ranking_explanation"]["source"] == "meilisearch"

@@ -37,10 +37,12 @@ _INDEX_SETTINGS = {
         "created_at_ts",
         "file_id",
         "ocr_text_length",
+        "confidence_score",
     ],
     "sortableAttributes": [
         "created_at_ts",
         "file_size",
+        "confidence_score",
     ],
     "displayedAttributes": [
         "file_id",
@@ -55,6 +57,7 @@ _INDEX_SETTINGS = {
         "reference_number",
         "mime_type",
         "file_size",
+        "confidence_score",
         "created_at_ts",
         "ocr_text",
         "ocr_text_length",
@@ -127,6 +130,12 @@ def _build_document(file_record: "FileRecord", text: str, metadata: dict) -> dic
     if isinstance(tags, str):
         tags = [t.strip() for t in tags.split(",") if t.strip()]
 
+    confidence_score = metadata.get("confidence_score")
+    try:
+        confidence_score = int(confidence_score) if confidence_score is not None else None
+    except (TypeError, ValueError):
+        confidence_score = None
+
     # Unix timestamp for sorting/filtering
     created_at_ts = 0
     if file_record.created_at:
@@ -148,6 +157,7 @@ def _build_document(file_record: "FileRecord", text: str, metadata: dict) -> dic
         "reference_number": metadata.get("reference_number") or "",
         "mime_type": file_record.mime_type or "",
         "file_size": file_record.file_size or 0,
+        "confidence_score": confidence_score,
         "created_at_ts": created_at_ts,
         "ocr_text": text or "",
         "ocr_text_length": len(text) if text else 0,
