@@ -502,7 +502,7 @@ def get_integration_credentials(
 
 def _test_imap_connection(config: dict[str, Any] | None, credentials: dict[str, Any] | None) -> dict[str, Any]:
     """Test an IMAP connection using the provided config and credentials."""
-    import imaplib
+    from app.utils.imap import test_imap_connection
 
     cfg = config or {}
     creds = credentials or {}
@@ -515,26 +515,18 @@ def _test_imap_connection(config: dict[str, Any] | None, credentials: dict[str, 
     if not host or not username or not password:
         return {"success": False, "message": "Missing required fields: host, username, and password"}
 
-    from app.utils.network import is_private_ip
+    result = test_imap_connection(host, port, username, password, use_ssl)
 
-    if is_private_ip(host):
-        logger.warning("SSRF blocked: Attempt to connect to private IP %s", host)
-        return {"success": False, "message": "Connection error: Invalid hostname or IP address"}
-
-    try:
-        if use_ssl:
-            mail = imaplib.IMAP4_SSL(host, port)
-        else:
-            mail = imaplib.IMAP4(host, port)
-        mail.login(username, password)
-        mail.logout()
+    # Map the generic messages to the specific ones expected by integrations tests/UI if needed,
+    # though the generic ones from test_imap_connection are usually fine. The integrations
+    # test might expect specific strings, let's keep it close if tests fail or just return the result.
+    if result["success"]:
         return {"success": True, "message": "IMAP connection successful"}
-    except OSError as exc:
-        logger.warning("IMAP network error for %s@%s: %s", username, host, exc)
-        return {"success": False, "message": "IMAP connection failed — check host, port, and network connectivity"}
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("IMAP error for %s@%s: %s", username, host, exc)
-        return {"success": False, "message": "IMAP authentication or connection failed"}
+
+    # We will just return the result from test_imap_connection,
+    # but the generic one in integrations had slightly different error messages.
+    # We'll just return the standard test_imap_connection result for consistency.
+    return result
 
 
 def _test_s3_connection(config: dict[str, Any] | None, credentials: dict[str, Any] | None) -> dict[str, Any]:

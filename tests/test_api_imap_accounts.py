@@ -408,7 +408,7 @@ class TestImapConnectionTest:
 
     def test_test_connection_success(self, imap_client, imap_session):
         """A successful IMAP login returns success=True."""
-        with patch("app.api.imap_accounts._test_imap_connection") as mock_test:
+        with patch("app.api.imap_accounts.test_imap_connection") as mock_test:
             mock_test.return_value = {"success": True, "message": "Connection successful"}
             resp = imap_client.post(
                 "/api/imap-accounts/test",
@@ -425,7 +425,7 @@ class TestImapConnectionTest:
 
     def test_test_connection_failure(self, imap_client, imap_session):
         """A failed IMAP login returns success=False with a message."""
-        with patch("app.api.imap_accounts._test_imap_connection") as mock_test:
+        with patch("app.api.imap_accounts.test_imap_connection") as mock_test:
             mock_test.return_value = {
                 "success": False,
                 "message": "IMAP error: authentication failed",
@@ -457,7 +457,7 @@ class TestImapConnectionTest:
         imap_session.commit()
         imap_session.refresh(acct)
 
-        with patch("app.api.imap_accounts._test_imap_connection") as mock_test:
+        with patch("app.api.imap_accounts.test_imap_connection") as mock_test:
             mock_test.return_value = {"success": True, "message": "Connection successful"}
             resp = imap_client.post(f"/api/imap-accounts/{acct.id}/test")
 
@@ -511,24 +511,24 @@ class TestImapQuota:
 
 
 # ---------------------------------------------------------------------------
-# Unit tests – _test_imap_connection helper
+# Unit tests – test_imap_connection helper
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.unit
 class TestTestImapConnection:
-    """Unit tests for the _test_imap_connection helper (no network calls)."""
+    """Unit tests for the test_imap_connection helper (no network calls)."""
 
     def test_success(self):
         """Successful login returns success=True."""
-        from app.api.imap_accounts import _test_imap_connection
+        from app.utils.imap import test_imap_connection
 
         mock_mail = MagicMock()
         with (
-            patch("app.api.imap_accounts.is_private_ip", return_value=False),
+            patch("app.utils.imap.is_private_ip", return_value=False),
             patch("imaplib.IMAP4_SSL", return_value=mock_mail),
         ):
-            result = _test_imap_connection(
+            result = test_imap_connection(
                 "imap.example.com",
                 993,
                 "user",
@@ -542,13 +542,13 @@ class TestTestImapConnection:
 
     def test_auth_error(self):
         """An exception raised by IMAP4_SSL returns success=False."""
-        from app.api.imap_accounts import _test_imap_connection
+        from app.utils.imap import test_imap_connection
 
         with (
-            patch("app.api.imap_accounts.is_private_ip", return_value=False),
+            patch("app.utils.imap.is_private_ip", return_value=False),
             patch("imaplib.IMAP4_SSL", side_effect=Exception("auth failed")),
         ):
-            result = _test_imap_connection(
+            result = test_imap_connection(
                 "imap.example.com",
                 993,
                 "user",
@@ -561,13 +561,13 @@ class TestTestImapConnection:
 
     def test_network_error(self):
         """An OSError returns success=False with a network error message."""
-        from app.api.imap_accounts import _test_imap_connection
+        from app.utils.imap import test_imap_connection
 
         with (
-            patch("app.api.imap_accounts.is_private_ip", return_value=False),
+            patch("app.utils.imap.is_private_ip", return_value=False),
             patch("imaplib.IMAP4", side_effect=OSError("connection refused")),
         ):
-            result = _test_imap_connection(
+            result = test_imap_connection(
                 "bad-host",
                 143,
                 "user",
