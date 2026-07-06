@@ -266,7 +266,7 @@ class TestReleaseNamesJson:
         assert len(codenames) == len(set(codenames)), "Codenames must be unique"
 
     def test_roadmap_named_anchors_exist_in_release_names_json(self):
-        """Test that roadmap codenames are backed by release_names.json."""
+        """Test that current roadmap release anchors are backed by release_names.json."""
         release_file = self._repo_file("release_names.json")
         with open(release_file, "r") as f:
             data = json.load(f)
@@ -280,6 +280,8 @@ class TestReleaseNamesJson:
         )
         known_codenames = {entry["codename"] for entry in data["releases"].values()}
 
+        # release_names.json also keeps historical and future names; only roadmap anchors
+        # are required to resolve back to release metadata.
         assert roadmap_codenames, "ROADMAP.md should list at least one named release anchor"
         missing_codenames = roadmap_codenames - known_codenames
         assert not missing_codenames, (
