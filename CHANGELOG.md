@@ -14,6 +14,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- Clarify upload endpoint audience ([#974](https://github.com/christianlouis/DocuElevate/pull/974),
+  [`b1f6737`](https://github.com/christianlouis/DocuElevate/commit/b1f6737a4e610b05c404114b4e4990851847a4c6))
+
+- Clarify upload rate limit defaults
+  ([#974](https://github.com/christianlouis/DocuElevate/pull/974),
+  [`b1f6737`](https://github.com/christianlouis/DocuElevate/commit/b1f6737a4e610b05c404114b4e4990851847a4c6))
+
+- Reconcile release naming anchors ([#973](https://github.com/christianlouis/DocuElevate/pull/973),
+  [`123cd50`](https://github.com/christianlouis/DocuElevate/commit/123cd50e1d6f028689ebafeb7a8641c9b962714b))
+
+- **changelog**: Update changelog [skip ci]
+  ([`78fd7ae`](https://github.com/christianlouis/DocuElevate/commit/78fd7aebccee9ef3ad5f3627b1c99796b763f09b))
+
+
+## Unreleased
+
+### Documentation
+
 - Reconcile release naming anchors ([#973](https://github.com/christianlouis/DocuElevate/pull/973),
   [`123cd50`](https://github.com/christianlouis/DocuElevate/commit/123cd50e1d6f028689ebafeb7a8641c9b962714b))
 
