@@ -87,6 +87,7 @@ class TestProcessEndpoints:
             data = response.json()
             assert data["task_id"] == "test-task-id"
             assert data["status"] == "queued"
+            mock_task.delay.assert_called_once_with(str(test_file))
 
     def test_send_to_nextcloud_file_not_found(self, client):
         """Test POST /api/send_to_nextcloud/ with non-existent file."""
@@ -106,6 +107,7 @@ class TestProcessEndpoints:
             data = response.json()
             assert data["task_id"] == "test-task-id"
             assert data["status"] == "queued"
+            mock_task.delay.assert_called_once_with(str(test_file))
 
     def test_send_to_google_drive_file_not_found(self, client):
         """Test POST /api/send_to_google_drive/ with non-existent file."""
@@ -125,6 +127,7 @@ class TestProcessEndpoints:
             data = response.json()
             assert data["task_id"] == "test-task-id"
             assert data["status"] == "queued"
+            mock_task.delay.assert_called_once_with(str(test_file))
 
     def test_send_to_onedrive_file_not_found(self, client):
         """Test POST /api/send_to_onedrive/ with non-existent file."""
@@ -144,6 +147,7 @@ class TestProcessEndpoints:
             data = response.json()
             assert data["task_id"] == "test-task-id"
             assert data["status"] == "queued"
+            mock_task.delay.assert_called_once_with(str(test_file))
 
     def test_send_to_all_destinations_file_not_found(self, client):
         """Test POST /api/send_to_all_destinations/ with non-existent file."""
@@ -164,6 +168,7 @@ class TestProcessEndpoints:
             assert data["task_id"] == "test-task-id"
             assert data["status"] == "queued"
             assert data["file_path"] == str(test_file)
+            mock_task.delay.assert_called_once_with(str(test_file))
 
     def test_processall_endpoint_empty_dir(self, client, tmp_path):
         """Test POST /api/processall with no PDF files in workdir."""
