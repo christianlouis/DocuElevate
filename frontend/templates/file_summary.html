@@ -160,7 +160,7 @@
     <div class="info-row"><span class="info-key">Language</span><span class="info-val">{{ file.detected_language }}</span></div>
     {% endif %}
     {% if pipeline_info %}
-    <div class="info-row"><span class="info-key">Pipeline</span><span class="info-val">{{ pipeline_info.name }}</span></div>
+    <div class="info-row"><span class="info-key">Pipeline</span><span class="info-val">{{ pipeline_info.name }} <span title="{{ pipeline_info.selection_reason }}">({{ pipeline_info.selection_label | lower }})</span></span></div>
     {% endif %}
     {% if file.document_title %}
     <div class="info-row"><span class="info-key">Document Title</span><span class="info-val">{{ file.document_title }}</span></div>

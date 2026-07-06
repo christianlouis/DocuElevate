@@ -401,6 +401,30 @@ class TestStepManager:
         assert summary["total_main_steps"] == len(MAIN_PROCESSING_STEPS)
         assert summary["total_upload_tasks"] == 3  # 3 upload_to_* steps counted
 
+    def test_get_step_summary_uses_pipeline_steps_for_expected_main_count(self, db_session: Session):
+        """Selected profile steps determine expected main status totals."""
+        file_record = FileRecord(
+            filehash="profile-summary",
+            original_filename="profile-summary.pdf",
+            local_filename="/tmp/profile-summary.pdf",
+            file_size=2097152,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        update_step_status(db_session, file_record.id, "check_text", "success")
+        update_step_status(db_session, file_record.id, "send_to_all_destinations", "success")
+        pipeline_steps = [
+            type("Step", (), {"enabled": True, "step_type": "ocr"})(),
+            type("Step", (), {"enabled": False, "step_type": "send_to_destinations"})(),
+        ]
+
+        summary = get_step_summary(db_session, file_record.id, pipeline_steps=pipeline_steps)
+
+        assert summary["main"]["success"] == 1
+        assert summary["main"]["queued"] == 3
+        assert summary["total_main_steps"] == 4
+
     def test_get_file_overall_status_duplicate_file(self, db_session: Session):
         """Test overall status returns 'duplicate' immediately for duplicate files."""
         file_record = FileRecord(
