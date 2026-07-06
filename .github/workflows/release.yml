@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: semantic-release-main
+  group: semantic-release-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -23,7 +23,7 @@ jobs:
   release:
     name: Semantic Release
     runs-on: ubuntu-latest
-    if: github.repository == 'christianlouis/DocuElevate'
+    if: github.repository == 'christianlouis/DocuElevate' && github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout Code
@@ -48,6 +48,29 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Prepare release push helper
+        run: |
+          cat > /tmp/release-push-main <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          status=1
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if git rebase origin/main && git push origin HEAD:main; then
+              exit 0
+            fi
+            status=$?
+            git rebase --abort 2>/dev/null || true
+            echo "Push attempt ${attempt} failed; retrying..."
+            sleep $((attempt * 3))
+          done
+
+          exit "$status"
+          EOF
+          sed -i 's/^          //' /tmp/release-push-main
+          chmod +x /tmp/release-push-main
+
       - name: Run Semantic Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -67,8 +90,7 @@ jobs:
             if ! git diff --quiet CHANGELOG.md; then
               git add CHANGELOG.md
               git commit -m "docs(changelog): update changelog [skip ci]"
-              git pull --rebase origin main
-              git push origin HEAD:main
+              /tmp/release-push-main
             fi
           fi
 
@@ -81,6 +103,5 @@ jobs:
           done
           if ! git diff --staged --quiet; then
             git commit -m "chore(release): update build metadata files [skip ci]"
-            git pull --rebase origin main
-            git push origin HEAD:main
+            /tmp/release-push-main
           fi
