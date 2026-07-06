@@ -505,13 +505,13 @@ def create_pipeline_from_preset(
         db.refresh(pipeline)
     except Exception:
         db.rollback()
-        logger.exception("Failed to create pipeline from preset=%s user=%s", preset_key, user_id)
+        logger.exception("Failed to create pipeline from preset=%s", preset_key)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create pipeline from preset",
         )
 
-    logger.info("Pipeline created from preset: id=%s, owner=%s, preset=%s", pipeline.id, user_id, preset_key)
+    logger.info("Pipeline created from preset: id=%s, preset=%s", pipeline.id, preset_key)
     return _serialize_pipeline(pipeline, include_steps=True, db=db)
 
 
