@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.173.14 (2026-07-06)
+
+### Bug Fixes
+
+- Polish processing profile OCR copy
+  ([#979](https://github.com/christianlouis/DocuElevate/pull/979),
+  [`94d8dbf`](https://github.com/christianlouis/DocuElevate/commit/94d8dbf8e71f2c725373d836fc1cd295e0c2e003))
+
+
 ## v0.173.13 (2026-07-06)
 
 ### Bug Fixes
