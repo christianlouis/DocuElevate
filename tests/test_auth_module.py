@@ -65,14 +65,14 @@ class TestGetGravatarUrl:
 
         assert result1 == result2
 
-    def test_hash_is_md5(self):
-        """Test that the hash is MD5 (32 hexadecimal characters)."""
+    def test_hash_is_sha256(self):
+        """Test that the hash is SHA-256 (64 hexadecimal characters)."""
         email = "test@example.com"
         result = get_gravatar_url(email)
 
         # Extract hash from URL
         hash_part = result.split("/avatar/")[1].split("?")[0]
-        assert len(hash_part) == 32
+        assert len(hash_part) == 64
         assert all(c in "0123456789abcdef" for c in hash_part)
 
 
