@@ -89,6 +89,30 @@ class TestSearchPage:
         assert "/pipelines?file_id=" in text
         assert "exportSearchResult" in text
 
+    def test_search_page_contains_bulk_action_toolbar(self, client):
+        """Search results can be selected for bulk actions."""
+        response = client.get("/search")
+        assert response.status_code == 200
+        text = response.text
+        assert 'id="search-bulk-bar"' in text
+        assert "search-result-checkbox" in text
+        assert "selectVisibleSearchResults" in text
+        assert "clearSearchSelection" in text
+
+    def test_search_page_bulk_actions_use_existing_file_apis(self, client):
+        """Bulk actions from search call existing file operation endpoints."""
+        response = client.get("/search")
+        assert response.status_code == 200
+        text = response.text
+        assert "bulkDownloadSearchResults" in text
+        assert "bulkExportSearchResults" in text
+        assert "bulkReprocessSearchResults" in text
+        assert "bulkDeleteSearchResults" in text
+        assert "/api/files/bulk-download" in text
+        assert "/api/files/bulk-reprocess" in text
+        assert "/api/files/bulk-delete" in text
+        assert "This cannot be undone from search results" in text
+
     def test_search_page_text_quality_options(self, client):
         """GET /search contains text quality filter with expected options."""
         response = client.get("/search")
