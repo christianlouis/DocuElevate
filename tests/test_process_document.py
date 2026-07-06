@@ -851,6 +851,107 @@ startxref
 
 @pytest.mark.unit
 @pytest.mark.requires_db
+def test_apply_pre_processing_routing_assigns_matching_profile(db_session):
+    """Pre-processing routing stores the matched profile and provenance."""
+    from app.models import Pipeline, PipelineRoutingRule
+    from app.tasks.process_document import _apply_pre_processing_routing
+
+    pipeline = Pipeline(owner_id="user1", name="Invoice Profile", is_default=False, is_active=True)
+    db_session.add(pipeline)
+    db_session.commit()
+
+    rule = PipelineRoutingRule(
+        owner_id="user1",
+        name="Invoice Filename",
+        position=0,
+        field="filename",
+        operator="contains",
+        value="invoice",
+        target_pipeline_id=pipeline.id,
+        is_active=True,
+    )
+    db_session.add(rule)
+    db_session.commit()
+
+    file_record = FileRecord(
+        owner_id="user1",
+        filehash="route123",
+        original_filename="invoice-2026.pdf",
+        local_filename="/tmp/invoice-2026.pdf",
+        file_size=1024,
+        mime_type="application/pdf",
+        is_duplicate=False,
+    )
+    db_session.add(file_record)
+    db_session.commit()
+
+    _apply_pre_processing_routing(db_session, file_record, owner_id="user1", task_id="test-task")
+
+    assert file_record.pipeline_id == pipeline.id
+    assert file_record.pipeline_assignment_source == "routing_rule"
+    assert file_record.pipeline_routing_rule_id == rule.id
+    assert "Invoice Filename" in file_record.pipeline_assignment_reason
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_apply_pre_processing_routing_records_default_fallback(db_session):
+    """When no pre-processing rule matches, the default fallback reason is stored."""
+    from app.tasks.process_document import _apply_pre_processing_routing
+
+    file_record = FileRecord(
+        owner_id="user1",
+        filehash="default123",
+        original_filename="plain.pdf",
+        local_filename="/tmp/plain.pdf",
+        file_size=1024,
+        mime_type="application/pdf",
+        is_duplicate=False,
+    )
+    db_session.add(file_record)
+    db_session.commit()
+
+    _apply_pre_processing_routing(db_session, file_record, owner_id="user1", task_id="test-task")
+
+    assert file_record.pipeline_id is None
+    assert file_record.pipeline_assignment_source == "default"
+    assert file_record.pipeline_routing_rule_id is None
+    assert "No pre-processing routing rule matched" in file_record.pipeline_assignment_reason
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_apply_pre_processing_routing_preserves_explicit_profile(db_session):
+    """Existing file-level profile assignments are not overwritten by routing."""
+    from app.models import Pipeline
+    from app.tasks.process_document import _apply_pre_processing_routing
+
+    pipeline = Pipeline(owner_id="user1", name="Manual Profile", is_default=False, is_active=True)
+    db_session.add(pipeline)
+    db_session.commit()
+
+    file_record = FileRecord(
+        owner_id="user1",
+        filehash="manual123",
+        original_filename="invoice.pdf",
+        local_filename="/tmp/invoice.pdf",
+        file_size=1024,
+        mime_type="application/pdf",
+        is_duplicate=False,
+        pipeline_id=pipeline.id,
+    )
+    db_session.add(file_record)
+    db_session.commit()
+
+    _apply_pre_processing_routing(db_session, file_record, owner_id="user1", task_id="test-task")
+
+    assert file_record.pipeline_id == pipeline.id
+    assert file_record.pipeline_assignment_source == "manual"
+    assert file_record.pipeline_routing_rule_id is None
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
 def test_get_pipeline_ocr_language_returns_none_when_no_pipeline(db_session):
     """Returns None when no pipeline exists in the database."""
     from app.tasks.process_document import _get_pipeline_ocr_language

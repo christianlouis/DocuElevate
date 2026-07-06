@@ -670,9 +670,10 @@ based on their properties — no manual pipeline selection required.
    (`POST /api/routing-rules`).
 2. Each rule specifies a **field** to inspect, an **operator** (condition),
    a **value** to compare against, and a **target pipeline**.
-3. When a document is processed, rules are evaluated **in position order**
-   (lowest first).  The first matching rule wins and the document is routed
-   to that pipeline.
+3. During initial ingestion, rules are evaluated **in position order**
+   (lowest first) using the fields that are already known before OCR and
+   metadata extraction: `file_type`, `filename`, and `size`.  The first
+   matching rule wins and the document is routed to that profile.
 4. If no rule matches, the document is processed by the default pipeline.
 
 **Available fields:**
@@ -682,9 +683,9 @@ based on their properties — no manual pipeline selection required.
 | `file_type` | MIME type, e.g. `application/pdf` |
 | `filename` | Original filename |
 | `size` | File size in bytes |
-| `document_type` | AI-classified type (Invoice, Contract, …) |
-| `category` | Alias for `document_type` |
-| `metadata.<key>` | Any key from the AI-extracted metadata JSON |
+| `document_type` | AI-classified type (Invoice, Contract, …); available after classification |
+| `category` | Alias for `document_type`; available after classification |
+| `metadata.<key>` | Any key from the AI-extracted metadata JSON; available after classification |
 
 **Available operators:**
 
@@ -702,10 +703,10 @@ Rule 1: field=document_type, operator=equals, value=Invoice, target_pipeline=3
 Rule 2: field=size,          operator=gt,     value=1048576, target_pipeline=5
 ```
 
-With first-match-wins logic, an invoice of any size matches Rule 1 and is
-routed to pipeline 3.  A non-invoice file larger than 1 MB matches Rule 2
-and is routed to pipeline 5.  Everything else falls back to the default
-pipeline.
+At ingestion time, Rule 2 can select the initial profile because file size is
+known before processing starts.  Rule 1 depends on AI classification metadata,
+so it is available for dry-run evaluation and post-classification routing logic
+rather than initial profile selection.
 
 You can test your rules without actually routing a document using the
 **evaluate** endpoint (`POST /api/routing-rules/evaluate`).  For the full
