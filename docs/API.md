@@ -136,6 +136,20 @@ curl -X GET "http://<your-docuelevate-instance>/api/files" \
 
 ## Common Endpoints
 
+### Pipeline Template Library
+
+Versioned processing-profile templates can be listed, validated, imported, and
+exported through the pipeline API. See [Pipeline Template Library](PipelineTemplates.md)
+for the JSON format, built-in starter kits, and validation rules.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/pipelines/templates` | List built-in starter templates |
+| `GET` | `/api/pipelines/templates/{template_key}` | Fetch one built-in starter template |
+| `POST` | `/api/pipelines/templates/validate` | Validate a template without importing it |
+| `POST` | `/api/pipelines/templates/import` | Import a template as a user-owned processing profile |
+| `GET` | `/api/pipelines/{pipeline_id}/template` | Export an accessible profile as a versioned template |
+
 ### Document Upload
 
 #### Upload from Computer
