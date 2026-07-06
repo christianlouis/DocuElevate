@@ -325,7 +325,7 @@ class TestOnboardingAPI:
 
         # Since Starlette uses session dictionaries added to the request scope,
         # we can patch the complete_onboarding endpoint's access to request.session
-        with patch('app.api.onboarding.Request.session', new_callable=dict) as mock_session:
+        with patch("app.api.onboarding.Request.session", new_callable=dict) as mock_session:
             mock_session.update({"post_onboarding_redirect": "/dashboard"})
 
             resp = ob_client_authed.post("/api/onboarding/complete")
@@ -342,8 +342,8 @@ class TestOnboardingAPI:
         # Patch db.commit to raise an exception
         from unittest.mock import patch
 
-        with patch('sqlalchemy.orm.Session.commit', side_effect=Exception("DB error")) as mock_commit:
-            with patch('sqlalchemy.orm.Session.rollback') as mock_rollback:
+        with patch("sqlalchemy.orm.Session.commit", side_effect=Exception("DB error")) as mock_commit:
+            with patch("sqlalchemy.orm.Session.rollback") as mock_rollback:
                 resp = ob_client_authed.post("/api/onboarding/complete")
 
                 # Fast API error handler handles the exception and returns a 500 error
