@@ -142,11 +142,11 @@ curl -X GET "http://<your-docuelevate-instance>/api/files" \
 
 Upload a file from your computer to DocuElevate for processing.
 
-**Endpoint**: `POST /api/upload`
+**Endpoint**: `POST /api/ui-upload`
 
 **Request**:
 ```bash
-curl -X POST "http://<your-docuelevate-instance>/api/upload" \
+curl -X POST "http://<your-docuelevate-instance>/api/ui-upload" \
   -H "Authorization: Bearer <your-token>" \
   -F "file=@/path/to/document.pdf"
 ```
@@ -2735,14 +2735,16 @@ Return basic profile information for the authenticated user.
 ## GraphQL API
 
 DocuElevate exposes a GraphQL API at `/graphql` alongside the REST API.  It
-supports flexible queries with field selection, making it ideal for dashboards
-and integrations that only need a subset of the available data.
+currently exposes read-only queries with flexible field selection, making it
+ideal for dashboards and integrations that only need a subset of available
+data. Use the REST API for write operations such as uploads, processing, and
+management actions.
 
 ### Endpoint
 
 | Method | URL | Description |
 |--------|-----|-------------|
-| `POST` | `/graphql` | Execute a GraphQL query or mutation |
+| `POST` | `/graphql` | Execute a GraphQL query |
 | `GET`  | `/graphql` | Open the GraphiQL interactive playground |
 
 ### Authentication

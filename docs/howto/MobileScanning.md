@@ -84,7 +84,7 @@ On iPhone/iPad, you can create an **iOS Shortcut** that scans a document and upl
 3. Add the following actions:
    - **Scan Document** — opens the camera for scanning
    - **Get Contents of URL** — configures the API call:
-     - **URL:** `http://your-docuelevate-host:8000/api/upload`
+     - **URL:** `http://your-docuelevate-host:8000/api/ui-upload`
      - **Method:** POST
      - **Headers:** `Authorization: Bearer YOUR_API_KEY`
      - **Request Body:** Form data with `file` = Scanned Document
@@ -95,7 +95,7 @@ On iPhone/iPad, you can create an **iOS Shortcut** that scans a document and upl
 Shortcut flow:
 ┌─────────────┐    ┌──────────────┐    ┌──────────────────────┐
 │ Scan Document│ → │ Select pages │ → │ POST to DocuElevate  │
-│  (Camera)   │    │    & crop    │    │     /api/upload      │
+│  (Camera)   │    │    & crop    │    │    /api/ui-upload    │
 └─────────────┘    └──────────────┘    └──────────────────────┘
 ```
 

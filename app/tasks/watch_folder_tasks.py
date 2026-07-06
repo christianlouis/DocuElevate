@@ -15,6 +15,7 @@ import ftplib  # nosec B402 - FTP usage is intentional for legacy server support
 import json
 import logging
 import os
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -32,6 +33,12 @@ redis_client = redis.StrictRedis.from_url(settings.redis_url, decode_responses=T
 
 WATCH_FOLDER_LOCK_KEY = "watch_folder_lock"
 WATCH_FOLDER_LOCK_EXPIRE = 300  # 5 minutes
+_RELEASE_LOCK_SCRIPT = """
+if redis.call("get", KEYS[1]) == ARGV[1] then
+    return redis.call("del", KEYS[1])
+end
+return 0
+"""
 
 # Cache file for tracking already-ingested files (local watch folders)
 WATCH_FOLDER_CACHE_FILE = os.path.join(settings.workdir, "watch_folder_processed.json")
@@ -67,21 +74,25 @@ def _get_db_session():
 # ---------------------------------------------------------------------------
 
 
-def _acquire_lock(lock_key: str, expire: int = WATCH_FOLDER_LOCK_EXPIRE) -> bool:
-    """Acquire a Redis-based distributed lock. Returns True if acquired."""
-    acquired = redis_client.setnx(lock_key, "locked")
+def _acquire_lock(lock_key: str, expire: int = WATCH_FOLDER_LOCK_EXPIRE) -> str | None:
+    """Acquire a Redis-based distributed lock and return its owner token."""
+    lock_token = str(uuid.uuid4())
+    acquired = redis_client.set(lock_key, lock_token, ex=expire, nx=True)
     if acquired:
-        redis_client.expire(lock_key, expire)
         logger.debug("Lock acquired: %s", lock_key)
-        return True
+        return lock_token
     logger.debug("Lock already held: %s — skipping.", lock_key)
-    return False
+    return None
 
 
-def _release_lock(lock_key: str) -> None:
-    """Release a Redis-based distributed lock."""
-    redis_client.delete(lock_key)
-    logger.debug("Lock released: %s", lock_key)
+def _release_lock(lock_key: str, lock_token: str) -> bool:
+    """Release a Redis-based distributed lock only when this worker owns it."""
+    released = bool(redis_client.eval(_RELEASE_LOCK_SCRIPT, 1, lock_key, lock_token))
+    if released:
+        logger.debug("Lock released: %s", lock_key)
+    else:
+        logger.debug("Lock not released because owner changed: %s", lock_key)
+    return released
 
 
 # ---------------------------------------------------------------------------
@@ -2270,7 +2281,8 @@ def scan_all_watch_folders() -> dict:
     9. WebDAV ingest folder (if enabled)
     10. Per-user WATCH_FOLDER integrations from the database
     """
-    if not _acquire_lock(WATCH_FOLDER_LOCK_KEY):
+    lock_token = _acquire_lock(WATCH_FOLDER_LOCK_KEY)
+    if not lock_token:
         logger.info("Watch folder scan already running — skipping this cycle.")
         return {"status": "skipped", "reason": "lock held"}
 
@@ -2287,6 +2299,6 @@ def scan_all_watch_folders() -> dict:
         results["webdav"] = scan_webdav_watch_folder()
         results["user_watch_folders"] = _pull_user_integration_watch_folders()
     finally:
-        _release_lock(WATCH_FOLDER_LOCK_KEY)
+        _release_lock(WATCH_FOLDER_LOCK_KEY, lock_token)
 
     return {"status": "ok", "results": results}

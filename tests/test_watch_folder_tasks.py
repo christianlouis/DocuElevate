@@ -194,27 +194,40 @@ class TestAcquireReleaseLock:
         from app.tasks.watch_folder_tasks import _acquire_lock
 
         mock_redis = MagicMock()
-        mock_redis.setnx.return_value = True
+        mock_redis.set.return_value = True
         with patch("app.tasks.watch_folder_tasks.redis_client", mock_redis):
             result = _acquire_lock("test_lock")
-        assert result is True
+        assert isinstance(result, str)
+        mock_redis.set.assert_called_once_with("test_lock", result, ex=300, nx=True)
 
     def test_acquire_lock_fails_when_held(self):
         from app.tasks.watch_folder_tasks import _acquire_lock
 
         mock_redis = MagicMock()
-        mock_redis.setnx.return_value = False
+        mock_redis.set.return_value = False
         with patch("app.tasks.watch_folder_tasks.redis_client", mock_redis):
             result = _acquire_lock("test_lock")
-        assert result is False
+        assert result is None
 
-    def test_release_lock_deletes_key(self):
+    def test_release_lock_deletes_key_when_token_matches(self):
         from app.tasks.watch_folder_tasks import _release_lock
 
         mock_redis = MagicMock()
+        mock_redis.eval.return_value = 1
         with patch("app.tasks.watch_folder_tasks.redis_client", mock_redis):
-            _release_lock("test_lock")
-        mock_redis.delete.assert_called_once_with("test_lock")
+            result = _release_lock("test_lock", "owner-token")
+        assert result is True
+        mock_redis.eval.assert_called_once()
+        assert mock_redis.eval.call_args.args[1:] == (1, "test_lock", "owner-token")
+
+    def test_release_lock_keeps_key_when_token_differs(self):
+        from app.tasks.watch_folder_tasks import _release_lock
+
+        mock_redis = MagicMock()
+        mock_redis.eval.return_value = 0
+        with patch("app.tasks.watch_folder_tasks.redis_client", mock_redis):
+            result = _release_lock("test_lock", "old-owner-token")
+        assert result is False
 
 
 @pytest.mark.unit
@@ -380,7 +393,7 @@ class TestScanAllWatchFolders:
         from app.tasks.watch_folder_tasks import scan_all_watch_folders
 
         with (
-            patch("app.tasks.watch_folder_tasks._acquire_lock", return_value=True),
+            patch("app.tasks.watch_folder_tasks._acquire_lock", return_value="owner-token"),
             patch("app.tasks.watch_folder_tasks._release_lock") as mock_release,
             patch("app.tasks.watch_folder_tasks.scan_local_watch_folders", return_value={"status": "ok"}),
             patch("app.tasks.watch_folder_tasks.scan_ftp_watch_folder", return_value={"status": "skipped"}),
@@ -390,21 +403,21 @@ class TestScanAllWatchFolders:
 
         assert result["status"] == "ok"
         assert "results" in result
-        mock_release.assert_called_once()
+        mock_release.assert_called_once_with("watch_folder_lock", "owner-token")
 
     def test_lock_released_even_on_exception(self):
         """Lock must be released even if a sub-scan raises an exception."""
         from app.tasks.watch_folder_tasks import scan_all_watch_folders
 
         with (
-            patch("app.tasks.watch_folder_tasks._acquire_lock", return_value=True),
+            patch("app.tasks.watch_folder_tasks._acquire_lock", return_value="owner-token"),
             patch("app.tasks.watch_folder_tasks._release_lock") as mock_release,
             patch("app.tasks.watch_folder_tasks.scan_local_watch_folders", side_effect=RuntimeError("boom")),
         ):
             with pytest.raises(RuntimeError):
                 scan_all_watch_folders()
 
-        mock_release.assert_called_once()
+        mock_release.assert_called_once_with("watch_folder_lock", "owner-token")
 
 
 @pytest.mark.unit
