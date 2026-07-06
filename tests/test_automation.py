@@ -380,7 +380,6 @@ class TestAutomationAPI:
         assert resp.status_code == 200
         assert resp.json() == [SAMPLE_PAYLOADS[event]]
 
-
     def test_trigger_sample_fallback(self, client, mocker):
         """GET /api/automation/triggers/sample/{event} returns fallback when sample missing."""
         self._with_auth(client)
