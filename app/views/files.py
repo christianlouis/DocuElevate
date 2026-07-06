@@ -1039,7 +1039,7 @@ def get_processed_text(request: Request, file_id: int, db: Session = Depends(get
 
     try:
         # Extract text from PDF using pypdf
-        from pypdf import PdfReader  # Upgraded from PyPDF2 to fix CVE-2023-36464
+        from pypdf import PdfReader
 
         reader = PdfReader(file_record.processed_file_path)
         text = ""
