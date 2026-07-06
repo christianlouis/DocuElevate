@@ -17,6 +17,11 @@
       "description": "Workflow automation, custom pipelines, and rule-based processing",
       "milestone": "v0.7.0 - Workflow Automation"
     },
+    "0.8": {
+      "codename": "Signal",
+      "description": "AI quality, retrieval, and multi-language foundations",
+      "milestone": "v0.8.0 - Advanced AI & Multi-language"
+    },
     "1.0": {
       "codename": "Summit",
       "description": "Enterprise-ready with multi-tenancy, RBAC, and horizontal scaling",
@@ -31,6 +36,16 @@
       "codename": "Horizon",
       "description": "On-premise AI, advanced document management, and platform expansion",
       "milestone": "v2.0.0 - Next Generation"
+    },
+    "2.1": {
+      "codename": "Sentinel",
+      "description": "Governance, compliance, and policy-driven automation",
+      "milestone": "v2.1.0 - Governance & Policy"
+    },
+    "3.0": {
+      "codename": "Constellation",
+      "description": "Integration hub, agent platform, and interoperability",
+      "milestone": "v3.0.0 - Integration Hub & Agent Platform"
     }
   }
 }

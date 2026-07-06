@@ -23,18 +23,20 @@ DocuElevate follows [Semantic Versioning 2.0.0](https://semver.org/):
 
 DocuElevate ships continuously via automated semantic versioning. Use **GitHub Releases** for the latest build artifacts and **GitHub Milestones** (below) for roadmap tracking.
 
-### Last Shipped Milestone: v0.5.0 (Released February 8, 2026)
+### Last Completed Named Milestone Anchor: v0.5.0 (Released February 8, 2026)
 - Database-backed settings management with encryption
 - Setup wizard for first-time configuration
 - Admin UI for runtime configuration
 - Release automation via semantic-release
+
+The current build number is managed by semantic-release and may be ahead of the planning anchors below. Check `VERSION` and GitHub Releases for the exact current release stream.
 
 ### Important Note on Versioning
 As of February 2026, DocuElevate uses **automated semantic versioning**:
 - Version management handled by `python-semantic-release`
 - Releases automated via GitHub Actions on merge to main
 - Version bumps determined by conventional commit messages
-- `VERSION` and `CHANGELOG.md` automatically updated
+- `VERSION` and generated release notes are automatically updated; `CHANGELOG.md` is release automation output and is not edited manually
 - GitHub Releases created automatically with release notes
 
 ---
@@ -126,7 +128,7 @@ As of February 2026, DocuElevate uses **automated semantic versioning**:
 
 ---
 
-## Upcoming Milestones
+## Upcoming Planning Anchors
 
 ### v0.6.0 - Clarity: Enhanced Search & UI (Target: July 31, 2026)
 **Target Date:** July 31, 2026
@@ -297,11 +299,11 @@ Starting with v0.6.0, releases are fully automated using `python-semantic-releas
 3. **Automated Analysis**: semantic-release determines version from commits
 4. **Automatic Updates**:
    - Updates `VERSION` file
-   - Generates/updates `CHANGELOG.md`
+   - Generates release notes and updates generated changelog state where configured
    - Creates Git tag (e.g., `v0.173.1`)
    - Creates GitHub Release with notes
    - Triggers Docker image builds
-5. **No Manual Steps**: VERSION and CHANGELOG are never edited manually
+5. **No Manual Steps**: VERSION and generated changelog state are never edited manually
 
 ### Version Bump Rules
 - `feat:` commits → Minor version (e.g., 0.173.1 → 0.174.0)
@@ -314,10 +316,8 @@ Starting with v0.6.0, releases are fully automated using `python-semantic-releas
 - [ ] Security scan passed
 - [ ] Code review completed
 - [ ] Documentation updated
-- [ ] CHANGELOG.md updated
+- [ ] Release notes generated
 - [ ] Migration guide (if breaking changes)
-- [ ] Release notes drafted
-- [ ] Version numbers bumped
 - [ ] Docker images built and tested
 
 ### Release Artifacts
@@ -329,9 +329,9 @@ Starting with v0.6.0, releases are fully automated using `python-semantic-releas
 
 ---
 
-## Version History
+## Version History and Planning Anchors
 
-| Version | Release Date | Theme | Status |
+| Anchor | Release Date | Theme | Status |
 |---------|-------------|-------|--------|
 | v0.1.0 | 2024-Q1 | Initial Release | Released |
 | v0.2.0 | 2024-Q3 | Multi-provider Support | Released |
