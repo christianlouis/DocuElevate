@@ -1,0 +1,10 @@
+{
+  "integration": "webhook_receiver",
+  "template": "standard_document_archive",
+  "webhook": {
+    "url": "https://example.com/docuelevate/events",
+    "events": ["document.processed", "document.failed"],
+    "secret_ref": "DOCUELEVATE_WEBHOOK_SECRET",
+    "description": "Starter webhook receiver for document lifecycle events"
+  }
+}

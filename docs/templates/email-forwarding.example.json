@@ -1,0 +1,10 @@
+{
+  "integration": "email_forwarding",
+  "template": "invoice_intake_pack",
+  "settings": {
+    "destination": "finance-archive@example.com",
+    "subject": "Processed invoice: {{ filename }}",
+    "include_metadata": true,
+    "attach_pdf": true
+  }
+}

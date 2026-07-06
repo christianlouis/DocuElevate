@@ -64,6 +64,11 @@ DocuElevate ships five starter templates:
 - `receipt_capture_pack`
 - `research_archive_pack`
 
+Each starter has sample metadata and integration examples in
+[`docs/templates/`](templates/README.md). The examples cover common demo and
+validation cases, including email forwarding and webhook receiver starters for
+Slack, Teams, or custom automation endpoints.
+
 ## API
 
 | Method | Endpoint | Purpose |

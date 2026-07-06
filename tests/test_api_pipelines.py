@@ -481,6 +481,38 @@ class TestPipelineCRUD:
         assert template["steps"][0]["step_type"] == "ocr"
         assert template["steps"][0]["config"]["ocr_language"] == "eng"
 
+    def test_builtin_templates_have_documented_samples(self):
+        """Each shipped workflow template has docs and sample metadata."""
+        from pathlib import Path
+
+        from app.pipeline_templates import BUILT_IN_PIPELINE_TEMPLATES
+
+        root = Path(__file__).parents[1]
+        docs_dir = root / "docs" / "templates"
+        readme = (docs_dir / "README.md").read_text()
+        sample_files = {
+            "standard_document_archive": "standard-document.sample.json",
+            "invoice_intake_pack": "invoice.sample.json",
+            "contract_review_pack": "contract.sample.json",
+            "receipt_capture_pack": "receipt.sample.json",
+            "research_archive_pack": "research.sample.json",
+        }
+
+        assert set(sample_files) == set(BUILT_IN_PIPELINE_TEMPLATES)
+        for template_key, sample_file in sample_files.items():
+            assert template_key in readme
+            assert sample_file in readme
+            sample = json.loads((docs_dir / sample_file).read_text())
+            assert sample["filename"]
+            assert sample["file_type"]
+            assert sample["document_type"]
+            assert isinstance(sample["metadata"], dict)
+
+        for example_file in ("email-forwarding.example.json", "webhook-receiver.example.json"):
+            assert example_file in readme
+            example = json.loads((docs_dir / example_file).read_text())
+            assert example["integration"]
+
 
 # ---------------------------------------------------------------------------
 # Integration tests – Step management
