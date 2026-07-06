@@ -379,6 +379,46 @@ class TestSeedDefaultScheduledJobs:
         }
         assert expected == task_names
 
+    def test_does_not_overwrite_existing_jobs(self, sj_session):
+        """Existing jobs are not modified during seed."""
+        from app.api.scheduled_jobs import DEFAULT_JOBS, seed_default_scheduled_jobs
+
+        # Seed initially
+        seed_default_scheduled_jobs(sj_session)
+
+        # Modify a job
+        job_to_modify = DEFAULT_JOBS[0]["name"]
+        job = sj_session.query(ScheduledJob).filter_by(name=job_to_modify).first()
+        job.enabled = False
+        job.cron_hour = "12"
+        sj_session.commit()
+
+        # Seed again
+        seed_default_scheduled_jobs(sj_session)
+
+        # Verify it wasn't overwritten
+        updated_job = sj_session.query(ScheduledJob).filter_by(name=job_to_modify).first()
+        assert updated_job.enabled is False
+        assert updated_job.cron_hour == "12"
+
+    def test_seeds_only_missing_jobs(self, sj_session):
+        """Only missing jobs are inserted when some already exist."""
+        from app.api.scheduled_jobs import DEFAULT_JOBS, seed_default_scheduled_jobs
+
+        # Manually create just the first job
+        first_job = ScheduledJob(**DEFAULT_JOBS[0])
+        sj_session.add(first_job)
+        sj_session.commit()
+
+        count_before = sj_session.query(ScheduledJob).count()
+        assert count_before == 1
+
+        # Seed should add the rest
+        seed_default_scheduled_jobs(sj_session)
+
+        count_after = sj_session.query(ScheduledJob).count()
+        assert count_after == len(DEFAULT_JOBS)
+
 
 # ===========================================================================
 # Batch task tests
