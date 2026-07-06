@@ -14,6 +14,7 @@ from typing import Annotated, List, Optional
 import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 
@@ -38,6 +39,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 DbSession = Annotated[Session, Depends(get_db)]
+
+
+class BulkPipelineAssignment(BaseModel):
+    """Request body for assigning selected files to a processing pipeline."""
+
+    file_ids: list[int] = Field(..., min_length=1)
+    pipeline_id: int | None = Field(default=None, ge=1)
 
 
 def get_limiter():
@@ -557,6 +565,69 @@ def bulk_reprocess_files_cloud_ocr(request: Request, file_ids: List[int], db: Db
     except Exception as e:
         logger.exception(f"Error bulk reprocessing files with Cloud OCR: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error bulk reprocessing files with Cloud OCR: {str(e)}")
+
+
+@router.post("/files/bulk-assign-pipeline")
+@require_login
+def bulk_assign_pipeline_to_files(request: Request, body: BulkPipelineAssignment, db: DbSession):
+    """Assign or clear a processing pipeline for multiple files."""
+    from app.auth import get_current_user, get_current_user_id
+    from app.models import Pipeline
+
+    try:
+        user = get_current_user(request)
+        user_id = get_current_user_id(request)
+        owner_id = get_current_owner_id(request)
+        is_admin = bool(user and user.get("is_admin"))
+
+        query = db.query(FileRecord).filter(FileRecord.id.in_(body.file_ids))
+        query = apply_owner_filter(query, request)
+        file_records = query.all()
+        if not file_records:
+            raise HTTPException(status_code=404, detail="No files found with the provided IDs")
+
+        if not is_admin:
+            non_owner_ids = [f.id for f in file_records if get_file_role(f, owner_id, db) != "owner"]
+            if non_owner_ids:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"You can only route files you own. Not owner of file IDs: {non_owner_ids}",
+                )
+
+        if body.pipeline_id is not None:
+            pipeline = db.query(Pipeline).filter(Pipeline.id == body.pipeline_id).first()
+            if not pipeline:
+                raise HTTPException(status_code=404, detail="Pipeline not found")
+            if not is_admin and pipeline.owner_id is not None and pipeline.owner_id != user_id:
+                raise HTTPException(status_code=404, detail="Pipeline not found")
+
+        updated_ids = [file_record.id for file_record in file_records]
+        for file_record in file_records:
+            file_record.pipeline_id = body.pipeline_id
+            file_record.pipeline_routing_rule_id = None
+            if body.pipeline_id is None:
+                file_record.pipeline_assignment_source = "default"
+                file_record.pipeline_assignment_reason = "Bulk route cleared; using the owner or system default profile"
+            else:
+                file_record.pipeline_assignment_source = "bulk_route"
+                file_record.pipeline_assignment_reason = "Processing profile assigned from bulk search results"
+
+        db.commit()
+
+        logger.info("Bulk pipeline assignment updated %d files to pipeline=%r", len(updated_ids), body.pipeline_id)
+        return {
+            "status": "success",
+            "message": f"Updated routing for {len(updated_ids)} selected document(s)",
+            "updated_count": len(updated_ids),
+            "updated_ids": updated_ids,
+            "pipeline_id": body.pipeline_id,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Error bulk assigning pipeline: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error bulk assigning pipeline: {str(e)}")
 
 
 @router.post("/files/bulk-download")

@@ -106,9 +106,11 @@ class TestSearchPage:
         text = response.text
         assert "bulkDownloadSearchResults" in text
         assert "bulkExportSearchResults" in text
+        assert "bulkRouteSearchResults" in text
         assert "bulkReprocessSearchResults" in text
         assert "bulkDeleteSearchResults" in text
         assert "/api/files/bulk-download" in text
+        assert "/api/files/bulk-assign-pipeline" in text
         assert "/api/files/bulk-reprocess" in text
         assert "/api/files/bulk-delete" in text
         assert "This cannot be undone from search results" in text

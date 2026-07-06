@@ -303,6 +303,9 @@
       <button type="button" onclick="bulkExportSearchResults()">
         <i class="fas fa-file-export" aria-hidden="true"></i> Export
       </button>
+      <button type="button" onclick="bulkRouteSearchResults()">
+        <i class="fas fa-route" aria-hidden="true"></i> Route
+      </button>
       <button type="button" onclick="bulkReprocessSearchResults()">
         <i class="fas fa-sync-alt" aria-hidden="true"></i> Reprocess
       </button>
@@ -694,6 +697,35 @@
     .then(function(data) {
       const errors = Array.isArray(data.errors) ? data.errors.length : 0;
       setBulkStatus((data.message || 'Reprocessing queued.') + (errors ? ' ' + errors + ' error(s) returned.' : ''), errors > 0);
+    })
+    .catch(function(error) { setBulkStatus(error.message, true); });
+  }
+
+  function bulkRouteSearchResults() {
+    const fileIds = requireBulkSelection();
+    if (!fileIds) return;
+    const pipelineIdText = prompt('Enter the destination pipeline ID for ' + fileIds.length + ' selected document' + (fileIds.length !== 1 ? 's' : '') + '. Leave blank to clear the route.');
+    if (pipelineIdText === null) return;
+    const trimmed = pipelineIdText.trim();
+    const pipelineId = trimmed ? Number(trimmed) : null;
+    if (trimmed && (!Number.isInteger(pipelineId) || pipelineId < 1)) {
+      setBulkStatus('Pipeline ID must be a positive number.', true);
+      return;
+    }
+    const action = pipelineId === null ? 'clear routing for' : 'route';
+    if (!confirm('Bulk ' + action + ' ' + fileIds.length + ' selected document' + (fileIds.length !== 1 ? 's' : '') + '?')) return;
+    setBulkStatus('Updating selected routes…', false);
+    fetch('/api/files/bulk-assign-pipeline', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_ids: fileIds, pipeline_id: pipelineId })
+    })
+    .then(function(response) {
+      if (!response.ok) return response.json().then(function(err) { throw new Error(err.detail || 'Failed to route selected records'); });
+      return response.json();
+    })
+    .then(function(data) {
+      setBulkStatus(data.message || 'Selected routes updated.', false);
     })
     .catch(function(error) { setBulkStatus(error.message, true); });
   }

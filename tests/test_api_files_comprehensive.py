@@ -2919,6 +2919,84 @@ class TestAssignPipelineToFile:
 
 
 @pytest.mark.unit
+class TestBulkAssignPipelineToFiles:
+    """Tests for POST /api/files/bulk-assign-pipeline endpoint."""
+
+    def test_bulk_assign_pipeline_success(self, client: TestClient, db_session):
+        """Bulk route assigns a pipeline to multiple files."""
+        from app.models import Pipeline
+
+        files = [
+            FileRecord(
+                filehash=f"hash{i}",
+                original_filename=f"test{i}.pdf",
+                local_filename=f"/tmp/test{i}.pdf",
+                file_size=1024,
+                mime_type="application/pdf",
+            )
+            for i in range(2)
+        ]
+        pipeline = Pipeline(name="Bulk Route", owner_id=None, is_default=False)
+        db_session.add_all([*files, pipeline])
+        db_session.commit()
+
+        response = client.post(
+            "/api/files/bulk-assign-pipeline",
+            json={"file_ids": [file.id for file in files], "pipeline_id": pipeline.id},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["updated_count"] == 2
+        assert data["pipeline_id"] == pipeline.id
+        for file in files:
+            db_session.refresh(file)
+            assert file.pipeline_id == pipeline.id
+            assert file.pipeline_assignment_source == "bulk_route"
+
+    def test_bulk_assign_pipeline_can_clear_routes(self, client: TestClient, db_session):
+        """Bulk route can clear explicit pipeline assignments."""
+        from app.models import Pipeline
+
+        pipeline = Pipeline(name="Bulk Route", owner_id=None, is_default=False)
+        file = FileRecord(
+            filehash="hash-clear",
+            original_filename="clear.pdf",
+            local_filename="/tmp/clear.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add_all([pipeline, file])
+        db_session.commit()
+        file.pipeline_id = pipeline.id
+        db_session.commit()
+
+        response = client.post("/api/files/bulk-assign-pipeline", json={"file_ids": [file.id], "pipeline_id": None})
+
+        assert response.status_code == 200
+        db_session.refresh(file)
+        assert file.pipeline_id is None
+        assert file.pipeline_assignment_source == "default"
+
+    def test_bulk_assign_pipeline_rejects_missing_pipeline(self, client: TestClient, db_session):
+        """Bulk route rejects unknown target pipelines."""
+        file = FileRecord(
+            filehash="hash-missing-pipeline",
+            original_filename="missing-pipeline.pdf",
+            local_filename="/tmp/missing-pipeline.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.post("/api/files/bulk-assign-pipeline", json={"file_ids": [file.id], "pipeline_id": 99999})
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Pipeline not found"
+
+
+@pytest.mark.unit
 class TestRetryPipelineStepEmptyLocalFilename:
     """Tests for _retry_pipeline_step with empty-string local_filename (falsy but not null)."""
 
