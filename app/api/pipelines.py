@@ -35,17 +35,23 @@ DbSession = Annotated[Session, Depends(get_db)]
 PIPELINE_STEP_TYPES: dict[str, dict[str, Any]] = {
     "convert_to_pdf": {
         "label": "Convert to PDF",
-        "description": "Convert non-PDF documents to PDF format using Gotenberg.",
+        "description": "Convert non-PDF documents to PDF format using Gotenberg. Runtime order is system-managed.",
+        "runtime_effect": "metadata_only",
+        "runtime_effect_description": "Stored for profile planning; it does not currently change processing order.",
         "config_schema": {},
     },
     "check_duplicates": {
         "label": "Check for Duplicates",
-        "description": "Compare file hash against existing documents to detect duplicates.",
+        "description": "Compare file hash against existing documents to detect duplicates. Runtime order is system-managed.",
+        "runtime_effect": "metadata_only",
+        "runtime_effect_description": "Stored for profile planning; duplicate checks use global settings today.",
         "config_schema": {},
     },
     "ocr": {
-        "label": "OCR Processing",
-        "description": "Extract text using Azure Document Intelligence or local Tesseract.",
+        "label": "OCR Profile Settings",
+        "description": "Configure OCR behavior that is applied during the system-managed processing flow.",
+        "runtime_effect": "applied_config",
+        "runtime_effect_description": "OCR language and force-cloud OCR are applied at runtime.",
         "config_schema": {
             "force_cloud_ocr": {
                 "type": "boolean",
@@ -97,27 +103,37 @@ PIPELINE_STEP_TYPES: dict[str, dict[str, Any]] = {
     },
     "extract_metadata": {
         "label": "Metadata Extraction",
-        "description": "Extract structured metadata (document type, sender, recipient, tags) using AI.",
+        "description": "Extract structured metadata (document type, sender, recipient, tags) using AI. Runtime order is system-managed.",
+        "runtime_effect": "metadata_only",
+        "runtime_effect_description": "Stored for profile planning; it does not currently change processing order.",
         "config_schema": {},
     },
     "embed_metadata": {
         "label": "Embed Metadata into PDF",
-        "description": "Write the extracted metadata into the PDF document properties.",
+        "description": "Write the extracted metadata into the PDF document properties. Runtime order is system-managed.",
+        "runtime_effect": "metadata_only",
+        "runtime_effect_description": "Stored for profile planning; it does not currently change processing order.",
         "config_schema": {},
     },
     "compute_embedding": {
         "label": "Compute Text Embedding",
-        "description": "Compute semantic text embeddings for full-text and similarity search.",
+        "description": "Compute semantic text embeddings for full-text and similarity search. Runtime order is system-managed.",
+        "runtime_effect": "metadata_only",
+        "runtime_effect_description": "Stored for profile planning; it does not currently change processing order.",
         "config_schema": {},
     },
     "send_to_destinations": {
         "label": "Send to Storage Destinations",
-        "description": "Upload the processed document to all configured storage destinations.",
+        "description": "Upload the processed document to all configured storage destinations. Runtime order is system-managed.",
+        "runtime_effect": "metadata_only",
+        "runtime_effect_description": "Stored for profile planning; destination uploads use configured integrations today.",
         "config_schema": {},
     },
     "classify": {
         "label": "Document Classification",
-        "description": "Classify the document type using built-in and custom rules (filename patterns, content keywords, metadata matching).",
+        "description": "Classify the document type using built-in and custom rules. Runtime order is system-managed.",
+        "runtime_effect": "metadata_only",
+        "runtime_effect_description": "Stored for profile planning; classification rules use their own settings today.",
         "config_schema": {
             "use_builtin_rules": {
                 "type": "boolean",

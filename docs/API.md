@@ -1879,7 +1879,13 @@ Execute a full data migration from source to target database.
 
 ## Pipelines
 
-The pipeline API lets you build and manage custom document processing workflows. Each pipeline is owned by a single user (or by the system when `owner_id` is `null`).
+The pipeline API manages processing profiles. Each profile is owned by a single user (or by the system when `owner_id` is `null`).
+
+Current runtime contract:
+
+- OCR step config is applied at runtime. `ocr_language` and `force_cloud_ocr` affect document processing.
+- Step order, non-OCR step entries, and enabled flags are stored as profile metadata. They do not currently orchestrate the worker chain.
+- The system-managed processing flow still controls conversion, duplicate handling, metadata extraction, embedding, storage uploads, and classification.
 
 ### Step-types catalogue
 
@@ -1895,11 +1901,15 @@ Returns the catalogue of built-in step types.
   "convert_to_pdf": {
     "label": "Convert to PDF",
     "description": "Convert non-PDF documents to PDF format using Gotenberg.",
+    "runtime_effect": "metadata_only",
+    "runtime_effect_description": "Stored for profile planning; it does not currently change processing order.",
     "config_schema": {}
   },
   "ocr": {
-    "label": "OCR Processing",
-    "description": "Extract text using Azure Document Intelligence or local Tesseract.",
+    "label": "OCR Profile Settings",
+    "description": "Configure OCR behavior that is applied during the system-managed processing flow.",
+    "runtime_effect": "applied_config",
+    "runtime_effect_description": "OCR language and force-cloud OCR are applied at runtime.",
     "config_schema": {
       "force_cloud_ocr": { "type": "boolean", "default": false },
       "ocr_language": {
@@ -1937,8 +1947,8 @@ POST /api/pipelines
 Content-Type: application/json
 
 {
-  "name": "My Workflow",
-  "description": "Converts, OCRs, and stores documents.",
+  "name": "German OCR Profile",
+  "description": "Uses German OCR defaults.",
   "is_default": false,
   "is_active": true
 }
@@ -1949,8 +1959,8 @@ Content-Type: application/json
 {
   "id": 1,
   "owner_id": "alice",
-  "name": "My Workflow",
-  "description": "Converts, OCRs, and stores documents.",
+  "name": "German OCR Profile",
+  "description": "Uses German OCR defaults.",
   "is_default": false,
   "is_active": true,
   "created_at": "2026-03-07T10:00:00+00:00",
@@ -1981,7 +1991,7 @@ GET /api/pipelines/{pipeline_id}
 {
   "id": 1,
   "owner_id": "alice",
-  "name": "My Workflow",
+  "name": "German OCR Profile",
   "steps": [
     { "id": 1, "position": 0, "step_type": "convert_to_pdf", "enabled": true, "config": {} },
     { "id": 2, "position": 1, "step_type": "ocr", "enabled": true, "config": { "force_cloud_ocr": false } }
@@ -2057,7 +2067,7 @@ Content-Type: application/json
 [3, 1, 2]
 ```
 
-Provide a complete ordered list of **all** step IDs. Their positions are reassigned 0, 1, 2, … in the given order.
+Provide a complete ordered list of **all** step IDs. Their positions are reassigned 0, 1, 2, … in the given order. Reordering is metadata-only in the current runtime and does not change worker execution order.
 
 ### Assign pipeline to a file
 

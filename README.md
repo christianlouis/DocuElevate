@@ -37,7 +37,7 @@ DocuElevate is an intelligent document processing system that automates the inge
 - **Multi-Engine OCR** — Azure Document Intelligence, Tesseract, EasyOCR, Mistral OCR, Google Cloud Document AI, and AWS Textract with configurable merge strategies
 - **13 Storage Destinations** — Dropbox, Google Drive, OneDrive, Amazon S3, Nextcloud, WebDAV, FTP, SFTP, iCloud Drive, Email (SMTP), Paperless-ngx, Evernote, and Rclone
 - **Multi-Channel Ingestion** — web upload, browser extension, mobile app, CLI, REST API, IMAP email, and watched folders (local, cloud, FTP/SFTP)
-- **Processing Pipelines** — customizable multi-step workflows with conditional routing rules
+- **Processing Profiles** — per-profile OCR behavior, default selection, and conditional routing rules
 - **Full-Text Search** — powered by Meilisearch for instant document discovery
 - **Multi-User with SSO** — local accounts, OAuth2/OIDC (Authentik), and social login (Google, Microsoft, Apple, Dropbox)
 
@@ -116,7 +116,7 @@ Processed documents are distributed to any combination of configured destination
 - **AI metadata extraction** using any supported provider (OpenAI, Anthropic, Gemini, Ollama, OpenRouter, Portkey, Azure OpenAI)
 - **PDF conversion** via Gotenberg with optional PDF/A archival format
 - **Duplicate detection** — exact (SHA-256) and near-duplicate (content similarity with vector embeddings)
-- **Customizable pipelines** — define multi-step processing workflows with conditional routing rules
+- **Customizable processing profiles** — select OCR behavior and route documents to profile defaults
 
 ### Document Management
 - **Full-text search** powered by Meilisearch with saved searches
