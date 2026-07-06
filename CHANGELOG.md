@@ -10,6 +10,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.174.0 (2026-07-06)
+
+### Bug Fixes
+
+- Avoid logging preset owner identifiers
+  ([#982](https://github.com/christianlouis/DocuElevate/pull/982),
+  [`3ec97b7`](https://github.com/christianlouis/DocuElevate/commit/3ec97b7babc150cb155bc0478fdfe2896e0fa389))
+
+### Chores
+
+- Remove crowdin configuration ([#982](https://github.com/christianlouis/DocuElevate/pull/982),
+  [`3ec97b7`](https://github.com/christianlouis/DocuElevate/commit/3ec97b7babc150cb155bc0478fdfe2896e0fa389))
+
+### Features
+
+- Add guided pipeline presets ([#982](https://github.com/christianlouis/DocuElevate/pull/982),
+  [`3ec97b7`](https://github.com/christianlouis/DocuElevate/commit/3ec97b7babc150cb155bc0478fdfe2896e0fa389))
+
+### Testing
+
+- Cover preset logging safeguards ([#982](https://github.com/christianlouis/DocuElevate/pull/982),
+  [`3ec97b7`](https://github.com/christianlouis/DocuElevate/commit/3ec97b7babc150cb155bc0478fdfe2896e0fa389))
+
+
 ## v0.173.16 (2026-07-06)
 
 ### Bug Fixes
