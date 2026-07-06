@@ -348,12 +348,39 @@ class TestFormatTimeRemaining:
 
         from app.api.google_drive import format_time_remaining
 
-        time_left = timedelta(days=1, hours=0)
+        time_left = timedelta(days=1, hours=1)
         result = format_time_remaining(time_left)
         # Should use singular "day" not plural "days"
         assert "1 day" in result
         # Should not have "1 days" (plural)
         assert "1 days" not in result
+        assert "1 hour" in result
+        assert "1 hours" not in result
+
+        time_left_min = timedelta(minutes=1)
+        result_min = format_time_remaining(time_left_min)
+        assert "1 minute" in result_min
+        assert "1 minutes" not in result_min
+
+    def test_format_zero_seconds(self):
+        """Test formatting when exact zero seconds remaining."""
+        from datetime import timedelta
+
+        from app.api.google_drive import format_time_remaining
+
+        time_left = timedelta(seconds=0)
+        result = format_time_remaining(time_left)
+        assert result == "Expired"
+
+    def test_format_seconds_only(self):
+        """Test formatting when only seconds remaining."""
+        from datetime import timedelta
+
+        from app.api.google_drive import format_time_remaining
+
+        time_left = timedelta(seconds=30)
+        result = format_time_remaining(time_left)
+        assert result == ""
 
 
 @pytest.mark.unit
