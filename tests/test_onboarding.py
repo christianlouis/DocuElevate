@@ -280,13 +280,38 @@ class TestOnboardingAPI:
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
-        assert "redirect_url" in data
+        assert data["redirect_url"] == "/upload"
 
         # Re-query to see persisted value
         ob_session.expire_all()
         profile = ob_session.query(UserProfile).filter(UserProfile.user_id == _TEST_USER["sub"]).first()
         assert profile.onboarding_completed is True
         assert profile.onboarding_completed_at is not None
+
+    def test_complete_uses_session_redirect_url(self, ob_client_authed, ob_session):
+        """POST /complete should return the redirect_url from the session."""
+        from unittest.mock import patch
+
+        _make_profile(ob_session, _TEST_USER["sub"])
+
+        # We patch FastAPI's Request.session property to simulate an active session
+        with patch("fastapi.Request.session", new_callable=lambda: {"post_onboarding_redirect": "/custom-dashboard"}):
+            resp = ob_client_authed.post("/api/onboarding/complete")
+
+        assert resp.status_code == 200
+        assert resp.json()["redirect_url"] == "/custom-dashboard"
+
+        ob_session.expire_all()
+        profile = ob_session.query(UserProfile).filter(UserProfile.user_id == _TEST_USER["sub"]).first()
+        assert profile.onboarding_completed is True
+
+    def test_complete_db_error_triggers_rollback(self, ob_client_authed, ob_session):
+        """POST /complete should rollback and raise 500 if DB commit fails."""
+        from unittest.mock import patch
+
+        with patch("sqlalchemy.orm.Session.commit", side_effect=Exception("DB Error")):
+            resp = ob_client_authed.post("/api/onboarding/complete")
+            assert resp.status_code == 500
 
     def test_complete_creates_profile_if_missing(self, ob_client_authed, ob_session):
         """POST /complete should create a profile when none exists and mark it done."""
