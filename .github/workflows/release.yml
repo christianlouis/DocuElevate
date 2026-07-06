@@ -6,6 +6,10 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: semantic-release-main
+  cancel-in-progress: false
+
 permissions:
   contents: write
   issues: write
@@ -63,7 +67,8 @@ jobs:
             if ! git diff --quiet CHANGELOG.md; then
               git add CHANGELOG.md
               git commit -m "docs(changelog): update changelog [skip ci]"
-              git push
+              git pull --rebase origin main
+              git push origin HEAD:main
             fi
           fi
 
@@ -76,5 +81,6 @@ jobs:
           done
           if ! git diff --staged --quiet; then
             git commit -m "chore(release): update build metadata files [skip ci]"
-            git push
+            git pull --rebase origin main
+            git push origin HEAD:main
           fi
