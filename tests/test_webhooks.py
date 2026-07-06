@@ -631,3 +631,26 @@ class TestDeliverWebhookTask:
 
         with pytest.raises(RuntimeError, match="Webhook delivery.*failed"):
             deliver_webhook_task.__wrapped__("https://example.com/hook", {"event": "test"}, None)
+
+    def test_final_failure_logs_dead_letter_context(self, mocker):
+        """After retry exhaustion, webhook failures are logged with dead-letter context."""
+        mock_logger = mocker.patch("app.tasks.webhook_tasks.logger")
+
+        from app.tasks.webhook_tasks import deliver_webhook_task
+
+        deliver_webhook_task.on_failure(
+            RuntimeError("delivery failed"),
+            "task-dead",
+            ("https://example.com/hook", {"event": "document.failed"}, None),
+            {},
+            None,
+        )
+
+        mock_logger.error.assert_called_once_with(
+            "Webhook delivery dead-lettered: task_id=%s url=%s event=%s attempts=%d error=%s",
+            "task-dead",
+            "https://example.com/hook",
+            "document.failed",
+            deliver_webhook_task.max_retries + 1,
+            mocker.ANY,
+        )

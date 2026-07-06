@@ -1636,6 +1636,9 @@ is_valid = verify_signature(
 ### Retry Behavior
 
 Failed deliveries (non-2xx responses or network errors) are automatically retried with exponential backoff: 60 s, 300 s, then 900 s (up to 3 retries with ±20 % jitter).
+If all attempts fail, the Celery task logs a structured dead-letter entry with
+the task ID, target URL, event type, attempt count, and final error so operators
+can alert on or replay failed deliveries from task logs.
 
 ## Error Handling
 
