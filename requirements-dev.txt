@@ -3,19 +3,19 @@
 
 # Testing
 pytest>=9.1.1
-pytest-cov>=4.1.0
+pytest-cov>=7.1.0
 pytest-asyncio>=1.4.0
 pytest-mock>=3.12.0
 pytest-timeout>=2.4.0  # Per-test timeout enforcement to prevent CI hangs
-httpx>=0.26.0  # For async test client
+httpx>=0.28.1  # For async test client
 testcontainers>=3.7.1  # For integration tests with real containers
 fpdf2>=2.8.0  # For generating test PDF documents in integration tests
 minio>=7.2.20  # For MinIO/S3 integration tests
 redis>=8.0.0  # For Redis integration tests
-boto3>=1.43.36  # For S3 integration tests
+boto3>=1.43.40  # For S3 integration tests
 
 # Code quality
-ruff>=0.3.0
+ruff>=0.15.20
 mypy>=2.1.0
 djlint>=1.36.0  # HTML template linter for accessibility and best practices
 
@@ -37,6 +37,6 @@ pre-commit>=3.6.0
 pip-licenses==5.5.5  # For license compliance checking
 
 # Release automation
-python-semantic-release>=9.0.0
+python-semantic-release>=10.6.0
 
 types-aiofiles>=24.1.0.20240311  # Type stubs for aiofiles

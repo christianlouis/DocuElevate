@@ -31,13 +31,13 @@ msgraph-core>=1.0.0
 msal>=1.20.0
 
 # AWS S3
-boto3>=1.43.36
+boto3>=1.43.40
 
 # SFTP
 paramiko>=3.4.0  # SSH/SFTP implementation for Python (LGPL license)
 
 # iCloud Drive
-pyicloud>=2.6.4  # Unofficial Apple iCloud API client (MIT license)
+pyicloud>=2.6.5  # Unofficial Apple iCloud API client (MIT license)
 
 # Evernote
 evernote3>=1.25.14  # Evernote Cloud API SDK for Python 3 (BSD license)
@@ -46,7 +46,7 @@ evernote3>=1.25.14  # Evernote Cloud API SDK for Python 3 (BSD license)
 defusedxml>=0.7.1
 
 # Notification service
-apprise>=1.11.0
+apprise>=1.12.0
 
 # AI provider aggregator - enables Anthropic, Gemini, Ollama, and 100+ LLM providers
 litellm>=1.90.0,<2.0.0
@@ -58,14 +58,14 @@ aiohttp>=3.14.0,<4.0.0
 pytesseract>=0.3.13  # Python wrapper for Tesseract OCR
 pdf2image>=1.17.0  # Convert PDF pages to images (used by Tesseract and EasyOCR providers)
 ocrmypdf>=16.0.0,<18.0.0  # Post-processing: embeds searchable text layers into PDFs via Tesseract
-meilisearch>=0.41.0  # Full-text search engine client
+meilisearch>=0.42.0  # Full-text search engine client
 stripe>=7.0.0,<16.0.0  # Stripe billing SDK (MIT license)
 
 # Error and performance monitoring
 sentry-sdk[fastapi,celery,sqlalchemy]>=2.63.0,<3.0.0
 
 # GraphQL API
-strawberry-graphql[fastapi]>=0.243.0,<1.0.0
+strawberry-graphql[fastapi]>=0.320.1,<1.0.0
 
 aiofiles>=25.1.0  # Asynchronous file I/O support
 segno>=1.6.0  # Pure-Python QR code generator (server-side rendering, no Pillow dependency)
