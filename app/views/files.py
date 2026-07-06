@@ -13,6 +13,8 @@ from app.utils.file_queries import apply_status_filter
 from app.utils.file_status import get_files_processing_status
 from app.utils.pipeline_stages import (
     ALWAYS_SHOW_STAGES as _ALWAYS_SHOW_STAGES,
+)
+from app.utils.pipeline_stages import (
     normalize_stage_name,
     stage_keys_for_pipeline_steps,
 )
