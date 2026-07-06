@@ -2,14 +2,12 @@
 Dropbox API endpoints
 """
 
-import asyncio
 import logging
 import os
 from typing import Annotated, Optional
 from urllib.parse import quote
 
 import httpx
-import requests
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
@@ -345,13 +343,13 @@ async def list_dropbox_folders(
             "include_mounted_folders": True,
         }
 
-        response = await asyncio.to_thread(
-            requests.post,
-            "https://api.dropboxapi.com/2/files/list_folder",
-            headers=headers,
-            json=payload,
-            timeout=settings.http_request_timeout,
-        )
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.dropboxapi.com/2/files/list_folder",
+                headers=headers,
+                json=payload,
+                timeout=settings.http_request_timeout,
+            )
 
         if response.status_code == 401:
             raise HTTPException(
