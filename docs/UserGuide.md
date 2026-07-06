@@ -549,16 +549,23 @@ PAPERLESS_CUSTOM_FIELDS_MAPPING='{"absender": "Sender", "empfaenger": "Recipient
 3. After successful upload, custom fields are automatically populated
 4. You can view the populated fields in your Paperless-ngx document details
 
-## Processing Pipelines
+## Processing Profiles
 
-Processing pipelines let you define exactly what happens to your documents when they are uploaded. Each pipeline is an ordered sequence of **steps** — for example: convert to PDF → OCR → extract metadata → send to storage.
+Processing profiles let you select defaults and OCR behavior for uploaded documents. The current processor still uses DocuElevate's system-managed execution flow; profiles do not yet act as an ordered workflow engine.
+
+At runtime, profile OCR settings are honored:
+
+- `ocr_language`
+- `force_cloud_ocr`
+
+Other step entries, ordering, and enabled flags are saved as profile metadata for planning and future workflow automation.
 
 ### Key concepts
 
 | Term | Meaning |
 |------|---------|
-| **Pipeline** | A named, ordered list of processing steps |
-| **Step** | A single processing action (e.g., OCR, metadata extraction) |
+| **Pipeline / profile** | A named processing profile used for defaults and OCR behavior |
+| **Step** | A profile setting entry. OCR step config is applied at runtime; other entries are metadata today |
 | **System pipeline** | Created by an admin; visible to all users as a shared default |
 | **User pipeline** | Created by a regular user; private to that user |
 | **Default pipeline** | Marked `is_default=true`; used automatically for new uploads |
@@ -566,23 +573,22 @@ Processing pipelines let you define exactly what happens to your documents when 
 ### Managing your pipelines
 
 1. Navigate to **Pipelines** in the top navigation bar.
-2. Click **New Pipeline** to create a pipeline, give it a name and optional description.
-3. Expand the pipeline card and click **Add Step** to build the workflow.
-4. Use the ↑ / ↓ arrows to reorder steps, or click the edit icon to change step settings.
-5. Mark a pipeline as **Default** so new documents are automatically processed by it.
+2. Click **New Pipeline** to create a profile, give it a name and optional description.
+3. Expand the profile card and add an OCR setting when you need per-profile OCR behavior.
+4. Mark a profile as **Default** so new documents use it automatically.
 
 ### Available step types
 
 | Step Type | Description |
 |-----------|-------------|
-| `convert_to_pdf` | Convert non-PDF files to PDF using Gotenberg |
-| `check_duplicates` | Detect duplicate files by content hash |
-| `ocr` | Extract text with OCR (supports multi-language configuration, see below) |
-| `extract_metadata` | Extract structured metadata (type, sender, tags) with AI |
-| `embed_metadata` | Write extracted metadata into the PDF document properties |
-| `compute_embedding` | Compute semantic embeddings for similarity search |
-| `send_to_destinations` | Upload the processed document to all configured storage destinations |
-| `classify` | Classify the document type using rules (filename patterns, content keywords, metadata) |
+| `ocr` | Applied at runtime. Supports multi-language configuration and force-cloud OCR |
+| `convert_to_pdf` | Metadata only today. Conversion runs in the system-managed flow |
+| `check_duplicates` | Metadata only today. Duplicate handling uses global settings |
+| `extract_metadata` | Metadata only today. Metadata extraction runs in the system-managed flow |
+| `embed_metadata` | Metadata only today. PDF metadata embedding runs in the system-managed flow |
+| `compute_embedding` | Metadata only today. Embedding runs in the system-managed flow |
+| `send_to_destinations` | Metadata only today. Destination uploads use configured integrations |
+| `classify` | Metadata only today. Classification rules use their own settings |
 
 #### Classify step – rule-based document classification
 
@@ -608,12 +614,12 @@ The `ocr` step supports two optional configuration fields:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `force_cloud_ocr` | boolean | `false` | Always run cloud OCR even if the PDF already has embedded text |
+| `force_cloud_ocr` | boolean | `false` | Always run OCR even if the PDF already has embedded text |
 | `ocr_language` | string | `"auto"` | Language(s) to use for OCR text extraction (see below) |
 
 **`ocr_language` — per-pipeline language override**
 
-This option enables manual language control per pipeline, overriding the global Tesseract/EasyOCR language settings for all documents processed by that pipeline. The following values are supported (28 languages total):
+This option enables manual language control per profile, overriding the global Tesseract/EasyOCR language settings for all documents processed by that profile. The following values are supported (28 languages total):
 
 | Value | Language | Value | Language |
 |-------|----------|-------|----------|
@@ -639,7 +645,7 @@ This option enables manual language control per pipeline, overriding the global 
 > - For multi-language documents with Tesseract, combine codes with `+`, e.g. `eng+deu`.
 > - Setting `ocr_language` to `auto` or leaving it unset uses the global `TESSERACT_LANGUAGE` / `EASYOCR_LANGUAGES` environment variables.
 
-### Assigning a pipeline to a file
+### Assigning a profile to a file
 
 You can assign (or change) the pipeline for an individual document via the file detail page or the API:
 
@@ -647,15 +653,15 @@ You can assign (or change) the pipeline for an individual document via the file 
 POST /api/files/{file_id}/assign-pipeline?pipeline_id=3
 ```
 
-Pass no `pipeline_id` to clear the assignment and fall back to the system default.
+Pass no `pipeline_id` to clear the assignment and fall back to the system default profile.
 
 ### Admin: system-wide pipelines
 
-Admins can create **system pipelines** that appear in every user's pipeline list. These can be set as the global default so all users benefit from a consistent processing baseline. Navigate to **Pipelines** and check the **System pipeline** box when creating a new one (admin only).
+Admins can create **system pipelines** that appear in every user's pipeline list. These can be set as the global default so all users benefit from a consistent processing profile. Navigate to **Pipelines** and check the **System pipeline** box when creating a new one (admin only).
 
 ### Conditional routing rules
 
-Routing rules automatically assign incoming documents to the right pipeline
+Routing rules automatically assign incoming documents to the right profile
 based on their properties — no manual pipeline selection required.
 
 **How it works:**

@@ -917,6 +917,49 @@ def test_get_pipeline_ocr_language_returns_language_from_system_default(db_sessi
 
 @pytest.mark.unit
 @pytest.mark.requires_db
+def test_get_pipeline_ocr_config_returns_force_cloud_ocr(db_session):
+    """Returns force_cloud_ocr from the selected profile OCR step config."""
+    import json
+
+    from app.models import Pipeline, PipelineStep
+    from app.tasks.process_document import _get_pipeline_ocr_config
+
+    pipeline = Pipeline(
+        owner_id=None,
+        name="Force OCR Profile",
+        is_default=True,
+        is_active=True,
+    )
+    db_session.add(pipeline)
+    db_session.commit()
+
+    ocr_step = PipelineStep(
+        pipeline_id=pipeline.id,
+        position=0,
+        step_type="ocr",
+        config=json.dumps({"force_cloud_ocr": True, "ocr_language": "eng"}),
+        enabled=True,
+    )
+    db_session.add(ocr_step)
+    db_session.commit()
+
+    file_record = FileRecord(
+        filehash="force123",
+        original_filename="force.pdf",
+        local_filename="/tmp/force.pdf",
+        file_size=256,
+        mime_type="application/pdf",
+        is_duplicate=False,
+    )
+    db_session.add(file_record)
+    db_session.commit()
+
+    result = _get_pipeline_ocr_config(db_session, file_record, owner_id=None)
+    assert result == {"ocr_language": "eng", "force_cloud_ocr": True}
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
 def test_get_pipeline_ocr_language_auto_returns_none(db_session):
     """Returns None when ocr_language is 'auto' (should use global settings)."""
     import json

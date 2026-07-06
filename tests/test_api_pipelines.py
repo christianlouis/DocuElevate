@@ -61,6 +61,19 @@ class TestStepTypesCatalogue:
             assert "label" in meta, f"Step type '{key}' missing 'label'"
             assert "description" in meta, f"Step type '{key}' missing 'description'"
 
+    def test_step_types_declare_runtime_effect(self, client):
+        """Step-type metadata identifies what currently affects processing."""
+        r = client.get("/api/pipelines/step-types")
+        data = r.json()
+
+        assert data["ocr"]["runtime_effect"] == "applied_config"
+        assert data["ocr"]["runtime_effect_description"]
+
+        metadata_only = set(data) - {"ocr"}
+        for key in metadata_only:
+            assert data[key]["runtime_effect"] == "metadata_only"
+            assert data[key]["runtime_effect_description"]
+
 
 # ---------------------------------------------------------------------------
 # Integration tests – Pipeline CRUD

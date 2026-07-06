@@ -385,12 +385,16 @@ class SubscriptionPlan(Base):
 
 
 class Pipeline(Base):
-    """User-defined processing pipeline: an ordered set of steps.
+    """User-defined processing profile for document handling.
 
     Pipelines are user-specific.  A pipeline with ``owner_id = NULL`` is a
     *system default* pipeline that only admins may create.  Regular users
     create pipelines under their own ``owner_id``.  When a file has no
     explicit pipeline assigned, the active system default is used.
+
+    The current runtime uses these records as processing profiles, not as an
+    executable workflow engine.  OCR step config is applied at runtime; step
+    order and non-OCR steps are stored for planning and UI context.
     """
 
     __tablename__ = "pipelines"
@@ -419,11 +423,11 @@ class Pipeline(Base):
 
 
 class PipelineStep(Base):
-    """A single step in a processing pipeline.
+    """A processing profile step entry.
 
-    Steps are executed in ascending ``position`` order.  Each step has a
-    ``step_type`` that maps to a built-in processing action and an optional
-    ``config`` JSON blob with step-specific parameters.
+    Step order, labels, and enabled state are retained as profile metadata.
+    The current runtime applies OCR step config but does not execute this
+    table as an ordered workflow plan.
     """
 
     __tablename__ = "pipeline_steps"
@@ -431,7 +435,7 @@ class PipelineStep(Base):
     id = Column(Integer, primary_key=True, index=True)
     pipeline_id = Column(Integer, ForeignKey(_PIPELINES_ID_FK), nullable=False, index=True)
 
-    # Execution order within the pipeline (lower = earlier)
+    # Display/planning order within the profile (lower = earlier)
     position = Column(Integer, nullable=False, default=0)
 
     # One of the recognised step types (see PIPELINE_STEP_TYPES in pipelines.py)
@@ -443,7 +447,7 @@ class PipelineStep(Base):
     # JSON-encoded step-specific configuration dict
     config = Column(Text, nullable=True)
 
-    # When False this step is skipped during execution
+    # Profile metadata only for most step types; OCR config is runtime-applied.
     enabled = Column(Boolean, nullable=False, default=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

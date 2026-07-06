@@ -30,17 +30,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _get_pipeline_ocr_language(db: "Session", file_record: FileRecord, owner_id: str | None) -> str | None:
-    """Look up the OCR language override from the file's pipeline OCR step config.
+def _get_pipeline_ocr_config(db: "Session", file_record: FileRecord, owner_id: str | None) -> dict[str, object]:
+    """Look up runtime OCR overrides from the file's processing profile.
 
     Resolution order:
     1. Explicit pipeline assigned to the file (``file_record.pipeline_id``).
     2. User's own default pipeline (``owner_id``, ``is_default=True``).
     3. System default pipeline (``owner_id=NULL``, ``is_default=True``).
 
-    Returns the ``ocr_language`` value from the pipeline's OCR step config, or
-    ``None`` when no override is configured.
+    Returns normalized OCR config. ``ocr_language`` is ``None`` when no
+    override is configured or the profile uses ``auto``.
     """
+    result: dict[str, object] = {"ocr_language": None, "force_cloud_ocr": False}
     pipeline = None
 
     if file_record.pipeline_id:
@@ -69,7 +70,7 @@ def _get_pipeline_ocr_language(db: "Session", file_record: FileRecord, owner_id:
         )
 
     if pipeline is None:
-        return None
+        return result
 
     ocr_step = (
         db.query(PipelineStep)
@@ -82,15 +83,23 @@ def _get_pipeline_ocr_language(db: "Session", file_record: FileRecord, owner_id:
     )
 
     if ocr_step is None or not ocr_step.config:
-        return None
+        return result
 
     try:
         step_config = json.loads(ocr_step.config)
         lang = step_config.get("ocr_language")
         # "auto" is treated as no override
-        return lang if lang and lang != "auto" else None
+        result["ocr_language"] = lang if lang and lang != "auto" else None
+        result["force_cloud_ocr"] = bool(step_config.get("force_cloud_ocr"))
+        return result
     except Exception:
-        return None
+        return result
+
+
+def _get_pipeline_ocr_language(db: "Session", file_record: FileRecord, owner_id: str | None) -> str | None:
+    """Return only the OCR language override from the selected processing profile."""
+    config = _get_pipeline_ocr_config(db, file_record, owner_id)
+    return config["ocr_language"] if isinstance(config["ocr_language"], str) else None
 
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
@@ -110,8 +119,8 @@ def process_document(
         original_filename: Optional original filename (if different from path basename)
         file_id: Optional existing file record ID. When provided, skips duplicate
                  detection and reuses the existing record (used for reprocessing).
-        force_cloud_ocr: If True, forces Azure Document Intelligence OCR processing
-                        regardless of embedded text quality. Used for re-processing.
+        force_cloud_ocr: If True, forces OCR processing regardless of embedded
+                         text quality. Used for re-processing and profile overrides.
         owner_id: Optional user identifier for multi-user mode. When provided, the
                   created FileRecord is associated with this user.
 
@@ -123,7 +132,7 @@ def process_document(
          - Copy file to /workdir/tmp for processing
          - Check for embedded text. If present, run local GPT extraction
          - Otherwise, queue Azure Document Intelligence processing
-      3. If force_cloud_ocr is True, skip local text extraction and use cloud OCR
+      3. If force_cloud_ocr is True, skip local text extraction and queue OCR
     """
     # Fall back to the configured default_owner_id when no explicit owner was provided
     default_owner_id = settings.default_owner_id
@@ -179,7 +188,8 @@ def process_document(
         )
 
     # Acquire DB session in the task
-    ocr_language: str | None = None  # Pipeline OCR language override resolved inside DB session
+    # Profile OCR overrides resolved inside DB session.
+    ocr_language: str | None = None
     with SessionLocal() as db:
         # When file_id is provided, we are reprocessing an existing file.
         # Skip the duplicate check and reuse the existing record.
@@ -376,13 +386,17 @@ def process_document(
         new_record.local_filename = new_local_path
         db.commit()
 
-        # Look up pipeline OCR language override before the session closes.
+        # Look up processing-profile OCR overrides before the session closes.
         # This reads the OCR step config from the file's assigned pipeline (or
-        # the user/system default pipeline) so the language is available when
+        # the user/system default pipeline) so the settings are available when
         # dispatching process_with_ocr below.
-        ocr_language = _get_pipeline_ocr_language(db, new_record, owner_id)
+        ocr_config = _get_pipeline_ocr_config(db, new_record, owner_id)
+        ocr_language = ocr_config["ocr_language"] if isinstance(ocr_config["ocr_language"], str) else None
+        force_cloud_ocr = force_cloud_ocr or bool(ocr_config["force_cloud_ocr"])
         if ocr_language:
             logger.info(f"[{task_id}] Pipeline OCR language override: {ocr_language!r}")
+        if force_cloud_ocr:
+            logger.info(f"[{task_id}] Pipeline force-cloud OCR override enabled")
 
         # Store file_id before session closes to avoid DetachedInstanceError
         file_id = new_record.id
