@@ -14,7 +14,7 @@ import json
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -151,6 +151,60 @@ PIPELINE_STEP_TYPES: dict[str, dict[str, Any]] = {
 MAX_STEPS_PER_PIPELINE = 50
 MAX_NAME_LENGTH = 255
 
+PIPELINE_PRESETS: dict[str, dict[str, Any]] = {
+    "standard_document": {
+        "name": "Standard document processing",
+        "description": "OCR when needed, extract metadata, write PDF metadata, search index, and deliver to destinations.",
+        "steps": [
+            {"step_type": "ocr", "label": "OCR when needed", "config": {"ocr_language": "auto"}},
+            {"step_type": "extract_metadata", "label": "Extract document metadata"},
+            {"step_type": "embed_metadata", "label": "Write metadata to PDF"},
+            {"step_type": "compute_embedding", "label": "Enable semantic search"},
+            {"step_type": "send_to_destinations", "label": "Deliver to configured destinations"},
+        ],
+    },
+    "scan_ocr_only": {
+        "name": "Scan and OCR only",
+        "description": "Run OCR-focused processing without delivery or AI metadata planning steps.",
+        "steps": [
+            {
+                "step_type": "ocr",
+                "label": "OCR scanned document",
+                "config": {"force_cloud_ocr": True, "ocr_language": "auto"},
+            },
+        ],
+    },
+    "invoice_intake": {
+        "name": "Invoice intake",
+        "description": "OCR, classify, extract structured metadata, index for search, and deliver to destinations.",
+        "steps": [
+            {"step_type": "ocr", "label": "OCR invoice"},
+            {"step_type": "classify", "label": "Classify document type"},
+            {"step_type": "extract_metadata", "label": "Extract invoice metadata"},
+            {"step_type": "compute_embedding", "label": "Enable invoice search"},
+            {"step_type": "send_to_destinations", "label": "Deliver invoice"},
+        ],
+    },
+    "privacy_local_ocr": {
+        "name": "Privacy-first OCR",
+        "description": "Keep the profile focused on local OCR/search planning and avoid external delivery actions.",
+        "steps": [
+            {"step_type": "ocr", "label": "Local OCR preference", "config": {"ocr_language": "auto"}},
+            {"step_type": "compute_embedding", "label": "Enable local search"},
+        ],
+    },
+    "no_external_delivery": {
+        "name": "Process without delivery",
+        "description": "Extract and enrich the document without sending it to configured external destinations.",
+        "steps": [
+            {"step_type": "ocr", "label": "OCR when needed"},
+            {"step_type": "extract_metadata", "label": "Extract document metadata"},
+            {"step_type": "embed_metadata", "label": "Write metadata to PDF"},
+            {"step_type": "compute_embedding", "label": "Enable search"},
+        ],
+    },
+}
+
 
 def _get_user_id(request: Request) -> str:
     """Return a stable user identifier from the session.
@@ -230,6 +284,15 @@ class PipelineCreate(BaseModel):
     is_active: bool = Field(default=True)
 
 
+class PipelinePresetCreate(BaseModel):
+    """Body for creating a pipeline from a built-in preset."""
+
+    name: str | None = Field(default=None, max_length=MAX_NAME_LENGTH)
+    description: str | None = Field(default=None, max_length=4096)
+    is_default: bool = Field(default=False)
+    is_active: bool = Field(default=True)
+
+
 class PipelineUpdate(BaseModel):
     """Body for updating a pipeline (all fields optional)."""
 
@@ -281,14 +344,22 @@ def list_step_types() -> dict[str, Any]:
 
 @router.get("")
 @require_login
-def list_pipelines(request: Request, db: DbSession) -> list[dict[str, Any]]:
+def list_pipelines(
+    request: Request,
+    db: DbSession,
+    include_steps: bool = Query(
+        default=False,
+        description="Include ordered profile steps for each returned pipeline.",
+    ),
+) -> list[dict[str, Any]]:
     """List pipelines visible to the current user.
 
     Regular users see: their own pipelines + system pipelines (owner_id=NULL).
     Admins see: all pipelines from all users.
 
     Returns:
-        A list of pipeline objects (without steps — use GET /pipelines/{id} for steps).
+        A list of pipeline objects. Pass ``include_steps=true`` to include
+        each pipeline's ordered steps in a single request.
     """
     user_id = _get_user_id(request)
     admin = _is_admin(request)
@@ -303,7 +374,7 @@ def list_pipelines(request: Request, db: DbSession) -> list[dict[str, Any]]:
             .all()
         )
 
-    return [_serialize_pipeline(p) for p in pipelines]
+    return [_serialize_pipeline(p, include_steps=include_steps, db=db) for p in pipelines]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -364,6 +435,84 @@ def create_pipeline(request: Request, db: DbSession, body: PipelineCreate) -> di
 
     logger.info("Pipeline created: id=%s, owner=%s, name=%r", pipeline.id, user_id, name)
     return _serialize_pipeline(pipeline)
+
+
+@router.get("/presets")
+@require_login
+def list_pipeline_presets() -> list[dict[str, Any]]:
+    """Return built-in profile presets suitable for guided setup UIs."""
+    return [
+        {
+            "key": key,
+            "name": preset["name"],
+            "description": preset["description"],
+            "steps": preset["steps"],
+        }
+        for key, preset in PIPELINE_PRESETS.items()
+    ]
+
+
+@router.post("/presets/{preset_key}", status_code=status.HTTP_201_CREATED)
+@require_login
+def create_pipeline_from_preset(
+    preset_key: str,
+    request: Request,
+    db: DbSession,
+    body: PipelinePresetCreate | None = None,
+) -> dict[str, Any]:
+    """Create a user-owned processing profile from a built-in preset."""
+    preset = PIPELINE_PRESETS.get(preset_key)
+    if preset is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline preset not found")
+
+    user_id = _get_user_id(request)
+    payload = body or PipelinePresetCreate()
+    name = (payload.name or preset["name"]).strip()
+    description = payload.description if payload.description is not None else preset["description"]
+
+    if not name:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="name is required")
+
+    existing = db.query(Pipeline).filter(Pipeline.owner_id == user_id, Pipeline.name == name).first()
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"A pipeline named '{name}' already exists")
+
+    if payload.is_default:
+        _unset_default(db, user_id)
+
+    pipeline = Pipeline(
+        owner_id=user_id,
+        name=name,
+        description=description,
+        is_default=payload.is_default,
+        is_active=payload.is_active,
+    )
+    try:
+        db.add(pipeline)
+        db.flush()
+        for position, step in enumerate(preset["steps"]):
+            db.add(
+                PipelineStep(
+                    pipeline_id=pipeline.id,
+                    position=position,
+                    step_type=step["step_type"],
+                    label=step.get("label"),
+                    config=json.dumps(step.get("config", {})),
+                    enabled=step.get("enabled", True),
+                )
+            )
+        db.commit()
+        db.refresh(pipeline)
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to create pipeline from preset=%s", preset_key)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create pipeline from preset",
+        )
+
+    logger.info("Pipeline created from preset: id=%s, preset=%s", pipeline.id, preset_key)
+    return _serialize_pipeline(pipeline, include_steps=True, db=db)
 
 
 @router.get("/{pipeline_id}")
