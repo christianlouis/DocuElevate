@@ -52,8 +52,7 @@
               type="button"
               @click="createFromPreset(preset)"
               :disabled="preset._creating"
-              class="inline-flex shrink-0 items-center rounded-md bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-              style="min-height:44px;min-width:44px;"
+              class="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center rounded-md bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60"
               :aria-label="i18n.createPreset.replace('{name}', preset.name)"
             >
               <template x-if="preset._creating">
@@ -658,6 +657,10 @@ function pipelinesApp() {
       expandSettings: {{ _("pipelines.expand_settings_aria") | tojson }},
       profileMetadata: {{ _("pipelines.profile_metadata") | tojson }},
       createPreset: {{ _("pipelines.create_preset_aria") | tojson }},
+      presetCreatedTitle: {{ _("pipelines.preset_created_title") | tojson }},
+      presetCreatedMessage: {{ _("pipelines.preset_created_message") | tojson }},
+      presetFailedTitle: {{ _("pipelines.preset_failed_title") | tojson }},
+      presetFailedDefault: {{ _("pipelines.preset_failed_default") | tojson }},
       presetSteps: {{ _("pipelines.preset_steps") | tojson }},
       routingMetadataError: {{ _("pipelines.routing_metadata_error") | tojson }},
       routingMissingTarget: {{ _("pipelines.routing_missing_target") | tojson }},
@@ -892,13 +895,17 @@ function pipelinesApp() {
         });
         if (!r.ok) {
           const e = await r.json().catch(() => ({}));
-          throw new Error(e.detail || `HTTP ${r.status}`);
+          throw new Error(e.detail || this.i18n.presetFailedDefault);
         }
         const created = await r.json();
         this.pipelines.push({ ...created, steps: created.steps || [], _expanded: true });
-        this.showAlert('success', 'Profile created', `"${created.name}" has been created from a preset.`);
+        this.showAlert(
+          'success',
+          this.i18n.presetCreatedTitle,
+          this.i18n.presetCreatedMessage.replace('{name}', created.name),
+        );
       } catch (err) {
-        this.showAlert('error', 'Preset failed', err.message || String(err));
+        this.showAlert('error', this.i18n.presetFailedTitle, err.message || String(err));
       } finally {
         preset._creating = false;
       }

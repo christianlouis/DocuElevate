@@ -8,6 +8,7 @@ import json
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.models import FileRecord, Pipeline, PipelineStep
 
@@ -107,6 +108,10 @@ class TestStepTypesCatalogue:
             "pipelines.profile_contract_title",
             "pipelines.profile_metadata",
             "pipelines.create_preset_aria",
+            "pipelines.preset_created_message",
+            "pipelines.preset_created_title",
+            "pipelines.preset_failed_default",
+            "pipelines.preset_failed_title",
             "pipelines.preset_steps",
             "pipelines.presets_hint",
             "pipelines.presets_title",
@@ -140,6 +145,11 @@ class TestStepTypesCatalogue:
         assert "metadata disabled" not in template
         assert 'placeholder="invoice_2026.pdf"' not in template
         assert 'role="alert"' in template
+        preset_button = template.split(':aria-label="i18n.createPreset', 1)[0].rsplit("<button", 1)[1]
+        assert "min-h-[44px]" in preset_button
+        assert "style=" not in preset_button
+        assert "this.i18n.presetCreatedTitle" in template
+        assert "this.i18n.presetFailedTitle" in template
 
     def test_pipeline_page_batch_loads_profile_details(self):
         """The pipeline UI asks the list endpoint for steps in one request."""
@@ -353,6 +363,27 @@ class TestPipelineCRUD:
 
         assert first.status_code == 201
         assert second.status_code == 409
+
+    def test_create_pipeline_from_preset_rejects_blank_custom_name(self, client):
+        """Whitespace-only preset name overrides are invalid instead of falling back."""
+        r = client.post("/api/pipelines/presets/scan_ocr_only", json={"name": "   "})
+
+        assert r.status_code == 422
+        assert r.json()["detail"] == "name is required"
+
+    def test_pipeline_name_unique_per_owner_database_guard(self, db_session):
+        """The database also rejects duplicate pipeline names for the same owner."""
+        db_session.add_all(
+            [
+                Pipeline(owner_id="owner-a", name="Invoices"),
+                Pipeline(owner_id="owner-a", name="Invoices"),
+            ]
+        )
+
+        with pytest.raises(IntegrityError):
+            db_session.commit()
+
+        db_session.rollback()
 
     def test_create_pipeline_from_preset_logs_without_owner_identifier(self, client):
         """Preset creation logs operational context without owner/user identifiers."""

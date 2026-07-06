@@ -16,6 +16,7 @@ from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, get_current_user_id, require_login
@@ -309,6 +310,13 @@ def _pipeline_template_response(template: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _pipeline_name_conflict(name: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=f"A pipeline named '{name}' already exists",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Pydantic schemas
 # ---------------------------------------------------------------------------
@@ -465,10 +473,7 @@ def create_pipeline(request: Request, db: DbSession, body: PipelineCreate) -> di
     # Enforce unique name per owner
     existing = db.query(Pipeline).filter(Pipeline.owner_id == user_id, Pipeline.name == name).first()
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"A pipeline named '{name}' already exists",
-        )
+        raise _pipeline_name_conflict(name)
 
     # If this pipeline is marked as default, unset the existing default for this user
     if body.is_default:
@@ -485,6 +490,9 @@ def create_pipeline(request: Request, db: DbSession, body: PipelineCreate) -> di
         db.add(pipeline)
         db.commit()
         db.refresh(pipeline)
+    except IntegrityError:
+        db.rollback()
+        raise _pipeline_name_conflict(name)
     except Exception:
         db.rollback()
         logger.exception("Failed to create pipeline user=%s", user_id)
@@ -527,7 +535,8 @@ def create_pipeline_from_preset(
 
     user_id = _get_user_id(request)
     payload = body or PipelinePresetCreate()
-    name = (payload.name or preset["name"]).strip()
+    name = preset["name"] if payload.name is None else payload.name
+    name = name.strip()
     description = payload.description if payload.description is not None else preset["description"]
 
     if not name:
@@ -535,7 +544,7 @@ def create_pipeline_from_preset(
 
     existing = db.query(Pipeline).filter(Pipeline.owner_id == user_id, Pipeline.name == name).first()
     if existing:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"A pipeline named '{name}' already exists")
+        raise _pipeline_name_conflict(name)
 
     if payload.is_default:
         _unset_default(db, user_id)
@@ -563,6 +572,9 @@ def create_pipeline_from_preset(
             )
         db.commit()
         db.refresh(pipeline)
+    except IntegrityError:
+        db.rollback()
+        raise _pipeline_name_conflict(name)
     except Exception:
         db.rollback()
         logger.exception("Failed to create pipeline from preset=%s", preset_key)
@@ -765,10 +777,7 @@ def update_pipeline(pipeline_id: int, request: Request, db: DbSession, body: Pip
                 .first()
             )
             if conflict:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=f"A pipeline named '{new_name}' already exists",
-                )
+                raise _pipeline_name_conflict(new_name)
         pipeline.name = new_name
 
     if body.description is not None:
@@ -785,6 +794,10 @@ def update_pipeline(pipeline_id: int, request: Request, db: DbSession, body: Pip
     try:
         db.commit()
         db.refresh(pipeline)
+    except IntegrityError:
+        db.rollback()
+        name = body.name.strip() if body.name else pipeline.name
+        raise _pipeline_name_conflict(name)
     except Exception:
         db.rollback()
         logger.exception("Failed to update pipeline id=%s", pipeline_id)

@@ -404,6 +404,7 @@ class Pipeline(Base):
     """
 
     __tablename__ = "pipelines"
+    __table_args__ = (UniqueConstraint("owner_id", "name", name="uq_pipelines_owner_name"),)
 
     id = Column(Integer, primary_key=True, index=True)
 
