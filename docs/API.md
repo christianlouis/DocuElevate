@@ -1568,6 +1568,7 @@ When a subscribed event occurs, a JSON POST request is sent to the configured UR
 
 ```json
 {
+  "version": "1.0",
   "event": "document.processed",
   "timestamp": 1709322559.123456,
   "data": {
@@ -1577,9 +1578,19 @@ When a subscribed event occurs, a JSON POST request is sent to the configured UR
 }
 ```
 
+The `version` field is the webhook envelope contract version. Consumers should
+branch on it before assuming payload shape changes are backward compatible.
+
 ### HMAC Signature
 
 If a secret is configured, an `X-Webhook-Signature` header is included with each request. The signature is computed as `sha256=<hex-digest>` using HMAC-SHA256 over the raw JSON body.
+
+Every delivery also includes:
+
+| Header | Description |
+|--------|-------------|
+| `X-DocuElevate-Event` | Event type, such as `document.processed` |
+| `X-DocuElevate-Webhook-Version` | Payload envelope version, currently `1.0` |
 
 To verify in Python:
 

@@ -29,6 +29,9 @@ from app.models import WebhookConfig
 
 logger = logging.getLogger(__name__)
 
+#: Version for the outbound webhook payload envelope.
+WEBHOOK_PAYLOAD_VERSION = "1.0"
+
 #: Events recognised by the webhook subsystem.
 VALID_EVENTS: frozenset[str] = frozenset(
     {
@@ -187,6 +190,10 @@ def deliver_webhook(url: str, payload: dict[str, Any], secret: str | None = None
     body_bytes = body.encode("utf-8")
 
     headers: dict[str, str] = {"Content-Type": "application/json"}
+    if payload.get("event"):
+        headers["X-DocuElevate-Event"] = str(payload["event"])
+    if payload.get("version"):
+        headers["X-DocuElevate-Webhook-Version"] = str(payload["version"])
     if secret:
         headers["X-Webhook-Signature"] = compute_signature(body_bytes, secret)
 
@@ -213,6 +220,7 @@ def build_payload(event: str, data: dict[str, Any]) -> dict[str, Any]:
         Dictionary with ``event``, ``timestamp``, and ``data`` keys.
     """
     return {
+        "version": WEBHOOK_PAYLOAD_VERSION,
         "event": event,
         "timestamp": time.time(),
         "data": data,
