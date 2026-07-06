@@ -106,13 +106,20 @@ class TestSearchPage:
         text = response.text
         assert "bulkDownloadSearchResults" in text
         assert "bulkExportSearchResults" in text
+        assert "bulkTagSearchResults" in text
         assert "bulkRouteSearchResults" in text
+        assert "setBulkActionStatus" in text
+        assert 'id="bulk-route-pipeline"' in text
+        assert "loadBulkRoutePipelines" in text
         assert "bulkReprocessSearchResults" in text
         assert "bulkDeleteSearchResults" in text
         assert "/api/files/bulk-download" in text
+        assert "/api/files/bulk-tag" in text
+        assert "/api/pipelines" in text
         assert "/api/files/bulk-assign-pipeline" in text
         assert "/api/files/bulk-reprocess" in text
         assert "/api/files/bulk-delete" in text
+        assert "Enter the destination pipeline ID" not in text
         assert "This cannot be undone from search results" in text
 
     def test_search_page_text_quality_options(self, client):

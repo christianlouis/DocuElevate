@@ -3,13 +3,14 @@ File-related API endpoints
 """
 
 import io
+import json
 import logging
 import mimetypes
 import os
 import uuid
 import zipfile
 from datetime import datetime, timezone
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Literal, Optional
 
 import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
@@ -46,6 +47,67 @@ class BulkPipelineAssignment(BaseModel):
 
     file_ids: list[int] = Field(..., min_length=1)
     pipeline_id: int | None = Field(default=None, ge=1)
+
+
+class BulkTagRequest(BaseModel):
+    """Request body for applying tags to selected files."""
+
+    file_ids: list[int] = Field(..., min_length=1)
+    tags: list[str] = Field(..., min_length=1)
+    mode: Literal["add", "replace"] = "add"
+
+
+def _bulk_action_status(action: str, updated_count: int, updated_ids: list[int]) -> dict:
+    """Build a consistent status object for bulk file operations."""
+    return {
+        "action": action,
+        "state": "completed",
+        "updated_count": updated_count,
+        "updated_ids": updated_ids,
+    }
+
+
+def _normalize_tags(tags: list[str]) -> list[str]:
+    """Trim and deduplicate tag names while preserving the first spelling."""
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for tag in tags:
+        clean = tag.strip()
+        if not clean:
+            continue
+        key = clean.casefold()
+        if key not in seen:
+            normalized.append(clean)
+            seen.add(key)
+    if not normalized:
+        raise HTTPException(status_code=422, detail="At least one non-empty tag is required")
+    return normalized
+
+
+def _metadata_with_tags(file_record: FileRecord, tags: list[str], mode: Literal["add", "replace"]) -> dict:
+    """Return updated metadata with normalized tags."""
+    try:
+        metadata = json.loads(file_record.ai_metadata or "{}")
+    except json.JSONDecodeError:
+        metadata = {}
+    if not isinstance(metadata, dict):
+        metadata = {}
+
+    existing = metadata.get("tags", [])
+    if isinstance(existing, str):
+        existing_tags = [tag.strip() for tag in existing.split(",") if tag.strip()]
+    elif isinstance(existing, list):
+        existing_tags = [str(tag).strip() for tag in existing if str(tag).strip()]
+    else:
+        existing_tags = []
+
+    if mode == "replace":
+        metadata["tags"] = tags
+        return metadata
+
+    merged = _normalize_tags([*existing_tags, *tags])
+    metadata["tags"] = merged
+    return metadata
 
 
 def get_limiter():
@@ -618,6 +680,7 @@ def bulk_assign_pipeline_to_files(request: Request, body: BulkPipelineAssignment
         return {
             "status": "success",
             "message": f"Updated routing for {len(updated_ids)} selected document(s)",
+            "bulk_action": _bulk_action_status("route", len(updated_ids), updated_ids),
             "updated_count": len(updated_ids),
             "updated_ids": updated_ids,
             "pipeline_id": body.pipeline_id,
@@ -628,6 +691,57 @@ def bulk_assign_pipeline_to_files(request: Request, body: BulkPipelineAssignment
         db.rollback()
         logger.exception(f"Error bulk assigning pipeline: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error bulk assigning pipeline: {str(e)}")
+
+
+@router.post("/files/bulk-tag")
+@require_login
+def bulk_tag_files(request: Request, body: BulkTagRequest, db: DbSession):
+    """Add or replace tags for multiple files."""
+    from app.auth import get_current_user
+
+    try:
+        tags = _normalize_tags(body.tags)
+        user = get_current_user(request)
+        owner_id = get_current_owner_id(request)
+        is_admin = bool(user and user.get("is_admin"))
+
+        query = db.query(FileRecord).filter(FileRecord.id.in_(body.file_ids))
+        query = apply_owner_filter(query, request)
+        file_records = query.all()
+        if not file_records:
+            raise HTTPException(status_code=404, detail="No files found with the provided IDs")
+
+        if not is_admin:
+            non_owner_ids = [f.id for f in file_records if get_file_role(f, owner_id, db) != "owner"]
+            if non_owner_ids:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"You can only tag files you own. Not owner of file IDs: {non_owner_ids}",
+                )
+
+        updated_ids = [file_record.id for file_record in file_records]
+        for file_record in file_records:
+            metadata = _metadata_with_tags(file_record, tags, body.mode)
+            file_record.ai_metadata = json.dumps(metadata, ensure_ascii=False)
+
+        db.commit()
+
+        logger.info("Bulk tag updated %d files using mode=%s tags=%s", len(updated_ids), body.mode, tags)
+        return {
+            "status": "success",
+            "message": f"Updated tags for {len(updated_ids)} selected document(s)",
+            "bulk_action": _bulk_action_status("tag", len(updated_ids), updated_ids),
+            "updated_count": len(updated_ids),
+            "updated_ids": updated_ids,
+            "tags": tags,
+            "mode": body.mode,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Error bulk tagging files: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error bulk tagging files: {str(e)}")
 
 
 @router.post("/files/bulk-download")

@@ -83,12 +83,15 @@
     }
     .search-bulk-bar.active { display: flex; }
     .search-bulk-bar strong { color: #111827; }
-    .search-bulk-bar button {
+    .search-bulk-bar button,
+    .search-bulk-bar select {
       min-height: 44px; display: inline-flex; align-items: center; gap: 0.35rem;
       padding: 0.45rem 0.65rem; border: 1px solid #d1d5db;
       border-radius: 0.375rem; background: #fff; color: #374151;
-      font-size: 0.8rem; cursor: pointer;
+      font-size: 0.8rem;
     }
+    .search-bulk-bar button { cursor: pointer; }
+    .search-bulk-bar select { min-width: min(16rem, 100%); }
     .search-bulk-bar button:hover { background: #f3f4f6; }
     .search-bulk-bar button.danger { color: #b91c1c; border-color: #fecaca; }
     .search-bulk-status {
@@ -303,6 +306,13 @@
       <button type="button" onclick="bulkExportSearchResults()">
         <i class="fas fa-file-export" aria-hidden="true"></i> Export
       </button>
+      <button type="button" onclick="bulkTagSearchResults()">
+        <i class="fas fa-tags" aria-hidden="true"></i> Tag
+      </button>
+      <label class="sr-only" for="bulk-route-pipeline">Route destination</label>
+      <select id="bulk-route-pipeline" aria-label="Route destination">
+        <option value="">Default route</option>
+      </select>
       <button type="button" onclick="bulkRouteSearchResults()">
         <i class="fas fa-route" aria-hidden="true"></i> Route
       </button>
@@ -354,6 +364,7 @@
   const bulkBar = document.getElementById('search-bulk-bar');
   const selectedCount = document.getElementById('search-selected-count');
   const bulkStatus = document.getElementById('search-bulk-status');
+  const bulkRoutePipeline = document.getElementById('bulk-route-pipeline');
 
   // Filter elements
   const filterDocType    = document.getElementById('filter-document-type');
@@ -370,6 +381,7 @@
   const selectedSearchResults = new Set();
   const visibleSearchResultIds = [];
   const searchResultCache = new Map();
+  let bulkRoutePipelinesLoaded = false;
 
   /** Collect active filter values into an object. */
   function getActiveFilters() {
@@ -590,6 +602,15 @@
     bulkStatus.style.color = isError ? '#b91c1c' : '#6b7280';
   }
 
+  function setBulkActionStatus(data, fallbackMessage) {
+    if (data && data.bulk_action && data.bulk_action.state === 'completed') {
+      const count = Number(data.bulk_action.updated_count || 0);
+      setBulkStatus((data.message || fallbackMessage) + ' Completed: ' + count + '.', false);
+      return;
+    }
+    setBulkStatus((data && data.message) || fallbackMessage, false);
+  }
+
   function syncSearchSelectionUI() {
     document.querySelectorAll('.search-result-checkbox').forEach(function(checkbox) {
       checkbox.checked = selectedSearchResults.has(Number(checkbox.value));
@@ -704,16 +725,10 @@
   function bulkRouteSearchResults() {
     const fileIds = requireBulkSelection();
     if (!fileIds) return;
-    const pipelineIdText = prompt('Enter the destination pipeline ID for ' + fileIds.length + ' selected document' + (fileIds.length !== 1 ? 's' : '') + '. Leave blank to clear the route.');
-    if (pipelineIdText === null) return;
-    const trimmed = pipelineIdText.trim();
-    const pipelineId = trimmed ? Number(trimmed) : null;
-    if (trimmed && (!Number.isInteger(pipelineId) || pipelineId < 1)) {
-      setBulkStatus('Pipeline ID must be a positive number.', true);
-      return;
-    }
+    const pipelineId = bulkRoutePipeline && bulkRoutePipeline.value ? Number(bulkRoutePipeline.value) : null;
+    const routeLabel = bulkRoutePipeline && bulkRoutePipeline.selectedOptions.length ? bulkRoutePipeline.selectedOptions[0].textContent.trim() : 'Default route';
     const action = pipelineId === null ? 'clear routing for' : 'route';
-    if (!confirm('Bulk ' + action + ' ' + fileIds.length + ' selected document' + (fileIds.length !== 1 ? 's' : '') + '?')) return;
+    if (!confirm('Bulk ' + action + ' ' + fileIds.length + ' selected document' + (fileIds.length !== 1 ? 's' : '') + ' using "' + routeLabel + '"?')) return;
     setBulkStatus('Updating selected routes…', false);
     fetch('/api/files/bulk-assign-pipeline', {
       method: 'POST',
@@ -725,7 +740,55 @@
       return response.json();
     })
     .then(function(data) {
-      setBulkStatus(data.message || 'Selected routes updated.', false);
+      setBulkActionStatus(data, 'Selected routes updated.');
+    })
+    .catch(function(error) { setBulkStatus(error.message, true); });
+  }
+
+  function loadBulkRoutePipelines() {
+    if (!bulkRoutePipeline || bulkRoutePipelinesLoaded) return;
+    fetch('/api/pipelines')
+      .then(function(response) {
+        if (!response.ok) throw new Error('Could not load route profiles');
+        return response.json();
+      })
+      .then(function(pipelines) {
+        pipelines.forEach(function(pipeline) {
+          const option = document.createElement('option');
+          option.value = String(pipeline.id);
+          option.textContent = pipeline.owner_id ? pipeline.name : pipeline.name + ' (system)';
+          bulkRoutePipeline.appendChild(option);
+        });
+        bulkRoutePipelinesLoaded = true;
+      })
+      .catch(function(error) {
+        setBulkStatus(error.message, true);
+      });
+  }
+
+  function bulkTagSearchResults() {
+    const fileIds = requireBulkSelection();
+    if (!fileIds) return;
+    const tagText = prompt('Add tags to ' + fileIds.length + ' selected document' + (fileIds.length !== 1 ? 's' : '') + '. Separate tags with commas.');
+    if (tagText === null) return;
+    const tags = tagText.split(',').map(function(tag) { return tag.trim(); }).filter(Boolean);
+    if (!tags.length) {
+      setBulkStatus('Enter at least one tag.', true);
+      return;
+    }
+    if (!confirm('Add ' + tags.length + ' tag' + (tags.length !== 1 ? 's' : '') + ' to ' + fileIds.length + ' selected document' + (fileIds.length !== 1 ? 's' : '') + '?')) return;
+    setBulkStatus('Updating selected tags…', false);
+    fetch('/api/files/bulk-tag', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_ids: fileIds, tags: tags, mode: 'add' })
+    })
+    .then(function(response) {
+      if (!response.ok) return response.json().then(function(err) { throw new Error(err.detail || 'Failed to tag selected records'); });
+      return response.json();
+    })
+    .then(function(data) {
+      setBulkActionStatus(data, 'Selected tags updated.');
     })
     .catch(function(error) { setBulkStatus(error.message, true); });
   }
@@ -915,6 +978,7 @@
 
     // Load saved searches
     loadSavedSearches();
+    loadBulkRoutePipelines();
 
     // If q was provided via URL, search immediately
     if (searchInput.value.trim().length >= 2) {
