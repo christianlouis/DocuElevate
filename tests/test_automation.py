@@ -380,6 +380,15 @@ class TestAutomationAPI:
         assert resp.status_code == 200
         assert resp.json() == [SAMPLE_PAYLOADS[event]]
 
+
+    def test_trigger_sample_fallback(self, client, mocker):
+        """GET /api/automation/triggers/sample/{event} returns fallback when sample missing."""
+        self._with_auth(client)
+        mocker.patch("app.api.automation.SAMPLE_PAYLOADS", {})
+        resp = client.get("/api/automation/triggers/sample/document.uploaded")
+        assert resp.status_code == 200
+        assert resp.json() == [{"id": "evt_sample", "event": "document.uploaded", "timestamp": 0}]
+
     def test_trigger_sample_unknown_event(self, client):
         """GET /api/automation/triggers/sample/bad returns 404."""
         self._with_auth(client)
