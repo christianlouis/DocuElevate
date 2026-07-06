@@ -91,3 +91,14 @@ class TestFilesView:
         # Check for drag-and-drop event handlers
         assert "dragenter" in content or "drag" in content, "Drag event handlers should be present"
         assert "Drop files or folders anywhere to upload" in content, "Drop message should be present"
+
+    def test_files_view_saved_searches_support_pinning_and_deep_links(self, client: TestClient):
+        """The files view can pin saved searches and open them as URL filters."""
+        response = client.get("/files")
+        assert response.status_code == 200
+
+        content = response.text
+        assert "toggleSavedSearchPin" in content
+        assert "files.js_pin_saved_search_aria" not in content
+        assert "pinSavedSearchAria" in content
+        assert 'href="/files?${params.toString()}"' in content

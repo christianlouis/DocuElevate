@@ -195,6 +195,7 @@ class SavedSearch(Base):
     user_id = Column(String, nullable=False, index=True)  # Username or user identifier from session
     name = Column(String, nullable=False)  # Human-readable name for the saved search
     filters = Column(Text, nullable=False)  # JSON-encoded filter parameters
+    pinned = Column(Boolean, nullable=False, default=False)  # Whether the search is pinned ahead of the rest
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

@@ -360,9 +360,11 @@ Both the **Files** and **Search** pages support **saved searches** — named fil
 2. Click **Save Current** in the saved searches bar
 3. Enter a name for the saved search
 4. Your saved search appears as a clickable tag — click it to instantly re-apply those filters
-5. Click the **×** button next to a saved search to delete it
+5. Use the star button to pin important saved searches ahead of the rest
+6. Click the **×** button next to a saved search to delete it
 
 On the **Search** page, saved searches store the full-text query (`q`) along with all active content-finding filters. On the **Files** page, saved searches store the file management filters (filename search, MIME type, status, etc.).
+Saved searches are private to your user account for now; organization-shared smart views are planned for a later permissions model.
 
 The search page is also accessible via URL with a pre-filled query: `/search?q=invoice`
 

@@ -461,6 +461,7 @@ GET /api/search?q=invoice&document_type=Invoice&tags=amazon&text_quality=high&pa
 Saved searches allow users to save and reuse filter combinations. Each user can store up to 50 saved searches.
 
 Saved searches are used on both the **Files** page (for file management filters) and the **Search** page (for content-finding filters including full-text queries).
+They are scoped to the current user identifier. Organization-shared searches are reserved for a future permissions model.
 
 #### List Saved Searches
 
@@ -480,6 +481,7 @@ Returns all saved searches for the current user.
       "document_type": "Invoice",
       "date_from": "2026-01-01"
     },
+    "pinned": true,
     "created_at": "2026-03-01T10:00:00Z",
     "updated_at": "2026-03-01T10:00:00Z"
   }
@@ -499,7 +501,8 @@ Returns all saved searches for the current user.
     "tags": "invoice",
     "document_type": "Invoice",
     "date_from": "2026-01-01"
-  }
+  },
+  "pinned": false
 }
 ```
 
@@ -523,7 +526,8 @@ Shared keys: `tags`, `date_from`, `date_to`
   "name": "Updated Name",
   "filters": {
     "tags": "invoice,amazon"
-  }
+  },
+  "pinned": true
 }
 ```
 

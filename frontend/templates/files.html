@@ -861,6 +861,8 @@
       enterSearchName: {{ _("files.js_enter_search_name") | tojson }},
       deleteSavedSearchConfirm: {{ _("files.js_delete_saved_search_confirm") | tojson }},
       deleteSavedSearchAria: {{ _("files.js_delete_saved_search_aria") | tojson }},
+      pinSavedSearchAria: {{ _("files.js_pin_saved_search_aria") | tojson }},
+      unpinSavedSearchAria: {{ _("files.js_unpin_saved_search_aria") | tojson }},
       selectFilesDelete: {{ _("files.js_select_files_delete") | tojson }},
       confirmDeleteFiles: {{ _("files.js_confirm_delete_files") | tojson }},
       failedDeleteFiles: {{ _("files.js_failed_delete_files") | tojson }},
@@ -1178,9 +1180,14 @@
           }
           container.innerHTML = searches.map(s => {
             const params = new URLSearchParams(s.filters);
+            const safeName = escapeHtml(s.name);
+            const pinLabel = (s.pinned ? __i18n.unpinSavedSearchAria : __i18n.pinSavedSearchAria).replace('{name}', s.name);
             return `<span class="saved-search-tag" style="display: inline-flex; align-items: center; gap: 0.25rem; background: var(--bg-tertiary, #e5e7eb); padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-size: 0.8rem;">
-              <a href="/files?${params.toString()}" style="text-decoration: none; color: inherit;">${s.name}</a>
-              <button type="button" onclick="deleteSavedSearch(${s.id})" style="border: none; background: none; cursor: pointer; color: var(--text-muted); padding: 0; line-height: 1;" aria-label="${__i18n.deleteSavedSearchAria.replace('{name}', s.name)}">
+              <button type="button" onclick="toggleSavedSearchPin(${s.id}, ${s.pinned ? 'false' : 'true'})" style="border: none; background: none; cursor: pointer; color: ${s.pinned ? '#d97706' : 'var(--text-muted)'}; padding: 0; line-height: 1;" aria-label="${escapeHtml(pinLabel)}">
+                <i class="${s.pinned ? 'fas' : 'far'} fa-star" aria-hidden="true"></i>
+              </button>
+              <a href="/files?${params.toString()}" style="text-decoration: none; color: inherit;">${safeName}</a>
+              <button type="button" onclick="deleteSavedSearch(${s.id})" style="border: none; background: none; cursor: pointer; color: var(--text-muted); padding: 0; line-height: 1;" aria-label="${escapeHtml(__i18n.deleteSavedSearchAria.replace('{name}', s.name))}">
                 <i class="fas fa-times" aria-hidden="true"></i>
               </button>
             </span>`;
@@ -1209,7 +1216,7 @@
       fetch('/api/saved-searches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), filters: filters })
+        body: JSON.stringify({ name: name.trim(), filters: filters, pinned: false })
       })
       .then(response => {
         if (!response.ok) return response.json().then(d => { throw new Error(d.detail || 'Failed to save'); });
@@ -1224,6 +1231,19 @@
       fetch(`/api/saved-searches/${id}`, { method: 'DELETE' })
         .then(response => {
           if (!response.ok) throw new Error('Failed to delete');
+          loadSavedSearches();
+        })
+        .catch(error => alert(error.message));
+    }
+
+    function toggleSavedSearchPin(id, pinned) {
+      fetch(`/api/saved-searches/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pinned })
+      })
+        .then(response => {
+          if (!response.ok) return response.json().then(d => { throw new Error(d.detail || 'Failed to update'); });
           loadSavedSearches();
         })
         .catch(error => alert(error.message));

@@ -60,6 +60,14 @@ class TestSearchPage:
         assert 'id="save-search-btn"' in response.text
         assert "/api/saved-searches" in response.text
 
+    def test_search_page_saved_searches_support_pinning_and_deep_links(self, client):
+        """Saved searches on /search can be pinned and reopened by URL."""
+        response = client.get("/search")
+        assert response.status_code == 200
+        assert "toggleSavedSearchPin" in response.text
+        assert "href=\"/search?' + escapeHtml(params.toString())" in response.text
+        assert "fa-star" in response.text
+
     def test_search_page_text_quality_options(self, client):
         """GET /search contains text quality filter with expected options."""
         response = client.get("/search")

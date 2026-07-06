@@ -56,6 +56,7 @@
       border: none; background: none; cursor: pointer; color: #6b7280;
       padding: 0; line-height: 1;
     }
+    .saved-search-tag button.is-pinned { color: #d97706; }
     .btn-save-search {
       margin-left: auto; font-size: 0.8rem; padding: 0.25rem 0.5rem;
       cursor: pointer; border: 1px solid #d1d5db; border-radius: 0.25rem;
@@ -430,7 +431,11 @@
         }
         container.innerHTML = searches.map(function(s) {
           const params = new URLSearchParams(s.filters);
+          const pinLabel = (s.pinned ? 'Unpin saved search ' : 'Pin saved search ') + s.name;
           return '<span class="saved-search-tag">' +
+            '<button type="button" class="' + (s.pinned ? 'is-pinned' : '') + '" onclick="toggleSavedSearchPin(' + s.id + ', ' + (s.pinned ? 'false' : 'true') + ')" aria-label="' + escapeHtml(pinLabel) + '">' +
+            '<i class="' + (s.pinned ? 'fas' : 'far') + ' fa-star" aria-hidden="true"></i>' +
+            '</button>' +
             '<a href="/search?' + escapeHtml(params.toString()) + '">' + escapeHtml(s.name) + '</a>' +
             '<button type="button" onclick="deleteSavedSearch(' + s.id + ')" aria-label="Delete saved search ' + escapeHtml(s.name) + '">' +
             '<i class="fas fa-times" aria-hidden="true"></i>' +
@@ -462,15 +467,28 @@
     fetch('/api/saved-searches', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name.trim(), filters: filters })
+      body: JSON.stringify({ name: name.trim(), filters: filters, pinned: false })
     })
     .then(function(response) {
       if (!response.ok) return response.json().then(function(d) { throw new Error(d.detail || 'Failed to save'); });
       return response.json();
     })
     .then(function() { loadSavedSearches(); })
-    .catch(function(error) { alert(error.message); });
+      .catch(function(error) { alert(error.message); });
   });
+
+  function toggleSavedSearchPin(id, pinned) {
+    fetch('/api/saved-searches/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pinned: pinned })
+    })
+    .then(function(response) {
+      if (!response.ok) return response.json().then(function(d) { throw new Error(d.detail || 'Failed to update'); });
+      loadSavedSearches();
+    })
+    .catch(function(error) { alert(error.message); });
+  }
 
   function deleteSavedSearch(id) {
     if (!confirm('Delete this saved search?')) return;
