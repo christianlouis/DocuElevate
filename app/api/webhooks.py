@@ -7,14 +7,18 @@ when document events occur (``document.uploaded``, ``document.processed``,
 
 import json
 import logging
+import os
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.auth import get_current_user, get_current_user_id, require_login
 from app.database import get_db
-from app.models import WebhookConfig
+from app.models import FileRecord, Pipeline, WebhookConfig
+from app.tasks.process_document import process_document
+from app.utils.user_scope import get_current_owner_id
 from app.utils.webhook import VALID_EVENTS
 
 logger = logging.getLogger(__name__)
@@ -77,6 +81,14 @@ class WebhookResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class InboundPipelineTrigger(BaseModel):
+    """Schema for authenticated inbound workflow triggers."""
+
+    file_id: int = Field(..., ge=1, description="Existing document ID to process with the selected pipeline")
+    force_cloud_ocr: bool = Field(default=False, description="Force OCR during the queued processing run")
+    event_id: str | None = Field(default=None, max_length=255, description="Optional external event identifier")
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -111,6 +123,84 @@ def _to_response(cfg: WebhookConfig) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/inbound/pipelines/{pipeline_id}/trigger",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Trigger a processing pipeline from an inbound webhook",
+)
+@require_login
+def trigger_pipeline_from_webhook(
+    pipeline_id: int,
+    request: Request,
+    body: InboundPipelineTrigger,
+    db: DbSession,
+) -> dict[str, Any]:
+    """Assign a pipeline to an existing file and enqueue processing.
+
+    This endpoint is intended for external systems authenticated with a
+    DocuElevate API token.  It validates both the target file and pipeline
+    against the caller before modifying the file or queueing work.
+    """
+    user = get_current_user(request)
+    user_id = get_current_user_id(request)
+    owner_id = get_current_owner_id(request)
+    is_admin = bool(user and user.get("is_admin"))
+
+    file_record = db.query(FileRecord).filter(FileRecord.id == body.file_id).first()
+    if not file_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+    if not is_admin and file_record.owner_id is not None and file_record.owner_id != owner_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    pipeline = db.query(Pipeline).filter(Pipeline.id == pipeline_id).first()
+    if not pipeline or (not is_admin and pipeline.owner_id is not None and pipeline.owner_id != user_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found")
+
+    if not file_record.local_filename or not os.path.exists(file_record.local_filename):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Local file not found on disk. Cannot trigger pipeline.",
+        )
+
+    file_record.pipeline_id = pipeline.id
+    file_record.pipeline_routing_rule_id = None
+    file_record.pipeline_assignment_source = "inbound_webhook"
+    reason = "Inbound webhook trigger assigned processing profile and queued workflow"
+    if body.event_id:
+        reason = f"{reason} for external event {body.event_id}"
+    file_record.pipeline_assignment_reason = reason
+
+    try:
+        db.commit()
+        db.refresh(file_record)
+        task = process_document.delay(
+            file_record.local_filename,
+            original_filename=file_record.original_filename,
+            file_id=file_record.id,
+            force_cloud_ocr=body.force_cloud_ocr,
+            owner_id=file_record.owner_id,
+        )
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Failed to trigger inbound pipeline id=%s for file id=%s", pipeline_id, body.file_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to trigger pipeline"
+        ) from exc
+
+    logger.info(
+        "Inbound webhook queued pipeline_id=%s for file_id=%s task_id=%s",
+        pipeline_id,
+        file_record.id,
+        task.id,
+    )
+    return {
+        "status": "queued",
+        "file_id": file_record.id,
+        "pipeline_id": file_record.pipeline_id,
+        "task_id": task.id,
+    }
 
 
 @router.get("/", summary="List all webhook configurations")

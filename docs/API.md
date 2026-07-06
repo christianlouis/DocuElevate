@@ -1562,6 +1562,35 @@ Update an existing webhook. Only supplied fields are changed.
 
 Delete a webhook configuration. Returns `204 No Content` on success.
 
+### POST /api/webhooks/inbound/pipelines/{pipeline_id}/trigger
+
+Trigger an existing document to be processed with a specific pipeline. This
+endpoint is intended for external systems using a DocuElevate API token in the
+`Authorization: Bearer <token>` header. The caller must be allowed to access
+both the document and the target pipeline.
+
+Request body:
+
+```json
+{
+  "file_id": 42,
+  "force_cloud_ocr": false,
+  "event_id": "external-event-123"
+}
+```
+
+Successful requests return `202 Accepted` after assigning the pipeline and
+queueing processing:
+
+```json
+{
+  "status": "queued",
+  "file_id": 42,
+  "pipeline_id": 7,
+  "task_id": "celery-task-id"
+}
+```
+
 ### Webhook Payload Format
 
 When a subscribed event occurs, a JSON POST request is sent to the configured URL:

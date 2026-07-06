@@ -5,12 +5,12 @@ import hmac
 import json
 import socket
 import time
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from urllib.parse import urlparse
 
 import pytest
 
-from app.models import WebhookConfig
+from app.models import FileRecord, Pipeline, WebhookConfig
 from app.utils.webhook import (
     _send_pinned_post,
     build_payload,
@@ -363,6 +363,77 @@ class TestWebhookAPI:
         assert data["is_active"] is True
         assert data["has_secret"] is True
         assert "secret" not in data  # secret must not be exposed
+
+    @patch("app.api.webhooks.process_document.delay")
+    def test_inbound_pipeline_trigger_assigns_profile_and_queues_work(self, mock_delay, client, db_session, tmp_path):
+        """Inbound triggers validate file/pipeline access before queueing processing."""
+        source_file = tmp_path / "inbound.pdf"
+        source_file.write_bytes(b"%PDF-1.4")
+        pipeline = Pipeline(owner_id="anonymous", name="Inbound")
+        file_record = FileRecord(
+            owner_id=None,
+            filehash="hash-inbound",
+            original_filename="inbound.pdf",
+            local_filename=str(source_file),
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add_all([pipeline, file_record])
+        db_session.commit()
+        mock_delay.return_value = Mock(id="task-inbound")
+
+        resp = client.post(
+            f"/api/webhooks/inbound/pipelines/{pipeline.id}/trigger",
+            json={"file_id": file_record.id, "force_cloud_ocr": True, "event_id": "evt-123"},
+        )
+
+        assert resp.status_code == 202
+        assert resp.json() == {
+            "status": "queued",
+            "file_id": file_record.id,
+            "pipeline_id": pipeline.id,
+            "task_id": "task-inbound",
+        }
+        db_session.refresh(file_record)
+        assert file_record.pipeline_id == pipeline.id
+        assert file_record.pipeline_assignment_source == "inbound_webhook"
+        assert "evt-123" in file_record.pipeline_assignment_reason
+        mock_delay.assert_called_once_with(
+            str(source_file),
+            original_filename="inbound.pdf",
+            file_id=file_record.id,
+            force_cloud_ocr=True,
+            owner_id=None,
+        )
+
+    def test_inbound_pipeline_trigger_rejects_missing_file(self, client, db_session):
+        """Inbound triggers reject unknown documents."""
+        pipeline = Pipeline(owner_id="anonymous", name="Inbound")
+        db_session.add(pipeline)
+        db_session.commit()
+
+        resp = client.post(f"/api/webhooks/inbound/pipelines/{pipeline.id}/trigger", json={"file_id": 99999})
+
+        assert resp.status_code == 404
+
+    def test_inbound_pipeline_trigger_rejects_missing_local_file(self, client, db_session):
+        """Inbound triggers do not queue work when the document file is unavailable."""
+        pipeline = Pipeline(owner_id="anonymous", name="Inbound")
+        file_record = FileRecord(
+            owner_id=None,
+            filehash="hash-missing",
+            original_filename="missing.pdf",
+            local_filename="/nonexistent/missing.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add_all([pipeline, file_record])
+        db_session.commit()
+
+        resp = client.post(f"/api/webhooks/inbound/pipelines/{pipeline.id}/trigger", json={"file_id": file_record.id})
+
+        assert resp.status_code == 409
+        assert resp.json()["detail"] == "Local file not found on disk. Cannot trigger pipeline."
 
     def test_list_webhooks(self, client, db_session):
         """GET /api/webhooks/ returns all webhooks."""
