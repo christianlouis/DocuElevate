@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.173.13 (2026-07-06)
+
+### Bug Fixes
+
+- Apply ingestion routing rules ([#978](https://github.com/christianlouis/DocuElevate/pull/978),
+  [`5a62aa8`](https://github.com/christianlouis/DocuElevate/commit/5a62aa854a87576ab3867280b82846c551a7cb36))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`973f45f`](https://github.com/christianlouis/DocuElevate/commit/973f45fbfa595c5de5a50aa341f5cee5a12084fc))
+
+### Testing
+
+- Clarify release-name roadmap coverage
+  ([#975](https://github.com/christianlouis/DocuElevate/pull/975),
+  [`a331be0`](https://github.com/christianlouis/DocuElevate/commit/a331be00fd7240fc73763f406006d4c0f30bdba6))
+
+
 ## Unreleased
 
 ### Testing
