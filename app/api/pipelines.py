@@ -51,12 +51,12 @@ PIPELINE_STEP_TYPES: dict[str, dict[str, Any]] = {
         "label": "OCR Profile Settings",
         "description": "Configure OCR behavior that is applied during the system-managed processing flow.",
         "runtime_effect": "applied_config",
-        "runtime_effect_description": "OCR language and force-cloud OCR are applied at runtime.",
+        "runtime_effect_description": "OCR language and forced OCR processing are applied at runtime.",
         "config_schema": {
             "force_cloud_ocr": {
                 "type": "boolean",
                 "default": False,
-                "description": "Always use cloud OCR even if the PDF already has embedded text.",
+                "description": "Always run OCR processing even if the PDF already has embedded text.",
             },
             "ocr_language": {
                 "type": "select",

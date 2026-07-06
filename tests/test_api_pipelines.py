@@ -74,6 +74,49 @@ class TestStepTypesCatalogue:
             assert data[key]["runtime_effect"] == "metadata_only"
             assert data[key]["runtime_effect_description"]
 
+    def test_force_ocr_copy_does_not_overpromise_cloud_provider(self, client):
+        """force_cloud_ocr copy describes forced OCR behavior, not only cloud providers."""
+        r = client.get("/api/pipelines/step-types")
+        description = r.json()["ocr"]["config_schema"]["force_cloud_ocr"]["description"]
+
+        assert "run OCR processing" in description
+        assert "cloud OCR" not in description
+
+    def test_processing_profile_translation_keys_exist(self):
+        """New processing-profile UI copy is routed through translation keys."""
+        import json
+        from pathlib import Path
+
+        root = Path(__file__).parents[1]
+        translations = json.loads((root / "frontend" / "translations" / "en.json").read_text())
+        template = (root / "frontend" / "templates" / "pipelines.html").read_text()
+
+        expected_keys = [
+            "pipelines.add_profile_setting_btn",
+            "pipelines.add_profile_setting_title",
+            "pipelines.add_setting",
+            "pipelines.applied_at_runtime",
+            "pipelines.collapse_settings_aria",
+            "pipelines.disabled_profile_metadata",
+            "pipelines.disabled_runtime_config",
+            "pipelines.edit_profile_setting_title",
+            "pipelines.expand_settings_aria",
+            "pipelines.force_cloud_ocr_label",
+            "pipelines.profile_contract_body",
+            "pipelines.profile_contract_inline",
+            "pipelines.profile_contract_title",
+            "pipelines.profile_metadata",
+            "pipelines.save_changes",
+            "pipelines.setting_plural",
+            "pipelines.setting_singular",
+            "pipelines.step_modal_contract",
+        ]
+        for key in expected_keys:
+            assert key in translations, f"Missing translation key: {key}"
+
+        assert "Current profile contract" not in template
+        assert "metadata disabled" not in template
+
 
 # ---------------------------------------------------------------------------
 # Integration tests – Pipeline CRUD
