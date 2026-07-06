@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 
 import pytest
 
-from app.models import FileRecord, Pipeline, WebhookConfig
+from app.models import FileRecord, Pipeline, WebhookConfig, WebhookDeliveryAttempt
 from app.utils.webhook import (
     _send_pinned_post,
     build_payload,
@@ -452,6 +452,73 @@ class TestWebhookAPI:
         items = resp.json()
         assert any(w["url"] == "https://list.example.com/hook" for w in items)
 
+    def test_list_delivery_attempts(self, client, db_session):
+        """GET /api/webhooks/delivery-attempts/ returns recent persisted deliveries."""
+        self._with_admin(client)
+        attempt = WebhookDeliveryAttempt(
+            url="https://list.example.com/hook",
+            event="document.processed",
+            payload=json.dumps({"event": "document.processed"}),
+            status="failed",
+            attempt_number=2,
+            error="timeout",
+        )
+        db_session.add(attempt)
+        db_session.commit()
+
+        resp = client.get("/api/webhooks/delivery-attempts/?status=failed")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["url"] == "https://list.example.com/hook"
+        assert data[0]["event"] == "document.processed"
+        assert data[0]["status"] == "failed"
+        assert "payload" not in data[0]
+
+    def test_replay_delivery_attempt_queues_current_webhook_config(self, client, db_session, mocker):
+        """POST /api/webhooks/delivery-attempts/{id}/replay queues a new attempt."""
+        self._with_admin(client)
+        mock_task = mocker.patch("app.api.webhooks.deliver_webhook_task.delay")
+        mock_task.return_value = Mock(id="task-replay")
+        cfg = WebhookConfig(
+            url="https://current.example.com/hook",
+            secret="current-secret",
+            events=json.dumps(["document.processed"]),
+            is_active=True,
+        )
+        db_session.add(cfg)
+        db_session.commit()
+        attempt = WebhookDeliveryAttempt(
+            webhook_config_id=cfg.id,
+            url="https://old.example.com/hook",
+            event="document.processed",
+            payload=json.dumps({"event": "document.processed", "data": {"file_id": 42}}),
+            status="failed",
+            attempt_number=1,
+            error="timeout",
+        )
+        db_session.add(attempt)
+        db_session.commit()
+
+        resp = client.post(f"/api/webhooks/delivery-attempts/{attempt.id}/replay")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "queued"
+        assert data["replay_of"] == attempt.id
+        assert data["task_id"] == "task-replay"
+        replay = db_session.query(WebhookDeliveryAttempt).filter(WebhookDeliveryAttempt.id == data["delivery_id"]).one()
+        assert replay.status == "queued"
+        assert replay.url == "https://current.example.com/hook"
+        mock_task.assert_called_once_with(
+            "https://current.example.com/hook",
+            {"event": "document.processed", "data": {"file_id": 42}},
+            "current-secret",
+            cfg.id,
+            replay.id,
+        )
+
     def test_get_webhook(self, client, db_session):
         """GET /api/webhooks/{id} returns a single webhook."""
         self._with_admin(client)
@@ -608,44 +675,68 @@ class TestWebhookAPI:
 class TestDeliverWebhookTask:
     """Tests for the Celery webhook delivery task."""
 
-    def test_success_returns_status_dict(self, mocker):
+    def test_success_returns_status_dict(self, mocker, db_session):
         """Task returns a dict on successful delivery."""
         mocker.patch("app.tasks.webhook_tasks.deliver_webhook", return_value=True)
+        mocker.patch("app.tasks.webhook_tasks.SessionLocal", return_value=db_session)
 
         from app.tasks.webhook_tasks import deliver_webhook_task
 
         # Mock the task's request context for the log line
         deliver_webhook_task.request.retries = 0
+        deliver_webhook_task.request.id = "task-success"
 
-        result = deliver_webhook_task.__wrapped__("https://example.com/hook", {"event": "test"}, None)
+        result = deliver_webhook_task.__wrapped__("https://example.com/hook", {"event": "test"}, None, 123)
         assert result["status"] == "delivered"
         assert result["url"] == "https://example.com/hook"
+        attempt = db_session.query(WebhookDeliveryAttempt).one()
+        assert attempt.task_id == "task-success"
+        assert attempt.webhook_config_id == 123
+        assert attempt.status == "delivered"
+        assert attempt.event == "test"
 
-    def test_failure_raises_for_retry(self, mocker):
+    def test_failure_raises_for_retry(self, mocker, db_session):
         """Task raises RuntimeError on delivery failure to trigger retry."""
         mocker.patch("app.tasks.webhook_tasks.deliver_webhook", return_value=False)
+        mocker.patch("app.tasks.webhook_tasks.SessionLocal", return_value=db_session)
 
         from app.tasks.webhook_tasks import deliver_webhook_task
 
         deliver_webhook_task.request.retries = 0
+        deliver_webhook_task.request.id = "task-failure"
 
         with pytest.raises(RuntimeError, match="Webhook delivery.*failed"):
             deliver_webhook_task.__wrapped__("https://example.com/hook", {"event": "test"}, None)
+        attempt = db_session.query(WebhookDeliveryAttempt).one()
+        assert attempt.task_id == "task-failure"
+        assert attempt.status == "failed"
+        assert "failed" in attempt.error
 
     def test_final_failure_logs_dead_letter_context(self, mocker):
         """After retry exhaustion, webhook failures are logged with dead-letter context."""
         mock_logger = mocker.patch("app.tasks.webhook_tasks.logger")
+        mock_record = mocker.patch("app.tasks.webhook_tasks._record_delivery_attempt")
 
         from app.tasks.webhook_tasks import deliver_webhook_task
 
         deliver_webhook_task.on_failure(
             RuntimeError("delivery failed"),
             "task-dead",
-            ("https://example.com/hook", {"event": "document.failed"}, None),
+            ("https://example.com/hook", {"event": "document.failed"}, None, 123, 456),
             {},
             None,
         )
 
+        mock_record.assert_called_once_with(
+            url="https://example.com/hook",
+            payload={"event": "document.failed"},
+            status="dead_lettered",
+            attempt_number=deliver_webhook_task.max_retries + 1,
+            task_id="task-dead",
+            webhook_config_id=123,
+            delivery_id=456,
+            error="delivery failed",
+        )
         mock_logger.error.assert_called_once_with(
             "Webhook delivery dead-lettered: task_id=%s url=%s event=%s attempts=%d error=%s",
             "task-dead",

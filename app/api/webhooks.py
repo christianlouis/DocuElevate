@@ -10,14 +10,15 @@ import logging
 import os
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, get_current_user_id, require_login
 from app.database import get_db
-from app.models import FileRecord, Pipeline, WebhookConfig
+from app.models import FileRecord, Pipeline, WebhookConfig, WebhookDeliveryAttempt
 from app.tasks.process_document import process_document
+from app.tasks.webhook_tasks import deliver_webhook_task
 from app.utils.user_scope import get_current_owner_id
 from app.utils.webhook import VALID_EVENTS
 
@@ -89,6 +90,15 @@ class InboundPipelineTrigger(BaseModel):
     event_id: str | None = Field(default=None, max_length=255, description="Optional external event identifier")
 
 
+class WebhookReplayResponse(BaseModel):
+    """Response returned after queueing a webhook delivery replay."""
+
+    status: str
+    delivery_id: int
+    replay_of: int
+    task_id: str | None
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -117,6 +127,24 @@ def _to_response(cfg: WebhookConfig) -> dict[str, Any]:
         "is_active": cfg.is_active,
         "description": cfg.description,
         "has_secret": cfg.secret is not None and len(cfg.secret) > 0,
+    }
+
+
+def _to_delivery_response(attempt: WebhookDeliveryAttempt) -> dict[str, Any]:
+    """Convert a persisted delivery attempt to an admin response."""
+    return {
+        "id": attempt.id,
+        "webhook_config_id": attempt.webhook_config_id,
+        "task_id": attempt.task_id,
+        "url": attempt.url,
+        "event": attempt.event,
+        "status": attempt.status,
+        "attempt_number": attempt.attempt_number,
+        "response_status": attempt.response_status,
+        "error": attempt.error,
+        "created_at": attempt.created_at,
+        "delivered_at": attempt.delivered_at,
+        "updated_at": attempt.updated_at,
     }
 
 
@@ -208,6 +236,68 @@ def list_webhooks(db: DbSession, _admin: AdminUser) -> list[dict[str, Any]]:
     """Return all webhook configurations. Secrets are never included."""
     configs = db.query(WebhookConfig).order_by(WebhookConfig.id).all()
     return [_to_response(c) for c in configs]
+
+
+@router.get("/delivery-attempts/", summary="List webhook delivery attempts")
+def list_delivery_attempts(
+    db: DbSession,
+    _admin: AdminUser,
+    status_filter: str | None = Query(default=None, alias="status"),
+    event: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> list[dict[str, Any]]:
+    """Return recent outbound webhook delivery attempts."""
+    query = db.query(WebhookDeliveryAttempt)
+    if status_filter:
+        query = query.filter(WebhookDeliveryAttempt.status == status_filter)
+    if event:
+        query = query.filter(WebhookDeliveryAttempt.event == event)
+    attempts = query.order_by(WebhookDeliveryAttempt.created_at.desc(), WebhookDeliveryAttempt.id.desc()).limit(limit).all()
+    return [_to_delivery_response(attempt) for attempt in attempts]
+
+
+@router.post("/delivery-attempts/{attempt_id}/replay", summary="Replay a webhook delivery attempt")
+def replay_delivery_attempt(attempt_id: int, db: DbSession, _admin: AdminUser) -> dict[str, Any]:
+    """Queue a replay for a persisted webhook delivery attempt."""
+    attempt = db.query(WebhookDeliveryAttempt).filter(WebhookDeliveryAttempt.id == attempt_id).first()
+    if not attempt:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook delivery attempt not found")
+
+    try:
+        payload = json.loads(attempt.payload)
+    except (json.JSONDecodeError, TypeError):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Stored webhook payload cannot be replayed")
+
+    webhook_config = None
+    if attempt.webhook_config_id is not None:
+        webhook_config = db.query(WebhookConfig).filter(WebhookConfig.id == attempt.webhook_config_id).first()
+
+    replay_url = webhook_config.url if webhook_config else attempt.url
+    replay_secret = webhook_config.secret if webhook_config else None
+    replay = WebhookDeliveryAttempt(
+        webhook_config_id=attempt.webhook_config_id,
+        url=replay_url,
+        event=attempt.event,
+        payload=json.dumps(payload, default=str, sort_keys=True),
+        status="queued",
+        attempt_number=1,
+    )
+    db.add(replay)
+    db.commit()
+    db.refresh(replay)
+
+    task = deliver_webhook_task.delay(replay_url, payload, replay_secret, attempt.webhook_config_id, replay.id)
+    replay.task_id = getattr(task, "id", None)
+    db.commit()
+    db.refresh(replay)
+
+    logger.info("Webhook delivery attempt %d replay queued as delivery %d", attempt.id, replay.id)
+    return WebhookReplayResponse(
+        status="queued",
+        delivery_id=replay.id,
+        replay_of=attempt.id,
+        task_id=replay.task_id,
+    ).model_dump()
 
 
 @router.get("/{webhook_id}", summary="Get a single webhook configuration")

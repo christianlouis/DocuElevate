@@ -302,7 +302,7 @@ def dispatch_webhook_event(event: str, data: dict[str, Any]) -> None:
 
         for wh in webhooks:
             try:
-                deliver_webhook_task.delay(wh["url"], payload, wh["secret"])
+                deliver_webhook_task.delay(wh["url"], payload, wh["secret"], webhook_config_id=wh.get("id"))
                 logger.debug("Queued webhook delivery to %s for event %s", wh["url"], event)
             except Exception as exc:
                 logger.error("Failed to queue webhook to %s: %s", wh["url"], exc)

@@ -217,6 +217,26 @@ class WebhookConfig(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class WebhookDeliveryAttempt(Base):
+    """Persisted outbound webhook delivery attempt for audit and replay."""
+
+    __tablename__ = "webhook_delivery_attempts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    webhook_config_id = Column(Integer, nullable=True, index=True)
+    task_id = Column(String, nullable=True, index=True)
+    url = Column(String, nullable=False)
+    event = Column(String, nullable=True, index=True)
+    payload = Column(Text, nullable=False)
+    status = Column(String(30), nullable=False, default="pending", index=True)
+    attempt_number = Column(Integer, nullable=False, default=1)
+    response_status = Column(Integer, nullable=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    delivered_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class AutomationHook(Base):
     """Zapier / Make.com compatible webhook subscription for automation triggers.
 
