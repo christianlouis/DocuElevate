@@ -10,6 +10,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.173.16 (2026-07-06)
+
+### Bug Fixes
+
+- Align file profile status views
+  ([`4459682`](https://github.com/christianlouis/DocuElevate/commit/44596829e2b7a070ee97df191cf179fd2bb8b3a9))
+
+- Surface profile selection provenance
+  ([`708ac5e`](https://github.com/christianlouis/DocuElevate/commit/708ac5e607dd93dc7b7a73cc6bb1bf98df0f3492))
+
+- Type profile step summary input
+  ([`f9666c6`](https://github.com/christianlouis/DocuElevate/commit/f9666c6406b94d8c0920784a12a25b3d1262a8c8))
+
+### Chores
+
+- Rerun ci for profile status views
+  ([`b964994`](https://github.com/christianlouis/DocuElevate/commit/b964994e95105274dc09fa03d545880128bfab6b))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`dd67f4a`](https://github.com/christianlouis/DocuElevate/commit/dd67f4a1bb89152053e975a8e9b8b5193a269d6d))
+
+
 ## v0.173.15 (2026-07-06)
 
 ### Bug Fixes
