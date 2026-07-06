@@ -154,6 +154,18 @@ def compute_signature(payload_bytes: bytes, secret: str) -> str:
     return f"sha256={mac.hexdigest()}"
 
 
+def verify_signature(payload_bytes: bytes, secret: str, signature: str | None) -> bool:
+    """Return whether *signature* matches *payload_bytes* for *secret*.
+
+    The comparison is constant-time and accepts the same ``sha256=<digest>``
+    value that DocuElevate sends in ``X-Webhook-Signature``.
+    """
+    if not signature or not signature.startswith("sha256="):
+        return False
+    expected = compute_signature(payload_bytes, secret)
+    return hmac.compare_digest(expected, signature)
+
+
 def deliver_webhook(url: str, payload: dict[str, Any], secret: str | None = None) -> bool:
     """Send a single webhook POST request.
 

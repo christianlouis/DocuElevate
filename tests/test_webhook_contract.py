@@ -46,3 +46,15 @@ def test_deliver_webhook_sends_signature_and_contract_headers(mocker):
     assert headers["X-DocuElevate-Event"] == "document.processed"
     assert headers["X-DocuElevate-Webhook-Version"] == "1.0"
     assert headers["X-Webhook-Signature"] == compute_signature(expected_body, "secret")
+
+
+@pytest.mark.unit
+def test_signature_verifier_accepts_documented_header_value():
+    """The verifier checks the exact X-Webhook-Signature header value."""
+    from app.utils.webhook import compute_signature, verify_signature
+
+    body = b'{"data":{"file_id":42},"event":"document.processed","timestamp":123.5,"version":"1.0"}'
+    signature = compute_signature(body, "secret")
+
+    assert verify_signature(body, "secret", signature) is True
+    assert verify_signature(body, "secret", "sha256=" + "0" * 64) is False

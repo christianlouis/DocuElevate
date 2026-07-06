@@ -18,6 +18,7 @@ from app.utils.webhook import (
     deliver_webhook,
     dispatch_webhook_event,
     get_active_webhooks_for_event,
+    verify_signature,
 )
 
 # ---------------------------------------------------------------------------
@@ -47,6 +48,35 @@ class TestComputeSignature:
         """Different secrets must produce different signatures."""
         payload = b"same"
         assert compute_signature(payload, "secret1") != compute_signature(payload, "secret2")
+
+
+# ---------------------------------------------------------------------------
+# Unit tests – verify_signature
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestVerifySignature:
+    """Tests for webhook signature verification."""
+
+    def test_valid_signature_returns_true(self):
+        """The verifier accepts signatures produced by compute_signature."""
+        payload = b'{"event":"document.processed"}'
+        signature = compute_signature(payload, "secret")
+
+        assert verify_signature(payload, "secret", signature) is True
+
+    def test_invalid_signature_returns_false(self):
+        """The verifier rejects signatures for a different secret or payload."""
+        payload = b'{"event":"document.processed"}'
+        signature = compute_signature(payload, "other-secret")
+
+        assert verify_signature(payload, "secret", signature) is False
+
+    @pytest.mark.parametrize("signature", [None, "", "bad", "sha1=abc"])
+    def test_malformed_signature_returns_false(self, signature):
+        """Missing or malformed signatures are rejected."""
+        assert verify_signature(b"{}", "secret", signature) is False
 
 
 # ---------------------------------------------------------------------------

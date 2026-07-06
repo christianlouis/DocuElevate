@@ -1592,16 +1592,16 @@ Every delivery also includes:
 | `X-DocuElevate-Event` | Event type, such as `document.processed` |
 | `X-DocuElevate-Webhook-Version` | Payload envelope version, currently `1.0` |
 
-To verify in Python:
+To verify in Python with DocuElevate's helper:
 
 ```python
-import hashlib, hmac
+from app.utils.webhook import verify_signature
 
-def verify_signature(body: bytes, secret: str, signature: str) -> bool:
-    expected = "sha256=" + hmac.new(
-        secret.encode(), body, hashlib.sha256
-    ).hexdigest()
-    return hmac.compare_digest(expected, signature)
+is_valid = verify_signature(
+    body=request.body,
+    secret="shared webhook secret",
+    signature=request.headers.get("X-Webhook-Signature"),
+)
 ```
 
 ### Retry Behavior
