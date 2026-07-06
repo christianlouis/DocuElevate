@@ -38,6 +38,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#966](https://github.com/christianlouis/DocuElevate/pull/966),
   [`545c36c`](https://github.com/christianlouis/DocuElevate/commit/545c36c03c7a49438a9f2223d6aa89e82bdb9cb0))
 
+- **deps-dev**: Update pytest requirement from >=8.0.0 to >=9.1.1
+  ([#963](https://github.com/christianlouis/DocuElevate/pull/963),
+  [`c7e3d05`](https://github.com/christianlouis/DocuElevate/commit/c7e3d05de8ab235dda4ee48bcd6f997351dad911))
+
+- **deps-dev**: Update pytest-cov requirement from >=4.1.0 to >=7.1.0
+  ([#962](https://github.com/christianlouis/DocuElevate/pull/962),
+  [`faa3f2a`](https://github.com/christianlouis/DocuElevate/commit/faa3f2ad220c6d12eb3bddb6f8649254095ecad6))
+
+- **deps-dev**: Update python-semantic-release requirement
+  ([#965](https://github.com/christianlouis/DocuElevate/pull/965),
+  [`ae8c9ae`](https://github.com/christianlouis/DocuElevate/commit/ae8c9ae46a3db35c3673d90837c52c95c93e3c84))
+
+- **deps-dev**: Update ruff requirement from >=0.3.0 to >=0.15.20
+  ([#969](https://github.com/christianlouis/DocuElevate/pull/969),
+  [`897c745`](https://github.com/christianlouis/DocuElevate/commit/897c74519b16ab28aa4620c0d97023a4b57ab3ae))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`fb0588e`](https://github.com/christianlouis/DocuElevate/commit/fb0588e67a8d5e3bd475100fec9f940909435c8a))
+
+
+## Unreleased
+
+### Build System
+
+- **deps**: Update apprise requirement from >=1.11.0 to >=1.12.0
+  ([#961](https://github.com/christianlouis/DocuElevate/pull/961),
+  [`ba598b6`](https://github.com/christianlouis/DocuElevate/commit/ba598b6fcf89300f74eac40545d6e76cfe4f13ed))
+
+- **deps**: Update boto3 requirement from >=1.43.36 to >=1.43.40
+  ([#968](https://github.com/christianlouis/DocuElevate/pull/968),
+  [`c023c75`](https://github.com/christianlouis/DocuElevate/commit/c023c75157489ab9dc3c3ad69bfb260f27e39a05))
+
+- **deps**: Update meilisearch requirement from >=0.41.0 to >=0.42.0
+  ([#964](https://github.com/christianlouis/DocuElevate/pull/964),
+  [`2e1538a`](https://github.com/christianlouis/DocuElevate/commit/2e1538a647c3a91f6c7f1b045712e4446b8a8fcf))
+
+- **deps**: Update pyicloud requirement from >=2.6.4 to >=2.6.5
+  ([#960](https://github.com/christianlouis/DocuElevate/pull/960),
+  [`b1ae6bd`](https://github.com/christianlouis/DocuElevate/commit/b1ae6bd531fb9c9eef87f0358d13ffc659520c84))
+
+- **deps**: Update strawberry-graphql requirement
+  ([#967](https://github.com/christianlouis/DocuElevate/pull/967),
+  [`c864d9c`](https://github.com/christianlouis/DocuElevate/commit/c864d9c95d91ab03173415c0b5bac32a2c893120))
+
+- **deps-dev**: Update httpx requirement from >=0.26.0 to >=0.28.1
+  ([#966](https://github.com/christianlouis/DocuElevate/pull/966),
+  [`545c36c`](https://github.com/christianlouis/DocuElevate/commit/545c36c03c7a49438a9f2223d6aa89e82bdb9cb0))
+
 - **deps-dev**: Update pytest-cov requirement from >=4.1.0 to >=7.1.0
   ([#962](https://github.com/christianlouis/DocuElevate/pull/962),
   [`faa3f2a`](https://github.com/christianlouis/DocuElevate/commit/faa3f2ad220c6d12eb3bddb6f8649254095ecad6))
