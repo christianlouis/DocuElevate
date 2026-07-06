@@ -88,13 +88,29 @@ def _get_pipeline_ocr_config(db: "Session", file_record: FileRecord, owner_id: s
 
     try:
         step_config = json.loads(ocr_step.config)
-        lang = step_config.get("ocr_language")
-        # "auto" is treated as no override
-        result["ocr_language"] = lang if lang and lang != "auto" else None
-        result["force_cloud_ocr"] = bool(step_config.get("force_cloud_ocr"))
+    except (json.JSONDecodeError, TypeError) as exc:
+        logger.warning(
+            "Invalid OCR processing-profile config JSON for pipeline_id=%s, step_id=%s: %s",
+            pipeline.id,
+            ocr_step.id,
+            exc,
+        )
         return result
-    except Exception:
+
+    if not isinstance(step_config, dict):
+        logger.warning(
+            "Invalid OCR processing-profile config for pipeline_id=%s, step_id=%s: expected object, got %s",
+            pipeline.id,
+            ocr_step.id,
+            type(step_config).__name__,
+        )
         return result
+
+    lang = step_config.get("ocr_language")
+    # "auto" is treated as no override
+    result["ocr_language"] = lang if lang and lang != "auto" else None
+    result["force_cloud_ocr"] = bool(step_config.get("force_cloud_ocr"))
+    return result
 
 
 def _get_pipeline_ocr_language(db: "Session", file_record: FileRecord, owner_id: str | None) -> str | None:
@@ -160,7 +176,7 @@ def process_document(
         file_id: Optional existing file record ID. When provided, skips duplicate
                  detection and reuses the existing record (used for reprocessing).
         force_cloud_ocr: If True, forces OCR processing regardless of embedded
-                         text quality. Used for re-processing and profile overrides.
+                         text quality. Used for re-processing and profile configuration.
         owner_id: Optional user identifier for multi-user mode. When provided, the
                   created FileRecord is associated with this user.
 
@@ -454,9 +470,9 @@ def process_document(
         ocr_language = ocr_config["ocr_language"] if isinstance(ocr_config["ocr_language"], str) else None
         force_cloud_ocr = force_cloud_ocr or bool(ocr_config["force_cloud_ocr"])
         if ocr_language:
-            logger.info(f"[{task_id}] Pipeline OCR language override: {ocr_language!r}")
+            logger.info(f"[{task_id}] Processing profile OCR language configured: {ocr_language!r}")
         if force_cloud_ocr:
-            logger.info(f"[{task_id}] Pipeline force-cloud OCR override enabled")
+            logger.info(f"[{task_id}] Processing profile forced OCR processing enabled")
 
         # Store file_id before session closes to avoid DetachedInstanceError
         file_id = new_record.id

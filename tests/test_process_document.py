@@ -1061,6 +1061,99 @@ def test_get_pipeline_ocr_config_returns_force_cloud_ocr(db_session):
 
 @pytest.mark.unit
 @pytest.mark.requires_db
+def test_get_pipeline_ocr_config_logs_invalid_json(db_session, caplog):
+    """Invalid OCR profile JSON is logged and falls back to default config."""
+    import logging
+
+    from app.models import Pipeline, PipelineStep
+    from app.tasks.process_document import _get_pipeline_ocr_config
+
+    pipeline = Pipeline(
+        owner_id=None,
+        name="Invalid OCR Profile",
+        is_default=True,
+        is_active=True,
+    )
+    db_session.add(pipeline)
+    db_session.commit()
+
+    ocr_step = PipelineStep(
+        pipeline_id=pipeline.id,
+        position=0,
+        step_type="ocr",
+        config="{not-json",
+        enabled=True,
+    )
+    db_session.add(ocr_step)
+    db_session.commit()
+
+    file_record = FileRecord(
+        filehash="invalid-json",
+        original_filename="invalid.pdf",
+        local_filename="/tmp/invalid.pdf",
+        file_size=256,
+        mime_type="application/pdf",
+        is_duplicate=False,
+    )
+    db_session.add(file_record)
+    db_session.commit()
+
+    with caplog.at_level(logging.WARNING, logger="app.tasks.process_document"):
+        result = _get_pipeline_ocr_config(db_session, file_record, owner_id=None)
+
+    assert result == {"ocr_language": None, "force_cloud_ocr": False}
+    assert "Invalid OCR processing-profile config JSON" in caplog.text
+    assert f"step_id={ocr_step.id}" in caplog.text
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_get_pipeline_ocr_config_logs_non_object_json(db_session, caplog):
+    """OCR profile config must be a JSON object."""
+    import logging
+
+    from app.models import Pipeline, PipelineStep
+    from app.tasks.process_document import _get_pipeline_ocr_config
+
+    pipeline = Pipeline(
+        owner_id=None,
+        name="List OCR Profile",
+        is_default=True,
+        is_active=True,
+    )
+    db_session.add(pipeline)
+    db_session.commit()
+
+    ocr_step = PipelineStep(
+        pipeline_id=pipeline.id,
+        position=0,
+        step_type="ocr",
+        config='["eng"]',
+        enabled=True,
+    )
+    db_session.add(ocr_step)
+    db_session.commit()
+
+    file_record = FileRecord(
+        filehash="list-json",
+        original_filename="list.pdf",
+        local_filename="/tmp/list.pdf",
+        file_size=256,
+        mime_type="application/pdf",
+        is_duplicate=False,
+    )
+    db_session.add(file_record)
+    db_session.commit()
+
+    with caplog.at_level(logging.WARNING, logger="app.tasks.process_document"):
+        result = _get_pipeline_ocr_config(db_session, file_record, owner_id=None)
+
+    assert result == {"ocr_language": None, "force_cloud_ocr": False}
+    assert "expected object, got list" in caplog.text
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
 def test_get_pipeline_ocr_language_auto_returns_none(db_session):
     """Returns None when ocr_language is 'auto' (should use global settings)."""
     import json
