@@ -39,7 +39,7 @@ All API endpoints are protected with a default rate limit unless explicitly exem
 **Rate Limit**: 600 requests per minute
 
 **Endpoints**:
-- `POST /api/ui-upload` - Web UI file upload
+- `POST /api/ui-upload` - File upload for web UI and API token clients
 
 **Rationale**: File uploads consume network bandwidth, disk I/O, and storage space. A limit of 600 uploads per minute allows fast batch uploads while preventing resource exhaustion and abuse.
 
