@@ -266,6 +266,7 @@ def list_files_api(
                 "local_filename": f.local_filename,
                 "file_size": f.file_size,
                 "mime_type": f.mime_type,
+                "legal_hold": f.legal_hold,
                 "created_at": f.created_at.isoformat() if f.created_at else None,
                 "processing_status": statuses.get(
                     f.id,
@@ -356,6 +357,7 @@ def get_file_details(request: Request, file_id: int, db: DbSession):
             "local_filename": file_record.local_filename,
             "file_size": file_record.file_size,
             "mime_type": file_record.mime_type,
+            "legal_hold": file_record.legal_hold,
             "created_at": (file_record.created_at.isoformat() if file_record.created_at else None),
         },
         "processing_status": processing_status,
@@ -384,6 +386,8 @@ def delete_file_record(request: Request, file_id: int, db: DbSession):
 
         if not file_record:
             raise HTTPException(status_code=404, detail=f"File record with ID {file_id} not found")
+        if file_record.legal_hold:
+            raise HTTPException(status_code=409, detail="File is under legal hold and cannot be deleted")
 
         # Enforce owner-only deletion in multi-user mode
         user = request.session.get("user")
@@ -437,6 +441,12 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
 
         if not file_records:
             raise HTTPException(status_code=404, detail="No files found with the provided IDs")
+        held_ids = [f.id for f in file_records if f.legal_hold]
+        if held_ids:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Files under legal hold cannot be deleted. File IDs: {held_ids}",
+            )
 
         # Enforce owner-only deletion in multi-user mode
         user = request.session.get("user")

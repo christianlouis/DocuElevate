@@ -59,6 +59,9 @@ class FileRecord(Base):
     # When a duplicate is detected, this file record is created but marked as duplicate
     is_duplicate = Column(Boolean, default=False, nullable=False, index=True)
 
+    # Legal hold prevents destructive deletion while records are under review or retention.
+    legal_hold = Column(Boolean, default=False, nullable=False, index=True)
+
     # If this is a duplicate, record the ID of the original file for reference
     duplicate_of_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=True)
 

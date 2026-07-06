@@ -303,6 +303,25 @@ class TestDeleteFileRecord:
         response = client.delete("/api/files/99999")
         assert response.status_code == 404
 
+    @patch("app.config.settings.allow_file_delete", True)
+    def test_delete_file_rejects_legal_hold(self, client: TestClient, db_session):
+        """Files under legal hold cannot be deleted."""
+        file = FileRecord(
+            filehash="hash-legal-hold",
+            original_filename="hold.pdf",
+            local_filename="/tmp/hold.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+            legal_hold=True,
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.delete(f"/api/files/{file.id}")
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == "File is under legal hold and cannot be deleted"
+
 
 @pytest.mark.unit
 class TestBulkDeleteFiles:
@@ -351,6 +370,26 @@ class TestBulkDeleteFiles:
         """Test bulk delete with non-existent IDs."""
         response = client.post("/api/files/bulk-delete", json=[99999, 99998])
         assert response.status_code == 404
+
+    @patch("app.config.settings.allow_file_delete", True)
+    def test_bulk_delete_rejects_legal_hold(self, client: TestClient, db_session):
+        """Bulk delete rejects the whole operation when any file is under legal hold."""
+        file = FileRecord(
+            filehash="hash-bulk-legal-hold",
+            original_filename="bulk-hold.pdf",
+            local_filename="/tmp/bulk-hold.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+            legal_hold=True,
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.post("/api/files/bulk-delete", json=[file.id])
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == f"Files under legal hold cannot be deleted. File IDs: [{file.id}]"
+        assert db_session.query(FileRecord).filter(FileRecord.id == file.id).first() is not None
 
 
 @pytest.mark.unit
