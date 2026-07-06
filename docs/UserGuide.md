@@ -70,7 +70,7 @@ Beyond the web interface, DocuElevate is available through several additional cl
 - **Mobile App (iOS & Android)** — Capture documents with your phone camera or upload from your photo library. See the [Mobile App Guide](MobileApp.md) for setup and usage.
 - **Browser Extension** — Clip web pages or send files to DocuElevate directly from Chrome, Firefox, or Edge. See the [Browser Extension Guide](BrowserExtension.md) for installation.
 - **CLI Tool** — Upload, download, search, and manage documents from the command line or scripts. See the [CLI Guide](CLIGuide.md) for details.
-- **REST & GraphQL API** — Full programmatic access for automation and integrations. See the [API Documentation](API.md).
+- **REST & GraphQL API** — REST automation endpoints plus query-only GraphQL access for dashboards and integrations. See the [API Documentation](API.md).
 
 ## Uploading Documents
 

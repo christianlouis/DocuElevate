@@ -129,7 +129,7 @@ Processed documents are distributed to any combination of configured destination
 - **Browser extension** — clip web pages or send files from Chrome, Firefox, Edge ([guide](docs/BrowserExtension.md))
 - **Mobile app** — iOS and Android with camera capture, push notifications, and SSO ([guide](docs/MobileApp.md))
 - **CLI tool** — batch uploads, downloads, search, and API-token management ([guide](docs/CLIGuide.md))
-- **REST API & GraphQL** — full programmatic access with Swagger documentation at `/docs`
+- **REST API & GraphQL** — REST write operations plus query-only GraphQL access, with Swagger documentation at `/docs`
 - **IMAP email** — poll multiple mailboxes with attachment filtering and auto-processing
 - **Watched folders** — local filesystem, FTP, SFTP, and cloud storage providers
 

@@ -78,7 +78,7 @@ def fetch_and_upload():
                 files = {"file": (filename, payload, "application/pdf")}
                 headers = {"Authorization": f"Bearer {API_KEY}"}
                 resp = requests.post(
-                    f"{DOCUELEVATE_URL}/api/upload",
+                    f"{DOCUELEVATE_URL}/api/ui-upload",
                     files=files,
                     headers=headers
                 )
