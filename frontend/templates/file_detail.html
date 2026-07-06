@@ -1209,6 +1209,8 @@
           <span style="display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.45rem; font-size: 0.7rem; font-weight: 600; border-radius: 0.25rem; background: #ede9fe; color: #5b21b6;" title="{{ pipeline_info.selection_reason }}">{{ pipeline_info.selection_label }}</span>
           {% elif pipeline_info.selection_label == "User Default" %}
           <span style="display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.45rem; font-size: 0.7rem; font-weight: 600; border-radius: 0.25rem; background: #fef3c7; color: #92400e;" title="{{ pipeline_info.selection_reason }}">User Default</span>
+          {% elif pipeline_info.selection_label == "Manual" %}
+          <span style="display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.45rem; font-size: 0.7rem; font-weight: 600; border-radius: 0.25rem; background: #d1fae5; color: #065f46;" title="{{ pipeline_info.selection_reason }}">Manual</span>
           {% elif pipeline_info.is_system %}
           <span style="display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.45rem; font-size: 0.7rem; font-weight: 600; border-radius: 0.25rem; background: #dbeafe; color: #1e40af;" title="{{ pipeline_info.selection_reason }}">System</span>
           {% else %}

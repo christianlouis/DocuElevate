@@ -586,7 +586,11 @@ def _pipeline_selection_details(file_record, pipeline) -> dict[str, str | None]:
     reason = getattr(file_record, "pipeline_assignment_reason", None)
 
     if source == "routing_rule":
-        return {"selection_source": source, "selection_label": "Routing Rule", "selection_reason": reason}
+        return {
+            "selection_source": source,
+            "selection_label": "Routing Rule",
+            "selection_reason": reason or "Processing profile was selected by a routing rule",
+        }
     if source == "manual" or file_record.pipeline_id:
         return {
             "selection_source": source or "manual",

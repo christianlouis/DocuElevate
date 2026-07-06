@@ -1951,7 +1951,7 @@ class TestPipelineInfoInViews:
 
         missing = set(PIPELINE_STEP_TYPES.keys()) - set(PIPELINE_STEP_TO_STAGES.keys())
         assert not missing, (
-            f"The following pipeline step types are missing from _STEP_TYPE_TO_STAGES "
+            f"The following pipeline step types are missing from PIPELINE_STEP_TO_STAGES "
             f"in app/utils/pipeline_stages.py: {missing}.  "
             "Add them with their corresponding status/log stage key(s) (use [] if none yet)."
         )
