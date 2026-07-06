@@ -84,6 +84,11 @@ class FileRecord(Base):
     # Processing pipeline assigned to this file (NULL = use system default)
     pipeline_id = Column(Integer, ForeignKey(_PIPELINES_ID_FK), nullable=True, index=True)
 
+    # Why the current processing profile was selected.
+    pipeline_assignment_source = Column(String(50), nullable=True, index=True)
+    pipeline_routing_rule_id = Column(Integer, ForeignKey(f"{_ROUTING_RULES_TABLE}.id"), nullable=True, index=True)
+    pipeline_assignment_reason = Column(Text, nullable=True)
+
     # Detected document language (ISO 639-1 code, e.g. "de", "en", "fr")
     # Extracted from AI metadata during processing; cached here for fast access.
     detected_language = Column(String(10), nullable=True)

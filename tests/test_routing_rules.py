@@ -16,6 +16,7 @@ from app.utils.routing_engine import (
     _resolve_field,
     _to_float,
     build_document_properties,
+    evaluate_pre_processing_routing_rules,
     evaluate_routing_rules,
 )
 
@@ -401,6 +402,69 @@ class TestEvaluateRoutingRules:
         result = evaluate_routing_rules(db_session, "testuser", doc)
         assert result is not None
         assert result.id == p.id
+
+
+@pytest.mark.unit
+class TestPreProcessingRoutingRules:
+    """Tests for routing fields available before OCR and metadata extraction."""
+
+    def test_filename_rule_returns_decision(self, db_session):
+        """Pre-processing routing returns both the pipeline and matched rule."""
+        pipeline = _make_pipeline(db_session, name="Invoice Profile")
+        rule = _make_rule(
+            db_session,
+            pipeline.id,
+            field="filename",
+            operator="contains",
+            value="invoice",
+            name="Invoice Filename",
+        )
+        file_record = _make_file_record(db_session, original_filename="invoice-2026.pdf")
+
+        decision = evaluate_pre_processing_routing_rules(db_session, "testuser", file_record)
+
+        assert decision is not None
+        assert decision.pipeline.id == pipeline.id
+        assert decision.rule.id == rule.id
+
+    def test_metadata_and_document_type_rules_are_skipped(self, db_session):
+        """Late-bound rules must not match against missing pre-processing values."""
+        metadata_pipeline = _make_pipeline(db_session, name="Metadata Profile")
+        filename_pipeline = _make_pipeline(db_session, name="Filename Profile")
+        _make_rule(
+            db_session,
+            metadata_pipeline.id,
+            position=0,
+            field="metadata.sender",
+            operator="not_equals",
+            value="acme",
+            name="Metadata Not Equals",
+        )
+        _make_rule(
+            db_session,
+            metadata_pipeline.id,
+            position=1,
+            field="document_type",
+            operator="not_equals",
+            value="Invoice",
+            name="Document Type Not Equals",
+        )
+        filename_rule = _make_rule(
+            db_session,
+            filename_pipeline.id,
+            position=2,
+            field="filename",
+            operator="contains",
+            value="receipt",
+            name="Receipt Filename",
+        )
+        file_record = _make_file_record(db_session, original_filename="receipt.pdf", ai_metadata=None)
+
+        decision = evaluate_pre_processing_routing_rules(db_session, "testuser", file_record)
+
+        assert decision is not None
+        assert decision.pipeline.id == filename_pipeline.id
+        assert decision.rule.id == filename_rule.id
 
 
 # ===========================================================================

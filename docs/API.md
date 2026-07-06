@@ -2091,6 +2091,12 @@ metadata.  Rules are evaluated in **position order** (lowest first); the first
 rule that matches wins.  If no rule matches, the system falls back to the
 owner's (or global) default pipeline.
 
+During initial ingestion, routing can only use fields known before processing:
+`file_type`, `filename`, and `size`.  Rules that depend on `document_type`,
+`category`, or `metadata.<key>` are still accepted and can be tested with the
+dry-run endpoint, but they are not used for the initial processing-profile
+selection until classification metadata exists.
+
 ### Supported operators and fields
 
 ```bash
@@ -2111,6 +2117,8 @@ populate dropdowns without hard-coding values.
 
 > **Tip:** For AI metadata fields use the `metadata.` prefix, e.g.
 > `metadata.sender`, `metadata.amount`.
+> These fields are available for dry-run evaluation and post-classification
+> routing logic; they do not affect the initial ingestion profile.
 
 ### List routing rules
 
@@ -2216,7 +2224,8 @@ Content-Type: application/json
 ```
 
 Tests which rule (if any) would match the given properties **without**
-actually routing a document.
+actually routing a document.  Dry-run evaluation accepts both pre-processing
+fields and post-classification fields.
 
 **Response (200) – match found:**
 ```json

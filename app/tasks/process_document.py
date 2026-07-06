@@ -21,6 +21,7 @@ from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.tasks.process_with_ocr import process_with_ocr
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils import get_unique_filepath_with_counter, hash_file, log_task_progress
+from app.utils.routing_engine import evaluate_pre_processing_routing_rules
 from app.utils.step_manager import initialize_file_steps
 from app.utils.text_quality import check_text_quality, detect_pdf_text_source
 
@@ -100,6 +101,45 @@ def _get_pipeline_ocr_language(db: "Session", file_record: FileRecord, owner_id:
     """Return only the OCR language override from the selected processing profile."""
     config = _get_pipeline_ocr_config(db, file_record, owner_id)
     return config["ocr_language"] if isinstance(config["ocr_language"], str) else None
+
+
+def _apply_pre_processing_routing(
+    db: "Session",
+    file_record: FileRecord,
+    owner_id: str | None,
+    task_id: str | None = None,
+) -> None:
+    """Assign a processing profile from routing rules known before OCR runs."""
+    if file_record.pipeline_id is not None:
+        if not file_record.pipeline_assignment_source:
+            file_record.pipeline_assignment_source = "manual"
+            file_record.pipeline_routing_rule_id = None
+            file_record.pipeline_assignment_reason = "Processing profile was already assigned before ingestion routing"
+        return
+
+    decision = evaluate_pre_processing_routing_rules(db, owner_id, file_record)
+    if decision is None:
+        file_record.pipeline_assignment_source = "default"
+        file_record.pipeline_routing_rule_id = None
+        file_record.pipeline_assignment_reason = (
+            "No pre-processing routing rule matched; using the owner or system default profile"
+        )
+        return
+
+    file_record.pipeline_id = decision.pipeline.id
+    file_record.pipeline_assignment_source = "routing_rule"
+    file_record.pipeline_routing_rule_id = decision.rule.id
+    file_record.pipeline_assignment_reason = (
+        f"Matched pre-processing routing rule '{decision.rule.name}' on {decision.rule.field}"
+    )
+
+    logger.info(
+        "[%s] Pre-processing routing matched rule_id=%s, pipeline_id=%s for file_id=%s",
+        task_id or "-",
+        decision.rule.id,
+        decision.pipeline.id,
+        file_record.id,
+    )
 
 
 @celery.task(base=BaseTaskWithRetry, bind=True)
@@ -384,7 +424,27 @@ def process_document(
 
         # Update the DB with local_filename
         new_record.local_filename = new_local_path
+        _apply_pre_processing_routing(db, new_record, owner_id, task_id)
         db.commit()
+
+        if new_record.pipeline_assignment_source == "routing_rule":
+            log_task_progress(
+                task_id,
+                "route_pipeline",
+                "success",
+                "Processing profile selected by routing rule",
+                file_id=new_record.id,
+                detail=new_record.pipeline_assignment_reason,
+            )
+        elif new_record.pipeline_assignment_source == "default":
+            log_task_progress(
+                task_id,
+                "route_pipeline",
+                "skipped",
+                "No routing rule matched; using default profile",
+                file_id=new_record.id,
+                detail=new_record.pipeline_assignment_reason,
+            )
 
         # Look up processing-profile OCR overrides before the session closes.
         # This reads the OCR step config from the file's assigned pipeline (or

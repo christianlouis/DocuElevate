@@ -1721,6 +1721,13 @@ def assign_pipeline_to_file(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found")
 
     file_record.pipeline_id = pipeline_id
+    file_record.pipeline_routing_rule_id = None
+    if pipeline_id is None:
+        file_record.pipeline_assignment_source = "default"
+        file_record.pipeline_assignment_reason = "Manual assignment cleared; using the owner or system default profile"
+    else:
+        file_record.pipeline_assignment_source = "manual"
+        file_record.pipeline_assignment_reason = "Processing profile manually assigned through the API"
 
     try:
         db.commit()

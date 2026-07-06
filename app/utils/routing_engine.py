@@ -23,6 +23,7 @@ Supported comparison operators
 import json
 import logging
 import re
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -57,6 +58,10 @@ BUILTIN_FIELDS: frozenset[str] = frozenset(
     }
 )
 
+# Fields known before OCR and AI metadata extraction. Only these can affect the
+# initial processing profile selected during ingestion.
+PRE_PROCESSING_ROUTING_FIELDS: frozenset[str] = frozenset({"file_type", "filename", "size"})
+
 TEXT_OPERATORS = {
     "equals": lambda actual, expected: actual == expected,
     "not_equals": lambda actual, expected: actual != expected,
@@ -72,6 +77,14 @@ NUMERIC_OPERATORS = {
 }
 
 MAX_REGEX_PATTERN_LENGTH = 256
+
+
+@dataclass(frozen=True)
+class RoutingDecision:
+    """A matched routing rule and its active target pipeline."""
+
+    pipeline: Pipeline
+    rule: PipelineRoutingRule
 
 
 def _resolve_field(field: str, doc_props: dict[str, Any]) -> Any:
@@ -91,6 +104,18 @@ def _resolve_field(field: str, doc_props: dict[str, Any]) -> Any:
         return metadata.get(meta_key)
 
     return doc_props.get(field)
+
+
+def _field_matches_allowed_stage(field: str, allowed_fields: frozenset[str] | None) -> bool:
+    """Return whether *field* can be evaluated for the requested routing stage."""
+    if allowed_fields is None:
+        return True
+
+    normalized_field = "document_type" if field == "category" else field
+    if normalized_field.startswith("metadata."):
+        normalized_field = "metadata"
+
+    return normalized_field in allowed_fields
 
 
 def _to_float(value: Any) -> float | None:
@@ -187,16 +212,22 @@ def build_document_properties(file_record: Any) -> dict[str, Any]:
     }
 
 
-def evaluate_routing_rules(
+def evaluate_routing_decision(
     db: Session,
     owner_id: str | None,
     doc_props: dict[str, Any],
-) -> Pipeline | None:
-    """Evaluate routing rules and return the first matching pipeline.
+    *,
+    allowed_fields: frozenset[str] | None = None,
+) -> RoutingDecision | None:
+    """Evaluate routing rules and return the first matching decision.
 
     Rules are fetched for the given *owner_id* **plus** any system-wide rules
     (``owner_id IS NULL``).  Owner rules are evaluated first (by position),
     then system rules.
+
+    ``allowed_fields`` limits evaluation to properties available at the
+    current stage. This is required during ingestion so late-bound metadata
+    rules do not match against missing values.
 
     Args:
         db: Active database session.
@@ -205,8 +236,8 @@ def evaluate_routing_rules(
             :func:`build_document_properties`.
 
     Returns:
-        The first matching :class:`Pipeline`, or ``None`` when no rule
-        matches (caller should fall back to the default pipeline).
+        The first matching :class:`RoutingDecision`, or ``None`` when no rule
+        matches.
     """
     # Fetch active rules for the owner + system rules, ordered by position.
     rules = (
@@ -224,6 +255,9 @@ def evaluate_routing_rules(
     )
 
     for rule in rules:
+        if not _field_matches_allowed_stage(rule.field, allowed_fields):
+            continue
+
         actual = _resolve_field(rule.field, doc_props)
         if _evaluate_condition(actual, rule.operator, rule.value):
             pipeline = db.query(Pipeline).filter(Pipeline.id == rule.target_pipeline_id).first()
@@ -234,7 +268,7 @@ def evaluate_routing_rules(
                     rule.name,
                     rule.target_pipeline_id,
                 )
-                return pipeline
+                return RoutingDecision(pipeline=pipeline, rule=rule)
             logger.warning(
                 "Routing rule %s matched but target pipeline %s is inactive or missing",
                 rule.id,
@@ -242,3 +276,27 @@ def evaluate_routing_rules(
             )
 
     return None
+
+
+def evaluate_routing_rules(
+    db: Session,
+    owner_id: str | None,
+    doc_props: dict[str, Any],
+) -> Pipeline | None:
+    """Evaluate all routing rules and return the first matching pipeline."""
+    decision = evaluate_routing_decision(db, owner_id, doc_props)
+    return decision.pipeline if decision else None
+
+
+def evaluate_pre_processing_routing_rules(
+    db: Session,
+    owner_id: str | None,
+    file_record: Any,
+) -> RoutingDecision | None:
+    """Evaluate only routing rules that are safe before document processing."""
+    return evaluate_routing_decision(
+        db,
+        owner_id,
+        build_document_properties(file_record),
+        allowed_fields=PRE_PROCESSING_ROUTING_FIELDS,
+    )

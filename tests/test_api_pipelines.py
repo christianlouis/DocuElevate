@@ -368,6 +368,9 @@ class TestAssignPipelineToFile:
 
         db_session.refresh(fr)
         assert fr.pipeline_id == pipeline["id"]
+        assert fr.pipeline_assignment_source == "manual"
+        assert fr.pipeline_routing_rule_id is None
+        assert "manually assigned" in fr.pipeline_assignment_reason
 
     def test_clear_pipeline_from_file(self, client, db_session):
         """Passing no pipeline_id clears the assignment."""
@@ -378,6 +381,11 @@ class TestAssignPipelineToFile:
         r = client.post(f"/api/files/{fr.id}/assign-pipeline")
         assert r.status_code == 200
         assert r.json()["pipeline_id"] is None
+
+        db_session.refresh(fr)
+        assert fr.pipeline_assignment_source == "default"
+        assert fr.pipeline_routing_rule_id is None
+        assert "Manual assignment cleared" in fr.pipeline_assignment_reason
 
     def test_assign_nonexistent_pipeline_returns_404(self, client, db_session):
         """Assigning a non-existent pipeline returns 404."""
