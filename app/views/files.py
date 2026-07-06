@@ -11,6 +11,13 @@ from sqlalchemy.orm import Session
 from app.utils.cache import cache_get, cache_set
 from app.utils.file_queries import apply_status_filter
 from app.utils.file_status import get_files_processing_status
+from app.utils.pipeline_stages import (
+    ALWAYS_SHOW_STAGES as _ALWAYS_SHOW_STAGES,
+)
+from app.utils.pipeline_stages import (
+    normalize_stage_name,
+    stage_keys_for_pipeline_steps,
+)
 from app.views.base import APIRouter, get_db, logger, require_login, templates
 
 router = APIRouter()
@@ -382,16 +389,19 @@ def file_view_page(request: Request, file_id: int, db: Session = Depends(get_db)
             except Exception as e:
                 logger.warning(f"Failed to parse ai_metadata for file {file_id}: {e}")
 
+        # Resolve the pipeline assigned to this file (explicit or inferred default)
+        pipeline_info = _resolve_pipeline(db, file_record)
+
         # Quick processing status (no logs needed)
         try:
             from app.utils.step_manager import get_step_summary as _get_step_summary
 
-            step_summary = _get_step_summary(db, file_id)
+            step_summary = _get_step_summary(
+                db, file_id, pipeline_steps=pipeline_info["steps"] if pipeline_info else None
+            )
         except Exception:
             step_summary = None
 
-        # Resolve the pipeline assigned to this file (explicit or system default)
-        pipeline_info = _resolve_pipeline(db, file_record)
         owner_ctx = _resolve_owner_context(request, file_record, db)
 
         return templates.TemplateResponse(
@@ -463,7 +473,7 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
                 except Exception as e:
                     logger.warning(f"Failed to load metadata from {metadata_path}: {e}")
 
-        # Resolve the pipeline assigned to this file (explicit or system default)
+        # Resolve the pipeline assigned to this file (explicit or inferred default)
         pipeline_info = _resolve_pipeline(db, file_record)
 
         # Compute processing flow for visualization — filter to pipeline steps when available
@@ -473,10 +483,12 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
         try:
             from app.utils.step_manager import get_step_summary as get_step_summary_from_table
 
-            step_summary = get_step_summary_from_table(db, file_id)
+            step_summary = get_step_summary_from_table(
+                db, file_id, pipeline_steps=pipeline_info["steps"] if pipeline_info else None
+            )
         except Exception:
             # Fallback to log-based computation if status table not available
-            step_summary = _compute_step_summary(logs)
+            step_summary = _compute_step_summary(logs, pipeline_steps=pipeline_info["steps"] if pipeline_info else None)
 
         return templates.TemplateResponse(
             "file_detail.html",
@@ -568,44 +580,50 @@ def file_comments_redirect(request: Request, file_id: int):
     return RedirectResponse(url=f"/files/{file_id}/annotations", status_code=302)
 
 
-# ---------------------------------------------------------------------------
-# Pipeline ↔ Celery-log stage mapping
-# ---------------------------------------------------------------------------
+def _pipeline_selection_details(file_record, pipeline) -> dict[str, str | None]:
+    """Return display metadata for why a processing profile was selected."""
+    source = getattr(file_record, "pipeline_assignment_source", None)
+    reason = getattr(file_record, "pipeline_assignment_reason", None)
 
-# Maps each pipeline step_type to the set of Celery task log stage keys that
-# implement it.  Used to filter the flow visualization when a pipeline is
-# assigned to a file.
-#
-# ⚠️  MAINTENANCE NOTE: When a new step type is added to PIPELINE_STEP_TYPES
-# in app/api/pipelines.py it MUST also be added here, otherwise the flow
-# visualization will silently skip its Celery-task stages for files using that
-# step type.  The test ``TestPipelineInfoInViews::test_step_type_mapping_is_complete``
-# enforces this invariant automatically.
-_STEP_TYPE_TO_STAGES: dict[str, list[str]] = {
-    "convert_to_pdf": ["convert_to_pdf"],
-    "check_duplicates": ["check_for_duplicates"],
-    "ocr": ["check_text", "extract_text", "process_with_ocr"],
-    "extract_metadata": ["extract_metadata_with_gpt"],
-    "embed_metadata": ["embed_metadata_into_pdf"],
-    "compute_embedding": ["compute_embedding"],
-    "send_to_destinations": ["finalize_document_storage", "send_to_all_destinations"],
-    "classify": ["classify_document"],
-}
+    if source == "routing_rule":
+        return {
+            "selection_source": source,
+            "selection_label": "Routing Rule",
+            "selection_reason": reason or "Processing profile was selected by a routing rule",
+        }
+    if source == "manual" or file_record.pipeline_id:
+        return {
+            "selection_source": source or "manual",
+            "selection_label": "Manual",
+            "selection_reason": reason or "Processing profile was manually assigned to this file",
+        }
 
-# These internal bookkeeping stages are always shown in the flow regardless of
-# which pipeline steps are defined.
-_ALWAYS_SHOW_STAGES: frozenset[str] = frozenset({"create_file_record"})
+    if pipeline.owner_id is None:
+        return {
+            "selection_source": source or "system_default",
+            "selection_label": "System Default",
+            "selection_reason": reason or "No file profile matched; using the system default profile",
+        }
+
+    return {
+        "selection_source": source or "user_default",
+        "selection_label": "User Default",
+        "selection_reason": reason or "No file profile matched; using the owner's default profile",
+    }
 
 
 def _resolve_pipeline(db: Session, file_record) -> dict | None:
     """Resolve the pipeline information for a file.
 
-    If the file has an explicit ``pipeline_id``, load that pipeline.
-    Otherwise fall back to the active system-default pipeline
-    (``owner_id IS NULL``, ``is_default=True``).
+    Resolution order mirrors document processing:
+
+    1. Explicit file pipeline assignment.
+    2. Owner default pipeline.
+    3. Active system-default pipeline (``owner_id IS NULL``, ``is_default=True``).
 
     Returns a dict with keys:
-        id, name, description, is_default, is_system, is_explicit, steps
+        id, name, description, is_default, is_system, is_explicit, steps,
+        selection_source, selection_label, selection_reason
     or ``None`` when no pipeline exists in the database.
     """
     from app.models import Pipeline, PipelineStep
@@ -613,6 +631,17 @@ def _resolve_pipeline(db: Session, file_record) -> dict | None:
     pipeline = None
     if file_record.pipeline_id:
         pipeline = db.query(Pipeline).filter(Pipeline.id == file_record.pipeline_id).first()
+
+    if pipeline is None and file_record.owner_id:
+        pipeline = (
+            db.query(Pipeline)
+            .filter(
+                Pipeline.owner_id == file_record.owner_id,
+                Pipeline.is_default.is_(True),
+                Pipeline.is_active.is_(True),
+            )
+            .first()
+        )
 
     if pipeline is None:
         pipeline = (
@@ -629,6 +658,7 @@ def _resolve_pipeline(db: Session, file_record) -> dict | None:
         return None
 
     steps = db.query(PipelineStep).filter(PipelineStep.pipeline_id == pipeline.id).order_by(PipelineStep.position).all()
+    selection = _pipeline_selection_details(file_record, pipeline)
 
     return {
         "id": pipeline.id,
@@ -639,6 +669,7 @@ def _resolve_pipeline(db: Session, file_record) -> dict | None:
         # True when the file has a pipeline explicitly assigned (not inferred default)
         "is_explicit": bool(file_record.pipeline_id),
         "steps": steps,
+        **selection,
     }
 
 
@@ -693,15 +724,11 @@ def _compute_processing_flow(logs, pipeline_steps=None):
     # pipeline's enabled steps plus always-show bookkeeping stages and any stage
     # that actually produced log entries (so nothing already-run is hidden).
     if pipeline_steps is not None:
-        # Collect Celery stage keys that the pipeline's enabled steps map to
-        allowed: set[str] = set(_ALWAYS_SHOW_STAGES)
-        for ps in pipeline_steps:
-            if ps.enabled:
-                allowed.update(_STEP_TYPE_TO_STAGES.get(ps.step_type, []))
+        allowed = stage_keys_for_pipeline_steps(pipeline_steps) or set(_ALWAYS_SHOW_STAGES)
         # Pre-scan logs so we can also keep any stage that already ran
         ran_stages: set[str] = set()
         for log in logs:
-            ran_stages.add(log.step_name)
+            ran_stages.add(normalize_stage_name(log.step_name))
         allowed.update(ran_stages)
         stages = {k: v for k, v in stages.items() if k in allowed}
 
@@ -749,8 +776,7 @@ def _compute_processing_flow(logs, pipeline_steps=None):
             )
         else:
             # Normalize legacy OCR step name for backward compatibility with old log entries
-            if step_name == "process_with_azure_document_intelligence":
-                step_name = "process_with_ocr"
+            step_name = normalize_stage_name(step_name)
             # Regular processing step
             if step_name not in step_map:
                 step_map[step_name] = []
@@ -812,7 +838,7 @@ def _compute_processing_flow(logs, pipeline_steps=None):
     return flow
 
 
-def _compute_step_summary(logs):
+def _compute_step_summary(logs, pipeline_steps=None):
     """
     Compute a step-aligned summary from logs showing queued, success, and failure counts.
 
@@ -824,6 +850,7 @@ def _compute_step_summary(logs):
     from app.config import settings
 
     # Count statuses for main processing steps (not uploads)
+    expected_steps = stage_keys_for_pipeline_steps(pipeline_steps)
     main_steps = []
     if settings.enable_deduplication and settings.show_deduplication_step:
         main_steps.append("check_for_duplicates")
@@ -839,6 +866,8 @@ def _compute_step_summary(logs):
             "send_to_all_destinations",
         ]
     )
+    if expected_steps is not None:
+        main_steps = [step_name for step_name in main_steps if step_name in expected_steps]
 
     upload_prefixes = ["upload_to_", "queue_"]
 
@@ -857,9 +886,7 @@ def _compute_step_summary(logs):
         if status == "pending":
             status = "queued"
 
-        # Normalize legacy OCR step name for backward compatibility
-        if step_name == "process_with_azure_document_intelligence":
-            step_name = "process_with_ocr"
+        step_name = normalize_stage_name(step_name)
 
         # Check if it's an upload task
         is_upload = any(step_name.startswith(prefix) for prefix in upload_prefixes)
@@ -878,6 +905,11 @@ def _compute_step_summary(logs):
         if task_status in main_counts:
             main_counts[task_status] += 1
 
+    if expected_steps is not None:
+        for step_name in main_steps:
+            if step_name not in main_steps_seen:
+                main_counts["queued"] += 1
+
     # Count upload task statuses from latest status per task
     for _, task_status in upload_tasks_seen.values():
         if task_status in upload_counts:
@@ -886,7 +918,7 @@ def _compute_step_summary(logs):
     return {
         "main": main_counts,
         "uploads": upload_counts,
-        "total_main_steps": len(main_steps_seen),
+        "total_main_steps": len(main_steps) if expected_steps is not None else len(main_steps_seen),
         "total_upload_tasks": len(upload_tasks_seen),
     }
 

@@ -5,6 +5,7 @@ This module provides functions to initialize, update, and query the status
 of file processing steps using the FileProcessingStep model.
 """
 
+from collections.abc import Iterable
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import FileProcessingStep, FileRecord
+from app.utils.pipeline_stages import normalize_stage_name, stage_keys_for_pipeline_steps
 
 # Define the expected processing steps for a standard file workflow
 # The "check_for_duplicates" step is conditionally included based on enable_deduplication setting
@@ -293,7 +295,7 @@ def get_file_overall_status(db: Session, file_id: int) -> Dict:
     }
 
 
-def get_step_summary(db: Session, file_id: int) -> Dict:
+def get_step_summary(db: Session, file_id: int, pipeline_steps: Iterable[object] | None = None) -> Dict:
     """
     Get a summary of main steps vs upload steps with status counts.
 
@@ -317,7 +319,7 @@ def get_step_summary(db: Session, file_id: int) -> Dict:
     # Only high-level logical steps, not implementation sub-steps
     # Both process_with_ocr (current) and process_with_azure_document_intelligence (legacy)
     # are included to correctly count steps for files processed before the OCR abstraction.
-    REAL_MAIN_STEPS = {
+    real_main_steps = {
         "create_file_record",
         "check_text",
         "extract_text",
@@ -332,7 +334,11 @@ def get_step_summary(db: Session, file_id: int) -> Dict:
 
     # Add check_for_duplicates if deduplication is enabled
     if settings.enable_deduplication:
-        REAL_MAIN_STEPS.add("check_for_duplicates")
+        real_main_steps.add("check_for_duplicates")
+
+    expected_steps = stage_keys_for_pipeline_steps(pipeline_steps)
+    if expected_steps is not None:
+        real_main_steps = {step_name for step_name in real_main_steps if step_name in expected_steps}
 
     steps = db.query(FileProcessingStep).filter(FileProcessingStep.file_id == file_id).all()
 
@@ -341,6 +347,7 @@ def get_step_summary(db: Session, file_id: int) -> Dict:
 
     main_steps_count = 0
     upload_steps_count = 0
+    counted_main_steps: set[str] = set()
 
     for step in steps:
         # Normalize status
@@ -348,11 +355,13 @@ def get_step_summary(db: Session, file_id: int) -> Dict:
         if status == "pending":
             status = "queued"
 
+        step_name = normalize_stage_name(step.step_name)
+
         # Check if it's an upload task (only count actual upload_to_* steps, not queue_* steps)
-        is_upload = step.step_name.startswith("upload_to_")
+        is_upload = step_name.startswith("upload_to_")
 
         # Only count "real" steps
-        is_real_step = step.step_name in REAL_MAIN_STEPS or is_upload or step.step_name.startswith("queue_")
+        is_real_step = step_name in real_main_steps or is_upload or step_name.startswith("queue_")
 
         if not is_real_step:
             # Skip diagnostic/internal steps like poll_task, upload_file, set_custom_fields, etc.
@@ -362,9 +371,15 @@ def get_step_summary(db: Session, file_id: int) -> Dict:
             if status in upload_counts:
                 upload_counts[status] += 1
             upload_steps_count += 1
-        elif step.step_name in REAL_MAIN_STEPS:
+        elif step_name in real_main_steps:
             if status in main_counts:
                 main_counts[status] += 1
+            main_steps_count += 1
+            counted_main_steps.add(step_name)
+
+    if expected_steps is not None:
+        for _step_name in real_main_steps - counted_main_steps:
+            main_counts["queued"] += 1
             main_steps_count += 1
 
     # Ensure the terminal step is always counted in total_main_steps.
@@ -374,7 +389,11 @@ def get_step_summary(db: Session, file_id: int) -> Dict:
     # Note: if TERMINAL_STEP already appears in `steps`, the loop above has
     # already incremented `main_steps_count` for it, so we only add here when
     # the step is absent from the DB entirely.
-    if not any(step.step_name == TERMINAL_STEP for step in steps):
+    if (
+        expected_steps is None
+        and TERMINAL_STEP in real_main_steps
+        and not any(normalize_stage_name(step.step_name) == TERMINAL_STEP for step in steps)
+    ):
         main_steps_count += 1
         main_counts["queued"] += 1
 

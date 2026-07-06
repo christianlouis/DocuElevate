@@ -427,6 +427,23 @@ class TestComputeStepSummary:
         assert summary["uploads"]["success"] >= 1
         assert summary["uploads"]["failure"] >= 1
 
+    def test_compute_step_summary_uses_profile_steps_for_expected_rows(self):
+        """Profile-aware fallback summary counts expected unstarted steps as queued."""
+        from app.views.files import _compute_step_summary
+
+        logs = [Mock(step_name="check_text", status="success", timestamp=Mock())]
+        pipeline_steps = [
+            Mock(enabled=True, step_type="ocr"),
+            Mock(enabled=True, step_type="extract_metadata"),
+            Mock(enabled=False, step_type="send_to_destinations"),
+        ]
+
+        summary = _compute_step_summary(logs, pipeline_steps=pipeline_steps)
+
+        assert summary["main"]["success"] == 1
+        assert summary["main"]["queued"] == 4
+        assert summary["total_main_steps"] == 5
+
     def test_compute_step_summary_normalizes_pending_status(self):
         """Test that 'pending' status is normalized to 'queued'."""
         from app.views.files import _compute_step_summary
@@ -1730,7 +1747,7 @@ class TestPipelineInfoInViews:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _make_file(db_session, pipeline_id=None):
+    def _make_file(db_session, pipeline_id=None, owner_id=None, **kwargs):
         from app.models import FileRecord
 
         f = FileRecord(
@@ -1740,6 +1757,8 @@ class TestPipelineInfoInViews:
             file_size=1024,
             mime_type="application/pdf",
             pipeline_id=pipeline_id,
+            owner_id=owner_id,
+            **kwargs,
         )
         db_session.add(f)
         db_session.commit()
@@ -1787,6 +1806,22 @@ class TestPipelineInfoInViews:
         db_session.commit()
         return p
 
+    @staticmethod
+    def _make_user_default_pipeline(db_session, owner_id="user1"):
+        from app.models import Pipeline, PipelineStep
+
+        p = Pipeline(
+            owner_id=owner_id,
+            name="User Default Profile",
+            is_default=True,
+            is_active=True,
+        )
+        db_session.add(p)
+        db_session.flush()
+        db_session.add(PipelineStep(pipeline_id=p.id, position=0, step_type="ocr", label="OCR", enabled=True))
+        db_session.commit()
+        return p
+
     # ------------------------------------------------------------------
     # _resolve_pipeline unit tests
     # ------------------------------------------------------------------
@@ -1819,6 +1854,24 @@ class TestPipelineInfoInViews:
         assert info["is_explicit"] is False
         assert info["is_system"] is True
         assert info["is_default"] is True
+        assert info["selection_label"] == "System Default"
+
+    def test_resolve_pipeline_fallback_to_owner_default_before_system_default(self, db_session):
+        """File detail uses the owner's default profile before the system default."""
+        from app.views.files import _resolve_pipeline
+
+        self._make_system_pipeline(db_session)
+        user_pipeline = self._make_user_default_pipeline(db_session, owner_id="user1")
+        file_rec = self._make_file(db_session, pipeline_id=None, owner_id="user1")
+
+        info = _resolve_pipeline(db_session, file_rec)
+
+        assert info is not None
+        assert info["id"] == user_pipeline.id
+        assert info["is_explicit"] is False
+        assert info["is_system"] is False
+        assert info["is_default"] is True
+        assert info["selection_label"] == "User Default"
 
     def test_resolve_pipeline_returns_none_when_no_pipeline_in_db(self, db_session):
         """Returns None when no pipeline exists (empty database)."""
@@ -1856,6 +1909,26 @@ class TestPipelineInfoInViews:
         assert info["name"] == "My Custom Pipeline"
         assert info["is_system"] is False
         assert info["is_explicit"] is True
+        assert info["selection_label"] == "Manual"
+
+    def test_resolve_pipeline_reports_routing_rule_selection(self, db_session):
+        """A routed file shows routing-rule provenance in pipeline info."""
+        from app.views.files import _resolve_pipeline
+
+        pipeline = self._make_custom_pipeline(db_session)
+        file_rec = self._make_file(
+            db_session,
+            pipeline_id=pipeline.id,
+            owner_id="user1",
+            pipeline_assignment_source="routing_rule",
+            pipeline_assignment_reason="Matched pre-processing routing rule 'Invoices'",
+        )
+
+        info = _resolve_pipeline(db_session, file_rec)
+
+        assert info is not None
+        assert info["selection_label"] == "Routing Rule"
+        assert info["selection_reason"] == "Matched pre-processing routing rule 'Invoices'"
 
     # ------------------------------------------------------------------
     # _compute_processing_flow pipeline filtering
@@ -1872,15 +1945,15 @@ class TestPipelineInfoInViews:
         assert "extract_metadata_with_gpt" in keys
 
     def test_step_type_mapping_is_complete(self):
-        """Every step type in PIPELINE_STEP_TYPES has an entry in _STEP_TYPE_TO_STAGES."""
+        """Every step type in PIPELINE_STEP_TYPES has a shared status-stage mapping."""
         from app.api.pipelines import PIPELINE_STEP_TYPES
-        from app.views.files import _STEP_TYPE_TO_STAGES
+        from app.utils.pipeline_stages import PIPELINE_STEP_TO_STAGES
 
-        missing = set(PIPELINE_STEP_TYPES.keys()) - set(_STEP_TYPE_TO_STAGES.keys())
+        missing = set(PIPELINE_STEP_TYPES.keys()) - set(PIPELINE_STEP_TO_STAGES.keys())
         assert not missing, (
-            f"The following pipeline step types are missing from _STEP_TYPE_TO_STAGES "
-            f"in app/views/files.py: {missing}.  "
-            "Add them with their corresponding Celery log stage key(s) (use [] if none yet)."
+            f"The following pipeline step types are missing from PIPELINE_STEP_TO_STAGES "
+            f"in app/utils/pipeline_stages.py: {missing}.  "
+            "Add them with their corresponding status/log stage key(s) (use [] if none yet)."
         )
 
     def test_compute_flow_with_pipeline_filters_stages(self, db_session):
@@ -1951,6 +2024,18 @@ class TestPipelineInfoInViews:
 
         assert response.status_code == 200
         assert b"System Default" in response.content
+
+    def test_file_detail_page_shows_user_default_badge(self, client, db_session):
+        """File owned by a user shows that user's default profile when selected."""
+        self._make_system_pipeline(db_session)
+        self._make_user_default_pipeline(db_session, owner_id="user1")
+        file_rec = self._make_file(db_session, pipeline_id=None, owner_id="user1")
+
+        response = client.get(f"/files/{file_rec.id}/process")
+
+        assert response.status_code == 200
+        assert b"User Default Profile" in response.content
+        assert b"User Default" in response.content
 
     def test_file_detail_page_shows_custom_badge_for_custom_pipeline(self, client, db_session):
         """File with a custom (non-system) pipeline shows 'Custom' badge."""

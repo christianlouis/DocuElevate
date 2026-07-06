@@ -1205,12 +1205,16 @@
         <span class="detail-value">
           {% if pipeline_info %}
           <a href="/pipelines" style="text-decoration: none; color: inherit; font-weight: 500;" aria-label="View pipeline management for {{ pipeline_info.name }}">{{ pipeline_info.name }}</a>
-          {% if not pipeline_info.is_explicit and pipeline_info.is_system %}
-          <span style="display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.45rem; font-size: 0.7rem; font-weight: 600; border-radius: 0.25rem; background: #ede9fe; color: #5b21b6;" title="No pipeline was explicitly assigned; the system default is applied">System Default</span>
+          {% if pipeline_info.selection_label in ["System Default", "Routing Rule"] %}
+          <span style="display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.45rem; font-size: 0.7rem; font-weight: 600; border-radius: 0.25rem; background: #ede9fe; color: #5b21b6;" title="{{ pipeline_info.selection_reason }}">{{ pipeline_info.selection_label }}</span>
+          {% elif pipeline_info.selection_label == "User Default" %}
+          <span style="display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.45rem; font-size: 0.7rem; font-weight: 600; border-radius: 0.25rem; background: #fef3c7; color: #92400e;" title="{{ pipeline_info.selection_reason }}">User Default</span>
+          {% elif pipeline_info.selection_label == "Manual" %}
+          <span style="display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.45rem; font-size: 0.7rem; font-weight: 600; border-radius: 0.25rem; background: #d1fae5; color: #065f46;" title="{{ pipeline_info.selection_reason }}">Manual</span>
           {% elif pipeline_info.is_system %}
-          <span style="display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.45rem; font-size: 0.7rem; font-weight: 600; border-radius: 0.25rem; background: #dbeafe; color: #1e40af;" title="This file uses a system-managed pipeline">System</span>
+          <span style="display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.45rem; font-size: 0.7rem; font-weight: 600; border-radius: 0.25rem; background: #dbeafe; color: #1e40af;" title="{{ pipeline_info.selection_reason }}">System</span>
           {% else %}
-          <span style="display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.45rem; font-size: 0.7rem; font-weight: 600; border-radius: 0.25rem; background: #d1fae5; color: #065f46;" title="This file uses a custom user-defined pipeline">Custom</span>
+          <span style="display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.45rem; font-size: 0.7rem; font-weight: 600; border-radius: 0.25rem; background: #d1fae5; color: #065f46;" title="{{ pipeline_info.selection_reason }}">Custom</span>
           {% endif %}
           {% else %}
           <span style="color: #9ca3af; font-style: italic;">Standard (legacy)</span>

@@ -306,10 +306,9 @@
           <span class="info-val">
             {% if pipeline_info %}
             <a href="/pipelines" style="text-decoration:none;color:inherit;font-weight:500;" aria-label="View pipeline management for {{ pipeline_info.name }}">{{ pipeline_info.name }}</a>
-            {% if not pipeline_info.is_explicit %}
-            <span style="font-size:0.7em;color:#7c3aed;" title="System default pipeline applied automatically">(default)</span>
-            {% elif not pipeline_info.is_system %}
-            <span style="font-size:0.7em;color:#059669;" title="Custom user-defined pipeline">(custom)</span>
+            {% if pipeline_info.selection_label %}
+            {% set pipeline_badge_color = "#059669" if pipeline_info.selection_label == "Manual" else "#7c3aed" %}
+            <span style="font-size:0.7em;color:{{ pipeline_badge_color }};" title="{{ pipeline_info.selection_reason }}">({{ pipeline_info.selection_label | lower }})</span>
             {% endif %}
             {% else %}
             <span style="color:#9ca3af;font-style:italic;">Standard</span>
