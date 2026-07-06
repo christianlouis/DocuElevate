@@ -144,6 +144,8 @@ class TestMeilisearchSearchDocuments:
                 "document_type": "Invoice",
                 "tags": ["amazon", "invoice"],
                 "ocr_text": "Amazon invoice content here",
+                "_rankingScore": 0.92,
+                "_rankingScoreDetails": {"words": {"score": 0.95}},
                 "_formatted": {
                     "document_title": "Amazon <mark>Invoice</mark>",
                     "ocr_text": "…Amazon <mark>invoice</mark> content here…",
@@ -163,7 +165,15 @@ class TestMeilisearchSearchDocuments:
         assert len(result["results"]) == 1
         # Raw ocr_text should be stripped from result (only _formatted snippet kept)
         assert "ocr_text" not in result["results"][0]
+        assert "_rankingScore" not in result["results"][0]
+        assert "_rankingScoreDetails" not in result["results"][0]
         assert result["results"][0]["file_id"] == 42
+        assert result["results"][0]["ranking_score"] == 0.92
+        assert result["results"][0]["ranking_details"] == {"words": {"score": 0.95}}
+        assert result["results"][0]["ranking_explanation"]["source"] == "meilisearch"
+        _, search_params = mock_index.search.call_args.args
+        assert search_params["showRankingScore"] is True
+        assert search_params["showRankingScoreDetails"] is True
 
     def test_search_with_filters(self):
         """search_documents passes filter expressions to Meilisearch."""

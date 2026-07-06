@@ -283,6 +283,8 @@ def search_documents(
             "highlightPostTag": "</mark>",
             "attributesToCrop": ["ocr_text"],
             "cropLength": 200,
+            "showRankingScore": True,
+            "showRankingScoreDetails": True,
         }
 
         if filters:
@@ -297,11 +299,21 @@ def search_documents(
         formatted_results = []
         for hit in hits:
             formatted = dict(hit)
+            if "_rankingScore" in hit:
+                formatted["ranking_score"] = hit["_rankingScore"]
+            if "_rankingScoreDetails" in hit:
+                formatted["ranking_details"] = hit["_rankingScoreDetails"]
+                formatted["ranking_explanation"] = {
+                    "source": "meilisearch",
+                    "summary": "Meilisearch ranking score details for this result.",
+                }
             # Include formatted (highlighted) snippets if available
             if "_formatted" in hit:
                 formatted["_formatted"] = hit["_formatted"]
             # Exclude raw ocr_text from results (use _formatted snippet instead)
             formatted.pop("ocr_text", None)
+            formatted.pop("_rankingScore", None)
+            formatted.pop("_rankingScoreDetails", None)
             formatted_results.append(formatted)
 
         pages = (total + per_page - 1) // per_page if total > 0 else 0

@@ -86,6 +86,8 @@ class TestSearchPage:
         assert "/download?version=processed" in text
         assert "searchByTag" in text
         assert "searchByDocumentType" in text
+        assert "ranking_score" in text
+        assert "badge-score" in text
         assert "/pipelines?file_id=" in text
         assert "exportSearchResult" in text
 

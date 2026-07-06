@@ -509,6 +509,7 @@
       const tags = Array.isArray(hit.tags) ? hit.tags : (hit.tags ? [hit.tags] : []);
       const docType = hit.document_type || '';
       const sender = hit.sender || hit.absender || '';
+      const rankingScore = typeof hit.ranking_score === 'number' ? Math.round(hit.ranking_score * 100) : null;
       const fileUrl = '/files/' + hit.file_id;
       const downloadUrl = '/api/files/' + hit.file_id + '/download?version=processed';
       visibleSearchResultIds.push(hit.file_id);
@@ -516,6 +517,7 @@
 
       let badges = '';
       if (docType) badges += '<span class="search-result-badge badge-type">' + escapeHtml(docType) + '</span>';
+      if (rankingScore !== null) badges += '<span class="search-result-badge badge-score"><i class="fas fa-signal" aria-hidden="true"></i> ' + rankingScore + '% match</span>';
       if (sender)  badges += '<span class="search-result-badge badge-sender"><i class="fas fa-user" aria-hidden="true"></i> ' + escapeHtml(sender) + '</span>';
       tags.forEach(function(t) {
         badges += '<button type="button" class="search-result-badge badge-tag" onclick="searchByTag(decodeURIComponent(\'' + encodeActionValue(t) + '\'))" aria-label="Search tag ' + escapeHtml(t) + '">' + escapeHtml(t) + '</button>';
