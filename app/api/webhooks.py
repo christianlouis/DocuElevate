@@ -262,7 +262,9 @@ def list_delivery_attempts(
         query = query.filter(WebhookDeliveryAttempt.status == status_filter)
     if event:
         query = query.filter(WebhookDeliveryAttempt.event == event)
-    attempts = query.order_by(WebhookDeliveryAttempt.created_at.desc(), WebhookDeliveryAttempt.id.desc()).limit(limit).all()
+    attempts = (
+        query.order_by(WebhookDeliveryAttempt.created_at.desc(), WebhookDeliveryAttempt.id.desc()).limit(limit).all()
+    )
     return [_to_delivery_response(attempt) for attempt in attempts]
 
 
