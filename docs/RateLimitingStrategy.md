@@ -40,13 +40,10 @@ All API endpoints are protected with a default rate limit unless explicitly exem
 
 **Endpoints**:
 - `POST /api/ui-upload` - Web UI file upload
-- `POST /api/ui-upload` - API token uploads using multipart form data
 
 **Rationale**: File uploads consume network bandwidth, disk I/O, and storage space. A limit of 600 uploads per minute allows fast batch uploads while preventing resource exhaustion and abuse.
 
 **Implementation Status**: Configured via `RATE_LIMIT_UPLOAD` (default: `600/minute`)
-
-**Implementation Status**: Configured via `RATE_LIMIT_UPLOAD` (default: `20/minute`)
 
 ---
 
@@ -154,7 +151,7 @@ REDIS_URL=redis://redis:6379/0
 
 # Configure limits
 RATE_LIMIT_DEFAULT=100/minute
-RATE_LIMIT_UPLOAD=20/minute
+RATE_LIMIT_UPLOAD=600/minute
 RATE_LIMIT_PROCESS=30/minute
 RATE_LIMIT_AUTH=10/minute
 ```
