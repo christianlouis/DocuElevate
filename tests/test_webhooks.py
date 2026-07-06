@@ -476,6 +476,20 @@ class TestWebhookAPI:
         assert data[0]["status"] == "failed"
         assert "payload" not in data[0]
 
+    def test_event_catalog_returns_versioned_samples(self, client):
+        """GET /api/webhooks/event-catalog/ describes supported events."""
+        self._with_admin(client)
+
+        resp = client.get("/api/webhooks/event-catalog/")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["payload_version"] == "1.0"
+        processed = next(event for event in data["events"] if event["event"] == "document.processed")
+        assert processed["payload_version"] == "1.0"
+        assert processed["sample_payload"]["event"] == "document.processed"
+        assert processed["sample_payload"]["data"]["file_id"] == 42
+
     def test_replay_delivery_attempt_queues_current_webhook_config(self, client, db_session, mocker):
         """POST /api/webhooks/delivery-attempts/{id}/replay queues a new attempt."""
         self._with_admin(client)

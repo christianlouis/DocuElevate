@@ -20,7 +20,7 @@ from app.models import FileRecord, Pipeline, WebhookConfig, WebhookDeliveryAttem
 from app.tasks.process_document import process_document
 from app.tasks.webhook_tasks import deliver_webhook_task
 from app.utils.user_scope import get_current_owner_id
-from app.utils.webhook import VALID_EVENTS
+from app.utils.webhook import VALID_EVENTS, WEBHOOK_PAYLOAD_VERSION
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
@@ -97,6 +97,16 @@ class WebhookReplayResponse(BaseModel):
     delivery_id: int
     replay_of: int
     task_id: str | None
+
+
+_WEBHOOK_EVENT_SAMPLE_DATA: dict[str, dict[str, Any]] = {
+    "document.uploaded": {"file_id": 42, "filename": "invoice.pdf", "owner_id": "user@example.com"},
+    "document.processed": {"file_id": 42, "filename": "invoice.pdf", "status": "completed"},
+    "document.failed": {"file_id": 42, "filename": "invoice.pdf", "error": "OCR provider unavailable"},
+    "user.signup": {"user_id": "user@example.com", "email": "user@example.com"},
+    "user.plan_changed": {"user_id": "user@example.com", "old_tier": "free", "new_tier": "starter"},
+    "user.payment_issue": {"user_id": "user@example.com", "issue": "Card declined"},
+}
 
 
 # ---------------------------------------------------------------------------
@@ -254,6 +264,27 @@ def list_delivery_attempts(
         query = query.filter(WebhookDeliveryAttempt.event == event)
     attempts = query.order_by(WebhookDeliveryAttempt.created_at.desc(), WebhookDeliveryAttempt.id.desc()).limit(limit).all()
     return [_to_delivery_response(attempt) for attempt in attempts]
+
+
+@router.get("/event-catalog/", summary="List webhook event catalog")
+def event_catalog(_admin: AdminUser) -> dict[str, Any]:
+    """Return supported webhook events with example payload envelopes."""
+    events = []
+    for event in sorted(VALID_EVENTS):
+        sample_data = _WEBHOOK_EVENT_SAMPLE_DATA.get(event, {})
+        events.append(
+            {
+                "event": event,
+                "payload_version": WEBHOOK_PAYLOAD_VERSION,
+                "sample_payload": {
+                    "version": WEBHOOK_PAYLOAD_VERSION,
+                    "event": event,
+                    "timestamp": 1772841600.0,
+                    "data": sample_data,
+                },
+            }
+        )
+    return {"payload_version": WEBHOOK_PAYLOAD_VERSION, "events": events}
 
 
 @router.post("/delivery-attempts/{attempt_id}/replay", summary="Replay a webhook delivery attempt")
