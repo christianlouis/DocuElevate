@@ -68,6 +68,27 @@ class TestSearchPage:
         assert "href=\"/search?' + escapeHtml(params.toString())" in response.text
         assert "fa-star" in response.text
 
+    def test_search_page_contains_preview_first_results_ui(self, client):
+        """Search results support inline previews without leaving the page."""
+        response = client.get("/search")
+        assert response.status_code == 200
+        assert 'id="search-preview-panel"' in response.text
+        assert 'id="search-preview-body"' in response.text
+        assert "openSearchPreview" in response.text
+        assert "/api/files/' + encodeURIComponent(fileId) + '/preview?version=processed" in response.text
+        assert "closeSearchPreview" in response.text
+
+    def test_search_page_contains_result_quick_actions(self, client):
+        """Search result actions expose open, download, tag, route, and export controls."""
+        response = client.get("/search")
+        assert response.status_code == 200
+        text = response.text
+        assert "/download?version=processed" in text
+        assert "searchByTag" in text
+        assert "searchByDocumentType" in text
+        assert "/pipelines?file_id=" in text
+        assert "exportSearchResult" in text
+
     def test_search_page_text_quality_options(self, client):
         """GET /search contains text quality filter with expected options."""
         response = client.get("/search")
