@@ -237,6 +237,24 @@ class WebhookDeliveryAttempt(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class DocumentReviewItem(Base):
+    """Document queued for human review."""
+
+    __tablename__ = "document_review_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=False, index=True)
+    status = Column(String(30), nullable=False, default="pending", index=True)
+    reason = Column(String, nullable=False)
+    confidence_score = Column(Integer, nullable=True)
+    created_by = Column(String, nullable=True, index=True)
+    resolved_by = Column(String, nullable=True)
+    resolution_note = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class AutomationHook(Base):
     """Zapier / Make.com compatible webhook subscription for automation triggers.
 
