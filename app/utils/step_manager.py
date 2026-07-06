@@ -5,6 +5,7 @@ This module provides functions to initialize, update, and query the status
 of file processing steps using the FileProcessingStep model.
 """
 
+from collections.abc import Iterable
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -294,7 +295,7 @@ def get_file_overall_status(db: Session, file_id: int) -> Dict:
     }
 
 
-def get_step_summary(db: Session, file_id: int, pipeline_steps=None) -> Dict:
+def get_step_summary(db: Session, file_id: int, pipeline_steps: Iterable[object] | None = None) -> Dict:
     """
     Get a summary of main steps vs upload steps with status counts.
 
