@@ -318,8 +318,6 @@ Starting with v0.6.0, releases are fully automated using `python-semantic-releas
 - [ ] Documentation updated
 - [ ] Release notes generated
 - [ ] Migration guide (if breaking changes)
-- [ ] Release notes drafted
-- [ ] Version numbers bumped
 - [ ] Docker images built and tested
 
 ### Release Artifacts

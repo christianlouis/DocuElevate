@@ -280,7 +280,12 @@ class TestReleaseNamesJson:
         )
         known_codenames = {entry["codename"] for entry in data["releases"].values()}
 
-        assert roadmap_codenames <= known_codenames
+        assert roadmap_codenames, "ROADMAP.md should list at least one named release anchor"
+        missing_codenames = roadmap_codenames - known_codenames
+        assert not missing_codenames, (
+            "ROADMAP.md contains release anchors missing from release_names.json: "
+            f"{sorted(missing_codenames)}"
+        )
 
     def test_release_names_json_entries_are_documented(self):
         """Test that release_names.json codenames are listed in the naming guide."""
