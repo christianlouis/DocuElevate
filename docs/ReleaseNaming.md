@@ -19,9 +19,11 @@ This happens automatically — no manual intervention needed.
 Major milestone releases carry a **codename** that anchors the release in project history. Codenames:
 
 - Are defined in [`release_names.json`](../release_names.json) at the project root
-- Map to **minor version ranges** (e.g., all `0.5.x` releases share the codename "Foundation")
-- Appear in the status dashboard, build metadata, and footer
+- Map to **selected minor version anchors** (e.g., all `0.5.x` releases share the codename "Foundation")
+- Appear in the status dashboard, build metadata, and footer when the current release stream matches a named anchor
 - Do **not** interfere with automatic version numbering
+
+Not every automated release stream has a codename. For example, a continuous release such as `0.173.x` may be intentionally unnamed unless `release_names.json` defines a matching `0.173` anchor.
 
 ### Current Release Names
 
@@ -30,9 +32,12 @@ Major milestone releases carry a **codename** that anchors the release in projec
 | 0.5.x         | **Foundation** | Core platform with multi-provider storage, AI, and UI    |
 | 0.6.x         | **Clarity**    | Enhanced search, filtering, and improved UI/UX           |
 | 0.7.x         | **Conductor**  | Workflow automation, custom pipelines, rule-based logic   |
+| 0.8.x         | **Signal**     | AI quality, retrieval, and multi-language foundations     |
 | 1.0.x         | **Summit**     | Enterprise-ready: multi-tenancy, RBAC, horizontal scaling|
 | 1.1.x         | **Bridge**     | Collaboration features, document sharing, analytics      |
 | 2.0.x         | **Horizon**    | On-premise AI, advanced management, platform expansion   |
+| 2.1.x         | **Sentinel**   | Governance, compliance, and policy-driven automation     |
+| 3.0.x         | **Constellation** | Integration hub, agent platform, interoperability     |
 
 ## Adding a New Release Name
 
@@ -67,7 +72,7 @@ The application resolves codenames using a cascading lookup against the current 
 2. **Minor prefix**: Checks the minor version prefix (e.g., `0.5`)
 3. **Major prefix**: Checks the major version prefix (e.g., `0`)
 
-This means all patch releases within a minor version series inherit the same codename.
+This means all patch releases within a named minor version series inherit the same codename. If no exact, minor, or major entry exists, the application leaves the release name empty rather than inventing one.
 
 ## Codename Naming Conventions
 
@@ -95,7 +100,7 @@ This creates a clear link between planning (milestones), delivery (releases), an
 ### Do
 
 - ✅ Let semantic-release handle all version numbering automatically
-- ✅ Use codenames for **milestone releases** (minor/major versions), not every patch
+- ✅ Use codenames for **selected milestone anchors** (minor/major versions), not every patch or every continuous-release stream
 - ✅ Reference codenames in release notes and changelogs for major versions
 - ✅ Keep `release_names.json` in sync with `ROADMAP.md`
 - ✅ Announce codenames in GitHub Release descriptions for milestone versions
@@ -115,6 +120,8 @@ This creates a clear link between planning (milestones), delivery (releases), an
 | Page footer             | `Version 0.5.3 "Foundation"`            |
 | RUNTIME_INFO metadata   | `Release Name: Foundation`              |
 | ROADMAP.md              | Section headers include codenames       |
+
+Unnamed automated releases omit the codename portion in runtime surfaces.
 
 ## File Reference
 

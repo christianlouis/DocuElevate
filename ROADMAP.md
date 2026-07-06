@@ -19,9 +19,9 @@ For the detailed milestone breakdown and target dates, see [MILESTONES.md](MILES
 
 ## Release Naming
 
-Each major milestone release carries a codename to anchor key project moments. These names appear in the status dashboard, build metadata, and changelog. For details, see [docs/ReleaseNaming.md](docs/ReleaseNaming.md).
+Selected milestone anchors carry codenames to mark key project moments. These names appear in runtime surfaces only when the current automated release stream matches an entry in `release_names.json`; continuous release streams such as `0.173.x` may remain unnamed. For details, see [docs/ReleaseNaming.md](docs/ReleaseNaming.md).
 
-| Milestone | Codename        | Theme |
+| Planning Anchor | Codename        | Theme |
 |----------|------------------|-------|
 | v0.6.0   | **Clarity**      | Search, discovery, and modern UX |
 | v0.7.0   | **Conductor**    | Workflows, orchestration, and integrations |
@@ -76,7 +76,7 @@ Each major milestone release carries a codename to anchor key project moments. T
 
 ## Release Plan (Extended)
 
-This plan extends the existing milestones with a clearer thematic arc and a forward-looking “beyond v2.0” horizon. Each milestone links to an epic issue that owns scope and sub-issues.
+This plan extends the existing milestone anchors with a clearer thematic arc and a forward-looking “beyond v2.0” horizon. The anchor labels are planning references, not promises that the automated semantic-release stream will stay numerically below them. Each milestone links to an epic issue that owns scope and sub-issues.
 
 ### v0.6.0 — Clarity (Search & UX)
 - **Outcome:** users can reliably find, preview, and act on documents in seconds

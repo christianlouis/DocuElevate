@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from unittest.mock import Mock, patch
 
 import pytest
@@ -231,9 +232,13 @@ class TestReleaseNameInStatusView:
 class TestReleaseNamesJson:
     """Tests for the release_names.json data file."""
 
+    @staticmethod
+    def _repo_file(*parts):
+        return os.path.join(os.path.dirname(os.path.dirname(__file__)), *parts)
+
     def test_release_names_json_is_valid(self):
         """Test that release_names.json is valid JSON."""
-        release_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "release_names.json")
+        release_file = self._repo_file("release_names.json")
         with open(release_file, "r") as f:
             data = json.load(f)
 
@@ -242,7 +247,7 @@ class TestReleaseNamesJson:
 
     def test_release_names_json_entries_have_codename(self):
         """Test that all entries in release_names.json have a codename."""
-        release_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "release_names.json")
+        release_file = self._repo_file("release_names.json")
         with open(release_file, "r") as f:
             data = json.load(f)
 
@@ -253,9 +258,39 @@ class TestReleaseNamesJson:
 
     def test_release_names_json_codenames_are_unique(self):
         """Test that all codenames in release_names.json are unique."""
-        release_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "release_names.json")
+        release_file = self._repo_file("release_names.json")
         with open(release_file, "r") as f:
             data = json.load(f)
 
         codenames = [entry["codename"] for entry in data["releases"].values()]
         assert len(codenames) == len(set(codenames)), "Codenames must be unique"
+
+    def test_roadmap_named_anchors_exist_in_release_names_json(self):
+        """Test that roadmap codenames are backed by release_names.json."""
+        release_file = self._repo_file("release_names.json")
+        with open(release_file, "r") as f:
+            data = json.load(f)
+
+        roadmap_file = self._repo_file("ROADMAP.md")
+        with open(roadmap_file, "r") as f:
+            roadmap = f.read()
+
+        roadmap_codenames = set(
+            re.findall(r"^\|\s*v[\d.]+(?:\+)?\s*\|\s*\*\*([A-Z][A-Za-z]+)\*\*", roadmap, re.MULTILINE)
+        )
+        known_codenames = {entry["codename"] for entry in data["releases"].values()}
+
+        assert roadmap_codenames <= known_codenames
+
+    def test_release_names_json_entries_are_documented(self):
+        """Test that release_names.json codenames are listed in the naming guide."""
+        release_file = self._repo_file("release_names.json")
+        with open(release_file, "r") as f:
+            data = json.load(f)
+
+        guide_file = self._repo_file("docs", "ReleaseNaming.md")
+        with open(guide_file, "r") as f:
+            guide = f.read()
+
+        for entry in data["releases"].values():
+            assert f"**{entry['codename']}**" in guide
