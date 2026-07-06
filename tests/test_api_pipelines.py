@@ -106,16 +106,54 @@ class TestStepTypesCatalogue:
             "pipelines.profile_contract_inline",
             "pipelines.profile_contract_title",
             "pipelines.profile_metadata",
+            "pipelines.create_preset_aria",
+            "pipelines.preset_steps",
+            "pipelines.presets_hint",
+            "pipelines.presets_title",
+            "pipelines.routing_document_type",
+            "pipelines.routing_file_type",
+            "pipelines.routing_filename",
+            "pipelines.routing_matched",
+            "pipelines.routing_metadata",
+            "pipelines.routing_metadata_error",
+            "pipelines.routing_missing_target",
+            "pipelines.routing_no_match",
+            "pipelines.routing_size",
+            "pipelines.routing_test_btn",
+            "pipelines.routing_test_hint",
+            "pipelines.routing_test_title",
             "pipelines.save_changes",
             "pipelines.setting_plural",
             "pipelines.setting_singular",
             "pipelines.step_modal_contract",
+            "pipelines.use_preset",
         ]
         for key in expected_keys:
             assert key in translations, f"Missing translation key: {key}"
 
         assert "Current profile contract" not in template
         assert "metadata disabled" not in template
+
+    def test_pipeline_page_batch_loads_profile_details(self):
+        """The pipeline UI asks the list endpoint for steps in one request."""
+        from pathlib import Path
+
+        root = Path(__file__).parents[1]
+        template = (root / "frontend" / "templates" / "pipelines.html").read_text()
+
+        assert "fetch('/api/pipelines?include_steps=true')" in template
+        assert "Promise.all(list.map(p => this.fetchPipeline(p.id)))" not in template
+
+    def test_pipeline_page_exposes_routing_dry_run(self):
+        """The pipeline UI can dry-run routing rules from the profiles page."""
+        from pathlib import Path
+
+        root = Path(__file__).parents[1]
+        template = (root / "frontend" / "templates" / "pipelines.html").read_text()
+
+        assert "evaluateRoutingRules()" in template
+        assert "fetch('/api/routing-rules/evaluate'" in template
+        assert "pipelines.routing_test_title" in template
 
 
 # ---------------------------------------------------------------------------
@@ -229,6 +267,85 @@ class TestPipelineCRUD:
         r = client.get("/api/pipelines")
         names = [p["name"] for p in r.json()]
         assert "Visible" in names
+
+    def test_list_pipelines_can_include_steps(self, client):
+        """GET /api/pipelines?include_steps=true batch-loads ordered steps."""
+        pipeline = client.post("/api/pipelines", json={"name": "Batch Details"}).json()
+        client.post(f"/api/pipelines/{pipeline['id']}/steps", json={"step_type": "convert_to_pdf"})
+        client.post(f"/api/pipelines/{pipeline['id']}/steps", json={"step_type": "ocr"})
+
+        r = client.get("/api/pipelines?include_steps=true")
+
+        assert r.status_code == 200
+        batch_pipeline = next(p for p in r.json() if p["id"] == pipeline["id"])
+        assert [step["step_type"] for step in batch_pipeline["steps"]] == ["convert_to_pdf", "ocr"]
+
+    def test_list_pipelines_omits_steps_by_default(self, client):
+        """The default list response stays lightweight for API callers."""
+        pipeline = client.post("/api/pipelines", json={"name": "Lightweight"}).json()
+        client.post(f"/api/pipelines/{pipeline['id']}/steps", json={"step_type": "ocr"})
+
+        r = client.get("/api/pipelines")
+
+        assert r.status_code == 200
+        batch_pipeline = next(p for p in r.json() if p["id"] == pipeline["id"])
+        assert "steps" not in batch_pipeline
+
+    def test_list_pipeline_presets_returns_guided_options(self, client):
+        """GET /api/pipelines/presets exposes built-in guided profile presets."""
+        r = client.get("/api/pipelines/presets")
+
+        assert r.status_code == 200
+        presets = r.json()
+        preset_keys = {preset["key"] for preset in presets}
+        assert {"standard_document", "scan_ocr_only", "invoice_intake"}.issubset(preset_keys)
+        for preset in presets:
+            assert preset["name"]
+            assert preset["description"]
+            assert preset["steps"]
+
+    def test_create_pipeline_from_preset(self, client):
+        """POST /api/pipelines/presets/{key} creates a profile with preset steps."""
+        r = client.post("/api/pipelines/presets/scan_ocr_only", json={})
+
+        assert r.status_code == 201
+        data = r.json()
+        assert data["name"] == "Scan and OCR only"
+        assert data["description"] == "Run OCR-focused processing without delivery or AI metadata planning steps."
+        assert [step["step_type"] for step in data["steps"]] == ["ocr"]
+        assert data["steps"][0]["label"] == "OCR scanned document"
+        assert data["steps"][0]["config"]["force_cloud_ocr"] is True
+        assert data["steps"][0]["config"]["ocr_language"] == "auto"
+
+    def test_create_pipeline_from_preset_accepts_custom_name_and_default(self, client):
+        """Preset creation can customize the name and make the new profile default."""
+        existing = client.post("/api/pipelines", json={"name": "Existing Default", "is_default": True}).json()
+
+        r = client.post(
+            "/api/pipelines/presets/privacy_local_ocr",
+            json={"name": "Local OCR", "description": "Internal only", "is_default": True},
+        )
+
+        assert r.status_code == 201
+        data = r.json()
+        assert data["name"] == "Local OCR"
+        assert data["description"] == "Internal only"
+        assert data["is_default"] is True
+        assert client.get(f"/api/pipelines/{existing['id']}").json()["is_default"] is False
+
+    def test_create_pipeline_from_unknown_preset_returns_404(self, client):
+        """Unknown preset keys are rejected."""
+        r = client.post("/api/pipelines/presets/not-a-preset", json={})
+
+        assert r.status_code == 404
+
+    def test_create_pipeline_from_preset_duplicate_name_rejected(self, client):
+        """Preset creation keeps the same per-owner unique-name guard as manual creation."""
+        first = client.post("/api/pipelines/presets/invoice_intake", json={})
+        second = client.post("/api/pipelines/presets/invoice_intake", json={})
+
+        assert first.status_code == 201
+        assert second.status_code == 409
 
 
 # ---------------------------------------------------------------------------
