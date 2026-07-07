@@ -1,5 +1,6 @@
 """Tests for app/api/queue.py and app/views/queue.py modules."""
 
+from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -264,6 +265,13 @@ class TestQueueDashboardView:
 @pytest.mark.unit
 class TestQueueDashboardViewFunction:
     """Tests for the queue_dashboard view function."""
+
+    def test_queue_dashboard_uses_shared_html_escape_helper(self):
+        """Avoid local attribute escaping helpers that miss quote characters."""
+        template = Path("frontend/templates/queue_dashboard.html").read_text()
+
+        assert '<script src="/static/js/common.js"></script>' in template
+        assert "function escapeHtml(str)" not in template
 
     @patch("app.views.queue.templates")
     @pytest.mark.asyncio
