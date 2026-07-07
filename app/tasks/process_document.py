@@ -10,7 +10,7 @@ import shutil
 import uuid
 from typing import TYPE_CHECKING
 
-import pypdf  # Upgraded from PyPDF2 to fix CVE-2023-36464
+import pypdf
 from pypdf.errors import PdfReadError
 
 from app.celery_app import celery

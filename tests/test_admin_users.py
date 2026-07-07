@@ -407,6 +407,70 @@ class TestUpsertUserProfile:
 
 
 # ---------------------------------------------------------------------------
+# Payment issue endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestReportPaymentIssue:
+    """Tests for POST /api/admin/users/{user_id}/payment-issue."""
+
+    @pytest.mark.unit
+    def test_report_payment_issue_success(self, au_client, au_session):
+        """Valid payment issue request triggers webhook and notification."""
+        from unittest.mock import patch
+
+        _make_profile(au_session, "payissue@example.com")
+
+        with (
+            patch("app.utils.notification.notify_payment_issue") as mock_notify,
+            patch("app.utils.webhook.dispatch_webhook_event") as mock_webhook,
+        ):
+            resp = au_client.post(
+                "/api/admin/users/payissue@example.com/payment-issue",
+                json={"issue": "Credit card expired"},
+            )
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["acknowledged"] is True
+            assert data["user_id"] == "payissue@example.com"
+            assert data["profile"]["user_id"] == "payissue@example.com"
+
+            mock_notify.assert_called_once_with("payissue@example.com", issue="Credit card expired")
+            mock_webhook.assert_called_once_with(
+                "user.payment_issue",
+                {"user_id": "payissue@example.com", "issue": "Credit card expired"},
+            )
+
+    @pytest.mark.unit
+    def test_report_payment_issue_not_found(self, au_client):
+        """Reporting an issue for a non-existent user returns 404."""
+        resp = au_client.post(
+            "/api/admin/users/doesnotexist@example.com/payment-issue",
+            json={"issue": "declined"},
+        )
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "User profile not found"
+
+    @pytest.mark.unit
+    def test_report_payment_issue_notification_exception(self, au_client, au_session):
+        """If webhook/notification fails, it is caught and 200 OK is still returned."""
+        from unittest.mock import patch
+
+        _make_profile(au_session, "error@example.com")
+
+        with patch("app.utils.notification.notify_payment_issue", side_effect=Exception("Webhook down")):
+            resp = au_client.post(
+                "/api/admin/users/error@example.com/payment-issue",
+                json={"issue": "Payment failed"},
+            )
+            # Should still return 200
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["acknowledged"] is True
+            assert data["user_id"] == "error@example.com"
+
+
+# ---------------------------------------------------------------------------
 # Delete endpoint
 # ---------------------------------------------------------------------------
 

@@ -81,7 +81,7 @@ class TestGetGravatarUrl:
     def test_generates_correct_url(self):
         """Test gravatar URL generation with known email."""
         email = "test@example.com"
-        expected_hash = hashlib.md5(email.lower().strip().encode("utf-8"), usedforsecurity=False).hexdigest()
+        expected_hash = hashlib.sha256(email.lower().strip().encode("utf-8")).hexdigest()
         result = get_gravatar_url(email)
         assert result == f"https://www.gravatar.com/avatar/{expected_hash}?d=identicon"
 

@@ -2,7 +2,7 @@ import logging
 import os
 
 import azure.core.exceptions
-import pypdf  # Upgraded from PyPDF2 to fix CVE-2023-36464
+import pypdf
 from azure.ai.documentintelligence import DocumentIntelligenceClient
 from azure.ai.documentintelligence.models import AnalyzeOutputOption, AnalyzeResult
 from azure.core.credentials import AzureKeyCredential

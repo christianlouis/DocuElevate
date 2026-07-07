@@ -280,13 +280,38 @@ class TestOnboardingAPI:
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
-        assert "redirect_url" in data
+        assert data["redirect_url"] == "/upload"
 
         # Re-query to see persisted value
         ob_session.expire_all()
         profile = ob_session.query(UserProfile).filter(UserProfile.user_id == _TEST_USER["sub"]).first()
         assert profile.onboarding_completed is True
         assert profile.onboarding_completed_at is not None
+
+    def test_complete_uses_session_redirect_url(self, ob_client_authed, ob_session):
+        """POST /complete should return the redirect_url from the session."""
+        from unittest.mock import patch
+
+        _make_profile(ob_session, _TEST_USER["sub"])
+
+        # We patch FastAPI's Request.session property to simulate an active session
+        with patch("fastapi.Request.session", new_callable=lambda: {"post_onboarding_redirect": "/custom-dashboard"}):
+            resp = ob_client_authed.post("/api/onboarding/complete")
+
+        assert resp.status_code == 200
+        assert resp.json()["redirect_url"] == "/custom-dashboard"
+
+        ob_session.expire_all()
+        profile = ob_session.query(UserProfile).filter(UserProfile.user_id == _TEST_USER["sub"]).first()
+        assert profile.onboarding_completed is True
+
+    def test_complete_db_error_triggers_rollback(self, ob_client_authed, ob_session):
+        """POST /complete should rollback and raise 500 if DB commit fails."""
+        from unittest.mock import patch
+
+        with patch("sqlalchemy.orm.Session.commit", side_effect=Exception("DB Error")):
+            resp = ob_client_authed.post("/api/onboarding/complete")
+            assert resp.status_code == 500
 
     def test_complete_creates_profile_if_missing(self, ob_client_authed, ob_session):
         """POST /complete should create a profile when none exists and mark it done."""
@@ -315,3 +340,39 @@ class TestOnboardingAPI:
         app.dependency_overrides.clear()
 
         assert resp.status_code == 401
+
+    def test_complete_uses_post_onboarding_redirect(self, ob_client_authed, ob_session):
+        """POST /complete should read and clear the post_onboarding_redirect session key."""
+        _make_profile(ob_session, _TEST_USER["sub"])
+
+        # Send a request using a custom TestClient request builder that can intercept and inject session
+        from unittest.mock import patch
+
+        # Since Starlette uses session dictionaries added to the request scope,
+        # we can patch the complete_onboarding endpoint's access to request.session
+        with patch("app.api.onboarding.Request.session", new_callable=dict) as mock_session:
+            mock_session.update({"post_onboarding_redirect": "/dashboard"})
+
+            resp = ob_client_authed.post("/api/onboarding/complete")
+
+        assert resp.status_code == 200
+        assert resp.json()["redirect_url"] == "/dashboard"
+        # Verify it was popped
+        assert "post_onboarding_redirect" not in mock_session
+
+    def test_complete_exception_rollback(self, ob_client_authed, ob_session):
+        """POST /complete should rollback and re-raise if commit fails."""
+        _make_profile(ob_session, _TEST_USER["sub"])
+
+        # Patch db.commit to raise an exception
+        from unittest.mock import patch
+
+        with patch("sqlalchemy.orm.Session.commit", side_effect=Exception("DB error")) as mock_commit:
+            with patch("sqlalchemy.orm.Session.rollback") as mock_rollback:
+                resp = ob_client_authed.post("/api/onboarding/complete")
+
+                # Fast API error handler handles the exception and returns a 500 error
+                assert resp.status_code == 500
+
+                mock_commit.assert_called_once()
+                mock_rollback.assert_called_once()

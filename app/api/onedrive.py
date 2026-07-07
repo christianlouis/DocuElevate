@@ -2,13 +2,11 @@
 OneDrive API endpoints
 """
 
-import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Annotated, Optional
 
 import httpx
-import requests
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
@@ -231,7 +229,8 @@ async def list_onedrive_folders(
         }
 
         request_kwargs = {"headers": headers, "params": params, "timeout": settings.http_request_timeout}
-        response = await asyncio.to_thread(requests.get, url, **request_kwargs)
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, **request_kwargs)
 
         if response.status_code == 401:
             raise HTTPException(

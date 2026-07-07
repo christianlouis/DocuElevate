@@ -710,7 +710,7 @@ class TestOneDriveIntegration:
 class TestListOneDriveFolders:
     """Tests for list_onedrive_folders endpoint."""
 
-    @patch("app.api.onedrive.requests.get")
+    @patch("app.api.onedrive.httpx.AsyncClient.get")
     def test_list_folders_success(self, mock_get, client):
         """Test successful folder listing at root."""
         mock_response = Mock()
@@ -746,7 +746,7 @@ class TestListOneDriveFolders:
         assert data["folders"][1]["name"] == "Pictures"
         assert data["path"] == "/"
 
-    @patch("app.api.onedrive.requests.get")
+    @patch("app.api.onedrive.httpx.AsyncClient.get")
     def test_list_folders_subfolder(self, mock_get, client):
         """Test listing folders in a subfolder."""
         mock_response = Mock()
@@ -774,7 +774,7 @@ class TestListOneDriveFolders:
         assert data["folders"][0]["path"] == "/Documents/Invoices"
         assert data["path"] == "/Documents"
 
-    @patch("app.api.onedrive.requests.get")
+    @patch("app.api.onedrive.httpx.AsyncClient.get")
     def test_list_folders_empty(self, mock_get, client):
         """Test listing folders in an empty directory."""
         mock_response = Mock()
@@ -790,7 +790,7 @@ class TestListOneDriveFolders:
         assert response.status_code == 200
         assert len(response.json()["folders"]) == 0
 
-    @patch("app.api.onedrive.requests.get")
+    @patch("app.api.onedrive.httpx.AsyncClient.get")
     def test_list_folders_unauthorized(self, mock_get, client):
         """Test listing folders with invalid token returns 401."""
         mock_response = Mock()
@@ -805,7 +805,7 @@ class TestListOneDriveFolders:
 
         assert response.status_code == 401
 
-    @patch("app.api.onedrive.requests.get")
+    @patch("app.api.onedrive.httpx.AsyncClient.get")
     def test_list_folders_api_error(self, mock_get, client):
         """Test listing folders when Graph API returns an error."""
         mock_response = Mock()
@@ -820,7 +820,7 @@ class TestListOneDriveFolders:
 
         assert response.status_code == 502
 
-    @patch("app.api.onedrive.requests.get")
+    @patch("app.api.onedrive.httpx.AsyncClient.get")
     def test_list_folders_sorted_alphabetically(self, mock_get, client):
         """Test that folders are returned in alphabetical order."""
         mock_response = Mock()
@@ -858,7 +858,7 @@ class TestListOneDriveFolders:
         names = [f["name"] for f in response.json()["folders"]]
         assert names == ["Alpha", "middle", "Zebra"]
 
-    @patch("app.api.onedrive.requests.get")
+    @patch("app.api.onedrive.httpx.AsyncClient.get")
     def test_list_folders_root_drive_parent(self, mock_get, client):
         """Test folder path construction when parentReference.path is /drive/root."""
         mock_response = Mock()

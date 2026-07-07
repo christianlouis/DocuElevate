@@ -2,7 +2,7 @@ import json
 import logging
 import os
 
-import pypdf  # Upgraded from PyPDF2 to fix CVE-2023-36464
+import pypdf
 
 from app.celery_app import celery
 from app.config import settings

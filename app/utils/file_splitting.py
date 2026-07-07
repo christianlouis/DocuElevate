@@ -10,7 +10,7 @@ import logging
 import os
 from typing import List, Optional
 
-from pypdf import PdfReader, PdfWriter  # Upgraded from PyPDF2 to fix CVE-2023-36464
+from pypdf import PdfReader, PdfWriter
 
 logger = logging.getLogger(__name__)
 

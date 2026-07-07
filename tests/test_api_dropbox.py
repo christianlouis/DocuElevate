@@ -431,7 +431,7 @@ class TestSaveDropboxSettings:
 class TestListDropboxFolders:
     """Tests for list_dropbox_folders endpoint."""
 
-    @patch("app.api.dropbox.requests.post")
+    @patch("httpx.AsyncClient.post")
     def test_list_folders_success(self, mock_post, client):
         """Test successful folder listing at root."""
         mock_response = Mock()
@@ -459,7 +459,7 @@ class TestListDropboxFolders:
         assert data["path"] == "/"
         assert data["has_more"] is False
 
-    @patch("app.api.dropbox.requests.post")
+    @patch("httpx.AsyncClient.post")
     def test_list_folders_subfolder(self, mock_post, client):
         """Test listing folders in a subfolder."""
         mock_response = Mock()
@@ -482,7 +482,7 @@ class TestListDropboxFolders:
         assert len(data["folders"]) == 1
         assert data["folders"][0]["path"] == "/Documents/Invoices"
 
-    @patch("app.api.dropbox.requests.post")
+    @patch("httpx.AsyncClient.post")
     def test_list_folders_empty(self, mock_post, client):
         """Test listing folders in an empty directory."""
         mock_response = Mock()
@@ -498,7 +498,7 @@ class TestListDropboxFolders:
         assert response.status_code == 200
         assert len(response.json()["folders"]) == 0
 
-    @patch("app.api.dropbox.requests.post")
+    @patch("httpx.AsyncClient.post")
     def test_list_folders_unauthorized(self, mock_post, client):
         """Test listing folders with invalid token returns 401."""
         mock_response = Mock()
@@ -513,7 +513,7 @@ class TestListDropboxFolders:
 
         assert response.status_code == 401
 
-    @patch("app.api.dropbox.requests.post")
+    @patch("httpx.AsyncClient.post")
     def test_list_folders_api_error(self, mock_post, client):
         """Test listing folders when Dropbox API returns an error."""
         mock_response = Mock()
@@ -528,7 +528,7 @@ class TestListDropboxFolders:
 
         assert response.status_code == 502
 
-    @patch("app.api.dropbox.requests.post")
+    @patch("httpx.AsyncClient.post")
     def test_list_folders_root_path_normalization(self, mock_post, client):
         """Test that '/' is normalized to empty string for Dropbox API."""
         mock_response = Mock()
@@ -546,7 +546,7 @@ class TestListDropboxFolders:
         call_args = mock_post.call_args
         assert call_args[1]["json"]["path"] == ""
 
-    @patch("app.api.dropbox.requests.post")
+    @patch("httpx.AsyncClient.post")
     def test_list_folders_sorted_alphabetically(self, mock_post, client):
         """Test that folders are returned in alphabetical order."""
         mock_response = Mock()
