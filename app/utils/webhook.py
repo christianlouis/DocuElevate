@@ -7,6 +7,8 @@ Supported events:
 - ``document.uploaded``  – a new document has been ingested
 - ``document.processed`` – a document finished processing successfully
 - ``document.failed``    – document processing failed
+- ``document.routed``    – a document was assigned to a processing profile
+- ``document.metadata_updated`` – document metadata was created or changed
 - ``user.signup``        – a new user account was created
 - ``user.plan_changed``  – a user's subscription plan changed
 - ``user.payment_issue`` – a payment issue was reported for a user
@@ -38,6 +40,8 @@ VALID_EVENTS: frozenset[str] = frozenset(
         "document.uploaded",
         "document.processed",
         "document.failed",
+        "document.routed",
+        "document.metadata_updated",
         "user.signup",
         "user.plan_changed",
         "user.payment_issue",

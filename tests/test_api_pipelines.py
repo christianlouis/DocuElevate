@@ -717,11 +717,15 @@ class TestAssignPipelineToFile:
         fr = _make_test_file_record(db_session, owner_id=None)
         pipeline = client.post("/api/pipelines", json={"name": "Assign Test"}).json()
 
-        r = client.post(f"/api/files/{fr.id}/assign-pipeline?pipeline_id={pipeline['id']}")
+        with patch("app.utils.webhook.dispatch_webhook_event") as dispatch:
+            r = client.post(f"/api/files/{fr.id}/assign-pipeline?pipeline_id={pipeline['id']}")
         assert r.status_code == 200
         data = r.json()
         assert data["file_id"] == fr.id
         assert data["pipeline_id"] == pipeline["id"]
+        dispatch.assert_called_once()
+        assert dispatch.call_args.args[0] == "document.routed"
+        assert dispatch.call_args.args[1]["pipeline_id"] == pipeline["id"]
 
         db_session.refresh(fr)
         assert fr.pipeline_id == pipeline["id"]

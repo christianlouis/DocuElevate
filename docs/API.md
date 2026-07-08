@@ -1482,9 +1482,13 @@ Manage webhook configurations for notifying external systems when document event
 | `document.uploaded` | A new document has been ingested |
 | `document.processed` | A document finished processing successfully |
 | `document.failed` | Document processing failed |
+| `document.routed` | A document was assigned to a processing profile |
+| `document.metadata_updated` | Document metadata was created or changed |
 | `user.signup` | A new user account was created |
 | `user.plan_changed` | A user's subscription plan changed |
 | `user.payment_issue` | A payment issue was reported for a user |
+
+Webhook endpoints can also be managed from the admin UI at `/admin/webhooks`.
 
 ### GET /api/webhooks/events/
 
@@ -1492,7 +1496,7 @@ List all valid webhook event types.
 
 **Response (200):**
 ```json
-["document.failed", "document.processed", "document.uploaded", "user.payment_issue", "user.plan_changed", "user.signup"]
+["document.failed", "document.metadata_updated", "document.processed", "document.routed", "document.uploaded", "user.payment_issue", "user.plan_changed", "user.signup"]
 ```
 
 ### GET /api/webhooks/

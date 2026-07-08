@@ -452,6 +452,22 @@ def process_document(
                 file_id=new_record.id,
                 detail=new_record.pipeline_assignment_reason,
             )
+            try:
+                from app.utils.webhook import dispatch_webhook_event
+
+                dispatch_webhook_event(
+                    "document.routed",
+                    {
+                        "file_id": new_record.id,
+                        "filename": new_record.original_filename,
+                        "pipeline_id": new_record.pipeline_id,
+                        "assignment_source": new_record.pipeline_assignment_source,
+                        "routing_rule_id": new_record.pipeline_routing_rule_id,
+                        "reason": new_record.pipeline_assignment_reason,
+                    },
+                )
+            except Exception as webhook_exc:
+                logger.warning("[%s] Failed to dispatch document.routed webhook: %s", task_id, webhook_exc)
         elif new_record.pipeline_assignment_source == "default":
             log_task_progress(
                 task_id,

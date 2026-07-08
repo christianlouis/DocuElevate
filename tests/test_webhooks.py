@@ -489,6 +489,12 @@ class TestWebhookAPI:
         assert processed["payload_version"] == "1.0"
         assert processed["sample_payload"]["event"] == "document.processed"
         assert processed["sample_payload"]["data"]["file_id"] == 42
+        event_names = {event["event"] for event in data["events"]}
+        assert {"document.routed", "document.metadata_updated"}.issubset(event_names)
+        routed = next(event for event in data["events"] if event["event"] == "document.routed")
+        assert routed["sample_payload"]["data"]["assignment_source"] == "routing_rule"
+        metadata = next(event for event in data["events"] if event["event"] == "document.metadata_updated")
+        assert "updated_fields" in metadata["sample_payload"]["data"]
 
     def test_replay_delivery_attempt_queues_current_webhook_config(self, client, db_session, mocker):
         """POST /api/webhooks/delivery-attempts/{id}/replay queues a new attempt."""
@@ -623,6 +629,8 @@ class TestWebhookAPI:
         assert "document.uploaded" in events
         assert "document.processed" in events
         assert "document.failed" in events
+        assert "document.routed" in events
+        assert "document.metadata_updated" in events
 
     def test_requires_admin(self, client):
         """Endpoints return 403 without admin session."""
