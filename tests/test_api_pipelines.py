@@ -8,6 +8,7 @@ import json
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.models import FileRecord, Pipeline, PipelineStep
 
@@ -107,18 +108,27 @@ class TestStepTypesCatalogue:
             "pipelines.profile_contract_title",
             "pipelines.profile_metadata",
             "pipelines.create_preset_aria",
+            "pipelines.preset_created_message",
+            "pipelines.preset_created_title",
+            "pipelines.preset_failed_default",
+            "pipelines.preset_failed_title",
             "pipelines.preset_steps",
             "pipelines.presets_hint",
             "pipelines.presets_title",
             "pipelines.routing_document_type",
+            "pipelines.routing_document_type_placeholder",
             "pipelines.routing_file_type",
+            "pipelines.routing_file_type_placeholder",
             "pipelines.routing_filename",
+            "pipelines.routing_filename_placeholder",
             "pipelines.routing_matched",
             "pipelines.routing_metadata",
             "pipelines.routing_metadata_error",
+            "pipelines.routing_metadata_placeholder",
             "pipelines.routing_missing_target",
             "pipelines.routing_no_match",
             "pipelines.routing_size",
+            "pipelines.routing_size_placeholder",
             "pipelines.routing_test_btn",
             "pipelines.routing_test_hint",
             "pipelines.routing_test_title",
@@ -133,6 +143,13 @@ class TestStepTypesCatalogue:
 
         assert "Current profile contract" not in template
         assert "metadata disabled" not in template
+        assert 'placeholder="invoice_2026.pdf"' not in template
+        assert 'role="alert"' in template
+        preset_button = template.split(':aria-label="i18n.createPreset', 1)[0].rsplit("<button", 1)[1]
+        assert "min-h-[44px]" in preset_button
+        assert "style=" not in preset_button
+        assert "this.i18n.presetCreatedTitle" in template
+        assert "this.i18n.presetFailedTitle" in template
 
     def test_pipeline_page_batch_loads_profile_details(self):
         """The pipeline UI asks the list endpoint for steps in one request."""
@@ -347,6 +364,27 @@ class TestPipelineCRUD:
         assert first.status_code == 201
         assert second.status_code == 409
 
+    def test_create_pipeline_from_preset_rejects_blank_custom_name(self, client):
+        """Whitespace-only preset name overrides are invalid instead of falling back."""
+        r = client.post("/api/pipelines/presets/scan_ocr_only", json={"name": "   "})
+
+        assert r.status_code == 422
+        assert r.json()["detail"] == "name is required"
+
+    def test_pipeline_name_unique_per_owner_database_guard(self, db_session):
+        """The database also rejects duplicate pipeline names for the same owner."""
+        db_session.add_all(
+            [
+                Pipeline(owner_id="owner-a", name="Invoices"),
+                Pipeline(owner_id="owner-a", name="Invoices"),
+            ]
+        )
+
+        with pytest.raises(IntegrityError):
+            db_session.commit()
+
+        db_session.rollback()
+
     def test_create_pipeline_from_preset_logs_without_owner_identifier(self, client):
         """Preset creation logs operational context without owner/user identifiers."""
         with patch("app.api.pipelines.logger") as mock_logger:
@@ -375,6 +413,136 @@ class TestPipelineCRUD:
             "Failed to create pipeline from preset=%s",
             "no_external_delivery",
         )
+
+    def test_list_pipeline_templates_returns_versioned_starter_kits(self, client):
+        """GET /api/pipelines/templates exposes first-class starter templates."""
+        r = client.get("/api/pipelines/templates")
+
+        assert r.status_code == 200
+        templates = r.json()
+        assert len(templates) >= 5
+        categories = {template["category"] for template in templates}
+        assert {"contracts", "invoices", "receipts", "research", "standard"}.issubset(categories)
+        for template in templates:
+            assert template["format_version"] == "1.0"
+            assert template["compatibility"]["min_app_version"]
+            assert isinstance(template["compatibility"]["required_providers"], list)
+            assert template["steps"]
+
+    def test_get_pipeline_template_returns_one_template(self, client):
+        """GET /api/pipelines/templates/{key} returns one built-in starter kit."""
+        r = client.get("/api/pipelines/templates/invoice_intake_pack")
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["key"] == "invoice_intake_pack"
+        assert data["category"] == "invoices"
+        assert [step["step_type"] for step in data["steps"]][:2] == ["ocr", "classify"]
+
+    def test_validate_pipeline_template_accepts_portable_json(self, client):
+        """Templates can be validated without creating a pipeline."""
+        template = client.get("/api/pipelines/templates/receipt_capture_pack").json()
+
+        r = client.post("/api/pipelines/templates/validate", json={"template": template})
+
+        assert r.status_code == 200
+        assert r.json()["valid"] is True
+        assert r.json()["template"]["key"] == "receipt_capture_pack"
+
+    def test_validate_pipeline_template_rejects_unknown_steps(self, client):
+        """Validation rejects templates that reference unsupported step types."""
+        template = client.get("/api/pipelines/templates/receipt_capture_pack").json()
+        template["steps"][0]["step_type"] = "unknown_external_step"
+
+        r = client.post("/api/pipelines/templates/validate", json={"template": template})
+
+        assert r.status_code == 422
+        assert "unknown step_type" in r.json()["detail"]
+
+    def test_import_pipeline_template_creates_profile_with_steps(self, client):
+        """POST /api/pipelines/templates/import creates a user pipeline from a template."""
+        template = client.get("/api/pipelines/templates/contract_review_pack").json()
+
+        r = client.post(
+            "/api/pipelines/templates/import",
+            json={"template": template, "name": "Contract Ops", "is_default": True},
+        )
+
+        assert r.status_code == 201
+        data = r.json()
+        assert data["name"] == "Contract Ops"
+        assert data["is_default"] is True
+        assert data["description"] == template["description"]
+        assert [step["step_type"] for step in data["steps"]] == [
+            "ocr",
+            "classify",
+            "extract_metadata",
+            "embed_metadata",
+            "compute_embedding",
+        ]
+
+    def test_import_pipeline_template_duplicate_name_rejected(self, client):
+        """Template imports keep the per-owner unique-name guard."""
+        template = client.get("/api/pipelines/templates/research_archive_pack").json()
+
+        first = client.post("/api/pipelines/templates/import", json={"template": template})
+        second = client.post("/api/pipelines/templates/import", json={"template": template})
+
+        assert first.status_code == 201
+        assert second.status_code == 409
+
+    def test_export_pipeline_as_template(self, client):
+        """An existing pipeline can be exported as a versioned template document."""
+        pipeline = client.post(
+            "/api/pipelines",
+            json={"name": "Export Me", "description": "Reusable profile"},
+        ).json()
+        client.post(
+            f"/api/pipelines/{pipeline['id']}/steps",
+            json={"step_type": "ocr", "label": "OCR export", "config": {"ocr_language": "eng"}},
+        )
+
+        r = client.get(f"/api/pipelines/{pipeline['id']}/template?category=research")
+
+        assert r.status_code == 200
+        template = r.json()
+        assert template["format_version"] == "1.0"
+        assert template["key"] == f"pipeline-{pipeline['id']}"
+        assert template["category"] == "research"
+        assert template["steps"][0]["step_type"] == "ocr"
+        assert template["steps"][0]["config"]["ocr_language"] == "eng"
+
+    def test_builtin_templates_have_documented_samples(self):
+        """Each shipped workflow template has docs and sample metadata."""
+        from pathlib import Path
+
+        from app.pipeline_templates import BUILT_IN_PIPELINE_TEMPLATES
+
+        root = Path(__file__).parents[1]
+        docs_dir = root / "docs" / "templates"
+        readme = (docs_dir / "README.md").read_text()
+        sample_files = {
+            "standard_document_archive": "standard-document.sample.json",
+            "invoice_intake_pack": "invoice.sample.json",
+            "contract_review_pack": "contract.sample.json",
+            "receipt_capture_pack": "receipt.sample.json",
+            "research_archive_pack": "research.sample.json",
+        }
+
+        assert set(sample_files) == set(BUILT_IN_PIPELINE_TEMPLATES)
+        for template_key, sample_file in sample_files.items():
+            assert template_key in readme
+            assert sample_file in readme
+            sample = json.loads((docs_dir / sample_file).read_text())
+            assert sample["filename"]
+            assert sample["file_type"]
+            assert sample["document_type"]
+            assert isinstance(sample["metadata"], dict)
+
+        for example_file in ("email-forwarding.example.json", "webhook-receiver.example.json"):
+            assert example_file in readme
+            example = json.loads((docs_dir / example_file).read_text())
+            assert example["integration"]
 
 
 # ---------------------------------------------------------------------------

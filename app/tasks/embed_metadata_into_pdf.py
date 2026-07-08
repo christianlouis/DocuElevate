@@ -7,7 +7,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-import pypdf  # Upgraded from PyPDF2 to fix CVE-2023-36464
+import pypdf
 
 # Import the shared Celery instance
 from app.celery_app import celery

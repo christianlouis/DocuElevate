@@ -1495,7 +1495,7 @@ Configurations are stored in the database and managed through the API (see [API 
 |---------------------|------------------------------------------------------------------|-------------|
 | `WEBHOOK_ENABLED`   | Enable or disable webhook delivery globally (`True`/`False`)    | `True`      |
 
-Webhook URLs, secrets, and subscribed events are configured per-webhook via the `/api/webhooks/` endpoints (admin access required). Each delivery includes an optional HMAC-SHA256 signature for verification and is retried with exponential backoff on failure.
+Webhook URLs, secrets, and subscribed events are configured per-webhook via the `/api/webhooks/` endpoints (admin access required). Each delivery includes a versioned payload envelope, event/version headers, an optional HMAC-SHA256 signature for verification, and is retried with exponential backoff on failure. Admins can inspect supported event names and sample payload envelopes at `/api/webhooks/event-catalog/`.
 
 ### Automation Hooks (Zapier / Make.com)
 

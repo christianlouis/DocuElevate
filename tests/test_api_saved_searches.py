@@ -30,7 +30,20 @@ class TestSavedSearchesCRUD:
         assert data["name"] == "My Invoices"
         assert data["filters"]["tags"] == "invoice"
         assert data["filters"]["status"] == "completed"
+        assert data["pinned"] is False
         assert "id" in data
+
+    def test_create_pinned_saved_search(self, client: TestClient):
+        """POST /api/saved-searches can create a pinned saved search."""
+        payload = {
+            "name": "Pinned Invoices",
+            "filters": {"tags": "invoice", "status": "completed"},
+            "pinned": True,
+        }
+        response = client.post("/api/saved-searches", json=payload)
+
+        assert response.status_code == 201
+        assert response.json()["pinned"] is True
 
     def test_create_and_list_saved_search(self, client: TestClient):
         """Creating a saved search makes it appear in the list."""
@@ -45,6 +58,21 @@ class TestSavedSearchesCRUD:
         searches = response.json()
         assert len(searches) == 1
         assert searches[0]["name"] == "PDF Files"
+
+    def test_list_saved_searches_orders_pinned_first(self, client: TestClient):
+        """Pinned saved searches are listed before unpinned searches."""
+        client.post("/api/saved-searches", json={"name": "Zebra", "filters": {"status": "completed"}})
+        client.post(
+            "/api/saved-searches",
+            json={"name": "Alpha", "filters": {"tags": "invoice"}, "pinned": True},
+        )
+
+        response = client.get("/api/saved-searches")
+
+        assert response.status_code == 200
+        searches = response.json()
+        assert [search["name"] for search in searches] == ["Alpha", "Zebra"]
+        assert searches[0]["pinned"] is True
 
     def test_create_saved_search_missing_name(self, client: TestClient):
         """POST /api/saved-searches without name returns 422."""
@@ -107,6 +135,19 @@ class TestSavedSearchesCRUD:
         data = update_resp.json()
         assert data["name"] == "Updated"
         assert data["filters"]["status"] == "completed"
+
+    def test_update_saved_search_pin_state(self, client: TestClient):
+        """PUT /api/saved-searches/{id} can pin or unpin a saved search."""
+        create_resp = client.post(
+            "/api/saved-searches",
+            json={"name": "Pin Target", "filters": {"status": "pending"}},
+        )
+        search_id = create_resp.json()["id"]
+
+        update_resp = client.put(f"/api/saved-searches/{search_id}", json={"pinned": True})
+
+        assert update_resp.status_code == 200
+        assert update_resp.json()["pinned"] is True
 
     def test_update_saved_search_not_found(self, client: TestClient):
         """PUT /api/saved-searches/999 returns 404."""

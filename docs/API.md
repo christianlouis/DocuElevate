@@ -136,6 +136,20 @@ curl -X GET "http://<your-docuelevate-instance>/api/files" \
 
 ## Common Endpoints
 
+### Pipeline Template Library
+
+Versioned processing-profile templates can be listed, validated, imported, and
+exported through the pipeline API. See [Pipeline Template Library](PipelineTemplates.md)
+for the JSON format, built-in starter kits, and validation rules.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/pipelines/templates` | List built-in starter templates |
+| `GET` | `/api/pipelines/templates/{template_key}` | Fetch one built-in starter template |
+| `POST` | `/api/pipelines/templates/validate` | Validate a template without importing it |
+| `POST` | `/api/pipelines/templates/import` | Import a template as a user-owned processing profile |
+| `GET` | `/api/pipelines/{pipeline_id}/template` | Export an accessible profile as a versioned template |
+
 ### Document Upload
 
 #### Upload from Computer
@@ -447,6 +461,7 @@ GET /api/search?q=invoice&document_type=Invoice&tags=amazon&text_quality=high&pa
 Saved searches allow users to save and reuse filter combinations. Each user can store up to 50 saved searches.
 
 Saved searches are used on both the **Files** page (for file management filters) and the **Search** page (for content-finding filters including full-text queries).
+They are scoped to the current user identifier. Organization-shared searches are reserved for a future permissions model.
 
 #### List Saved Searches
 
@@ -466,6 +481,7 @@ Returns all saved searches for the current user.
       "document_type": "Invoice",
       "date_from": "2026-01-01"
     },
+    "pinned": true,
     "created_at": "2026-03-01T10:00:00Z",
     "updated_at": "2026-03-01T10:00:00Z"
   }
@@ -485,7 +501,8 @@ Returns all saved searches for the current user.
     "tags": "invoice",
     "document_type": "Invoice",
     "date_from": "2026-01-01"
-  }
+  },
+  "pinned": false
 }
 ```
 
@@ -509,7 +526,8 @@ Shared keys: `tags`, `date_from`, `date_to`
   "name": "Updated Name",
   "filters": {
     "tags": "invoice,amazon"
-  }
+  },
+  "pinned": true
 }
 ```
 
@@ -1544,12 +1562,42 @@ Update an existing webhook. Only supplied fields are changed.
 
 Delete a webhook configuration. Returns `204 No Content` on success.
 
+### POST /api/webhooks/inbound/pipelines/{pipeline_id}/trigger
+
+Trigger an existing document to be processed with a specific pipeline. This
+endpoint is intended for external systems using a DocuElevate API token in the
+`Authorization: Bearer <token>` header. The caller must be allowed to access
+both the document and the target pipeline.
+
+Request body:
+
+```json
+{
+  "file_id": 42,
+  "force_cloud_ocr": false,
+  "event_id": "external-event-123"
+}
+```
+
+Successful requests return `202 Accepted` after assigning the pipeline and
+queueing processing:
+
+```json
+{
+  "status": "queued",
+  "file_id": 42,
+  "pipeline_id": 7,
+  "task_id": "celery-task-id"
+}
+```
+
 ### Webhook Payload Format
 
 When a subscribed event occurs, a JSON POST request is sent to the configured URL:
 
 ```json
 {
+  "version": "1.0",
   "event": "document.processed",
   "timestamp": 1709322559.123456,
   "data": {
@@ -1559,25 +1607,38 @@ When a subscribed event occurs, a JSON POST request is sent to the configured UR
 }
 ```
 
+The `version` field is the webhook envelope contract version. Consumers should
+branch on it before assuming payload shape changes are backward compatible.
+
 ### HMAC Signature
 
 If a secret is configured, an `X-Webhook-Signature` header is included with each request. The signature is computed as `sha256=<hex-digest>` using HMAC-SHA256 over the raw JSON body.
 
-To verify in Python:
+Every delivery also includes:
+
+| Header | Description |
+|--------|-------------|
+| `X-DocuElevate-Event` | Event type, such as `document.processed` |
+| `X-DocuElevate-Webhook-Version` | Payload envelope version, currently `1.0` |
+
+To verify in Python with DocuElevate's helper:
 
 ```python
-import hashlib, hmac
+from app.utils.webhook import verify_signature
 
-def verify_signature(body: bytes, secret: str, signature: str) -> bool:
-    expected = "sha256=" + hmac.new(
-        secret.encode(), body, hashlib.sha256
-    ).hexdigest()
-    return hmac.compare_digest(expected, signature)
+is_valid = verify_signature(
+    body=request.body,
+    secret="shared webhook secret",
+    signature=request.headers.get("X-Webhook-Signature"),
+)
 ```
 
 ### Retry Behavior
 
 Failed deliveries (non-2xx responses or network errors) are automatically retried with exponential backoff: 60 s, 300 s, then 900 s (up to 3 retries with ±20 % jitter).
+If all attempts fail, the Celery task logs a structured dead-letter entry with
+the task ID, target URL, event type, attempt count, and final error so operators
+can alert on or replay failed deliveries from task logs.
 
 ## Error Handling
 

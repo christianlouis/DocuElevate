@@ -5,7 +5,6 @@ against their subscription plan's ``max_mailboxes`` limit, and a
 test-connection endpoint so users can verify credentials before saving.
 """
 
-import imaplib
 import logging
 from datetime import datetime, timezone
 from typing import Annotated, Any
@@ -17,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import UserImapAccount
 from app.utils.encryption import decrypt_value, encrypt_value
-from app.utils.network import is_private_ip
+from app.utils.imap import test_imap_connection
 from app.utils.subscription import get_tier, get_user_tier_id
 from app.utils.user_scope import get_current_owner_id
 
@@ -179,38 +178,6 @@ def _to_response(acct: UserImapAccount) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Connection test helper
-# ---------------------------------------------------------------------------
-
-
-def _test_imap_connection(host: str, port: int, username: str, password: str, use_ssl: bool) -> dict[str, Any]:
-    """Attempt to connect and log in to the IMAP server.
-
-    Returns a dict with ``{"success": bool, "message": str}``.
-    """
-
-    # Security: Prevent SSRF by blocking connections to internal IPs
-    if is_private_ip(host):
-        logger.warning("SSRF blocked: Attempt to connect to private IP %s", host)
-        return {"success": False, "message": "Connection error: Invalid hostname or IP address"}
-    try:
-        if use_ssl:
-            mail = imaplib.IMAP4_SSL(host, port)
-        else:
-            mail = imaplib.IMAP4(host, port)
-
-        mail.login(username, password)
-        mail.logout()
-        return {"success": True, "message": "Connection successful"}
-    except OSError as exc:
-        logger.warning("IMAP network error for %s@%s: %s", username, host, exc)
-        return {"success": False, "message": f"Connection error: {exc}"}
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("IMAP error for %s@%s: %s", username, host, exc)
-        return {"success": False, "message": f"IMAP error: {exc}"}
-
-
-# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
@@ -347,17 +314,17 @@ def test_saved_imap_account(account_id: int, request: Request, db: DbSession, ow
     if not acct:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="IMAP account not found")
 
-    return _test_imap_connection(acct.host, acct.port, acct.username, decrypt_value(acct.password), acct.use_ssl)
+    return test_imap_connection(acct.host, acct.port, acct.username, decrypt_value(acct.password), acct.use_ssl)
 
 
 @router.post("/test", summary="Test an IMAP connection without saving")
-def test_imap_connection(request: Request, body: ImapTestRequest, owner_id: CurrentOwner) -> dict[str, Any]:
+def test_imap_connection_endpoint(request: Request, body: ImapTestRequest, owner_id: CurrentOwner) -> dict[str, Any]:
     """Test IMAP credentials without persisting anything.
 
     Useful for the "Test connection" button in the UI before the user saves
     a new account.
     """
-    return _test_imap_connection(body.host, body.port, body.username, body.password, body.use_ssl)
+    return test_imap_connection(body.host, body.port, body.username, body.password, body.use_ssl)
 
 
 @router.get("/quota/", summary="Get IMAP account quota information for the current user")

@@ -5,6 +5,7 @@ Tests all API endpoints with success and error cases, proper mocking, and edge c
 Target: Bring coverage from 11.75% to 70%+
 """
 
+import json
 import os
 from io import BytesIO
 from unittest.mock import Mock, patch
@@ -302,6 +303,25 @@ class TestDeleteFileRecord:
         response = client.delete("/api/files/99999")
         assert response.status_code == 404
 
+    @patch("app.config.settings.allow_file_delete", True)
+    def test_delete_file_rejects_legal_hold(self, client: TestClient, db_session):
+        """Files under legal hold cannot be deleted."""
+        file = FileRecord(
+            filehash="hash-legal-hold",
+            original_filename="hold.pdf",
+            local_filename="/tmp/hold.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+            legal_hold=True,
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.delete(f"/api/files/{file.id}")
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == "File is under legal hold and cannot be deleted"
+
 
 @pytest.mark.unit
 class TestBulkDeleteFiles:
@@ -350,6 +370,26 @@ class TestBulkDeleteFiles:
         """Test bulk delete with non-existent IDs."""
         response = client.post("/api/files/bulk-delete", json=[99999, 99998])
         assert response.status_code == 404
+
+    @patch("app.config.settings.allow_file_delete", True)
+    def test_bulk_delete_rejects_legal_hold(self, client: TestClient, db_session):
+        """Bulk delete rejects the whole operation when any file is under legal hold."""
+        file = FileRecord(
+            filehash="hash-bulk-legal-hold",
+            original_filename="bulk-hold.pdf",
+            local_filename="/tmp/bulk-hold.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+            legal_hold=True,
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.post("/api/files/bulk-delete", json=[file.id])
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == f"Files under legal hold cannot be deleted. File IDs: [{file.id}]"
+        assert db_session.query(FileRecord).filter(FileRecord.id == file.id).first() is not None
 
 
 @pytest.mark.unit
@@ -2916,6 +2956,172 @@ class TestAssignPipelineToFile:
         with patch.object(db_session, "commit", side_effect=Exception("DB error")):
             response = client.post(f"/api/files/{file.id}/assign-pipeline")
             assert response.status_code == 500
+
+
+@pytest.mark.unit
+class TestBulkAssignPipelineToFiles:
+    """Tests for POST /api/files/bulk-assign-pipeline endpoint."""
+
+    def test_bulk_assign_pipeline_success(self, client: TestClient, db_session):
+        """Bulk route assigns a pipeline to multiple files."""
+        from app.models import Pipeline
+
+        files = [
+            FileRecord(
+                filehash=f"hash{i}",
+                original_filename=f"test{i}.pdf",
+                local_filename=f"/tmp/test{i}.pdf",
+                file_size=1024,
+                mime_type="application/pdf",
+            )
+            for i in range(2)
+        ]
+        pipeline = Pipeline(name="Bulk Route", owner_id=None, is_default=False)
+        db_session.add_all([*files, pipeline])
+        db_session.commit()
+
+        response = client.post(
+            "/api/files/bulk-assign-pipeline",
+            json={"file_ids": [file.id for file in files], "pipeline_id": pipeline.id},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["updated_count"] == 2
+        assert data["bulk_action"] == {
+            "action": "route",
+            "state": "completed",
+            "updated_count": 2,
+            "updated_ids": [file.id for file in files],
+        }
+        assert data["pipeline_id"] == pipeline.id
+        for file in files:
+            db_session.refresh(file)
+            assert file.pipeline_id == pipeline.id
+            assert file.pipeline_assignment_source == "bulk_route"
+
+    def test_bulk_assign_pipeline_can_clear_routes(self, client: TestClient, db_session):
+        """Bulk route can clear explicit pipeline assignments."""
+        from app.models import Pipeline
+
+        pipeline = Pipeline(name="Bulk Route", owner_id=None, is_default=False)
+        file = FileRecord(
+            filehash="hash-clear",
+            original_filename="clear.pdf",
+            local_filename="/tmp/clear.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add_all([pipeline, file])
+        db_session.commit()
+        file.pipeline_id = pipeline.id
+        db_session.commit()
+
+        response = client.post("/api/files/bulk-assign-pipeline", json={"file_ids": [file.id], "pipeline_id": None})
+
+        assert response.status_code == 200
+        db_session.refresh(file)
+        assert file.pipeline_id is None
+        assert file.pipeline_assignment_source == "default"
+
+    def test_bulk_assign_pipeline_rejects_missing_pipeline(self, client: TestClient, db_session):
+        """Bulk route rejects unknown target pipelines."""
+        file = FileRecord(
+            filehash="hash-missing-pipeline",
+            original_filename="missing-pipeline.pdf",
+            local_filename="/tmp/missing-pipeline.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.post("/api/files/bulk-assign-pipeline", json={"file_ids": [file.id], "pipeline_id": 99999})
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Pipeline not found"
+
+
+@pytest.mark.unit
+class TestBulkTagFiles:
+    """Tests for POST /api/files/bulk-tag endpoint."""
+
+    def test_bulk_tag_adds_tags_to_multiple_files(self, client: TestClient, db_session):
+        """Bulk tag adds normalized tags to selected files."""
+        files = [
+            FileRecord(
+                filehash=f"tag-hash-{i}",
+                original_filename=f"tagged-{i}.pdf",
+                local_filename=f"/tmp/tagged-{i}.pdf",
+                file_size=1024,
+                mime_type="application/pdf",
+                ai_metadata='{"tags": ["finance"]}',
+            )
+            for i in range(2)
+        ]
+        db_session.add_all(files)
+        db_session.commit()
+
+        response = client.post(
+            "/api/files/bulk-tag",
+            json={"file_ids": [file.id for file in files], "tags": ["Finance", " urgent ", "urgent"]},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["updated_count"] == 2
+        assert data["bulk_action"] == {
+            "action": "tag",
+            "state": "completed",
+            "updated_count": 2,
+            "updated_ids": [file.id for file in files],
+        }
+        assert data["tags"] == ["Finance", "urgent"]
+        for file in files:
+            db_session.refresh(file)
+            metadata = json.loads(file.ai_metadata)
+            assert metadata["tags"] == ["finance", "urgent"]
+
+    def test_bulk_tag_replace_mode_replaces_existing_tags(self, client: TestClient, db_session):
+        """Bulk tag can replace the selected files' existing tag set."""
+        file = FileRecord(
+            filehash="tag-replace-hash",
+            original_filename="replace-tags.pdf",
+            local_filename="/tmp/replace-tags.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+            ai_metadata='{"tags": ["old"], "title": "Keep title"}',
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.post(
+            "/api/files/bulk-tag",
+            json={"file_ids": [file.id], "tags": ["new", "review"], "mode": "replace"},
+        )
+
+        assert response.status_code == 200
+        db_session.refresh(file)
+        metadata = json.loads(file.ai_metadata)
+        assert metadata["tags"] == ["new", "review"]
+        assert metadata["title"] == "Keep title"
+
+    def test_bulk_tag_rejects_empty_tags(self, client: TestClient, db_session):
+        """Bulk tag rejects payloads that normalize to no tags."""
+        file = FileRecord(
+            filehash="tag-empty-hash",
+            original_filename="empty-tags.pdf",
+            local_filename="/tmp/empty-tags.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.post("/api/files/bulk-tag", json={"file_ids": [file.id], "tags": ["  "]})
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == "At least one non-empty tag is required"
 
 
 @pytest.mark.unit

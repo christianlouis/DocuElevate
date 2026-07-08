@@ -59,6 +59,9 @@ class FileRecord(Base):
     # When a duplicate is detected, this file record is created but marked as duplicate
     is_duplicate = Column(Boolean, default=False, nullable=False, index=True)
 
+    # Legal hold prevents destructive deletion while records are under review or retention.
+    legal_hold = Column(Boolean, default=False, nullable=False, index=True)
+
     # If this is a duplicate, record the ID of the original file for reference
     duplicate_of_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=True)
 
@@ -195,6 +198,7 @@ class SavedSearch(Base):
     user_id = Column(String, nullable=False, index=True)  # Username or user identifier from session
     name = Column(String, nullable=False)  # Human-readable name for the saved search
     filters = Column(Text, nullable=False)  # JSON-encoded filter parameters
+    pinned = Column(Boolean, nullable=False, default=False)  # Whether the search is pinned ahead of the rest
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -213,6 +217,44 @@ class WebhookConfig(Base):
     is_active = Column(Boolean, default=True, nullable=False)  # Whether the webhook is active
     description = Column(String, nullable=True)  # Optional human-readable description
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class WebhookDeliveryAttempt(Base):
+    """Persisted outbound webhook delivery attempt for audit and replay."""
+
+    __tablename__ = "webhook_delivery_attempts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    webhook_config_id = Column(Integer, nullable=True, index=True)
+    task_id = Column(String, nullable=True, index=True)
+    url = Column(String, nullable=False)
+    event = Column(String, nullable=True, index=True)
+    payload = Column(Text, nullable=False)
+    status = Column(String(30), nullable=False, default="pending", index=True)
+    attempt_number = Column(Integer, nullable=False, default=1)
+    response_status = Column(Integer, nullable=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    delivered_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class DocumentReviewItem(Base):
+    """Document queued for human review."""
+
+    __tablename__ = "document_review_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=False, index=True)
+    status = Column(String(30), nullable=False, default="pending", index=True)
+    reason = Column(String, nullable=False)
+    confidence_score = Column(Integer, nullable=True)
+    created_by = Column(String, nullable=True, index=True)
+    resolved_by = Column(String, nullable=True)
+    resolution_note = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
@@ -403,6 +445,7 @@ class Pipeline(Base):
     """
 
     __tablename__ = "pipelines"
+    __table_args__ = (UniqueConstraint("owner_id", "name", name="uq_pipelines_owner_name"),)
 
     id = Column(Integer, primary_key=True, index=True)
 

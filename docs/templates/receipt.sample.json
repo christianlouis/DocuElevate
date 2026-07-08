@@ -1,0 +1,13 @@
+{
+  "filename": "receipt-travel-2026-07-04.jpg",
+  "file_type": "image/jpeg",
+  "document_type": "receipt",
+  "size": 196608,
+  "metadata": {
+    "merchant": "City Rail",
+    "expense_category": "travel",
+    "purchase_date": "2026-07-04",
+    "total": "18.90",
+    "currency": "EUR"
+  }
+}

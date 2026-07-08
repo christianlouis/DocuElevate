@@ -12,15 +12,23 @@ can render the correct configuration form without hard-coding the catalogue.
 
 import json
 import logging
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, get_current_user_id, require_login
+from app.config import settings
 from app.database import get_db
 from app.models import Pipeline, PipelineStep
+from app.pipeline_templates import (
+    export_pipeline_template,
+    get_builtin_template,
+    list_builtin_templates,
+    validate_pipeline_template,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -251,7 +259,12 @@ def _serialize_step(step: PipelineStep) -> dict[str, Any]:
     }
 
 
-def _serialize_pipeline(pipeline: Pipeline, include_steps: bool = False, db: Session | None = None) -> dict[str, Any]:
+def _serialize_pipeline(
+    pipeline: Pipeline,
+    include_steps: bool = False,
+    db: Session | None = None,
+    steps: list[PipelineStep] | None = None,
+) -> dict[str, Any]:
     data: dict[str, Any] = {
         "id": pipeline.id,
         "owner_id": pipeline.owner_id,
@@ -262,12 +275,46 @@ def _serialize_pipeline(pipeline: Pipeline, include_steps: bool = False, db: Ses
         "created_at": pipeline.created_at.isoformat() if pipeline.created_at else None,
         "updated_at": pipeline.updated_at.isoformat() if pipeline.updated_at else None,
     }
-    if include_steps and db is not None:
-        steps = (
-            db.query(PipelineStep).filter(PipelineStep.pipeline_id == pipeline.id).order_by(PipelineStep.position).all()
-        )
-        data["steps"] = [_serialize_step(s) for s in steps]
+    if include_steps:
+        if steps is None and db is not None:
+            steps = (
+                db.query(PipelineStep)
+                .filter(PipelineStep.pipeline_id == pipeline.id)
+                .order_by(PipelineStep.position)
+                .all()
+            )
+        data["steps"] = [_serialize_step(s) for s in steps or []]
     return data
+
+
+def _pipeline_steps_by_id(db: Session, pipeline_ids: list[int]) -> dict[int, list[PipelineStep]]:
+    if not pipeline_ids:
+        return {}
+    grouped: dict[int, list[PipelineStep]] = {pipeline_id: [] for pipeline_id in pipeline_ids}
+    steps = (
+        db.query(PipelineStep)
+        .filter(PipelineStep.pipeline_id.in_(pipeline_ids))
+        .order_by(PipelineStep.pipeline_id, PipelineStep.position)
+        .all()
+    )
+    for step in steps:
+        grouped.setdefault(step.pipeline_id, []).append(step)
+    return grouped
+
+
+def _pipeline_template_response(template: dict[str, Any]) -> dict[str, Any]:
+    return validate_pipeline_template(
+        template,
+        valid_step_types=set(PIPELINE_STEP_TYPES),
+        current_app_version=settings.version,
+    )
+
+
+def _pipeline_name_conflict(name: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=f"A pipeline named '{name}' already exists",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -291,6 +338,22 @@ class PipelinePresetCreate(BaseModel):
     description: str | None = Field(default=None, max_length=4096)
     is_default: bool = Field(default=False)
     is_active: bool = Field(default=True)
+
+
+class PipelineTemplateImport(BaseModel):
+    """Body for importing a versioned pipeline template."""
+
+    template: dict[str, Any] = Field(..., description="Versioned pipeline template document")
+    name: str | None = Field(default=None, max_length=MAX_NAME_LENGTH)
+    description: str | None = Field(default=None, max_length=4096)
+    is_default: bool | None = Field(default=None)
+    is_active: bool | None = Field(default=None)
+
+
+class PipelineTemplateValidate(BaseModel):
+    """Body for validating a versioned pipeline template without importing it."""
+
+    template: dict[str, Any] = Field(..., description="Versioned pipeline template document")
 
 
 class PipelineUpdate(BaseModel):
@@ -374,7 +437,12 @@ def list_pipelines(
             .all()
         )
 
-    return [_serialize_pipeline(p, include_steps=include_steps, db=db) for p in pipelines]
+    if not include_steps:
+        return [_serialize_pipeline(p) for p in pipelines]
+
+    pipeline_ids = [cast(int, p.id) for p in pipelines]
+    steps_by_pipeline = _pipeline_steps_by_id(db, pipeline_ids)
+    return [_serialize_pipeline(p, include_steps=True, steps=steps_by_pipeline.get(p.id, [])) for p in pipelines]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -405,10 +473,7 @@ def create_pipeline(request: Request, db: DbSession, body: PipelineCreate) -> di
     # Enforce unique name per owner
     existing = db.query(Pipeline).filter(Pipeline.owner_id == user_id, Pipeline.name == name).first()
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"A pipeline named '{name}' already exists",
-        )
+        raise _pipeline_name_conflict(name)
 
     # If this pipeline is marked as default, unset the existing default for this user
     if body.is_default:
@@ -425,6 +490,9 @@ def create_pipeline(request: Request, db: DbSession, body: PipelineCreate) -> di
         db.add(pipeline)
         db.commit()
         db.refresh(pipeline)
+    except IntegrityError:
+        db.rollback()
+        raise _pipeline_name_conflict(name)
     except Exception:
         db.rollback()
         logger.exception("Failed to create pipeline user=%s", user_id)
@@ -467,7 +535,8 @@ def create_pipeline_from_preset(
 
     user_id = _get_user_id(request)
     payload = body or PipelinePresetCreate()
-    name = (payload.name or preset["name"]).strip()
+    name = preset["name"] if payload.name is None else payload.name
+    name = name.strip()
     description = payload.description if payload.description is not None else preset["description"]
 
     if not name:
@@ -475,7 +544,7 @@ def create_pipeline_from_preset(
 
     existing = db.query(Pipeline).filter(Pipeline.owner_id == user_id, Pipeline.name == name).first()
     if existing:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"A pipeline named '{name}' already exists")
+        raise _pipeline_name_conflict(name)
 
     if payload.is_default:
         _unset_default(db, user_id)
@@ -503,6 +572,9 @@ def create_pipeline_from_preset(
             )
         db.commit()
         db.refresh(pipeline)
+    except IntegrityError:
+        db.rollback()
+        raise _pipeline_name_conflict(name)
     except Exception:
         db.rollback()
         logger.exception("Failed to create pipeline from preset=%s", preset_key)
@@ -513,6 +585,132 @@ def create_pipeline_from_preset(
 
     logger.info("Pipeline created from preset: id=%s, preset=%s", pipeline.id, preset_key)
     return _serialize_pipeline(pipeline, include_steps=True, db=db)
+
+
+@router.get("/templates")
+@require_login
+def list_pipeline_templates() -> list[dict[str, Any]]:
+    """Return built-in versioned pipeline templates."""
+    return [_pipeline_template_response(template) for template in list_builtin_templates()]
+
+
+@router.get("/templates/{template_key}")
+@require_login
+def get_pipeline_template(template_key: str) -> dict[str, Any]:
+    """Return one built-in versioned pipeline template."""
+    template = get_builtin_template(template_key)
+    if template is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline template not found")
+    return _pipeline_template_response(template)
+
+
+@router.post("/templates/validate")
+@require_login
+def validate_template(body: PipelineTemplateValidate) -> dict[str, Any]:
+    """Validate a pipeline template without importing it."""
+    try:
+        template = _pipeline_template_response(body.template)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    return {"valid": True, "template": template}
+
+
+@router.post("/templates/import", status_code=status.HTTP_201_CREATED)
+@require_login
+def import_pipeline_template(
+    request: Request,
+    db: DbSession,
+    body: PipelineTemplateImport,
+) -> dict[str, Any]:
+    """Import a versioned pipeline template as a user-owned processing profile."""
+    try:
+        template = _pipeline_template_response(body.template)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
+    user_id = _get_user_id(request)
+    name = (body.name or template["name"]).strip()
+    description = body.description if body.description is not None else template["description"]
+    is_default = body.is_default if body.is_default is not None else template["pipeline"]["is_default"]
+    is_active = body.is_active if body.is_active is not None else template["pipeline"]["is_active"]
+
+    if not name:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="name is required")
+
+    existing = db.query(Pipeline).filter(Pipeline.owner_id == user_id, Pipeline.name == name).first()
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"A pipeline named '{name}' already exists")
+
+    if is_default:
+        _unset_default(db, user_id)
+
+    pipeline = Pipeline(
+        owner_id=user_id,
+        name=name,
+        description=description,
+        is_default=is_default,
+        is_active=is_active,
+    )
+    try:
+        db.add(pipeline)
+        db.flush()
+        for position, step in enumerate(template["steps"]):
+            db.add(
+                PipelineStep(
+                    pipeline_id=pipeline.id,
+                    position=position,
+                    step_type=step["step_type"],
+                    label=step["label"],
+                    config=json.dumps(step["config"]) if step["config"] else None,
+                    enabled=step["enabled"],
+                )
+            )
+        db.commit()
+        db.refresh(pipeline)
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to import pipeline template=%s", template["key"])
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to import pipeline template",
+        )
+
+    logger.info("Pipeline imported from template: id=%s, template=%s", pipeline.id, template["key"])
+    return _serialize_pipeline(pipeline, include_steps=True, db=db)
+
+
+@router.get("/{pipeline_id}/template")
+@require_login
+def export_pipeline_as_template(
+    pipeline_id: int,
+    request: Request,
+    db: DbSession,
+    category: str = Query(default="standard", description="Template category for the exported document."),
+) -> dict[str, Any]:
+    """Export an accessible pipeline as a versioned template document."""
+    user_id = _get_user_id(request)
+    admin = _is_admin(request)
+
+    pipeline = db.query(Pipeline).filter(Pipeline.id == pipeline_id).first()
+    if not pipeline or not _can_access_pipeline(pipeline, user_id, admin):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found")
+
+    steps = db.query(PipelineStep).filter(PipelineStep.pipeline_id == pipeline_id).order_by(PipelineStep.position).all()
+    serialized_steps = [_serialize_step(step) for step in steps]
+    template = export_pipeline_template(
+        key=f"pipeline-{pipeline.id}",
+        name=pipeline.name,
+        description=pipeline.description,
+        category=category,
+        is_active=pipeline.is_active,
+        is_default=pipeline.is_default,
+        steps=serialized_steps,
+        min_app_version=settings.version,
+    )
+    try:
+        return _pipeline_template_response(template)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
 
 @router.get("/{pipeline_id}")
@@ -579,10 +777,7 @@ def update_pipeline(pipeline_id: int, request: Request, db: DbSession, body: Pip
                 .first()
             )
             if conflict:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=f"A pipeline named '{new_name}' already exists",
-                )
+                raise _pipeline_name_conflict(new_name)
         pipeline.name = new_name
 
     if body.description is not None:
@@ -599,6 +794,10 @@ def update_pipeline(pipeline_id: int, request: Request, db: DbSession, body: Pip
     try:
         db.commit()
         db.refresh(pipeline)
+    except IntegrityError:
+        db.rollback()
+        name = body.name.strip() if body.name else pipeline.name
+        raise _pipeline_name_conflict(name)
     except Exception:
         db.rollback()
         logger.exception("Failed to update pipeline id=%s", pipeline_id)

@@ -109,6 +109,7 @@ def _serialize_saved_search(s: SavedSearch) -> dict:
         "id": s.id,
         "name": s.name,
         "filters": json.loads(s.filters),
+        "pinned": bool(s.pinned),
         "created_at": s.created_at.isoformat() if s.created_at else None,
         "updated_at": s.updated_at.isoformat() if s.updated_at else None,
     }
@@ -123,7 +124,12 @@ def list_saved_searches(request: Request, db: DbSession):
         A list of saved search objects with id, name, filters, and timestamps.
     """
     user_id = _get_user_id(request)
-    searches = db.query(SavedSearch).filter(SavedSearch.user_id == user_id).order_by(SavedSearch.name).all()
+    searches = (
+        db.query(SavedSearch)
+        .filter(SavedSearch.user_id == user_id)
+        .order_by(SavedSearch.pinned.desc(), SavedSearch.name)
+        .all()
+    )
     return [_serialize_saved_search(s) for s in searches]
 
 
@@ -134,6 +140,7 @@ def create_saved_search(
     db: DbSession,
     name: str = Body(..., embed=True),
     filters: dict = Body(..., embed=True),
+    pinned: bool = Body(False, embed=True),
 ):
     """Create a new saved search for the current user.
 
@@ -184,6 +191,7 @@ def create_saved_search(
         user_id=user_id,
         name=name,
         filters=json.dumps(sanitized_filters),
+        pinned=pinned,
     )
 
     try:
@@ -210,6 +218,7 @@ def update_saved_search(
     db: DbSession,
     name: str | None = Body(None, embed=True),
     filters: dict | None = Body(None, embed=True),
+    pinned: bool | None = Body(None, embed=True),
 ):
     """Update an existing saved search.
 
@@ -259,6 +268,9 @@ def update_saved_search(
                 detail="At least one filter parameter is required",
             )
         saved_search.filters = json.dumps(sanitized_filters)
+
+    if pinned is not None:
+        saved_search.pinned = pinned
 
     try:
         db.commit()

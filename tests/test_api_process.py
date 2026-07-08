@@ -1,13 +1,23 @@
 """Tests for app/api/process.py module."""
 
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+
+from app.config import settings
 
 
 @pytest.mark.integration
 class TestProcessEndpoints:
     """Tests for process API endpoints."""
+
+    def _workdir_file(self, tmp_path, relative_path: str):
+        """Create a test file under the configured workdir."""
+        test_file = Path(settings.workdir) / "docuelevate-process-tests" / tmp_path.name / relative_path
+        test_file.parent.mkdir(parents=True, exist_ok=True)
+        test_file.write_text("test content")
+        return test_file.resolve()
 
     def test_process_file_not_found(self, client):
         """Test POST /api/process/ with non-existent file."""
@@ -16,9 +26,7 @@ class TestProcessEndpoints:
 
     def test_process_file_success(self, client, tmp_path):
         """Test POST /api/process/ with existing file."""
-        # Create a test file
-        test_file = tmp_path / "test.pdf"
-        test_file.write_text("test content")
+        test_file = self._workdir_file(tmp_path, "test.pdf")
 
         with patch("app.api.process.process_document") as mock_task:
             mock_task.delay.return_value = Mock(id="test-task-id")
@@ -36,9 +44,7 @@ class TestProcessEndpoints:
 
     def test_send_to_dropbox_success(self, client, tmp_path):
         """Test POST /api/send_to_dropbox/ with existing file."""
-        test_file = tmp_path / "processed" / "test.pdf"
-        test_file.parent.mkdir(parents=True)
-        test_file.write_text("test content")
+        test_file = self._workdir_file(tmp_path, "processed/test.pdf")
 
         with patch("app.api.process.upload_to_dropbox") as mock_task:
             mock_task.delay.return_value = Mock(id="test-task-id")
@@ -56,9 +62,7 @@ class TestProcessEndpoints:
 
     def test_send_to_dropbox_endpoint_success(self, client, tmp_path):
         """Test POST /api/send_to_dropbox/ directly mapping to endpoint name with existing file."""
-        test_file = tmp_path / "processed" / "test_endpoint.pdf"
-        test_file.parent.mkdir(parents=True)
-        test_file.write_text("test content endpoint")
+        test_file = self._workdir_file(tmp_path, "processed/test_endpoint.pdf")
 
         with patch("app.api.process.upload_to_dropbox") as mock_task:
             mock_task.delay.return_value = Mock(id="test-task-id-endpoint")
@@ -76,9 +80,7 @@ class TestProcessEndpoints:
 
     def test_send_to_paperless_success(self, client, tmp_path):
         """Test POST /api/send_to_paperless/ with existing file."""
-        test_file = tmp_path / "processed" / "test.pdf"
-        test_file.parent.mkdir(parents=True)
-        test_file.write_text("test content")
+        test_file = self._workdir_file(tmp_path, "processed/test.pdf")
 
         with patch("app.api.process.upload_to_paperless") as mock_task:
             mock_task.delay.return_value = Mock(id="test-task-id")
@@ -87,6 +89,7 @@ class TestProcessEndpoints:
             data = response.json()
             assert data["task_id"] == "test-task-id"
             assert data["status"] == "queued"
+            mock_task.delay.assert_called_once_with(str(test_file))
 
     def test_send_to_nextcloud_file_not_found(self, client):
         """Test POST /api/send_to_nextcloud/ with non-existent file."""
@@ -95,9 +98,7 @@ class TestProcessEndpoints:
 
     def test_send_to_nextcloud_success(self, client, tmp_path):
         """Test POST /api/send_to_nextcloud/ with existing file."""
-        test_file = tmp_path / "processed" / "test.pdf"
-        test_file.parent.mkdir(parents=True)
-        test_file.write_text("test content")
+        test_file = self._workdir_file(tmp_path, "processed/test.pdf")
 
         with patch("app.api.process.upload_to_nextcloud") as mock_task:
             mock_task.delay.return_value = Mock(id="test-task-id")
@@ -106,6 +107,7 @@ class TestProcessEndpoints:
             data = response.json()
             assert data["task_id"] == "test-task-id"
             assert data["status"] == "queued"
+            mock_task.delay.assert_called_once_with(str(test_file))
 
     def test_send_to_google_drive_file_not_found(self, client):
         """Test POST /api/send_to_google_drive/ with non-existent file."""
@@ -114,9 +116,7 @@ class TestProcessEndpoints:
 
     def test_send_to_google_drive_success(self, client, tmp_path):
         """Test POST /api/send_to_google_drive/ with existing file."""
-        test_file = tmp_path / "processed" / "test.pdf"
-        test_file.parent.mkdir(parents=True)
-        test_file.write_text("test content")
+        test_file = self._workdir_file(tmp_path, "processed/test.pdf")
 
         with patch("app.api.process.upload_to_google_drive") as mock_task:
             mock_task.delay.return_value = Mock(id="test-task-id")
@@ -125,6 +125,7 @@ class TestProcessEndpoints:
             data = response.json()
             assert data["task_id"] == "test-task-id"
             assert data["status"] == "queued"
+            mock_task.delay.assert_called_once_with(str(test_file))
 
     def test_send_to_onedrive_file_not_found(self, client):
         """Test POST /api/send_to_onedrive/ with non-existent file."""
@@ -133,9 +134,7 @@ class TestProcessEndpoints:
 
     def test_send_to_onedrive_success(self, client, tmp_path):
         """Test POST /api/send_to_onedrive/ with existing file."""
-        test_file = tmp_path / "processed" / "test.pdf"
-        test_file.parent.mkdir(parents=True)
-        test_file.write_text("test content")
+        test_file = self._workdir_file(tmp_path, "processed/test.pdf")
 
         with patch("app.api.process.upload_to_onedrive") as mock_task:
             mock_task.delay.return_value = Mock(id="test-task-id")
@@ -144,6 +143,7 @@ class TestProcessEndpoints:
             data = response.json()
             assert data["task_id"] == "test-task-id"
             assert data["status"] == "queued"
+            mock_task.delay.assert_called_once_with(str(test_file))
 
     def test_send_to_all_destinations_file_not_found(self, client):
         """Test POST /api/send_to_all_destinations/ with non-existent file."""
@@ -152,9 +152,7 @@ class TestProcessEndpoints:
 
     def test_send_to_all_destinations_success(self, client, tmp_path):
         """Test POST /api/send_to_all_destinations/ with existing file."""
-        test_file = tmp_path / "processed" / "test.pdf"
-        test_file.parent.mkdir(parents=True)
-        test_file.write_text("test content")
+        test_file = self._workdir_file(tmp_path, "processed/test.pdf")
 
         with patch("app.api.process.send_to_all_destinations") as mock_task:
             mock_task.delay.return_value = Mock(id="test-task-id")
@@ -164,6 +162,7 @@ class TestProcessEndpoints:
             assert data["task_id"] == "test-task-id"
             assert data["status"] == "queued"
             assert data["file_path"] == str(test_file)
+            mock_task.delay.assert_called_once_with(str(test_file))
 
     def test_processall_endpoint_empty_dir(self, client, tmp_path):
         """Test POST /api/processall with no PDF files in workdir."""

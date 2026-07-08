@@ -1,0 +1,14 @@
+{
+  "filename": "invoice-acme-2026-00042.pdf",
+  "file_type": "application/pdf",
+  "document_type": "invoice",
+  "size": 348160,
+  "metadata": {
+    "vendor": "Acme Supplies GmbH",
+    "invoice_number": "2026-00042",
+    "invoice_date": "2026-06-30",
+    "total": "1842.15",
+    "currency": "EUR",
+    "due_date": "2026-07-30"
+  }
+}

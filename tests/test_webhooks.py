@@ -5,12 +5,12 @@ import hmac
 import json
 import socket
 import time
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from urllib.parse import urlparse
 
 import pytest
 
-from app.models import WebhookConfig
+from app.models import FileRecord, Pipeline, WebhookConfig, WebhookDeliveryAttempt
 from app.utils.webhook import (
     _send_pinned_post,
     build_payload,
@@ -18,6 +18,7 @@ from app.utils.webhook import (
     deliver_webhook,
     dispatch_webhook_event,
     get_active_webhooks_for_event,
+    verify_signature,
 )
 
 # ---------------------------------------------------------------------------
@@ -47,6 +48,35 @@ class TestComputeSignature:
         """Different secrets must produce different signatures."""
         payload = b"same"
         assert compute_signature(payload, "secret1") != compute_signature(payload, "secret2")
+
+
+# ---------------------------------------------------------------------------
+# Unit tests – verify_signature
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestVerifySignature:
+    """Tests for webhook signature verification."""
+
+    def test_valid_signature_returns_true(self):
+        """The verifier accepts signatures produced by compute_signature."""
+        payload = b'{"event":"document.processed"}'
+        signature = compute_signature(payload, "secret")
+
+        assert verify_signature(payload, "secret", signature) is True
+
+    def test_invalid_signature_returns_false(self):
+        """The verifier rejects signatures for a different secret or payload."""
+        payload = b'{"event":"document.processed"}'
+        signature = compute_signature(payload, "other-secret")
+
+        assert verify_signature(payload, "secret", signature) is False
+
+    @pytest.mark.parametrize("signature", [None, "", "bad", "sha1=abc"])
+    def test_malformed_signature_returns_false(self, signature):
+        """Missing or malformed signatures are rejected."""
+        assert verify_signature(b"{}", "secret", signature) is False
 
 
 # ---------------------------------------------------------------------------
@@ -334,6 +364,77 @@ class TestWebhookAPI:
         assert data["has_secret"] is True
         assert "secret" not in data  # secret must not be exposed
 
+    @patch("app.api.webhooks.process_document.delay")
+    def test_inbound_pipeline_trigger_assigns_profile_and_queues_work(self, mock_delay, client, db_session, tmp_path):
+        """Inbound triggers validate file/pipeline access before queueing processing."""
+        source_file = tmp_path / "inbound.pdf"
+        source_file.write_bytes(b"%PDF-1.4")
+        pipeline = Pipeline(owner_id="anonymous", name="Inbound")
+        file_record = FileRecord(
+            owner_id=None,
+            filehash="hash-inbound",
+            original_filename="inbound.pdf",
+            local_filename=str(source_file),
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add_all([pipeline, file_record])
+        db_session.commit()
+        mock_delay.return_value = Mock(id="task-inbound")
+
+        resp = client.post(
+            f"/api/webhooks/inbound/pipelines/{pipeline.id}/trigger",
+            json={"file_id": file_record.id, "force_cloud_ocr": True, "event_id": "evt-123"},
+        )
+
+        assert resp.status_code == 202
+        assert resp.json() == {
+            "status": "queued",
+            "file_id": file_record.id,
+            "pipeline_id": pipeline.id,
+            "task_id": "task-inbound",
+        }
+        db_session.refresh(file_record)
+        assert file_record.pipeline_id == pipeline.id
+        assert file_record.pipeline_assignment_source == "inbound_webhook"
+        assert "evt-123" in file_record.pipeline_assignment_reason
+        mock_delay.assert_called_once_with(
+            str(source_file),
+            original_filename="inbound.pdf",
+            file_id=file_record.id,
+            force_cloud_ocr=True,
+            owner_id=None,
+        )
+
+    def test_inbound_pipeline_trigger_rejects_missing_file(self, client, db_session):
+        """Inbound triggers reject unknown documents."""
+        pipeline = Pipeline(owner_id="anonymous", name="Inbound")
+        db_session.add(pipeline)
+        db_session.commit()
+
+        resp = client.post(f"/api/webhooks/inbound/pipelines/{pipeline.id}/trigger", json={"file_id": 99999})
+
+        assert resp.status_code == 404
+
+    def test_inbound_pipeline_trigger_rejects_missing_local_file(self, client, db_session):
+        """Inbound triggers do not queue work when the document file is unavailable."""
+        pipeline = Pipeline(owner_id="anonymous", name="Inbound")
+        file_record = FileRecord(
+            owner_id=None,
+            filehash="hash-missing",
+            original_filename="missing.pdf",
+            local_filename="/nonexistent/missing.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add_all([pipeline, file_record])
+        db_session.commit()
+
+        resp = client.post(f"/api/webhooks/inbound/pipelines/{pipeline.id}/trigger", json={"file_id": file_record.id})
+
+        assert resp.status_code == 409
+        assert resp.json()["detail"] == "Local file not found on disk. Cannot trigger pipeline."
+
     def test_list_webhooks(self, client, db_session):
         """GET /api/webhooks/ returns all webhooks."""
         self._with_admin(client)
@@ -350,6 +451,87 @@ class TestWebhookAPI:
         assert resp.status_code == 200
         items = resp.json()
         assert any(w["url"] == "https://list.example.com/hook" for w in items)
+
+    def test_list_delivery_attempts(self, client, db_session):
+        """GET /api/webhooks/delivery-attempts/ returns recent persisted deliveries."""
+        self._with_admin(client)
+        attempt = WebhookDeliveryAttempt(
+            url="https://list.example.com/hook",
+            event="document.processed",
+            payload=json.dumps({"event": "document.processed"}),
+            status="failed",
+            attempt_number=2,
+            error="timeout",
+        )
+        db_session.add(attempt)
+        db_session.commit()
+
+        resp = client.get("/api/webhooks/delivery-attempts/?status=failed")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["url"] == "https://list.example.com/hook"
+        assert data[0]["event"] == "document.processed"
+        assert data[0]["status"] == "failed"
+        assert "payload" not in data[0]
+
+    def test_event_catalog_returns_versioned_samples(self, client):
+        """GET /api/webhooks/event-catalog/ describes supported events."""
+        self._with_admin(client)
+
+        resp = client.get("/api/webhooks/event-catalog/")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["payload_version"] == "1.0"
+        processed = next(event for event in data["events"] if event["event"] == "document.processed")
+        assert processed["payload_version"] == "1.0"
+        assert processed["sample_payload"]["event"] == "document.processed"
+        assert processed["sample_payload"]["data"]["file_id"] == 42
+
+    def test_replay_delivery_attempt_queues_current_webhook_config(self, client, db_session, mocker):
+        """POST /api/webhooks/delivery-attempts/{id}/replay queues a new attempt."""
+        self._with_admin(client)
+        mock_task = mocker.patch("app.api.webhooks.deliver_webhook_task.delay")
+        mock_task.return_value = Mock(id="task-replay")
+        cfg = WebhookConfig(
+            url="https://current.example.com/hook",
+            secret="current-secret",
+            events=json.dumps(["document.processed"]),
+            is_active=True,
+        )
+        db_session.add(cfg)
+        db_session.commit()
+        attempt = WebhookDeliveryAttempt(
+            webhook_config_id=cfg.id,
+            url="https://old.example.com/hook",
+            event="document.processed",
+            payload=json.dumps({"event": "document.processed", "data": {"file_id": 42}}),
+            status="failed",
+            attempt_number=1,
+            error="timeout",
+        )
+        db_session.add(attempt)
+        db_session.commit()
+
+        resp = client.post(f"/api/webhooks/delivery-attempts/{attempt.id}/replay")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "queued"
+        assert data["replay_of"] == attempt.id
+        assert data["task_id"] == "task-replay"
+        replay = db_session.query(WebhookDeliveryAttempt).filter(WebhookDeliveryAttempt.id == data["delivery_id"]).one()
+        assert replay.status == "queued"
+        assert replay.url == "https://current.example.com/hook"
+        mock_task.assert_called_once_with(
+            "https://current.example.com/hook",
+            {"event": "document.processed", "data": {"file_id": 42}},
+            "current-secret",
+            cfg.id,
+            replay.id,
+        )
 
     def test_get_webhook(self, client, db_session):
         """GET /api/webhooks/{id} returns a single webhook."""
@@ -507,26 +689,73 @@ class TestWebhookAPI:
 class TestDeliverWebhookTask:
     """Tests for the Celery webhook delivery task."""
 
-    def test_success_returns_status_dict(self, mocker):
+    def test_success_returns_status_dict(self, mocker, db_session):
         """Task returns a dict on successful delivery."""
         mocker.patch("app.tasks.webhook_tasks.deliver_webhook", return_value=True)
+        mocker.patch("app.tasks.webhook_tasks.SessionLocal", return_value=db_session)
 
         from app.tasks.webhook_tasks import deliver_webhook_task
 
         # Mock the task's request context for the log line
         deliver_webhook_task.request.retries = 0
+        deliver_webhook_task.request.id = "task-success"
 
-        result = deliver_webhook_task.__wrapped__("https://example.com/hook", {"event": "test"}, None)
+        result = deliver_webhook_task.__wrapped__("https://example.com/hook", {"event": "test"}, None, 123)
         assert result["status"] == "delivered"
         assert result["url"] == "https://example.com/hook"
+        attempt = db_session.query(WebhookDeliveryAttempt).one()
+        assert attempt.task_id == "task-success"
+        assert attempt.webhook_config_id == 123
+        assert attempt.status == "delivered"
+        assert attempt.event == "test"
 
-    def test_failure_raises_for_retry(self, mocker):
+    def test_failure_raises_for_retry(self, mocker, db_session):
         """Task raises RuntimeError on delivery failure to trigger retry."""
         mocker.patch("app.tasks.webhook_tasks.deliver_webhook", return_value=False)
+        mocker.patch("app.tasks.webhook_tasks.SessionLocal", return_value=db_session)
 
         from app.tasks.webhook_tasks import deliver_webhook_task
 
         deliver_webhook_task.request.retries = 0
+        deliver_webhook_task.request.id = "task-failure"
 
         with pytest.raises(RuntimeError, match="Webhook delivery.*failed"):
             deliver_webhook_task.__wrapped__("https://example.com/hook", {"event": "test"}, None)
+        attempt = db_session.query(WebhookDeliveryAttempt).one()
+        assert attempt.task_id == "task-failure"
+        assert attempt.status == "failed"
+        assert "failed" in attempt.error
+
+    def test_final_failure_logs_dead_letter_context(self, mocker):
+        """After retry exhaustion, webhook failures are logged with dead-letter context."""
+        mock_logger = mocker.patch("app.tasks.webhook_tasks.logger")
+        mock_record = mocker.patch("app.tasks.webhook_tasks._record_delivery_attempt")
+
+        from app.tasks.webhook_tasks import deliver_webhook_task
+
+        deliver_webhook_task.on_failure(
+            RuntimeError("delivery failed"),
+            "task-dead",
+            ("https://example.com/hook", {"event": "document.failed"}, None, 123, 456),
+            {},
+            None,
+        )
+
+        mock_record.assert_called_once_with(
+            url="https://example.com/hook",
+            payload={"event": "document.failed"},
+            status="dead_lettered",
+            attempt_number=deliver_webhook_task.max_retries + 1,
+            task_id="task-dead",
+            webhook_config_id=123,
+            delivery_id=456,
+            error="delivery failed",
+        )
+        mock_logger.error.assert_called_once_with(
+            "Webhook delivery dead-lettered: task_id=%s url=%s event=%s attempts=%d error=%s",
+            "task-dead",
+            "https://example.com/hook",
+            "document.failed",
+            deliver_webhook_task.max_retries + 1,
+            mocker.ANY,
+        )

@@ -1,6 +1,6 @@
 """Tests for app/api/user.py module."""
 
-from hashlib import md5
+from hashlib import sha256
 from unittest.mock import MagicMock
 
 import pytest
@@ -27,7 +27,7 @@ class TestWhoamiHandler:
         assert result["id"] == "1"
         assert result["name"] == "Test"
         # Should have gravatar URL since no custom avatar
-        expected_hash = md5(email.encode(), usedforsecurity=False).hexdigest()
+        expected_hash = sha256(email.encode()).hexdigest()
         assert result["picture"] == f"https://www.gravatar.com/avatar/{expected_hash}?d=identicon"
 
     @pytest.mark.asyncio
@@ -83,7 +83,7 @@ class TestWhoamiHandler:
         mock_db.query.side_effect = Exception("DB error")
 
         result = await whoami_handler(mock_request, mock_db)
-        expected_hash = md5(email.encode(), usedforsecurity=False).hexdigest()
+        expected_hash = sha256(email.encode()).hexdigest()
         assert result["picture"] == f"https://www.gravatar.com/avatar/{expected_hash}?d=identicon"
 
 

@@ -52,8 +52,7 @@
               type="button"
               @click="createFromPreset(preset)"
               :disabled="preset._creating"
-              class="inline-flex shrink-0 items-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-              style="min-height:36px;"
+              class="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center rounded-md bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60"
               :aria-label="i18n.createPreset.replace('{name}', preset.name)"
             >
               <template x-if="preset._creating">
@@ -81,21 +80,21 @@
         <input type="text"
                x-model="routingTest.form.filename"
                class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
-               placeholder="invoice_2026.pdf">
+               placeholder="{{ _('pipelines.routing_filename_placeholder') }}">
       </label>
       <label class="block">
         <span class="text-xs font-medium text-gray-700">{{ _("pipelines.routing_file_type") }}</span>
         <input type="text"
                x-model="routingTest.form.file_type"
                class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
-               placeholder="application/pdf">
+               placeholder="{{ _('pipelines.routing_file_type_placeholder') }}">
       </label>
       <label class="block">
         <span class="text-xs font-medium text-gray-700">{{ _("pipelines.routing_document_type") }}</span>
         <input type="text"
                x-model="routingTest.form.document_type"
                class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
-               placeholder="invoice">
+               placeholder="{{ _('pipelines.routing_document_type_placeholder') }}">
       </label>
       <label class="block">
         <span class="text-xs font-medium text-gray-700">{{ _("pipelines.routing_size") }}</span>
@@ -103,7 +102,7 @@
                min="0"
                x-model="routingTest.form.size"
                class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
-               placeholder="1048576">
+               placeholder="{{ _('pipelines.routing_size_placeholder') }}">
       </label>
       <div class="flex items-end">
         <button type="submit"
@@ -120,10 +119,16 @@
         <textarea x-model="routingTest.form.metadata"
                   rows="2"
                   class="mt-1 w-full rounded-md border-gray-300 font-mono text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  placeholder='{"vendor":"Acme","total":"42.00"}'></textarea>
+                  placeholder="{{ _('pipelines.routing_metadata_placeholder') }}"></textarea>
       </label>
     </form>
-    <div x-show="routingTest.error" class="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" x-text="routingTest.error"></div>
+    <div
+      x-show="routingTest.error"
+      class="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
+      x-text="routingTest.error"
+      role="alert"
+      aria-live="assertive"
+    ></div>
     <div x-show="routingTest.result" class="mt-3 rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-700">
       <template x-if="routingTest.result && routingTest.result.matched">
         <p>
@@ -652,6 +657,10 @@ function pipelinesApp() {
       expandSettings: {{ _("pipelines.expand_settings_aria") | tojson }},
       profileMetadata: {{ _("pipelines.profile_metadata") | tojson }},
       createPreset: {{ _("pipelines.create_preset_aria") | tojson }},
+      presetCreatedTitle: {{ _("pipelines.preset_created_title") | tojson }},
+      presetCreatedMessage: {{ _("pipelines.preset_created_message") | tojson }},
+      presetFailedTitle: {{ _("pipelines.preset_failed_title") | tojson }},
+      presetFailedDefault: {{ _("pipelines.preset_failed_default") | tojson }},
       presetSteps: {{ _("pipelines.preset_steps") | tojson }},
       routingMetadataError: {{ _("pipelines.routing_metadata_error") | tojson }},
       routingMissingTarget: {{ _("pipelines.routing_missing_target") | tojson }},
@@ -886,13 +895,17 @@ function pipelinesApp() {
         });
         if (!r.ok) {
           const e = await r.json().catch(() => ({}));
-          throw new Error(e.detail || `HTTP ${r.status}`);
+          throw new Error(e.detail || this.i18n.presetFailedDefault);
         }
         const created = await r.json();
         this.pipelines.push({ ...created, steps: created.steps || [], _expanded: true });
-        this.showAlert('success', 'Profile created', `"${created.name}" has been created from a preset.`);
+        this.showAlert(
+          'success',
+          this.i18n.presetCreatedTitle,
+          this.i18n.presetCreatedMessage.replace('{name}', created.name),
+        );
       } catch (err) {
-        this.showAlert('error', 'Preset failed', err.message || String(err));
+        this.showAlert('error', this.i18n.presetFailedTitle, err.message || String(err));
       } finally {
         preset._creating = false;
       }

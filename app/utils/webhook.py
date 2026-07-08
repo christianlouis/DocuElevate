@@ -29,6 +29,9 @@ from app.models import WebhookConfig
 
 logger = logging.getLogger(__name__)
 
+#: Version for the outbound webhook payload envelope.
+WEBHOOK_PAYLOAD_VERSION = "1.0"
+
 #: Events recognised by the webhook subsystem.
 VALID_EVENTS: frozenset[str] = frozenset(
     {
@@ -151,6 +154,18 @@ def compute_signature(payload_bytes: bytes, secret: str) -> str:
     return f"sha256={mac.hexdigest()}"
 
 
+def verify_signature(payload_bytes: bytes, secret: str, signature: str | None) -> bool:
+    """Return whether *signature* matches *payload_bytes* for *secret*.
+
+    The comparison is constant-time and accepts the same ``sha256=<digest>``
+    value that DocuElevate sends in ``X-Webhook-Signature``.
+    """
+    if not signature or not signature.startswith("sha256="):
+        return False
+    expected = compute_signature(payload_bytes, secret)
+    return hmac.compare_digest(expected, signature)
+
+
 def deliver_webhook(url: str, payload: dict[str, Any], secret: str | None = None) -> bool:
     """Send a single webhook POST request.
 
@@ -187,6 +202,10 @@ def deliver_webhook(url: str, payload: dict[str, Any], secret: str | None = None
     body_bytes = body.encode("utf-8")
 
     headers: dict[str, str] = {"Content-Type": "application/json"}
+    if payload.get("event"):
+        headers["X-DocuElevate-Event"] = str(payload["event"])
+    if payload.get("version"):
+        headers["X-DocuElevate-Webhook-Version"] = str(payload["version"])
     if secret:
         headers["X-Webhook-Signature"] = compute_signature(body_bytes, secret)
 
@@ -213,6 +232,7 @@ def build_payload(event: str, data: dict[str, Any]) -> dict[str, Any]:
         Dictionary with ``event``, ``timestamp``, and ``data`` keys.
     """
     return {
+        "version": WEBHOOK_PAYLOAD_VERSION,
         "event": event,
         "timestamp": time.time(),
         "data": data,
@@ -282,7 +302,7 @@ def dispatch_webhook_event(event: str, data: dict[str, Any]) -> None:
 
         for wh in webhooks:
             try:
-                deliver_webhook_task.delay(wh["url"], payload, wh["secret"])
+                deliver_webhook_task.delay(wh["url"], payload, wh["secret"], webhook_config_id=wh.get("id"))
                 logger.debug("Queued webhook delivery to %s for event %s", wh["url"], event)
             except Exception as exc:
                 logger.error("Failed to queue webhook to %s: %s", wh["url"], exc)

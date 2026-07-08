@@ -68,6 +68,7 @@ from app.models import (  # noqa: F401, E402
     DocumentAnnotation,
     DocumentComment,
     DocumentMetadata,
+    DocumentReviewItem,
     FileRecord,
     FileShare,
     Pipeline,
@@ -80,6 +81,7 @@ from app.models import (  # noqa: F401, E402
     UserIntegration,
     UserProfile,
     WebhookConfig,
+    WebhookDeliveryAttempt,
 )
 
 

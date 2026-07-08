@@ -3,7 +3,7 @@ User-related API endpoints
 """
 
 import logging
-from hashlib import md5
+from hashlib import sha256
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -35,8 +35,8 @@ async def whoami_handler(request: Request, db: Session):
         raise HTTPException(status_code=400, detail="User has no email in session")
 
     # Generate Gravatar URL from email
-    # MD5 is used here for Gravatar's URL generation (not for security), so usedforsecurity=False
-    email_hash = md5(email.strip().lower().encode(), usedforsecurity=False).hexdigest()
+    # SHA-256 is recommended by Gravatar for new integrations.
+    email_hash = sha256(email.strip().lower().encode()).hexdigest()
     gravatar_url = f"https://www.gravatar.com/avatar/{email_hash}?d=identicon"
 
     # Add the gravatar URL to the user object instead of creating a new response
