@@ -438,13 +438,6 @@
     container.innerHTML = html;
   }
 
-  function escapeHtml(str) {
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
 
   // Pre-fill file ID from query string (e.g. /duplicates?file_id=42&tab=near)
   (function () {

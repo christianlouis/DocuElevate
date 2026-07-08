@@ -31,3 +31,8 @@
 **Vulnerability:** A DOM-based Cross-Site Scripting (XSS) vulnerability existed in `frontend/templates/queue_dashboard.html` due to a locally defined `escapeHtml` function that relied on `document.createElement('div').textContent` and `.innerHTML`. This method fails to escape quotes (both single and double), allowing attackers to break out of HTML attributes (e.g., `title="${escapeHtml(t.args)}"`) and execute arbitrary JavaScript.
 **Learning:** Locally redefining security-critical functions like HTML sanitizers is risky. Furthermore, using DOM manipulation (`textContent` to `innerHTML`) for sanitization is insufficient for attribute contexts where quotes must be escaped.
 **Prevention:** Rely on a centralized, robust escaping function (such as `window.escapeHtml` in `common.js`) that uses regex to escape all dangerous characters (`<`, `>`, `&`, `"`, `'`). Do not redefine sanitization logic locally within templates.
+
+## 2026-07-08 - [Fix DOM-based XSS by unifying escapeHtml]
+**Vulnerability:** A DOM-based Cross-Site Scripting (XSS) vulnerability existed in several templates because they used a locally defined `escapeHtml` function that did not properly escape quotes or fell out of sync with the global standard. This allowed attackers to break out of HTML attributes in contexts like `queue_dashboard.html`.
+**Learning:** Locally redefining security-critical functions like HTML sanitizers is risky. They can fail to properly escape attributes or become out-of-date compared to centralized functions.
+**Prevention:** Rely on a centralized, robust escaping function (such as `window.escapeHtml` in `common.js`) that uses regex to escape all dangerous characters (`<`, `>`, `&`, `"`, `'`). Do not redefine sanitization logic locally within templates.
