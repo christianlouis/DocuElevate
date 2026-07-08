@@ -208,6 +208,25 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
                     db.commit()
                     logger.info(f"[{task_id}] Updated database with processed_file_path and search fields")
 
+                    if metadata:
+                        try:
+                            from app.utils.webhook import dispatch_webhook_event
+
+                            dispatch_webhook_event(
+                                "document.metadata_updated",
+                                {
+                                    "file_id": file_record.id,
+                                    "filename": file_record.original_filename,
+                                    "updated_fields": sorted(metadata.keys()),
+                                },
+                            )
+                        except Exception as webhook_exc:
+                            logger.warning(
+                                "[%s] Failed to dispatch document.metadata_updated webhook: %s",
+                                task_id,
+                                webhook_exc,
+                            )
+
                     # Index into Meilisearch for full-text search (non-blocking, best-effort)
                     try:
                         from app.utils.meilisearch_client import index_document

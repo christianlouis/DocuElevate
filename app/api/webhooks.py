@@ -2,7 +2,8 @@
 
 Provides CRUD operations for webhook configs that notify external systems
 when document events occur (``document.uploaded``, ``document.processed``,
-``document.failed``).
+``document.failed``, ``document.routed``, and
+``document.metadata_updated``).
 """
 
 import json
@@ -103,6 +104,18 @@ _WEBHOOK_EVENT_SAMPLE_DATA: dict[str, dict[str, Any]] = {
     "document.uploaded": {"file_id": 42, "filename": "invoice.pdf", "owner_id": "user@example.com"},
     "document.processed": {"file_id": 42, "filename": "invoice.pdf", "status": "completed"},
     "document.failed": {"file_id": 42, "filename": "invoice.pdf", "error": "OCR provider unavailable"},
+    "document.routed": {
+        "file_id": 42,
+        "filename": "invoice.pdf",
+        "pipeline_id": 7,
+        "assignment_source": "routing_rule",
+        "routing_rule_id": 3,
+    },
+    "document.metadata_updated": {
+        "file_id": 42,
+        "filename": "invoice.pdf",
+        "updated_fields": ["tags", "document_type"],
+    },
     "user.signup": {"user_id": "user@example.com", "email": "user@example.com"},
     "user.plan_changed": {"user_id": "user@example.com", "old_tier": "free", "new_tier": "starter"},
     "user.payment_issue": {"user_id": "user@example.com", "issue": "Card declined"},

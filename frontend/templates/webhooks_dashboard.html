@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+
+{% block title %}Webhooks - DocuElevate{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="webhooksDashboard()" x-init="init()">
+  <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div>
+      <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Webhooks</h1>
+      <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Manage signed outbound endpoints and delivery retries.</p>
+    </div>
+    <button type="button"
+            class="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            @click="startCreate()">
+      <i class="fas fa-plus mr-2" aria-hidden="true"></i>
+      Add endpoint
+    </button>
+  </div>
+
+  <div x-show="toast"
+       x-cloak
+       class="mt-4 rounded-md border px-4 py-3 text-sm"
+       :class="toastType === 'error' ? 'border-red-300 bg-red-50 text-red-800 dark:border-red-700 dark:bg-red-950 dark:text-red-200' : 'border-green-300 bg-green-50 text-green-800 dark:border-green-700 dark:bg-green-950 dark:text-green-200'"
+       x-text="toast"></div>
+
+  <div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+    <section class="lg:col-span-2">
+      <div class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-700">
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">Configured endpoints</h2>
+        </div>
+        <div class="divide-y divide-gray-200 dark:divide-gray-700">
+          <template x-if="loading">
+            <div class="px-5 py-8 text-sm text-gray-500 dark:text-gray-400">Loading endpoints...</div>
+          </template>
+          <template x-if="!loading && webhooks.length === 0">
+            <div class="px-5 py-8 text-sm text-gray-500 dark:text-gray-400">No webhook endpoints configured.</div>
+          </template>
+          <template x-for="hook in webhooks" :key="hook.id">
+            <article class="px-5 py-4">
+              <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h3 class="truncate text-sm font-semibold text-gray-900 dark:text-white" x-text="hook.description || hook.url"></h3>
+                    <span class="rounded px-2 py-0.5 text-xs font-medium"
+                          :class="hook.is_active ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'"
+                          x-text="hook.is_active ? 'Active' : 'Paused'"></span>
+                    <span x-show="hook.has_secret"
+                          class="rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-200">Signed</span>
+                  </div>
+                  <p class="mt-1 break-all font-mono text-xs text-gray-500 dark:text-gray-400" x-text="hook.url"></p>
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <template x-for="event in hook.events" :key="event">
+                      <span class="rounded bg-gray-100 px-2 py-1 font-mono text-xs text-gray-700 dark:bg-gray-700 dark:text-gray-200" x-text="event"></span>
+                    </template>
+                  </div>
+                </div>
+                <div class="flex shrink-0 gap-2">
+                  <button type="button"
+                          class="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+                          @click="startEdit(hook)">
+                    <i class="fas fa-pen" aria-hidden="true"></i>
+                    <span class="sr-only">Edit</span>
+                  </button>
+                  <button type="button"
+                          class="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-200 dark:hover:bg-red-950"
+                          @click="deleteHook(hook)">
+                    <i class="fas fa-trash" aria-hidden="true"></i>
+                    <span class="sr-only">Delete</span>
+                  </button>
+                </div>
+              </div>
+            </article>
+          </template>
+        </div>
+      </div>
+
+      <div class="mt-6 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-700">
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">Recent deliveries</h2>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
+            <thead class="bg-gray-50 dark:bg-gray-900">
+              <tr>
+                <th class="px-5 py-3 text-left font-medium text-gray-500 dark:text-gray-300">Event</th>
+                <th class="px-5 py-3 text-left font-medium text-gray-500 dark:text-gray-300">Status</th>
+                <th class="px-5 py-3 text-left font-medium text-gray-500 dark:text-gray-300">Endpoint</th>
+                <th class="px-5 py-3 text-right font-medium text-gray-500 dark:text-gray-300">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+              <template x-if="deliveries.length === 0">
+                <tr><td colspan="4" class="px-5 py-6 text-gray-500 dark:text-gray-400">No delivery attempts recorded.</td></tr>
+              </template>
+              <template x-for="delivery in deliveries" :key="delivery.id">
+                <tr>
+                  <td class="px-5 py-3 font-mono text-xs text-gray-700 dark:text-gray-200" x-text="delivery.event"></td>
+                  <td class="px-5 py-3">
+                    <span class="rounded px-2 py-1 text-xs font-medium"
+                          :class="delivery.status === 'delivered' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'"
+                          x-text="delivery.status"></span>
+                  </td>
+                  <td class="max-w-xs truncate px-5 py-3 font-mono text-xs text-gray-500 dark:text-gray-400" x-text="delivery.url"></td>
+                  <td class="px-5 py-3 text-right">
+                    <button type="button"
+                            class="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-300"
+                            @click="replay(delivery)">
+                      Replay
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <aside class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <h2 class="text-base font-semibold text-gray-900 dark:text-white" x-text="editingId ? 'Edit endpoint' : 'New endpoint'"></h2>
+      <form class="mt-5 space-y-4" @submit.prevent="saveHook()">
+        <div>
+          <label for="webhook-description" class="block text-sm font-medium text-gray-700 dark:text-gray-200">Description</label>
+          <input id="webhook-description" x-model="form.description" type="text" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+        </div>
+        <div>
+          <label for="webhook-url" class="block text-sm font-medium text-gray-700 dark:text-gray-200">Target URL</label>
+          <input id="webhook-url" x-model="form.url" type="url" required class="mt-1 w-full rounded-md border-gray-300 font-mono text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+        </div>
+        <div>
+          <label for="webhook-secret" class="block text-sm font-medium text-gray-700 dark:text-gray-200">Signing secret</label>
+          <input id="webhook-secret" x-model="form.secret" type="password" autocomplete="new-password" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Leave empty while editing to keep the current secret.</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Events</label>
+          <div class="mt-2 max-h-56 space-y-2 overflow-auto rounded-md border border-gray-200 p-3 dark:border-gray-700">
+            <template x-for="event in events" :key="event">
+              <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                <input type="checkbox" class="rounded border-gray-300 text-blue-600" :value="event" x-model="form.events">
+                <span class="font-mono text-xs" x-text="event"></span>
+              </label>
+            </template>
+          </div>
+        </div>
+        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+          <input type="checkbox" class="rounded border-gray-300 text-blue-600" x-model="form.is_active">
+          Active
+        </label>
+        <div class="flex gap-2">
+          <button type="submit" class="inline-flex flex-1 items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <i class="fas fa-save mr-2" aria-hidden="true"></i>
+            Save
+          </button>
+          <button type="button" class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 dark:border-gray-600 dark:text-gray-200" @click="resetForm()">Cancel</button>
+        </div>
+      </form>
+    </aside>
+  </div>
+</div>
+
+<script>
+function webhooksDashboard() {
+  return {
+    webhooks: [],
+    deliveries: [],
+    events: [],
+    loading: true,
+    editingId: null,
+    toast: '',
+    toastType: 'success',
+    form: { url: '', description: '', secret: '', events: [], is_active: true },
+    async init() {
+      await Promise.all([this.loadEvents(), this.loadWebhooks(), this.loadDeliveries()]);
+    },
+    notify(message, type = 'success') {
+      this.toast = message;
+      this.toastType = type;
+      setTimeout(() => { this.toast = ''; }, 4000);
+    },
+    async loadEvents() {
+      const response = await fetch('/api/webhooks/events/');
+      if (response.ok) this.events = await response.json();
+    },
+    async loadWebhooks() {
+      this.loading = true;
+      const response = await fetch('/api/webhooks/');
+      this.webhooks = response.ok ? await response.json() : [];
+      this.loading = false;
+    },
+    async loadDeliveries() {
+      const response = await fetch('/api/webhooks/delivery-attempts/?limit=25');
+      this.deliveries = response.ok ? await response.json() : [];
+    },
+    startCreate() {
+      this.resetForm();
+      document.getElementById('webhook-url').focus();
+    },
+    startEdit(hook) {
+      this.editingId = hook.id;
+      this.form = {
+        url: hook.url,
+        description: hook.description || '',
+        secret: '',
+        events: [...hook.events],
+        is_active: hook.is_active,
+      };
+      document.getElementById('webhook-url').focus();
+    },
+    resetForm() {
+      this.editingId = null;
+      this.form = { url: '', description: '', secret: '', events: [], is_active: true };
+    },
+    payload() {
+      const data = {
+        url: this.form.url,
+        description: this.form.description || null,
+        events: this.form.events,
+        is_active: this.form.is_active,
+      };
+      if (this.form.secret) data.secret = this.form.secret;
+      return data;
+    },
+    async saveHook() {
+      if (this.form.events.length === 0) {
+        this.notify('Select at least one event.', 'error');
+        return;
+      }
+      const url = this.editingId ? `/api/webhooks/${this.editingId}` : '/api/webhooks/';
+      const response = await fetch(url, {
+        method: this.editingId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.payload()),
+      });
+      if (!response.ok) {
+        this.notify('Webhook endpoint could not be saved.', 'error');
+        return;
+      }
+      await this.loadWebhooks();
+      this.resetForm();
+      this.notify('Webhook endpoint saved.');
+    },
+    async deleteHook(hook) {
+      if (!confirm(`Delete webhook endpoint ${hook.url}?`)) return;
+      const response = await fetch(`/api/webhooks/${hook.id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        this.notify('Webhook endpoint could not be deleted.', 'error');
+        return;
+      }
+      await this.loadWebhooks();
+      this.notify('Webhook endpoint deleted.');
+    },
+    async replay(delivery) {
+      const response = await fetch(`/api/webhooks/delivery-attempts/${delivery.id}/replay`, { method: 'POST' });
+      if (!response.ok) {
+        this.notify('Delivery could not be replayed.', 'error');
+        return;
+      }
+      await this.loadDeliveries();
+      this.notify('Delivery replay queued.');
+    },
+  };
+}
+</script>
+{% endblock %}

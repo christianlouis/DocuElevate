@@ -3062,14 +3062,18 @@ class TestBulkTagFiles:
         db_session.add_all(files)
         db_session.commit()
 
-        response = client.post(
-            "/api/files/bulk-tag",
-            json={"file_ids": [file.id for file in files], "tags": ["Finance", " urgent ", "urgent"]},
-        )
+        with patch("app.utils.webhook.dispatch_webhook_event") as dispatch:
+            response = client.post(
+                "/api/files/bulk-tag",
+                json={"file_ids": [file.id for file in files], "tags": ["Finance", " urgent ", "urgent"]},
+            )
 
         assert response.status_code == 200
         data = response.json()
         assert data["updated_count"] == 2
+        assert dispatch.call_count == 2
+        assert {call.args[0] for call in dispatch.call_args_list} == {"document.metadata_updated"}
+        assert all(call.args[1]["updated_fields"] == ["tags"] for call in dispatch.call_args_list)
         assert data["bulk_action"] == {
             "action": "tag",
             "state": "completed",

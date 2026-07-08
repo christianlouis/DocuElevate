@@ -736,6 +736,22 @@ def bulk_tag_files(request: Request, body: BulkTagRequest, db: DbSession):
 
         db.commit()
 
+        try:
+            from app.utils.webhook import dispatch_webhook_event
+
+            for file_record in file_records:
+                dispatch_webhook_event(
+                    "document.metadata_updated",
+                    {
+                        "file_id": file_record.id,
+                        "filename": file_record.original_filename,
+                        "updated_fields": ["tags"],
+                        "mode": body.mode,
+                    },
+                )
+        except Exception as webhook_exc:
+            logger.warning("Failed to dispatch document.metadata_updated webhook after bulk tag: %s", webhook_exc)
+
         logger.info("Bulk tag updated %d files using mode=%s tags=%s", len(updated_ids), body.mode, tags)
         return {
             "status": "success",
@@ -1933,4 +1949,20 @@ def assign_pipeline_to_file(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to assign pipeline")
 
     logger.info(f"Pipeline {pipeline_id!r} assigned to file id={file_id}")
+    try:
+        from app.utils.webhook import dispatch_webhook_event
+
+        dispatch_webhook_event(
+            "document.routed",
+            {
+                "file_id": file_record.id,
+                "filename": file_record.original_filename,
+                "pipeline_id": file_record.pipeline_id,
+                "assignment_source": file_record.pipeline_assignment_source,
+                "routing_rule_id": file_record.pipeline_routing_rule_id,
+                "reason": file_record.pipeline_assignment_reason,
+            },
+        )
+    except Exception as webhook_exc:
+        logger.warning("Failed to dispatch document.routed webhook after pipeline assignment: %s", webhook_exc)
     return {"file_id": file_id, "pipeline_id": file_record.pipeline_id}
