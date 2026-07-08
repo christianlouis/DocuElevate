@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.176.0 (2026-07-08)
+
+### Features
+
+- Complete webhook destination system
+  ([`8ccae5c`](https://github.com/christianlouis/DocuElevate/commit/8ccae5c296aa1c456b6a9be510f7ecda2f658414))
+
+
 ## v0.175.0 (2026-07-08)
 
 ### Documentation
