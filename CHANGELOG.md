@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.175.0 (2026-07-08)
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`2e9eb86`](https://github.com/christianlouis/DocuElevate/commit/2e9eb8617b580079b1d8ce2800dc91ef636895ef))
+
+- **changelog**: Update changelog [skip ci]
+  ([`7675ad2`](https://github.com/christianlouis/DocuElevate/commit/7675ad28162fc5433783e893c38ca31cba2c7b04))
+
+### Features
+
+- Close pipeline preset follow-up slice
+  ([`9424c1b`](https://github.com/christianlouis/DocuElevate/commit/9424c1bb16afc9c47be78b12490e9cffb970f923))
+
+
 ## Unreleased
 
 ### Documentation
