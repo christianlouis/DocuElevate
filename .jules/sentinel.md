@@ -36,3 +36,7 @@
 **Vulnerability:** A DOM-based Cross-Site Scripting (XSS) vulnerability existed in several templates because they used a locally defined `escapeHtml` function that did not properly escape quotes or fell out of sync with the global standard. This allowed attackers to break out of HTML attributes in contexts like `queue_dashboard.html`.
 **Learning:** Locally redefining security-critical functions like HTML sanitizers is risky. They can fail to properly escape attributes or become out-of-date compared to centralized functions.
 **Prevention:** Rely on a centralized, robust escaping function (such as `window.escapeHtml` in `common.js`) that uses regex to escape all dangerous characters (`<`, `>`, `&`, `"`, `'`). Do not redefine sanitization logic locally within templates.
+## 2026-07-09 - [Fix DOM-based XSS in search.html encodeActionValue]
+**Vulnerability:** A DOM-based Cross-Site Scripting (XSS) vulnerability existed in `frontend/templates/search.html` where `encodeActionValue` used `encodeURIComponent` which does not escape single quotes. Since the encoded value was injected into `onclick` attributes enclosed in single quotes, an attacker could break out of the string literal and execute arbitrary JavaScript.
+**Learning:** `encodeURIComponent` does not escape single quotes. If you inject its output into HTML attributes delimited by single quotes, it leads to XSS.
+**Prevention:** Explicitly escape single quotes after using `encodeURIComponent` by appending `.replace(/'/g, '%27')` when the value will be injected into single-quoted HTML attributes.
