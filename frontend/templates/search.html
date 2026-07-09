@@ -562,7 +562,8 @@
 
   function encodeActionValue(str) {
     if (str === null || str === undefined) return '';
-    return encodeURIComponent(String(str));
+    // encodeURIComponent doesn't escape single quotes, which are used to enclose the parameter in onclick handlers
+    return encodeURIComponent(String(str)).replace(/'/g, '%27');
   }
 
   function openSearchPreview(fileId, filename) {
