@@ -272,6 +272,16 @@
         <label for="filter-date-to">{{ _("search.filter_date_to") }}</label>
         <input type="date" id="filter-date-to" aria-label="{{ _('search.filter_aria_date_to') }}">
       </div>
+      <div class="search-filter-item">
+        <label for="filter-sort-by">{{ _("search.filter_sort_by") }}</label>
+        <select id="filter-sort-by" aria-label="{{ _('search.filter_sort_by') }}">
+          <option value="relevance">{{ _("search.filter_sort_relevance") }}</option>
+          <option value="created_at:desc">{{ _("search.filter_sort_newest") }}</option>
+          <option value="created_at:asc">{{ _("search.filter_sort_oldest") }}</option>
+          <option value="file_size:desc">{{ _("search.filter_sort_largest") }}</option>
+          <option value="confidence_score:desc">{{ _("search.filter_sort_confidence") }}</option>
+        </select>
+      </div>
       <div class="search-filter-item" style="align-self: flex-end;">
         <button type="button" id="clear-filters-btn" style="padding: 0.4rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; font-size: 0.8rem; cursor: pointer; background: white; color: #374151;" aria-label="{{ _('search.filter_aria_clear') }}">
           {{ _("search.filter_clear_button") }}
@@ -374,7 +384,8 @@
     routeAction: {{ _("search.bulk_route_action") | tojson }},
     clearRouteAction: {{ _("search.bulk_clear_route_action") | tojson }},
     open: {{ _("search.preview_open") | tojson }},
-    download: {{ _("search.bulk_download") | tojson }}
+    download: {{ _("search.bulk_download") | tojson }},
+    renamingSavedSearch: {{ _("search.saved_rename_prompt") | tojson }}
   };
   function formatSearchMessage(template, values) {
     return Object.keys(values).reduce(function(message, key) {
@@ -404,6 +415,7 @@
   const filterTextQuality = document.getElementById('filter-text-quality');
   const filterDateFrom   = document.getElementById('filter-date-from');
   const filterDateTo     = document.getElementById('filter-date-to');
+  const filterSortBy     = document.getElementById('filter-sort-by');
 
   let _debounce = null;
   let _currentPage = 1;
@@ -430,6 +442,19 @@
     if (df) filters.date_from = Math.floor(new Date(df + 'T00:00:00Z').getTime() / 1000);
     const dTo = filterDateTo.value;
     if (dTo) filters.date_to = Math.floor(new Date(dTo + 'T23:59:59Z').getTime() / 1000);
+    const sortValue = filterSortBy.value || 'relevance';
+    if (sortValue !== 'relevance') {
+      const sortParts = sortValue.split(':');
+      filters.sort_by = sortParts[0];
+      filters.sort_order = sortParts[1] || 'desc';
+    }
+    return filters;
+  }
+
+  function getUrlFilters() {
+    const filters = getActiveFilters();
+    if (filterDateFrom.value) filters.date_from = filterDateFrom.value;
+    if (filterDateTo.value) filters.date_to = filterDateTo.value;
     return filters;
   }
 
@@ -440,8 +465,11 @@
     filterSender.value = filters.sender || '';
     filterLanguage.value = filters.language || '';
     filterTextQuality.value = filters.text_quality || '';
-    filterDateFrom.value = filters.date_from || '';
-    filterDateTo.value = filters.date_to || '';
+    filterDateFrom.value = /^\d{4}-\d{2}-\d{2}$/.test(filters.date_from || '') ? filters.date_from : '';
+    filterDateTo.value = /^\d{4}-\d{2}-\d{2}$/.test(filters.date_to || '') ? filters.date_to : '';
+    filterSortBy.value = filters.sort_by && filters.sort_by !== 'relevance'
+      ? filters.sort_by + ':' + (filters.sort_order || 'desc')
+      : 'relevance';
   }
 
   function doSearch(page) {
@@ -460,12 +488,13 @@
     url.searchParams.set('q', q);
     // Sync filter params to URL
     const activeFilters = getActiveFilters();
-    Object.keys(activeFilters).forEach(function(key) {
-      url.searchParams.set(key, activeFilters[key]);
+    const urlFilters = getUrlFilters();
+    Object.keys(urlFilters).forEach(function(key) {
+      url.searchParams.set(key, urlFilters[key]);
     });
     // Remove filter keys not in activeFilters
-    ['document_type', 'tags', 'sender', 'language', 'text_quality', 'date_from', 'date_to'].forEach(function(key) {
-      if (!activeFilters[key]) url.searchParams.delete(key);
+    ['document_type', 'tags', 'sender', 'language', 'text_quality', 'date_from', 'date_to', 'sort_by', 'sort_order'].forEach(function(key) {
+      if (!urlFilters[key]) url.searchParams.delete(key);
     });
     window.history.replaceState({}, '', url);
 
@@ -605,9 +634,19 @@
     previewPanel.classList.add('active');
     previewTitle.textContent = safeFilename;
     previewBody.innerHTML = '<div class="search-preview-state"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><p style="margin-top:0.5rem;">' + escapeHtml(searchI18n.loadingPreview) + '</p></div>' +
-      '<object data="' + previewUrl + '" type="application/pdf">' +
+      '<object id="search-preview-object" data="' + previewUrl + '" type="application/pdf">' +
       '<div class="search-preview-state">' + escapeHtml(searchI18n.previewUnavailable) + '</div>' +
       '</object>';
+    const previewObject = document.getElementById('search-preview-object');
+    const loadingState = previewBody.querySelector('.search-preview-state');
+    if (previewObject) {
+      previewObject.addEventListener('load', function() {
+        if (loadingState) loadingState.remove();
+      }, { once: true });
+      previewObject.addEventListener('error', function() {
+        previewBody.innerHTML = '<div class="search-preview-state">' + escapeHtml(searchI18n.previewUnavailable) + '</div>';
+      }, { once: true });
+    }
     previewFooter.innerHTML = '<a href="' + fileUrl + '"><i class="fas fa-external-link-alt" aria-hidden="true"></i> ' + escapeHtml(searchI18n.open) + '</a>' +
       '<a href="' + downloadUrl + '"><i class="fas fa-download" aria-hidden="true"></i> ' + escapeHtml(searchI18n.download) + '</a>';
   }
@@ -927,6 +966,9 @@
             '<i class="' + (s.pinned ? 'fas' : 'far') + ' fa-star" aria-hidden="true"></i>' +
             '</button>' +
             '<a href="/search?' + escapeHtml(params.toString()) + '">' + escapeHtml(s.name) + '</a>' +
+            '<button type="button" onclick="renameSavedSearch(' + s.id + ', decodeURIComponent(\'' + encodeActionValue(s.name) + '\'))" aria-label="Rename saved search ' + escapeHtml(s.name) + '">' +
+            '<i class="fas fa-pencil-alt" aria-hidden="true"></i>' +
+            '</button>' +
             '<button type="button" onclick="deleteSavedSearch(' + s.id + ')" aria-label="Delete saved search ' + escapeHtml(s.name) + '">' +
             '<i class="fas fa-times" aria-hidden="true"></i>' +
             '</button>' +
@@ -980,6 +1022,21 @@
     .catch(function(error) { alert(error.message); });
   }
 
+  function renameSavedSearch(id, currentName) {
+    const name = prompt(searchI18n.renamingSavedSearch, currentName);
+    if (!name || !name.trim() || name.trim() === currentName) return;
+    fetch('/api/saved-searches/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim() })
+    })
+    .then(function(response) {
+      if (!response.ok) return response.json().then(function(d) { throw new Error(d.detail || 'Failed to rename'); });
+      loadSavedSearches();
+    })
+    .catch(function(error) { alert(error.message); });
+  }
+
   function deleteSavedSearch(id) {
     if (!confirm('Delete this saved search?')) return;
     fetch('/api/saved-searches/' + id, { method: 'DELETE' })
@@ -1001,6 +1058,7 @@
     if (urlParams.get('text_quality')) filterTextQuality.value = urlParams.get('text_quality');
     if (urlParams.get('date_from')) filterDateFrom.value = urlParams.get('date_from');
     if (urlParams.get('date_to')) filterDateTo.value = urlParams.get('date_to');
+    applyFiltersToUI(Object.fromEntries(urlParams.entries()));
 
     // Load saved searches
     loadSavedSearches();

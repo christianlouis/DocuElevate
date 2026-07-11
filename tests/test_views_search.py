@@ -65,6 +65,7 @@ class TestSearchPage:
         response = client.get("/search")
         assert response.status_code == 200
         assert "toggleSavedSearchPin" in response.text
+        assert "renameSavedSearch" in response.text
         assert "href=\"/search?' + escapeHtml(params.toString())" in response.text
         assert "fa-star" in response.text
 
@@ -77,6 +78,8 @@ class TestSearchPage:
         assert "openSearchPreview" in response.text
         assert "/api/files/' + encodeURIComponent(fileId) + '/preview?version=processed" in response.text
         assert "closeSearchPreview" in response.text
+        assert "search-preview-object" in response.text
+        assert "addEventListener('error'" in response.text
 
     def test_search_page_contains_result_quick_actions(self, client):
         """Search result actions expose open, download, tag, route, and export controls."""
@@ -102,6 +105,14 @@ class TestSearchPage:
         assert "search-result-checkbox" in text
         assert "selectVisibleSearchResults" in text
         assert "clearSearchSelection" in text
+
+    def test_search_page_supports_sortable_deep_links(self, client):
+        """Sort choice is represented in the UI and restored from URL parameters."""
+        response = client.get("/search?sort_by=created_at&sort_order=asc")
+        assert response.status_code == 200
+        assert 'id="filter-sort-by"' in response.text
+        assert "filters.sort_by" in response.text
+        assert "filters.sort_order" in response.text
 
     def test_search_page_bulk_actions_use_existing_file_apis(self, client):
         """Bulk actions from search call existing file operation endpoints."""

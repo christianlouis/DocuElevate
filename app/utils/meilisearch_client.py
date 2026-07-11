@@ -226,6 +226,8 @@ def search_documents(
     text_quality: Optional[str] = None,
     date_from: Optional[int] = None,
     date_to: Optional[int] = None,
+    sort_by: str = "relevance",
+    sort_order: str = "desc",
     page: int = 1,
     per_page: int = 20,
 ) -> dict:
@@ -241,6 +243,8 @@ def search_documents(
         text_quality: Optional text quality filter: no_text, low, medium, high.
         date_from: Optional lower bound Unix timestamp for created_at.
         date_to: Optional upper bound Unix timestamp for created_at.
+        sort_by: Relevance or a supported sortable document field.
+        sort_order: Ascending or descending when ``sort_by`` is not relevance.
         page: 1-based page number.
         per_page: Results per page (max 100).
 
@@ -248,7 +252,15 @@ def search_documents(
         Dict with keys: results, total, page, pages, query.
         Returns empty results dict on any error.
     """
-    empty: dict = {"results": [], "total": 0, "page": page, "pages": 0, "query": query}
+    empty: dict = {
+        "results": [],
+        "total": 0,
+        "page": page,
+        "pages": 0,
+        "query": query,
+        "sort_by": sort_by,
+        "sort_order": sort_order,
+    }
 
     client = get_meilisearch_client()
     if client is None:
@@ -300,6 +312,15 @@ def search_documents(
         if filters:
             search_params["filter"] = " AND ".join(filters)
 
+        sort_fields = {
+            "created_at": "created_at_ts",
+            "file_size": "file_size",
+            "confidence_score": "confidence_score",
+        }
+        if sort_by in sort_fields:
+            direction = "asc" if sort_order == "asc" else "desc"
+            search_params["sort"] = [f"{sort_fields[sort_by]}:{direction}"]
+
         result = index.search(query, search_params)
 
         hits = result.get("hits", [])
@@ -334,6 +355,8 @@ def search_documents(
             "page": page,
             "pages": pages,
             "query": query,
+            "sort_by": sort_by,
+            "sort_order": sort_order,
         }
 
     except Exception as exc:

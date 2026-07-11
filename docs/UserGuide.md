@@ -359,8 +359,8 @@ Both the **Files** and **Search** pages support **saved searches** — named fil
 1. Apply your desired filters (and optionally a search query on the Search page)
 2. Click **Save Current** in the saved searches bar
 3. Enter a name for the saved search
-4. Your saved search appears as a clickable tag — click it to instantly re-apply those filters
-5. Use the star button to pin important saved searches ahead of the rest
+4. Your saved search appears as a clickable tag — click it to restore its query, filters, and sort order
+5. Use the pencil button to rename it and the star button to pin important searches ahead of the rest
 6. Click the **×** button next to a saved search to delete it
 
 On the **Search** page, saved searches store the full-text query (`q`) along with all active content-finding filters. On the **Files** page, saved searches store the file management filters (filename search, MIME type, status, etc.).

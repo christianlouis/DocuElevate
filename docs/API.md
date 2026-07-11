@@ -430,7 +430,7 @@ Search documents by full text across OCR content, titles, filenames, tags, sende
 
 **Example**:
 ```
-GET /api/search?q=invoice&document_type=Invoice&tags=amazon&text_quality=high&page=1
+GET /api/search?q=invoice&document_type=Invoice&tags=amazon&text_quality=high&sort_by=created_at&sort_order=desc&page=1
 ```
 
 **Response**:
@@ -513,6 +513,10 @@ Files-view keys: `search`, `mime_type`, `status`, `storage_provider`, `sort_by`,
 Search-view keys: `q`, `document_type`, `language`, `sender`, `text_quality`
 
 Shared keys: `tags`, `date_from`, `date_to`
+
+Search pages also persist `sort_by` (`relevance`, `created_at`, `file_size`, or
+`confidence_score`) and `sort_order` (`asc` or `desc`) so deep links and saved
+searches restore the same ordering.
 
 **Response** (201 Created): The created saved search object.
 
