@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.177.1 (2026-07-11)
+
+### Bug Fixes
+
+- Make runtime image builds fail safely
+  ([#1017](https://github.com/christianlouis/DocuElevate/pull/1017),
+  [`efa2829`](https://github.com/christianlouis/DocuElevate/commit/efa2829d2a4501f1809e1920cf254cfb69497702))
+
+
 ## v0.177.0 (2026-07-11)
 
 ### Features
