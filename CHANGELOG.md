@@ -10,6 +10,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.176.2 (2026-07-11)
+
+### Bug Fixes
+
+- Address post-merge review follow-ups
+  ([#1015](https://github.com/christianlouis/DocuElevate/pull/1015),
+  [`7072955`](https://github.com/christianlouis/DocuElevate/commit/7072955c822e057177ef1c54f0f15dcf794c8be4))
+
+### Documentation
+
+- Align roadmap with prioritized backlog
+  ([#1013](https://github.com/christianlouis/DocuElevate/pull/1013),
+  [`9bcb803`](https://github.com/christianlouis/DocuElevate/commit/9bcb803222e5692927062871289e54339bb230ae))
+
+- Align roadmap, labels, and release naming
+  ([#1013](https://github.com/christianlouis/DocuElevate/pull/1013),
+  [`9bcb803`](https://github.com/christianlouis/DocuElevate/commit/9bcb803222e5692927062871289e54339bb230ae))
+
+- Synchronize release and planning names
+  ([#1013](https://github.com/christianlouis/DocuElevate/pull/1013),
+  [`9bcb803`](https://github.com/christianlouis/DocuElevate/commit/9bcb803222e5692927062871289e54339bb230ae))
+
+- **changelog**: Update changelog [skip ci]
+  ([`0afabf3`](https://github.com/christianlouis/DocuElevate/commit/0afabf35cced76cea68e5d49e32a72cd7aac7213))
+
+
 ## Unreleased
 
 ### Documentation
