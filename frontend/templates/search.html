@@ -295,10 +295,10 @@
     <div id="search-bulk-bar" class="search-bulk-bar" aria-live="polite">
       <strong><span id="search-selected-count">0</span> selected</strong>
       <button type="button" onclick="selectVisibleSearchResults()">
-        <i class="fas fa-check-double" aria-hidden="true"></i> Select visible
+        <i class="fas fa-check-double" aria-hidden="true"></i> {{ _("search.bulk_select_visible") }}
       </button>
       <button type="button" onclick="clearSearchSelection()">
-        <i class="fas fa-times" aria-hidden="true"></i> Clear
+        <i class="fas fa-times" aria-hidden="true"></i> {{ _("search.bulk_clear") }}
       </button>
       <button type="button" onclick="bulkDownloadSearchResults()">
         <i class="fas fa-download" aria-hidden="true"></i> Download
@@ -309,9 +309,9 @@
       <button type="button" onclick="bulkTagSearchResults()">
         <i class="fas fa-tags" aria-hidden="true"></i> Tag
       </button>
-      <label class="sr-only" for="bulk-route-pipeline">Route destination</label>
-      <select id="bulk-route-pipeline" aria-label="Route destination">
-        <option value="">Default route</option>
+      <label class="sr-only" for="bulk-route-pipeline">{{ _("search.bulk_route_dest") }}</label>
+      <select id="bulk-route-pipeline" aria-label="{{ _("search.bulk_route_dest") }}">
+        <option value="">{{ _("search.bulk_default_route") }}</option>
       </select>
       <button type="button" onclick="bulkRouteSearchResults()">
         <i class="fas fa-route" aria-hidden="true"></i> Route
@@ -574,9 +574,9 @@
     searchContainer.classList.add('preview-active');
     previewPanel.classList.add('active');
     previewTitle.textContent = safeFilename;
-    previewBody.innerHTML = '<div class="search-preview-state"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><p style="margin-top:0.5rem;">Loading preview…</p></div>' +
+    previewBody.innerHTML = '<div class="search-preview-state"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><p style="margin-top:0.5rem;">' + {{ _('search.preview_loading') | tojson }} + '</p></div>' +
       '<object data="' + previewUrl + '" type="application/pdf">' +
-      '<div class="search-preview-state">Preview unavailable. Open the document or download it instead.</div>' +
+      '<div class="search-preview-state">' + {{ _('search.preview_unavailable') | tojson }} + '</div>' +
       '</object>';
     previewFooter.innerHTML = '<a href="' + fileUrl + '"><i class="fas fa-external-link-alt" aria-hidden="true"></i> Open</a>' +
       '<a href="' + downloadUrl + '"><i class="fas fa-download" aria-hidden="true"></i> Download</a>';
@@ -585,7 +585,7 @@
   function closeSearchPreview() {
     previewPanel.classList.remove('active');
     searchContainer.classList.remove('preview-active');
-    previewBody.innerHTML = '<div class="search-preview-state">Select a result to preview it here.</div>';
+    previewBody.innerHTML = '<div class="search-preview-state">' + {{ _('search.preview_placeholder') | tojson }} + '</div>';
     previewFooter.innerHTML = '';
   }
 
@@ -630,7 +630,7 @@
     visibleSearchResultIds.forEach(function(fileId) {
       selectedSearchResults.add(Number(fileId));
     });
-    setBulkStatus('Selected all visible results. Use a saved search to repeat this action later.', false);
+    setBulkStatus({{ _('search.js_bulk_select_all') | tojson }}, false);
     syncSearchSelectionUI();
   }
 
@@ -642,7 +642,7 @@
   function requireBulkSelection() {
     const fileIds = selectedSearchResultIds();
     if (fileIds.length === 0) {
-      setBulkStatus('Select at least one result first.', true);
+      setBulkStatus({{ _('search.js_bulk_select_none') | tojson }}, true);
       return null;
     }
     return fileIds;
@@ -651,7 +651,7 @@
   function bulkDownloadSearchResults() {
     const fileIds = requireBulkSelection();
     if (!fileIds) return;
-    setBulkStatus('Creating download archive…', false);
+    setBulkStatus({{ _('search.js_bulk_download_status') | tojson }}, false);
     fetch('/api/files/bulk-download', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -670,7 +670,7 @@
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      setBulkStatus('Download archive created for ' + fileIds.length + ' result' + (fileIds.length !== 1 ? 's' : '') + '.', false);
+      setBulkStatus({{ _('search.js_bulk_download_success') | tojson }}.replace('{count}', fileIds.length), false);
     })
     .catch(function(error) { setBulkStatus(error.message, true); });
   }
@@ -694,14 +694,14 @@
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    setBulkStatus('Exported metadata for ' + fileIds.length + ' selected result' + (fileIds.length !== 1 ? 's' : '') + '.', false);
+    setBulkStatus({{ _('search.js_bulk_export_status') | tojson }}.replace('{count}', fileIds.length), false);
   }
 
   function bulkReprocessSearchResults() {
     const fileIds = requireBulkSelection();
     if (!fileIds) return;
-    if (!confirm('Queue ' + fileIds.length + ' selected document' + (fileIds.length !== 1 ? 's' : '') + ' for reprocessing? This may replace extracted text and metadata.')) return;
-    setBulkStatus('Queueing reprocessing jobs…', false);
+    if (!confirm({{ _('search.js_bulk_reprocess_confirm') | tojson }}.replace('{count}', fileIds.length))) return;
+    setBulkStatus({{ _('search.js_bulk_reprocess_status') | tojson }}, false);
     fetch('/api/files/bulk-reprocess', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -713,7 +713,7 @@
     })
     .then(function(data) {
       const errors = Array.isArray(data.errors) ? data.errors.length : 0;
-      setBulkStatus((data.message || 'Reprocessing queued.') + (errors ? ' ' + errors + ' error(s) returned.' : ''), errors > 0);
+      setBulkStatus(errors ? {{ _('search.js_bulk_reprocess_success') | tojson }}.replace('{message}', data.message || 'Reprocessing queued.').replace('{errors}', errors) : (data.message || 'Reprocessing queued.'), errors > 0);
     })
     .catch(function(error) { setBulkStatus(error.message, true); });
   }
@@ -722,10 +722,10 @@
     const fileIds = requireBulkSelection();
     if (!fileIds) return;
     const pipelineId = bulkRoutePipeline && bulkRoutePipeline.value ? Number(bulkRoutePipeline.value) : null;
-    const routeLabel = bulkRoutePipeline && bulkRoutePipeline.selectedOptions.length ? bulkRoutePipeline.selectedOptions[0].textContent.trim() : 'Default route';
-    const action = pipelineId === null ? 'clear routing for' : 'route';
-    if (!confirm('Bulk ' + action + ' ' + fileIds.length + ' selected document' + (fileIds.length !== 1 ? 's' : '') + ' using "' + routeLabel + '"?')) return;
-    setBulkStatus('Updating selected routes…', false);
+    const routeLabel = bulkRoutePipeline && bulkRoutePipeline.selectedOptions.length ? bulkRoutePipeline.selectedOptions[0].textContent.trim() : '{{ _("search.bulk_default_route") }}';
+    const action = pipelineId === null ? {{ _('search.js_bulk_route_action_clear') | tojson }} : {{ _('search.js_bulk_route_action_route') | tojson }};
+    if (!confirm({{ _('search.js_bulk_route_confirm') | tojson }}.replace('{action}', action).replace('{count}', fileIds.length).replace('{routeLabel}', routeLabel))) return;
+    setBulkStatus({{ _('search.js_bulk_route_status') | tojson }}, false);
     fetch('/api/files/bulk-assign-pipeline', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -736,7 +736,7 @@
       return response.json();
     })
     .then(function(data) {
-      setBulkActionStatus(data, 'Selected routes updated.');
+      setBulkActionStatus(data, {{ _('search.js_bulk_route_success') | tojson }});
     })
     .catch(function(error) { setBulkStatus(error.message, true); });
   }
@@ -765,15 +765,15 @@
   function bulkTagSearchResults() {
     const fileIds = requireBulkSelection();
     if (!fileIds) return;
-    const tagText = prompt('Add tags to ' + fileIds.length + ' selected document' + (fileIds.length !== 1 ? 's' : '') + '. Separate tags with commas.');
+    const tagText = prompt({{ _('search.js_bulk_tag_prompt') | tojson }}.replace('{count}', fileIds.length));
     if (tagText === null) return;
     const tags = tagText.split(',').map(function(tag) { return tag.trim(); }).filter(Boolean);
     if (!tags.length) {
-      setBulkStatus('Enter at least one tag.', true);
+      setBulkStatus({{ _('search.js_bulk_tag_empty') | tojson }}, true);
       return;
     }
-    if (!confirm('Add ' + tags.length + ' tag' + (tags.length !== 1 ? 's' : '') + ' to ' + fileIds.length + ' selected document' + (fileIds.length !== 1 ? 's' : '') + '?')) return;
-    setBulkStatus('Updating selected tags…', false);
+    if (!confirm({{ _('search.js_bulk_tag_confirm') | tojson }}.replace('{tag_count}', tags.length).replace('{file_count}', fileIds.length))) return;
+    setBulkStatus({{ _('search.js_bulk_tag_status') | tojson }}, false);
     fetch('/api/files/bulk-tag', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -784,7 +784,7 @@
       return response.json();
     })
     .then(function(data) {
-      setBulkActionStatus(data, 'Selected tags updated.');
+      setBulkActionStatus(data, {{ _('search.js_bulk_tag_success') | tojson }});
     })
     .catch(function(error) { setBulkStatus(error.message, true); });
   }
@@ -792,9 +792,9 @@
   function bulkDeleteSearchResults() {
     const fileIds = requireBulkSelection();
     if (!fileIds) return;
-    const warning = 'Delete ' + fileIds.length + ' selected document record' + (fileIds.length !== 1 ? 's' : '') + '? This cannot be undone from search results.';
+    const warning = {{ _('search.js_bulk_delete_confirm') | tojson }}.replace('{count}', fileIds.length);
     if (!confirm(warning)) return;
-    setBulkStatus('Deleting selected records…', false);
+    setBulkStatus({{ _('search.js_bulk_delete_status') | tojson }}, false);
     fetch('/api/files/bulk-delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
