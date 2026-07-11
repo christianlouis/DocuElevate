@@ -872,6 +872,7 @@ class TestWebhookDashboardTemplate:
 
     @staticmethod
     def _template() -> str:
+        """Return the webhook dashboard source used by static contract checks."""
         return Path("frontend/templates/webhooks_dashboard.html").read_text(encoding="utf-8")
 
     def test_mutations_include_csrf_header(self):
