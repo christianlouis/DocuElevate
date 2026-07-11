@@ -1,6 +1,6 @@
 # DocuElevate Milestones
 
-**Last Updated:** 2026-05-23
+**Last Updated:** 2026-07-11
 
 This document outlines the release milestones, versioning strategy, and detailed feature breakdown for DocuElevate.
 
@@ -30,6 +30,12 @@ DocuElevate ships continuously via automated semantic versioning. Use **GitHub R
 - Release automation via semantic-release
 
 The current build number is managed by semantic-release and may be ahead of the planning anchors below. Check `VERSION` and GitHub Releases for the exact current release stream.
+
+Clarity, Conductor, and Signal are **planning tracks**, not predictions of the
+next semantic-release tag. Their old `0.6.x`–`0.8.x` labels were retired because
+those versions already exist in release history. Future `1.0+` entries remain
+version anchors. Scope and due dates are tracked in GitHub. Delivery follows the
+dependency order in [ROADMAP.md](ROADMAP.md).
 
 ### Important Note on Versioning
 As of February 2026, DocuElevate uses **automated semantic versioning**:
@@ -130,8 +136,8 @@ As of February 2026, DocuElevate uses **automated semantic versioning**:
 
 ## Upcoming Planning Anchors
 
-### v0.6.0 - Clarity: Enhanced Search & UI (Target: July 31, 2026)
-**Target Date:** July 31, 2026
+### Clarity: Enhanced Search & UI (Planning track)
+**Target Date:** October 31, 2026
 **Status:** 📋 Planned
 **Theme:** Search, Discovery, Modern UX
 **Epic:** #863
@@ -156,8 +162,8 @@ As of February 2026, DocuElevate uses **automated semantic versioning**:
 
 ---
 
-### v0.7.0 - Conductor: Workflow Automation & Integrations (Target: September 30, 2026)
-**Target Date:** September 30, 2026
+### Conductor: Workflow Automation & Integrations (Planning track)
+**Target Date:** January 31, 2027
 **Status:** 📋 Planned
 **Theme:** Automation, Integration, Webhooks
 **Epic:** #864
@@ -176,8 +182,8 @@ As of February 2026, DocuElevate uses **automated semantic versioning**:
 
 ---
 
-### v0.8.0 - Signal: AI Quality, RAG, and Multi-language (Target: November 30, 2026)
-**Target Date:** November 30, 2026
+### Signal: AI Quality, RAG, and Multi-language (Planning track)
+**Target Date:** April 30, 2027
 **Status:** 📋 Planned
 **Theme:** AI Quality, Retrieval, Internationalization
 **Epic:** #865
@@ -197,8 +203,8 @@ As of February 2026, DocuElevate uses **automated semantic versioning**:
 
 ---
 
-### v1.0.0 - Summit: Enterprise Edition (Target: March 31, 2027)
-**Target Date:** March 31, 2027
+### v1.0.0 - Summit: Enterprise Edition (Planning anchor)
+**Target Date:** September 30, 2027
 **Status:** 📋 Planned
 **Theme:** Enterprise Features, Scalability, Multi-tenancy
 **Epic:** #866
@@ -235,8 +241,8 @@ This is our first major release, marking production-ready enterprise capabilitie
 
 ---
 
-### v2.0.0 - Horizon: Platform Expansion (Target: September 30, 2027)
-**Target Date:** September 30, 2027
+### v2.0.0 - Horizon: Platform Expansion (Planning anchor)
+**Target Date:** March 31, 2028
 **Status:** 📋 Planned
 **Theme:** Ecosystem, Platform, Distribution
 **Epic:** #867
@@ -254,8 +260,8 @@ This is our first major release, marking production-ready enterprise capabilitie
 
 ---
 
-### v2.1.0 - Sentinel: Governance & Policy (Target: March 31, 2028)
-**Target Date:** March 31, 2028
+### v2.1.0 - Sentinel: Governance & Policy (Planning anchor)
+**Target Date:** September 30, 2028
 **Status:** 📋 Planned
 **Theme:** Governance, Compliance, Policy-driven Automation
 **Epic:** #868
@@ -273,8 +279,8 @@ This is our first major release, marking production-ready enterprise capabilitie
 
 ---
 
-### v3.0.0 - Constellation: Integration Hub & Agent Platform (Target: September 30, 2028)
-**Target Date:** September 30, 2028
+### v3.0.0 - Constellation: Integration Hub & Agent Platform (Planning anchor)
+**Target Date:** March 31, 2029
 **Status:** 📋 Planned
 **Theme:** Ecosystem, Agents, Interoperability
 **Epic:** #869
@@ -340,13 +346,13 @@ Starting with v0.6.0, releases are fully automated using `python-semantic-releas
 | v0.3.2 | 2026-02-06 | Security Updates | Released |
 | v0.3.3 | 2026-02-08 | Drag-and-Drop Upload | Released |
 | v0.5.0 | 2026-02-08 | **Settings & Encryption** | **Released** |
-| v0.6.0 | 2026-07-31 | **Clarity:** Search & UX | Planned |
-| v0.7.0 | 2026-09-30 | **Conductor:** Workflows & Integrations | Planned |
-| v0.8.0 | 2026-11-30 | **Signal:** AI Quality, RAG, Multi-language | Planned |
-| v1.0.0 | 2027-03-31 | **Summit:** Enterprise | Planned |
-| v2.0.0 | 2027-09-30 | **Horizon:** Platform Expansion | Future |
-| v2.1.0 | 2028-03-31 | **Sentinel:** Governance & Policy | Future |
-| v3.0.0 | 2028-09-30 | **Constellation:** Integration Hub & Agents | Future |
+| Planning track | 2026-10-31 | **Clarity:** Search & UX | Planned |
+| Planning track | 2027-01-31 | **Conductor:** Workflows & Integrations | Planned |
+| Planning track | 2027-04-30 | **Signal:** AI Quality, RAG, Multi-language | Planned |
+| v1.0.0 | 2027-09-30 | **Summit:** Enterprise | Planned |
+| v2.0.0 | 2028-03-31 | **Horizon:** Platform Expansion | Future |
+| v2.1.0 | 2028-09-30 | **Sentinel:** Governance & Policy | Future |
+| v3.0.0 | 2029-03-31 | **Constellation:** Integration Hub & Agents | Future |
 
 ---
 
