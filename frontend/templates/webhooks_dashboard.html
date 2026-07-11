@@ -47,7 +47,7 @@
                     <h3 class="truncate text-sm font-semibold text-gray-900 dark:text-white" x-text="hook.description || hook.url"></h3>
                     <span class="rounded px-2 py-0.5 text-xs font-medium"
                           :class="hook.is_active ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'"
-                          x-text="hook.is_active ? {{ _("webhooks.active") | tojson }} : {{ _("webhooks.paused") | tojson }}"></span>
+                          x-text='hook.is_active ? {{ _("webhooks.active") | tojson }} : {{ _("webhooks.paused") | tojson }}'></span>
                     <span x-show="hook.has_secret"
                           class="rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-200">{{ _("webhooks.signed") }}</span>
                   </div>
@@ -122,7 +122,7 @@
     </section>
 
     <aside class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-      <h2 class="text-base font-semibold text-gray-900 dark:text-white" x-text="editingId ? {{ _("webhooks.edit_endpoint") | tojson }} : {{ _("webhooks.new_endpoint") | tojson }}"></h2>
+      <h2 class="text-base font-semibold text-gray-900 dark:text-white" x-text='editingId ? {{ _("webhooks.edit_endpoint") | tojson }} : {{ _("webhooks.new_endpoint") | tojson }}'></h2>
       <form class="mt-5 space-y-4" @submit.prevent="saveHook()">
         <div>
           <label for="webhook-description" class="block text-sm font-medium text-gray-700 dark:text-gray-200">{{ _("webhooks.description") }}</label>
