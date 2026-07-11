@@ -82,17 +82,11 @@ def upgrade() -> None:
 
     # 4 — Migrate existing attachment_filter values to profile_id
     bind.execute(
-        sa.text(
-            "UPDATE user_imap_accounts SET profile_id = :pid "
-            "WHERE attachment_filter = 'all'"
-        ),
+        sa.text("UPDATE user_imap_accounts SET profile_id = :pid WHERE attachment_filter = 'all'"),
         {"pid": _BUILTIN_ALL_FILES_ID},
     )
     bind.execute(
-        sa.text(
-            "UPDATE user_imap_accounts SET profile_id = :pid "
-            "WHERE attachment_filter = 'documents_only'"
-        ),
+        sa.text("UPDATE user_imap_accounts SET profile_id = :pid WHERE attachment_filter = 'documents_only'"),
         {"pid": _BUILTIN_DOCUMENTS_ONLY_ID},
     )
     # Rows with NULL attachment_filter keep profile_id = NULL (use global default)
@@ -121,17 +115,11 @@ def downgrade() -> None:
     # 2 — Restore string values from profile_id
     bind = op.get_bind()
     bind.execute(
-        sa.text(
-            "UPDATE user_imap_accounts SET attachment_filter = 'all' "
-            "WHERE profile_id = :pid"
-        ),
+        sa.text("UPDATE user_imap_accounts SET attachment_filter = 'all' WHERE profile_id = :pid"),
         {"pid": _BUILTIN_ALL_FILES_ID},
     )
     bind.execute(
-        sa.text(
-            "UPDATE user_imap_accounts SET attachment_filter = 'documents_only' "
-            "WHERE profile_id = :pid"
-        ),
+        sa.text("UPDATE user_imap_accounts SET attachment_filter = 'documents_only' WHERE profile_id = :pid"),
         {"pid": _BUILTIN_DOCUMENTS_ONLY_ID},
     )
 

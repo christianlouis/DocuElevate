@@ -461,3 +461,116 @@ class TestEmbedMetadataIntoPdf:
 
                                 # Verify unlink (delete) was called on the resolved path
                                 mock_resolved_path.unlink.assert_called_once()
+
+    @patch("app.tasks.embed_metadata_into_pdf.finalize_document_storage")
+    @patch("app.tasks.embed_metadata_into_pdf.persist_metadata")
+    @patch("app.tasks.embed_metadata_into_pdf.shutil.move")
+    @patch("app.tasks.embed_metadata_into_pdf.os.makedirs")
+    @patch("app.tasks.embed_metadata_into_pdf.get_unique_filepath_with_counter")
+    @patch("app.tasks.embed_metadata_into_pdf.sanitize_filename")
+    @patch("app.tasks.embed_metadata_into_pdf.SessionLocal")
+    @patch("app.tasks.embed_metadata_into_pdf.log_task_progress")
+    @patch("app.tasks.embed_metadata_into_pdf.pypdf.PdfReader")
+    @patch("app.tasks.embed_metadata_into_pdf.pypdf.PdfWriter")
+    @patch("app.utils.webhook.dispatch_webhook_event")
+    def test_webhook_dispatch_success(
+        self,
+        mock_webhook,
+        mock_pdf_writer_class,
+        mock_pdf_reader_class,
+        mock_log_progress,
+        mock_session_local,
+        mock_sanitize,
+        mock_get_unique,
+        mock_makedirs,
+        mock_move,
+        mock_persist,
+        mock_finalize,
+        tmp_path,
+    ):
+        mock_pdf_reader = MagicMock()
+        mock_pdf_reader.pages = [MagicMock()]
+        mock_pdf_reader_class.return_value = mock_pdf_reader
+        mock_pdf_writer = MagicMock()
+        mock_pdf_writer_class.return_value = mock_pdf_writer
+
+        mock_sanitize.return_value = "Test_Document.pdf"
+        mock_get_unique.return_value = "/workdir/processed/Test_Document.pdf"
+        mock_persist.return_value = "/workdir/processed/Test_Document.json"
+
+        mock_db = MagicMock()
+        mock_file_record = MagicMock()
+        mock_file_record.id = 42
+        mock_file_record.original_filename = "upload.pdf"
+        mock_file_record.user_id = 99
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_file_record
+        mock_session_local.return_value.__enter__.return_value = mock_db
+
+        metadata = {"filename": "Test Document", "document_type": "Invoice"}
+
+        test_pdf = tmp_path / "upload.pdf"
+        test_pdf.write_bytes(b"%PDF-1.4 content")
+        from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
+
+        embed_metadata_into_pdf.__wrapped__(str(test_pdf), "Sample text", metadata, file_id=42)
+
+        mock_webhook.assert_called_once()
+        args = mock_webhook.call_args[0]
+        assert args[0] == "document.metadata_updated"
+
+    @patch("app.tasks.embed_metadata_into_pdf.finalize_document_storage")
+    @patch("app.tasks.embed_metadata_into_pdf.persist_metadata")
+    @patch("app.tasks.embed_metadata_into_pdf.shutil.move")
+    @patch("app.tasks.embed_metadata_into_pdf.os.makedirs")
+    @patch("app.tasks.embed_metadata_into_pdf.get_unique_filepath_with_counter")
+    @patch("app.tasks.embed_metadata_into_pdf.sanitize_filename")
+    @patch("app.tasks.embed_metadata_into_pdf.SessionLocal")
+    @patch("app.tasks.embed_metadata_into_pdf.log_task_progress")
+    @patch("app.tasks.embed_metadata_into_pdf.pypdf.PdfReader")
+    @patch("app.tasks.embed_metadata_into_pdf.pypdf.PdfWriter")
+    @patch("app.utils.webhook.dispatch_webhook_event")
+    def test_webhook_dispatch_error(
+        self,
+        mock_webhook,
+        mock_pdf_writer_class,
+        mock_pdf_reader_class,
+        mock_log_progress,
+        mock_session_local,
+        mock_sanitize,
+        mock_get_unique,
+        mock_makedirs,
+        mock_move,
+        mock_persist,
+        mock_finalize,
+        tmp_path,
+        caplog,
+    ):
+        mock_pdf_reader = MagicMock()
+        mock_pdf_reader.pages = [MagicMock()]
+        mock_pdf_reader_class.return_value = mock_pdf_reader
+        mock_pdf_writer = MagicMock()
+        mock_pdf_writer_class.return_value = mock_pdf_writer
+
+        mock_sanitize.return_value = "Test_Document.pdf"
+        mock_get_unique.return_value = "/workdir/processed/Test_Document.pdf"
+        mock_persist.return_value = "/workdir/processed/Test_Document.json"
+
+        mock_db = MagicMock()
+        mock_file_record = MagicMock()
+        mock_file_record.id = 42
+        mock_file_record.original_filename = "upload.pdf"
+        mock_file_record.user_id = 99
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_file_record
+        mock_session_local.return_value.__enter__.return_value = mock_db
+
+        metadata = {"filename": "Test Document", "document_type": "Invoice"}
+
+        mock_webhook.side_effect = Exception("Webhook boom")
+
+        test_pdf = tmp_path / "upload.pdf"
+        test_pdf.write_bytes(b"%PDF-1.4 content")
+        from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
+
+        embed_metadata_into_pdf.__wrapped__(str(test_pdf), "Sample text", metadata, file_id=42)
+
+        assert "Failed to dispatch document.metadata_updated webhook: Webhook boom" in caplog.text

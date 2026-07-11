@@ -40,7 +40,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_webhook_delivery_attempts_id", "webhook_delivery_attempts", ["id"])
-    op.create_index("ix_webhook_delivery_attempts_webhook_config_id", "webhook_delivery_attempts", ["webhook_config_id"])
+    op.create_index(
+        "ix_webhook_delivery_attempts_webhook_config_id", "webhook_delivery_attempts", ["webhook_config_id"]
+    )
     op.create_index("ix_webhook_delivery_attempts_task_id", "webhook_delivery_attempts", ["task_id"])
     op.create_index("ix_webhook_delivery_attempts_event", "webhook_delivery_attempts", ["event"])
     op.create_index("ix_webhook_delivery_attempts_status", "webhook_delivery_attempts", ["status"])

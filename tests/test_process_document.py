@@ -13,6 +13,13 @@ from app.models import FileRecord
 from app.tasks.process_document import process_document
 
 
+@pytest.fixture(autouse=True)
+def mock_settings_workdir(tmp_path, monkeypatch):
+    from app.config import settings as real_settings
+
+    monkeypatch.setattr(real_settings, "workdir", str(tmp_path))
+
+
 @pytest.mark.unit
 @pytest.mark.requires_db
 def test_process_document_stores_file_id_before_session_closes(db_session, tmp_path):
