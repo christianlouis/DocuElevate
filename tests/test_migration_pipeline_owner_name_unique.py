@@ -39,6 +39,4 @@ def test_downgrade_drops_existing_unique_constraint(monkeypatch):
 
     migration.downgrade()
 
-    migration.op.drop_constraint.assert_called_once_with(
-        "uq_pipelines_owner_name", "pipelines", type_="unique"
-    )
+    migration.op.drop_constraint.assert_called_once_with("uq_pipelines_owner_name", "pipelines", type_="unique")
