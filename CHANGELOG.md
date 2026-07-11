@@ -10,6 +10,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.176.1 (2026-07-11)
+
+### Bug Fixes
+
+- Harden webhook admin dashboard ([#1011](https://github.com/christianlouis/DocuElevate/pull/1011),
+  [`2d1b792`](https://github.com/christianlouis/DocuElevate/commit/2d1b792d3548a58a99e7b74391bfc8d6d710f000))
+
+- Quote Alpine translation expressions safely
+  ([#1011](https://github.com/christianlouis/DocuElevate/pull/1011),
+  [`2d1b792`](https://github.com/christianlouis/DocuElevate/commit/2d1b792d3548a58a99e7b74391bfc8d6d710f000))
+
+### Code Style
+
+- Apply ruff auto-fix ([#1011](https://github.com/christianlouis/DocuElevate/pull/1011),
+  [`2d1b792`](https://github.com/christianlouis/DocuElevate/commit/2d1b792d3548a58a99e7b74391bfc8d6d710f000))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`7846270`](https://github.com/christianlouis/DocuElevate/commit/78462705c9a26ec72f7a18e754959d32b458fec4))
+
+### Refactoring
+
+- Isolate metadata webhook dispatch
+  ([#1011](https://github.com/christianlouis/DocuElevate/pull/1011),
+  [`2d1b792`](https://github.com/christianlouis/DocuElevate/commit/2d1b792d3548a58a99e7b74391bfc8d6d710f000))
+
+- Isolate routed webhook dispatch ([#1011](https://github.com/christianlouis/DocuElevate/pull/1011),
+  [`2d1b792`](https://github.com/christianlouis/DocuElevate/commit/2d1b792d3548a58a99e7b74391bfc8d6d710f000))
+
+### Testing
+
+- Cover document webhook dispatch paths
+  ([#1011](https://github.com/christianlouis/DocuElevate/pull/1011),
+  [`2d1b792`](https://github.com/christianlouis/DocuElevate/commit/2d1b792d3548a58a99e7b74391bfc8d6d710f000))
+
+- Cover routed webhook task orchestration
+  ([#1011](https://github.com/christianlouis/DocuElevate/pull/1011),
+  [`2d1b792`](https://github.com/christianlouis/DocuElevate/commit/2d1b792d3548a58a99e7b74391bfc8d6d710f000))
+
+- Document webhook template fixture
+  ([#1011](https://github.com/christianlouis/DocuElevate/pull/1011),
+  [`2d1b792`](https://github.com/christianlouis/DocuElevate/commit/2d1b792d3548a58a99e7b74391bfc8d6d710f000))
+
+- Guard Alpine translation attribute quoting
+  ([#1011](https://github.com/christianlouis/DocuElevate/pull/1011),
+  [`2d1b792`](https://github.com/christianlouis/DocuElevate/commit/2d1b792d3548a58a99e7b74391bfc8d6d710f000))
+
+- Lock webhook dashboard hardening
+  ([#1011](https://github.com/christianlouis/DocuElevate/pull/1011),
+  [`2d1b792`](https://github.com/christianlouis/DocuElevate/commit/2d1b792d3548a58a99e7b74391bfc8d6d710f000))
+
+- Reflect direct Celery task execution context
+  ([#1011](https://github.com/christianlouis/DocuElevate/pull/1011),
+  [`2d1b792`](https://github.com/christianlouis/DocuElevate/commit/2d1b792d3548a58a99e7b74391bfc8d6d710f000))
+
+- Type webhook template fixture ([#1011](https://github.com/christianlouis/DocuElevate/pull/1011),
+  [`2d1b792`](https://github.com/christianlouis/DocuElevate/commit/2d1b792d3548a58a99e7b74391bfc8d6d710f000))
+
+
 ## Unreleased
 
 
