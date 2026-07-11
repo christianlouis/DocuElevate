@@ -1303,4 +1303,4 @@ def test_process_document_dispatches_routed_webhook(db_session, tmp_path):
     mock_dispatch.assert_called_once()
     routed_record, task_id = mock_dispatch.call_args.args
     assert routed_record.pipeline_assignment_source == "routing_rule"
-    assert task_id is not None
+    assert task_id is None  # Direct .run() calls have no Celery request context.
