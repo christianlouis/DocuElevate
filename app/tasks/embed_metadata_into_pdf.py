@@ -52,6 +52,7 @@ def _dispatch_metadata_updated_webhook(file_record: FileRecord, metadata: dict, 
             webhook_exc,
         )
 
+
 def persist_metadata(metadata, final_pdf_path, original_file_path=None, processed_file_path=None):
     """
     Saves the metadata dictionary to a JSON file with the same base name as the final PDF.

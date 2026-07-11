@@ -132,6 +132,7 @@ def _dispatch_routed_webhook(file_record: FileRecord, task_id: str | None) -> No
     except Exception as webhook_exc:
         logger.warning("[%s] Failed to dispatch document.routed webhook: %s", task_id, webhook_exc)
 
+
 def _get_pipeline_ocr_language(db: "Session", file_record: FileRecord, owner_id: str | None) -> str | None:
     """Return only the OCR language override from the selected processing profile."""
     config = _get_pipeline_ocr_config(db, file_record, owner_id)

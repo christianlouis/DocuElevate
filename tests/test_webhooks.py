@@ -769,6 +769,7 @@ class TestDeliverWebhookTask:
             mocker.ANY,
         )
 
+
 # ---------------------------------------------------------------------------
 # Unit tests – document task webhook dispatch adapters
 # ---------------------------------------------------------------------------
@@ -864,6 +865,7 @@ class TestDocumentTaskWebhookDispatch:
 
         _dispatch_metadata_updated_webhook(record, {"tags": ["invoice"]}, "task-metadata")
 
+
 @pytest.mark.unit
 class TestWebhookDashboardTemplate:
     """Guard the admin dashboard's security and accessibility contract."""
@@ -876,7 +878,7 @@ class TestWebhookDashboardTemplate:
         """Save, delete, and replay requests share the page CSRF token."""
         template = self._template()
 
-        assert "meta[name=\"csrf-token\"]" in template
+        assert 'meta[name="csrf-token"]' in template
         assert "'X-CSRF-Token': this.csrfToken" in template
         assert template.count("this.csrfHeaders()") >= 3
 
@@ -896,4 +898,3 @@ class TestWebhookDashboardTemplate:
         assert '{{ _("webhooks.heading") }}' in template
         assert '{{ _("webhooks.save_error") | tojson }}' in template
         assert '{{ _("webhooks.delete_confirm") | tojson }}' in template
-
