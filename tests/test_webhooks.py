@@ -5,6 +5,7 @@ import hmac
 import json
 import socket
 import time
+from pathlib import Path
 from unittest.mock import Mock, patch
 from urllib.parse import urlparse
 
@@ -862,4 +863,37 @@ class TestDocumentTaskWebhookDispatch:
         from app.tasks.embed_metadata_into_pdf import _dispatch_metadata_updated_webhook
 
         _dispatch_metadata_updated_webhook(record, {"tags": ["invoice"]}, "task-metadata")
+
+@pytest.mark.unit
+class TestWebhookDashboardTemplate:
+    """Guard the admin dashboard's security and accessibility contract."""
+
+    @staticmethod
+    def _template():
+        return Path("frontend/templates/webhooks_dashboard.html").read_text(encoding="utf-8")
+
+    def test_mutations_include_csrf_header(self):
+        """Save, delete, and replay requests share the page CSRF token."""
+        template = self._template()
+
+        assert "meta[name=\"csrf-token\"]" in template
+        assert "'X-CSRF-Token': this.csrfToken" in template
+        assert template.count("this.csrfHeaders()") >= 3
+
+    def test_toast_and_delivery_table_are_accessible(self):
+        """Feedback and delivery history expose screen-reader semantics."""
+        template = self._template()
+
+        assert 'role="status"' in template
+        assert 'aria-live="polite"' in template
+        assert '<caption class="sr-only">' in template
+        assert template.count('<th scope="col"') == 4
+
+    def test_dashboard_uses_translation_keys(self):
+        """Dashboard headings and JavaScript feedback use the i18n catalog."""
+        template = self._template()
+
+        assert '{{ _("webhooks.heading") }}' in template
+        assert '{{ _("webhooks.save_error") | tojson }}' in template
+        assert '{{ _("webhooks.delete_confirm") | tojson }}' in template
 
