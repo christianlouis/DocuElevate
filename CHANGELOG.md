@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.177.0 (2026-07-11)
+
+### Features
+
+- Complete saved search and preview workflows
+  ([#1016](https://github.com/christianlouis/DocuElevate/pull/1016),
+  [`64e92a7`](https://github.com/christianlouis/DocuElevate/commit/64e92a72846437d109656134bf82a237a0c6bdad))
+
+
 ## v0.176.2 (2026-07-11)
 
 ### Bug Fixes
