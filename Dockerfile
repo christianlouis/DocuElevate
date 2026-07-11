@@ -22,10 +22,13 @@ ENV PATH="/opt/venv/bin:$PATH" \
     PIP_NO_CACHE_DIR=1
 
 COPY requirements.txt /build/
+# Keep dependency failures fatal and verify the entry points used by Kubernetes.
+# Only cache cleanup is best-effort.
 RUN pip install --no-cache-dir -r requirements.txt \
-    # Remove bytecode and cache to keep the venv lean
+    && command -v uvicorn \
+    && command -v celery \
     && find /opt/venv -type f -name "*.pyc" -delete \
-    && find /opt/venv -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    && (find /opt/venv -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true)
 
 # ── Stage 2: Frontend asset builder ─────────────────────────────────────────
 # Compiles Tailwind CSS (a devDependency) into the minified styles.css.

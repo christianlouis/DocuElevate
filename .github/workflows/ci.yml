@@ -224,13 +224,13 @@ jobs:
         with:
           cmd: |
             yq -i '(.. | select(tag == "!!str") | select(test("^(ghcr\\.io/christianlouis/docuelevate|christianlouis/docuelevate):"))) = strenv(IMAGE)' \
-              k8s-cluster-state/apps/docuelevate/preprod/docuelevate-stack.yaml
+              k8s-cluster-state/apps/docuelevate/greenfield-preprod/docuelevate-stack.yaml
       - name: Commit and push
         run: |
           cd k8s-cluster-state
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add apps/docuelevate/preprod/docuelevate-stack.yaml
+          git add apps/docuelevate/greenfield-preprod/docuelevate-stack.yaml
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
