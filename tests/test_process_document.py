@@ -1260,6 +1260,7 @@ def test_get_pipeline_ocr_language_explicit_pipeline_takes_priority(db_session):
     result = _get_pipeline_ocr_language(db_session, file_record, owner_id="user1")
     assert result == "fra"
 
+
 @pytest.mark.unit
 @pytest.mark.requires_db
 def test_process_document_dispatches_routed_webhook(db_session, tmp_path):
@@ -1282,7 +1283,10 @@ def test_process_document_dispatches_routed_webhook(db_session, tmp_path):
         patch("app.tasks.process_document.log_task_progress"),
         patch("app.tasks.process_document.initialize_file_steps"),
         patch("app.tasks.process_document._apply_pre_processing_routing", side_effect=assign_route),
-        patch("app.tasks.process_document._get_pipeline_ocr_config", return_value={"ocr_language": None, "force_cloud_ocr": False}),
+        patch(
+            "app.tasks.process_document._get_pipeline_ocr_config",
+            return_value={"ocr_language": None, "force_cloud_ocr": False},
+        ),
         patch("app.tasks.process_document._dispatch_routed_webhook") as mock_dispatch,
         patch("app.tasks.process_document.process_with_ocr") as mock_ocr,
     ):
@@ -1300,4 +1304,3 @@ def test_process_document_dispatches_routed_webhook(db_session, tmp_path):
     routed_record, task_id = mock_dispatch.call_args.args
     assert routed_record.pipeline_assignment_source == "routing_rule"
     assert task_id is not None
-
