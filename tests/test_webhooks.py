@@ -898,5 +898,5 @@ class TestWebhookDashboardTemplate:
         assert '{{ _("webhooks.heading") }}' in template
         assert '{{ _("webhooks.save_error") | tojson }}' in template
         assert '{{ _("webhooks.delete_confirm") | tojson }}' in template
-        assert "x-text=\'hook.is_active ?" in template
-        assert "x-text=\'editingId ?" in template
+        assert "x-text='hook.is_active ?" in template
+        assert "x-text='editingId ?" in template
