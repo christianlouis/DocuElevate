@@ -871,7 +871,7 @@ class TestWebhookDashboardTemplate:
     """Guard the admin dashboard's security and accessibility contract."""
 
     @staticmethod
-    def _template():
+    def _template() -> str:
         return Path("frontend/templates/webhooks_dashboard.html").read_text(encoding="utf-8")
 
     def test_mutations_include_csrf_header(self):
