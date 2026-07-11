@@ -113,6 +113,25 @@ def _get_pipeline_ocr_config(db: "Session", file_record: FileRecord, owner_id: s
     return result
 
 
+def _dispatch_routed_webhook(file_record: FileRecord, task_id: str | None) -> None:
+    """Dispatch routing metadata without letting webhook failures stop processing."""
+    try:
+        from app.utils.webhook import dispatch_webhook_event
+
+        dispatch_webhook_event(
+            "document.routed",
+            {
+                "file_id": file_record.id,
+                "filename": file_record.original_filename,
+                "pipeline_id": file_record.pipeline_id,
+                "assignment_source": file_record.pipeline_assignment_source,
+                "routing_rule_id": file_record.pipeline_routing_rule_id,
+                "reason": file_record.pipeline_assignment_reason,
+            },
+        )
+    except Exception as webhook_exc:
+        logger.warning("[%s] Failed to dispatch document.routed webhook: %s", task_id, webhook_exc)
+
 def _get_pipeline_ocr_language(db: "Session", file_record: FileRecord, owner_id: str | None) -> str | None:
     """Return only the OCR language override from the selected processing profile."""
     config = _get_pipeline_ocr_config(db, file_record, owner_id)
@@ -452,22 +471,7 @@ def process_document(
                 file_id=new_record.id,
                 detail=new_record.pipeline_assignment_reason,
             )
-            try:
-                from app.utils.webhook import dispatch_webhook_event
-
-                dispatch_webhook_event(
-                    "document.routed",
-                    {
-                        "file_id": new_record.id,
-                        "filename": new_record.original_filename,
-                        "pipeline_id": new_record.pipeline_id,
-                        "assignment_source": new_record.pipeline_assignment_source,
-                        "routing_rule_id": new_record.pipeline_routing_rule_id,
-                        "reason": new_record.pipeline_assignment_reason,
-                    },
-                )
-            except Exception as webhook_exc:
-                logger.warning("[%s] Failed to dispatch document.routed webhook: %s", task_id, webhook_exc)
+            _dispatch_routed_webhook(new_record, task_id)
         elif new_record.pipeline_assignment_source == "default":
             log_task_progress(
                 task_id,
