@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.177.3 (2026-07-11)
+
+### Bug Fixes
+
+- Widen legacy Alembic revision storage
+  ([#1019](https://github.com/christianlouis/DocuElevate/pull/1019),
+  [`6445d75`](https://github.com/christianlouis/DocuElevate/commit/6445d75149e8e600d3e97da8a8ec7c89a1e5710f))
+
+
 ## v0.177.2 (2026-07-11)
 
 ### Bug Fixes
