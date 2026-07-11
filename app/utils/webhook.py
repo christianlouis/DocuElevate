@@ -170,7 +170,9 @@ def verify_signature(payload_bytes: bytes, secret: str, signature: str | None) -
     return hmac.compare_digest(expected, signature)
 
 
-def deliver_webhook(url: str, payload: dict[str, Any], secret: str | None = None) -> bool:
+def deliver_webhook_with_status(
+    url: str, payload: dict[str, Any], secret: str | None = None
+) -> tuple[bool, int | None]:
     """Send a single webhook POST request.
 
     Args:
@@ -179,28 +181,28 @@ def deliver_webhook(url: str, payload: dict[str, Any], secret: str | None = None
         secret: If provided, an ``X-Webhook-Signature`` header is included.
 
     Returns:
-        ``True`` when the remote server responds with a 2xx status.
+        A tuple containing success and the remote HTTP status, when available.
     """
     parsed_url = urlparse(url)
     if parsed_url.scheme not in {"http", "https"}:
         logger.warning("Webhook to %s blocked: invalid scheme %s", url, parsed_url.scheme)
-        return False
+        return False, None
 
     hostname = parsed_url.hostname
     if not hostname:
         logger.warning("Webhook to %s blocked: missing hostname", url)
-        return False
+        return False, None
 
     normalised_hostname = _normalise_hostname(hostname)
     if normalised_hostname in METADATA_ENDPOINTS:
         logger.warning("Webhook to %s blocked: private or metadata endpoint", url)
-        return False
+        return False, None
 
     port = parsed_url.port or (443 if parsed_url.scheme == "https" else 80)
     address = _resolve_public_address(normalised_hostname, port)
     if address is None:
         logger.warning("Webhook to %s blocked: private, metadata, or unresolved endpoint", url)
-        return False
+        return False, None
 
     body = json.dumps(payload, default=str, sort_keys=True)
     body_bytes = body.encode("utf-8")
@@ -217,12 +219,18 @@ def deliver_webhook(url: str, payload: dict[str, Any], secret: str | None = None
         ok, status_code = _send_pinned_post(parsed_url, address, body_bytes, headers)
         if ok:
             logger.info("Webhook delivered to %s (status %d)", url, status_code)
-            return True
+            return True, status_code
         logger.warning("Webhook to %s returned status %d", url, status_code)
-        return False
+        return False, status_code
     except (OSError, http.client.HTTPException) as exc:
         logger.error("Webhook delivery to %s failed: %s", url, exc)
-        return False
+        return False, None
+
+
+def deliver_webhook(url: str, payload: dict[str, Any], secret: str | None = None) -> bool:
+    """Send a webhook and retain the legacy boolean result contract."""
+    success, _status_code = deliver_webhook_with_status(url, payload, secret)
+    return success
 
 
 def build_payload(event: str, data: dict[str, Any]) -> dict[str, Any]:

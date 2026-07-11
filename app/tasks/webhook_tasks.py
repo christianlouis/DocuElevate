@@ -14,7 +14,7 @@ from app.celery_app import celery
 from app.database import SessionLocal
 from app.models import WebhookDeliveryAttempt
 from app.tasks.retry_config import BaseTaskWithRetry
-from app.utils.webhook import deliver_webhook
+from app.utils.webhook import deliver_webhook_with_status
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,7 @@ def _record_delivery_attempt(
     webhook_config_id: int | None = None,
     delivery_id: int | None = None,
     error: str | None = None,
+    response_status: int | None = None,
 ) -> int | None:
     """Create or update a persisted webhook delivery attempt."""
     db = SessionLocal()
@@ -56,6 +57,7 @@ def _record_delivery_attempt(
         attempt.status = status
         attempt.attempt_number = attempt_number
         attempt.error = error
+        attempt.response_status = response_status
         if status == "delivered":
             attempt.delivered_at = datetime.now(timezone.utc)
         db.commit()
@@ -139,7 +141,7 @@ def deliver_webhook_task(
         delivery_id=delivery_id,
     )
 
-    success = deliver_webhook(url, payload, secret)
+    success, response_status = deliver_webhook_with_status(url, payload, secret)
     if success:
         _record_delivery_attempt(
             url=url,
@@ -149,6 +151,7 @@ def deliver_webhook_task(
             task_id=task_id,
             webhook_config_id=webhook_config_id,
             delivery_id=persisted_id,
+            response_status=response_status,
         )
         return {"status": "delivered", "url": url, "delivery_id": persisted_id}
 
@@ -161,5 +164,6 @@ def deliver_webhook_task(
         webhook_config_id=webhook_config_id,
         delivery_id=persisted_id,
         error=f"Webhook delivery to {url} failed",
+        response_status=response_status,
     )
     raise RuntimeError(f"Webhook delivery to {url} failed")

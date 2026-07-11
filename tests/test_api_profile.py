@@ -90,6 +90,7 @@ class TestGravatarUrl:
         url = _gravatar_url("Test@Example.COM")
         assert url.startswith("https://www.gravatar.com/avatar/")
         assert url.endswith("?d=identicon")
+        assert len(url.split("/avatar/")[1].split("?")[0]) == 64
 
     def test_fallback_for_none_email(self):
         from app.api.profile import _gravatar_url

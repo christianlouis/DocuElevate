@@ -3,14 +3,13 @@ User-related API endpoints
 """
 
 import logging
-from hashlib import sha256
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth import require_login
+from app.auth import get_gravatar_url, require_login
 from app.database import get_db
 from app.models import FileRecord, UserProfile
 
@@ -34,10 +33,7 @@ async def whoami_handler(request: Request, db: Session):
     if not email:
         raise HTTPException(status_code=400, detail="User has no email in session")
 
-    # Generate Gravatar URL from email
-    # SHA-256 is recommended by Gravatar for new integrations.
-    email_hash = sha256(email.strip().lower().encode()).hexdigest()
-    gravatar_url = f"https://www.gravatar.com/avatar/{email_hash}?d=identicon"
+    gravatar_url = get_gravatar_url(email)
 
     # Add the gravatar URL to the user object instead of creating a new response
     user_response = user.copy()  # Create a copy to avoid modifying the session

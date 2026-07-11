@@ -667,6 +667,9 @@ def import_pipeline_template(
             )
         db.commit()
         db.refresh(pipeline)
+    except IntegrityError:
+        db.rollback()
+        raise _pipeline_name_conflict(name)
     except Exception:
         db.rollback()
         logger.exception("Failed to import pipeline template=%s", template["key"])

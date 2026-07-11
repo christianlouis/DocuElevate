@@ -557,7 +557,8 @@ class TestTestImapConnection:
             )
 
         assert result["success"] is False
-        assert "auth failed" in result["message"]
+        assert result["message"] == "Authentication failed. Check the username, password, and TLS settings."
+        assert "auth failed" not in result["message"]
 
     def test_network_error(self):
         """An OSError returns success=False with a network error message."""
@@ -576,4 +577,5 @@ class TestTestImapConnection:
             )
 
         assert result["success"] is False
-        assert "connection refused" in result["message"].lower()
+        assert result["message"] == "Connection failed. Check the server address, port, and network access."
+        assert "connection refused" not in result["message"].lower()
