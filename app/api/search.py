@@ -9,7 +9,7 @@ for RAG (Retrieval Augmented Generation) chatbot workflows.
 """
 
 import logging
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Query, Request
 
@@ -37,6 +37,10 @@ def search_api(
     ),
     date_from: Optional[int] = Query(None, description="Filter results created after this Unix timestamp"),
     date_to: Optional[int] = Query(None, description="Filter results created before this Unix timestamp"),
+    sort_by: Literal["relevance", "created_at", "file_size", "confidence_score"] = Query(
+        "relevance", description="Result sort field"
+    ),
+    sort_order: Literal["asc", "desc"] = Query("desc", description="Result sort direction"),
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     per_page: int = Query(20, ge=1, le=100, description="Results per page"),
 ):
@@ -104,6 +108,8 @@ def search_api(
         text_quality=text_quality,
         date_from=date_from,
         date_to=date_to,
+        sort_by=sort_by,
+        sort_order=sort_order,
         page=page,
         per_page=per_page,
     )

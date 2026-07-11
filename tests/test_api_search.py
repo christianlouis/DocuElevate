@@ -222,6 +222,18 @@ class TestMeilisearchSearchDocuments:
         assert "filter" in search_params
         assert 'sender = "ACME Corp"' in search_params["filter"]
 
+    def test_search_with_explicit_sort(self):
+        """Supported sort fields are passed to Meilisearch using a safe mapping."""
+        mock_client, mock_index = self._make_mock_client(hits=[], total=0)
+
+        with patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client):
+            from app.utils.meilisearch_client import search_documents
+
+            search_documents("invoice", sort_by="created_at", sort_order="asc")
+
+        search_params = mock_index.search.call_args.args[1]
+        assert search_params["sort"] == ["created_at_ts:asc"]
+
     def test_search_with_text_quality_high(self):
         """search_documents translates text_quality=high to ocr_text_length filter."""
         mock_client, mock_index = self._make_mock_client(hits=[], total=0)
@@ -347,6 +359,8 @@ class TestSearchAPIEndpoint:
             text_quality=None,
             date_from=None,
             date_to=None,
+            sort_by="relevance",
+            sort_order="desc",
             page=2,
             per_page=10,
         )
@@ -373,6 +387,8 @@ class TestSearchAPIEndpoint:
             text_quality=None,
             date_from=None,
             date_to=None,
+            sort_by="relevance",
+            sort_order="desc",
             page=1,
             per_page=20,
         )
