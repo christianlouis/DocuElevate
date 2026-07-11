@@ -34,7 +34,7 @@ When the Docker image is built (locally or in CI/CD), the following happens:
 DocuElevate/
 ├── scripts/
 │   └── generate_build_metadata.sh    # Script that generates metadata
-├── VERSION                             # Manually maintained version number
+├── VERSION                             # Managed by semantic-release/build automation
 ├── BUILD_DATE                          # Generated at build time (gitignored)
 ├── GIT_SHA                            # Generated at build time (gitignored)
 └── RUNTIME_INFO                        # Generated at build time (gitignored)

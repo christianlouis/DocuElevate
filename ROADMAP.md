@@ -1,7 +1,7 @@
 # DocuElevate Roadmap
 
-**Last Updated:** 2026-05-23
-**Version:** 2.0
+**Last Updated:** 2026-07-11
+**Version:** 2.1
 
 ## Vision
 
@@ -16,6 +16,32 @@ DocuElevate ships frequently (automated semantic versioning), so this roadmap is
 - **P2** = nice-to-have / opportunistic
 
 For the detailed milestone breakdown and target dates, see [MILESTONES.md](MILESTONES.md).
+
+## Current Focus and Delivery Order
+
+The automated release number (`0.176.x` at the time of this review) is independent
+from the named planning anchors below. The team should execute work in dependency
+order, not in numeric-anchor order:
+
+1. **Stabilize the processing foundation** — close post-merge correctness work
+   (#1007), make workflow state/retries/status match execution (#388), and finish
+   the single-host-loss resilience plan (#902).
+2. **Complete the existing search experience** — saved searches (#870),
+   preview-first results (#872), and safe bulk actions (#873).
+3. **Add retrieval foundations** — choose one vector-store architecture (#477),
+   implement semantic retrieval (#480), then hybrid ranking and evaluation (#871).
+4. **Make orchestration configurable** — only after #388, build the workflow
+   editor (#875), scheduling (#876), and reusable templates (#877).
+5. **Make AI quality measurable before expanding AI UX** — build the extraction
+   evaluation harness (#880) before confidence scoring (#878), review queues
+   (#879), or Chat with Library (#478).
+6. **Build enterprise and ecosystem layers on stable contracts** — RBAC,
+   multi-tenancy, audit, plugins, governance, MCP, and agent actions remain later
+   tracks and must not displace the foundation work above.
+
+GitHub issues and milestones are the source of truth for executable scope. This
+document explains sequencing and product intent; it should not duplicate a sprint
+backlog.
 
 ## Release Naming
 
