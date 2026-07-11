@@ -5,6 +5,7 @@ import hmac
 import json
 import socket
 import time
+from pathlib import Path
 from unittest.mock import Mock, patch
 from urllib.parse import urlparse
 
@@ -767,3 +768,136 @@ class TestDeliverWebhookTask:
             deliver_webhook_task.max_retries + 1,
             mocker.ANY,
         )
+
+
+# ---------------------------------------------------------------------------
+# Unit tests – document task webhook dispatch adapters
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestDocumentTaskWebhookDispatch:
+    """Cover best-effort webhook dispatch paths in document tasks."""
+
+    def test_routed_event_payload(self, mocker):
+        """Routing dispatch includes the selected profile and rule context."""
+        dispatch = mocker.patch("app.utils.webhook.dispatch_webhook_event")
+        record = Mock(
+            id=42,
+            original_filename="invoice.pdf",
+            pipeline_id=7,
+            pipeline_assignment_source="routing_rule",
+            pipeline_routing_rule_id=3,
+            pipeline_assignment_reason="Matched invoices",
+        )
+
+        from app.tasks.process_document import _dispatch_routed_webhook
+
+        _dispatch_routed_webhook(record, "task-route")
+
+        dispatch.assert_called_once_with(
+            "document.routed",
+            {
+                "file_id": 42,
+                "filename": "invoice.pdf",
+                "pipeline_id": 7,
+                "assignment_source": "routing_rule",
+                "routing_rule_id": 3,
+                "reason": "Matched invoices",
+            },
+        )
+
+    def test_routed_event_failure_is_non_fatal(self, mocker):
+        """Routing continues when webhook dispatch fails."""
+        mocker.patch("app.utils.webhook.dispatch_webhook_event", side_effect=RuntimeError("offline"))
+        record = Mock(
+            id=42,
+            original_filename="invoice.pdf",
+            pipeline_id=7,
+            pipeline_assignment_source="routing_rule",
+            pipeline_routing_rule_id=3,
+            pipeline_assignment_reason="Matched invoices",
+        )
+
+        from app.tasks.process_document import _dispatch_routed_webhook
+
+        _dispatch_routed_webhook(record, "task-route")
+
+    def test_metadata_event_payload(self, mocker):
+        """Metadata dispatch reports the stable file identity and changed keys."""
+        dispatch = mocker.patch("app.utils.webhook.dispatch_webhook_event")
+        record = Mock(id=42, original_filename="invoice.pdf")
+
+        from app.tasks.embed_metadata_into_pdf import _dispatch_metadata_updated_webhook
+
+        _dispatch_metadata_updated_webhook(
+            record,
+            {"tags": ["invoice"], "document_type": "Invoice"},
+            "task-metadata",
+        )
+
+        dispatch.assert_called_once_with(
+            "document.metadata_updated",
+            {
+                "file_id": 42,
+                "filename": "invoice.pdf",
+                "updated_fields": ["document_type", "tags"],
+            },
+        )
+
+    def test_metadata_event_skips_empty_metadata(self, mocker):
+        """Empty metadata does not produce a misleading update event."""
+        dispatch = mocker.patch("app.utils.webhook.dispatch_webhook_event")
+        record = Mock(id=42, original_filename="invoice.pdf")
+
+        from app.tasks.embed_metadata_into_pdf import _dispatch_metadata_updated_webhook
+
+        _dispatch_metadata_updated_webhook(record, {}, "task-metadata")
+
+        dispatch.assert_not_called()
+
+    def test_metadata_event_failure_is_non_fatal(self, mocker):
+        """Metadata persistence continues when webhook dispatch fails."""
+        mocker.patch("app.utils.webhook.dispatch_webhook_event", side_effect=RuntimeError("offline"))
+        record = Mock(id=42, original_filename="invoice.pdf")
+
+        from app.tasks.embed_metadata_into_pdf import _dispatch_metadata_updated_webhook
+
+        _dispatch_metadata_updated_webhook(record, {"tags": ["invoice"]}, "task-metadata")
+
+
+@pytest.mark.unit
+class TestWebhookDashboardTemplate:
+    """Guard the admin dashboard's security and accessibility contract."""
+
+    @staticmethod
+    def _template() -> str:
+        """Return the webhook dashboard source used by static contract checks."""
+        return Path("frontend/templates/webhooks_dashboard.html").read_text(encoding="utf-8")
+
+    def test_mutations_include_csrf_header(self):
+        """Save, delete, and replay requests share the page CSRF token."""
+        template = self._template()
+
+        assert 'meta[name="csrf-token"]' in template
+        assert "'X-CSRF-Token': this.csrfToken" in template
+        assert template.count("this.csrfHeaders()") >= 3
+
+    def test_toast_and_delivery_table_are_accessible(self):
+        """Feedback and delivery history expose screen-reader semantics."""
+        template = self._template()
+
+        assert 'role="status"' in template
+        assert 'aria-live="polite"' in template
+        assert '<caption class="sr-only">' in template
+        assert template.count('<th scope="col"') == 4
+
+    def test_dashboard_uses_translation_keys(self):
+        """Dashboard headings and JavaScript feedback use the i18n catalog."""
+        template = self._template()
+
+        assert '{{ _("webhooks.heading") }}' in template
+        assert '{{ _("webhooks.save_error") | tojson }}' in template
+        assert '{{ _("webhooks.delete_confirm") | tojson }}' in template
+        assert "x-text='hook.is_active ?" in template
+        assert "x-text='editingId ?" in template

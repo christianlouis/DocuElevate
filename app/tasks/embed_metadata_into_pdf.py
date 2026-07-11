@@ -30,6 +30,29 @@ TMP_SUBDIR = "tmp"
 PROCESSED_SUBDIR = "processed"
 
 
+def _dispatch_metadata_updated_webhook(file_record: FileRecord, metadata: dict, task_id: str | None) -> None:
+    """Dispatch metadata updates without making document processing depend on webhooks."""
+    if not metadata:
+        return
+    try:
+        from app.utils.webhook import dispatch_webhook_event
+
+        dispatch_webhook_event(
+            "document.metadata_updated",
+            {
+                "file_id": file_record.id,
+                "filename": file_record.original_filename,
+                "updated_fields": sorted(metadata.keys()),
+            },
+        )
+    except Exception as webhook_exc:
+        logger.warning(
+            "[%s] Failed to dispatch document.metadata_updated webhook: %s",
+            task_id,
+            webhook_exc,
+        )
+
+
 def persist_metadata(metadata, final_pdf_path, original_file_path=None, processed_file_path=None):
     """
     Saves the metadata dictionary to a JSON file with the same base name as the final PDF.
@@ -208,24 +231,7 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
                     db.commit()
                     logger.info(f"[{task_id}] Updated database with processed_file_path and search fields")
 
-                    if metadata:
-                        try:
-                            from app.utils.webhook import dispatch_webhook_event
-
-                            dispatch_webhook_event(
-                                "document.metadata_updated",
-                                {
-                                    "file_id": file_record.id,
-                                    "filename": file_record.original_filename,
-                                    "updated_fields": sorted(metadata.keys()),
-                                },
-                            )
-                        except Exception as webhook_exc:
-                            logger.warning(
-                                "[%s] Failed to dispatch document.metadata_updated webhook: %s",
-                                task_id,
-                                webhook_exc,
-                            )
+                    _dispatch_metadata_updated_webhook(file_record, metadata, task_id)
 
                     # Index into Meilisearch for full-text search (non-blocking, best-effort)
                     try:

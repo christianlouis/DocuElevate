@@ -7,6 +7,7 @@ and doesn't cause DetachedInstanceError when accessing database objects.
 
 from unittest.mock import MagicMock, patch
 
+import pypdf
 import pytest
 
 from app.models import FileRecord
@@ -1258,3 +1259,48 @@ def test_get_pipeline_ocr_language_explicit_pipeline_takes_priority(db_session):
 
     result = _get_pipeline_ocr_language(db_session, file_record, owner_id="user1")
     assert result == "fra"
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_process_document_dispatches_routed_webhook(db_session, tmp_path):
+    """The task dispatches routing details after a routing-rule assignment."""
+    test_pdf = tmp_path / "routed.pdf"
+    writer = pypdf.PdfWriter()
+    writer.add_blank_page(width=612, height=792)
+    with test_pdf.open("wb") as output:
+        writer.write(output)
+
+    def assign_route(_db, record, _owner_id, _task_id):
+        record.pipeline_assignment_source = "routing_rule"
+        record.pipeline_id = 7
+        record.pipeline_routing_rule_id = 3
+        record.pipeline_assignment_reason = "Matched invoices"
+
+    with (
+        patch("app.tasks.process_document.SessionLocal") as mock_session_local,
+        patch("app.tasks.process_document.settings") as mock_settings,
+        patch("app.tasks.process_document.log_task_progress"),
+        patch("app.tasks.process_document.initialize_file_steps"),
+        patch("app.tasks.process_document._apply_pre_processing_routing", side_effect=assign_route),
+        patch(
+            "app.tasks.process_document._get_pipeline_ocr_config",
+            return_value={"ocr_language": None, "force_cloud_ocr": False},
+        ),
+        patch("app.tasks.process_document._dispatch_routed_webhook") as mock_dispatch,
+        patch("app.tasks.process_document.process_with_ocr") as mock_ocr,
+    ):
+        mock_settings.workdir = str(tmp_path)
+        mock_settings.enable_deduplication = False
+        mock_settings.enable_text_quality_check = False
+        mock_session_local.return_value.__enter__.return_value = db_session
+        mock_session_local.return_value.__exit__.return_value = None
+        mock_ocr.delay = MagicMock()
+
+        result = process_document.run(str(test_pdf))
+
+    assert result["status"] == "Queued for OCR"
+    mock_dispatch.assert_called_once()
+    routed_record, task_id = mock_dispatch.call_args.args
+    assert routed_record.pipeline_assignment_source == "routing_rule"
+    assert task_id is None  # Direct .run() calls have no Celery request context.
