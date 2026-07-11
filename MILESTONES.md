@@ -31,11 +31,11 @@ DocuElevate ships continuously via automated semantic versioning. Use **GitHub R
 
 The current build number is managed by semantic-release and may be ahead of the planning anchors below. Check `VERSION` and GitHub Releases for the exact current release stream.
 
-The named `v0.6.0`, `v0.7.0`, and later milestones are **planning anchors**, not
-predictions of the next semantic-release tag. Their scope and due dates are tracked
-in GitHub. Delivery follows the dependency order in [ROADMAP.md](ROADMAP.md), with
-correctness and operational resilience taking precedence over milestone feature
-work.
+Clarity, Conductor, and Signal are **planning tracks**, not predictions of the
+next semantic-release tag. Their old `0.6.x`–`0.8.x` labels were retired because
+those versions already exist in release history. Future `1.0+` entries remain
+version anchors. Scope and due dates are tracked in GitHub. Delivery follows the
+dependency order in [ROADMAP.md](ROADMAP.md).
 
 ### Important Note on Versioning
 As of February 2026, DocuElevate uses **automated semantic versioning**:
@@ -136,7 +136,7 @@ As of February 2026, DocuElevate uses **automated semantic versioning**:
 
 ## Upcoming Planning Anchors
 
-### v0.6.0 - Clarity: Enhanced Search & UI (Planning anchor)
+### Clarity: Enhanced Search & UI (Planning track)
 **Target Date:** October 31, 2026
 **Status:** 📋 Planned
 **Theme:** Search, Discovery, Modern UX
@@ -162,7 +162,7 @@ As of February 2026, DocuElevate uses **automated semantic versioning**:
 
 ---
 
-### v0.7.0 - Conductor: Workflow Automation & Integrations (Planning anchor)
+### Conductor: Workflow Automation & Integrations (Planning track)
 **Target Date:** January 31, 2027
 **Status:** 📋 Planned
 **Theme:** Automation, Integration, Webhooks
@@ -182,7 +182,7 @@ As of February 2026, DocuElevate uses **automated semantic versioning**:
 
 ---
 
-### v0.8.0 - Signal: AI Quality, RAG, and Multi-language (Planning anchor)
+### Signal: AI Quality, RAG, and Multi-language (Planning track)
 **Target Date:** April 30, 2027
 **Status:** 📋 Planned
 **Theme:** AI Quality, Retrieval, Internationalization
@@ -346,9 +346,9 @@ Starting with v0.6.0, releases are fully automated using `python-semantic-releas
 | v0.3.2 | 2026-02-06 | Security Updates | Released |
 | v0.3.3 | 2026-02-08 | Drag-and-Drop Upload | Released |
 | v0.5.0 | 2026-02-08 | **Settings & Encryption** | **Released** |
-| v0.6.0 | 2026-10-31 | **Clarity:** Search & UX | Planned |
-| v0.7.0 | 2027-01-31 | **Conductor:** Workflows & Integrations | Planned |
-| v0.8.0 | 2027-04-30 | **Signal:** AI Quality, RAG, Multi-language | Planned |
+| Planning track | 2026-10-31 | **Clarity:** Search & UX | Planned |
+| Planning track | 2027-01-31 | **Conductor:** Workflows & Integrations | Planned |
+| Planning track | 2027-04-30 | **Signal:** AI Quality, RAG, Multi-language | Planned |
 | v1.0.0 | 2027-09-30 | **Summit:** Enterprise | Planned |
 | v2.0.0 | 2028-03-31 | **Horizon:** Platform Expansion | Future |
 | v2.1.0 | 2028-09-30 | **Sentinel:** Governance & Policy | Future |

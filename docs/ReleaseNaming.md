@@ -1,6 +1,6 @@
 # Release Naming Guide
 
-DocuElevate uses **automated semantic versioning** via [python-semantic-release](https://github.com/python-semantic-release/python-semantic-release) combined with **named release anchors** (codenames) for milestone releases. This guide explains how the two systems work together.
+DocuElevate uses **automated semantic versioning** via [python-semantic-release](https://github.com/python-semantic-release/python-semantic-release). Runtime release codenames and roadmap planning-track names are related concepts, but they are not interchangeable.
 
 ## How It Works
 
@@ -14,7 +14,7 @@ Every merge to `main` is analyzed by `python-semantic-release`:
 
 This happens automatically — no manual intervention needed.
 
-### Named Release Anchors (Codenames)
+### Runtime Release Codenames
 
 Major milestone releases carry a **codename** that anchors the release in project history. Codenames:
 
@@ -30,14 +30,15 @@ Not every automated release stream has a codename. For example, a continuous rel
 | Version Range | Codename       | Description                                              |
 |---------------|----------------|----------------------------------------------------------|
 | 0.5.x         | **Foundation** | Core platform with multi-provider storage, AI, and UI    |
-| 0.6.x         | **Clarity**    | Enhanced search, filtering, and improved UI/UX           |
-| 0.7.x         | **Conductor**  | Workflow automation, custom pipelines, rule-based logic   |
-| 0.8.x         | **Signal**     | AI quality, retrieval, and multi-language foundations     |
 | 1.0.x         | **Summit**     | Enterprise-ready: multi-tenancy, RBAC, horizontal scaling|
 | 1.1.x         | **Bridge**     | Collaboration features, document sharing, analytics      |
 | 2.0.x         | **Horizon**    | On-premise AI, advanced management, platform expansion   |
 | 2.1.x         | **Sentinel**   | Governance, compliance, and policy-driven automation     |
 | 3.0.x         | **Constellation** | Integration hub, agent platform, interoperability     |
+
+Clarity, Conductor, and Signal are roadmap planning tracks. They are deliberately
+absent from this runtime table because versions `0.6.x`, `0.7.x`, and `0.8.x`
+already shipped before those future tracks were defined.
 
 ## Adding a New Release Name
 
@@ -55,7 +56,7 @@ Not every automated release stream has a codename. For example, a continuous rel
 }
 ```
 
-2. **Update `ROADMAP.md`** to include the codename in the appropriate milestone section.
+2. **Update `ROADMAP.md`** only when the codename also represents a roadmap anchor.
 
 3. **Update this documentation** to add the new entry to the table above.
 
@@ -86,14 +87,15 @@ When choosing codenames, follow these guidelines:
 
 ## Integration with Milestones
 
-Each codename maps to a GitHub milestone. The `milestone` field in `release_names.json` matches the milestone title used for issue tracking:
+When a runtime codename also has a GitHub milestone, the `milestone` field in
+`release_names.json` must exactly match the milestone title:
 
 ```
-v0.7.0 - Workflow Automation  →  codename: "Conductor"
-v1.0.0 - Enterprise           →  codename: "Summit"
+v1.0.0 - Enterprise Edition   →  codename: "Summit"
 ```
 
-This creates a clear link between planning (milestones), delivery (releases), and communication (codenames).
+Planning-only track names do not belong in `release_names.json` until an actual,
+not-yet-released semantic version is deliberately assigned to them.
 
 ## Best Practices: Blending Automated and Named Releases
 

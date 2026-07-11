@@ -45,13 +45,18 @@ backlog.
 
 ## Release Naming
 
-Selected milestone anchors carry codenames to mark key project moments. These names appear in runtime surfaces only when the current automated release stream matches an entry in `release_names.json`; continuous release streams such as `0.173.x` may remain unnamed. For details, see [docs/ReleaseNaming.md](docs/ReleaseNaming.md).
+Selected delivery tracks carry codenames to mark key project moments. A planning
+track is not automatically a release codename: runtime names appear only when the
+actual semantic version matches an entry in `release_names.json`. Clarity,
+Conductor, and Signal are currently planning-track names because their former
+`0.6.x`–`0.8.x` version numbers have already shipped. For details, see
+[docs/ReleaseNaming.md](docs/ReleaseNaming.md).
 
-| Planning Anchor | Codename        | Theme |
+| Delivery Track | Codename        | Theme |
 |----------|------------------|-------|
-| v0.6.0   | **Clarity**      | Search, discovery, and modern UX |
-| v0.7.0   | **Conductor**    | Workflows, orchestration, and integrations |
-| v0.8.0   | **Signal**       | AI quality, multilingual, and “Chat with Library” foundations |
+| Planning | **Clarity**      | Search, discovery, and modern UX |
+| Planning | **Conductor**    | Workflows, orchestration, and integrations |
+| Planning | **Signal**       | AI quality, multilingual, and “Chat with Library” foundations |
 | v1.0.0   | **Summit**       | Enterprise readiness (multi-tenancy, RBAC, scaling) |
 | v2.0.0   | **Horizon**      | Platform expansion and ecosystem maturity |
 | v2.1.0+  | **Sentinel**     | Governance, compliance, and policy-driven automation |
@@ -104,25 +109,25 @@ Selected milestone anchors carry codenames to mark key project moments. These na
 
 This plan extends the existing milestone anchors with a clearer thematic arc and a forward-looking “beyond v2.0” horizon. The anchor labels are planning references, not promises that the automated semantic-release stream will stay numerically below them. Each milestone links to an epic issue that owns scope and sub-issues.
 
-### v0.6.0 — Clarity (Search & UX)
+### Clarity (Search & UX)
 - **Outcome:** users can reliably find, preview, and act on documents in seconds
 - **P0:** semantic search + hybrid ranking, saved searches, fast filters, preview-first UX
 - **P1:** bulk operations, query suggestions, accessibility/dark mode polish
-- **Tracking:** GitHub milestone `v0.6.0 - Enhanced Search & UI` (epic #863)
+- **Tracking:** GitHub milestone `Clarity - Enhanced Search & UI` (epic #863)
 
-### v0.7.0 — Conductor (Workflows & Integrations)
+### Conductor (Workflows & Integrations)
 - **Outcome:** workflows are explicit, inspectable, and automatable end-to-end
 - **P0:** workflow object model + workflow-aware UI status, retries, pipeline definitions
 - **P1:** workflow builder, scheduling, inbound/outbound webhooks
 - **P2:** integration templates + “connector marketplace” concepts
-- **Tracking:** GitHub milestone `v0.7.0 - Workflow Automation` (epic #864)
+- **Tracking:** GitHub milestone `Conductor - Workflow Automation` (epic #864)
 
-### v0.8.0 — Signal (AI Quality + “Chat with Library” Foundations)
+### Signal (AI Quality + “Chat with Library” Foundations)
 - **Outcome:** AI features are measurable, reviewable, and safe to trust
 - **P0:** vector DB + embeddings pipeline, chat UI foundations, local AI options
 - **P1:** confidence scoring and review loop, extraction evaluation harness
 - **P2:** multilingual UX + localization expansion
-- **Tracking:** GitHub milestone `v0.8.0 - Advanced AI & Multi-language` (epic #865)
+- **Tracking:** GitHub milestone `Signal - Advanced AI & Multi-language` (epic #865)
 
 ### v1.0.0 — Summit (Enterprise Readiness)
 - **Outcome:** teams can run DocuElevate with strong isolation, access control, and scale
