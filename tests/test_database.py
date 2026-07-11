@@ -780,6 +780,34 @@ class TestMultiVersionMigrations:
 class TestAlembicUpgrade:
     """Tests for Alembic-based migration management."""
 
+    def test_widens_legacy_postgresql_version_column(self):
+        """Long revision IDs fit databases created with Alembic's legacy VARCHAR(32)."""
+        from sqlalchemy import String
+
+        from app.database import _ensure_alembic_version_capacity
+
+        connection = MagicMock()
+        connection.dialect.name = "postgresql"
+        inspector = MagicMock()
+        inspector.get_columns.return_value = [{"name": "version_num", "type": String(32)}]
+
+        with patch("sqlalchemy.inspect", return_value=inspector):
+            _ensure_alembic_version_capacity(connection)
+
+        statement = str(connection.execute.call_args.args[0])
+        assert statement == "ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(255)"
+
+    def test_version_capacity_is_noop_for_sqlite(self):
+        """SQLite does not enforce the declared VARCHAR length."""
+        from app.database import _ensure_alembic_version_capacity
+
+        connection = MagicMock()
+        connection.dialect.name = "sqlite"
+
+        _ensure_alembic_version_capacity(connection)
+
+        connection.execute.assert_not_called()
+
     def test_alembic_upgrade_stamps_fresh_database(self, tmp_path):
         """Test that _run_alembic_upgrade stamps a fresh database to head."""
         from pathlib import Path
