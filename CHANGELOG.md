@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.177.2 (2026-07-11)
+
+### Bug Fixes
+
+- Use a supported Python runtime image
+  ([#1018](https://github.com/christianlouis/DocuElevate/pull/1018),
+  [`1113c19`](https://github.com/christianlouis/DocuElevate/commit/1113c196b913ca7632cadc8fefb8c5678076d150))
+
+
 ## v0.177.1 (2026-07-11)
 
 ### Bug Fixes
