@@ -140,9 +140,34 @@ def _run_alembic_upgrade(engine: Any) -> None:
             command.stamp(alembic_cfg, "head")
         else:
             # Existing database with Alembic version tracking — apply pending migrations.
+            _ensure_alembic_version_capacity(connection)
             logger.info("Running pending Alembic migrations…")
             command.upgrade(alembic_cfg, "head")
             logger.info("Alembic migration check complete.")
+
+
+def _ensure_alembic_version_capacity(connection: Any) -> None:
+    """Widen legacy Alembic revision storage before applying long revision IDs."""
+    from sqlalchemy import inspect, text
+
+    dialect = connection.dialect.name
+    if dialect not in {"postgresql", "mysql", "mariadb"}:
+        return
+
+    columns = inspect(connection).get_columns("alembic_version")
+    version_column = next(
+        (column for column in columns if column["name"] == "version_num"),
+        None,
+    )
+    current_length = getattr(version_column["type"], "length", None) if version_column else None
+    if current_length is None or current_length >= 255:
+        return
+
+    if dialect == "postgresql":
+        connection.execute(text("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(255)"))
+    else:
+        connection.execute(text("ALTER TABLE alembic_version MODIFY COLUMN version_num VARCHAR(255) NOT NULL"))
+    logger.info("Expanded alembic_version.version_num from %s to 255 characters.", current_length)
 
 
 def _run_schema_migrations(engine: Any) -> None:
